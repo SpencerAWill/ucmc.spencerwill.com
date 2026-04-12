@@ -8,6 +8,7 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 
 - `apps/` — Applications
 - `libs/` — Shared libraries
+- `.wiki/` — GitHub wiki (git submodule, auto-synced)
 
 ## Development Setup
 
@@ -19,10 +20,13 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 ### Getting Started
 
 ```bash
+git clone --recurse-submodules <repo-url>
 pnpm install
 ```
 
-This automatically sets up Git hooks via Husky.
+If you already cloned without `--recurse-submodules`, `pnpm install` will initialize the wiki submodule automatically.
+
+This also sets up Git hooks via Husky.
 
 ### Committing
 
@@ -34,7 +38,7 @@ type(scope): description
 
 Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
 
-Scopes are validated against workspace package names.
+Scopes are validated against workspace package names, plus `wiki` for wiki-related changes.
 
 To use the interactive commit helper:
 
@@ -55,3 +59,15 @@ To run manually:
 pnpm exec eslint .
 pnpm exec prettier --write .
 ```
+
+### Wiki
+
+The GitHub wiki is included as a git submodule at `.wiki/`. It syncs automatically on pull, checkout, and install. A GitHub Action also keeps it updated.
+
+To push local wiki edits:
+
+```bash
+pnpm wiki:push
+```
+
+This also happens automatically when you `git push` the main repo (via the pre-push hook).

@@ -8,6 +8,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 
 - `apps/` — Applications (sub-apps with their own configs)
 - `libs/` — Shared libraries
+- `.wiki/` — GitHub wiki content (git submodule, auto-synced locally and via CI)
 - Root contains shared tooling and configuration
 
 ## Package Manager
@@ -33,9 +34,18 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - **Husky** — manages git hooks in `.husky/`
   - `pre-commit` — runs lint-staged (ESLint + Prettier on staged files)
   - `commit-msg` — runs commitlint to enforce conventional commits
+  - `post-merge` — auto-updates the wiki submodule
+  - `post-checkout` — auto-updates the wiki submodule
+  - `pre-push` — pushes unpushed wiki submodule commits before pushing the main repo
 - **lint-staged** — configured in `package.json` under `"lint-staged"`
   - `*.{js,ts,tsx}` — ESLint --fix, then Prettier --write
   - `*` — Prettier --write --ignore-unknown (catch-all for all other files)
+
+### CI / GitHub Actions
+
+- **Sync Wiki Submodule** (`sync-wiki.yml`) — updates the `.wiki/` submodule pointer on wiki edits (`gollum` event), 1st and 15th of each month at 06:00 UTC, or manual dispatch
+- **Deploy Worker** (`build-and-deploy.yml`) — manual Cloudflare Worker deploy
+- **Lint PR** (`lint-pr.yaml`) — validates PR titles follow conventional commit format
 
 ### Commits
 
@@ -51,6 +61,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - `pnpm commit` — interactive conventional commit helper
 - `pnpm exec eslint .` — lint all JS/TS files
 - `pnpm exec prettier --write .` — format all files
+- `pnpm wiki:push` — push local wiki submodule commits to the wiki remote
 
 ## Instructions for Claude
 

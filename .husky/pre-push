@@ -1,0 +1,9 @@
+# Push any unpushed wiki submodule commits before pushing the main repo,
+# so the submodule pointer always references a reachable commit.
+if [ -d ".wiki/.git" ] || [ -f ".wiki/.git" ]; then
+  unpushed=$(git -C .wiki log --oneline @{u}..HEAD 2>/dev/null)
+  if [ -n "$unpushed" ]; then
+    echo "Pushing unpushed wiki submodule commits..."
+    git -C .wiki push || exit 1
+  fi
+fi
