@@ -1,0 +1,11 @@
+name: ucmc-infra
+description: Infrastructure for the University of Cincinnati Mountaineering Club
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+    packagemanager: pnpm
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: typescript

@@ -8,6 +8,7 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 
 - `apps/` — Applications
 - `libs/` — Shared libraries
+- `infra/` — Pulumi infrastructure-as-code
 - `.wiki/` — GitHub wiki (git submodule, auto-synced)
 
 ## Development Setup
@@ -16,6 +17,7 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 
 - [Node.js](https://nodejs.org/)
 - [pnpm](https://pnpm.io/) (v10.33.0+)
+- [Pulumi CLI](https://www.pulumi.com/docs/install/) (for infrastructure changes)
 
 ### Getting Started
 

@@ -8,6 +8,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 
 - `apps/` — Applications (sub-apps with their own configs)
 - `libs/` — Shared libraries
+- `infra/` — Pulumi infrastructure-as-code (TypeScript)
 - `.wiki/` — GitHub wiki content (git submodule, auto-synced locally and via CI)
 - Root contains shared tooling and configuration
 
@@ -47,6 +48,14 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - **Deploy Worker** (`build-and-deploy.yml`) — manual Cloudflare Worker deploy
 - **Lint PR** (`lint-pr.yaml`) — validates PR titles follow conventional commit format
 
+### Infrastructure
+
+- **Pulumi** — IaC in `infra/`, TypeScript with the `nodejs` runtime
+  - Project config in `infra/Pulumi.yaml`
+  - Stack configs in `infra/Pulumi.<stack>.yaml` (secrets are encrypted, safe to commit)
+  - State stored in Pulumi Cloud
+  - Uses pnpm as the package manager (`runtime.options.packagemanager: pnpm`)
+
 ### Commits
 
 - **Conventional Commits** enforced via commitlint (`commitlint.config.js`)
@@ -62,6 +71,8 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - `pnpm exec eslint .` — lint all JS/TS files
 - `pnpm exec prettier --write .` — format all files
 - `pnpm wiki:push` — push local wiki submodule commits to the wiki remote
+- `cd infra && pulumi preview` — preview infrastructure changes
+- `cd infra && pulumi up` — deploy infrastructure changes
 
 ## Instructions for Claude
 
