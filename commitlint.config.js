@@ -9,7 +9,7 @@ export default {
         default: { rules },
       } = await import("@commitlint/config-pnpm-scopes");
       const [level, condition, scopes] = await rules["scope-enum"](ctx);
-      return [level, condition, [...scopes, "wiki"]];
+      return [level, condition, [...scopes, "wiki", "devcontainer"]];
     },
   },
 };

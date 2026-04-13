@@ -9,17 +9,37 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 - `apps/` — Applications
 - `libs/` — Shared libraries
 - `infra/` — Pulumi infrastructure-as-code
+- `.devcontainer/` — Dev container configuration
 - `.wiki/` — GitHub wiki (git submodule, auto-synced)
 
 ## Development Setup
 
-### Prerequisites
+### Dev Container (Recommended)
 
-- [Node.js](https://nodejs.org/)
+The easiest way to get started is with the included [dev container](https://containers.dev/), which works with VS Code, GitHub Codespaces, and any devcontainer-compatible tool.
+
+The container provides:
+
+- Node.js 22
+- pnpm (via corepack)
+- Pulumi CLI
+- GitHub CLI
+- Claude Code CLI
+- VS Code extensions: Prettier, ESLint, EditorConfig
+
+Named Docker volumes persist the pnpm store, Pulumi config, GitHub CLI config, and Claude data across container rebuilds.
+
+To use it, open the repo in VS Code and select **Reopen in Container** when prompted, or run `Dev Containers: Reopen in Container` from the command palette.
+
+### Manual Setup
+
+#### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v22+)
 - [pnpm](https://pnpm.io/) (v10.33.0+)
 - [Pulumi CLI](https://www.pulumi.com/docs/install/) (for infrastructure changes)
 
-### Getting Started
+#### Getting Started
 
 ```bash
 git clone --recurse-submodules <repo-url>
@@ -40,7 +60,7 @@ type(scope): description
 
 Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
 
-Scopes are validated against workspace package names, plus `wiki` for wiki-related changes.
+Scopes are validated against workspace package names, plus `wiki` and `devcontainer` for cross-cutting changes.
 
 To use the interactive commit helper:
 

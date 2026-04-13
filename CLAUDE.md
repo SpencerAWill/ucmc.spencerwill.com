@@ -9,6 +9,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - `apps/` — Applications (sub-apps with their own configs)
 - `libs/` — Shared libraries
 - `infra/` — Pulumi infrastructure-as-code (TypeScript)
+- `.devcontainer/` — Dev container configuration (Dockerfile, docker-compose, devcontainer.json)
 - `.wiki/` — GitHub wiki content (git submodule, auto-synced locally and via CI)
 - Root contains shared tooling and configuration
 
@@ -17,6 +18,16 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - **pnpm** (v10.33.0+) with workspaces
 - Workspace packages defined in `pnpm-workspace.yaml`
 - All modules are ESM (`"type": "module"` in package.json)
+
+## Dev Container
+
+- Config in `.devcontainer/` (Dockerfile, docker-compose.yml, devcontainer.json)
+- Base image: `mcr.microsoft.com/devcontainers/base:debian`
+- Installs Node.js 22 (via devcontainer feature), Pulumi CLI, GitHub CLI, and Claude Code CLI
+- `postCreateCommand` runs `corepack enable`, initializes the wiki submodule, and runs `pnpm install`
+- Named Docker volumes persist: pnpm store, Pulumi config (`~/.pulumi`), GitHub CLI config (`~/.config/gh`), Claude data (`~/.claude`)
+- VS Code extensions auto-installed: Prettier, ESLint, EditorConfig
+- `.dockerignore` excludes `node_modules/`, `.git/`, `.wiki/`, build outputs, and env files from the build context
 
 ## Tooling
 
@@ -59,7 +70,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 ### Commits
 
 - **Conventional Commits** enforced via commitlint (`commitlint.config.js`)
-- Commit scopes are validated against pnpm workspace package names via `@commitlint/config-pnpm-scopes`
+- Commit scopes are validated against pnpm workspace package names (via `@commitlint/config-pnpm-scopes`) plus custom scopes: `wiki`, `devcontainer`
 - Use `pnpm commit` to launch the interactive commit helper (czg)
 - Format: `type(scope): description`
 - Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert

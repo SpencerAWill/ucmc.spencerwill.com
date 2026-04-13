@@ -1,0 +1,11 @@
+node_modules/
+.git/
+.wiki/
+dist/
+.next/
+.nuxt/
+.cache/
+.pnpm-store/
+*.log
+.env
+.env.*
