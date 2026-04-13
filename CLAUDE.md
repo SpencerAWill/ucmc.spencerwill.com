@@ -7,6 +7,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 ## Repository Structure
 
 - `apps/` — Applications (sub-apps with their own configs)
+  - `apps/web/` — UCMC web app (TanStack Start, React 19, Vite, Tailwind v4, deployed to Cloudflare Workers via Wrangler)
 - `libs/` — Shared libraries
 - `infra/` — Pulumi infrastructure-as-code (TypeScript)
 - `.devcontainer/` — Dev container configuration (Dockerfile, docker-compose, devcontainer.json)
@@ -61,6 +62,20 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - **Infra CI** (`infra-ci.yml`) — runs ESLint, TypeScript type-checking, and Pulumi preview on PRs that modify `infra/`
 - **Infra Deploy** (`infra-deploy.yml`) — deploys infrastructure: auto-deploys dev on merge to main, manual prod deploy via `workflow_dispatch` with GitHub environment approval
 
+### Web App (`apps/web`)
+
+- **Framework**: TanStack Start (file-router mode) with React 19
+- **Build tool**: Vite 8 (config in `apps/web/vite.config.ts`)
+- **Styling**: Tailwind CSS v4 (via `@tailwindcss/vite`), shadcn components
+- **State/data**: TanStack Query, TanStack Router (with SSR query integration), TanStack Form, TanStack Table
+- **Env**: `@t3-oss/env-core` + zod (`apps/web/src/env.ts`)
+- **Testing**: Vitest with jsdom and Testing Library
+- **Component dev**: Storybook 10 (`pnpm --filter ucmc-web storybook`)
+- **Deployment**: Cloudflare Workers via Wrangler (`apps/web/wrangler.jsonc`, worker name `ucmc-web`)
+- **TS config**: extends bundler resolution with `strict: true`, path alias `#/*` → `./src/*` (also mirrored in `package.json` `imports` for Node-native resolution)
+- **ESLint**: extends the root config, then `@tanstack/eslint-config`, with a few TanStack-specific rules relaxed
+- **Formatting**: inherits the root `.prettierrc` — do NOT add a sub-app `prettier.config.js` (it would drift from root and lint-staged)
+
 ### Infrastructure
 
 - **Pulumi** — IaC in `infra/`, TypeScript with the `nodejs` runtime
@@ -86,6 +101,12 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - `pnpm exec eslint .` — lint all JS/TS files
 - `pnpm exec prettier --write .` — format all files
 - `pnpm wiki:push` — push local wiki submodule commits to the wiki remote
+- `pnpm --filter ucmc-web dev` — start the web app dev server on port 3000
+- `pnpm --filter ucmc-web build` — build the web app
+- `pnpm --filter ucmc-web test` — run web app unit tests
+- `pnpm --filter ucmc-web typecheck` — type-check the web app
+- `pnpm --filter ucmc-web storybook` — start Storybook on port 6006
+- `pnpm --filter ucmc-web deploy` — build and deploy to Cloudflare Workers
 - `cd infra && pulumi preview` — preview infrastructure changes
 - `cd infra && pulumi up` — deploy infrastructure changes
 

@@ -33,5 +33,11 @@
     "*": [
       "prettier --write --ignore-unknown"
     ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "lightningcss"
+    ]
   }
 }

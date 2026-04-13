@@ -13,6 +13,17 @@
   "remoteEnv": {
     "PATH": "/home/vscode/.pulumi/bin:${containerEnv:PATH}"
   },
+  "forwardPorts": [3000, 6006],
+  "portsAttributes": {
+    "3000": {
+      "label": "Web (Vite)",
+      "onAutoForward": "notify"
+    },
+    "6006": {
+      "label": "Storybook",
+      "onAutoForward": "silent"
+    }
+  },
   "postCreateCommand": "corepack enable && git submodule update --init --remote --merge && pnpm install",
   "customizations": {
     "vscode": {

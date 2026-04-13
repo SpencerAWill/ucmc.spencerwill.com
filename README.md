@@ -7,6 +7,7 @@ The University of Cincinnati Mountaineering Club's software system.
 This is a polyglot pnpm monorepo with the following workspace layout:
 
 - `apps/` — Applications
+  - `apps/web/` — UCMC web app (TanStack Start on Cloudflare Workers)
 - `libs/` — Shared libraries
 - `infra/` — Pulumi infrastructure-as-code
 - `.devcontainer/` — Dev container configuration
@@ -80,6 +81,21 @@ To run manually:
 ```bash
 pnpm exec eslint .
 pnpm exec prettier --write .
+```
+
+### Web App
+
+The web app lives in `apps/web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler.
+
+Common commands (run from the repo root):
+
+```bash
+pnpm --filter ucmc-web dev          # start the dev server on http://localhost:3000
+pnpm --filter ucmc-web build        # production build
+pnpm --filter ucmc-web test         # run Vitest unit tests
+pnpm --filter ucmc-web typecheck    # tsc --noEmit
+pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006
+pnpm --filter ucmc-web deploy       # build and deploy to Cloudflare Workers
 ```
 
 ### Infrastructure
