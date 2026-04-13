@@ -49,13 +49,36 @@ jobs:
         env:
           CLOUDFLARE_ENV: dev
 
+      # Pulumi is the source of truth for per-env runtime vars (APP_BASE_URL,
+      # WEBAUTHN_RP_*, RESEND_FROM). Read them here and pass via --var below
+      # so wrangler.jsonc doesn't duplicate the hostname Pulumi binds.
+      - uses: pulumi/setup-pulumi@v2
+      - name: Read Pulumi outputs
+        id: pulumi
+        working-directory: infra
+        run: |
+          pulumi stack select dev
+          {
+            echo "appBaseUrl=$(pulumi stack output appBaseUrl)"
+            echo "webauthnRpId=$(pulumi stack output webauthnRpId)"
+            echo "webauthnRpName=$(pulumi stack output webauthnRpName)"
+            echo "resendFrom=$(pulumi stack output resendFrom)"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
       - name: Deploy Worker (dev)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: deploy
+          command: >-
+            deploy
+            --var APP_BASE_URL:${{ steps.pulumi.outputs.appBaseUrl }}
+            --var WEBAUTHN_RP_ID:${{ steps.pulumi.outputs.webauthnRpId }}
+            --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthnRpName }}
+            --var RESEND_FROM:${{ steps.pulumi.outputs.resendFrom }}
 
   deploy-prod:
     name: Deploy Web to Prod
@@ -85,10 +108,30 @@ jobs:
         env:
           CLOUDFLARE_ENV: production
 
+      - uses: pulumi/setup-pulumi@v2
+      - name: Read Pulumi outputs
+        id: pulumi
+        working-directory: infra
+        run: |
+          pulumi stack select prod
+          {
+            echo "appBaseUrl=$(pulumi stack output appBaseUrl)"
+            echo "webauthnRpId=$(pulumi stack output webauthnRpId)"
+            echo "webauthnRpName=$(pulumi stack output webauthnRpName)"
+            echo "resendFrom=$(pulumi stack output resendFrom)"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
       - name: Deploy Worker (prod)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: deploy
+          command: >-
+            deploy --env production
+            --var APP_BASE_URL:${{ steps.pulumi.outputs.appBaseUrl }}
+            --var WEBAUTHN_RP_ID:${{ steps.pulumi.outputs.webauthnRpId }}
+            --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthnRpName }}
+            --var RESEND_FROM:${{ steps.pulumi.outputs.resendFrom }}
