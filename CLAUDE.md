@@ -73,7 +73,10 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - **Env**: `@t3-oss/env-core` + zod (`apps/web/src/env.ts`)
 - **Testing**: Vitest with jsdom and Testing Library
 - **Component dev**: Storybook 10 (`pnpm --filter ucmc-web storybook`)
-- **Deployment**: Cloudflare Workers via Wrangler (`apps/web/wrangler.jsonc`). Two wrangler environments: `dev` → worker `ucmc-web-dev` at `dev.ucmc.spencerwill.com`, `production` → worker `ucmc-web` at `ucmc.spencerwill.com`. Custom domain bindings are provisioned by Pulumi, not wrangler.
+- **Deployment**: Cloudflare Workers via Wrangler (`apps/web/wrangler.jsonc`). Two wrangler environments: `dev` → worker `ucmc-web-dev` at `dev.ucmc.spencerwill.com`, `production` → worker `ucmc-web` at `ucmc.spencerwill.com`.
+  - **Wrangler owns:** the Worker script (code, compatibility flags, D1 binding by UUID) and out-of-band secrets (`wrangler secret put RESEND_API_KEY --env <stack>`).
+  - **Pulumi owns:** the D1 database itself, the custom domain binding, and all per-env `vars` values (APP_BASE_URL, WEBAUTHN_RP_ID, WEBAUTHN_RP_NAME, RESEND_FROM). `vars` are injected at deploy time by `web-deploy.yml` via `wrangler deploy --var KEY:VALUE`, sourced from Pulumi stack outputs. This keeps the hostname Pulumi binds and the hostname the app advertises from drifting.
+  - **D1 UUIDs** are stack outputs from Pulumi and must be pasted into `wrangler.jsonc` once per stack after first `pulumi up`. They're non-secret and stable; the paste is one-time.
 - **TS config**: extends bundler resolution with `strict: true`, path alias `#/*` → `./src/*` (also mirrored in `package.json` `imports` for Node-native resolution)
 - **ESLint**: extends the root config, then `@tanstack/eslint-config`, with a few TanStack-specific rules relaxed
 - **Formatting**: inherits the root `.prettierrc` — do NOT add a sub-app `prettier.config.js` (it would drift from root and lint-staged)
@@ -87,7 +90,12 @@ This is the software system for the University of Cincinnati Mountaineering Club
   - State stored in Pulumi Cloud
   - Uses pnpm as the package manager (`runtime.options.packagemanager: pnpm`)
   - CI/CD via `infra-ci.yml` (PR preview) and `infra-deploy.yml` (deploy)
-  - **Cloudflare provider** (`@pulumi/cloudflare`) — manages the Worker custom domain bindings (`dev.ucmc.spencerwill.com`, `ucmc.spencerwill.com`). The `spencerwill.com` zone itself is NOT managed by Pulumi; only the Worker domain records within it are. Cloudflare auth in CI uses `CLOUDFLARE_API_TOKEN` (env var picked up by the provider)
+  - **Cloudflare provider** (`@pulumi/cloudflare`) — manages:
+    - Worker custom domain bindings (`dev.ucmc.spencerwill.com`, `ucmc.spencerwill.com`). The `spencerwill.com` zone itself is NOT managed by Pulumi; only the Worker domain records within it are.
+    - D1 databases (`ucmc-web-dev`, `ucmc-web`). Protected with `protect: true` — replacing a D1 DB wipes all data.
+    - Per-env worker var values, exposed as stack outputs (`appBaseUrl`, `webauthnRpId`, `webauthnRpName`, `resendFrom`) that `web-deploy.yml` reads and passes to `wrangler deploy --var`.
+    - Cloudflare auth in CI uses `CLOUDFLARE_API_TOKEN` (env var picked up by the provider)
+  - `web-deploy.yml` reads Pulumi stack outputs via `pulumi/setup-pulumi@v2` + `pulumi stack output`, which requires `PULUMI_ACCESS_TOKEN` to be set in the `dev` and `prod` GitHub environments.
 
 ### Commits
 

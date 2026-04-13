@@ -85,7 +85,7 @@ pnpm exec prettier --write .
 
 ### Web App
 
-The web app lives in `apps/web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Custom domains are provisioned by Pulumi (see Infrastructure below); dev auto-deploys on merge to main, prod is a manual dispatch with environment approval.
+The web app lives in `apps/web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Pulumi owns the D1 database, the custom domain binding, and the per-env `vars` values (injected into `wrangler deploy --var` by CI); wrangler deploys the worker script itself and manages secrets (`wrangler secret put`). Dev auto-deploys on merge to main, prod is a manual dispatch with environment approval.
 
 Common commands (run from the repo root):
 
@@ -119,10 +119,16 @@ pulumi up         # apply changes
 #### Required GitHub setup
 
 - **Environments**: Create `dev` (no protection) and `prod` (required reviewers) in repo Settings > Environments
-- **Secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `web-deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
+- **Secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `web-deploy.yml`). `web-deploy.yml` additionally needs `PULUMI_ACCESS_TOKEN` available in the `dev` and `prod` environments so it can read stack outputs — add it to each environment's secrets, not just repo-level. The Cloudflare API token needs these scopes: Workers Scripts (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), D1 (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
 - **Stack init** (one-time): `cd infra && pulumi stack init dev && pulumi stack init prod`
-- **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/Pulumi.dev.yaml` and `infra/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
-- **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. Trigger `web-deploy.yml` for dev first, then `infra-deploy.yml` for dev; repeat for prod. After bootstrap, either workflow can run independently.
+- **Stack config** (one-time): `infra/Pulumi.dev.yaml` and `infra/Pulumi.prod.yaml` hold non-secret per-env values (account ID, zone ID, hostname, worker name, D1 database name, display names). These are already populated; adjust if the domain or display names ever change.
+- **Bootstrap order** (first deploy for a new stack):
+  1. `cd infra && pulumi up --target 'urn:pulumi:<stack>::ucmc-infra::cloudflare:index/d1Database:D1Database::ucmc-web-<stack>-db'` — creates the D1 database only. Skipping `--target` on a fresh stack fails because `WorkersCustomDomain` references a worker that doesn't exist yet.
+  2. Copy the UUID from `pulumi stack output d1DatabaseId` into the matching `database_id` field in `apps/web/wrangler.jsonc`, commit.
+  3. Trigger `web-deploy.yml` for the stack — deploys the worker, which reads the remaining Pulumi outputs (`appBaseUrl`, `webauthnRpId`, etc.) and sets them as `--var`.
+  4. `pulumi up` — now completes the `WorkersCustomDomain` binding.
+  5. Set runtime secrets: `wrangler secret put RESEND_API_KEY --env <dev|production> --cwd apps/web`.
+     After bootstrap, `web-deploy.yml` and `infra-deploy.yml` run independently on their own triggers.
 
 ### Wiki
 
