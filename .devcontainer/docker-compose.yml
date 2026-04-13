@@ -9,6 +9,7 @@ services:
       - pulumi-config:/home/vscode/.pulumi
       - gh-config:/home/vscode/.config/gh
       - claude-data:/home/vscode/.claude
+      - command-history:/commandhistory
     command: sleep infinity
 
 volumes:
@@ -16,3 +17,4 @@ volumes:
   pulumi-config:
   gh-config:
   claude-data:
+  command-history:

@@ -10,8 +10,8 @@
     },
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  "remoteEnv": {
-    "PATH": "/home/vscode/.pulumi/bin:${containerEnv:PATH}"
+  "containerEnv": {
+    "TZ": "${localEnv:TZ:America/New_York}"
   },
   "forwardPorts": [3000, 6006],
   "portsAttributes": {
@@ -27,10 +27,32 @@
   "postCreateCommand": "corepack enable && git submodule update --init --remote --merge && pnpm install",
   "customizations": {
     "vscode": {
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      },
       "extensions": [
         "esbenp.prettier-vscode",
         "dbaeumer.vscode-eslint",
-        "editorconfig.editorconfig"
+        "editorconfig.editorconfig",
+        "bradlc.vscode-tailwindcss",
+        "github.vscode-github-actions",
+        "github.vscode-pull-request-github",
+        "vitest.explorer",
+        "yoavbls.pretty-ts-errors",
+        "usernamehw.errorlens",
+        "pulumi.pulumi-vscode-tools",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker",
+        "mikestead.dotenv",
+        "streetsidesoftware.code-spell-checker",
+        "christian-kohler.path-intellisense",
+        "formulahendry.auto-rename-tag",
+        "vivaxy.vscode-conventional-commits"
       ]
     }
   }
