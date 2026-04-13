@@ -8,9 +8,13 @@ RUN for dir in \
       .config/gh \
       .claude \
     ; do \
-      mkdir -p "/home/vscode/$dir" \
-      && chown -R vscode:vscode "/home/vscode/$dir"; \
-    done
+      mkdir -p "/home/vscode/$dir"; \
+    done \
+    && chown -R vscode:vscode \
+      /home/vscode/.local \
+      /home/vscode/.pulumi \
+      /home/vscode/.config/gh \
+      /home/vscode/.claude
 
 # Install Pulumi CLI and Claude Code CLI for vscode user
 USER vscode

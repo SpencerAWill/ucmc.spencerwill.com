@@ -10,6 +10,9 @@
     },
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
+  "remoteEnv": {
+    "PATH": "/home/vscode/.pulumi/bin:${containerEnv:PATH}"
+  },
   "postCreateCommand": "corepack enable && git submodule update --init --remote --merge && pnpm install",
   "customizations": {
     "vscode": {
