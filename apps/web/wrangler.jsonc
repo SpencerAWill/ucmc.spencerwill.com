@@ -1,15 +1,45 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ucmc-web",
+  // Top-level = dev config. @cloudflare/vite-plugin reads top-level only, so
+  // local dev (`pnpm dev`) uses these bindings. `wrangler deploy` (no --env)
+  // also publishes against this config → the dev worker.
+  //
+  // env.production overrides for prod via `wrangler deploy --env production`.
+  //
+  // ---- What lives here vs. in Pulumi ----
+  // Runtime `vars` (APP_BASE_URL, WEBAUTHN_RP_ID, etc.) are NOT in this file —
+  // they're Pulumi stack outputs injected at deploy time by web-deploy.yml via
+  // `wrangler deploy --var KEY:VALUE`. Local dev reads them from .dev.vars
+  // instead (see .dev.vars.example). This keeps the hostname that Pulumi binds
+  // to the worker and the hostname the app advertises in a single source.
+  //
+  // `database_id` below is the D1 UUID provisioned by Pulumi — pasted in once
+  // after `pulumi up` in a new stack. Non-secret, stable, safe to commit.
+  // Miniflare ignores the value locally (keys by `database_name` instead), so
+  // the dev placeholder is fine until someone actually targets remote D1.
+  "name": "ucmc-web-dev",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
-  "env": {
-    "dev": {
-      "name": "ucmc-web-dev",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ucmc-web-dev",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "drizzle/migrations",
     },
+  ],
+  "env": {
     "production": {
       "name": "ucmc-web",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ucmc-web",
+          "database_id": "REPLACE_WITH_PROD_D1_ID",
+          "migrations_dir": "drizzle/migrations",
+        },
+      ],
     },
   },
 }

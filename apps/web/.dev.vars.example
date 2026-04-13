@@ -1,0 +1,18 @@
+# Copy to .dev.vars (gitignored) and fill in. Loaded automatically by `wrangler dev`.
+#
+# Runtime vars no longer live in wrangler.jsonc (Pulumi owns them for deployed
+# envs via --var flags in web-deploy.yml). That means `wrangler dev` has no
+# defaults — this file is the ONLY source for local runs. Missing any of the
+# four below will crash the server on first request.
+
+APP_BASE_URL=http://localhost:3000
+WEBAUTHN_RP_ID=localhost
+WEBAUTHN_RP_NAME=UCMC (local)
+RESEND_FROM=UCMC <noreply@localhost>
+
+# Resend API key. Leave unset to use the console-log email adapter (magic
+# links print to the dev-server terminal — NOT the browser console).
+RESEND_API_KEY=
+
+# Email used as the seed system_admin for `pnpm db:seed:local`.
+SEED_ADMIN_EMAIL=you@example.com

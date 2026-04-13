@@ -8,61 +8,240 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as SignInRouteImport } from "./routes/sign-in";
+import { Route as AccountRouteImport } from "./routes/account";
+import { Route as IndexRouteImport } from "./routes/index";
+import { Route as AccountIndexRouteImport } from "./routes/account.index";
+import { Route as RegisterProfileRouteImport } from "./routes/register.profile";
+import { Route as RegisterPendingRouteImport } from "./routes/register.pending";
+import { Route as AuthCallbackRouteImport } from "./routes/auth.callback";
+import { Route as AccountSecurityRouteImport } from "./routes/account.security";
+import { Route as AccountPreferencesRouteImport } from "./routes/account.preferences";
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const SignInRoute = SignInRouteImport.update({
+  id: "/sign-in",
+  path: "/sign-in",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
+const AccountRoute = AccountRouteImport.update({
+  id: "/account",
+  path: "/account",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const IndexRoute = IndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const AccountIndexRoute = AccountIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => AccountRoute,
+} as any);
+const RegisterProfileRoute = RegisterProfileRouteImport.update({
+  id: "/register/profile",
+  path: "/register/profile",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const RegisterPendingRoute = RegisterPendingRouteImport.update({
+  id: "/register/pending",
+  path: "/register/pending",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: "/auth/callback",
+  path: "/auth/callback",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const AccountSecurityRoute = AccountSecurityRouteImport.update({
+  id: "/security",
+  path: "/security",
+  getParentRoute: () => AccountRoute,
+} as any);
+const AccountPreferencesRoute = AccountPreferencesRouteImport.update({
+  id: "/preferences",
+  path: "/preferences",
+  getParentRoute: () => AccountRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  "/": typeof IndexRoute;
+  "/account": typeof AccountRouteWithChildren;
+  "/sign-in": typeof SignInRoute;
+  "/account/preferences": typeof AccountPreferencesRoute;
+  "/account/security": typeof AccountSecurityRoute;
+  "/auth/callback": typeof AuthCallbackRoute;
+  "/register/pending": typeof RegisterPendingRoute;
+  "/register/profile": typeof RegisterProfileRoute;
+  "/account/": typeof AccountIndexRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  "/": typeof IndexRoute;
+  "/sign-in": typeof SignInRoute;
+  "/account/preferences": typeof AccountPreferencesRoute;
+  "/account/security": typeof AccountSecurityRoute;
+  "/auth/callback": typeof AuthCallbackRoute;
+  "/register/pending": typeof RegisterPendingRoute;
+  "/register/profile": typeof RegisterProfileRoute;
+  "/account": typeof AccountIndexRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  __root__: typeof rootRouteImport;
+  "/": typeof IndexRoute;
+  "/account": typeof AccountRouteWithChildren;
+  "/sign-in": typeof SignInRoute;
+  "/account/preferences": typeof AccountPreferencesRoute;
+  "/account/security": typeof AccountSecurityRoute;
+  "/auth/callback": typeof AuthCallbackRoute;
+  "/register/pending": typeof RegisterPendingRoute;
+  "/register/profile": typeof RegisterProfileRoute;
+  "/account/": typeof AccountIndexRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
-  fileRoutesById: FileRoutesById
+  fileRoutesByFullPath: FileRoutesByFullPath;
+  fullPaths:
+    | "/"
+    | "/account"
+    | "/sign-in"
+    | "/account/preferences"
+    | "/account/security"
+    | "/auth/callback"
+    | "/register/pending"
+    | "/register/profile"
+    | "/account/";
+  fileRoutesByTo: FileRoutesByTo;
+  to:
+    | "/"
+    | "/sign-in"
+    | "/account/preferences"
+    | "/account/security"
+    | "/auth/callback"
+    | "/register/pending"
+    | "/register/profile"
+    | "/account";
+  id:
+    | "__root__"
+    | "/"
+    | "/account"
+    | "/sign-in"
+    | "/account/preferences"
+    | "/account/security"
+    | "/auth/callback"
+    | "/register/pending"
+    | "/register/profile"
+    | "/account/";
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  IndexRoute: typeof IndexRoute;
+  AccountRoute: typeof AccountRouteWithChildren;
+  SignInRoute: typeof SignInRoute;
+  AuthCallbackRoute: typeof AuthCallbackRoute;
+  RegisterPendingRoute: typeof RegisterPendingRoute;
+  RegisterProfileRoute: typeof RegisterProfileRoute;
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+    "/sign-in": {
+      id: "/sign-in";
+      path: "/sign-in";
+      fullPath: "/sign-in";
+      preLoaderRoute: typeof SignInRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/account": {
+      id: "/account";
+      path: "/account";
+      fullPath: "/account";
+      preLoaderRoute: typeof AccountRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/account/": {
+      id: "/account/";
+      path: "/";
+      fullPath: "/account/";
+      preLoaderRoute: typeof AccountIndexRouteImport;
+      parentRoute: typeof AccountRoute;
+    };
+    "/register/profile": {
+      id: "/register/profile";
+      path: "/register/profile";
+      fullPath: "/register/profile";
+      preLoaderRoute: typeof RegisterProfileRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/register/pending": {
+      id: "/register/pending";
+      path: "/register/pending";
+      fullPath: "/register/pending";
+      preLoaderRoute: typeof RegisterPendingRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/auth/callback": {
+      id: "/auth/callback";
+      path: "/auth/callback";
+      fullPath: "/auth/callback";
+      preLoaderRoute: typeof AuthCallbackRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/account/security": {
+      id: "/account/security";
+      path: "/security";
+      fullPath: "/account/security";
+      preLoaderRoute: typeof AccountSecurityRouteImport;
+      parentRoute: typeof AccountRoute;
+    };
+    "/account/preferences": {
+      id: "/account/preferences";
+      path: "/preferences";
+      fullPath: "/account/preferences";
+      preLoaderRoute: typeof AccountPreferencesRouteImport;
+      parentRoute: typeof AccountRoute;
+    };
   }
 }
 
+interface AccountRouteChildren {
+  AccountPreferencesRoute: typeof AccountPreferencesRoute;
+  AccountSecurityRoute: typeof AccountSecurityRoute;
+  AccountIndexRoute: typeof AccountIndexRoute;
+}
+
+const AccountRouteChildren: AccountRouteChildren = {
+  AccountPreferencesRoute: AccountPreferencesRoute,
+  AccountSecurityRoute: AccountSecurityRoute,
+  AccountIndexRoute: AccountIndexRoute,
+};
+
+const AccountRouteWithChildren =
+  AccountRoute._addFileChildren(AccountRouteChildren);
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-}
+  AccountRoute: AccountRouteWithChildren,
+  SignInRoute: SignInRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
+  RegisterPendingRoute: RegisterPendingRoute,
+  RegisterProfileRoute: RegisterProfileRoute,
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
+import type { getRouter } from "./router.tsx";
+import type { createStart } from "@tanstack/react-start";
+declare module "@tanstack/react-start" {
   interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
+    ssr: true;
+    router: Awaited<ReturnType<typeof getRouter>>;
   }
 }

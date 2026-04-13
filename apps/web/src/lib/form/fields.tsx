@@ -1,21 +1,28 @@
+import { useId } from "react";
 import { useStore } from "@tanstack/react-form";
-
-import { useFieldContext, useFormContext } from "#/hooks/demo.form-context";
 
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
-import { Textarea as ShadcnTextarea } from "#/components/ui/textarea";
+import { Label } from "#/components/ui/label";
 import * as ShadcnSelect from "#/components/ui/select";
 import { Slider as ShadcnSlider } from "#/components/ui/slider";
 import { Switch as ShadcnSwitch } from "#/components/ui/switch";
-import { Label } from "#/components/ui/label";
+import { Textarea as ShadcnTextarea } from "#/components/ui/textarea";
 
-export function SubscribeButton({ label }: { label: string }) {
+import { useFieldContext, useFormContext } from "#/lib/form/form-context";
+
+export function SubscribeButton({
+  label,
+  className,
+}: {
+  label: string;
+  className?: string;
+}) {
   const form = useFormContext();
   return (
     <form.Subscribe selector={(state) => state.isSubmitting}>
       {(isSubmitting) => (
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting} className={className}>
           {label}
         </Button>
       )}
@@ -31,12 +38,12 @@ function ErrorMessages({
   return (
     <>
       {errors.map((error) => (
-        <div
+        <p
           key={typeof error === "string" ? error : error.message}
-          className="text-red-500 mt-1 font-bold"
+          className="text-destructive mt-1 text-sm"
         >
           {typeof error === "string" ? error : error.message}
-        </div>
+        </p>
       ))}
     </>
   );
@@ -45,19 +52,25 @@ function ErrorMessages({
 export function TextField({
   label,
   placeholder,
+  type = "text",
+  autoComplete,
 }: {
   label: string;
   placeholder?: string;
+  type?: string;
+  autoComplete?: string;
 }) {
+  const id = useId();
   const field = useFieldContext<string>();
   const errors = useStore(field.store, (state) => state.meta.errors);
 
   return (
-    <div>
-      <Label htmlFor={label} className="mb-2 text-xl font-bold">
-        {label}
-      </Label>
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
       <Input
+        id={id}
+        type={type}
+        autoComplete={autoComplete}
         value={field.state.value}
         placeholder={placeholder}
         onBlur={field.handleBlur}
@@ -75,16 +88,15 @@ export function TextArea({
   label: string;
   rows?: number;
 }) {
+  const id = useId();
   const field = useFieldContext<string>();
   const errors = useStore(field.store, (state) => state.meta.errors);
 
   return (
-    <div>
-      <Label htmlFor={label} className="mb-2 text-xl font-bold">
-        {label}
-      </Label>
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
       <ShadcnTextarea
-        id={label}
+        id={id}
         value={field.state.value}
         onBlur={field.handleBlur}
         rows={rows}
@@ -104,17 +116,19 @@ export function Select({
   values: Array<{ label: string; value: string }>;
   placeholder?: string;
 }) {
+  const id = useId();
   const field = useFieldContext<string>();
   const errors = useStore(field.store, (state) => state.meta.errors);
 
   return (
-    <div>
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
       <ShadcnSelect.Select
         name={field.name}
         value={field.state.value}
         onValueChange={(value) => field.handleChange(value)}
       >
-        <ShadcnSelect.SelectTrigger className="w-full">
+        <ShadcnSelect.SelectTrigger id={id} className="w-full">
           <ShadcnSelect.SelectValue placeholder={placeholder} />
         </ShadcnSelect.SelectTrigger>
         <ShadcnSelect.SelectContent className="bg-background text-foreground">
@@ -138,16 +152,15 @@ export function Select({
 }
 
 export function Slider({ label }: { label: string }) {
+  const id = useId();
   const field = useFieldContext<number>();
   const errors = useStore(field.store, (state) => state.meta.errors);
 
   return (
-    <div>
-      <Label htmlFor={label} className="mb-2 text-xl font-bold">
-        {label}
-      </Label>
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
       <ShadcnSlider
-        id={label}
+        id={id}
         onBlur={field.handleBlur}
         value={[field.state.value]}
         onValueChange={(value) => field.handleChange(value[0])}
@@ -158,19 +171,20 @@ export function Slider({ label }: { label: string }) {
 }
 
 export function Switch({ label }: { label: string }) {
+  const id = useId();
   const field = useFieldContext<boolean>();
   const errors = useStore(field.store, (state) => state.meta.errors);
 
   return (
-    <div>
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
         <ShadcnSwitch
-          id={label}
+          id={id}
           onBlur={field.handleBlur}
           checked={field.state.value}
           onCheckedChange={(checked) => field.handleChange(checked)}
         />
-        <Label htmlFor={label}>{label}</Label>
+        <Label htmlFor={id}>{label}</Label>
       </div>
       {field.state.meta.isTouched && <ErrorMessages errors={errors} />}
     </div>

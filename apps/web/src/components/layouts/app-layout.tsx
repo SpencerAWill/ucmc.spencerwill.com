@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { ModeToggle } from "#/components/mode-toggle";
-import { Avatar, AvatarFallback } from "#/components/ui/avatar";
+import { UserMenu } from "#/components/auth/user-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -60,9 +60,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
           <div className="flex flex-1 flex-nowrap flex-row-reverse gap-x-2">
-            <Avatar>
-              <AvatarFallback>?</AvatarFallback>
-            </Avatar>
+            <UserMenu />
             <ModeToggle />
           </div>
         </nav>
