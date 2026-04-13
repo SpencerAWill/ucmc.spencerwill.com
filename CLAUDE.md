@@ -57,7 +57,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 ### CI / GitHub Actions
 
 - **Sync Wiki Submodule** (`sync-wiki.yml`) — updates the `.wiki/` submodule pointer on wiki edits (`gollum` event), 1st and 15th of each month at 06:00 UTC, or manual dispatch
-- **Deploy Worker** (`build-and-deploy.yml`) — manual Cloudflare Worker deploy
+- **Web Deploy** (`web-deploy.yml`) — deploys the web app to Cloudflare Workers: auto-deploys dev on merge to main (when `apps/web/**`, `libs/**`, or lockfile changes), manual prod deploy via `workflow_dispatch` with GitHub environment approval
 - **Lint PR** (`lint-pr.yaml`) — validates PR titles follow conventional commit format
 - **Infra CI** (`infra-ci.yml`) — runs ESLint, TypeScript type-checking, and Pulumi preview on PRs that modify `infra/`
 - **Infra Deploy** (`infra-deploy.yml`) — deploys infrastructure: auto-deploys dev on merge to main, manual prod deploy via `workflow_dispatch` with GitHub environment approval
@@ -71,7 +71,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - **Env**: `@t3-oss/env-core` + zod (`apps/web/src/env.ts`)
 - **Testing**: Vitest with jsdom and Testing Library
 - **Component dev**: Storybook 10 (`pnpm --filter ucmc-web storybook`)
-- **Deployment**: Cloudflare Workers via Wrangler (`apps/web/wrangler.jsonc`, worker name `ucmc-web`)
+- **Deployment**: Cloudflare Workers via Wrangler (`apps/web/wrangler.jsonc`). Two wrangler environments: `dev` → worker `ucmc-web-dev` at `dev.ucmc.spencerwill.com`, `production` → worker `ucmc-web` at `ucmc.spencerwill.com`. Custom domain bindings are provisioned by Pulumi, not wrangler.
 - **TS config**: extends bundler resolution with `strict: true`, path alias `#/*` → `./src/*` (also mirrored in `package.json` `imports` for Node-native resolution)
 - **ESLint**: extends the root config, then `@tanstack/eslint-config`, with a few TanStack-specific rules relaxed
 - **Formatting**: inherits the root `.prettierrc` — do NOT add a sub-app `prettier.config.js` (it would drift from root and lint-staged)
@@ -85,6 +85,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
   - State stored in Pulumi Cloud
   - Uses pnpm as the package manager (`runtime.options.packagemanager: pnpm`)
   - CI/CD via `infra-ci.yml` (PR preview) and `infra-deploy.yml` (deploy)
+  - **Cloudflare provider** (`@pulumi/cloudflare`) — manages the Worker custom domain bindings (`dev.ucmc.spencerwill.com`, `ucmc.spencerwill.com`). The `spencerwill.com` zone itself is NOT managed by Pulumi; only the Worker domain records within it are. Cloudflare auth in CI uses `CLOUDFLARE_API_TOKEN` (env var picked up by the provider)
 
 ### Commits
 
@@ -106,7 +107,8 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - `pnpm --filter ucmc-web test` — run web app unit tests
 - `pnpm --filter ucmc-web typecheck` — type-check the web app
 - `pnpm --filter ucmc-web storybook` — start Storybook on port 6006
-- `pnpm --filter ucmc-web deploy` — build and deploy to Cloudflare Workers
+- `pnpm --filter ucmc-web deploy:dev` — build and deploy to dev (`ucmc-web-dev` worker)
+- `pnpm --filter ucmc-web deploy:prod` — build and deploy to prod (`ucmc-web` worker)
 - `cd infra && pulumi preview` — preview infrastructure changes
 - `cd infra && pulumi up` — deploy infrastructure changes
 

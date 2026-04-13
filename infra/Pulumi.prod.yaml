@@ -1,1 +1,5 @@
-config: {}
+config:
+  cloudflare:accountId: d57880630b3277f59331318b53f323b6
+  ucmc-infra:zoneId: 6bfb4d1d3134e6d765aef413094cd28f
+  ucmc-infra:hostname: ucmc.spencerwill.com
+  ucmc-infra:workerName: ucmc-web

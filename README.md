@@ -85,7 +85,7 @@ pnpm exec prettier --write .
 
 ### Web App
 
-The web app lives in `apps/web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler.
+The web app lives in `apps/web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Custom domains are provisioned by Pulumi (see Infrastructure below); dev auto-deploys on merge to main, prod is a manual dispatch with environment approval.
 
 Common commands (run from the repo root):
 
@@ -95,7 +95,8 @@ pnpm --filter ucmc-web build        # production build
 pnpm --filter ucmc-web test         # run Vitest unit tests
 pnpm --filter ucmc-web typecheck    # tsc --noEmit
 pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006
-pnpm --filter ucmc-web deploy       # build and deploy to Cloudflare Workers
+pnpm --filter ucmc-web deploy:dev   # build and deploy to dev (dev.ucmc.spencerwill.com)
+pnpm --filter ucmc-web deploy:prod  # build and deploy to prod (ucmc.spencerwill.com)
 ```
 
 ### Infrastructure
@@ -118,8 +119,10 @@ pulumi up         # apply changes
 #### Required GitHub setup
 
 - **Environments**: Create `dev` (no protection) and `prod` (required reviewers) in repo Settings > Environments
-- **Secrets**: Add `PULUMI_ACCESS_TOKEN` in repo Settings > Secrets and variables > Actions
+- **Secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `web-deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
 - **Stack init** (one-time): `cd infra && pulumi stack init dev && pulumi stack init prod`
+- **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/Pulumi.dev.yaml` and `infra/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
+- **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. Trigger `web-deploy.yml` for dev first, then `infra-deploy.yml` for dev; repeat for prod. After bootstrap, either workflow can run independently.
 
 ### Wiki
 
