@@ -14,7 +14,8 @@
     "format": "prettier --check .",
     "check": "prettier --write . && eslint --fix",
     "typecheck": "tsc --noEmit",
-    "deploy": "pnpm run build && wrangler deploy",
+    "deploy:dev": "CLOUDFLARE_ENV=dev pnpm run build && wrangler deploy",
+    "deploy:prod": "CLOUDFLARE_ENV=production pnpm run build && wrangler deploy",
     "storybook": "storybook dev -p 6006 --host 0.0.0.0",
     "build-storybook": "storybook build"
   },
