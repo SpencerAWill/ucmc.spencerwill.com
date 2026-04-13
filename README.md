@@ -82,6 +82,29 @@ pnpm exec eslint .
 pnpm exec prettier --write .
 ```
 
+### Infrastructure
+
+Infrastructure is managed with [Pulumi](https://www.pulumi.com/) in the `infra/` directory, with two stacks:
+
+- **dev** — auto-deployed when changes to `infra/` merge to `main`
+- **prod** — deployed manually via GitHub Actions with environment approval
+
+On pull requests that touch `infra/`, CI runs ESLint, TypeScript type-checking, and a Pulumi preview (posted as a PR comment).
+
+To preview or deploy locally:
+
+```bash
+cd infra
+pulumi preview    # see planned changes
+pulumi up         # apply changes
+```
+
+#### Required GitHub setup
+
+- **Environments**: Create `dev` (no protection) and `prod` (required reviewers) in repo Settings > Environments
+- **Secrets**: Add `PULUMI_ACCESS_TOKEN` in repo Settings > Secrets and variables > Actions
+- **Stack init** (one-time): `cd infra && pulumi stack init dev && pulumi stack init prod`
+
 ### Wiki
 
 The GitHub wiki is included as a git submodule at `.wiki/`. It syncs automatically on pull, checkout, and install. A GitHub Action also keeps it updated.

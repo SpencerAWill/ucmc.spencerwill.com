@@ -58,14 +58,18 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - **Sync Wiki Submodule** (`sync-wiki.yml`) — updates the `.wiki/` submodule pointer on wiki edits (`gollum` event), 1st and 15th of each month at 06:00 UTC, or manual dispatch
 - **Deploy Worker** (`build-and-deploy.yml`) — manual Cloudflare Worker deploy
 - **Lint PR** (`lint-pr.yaml`) — validates PR titles follow conventional commit format
+- **Infra CI** (`infra-ci.yml`) — runs ESLint, TypeScript type-checking, and Pulumi preview on PRs that modify `infra/`
+- **Infra Deploy** (`infra-deploy.yml`) — deploys infrastructure: auto-deploys dev on merge to main, manual prod deploy via `workflow_dispatch` with GitHub environment approval
 
 ### Infrastructure
 
 - **Pulumi** — IaC in `infra/`, TypeScript with the `nodejs` runtime
   - Project config in `infra/Pulumi.yaml`
   - Stack configs in `infra/Pulumi.<stack>.yaml` (secrets are encrypted, safe to commit)
+  - Two stacks: `dev` (auto-deployed on merge) and `prod` (manual deploy with approval)
   - State stored in Pulumi Cloud
   - Uses pnpm as the package manager (`runtime.options.packagemanager: pnpm`)
+  - CI/CD via `infra-ci.yml` (PR preview) and `infra-deploy.yml` (deploy)
 
 ### Commits
 
