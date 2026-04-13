@@ -4,9 +4,8 @@ import * as pulumi from "@pulumi/pulumi";
 const stack = pulumi.getStack();
 
 const cfg = new pulumi.Config();
-const cloudflareCfg = new pulumi.Config("cloudflare");
 
-const accountId = cloudflareCfg.require("accountId");
+const accountId = cfg.require("accountId");
 const zoneId = cfg.require("zoneId");
 const hostname = cfg.require("hostname");
 const workerName = cfg.require("workerName");
