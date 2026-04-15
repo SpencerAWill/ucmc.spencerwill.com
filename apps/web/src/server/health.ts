@@ -2,31 +2,77 @@ import { createServerFn } from "@tanstack/react-start";
 import { sql } from "drizzle-orm";
 
 import { getDb } from "#/server/db";
+import { getBucket } from "#/server/r2";
 
 /**
- * Runs a no-op `SELECT 1` against D1 to prove the binding resolves, the
- * worker can reach the DB, and Drizzle can build queries.
- *
- * Kept in its own server module (rather than inline in the route file)
- * because TanStack Start's route-splitting re-emits the route file into
- * client chunks. Keeping the D1 import chain behind the server-fn boundary
- * makes sure client bundles never try to resolve `cloudflare:workers`.
- *
- * Never throws — failures are returned as `status: "fail"` so the caller
- * can render them inline instead of tripping an error boundary.
+ * Per-check shape. `output` is set only on failure so the client can render
+ * an inline error message without tripping an error boundary.
  */
+export interface HealthCheck {
+  name: string;
+  status: "pass" | "fail";
+  time: string;
+  output?: string;
+}
+
+export interface HealthReport {
+  status: "pass" | "fail";
+  checks: HealthCheck[];
+}
+
+/**
+ * Individual probes live in their own module rather than inline in the route
+ * file because TanStack Start's route-splitting re-emits route files into
+ * client chunks. Keeping the D1/R2 import chains behind the server-fn
+ * boundary makes sure client bundles never try to resolve
+ * `cloudflare:workers`.
+ *
+ * Each probe MUST NOT throw — failures are returned as `status: "fail"` so
+ * /health can render them inline. The overall report is `pass` only if
+ * every probe passes.
+ */
+
+async function checkD1(): Promise<HealthCheck> {
+  const time = new Date().toISOString();
+  try {
+    const db = getDb();
+    await db.run(sql`SELECT 1`);
+    return { name: "d1:read", status: "pass", time };
+  } catch {
+    return {
+      name: "d1:read",
+      status: "fail",
+      time,
+      output: "database unreachable",
+    };
+  }
+}
+
+async function checkR2(): Promise<HealthCheck> {
+  const time = new Date().toISOString();
+  try {
+    const bucket = getBucket();
+    // `head` on a missing key returns null (not an error), so this succeeds
+    // on an empty bucket. It only throws when the binding itself is broken
+    // or credentials can't reach R2. O(1), no seed object required.
+    await bucket.head("__healthcheck__");
+    return { name: "r2:head", status: "pass", time };
+  } catch {
+    return {
+      name: "r2:head",
+      status: "fail",
+      time,
+      output: "bucket unreachable",
+    };
+  }
+}
+
 export const checkHealth = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const time = new Date().toISOString();
-    try {
-      const db = getDb();
-      await db.run(sql`SELECT 1`);
-      return { status: "pass" as const, check: { name: "d1:read", time } };
-    } catch {
-      return {
-        status: "fail" as const,
-        check: { name: "d1:read", time, output: "database unreachable" },
-      };
-    }
+  async (): Promise<HealthReport> => {
+    // Run probes in parallel — they're independent and the slowest one
+    // dominates total latency of the /health page.
+    const checks = await Promise.all([checkD1(), checkR2()]);
+    const status = checks.every((c) => c.status === "pass") ? "pass" : "fail";
+    return { status, checks };
   },
 );

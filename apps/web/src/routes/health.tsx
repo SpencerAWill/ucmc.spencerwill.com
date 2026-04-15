@@ -36,29 +36,37 @@ function HealthPage() {
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-muted-foreground">Checks</h2>
           <ul className="divide-y rounded-lg border">
-            <li className="flex items-start justify-between gap-4 p-4">
-              <div className="space-y-1">
-                <p className="font-mono text-sm">{report.check.name}</p>
-                {"output" in report.check && report.check.output ? (
-                  <p className="text-xs text-muted-foreground">
-                    {report.check.output}
-                  </p>
-                ) : null}
-                <p className="text-xs text-muted-foreground">
-                  {report.check.time}
-                </p>
-              </div>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-xs font-medium",
-                  ok
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                    : "bg-destructive/10 text-destructive",
-                )}
-              >
-                {report.status}
-              </span>
-            </li>
+            {report.checks.map((check) => {
+              const passed = check.status === "pass";
+              return (
+                <li
+                  key={check.name}
+                  className="flex items-start justify-between gap-4 p-4"
+                >
+                  <div className="space-y-1">
+                    <p className="font-mono text-sm">{check.name}</p>
+                    {check.output ? (
+                      <p className="text-xs text-muted-foreground">
+                        {check.output}
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-muted-foreground">
+                      {check.time}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-xs font-medium",
+                      passed
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                        : "bg-destructive/10 text-destructive",
+                    )}
+                  >
+                    {check.status}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </section>
       </div>

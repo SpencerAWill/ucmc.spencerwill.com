@@ -11,6 +11,7 @@ import { env as workerEnv } from "cloudflare:workers";
 export interface WorkerEnv {
   // Bindings (wrangler.jsonc)
   DB: D1Database;
+  BUCKET: R2Bucket;
 }
 
 export const env = workerEnv as unknown as WorkerEnv;

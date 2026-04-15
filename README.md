@@ -119,7 +119,7 @@ pulumi up         # apply changes
 #### Required GitHub setup
 
 - **Environments**: Create `dev` (no protection) and `prod` (required reviewers) in repo Settings > Environments
-- **Secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `web-deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
+- **Secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `web-deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Workers R2 Storage (Edit), D1 (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
 - **Stack init** (one-time): `cd infra && pulumi stack init dev && pulumi stack init prod`
 - **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/Pulumi.dev.yaml` and `infra/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
 - **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. Trigger `web-deploy.yml` for dev first, then `infra-deploy.yml` for dev; repeat for prod. After bootstrap, either workflow can run independently.
