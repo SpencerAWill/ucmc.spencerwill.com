@@ -3,3 +3,4 @@ config:
   ucmc-infra:zoneId: 6bfb4d1d3134e6d765aef413094cd28f
   ucmc-infra:hostname: dev.ucmc.spencerwill.com
   ucmc-infra:workerName: ucmc-web-dev
+  ucmc-infra:d1DatabaseName: ucmc-web-dev
