@@ -4,3 +4,4 @@ config:
   ucmc-infra:hostname: dev.ucmc.spencerwill.com
   ucmc-infra:workerName: ucmc-web-dev
   ucmc-infra:d1DatabaseName: ucmc-web-dev
+  ucmc-infra:r2BucketName: ucmc-web-dev-storage

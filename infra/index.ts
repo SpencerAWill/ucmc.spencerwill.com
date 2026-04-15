@@ -10,6 +10,7 @@ const zoneId = cfg.require("zoneId");
 const hostname = cfg.require("hostname");
 const workerName = cfg.require("workerName");
 const d1DatabaseName = cfg.require("d1DatabaseName");
+const r2BucketName = cfg.require("r2BucketName");
 
 // D1 database for the web app. Wrangler binds to it by UUID
 // (see `apps/web/wrangler.jsonc`); the UUID is exported below and
@@ -25,6 +26,24 @@ const database = new cloudflare.D1Database(
     name: d1DatabaseName,
     // Eastern North America — close to Cincinnati.
     primaryLocationHint: "enam",
+  },
+  { protect: true },
+);
+
+// R2 bucket for user-uploaded content (trip photos, profile images, etc.).
+// Wrangler binds by name (see `apps/web/wrangler.jsonc`), so unlike D1 there
+// is no UUID to inject at deploy time.
+//
+// `protect: true` — replacing an R2 bucket deletes every object in it. To
+// recreate, remove the protection deliberately via `pulumi state` and
+// accept the data loss.
+const bucket = new cloudflare.R2Bucket(
+  `ucmc-web-${stack}-bucket`,
+  {
+    accountId,
+    name: r2BucketName,
+    // Eastern North America — close to Cincinnati.
+    location: "enam",
   },
   { protect: true },
 );
@@ -51,3 +70,8 @@ export const workerHostname = workerDomain.hostname;
 // Cloudflare database identifier). Wrangler wants the UUID.
 export const d1DatabaseId = database.uuid;
 export const d1DatabaseNameOutput = database.name;
+
+// R2 bucket name — wrangler binds by name (not UUID), and the value is
+// already static in `apps/web/wrangler.jsonc`, so this export is for drift
+// detection / reference rather than being consumed by any workflow today.
+export const r2BucketNameOutput = bucket.name;
