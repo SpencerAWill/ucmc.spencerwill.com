@@ -34,6 +34,28 @@
       "bucket_name": "ucmc-web-dev-storage",
     },
   ],
+  // Rate Limiting bindings live under `unsafe` in wrangler config even
+  // though the runtime feature is GA — "unsafe" here refers to wrangler's
+  // config-schema stability (the shape may change in a future release),
+  // NOT runtime safety. Cloudflare's docs prescribe this exact placement
+  // today; D1/R2/KV/Queues all passed through `unsafe.bindings` before
+  // getting dedicated top-level keys, and rate limit is expected to
+  // follow the same path.
+  //
+  // The `namespace_id` is a worker-local unique integer (not an account
+  // resource, so nothing to provision in Pulumi). Dev and prod use
+  // different IDs so their counters are isolated. Miniflare simulates
+  // the binding in-memory for local dev.
+  "unsafe": {
+    "bindings": [
+      {
+        "name": "HEALTH_RATE_LIMITER",
+        "type": "ratelimit",
+        "namespace_id": "1001",
+        "simple": { "limit": 20, "period": 60 },
+      },
+    ],
+  },
   "env": {
     "production": {
       "name": "ucmc-web",
@@ -51,6 +73,16 @@
           "bucket_name": "ucmc-web-storage",
         },
       ],
+      "unsafe": {
+        "bindings": [
+          {
+            "name": "HEALTH_RATE_LIMITER",
+            "type": "ratelimit",
+            "namespace_id": "1002",
+            "simple": { "limit": 20, "period": 60 },
+          },
+        ],
+      },
     },
   },
 }

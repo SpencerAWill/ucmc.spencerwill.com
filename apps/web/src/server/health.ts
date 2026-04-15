@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 
 import { getDb } from "#/server/db";
 import { getBucket } from "#/server/r2";
+import { checkHealthRateLimit } from "#/server/rate-limit";
 
 /**
  * Per-check shape. `output` is set only on failure so the client can render
@@ -69,7 +70,25 @@ async function checkR2(): Promise<HealthCheck> {
 
 export const checkHealth = createServerFn({ method: "GET" }).handler(
   async (): Promise<HealthReport> => {
-    // Run probes in parallel — they're independent and the slowest one
+    // Rate-limit check first — short-circuits BEFORE touching D1/R2, which
+    // is the point: a flood of /health hits should not amplify into D1
+    // reads and R2 HEAD calls. 20 req / 60s per IP (see wrangler.jsonc).
+    const allowed = await checkHealthRateLimit();
+    if (!allowed) {
+      return {
+        status: "fail",
+        checks: [
+          {
+            name: "rate-limit",
+            status: "fail",
+            time: new Date().toISOString(),
+            output: "too many requests — try again in a minute",
+          },
+        ],
+      };
+    }
+
+    // Probes run in parallel — they're independent and the slowest one
     // dominates total latency of the /health page.
     const checks = await Promise.all([checkD1(), checkR2()]);
     const status = checks.every((c) => c.status === "pass") ? "pass" : "fail";

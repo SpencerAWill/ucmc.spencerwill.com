@@ -12,6 +12,7 @@ export interface WorkerEnv {
   // Bindings (wrangler.jsonc)
   DB: D1Database;
   BUCKET: R2Bucket;
+  HEALTH_RATE_LIMITER: RateLimit;
 }
 
 export const env = workerEnv as unknown as WorkerEnv;
