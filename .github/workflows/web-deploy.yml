@@ -45,9 +45,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build (dev env)
+        # Top-level wrangler.jsonc config IS the dev worker, so CLOUDFLARE_ENV
+        # must be unset here — setting it to "dev" would make
+        # @cloudflare/vite-plugin look up a nonexistent env.dev override.
         run: pnpm --filter ucmc-web build
-        env:
-          CLOUDFLARE_ENV: dev
 
       # Pulumi is the source of truth for the D1 database UUID. Fetch it from
       # the dev stack's output and rewrite the placeholder in wrangler.jsonc

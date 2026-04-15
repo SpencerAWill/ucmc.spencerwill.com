@@ -14,7 +14,7 @@
     "format": "prettier --check .",
     "check": "prettier --write . && eslint --fix",
     "typecheck": "tsc --noEmit",
-    "deploy:dev": "CLOUDFLARE_ENV=dev pnpm run build && wrangler deploy",
+    "deploy:dev": "pnpm run build && wrangler deploy",
     "deploy:prod": "CLOUDFLARE_ENV=production pnpm run build && wrangler deploy --env production",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply ucmc-web-dev --local",
