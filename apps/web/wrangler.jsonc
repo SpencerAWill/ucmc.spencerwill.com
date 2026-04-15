@@ -1,15 +1,40 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ucmc-web",
+  // Top-level = dev config. @cloudflare/vite-plugin reads top-level only,
+  // so local dev (`pnpm dev`) binds against these values. `wrangler deploy`
+  // (no --env) also publishes against this config → the dev worker.
+  //
+  // env.production overrides for prod via `wrangler deploy --env production`.
+  //
+  // ---- D1 database_id ----
+  // The database_id values below are placeholders. web-deploy.yml fetches
+  // the real UUID from the Pulumi `d1DatabaseId` stack output and rewrites
+  // this file via `sed` before running migrations/deploy. Miniflare ignores
+  // database_id locally (keys on database_name instead), so the placeholder
+  // is fine for `pnpm dev`.
+  "name": "ucmc-web-dev",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
-  "env": {
-    "dev": {
-      "name": "ucmc-web-dev",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ucmc-web-dev",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "drizzle/migrations",
     },
+  ],
+  "env": {
     "production": {
       "name": "ucmc-web",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ucmc-web",
+          "database_id": "11111111-1111-1111-1111-111111111111",
+          "migrations_dir": "drizzle/migrations",
+        },
+      ],
     },
   },
 }

@@ -49,6 +49,32 @@ jobs:
         env:
           CLOUDFLARE_ENV: dev
 
+      # Pulumi is the source of truth for the D1 database UUID. Fetch it from
+      # the dev stack's output and rewrite the placeholder in wrangler.jsonc
+      # so `wrangler d1 migrations apply` / `wrangler deploy` bind to the
+      # real database.
+      - uses: pulumi/setup-pulumi@v2
+
+      - name: Fetch D1 database ID from Pulumi
+        id: d1
+        working-directory: infra
+        run: |
+          pulumi stack select dev
+          echo "database_id=$(pulumi stack output d1DatabaseId)" >> "$GITHUB_OUTPUT"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Inject D1 UUID into wrangler.jsonc
+        run: sed -i 's/00000000-0000-0000-0000-000000000000/${{ steps.d1.outputs.database_id }}/' apps/web/wrangler.jsonc
+
+      - name: Apply D1 migrations (dev)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: d1 migrations apply ucmc-web-dev --remote
+
       - name: Deploy Worker (dev)
         uses: cloudflare/wrangler-action@v3
         with:
@@ -85,10 +111,32 @@ jobs:
         env:
           CLOUDFLARE_ENV: production
 
+      - uses: pulumi/setup-pulumi@v2
+
+      - name: Fetch D1 database ID from Pulumi
+        id: d1
+        working-directory: infra
+        run: |
+          pulumi stack select prod
+          echo "database_id=$(pulumi stack output d1DatabaseId)" >> "$GITHUB_OUTPUT"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Inject D1 UUID into wrangler.jsonc
+        run: sed -i 's/11111111-1111-1111-1111-111111111111/${{ steps.d1.outputs.database_id }}/' apps/web/wrangler.jsonc
+
+      - name: Apply D1 migrations (prod)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: d1 migrations apply ucmc-web --env production --remote
+
       - name: Deploy Worker (prod)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: deploy
+          command: deploy --env production

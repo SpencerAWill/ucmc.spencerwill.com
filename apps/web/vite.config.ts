@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import type { Plugin } from "vite";
 import { devtools } from "@tanstack/devtools-vite";
 
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -6,6 +7,39 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
+
+/**
+ * `cloudflare:workers` is a synthetic module only resolvable in the workerd
+ * runtime (the SSR environment in this app). TanStack Start's RPC compiler
+ * doesn't fully prune transitive server-only imports, so client bundling
+ * can encounter the import and fail to resolve it. This plugin stubs it for
+ * every Vite environment whose name isn't "ssr" (covers client, optimizer
+ * pre-bundling, etc.). Modules that actually use `env.*` are guarded by
+ * server-fn boundaries, so the stub is never executed at runtime.
+ */
+function stubCloudflareWorkersForClient(): Plugin {
+  const VIRTUAL_ID = "\0virtual:cloudflare-workers-stub";
+  return {
+    name: "stub-cloudflare-workers-for-client",
+    enforce: "pre",
+    resolveId(source) {
+      if (source !== "cloudflare:workers") {
+        return null;
+      }
+      // Only allow the real module in the SSR/worker env.
+      if (this.environment.name === "ssr") {
+        return null;
+      }
+      return { id: VIRTUAL_ID, moduleSideEffects: false };
+    },
+    load(id) {
+      if (id !== VIRTUAL_ID) {
+        return null;
+      }
+      return "export const env = new Proxy({}, { get() { throw new Error('cloudflare:workers is server-only'); } });";
+    },
+  };
+}
 
 const config = defineConfig({
   resolve: { tsconfigPaths: true },
@@ -19,6 +53,7 @@ const config = defineConfig({
   },
   plugins: [
     devtools(),
+    stubCloudflareWorkersForClient(),
     cloudflare({ viteEnvironment: { name: "ssr" } }),
     tailwindcss(),
     tanstackStart(),

@@ -71,10 +71,12 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - **Styling**: Tailwind CSS v4 (via `@tailwindcss/vite`), shadcn components
 - **State/data**: TanStack Query, TanStack Router (with SSR query integration), TanStack Form, TanStack Table
 - **Env**: `@t3-oss/env-core` + zod (`apps/web/src/env.ts`)
+- **Database**: Cloudflare D1 (SQLite) via Drizzle ORM. Schema in `apps/web/drizzle/schema.ts`, generated migrations in `apps/web/drizzle/migrations/` (committed). Runtime wrapper at `apps/web/src/server/db/index.ts` exposes a lazy `getDb()` singleton. Worker bindings accessed via `apps/web/src/server/cloudflare-env.ts` (typed wrapper around `cloudflare:workers` `env`). A small Vite plugin in `vite.config.ts` stubs the synthetic `cloudflare:workers` module for non-SSR bundles; never import the `cloudflare-env`/`db` modules outside server functions.
 - **Testing**: Vitest with jsdom and Testing Library
 - **Component dev**: Storybook 10 (`pnpm --filter ucmc-web storybook`)
-- **Deployment**: Cloudflare Workers via Wrangler (`apps/web/wrangler.jsonc`). Two wrangler environments: `dev` → worker `ucmc-web-dev` at `dev.ucmc.spencerwill.com`, `production` → worker `ucmc-web` at `ucmc.spencerwill.com`. Custom domain bindings are provisioned by Pulumi, not wrangler.
-- **TS config**: extends bundler resolution with `strict: true`, path alias `#/*` → `./src/*` (also mirrored in `package.json` `imports` for Node-native resolution)
+- **Deployment**: Cloudflare Workers via Wrangler (`apps/web/wrangler.jsonc`). Top-level config is the dev binding (so `@cloudflare/vite-plugin` picks it up in local dev); `env.production` overrides for prod. Two workers: `ucmc-web-dev` at `dev.ucmc.spencerwill.com` and `ucmc-web` at `ucmc.spencerwill.com`. Custom domain bindings AND D1 databases are provisioned by Pulumi. D1 `database_id` values in `wrangler.jsonc` are placeholders; the web-deploy workflow fetches the real UUID from `pulumi stack output d1DatabaseId` and rewrites the file before migrations/deploy.
+- **Migration workflow**: edit `drizzle/schema.ts` → `pnpm --filter ucmc-web db:generate` → commit the resulting SQL → CI applies it via `wrangler d1 migrations apply --remote` on each deploy. Local dev uses `pnpm --filter ucmc-web db:migrate:local` to apply migrations to the Miniflare-backed SQLite under `apps/web/.wrangler/state/`.
+- **TS config**: extends bundler resolution with `strict: true`, path alias `#/*` → `./src/*` (also mirrored in `package.json` `imports` for Node-native resolution), includes `@cloudflare/workers-types` so `D1Database`/`KVNamespace`/etc. are globally typed
 - **ESLint**: extends the root config, then `@tanstack/eslint-config`, with a few TanStack-specific rules relaxed
 - **Formatting**: inherits the root `.prettierrc` — do NOT add a sub-app `prettier.config.js` (it would drift from root and lint-staged)
 
@@ -87,7 +89,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
   - State stored in Pulumi Cloud
   - Uses pnpm as the package manager (`runtime.options.packagemanager: pnpm`)
   - CI/CD via `infra-ci.yml` (PR preview) and `infra-deploy.yml` (deploy)
-  - **Cloudflare provider** (`@pulumi/cloudflare`) — manages the Worker custom domain bindings (`dev.ucmc.spencerwill.com`, `ucmc.spencerwill.com`). The `spencerwill.com` zone itself is NOT managed by Pulumi; only the Worker domain records within it are. Cloudflare auth in CI uses `CLOUDFLARE_API_TOKEN` (env var picked up by the provider)
+  - **Cloudflare provider** (`@pulumi/cloudflare`) — manages the Worker custom domain bindings (`dev.ucmc.spencerwill.com`, `ucmc.spencerwill.com`) and the D1 databases (`ucmc-web-dev`, `ucmc-web`). D1 resources are marked `protect: true` because replacement wipes all data. The `spencerwill.com` zone itself is NOT managed by Pulumi; only the Worker domain records within it are. Cloudflare auth in CI uses `CLOUDFLARE_API_TOKEN` (env var picked up by the provider). The D1 database UUID is exported as the `d1DatabaseId` stack output and consumed by `web-deploy.yml`.
 
 ### Commits
 
@@ -111,6 +113,8 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - `pnpm --filter ucmc-web storybook` — start Storybook on port 6006
 - `pnpm --filter ucmc-web deploy:dev` — build and deploy to dev (`ucmc-web-dev` worker)
 - `pnpm --filter ucmc-web deploy:prod` — build and deploy to prod (`ucmc-web` worker)
+- `pnpm --filter ucmc-web db:generate` — generate Drizzle SQL migrations from `drizzle/schema.ts`
+- `pnpm --filter ucmc-web db:migrate:local` — apply migrations to the local Miniflare D1 (SQLite under `apps/web/.wrangler/state/`)
 - `cd infra && pulumi preview` — preview infrastructure changes
 - `cd infra && pulumi up` — deploy infrastructure changes
 

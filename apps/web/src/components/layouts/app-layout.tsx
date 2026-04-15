@@ -78,8 +78,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarFooter />
           <SidebarRail />
         </Sidebar>
-        <SidebarInset>{children}</SidebarInset>
+        <SidebarInset>
+          {children}
+          <AppFooter />
+        </SidebarInset>
       </div>
     </SidebarProvider>
+  );
+}
+
+function AppFooter() {
+  return (
+    <footer className="mt-auto border-t px-4 py-3 text-xs text-muted-foreground">
+      <div className="flex items-center justify-between gap-4">
+        <span>University of Cincinnati Mountaineering Club</span>
+        <Link to="/health" className="hover:text-foreground">
+          Status
+        </Link>
+      </div>
+    </footer>
   );
 }
