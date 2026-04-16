@@ -9,9 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RegisterProfileRouteImport } from './routes/register.profile'
+import { Route as RegisterPendingRouteImport } from './routes/register.pending'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HealthRoute = HealthRouteImport.update({
   id: '/health',
   path: '/health',
@@ -22,35 +31,92 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RegisterProfileRoute = RegisterProfileRouteImport.update({
+  id: '/register/profile',
+  path: '/register/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterPendingRoute = RegisterPendingRouteImport.update({
+  id: '/register/pending',
+  path: '/register/pending',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
+  '/sign-in': typeof SignInRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/register/pending': typeof RegisterPendingRoute
+  '/register/profile': typeof RegisterProfileRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
+  '/sign-in': typeof SignInRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/register/pending': typeof RegisterPendingRoute
+  '/register/profile': typeof RegisterProfileRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
+  '/sign-in': typeof SignInRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/register/pending': typeof RegisterPendingRoute
+  '/register/profile': typeof RegisterProfileRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/health'
+  fullPaths:
+    | '/'
+    | '/health'
+    | '/sign-in'
+    | '/auth/callback'
+    | '/register/pending'
+    | '/register/profile'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/health'
-  id: '__root__' | '/' | '/health'
+  to:
+    | '/'
+    | '/health'
+    | '/sign-in'
+    | '/auth/callback'
+    | '/register/pending'
+    | '/register/profile'
+  id:
+    | '__root__'
+    | '/'
+    | '/health'
+    | '/sign-in'
+    | '/auth/callback'
+    | '/register/pending'
+    | '/register/profile'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HealthRoute: typeof HealthRoute
+  SignInRoute: typeof SignInRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
+  RegisterPendingRoute: typeof RegisterPendingRoute
+  RegisterProfileRoute: typeof RegisterProfileRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/health': {
       id: '/health'
       path: '/health'
@@ -65,12 +131,37 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/register/profile': {
+      id: '/register/profile'
+      path: '/register/profile'
+      fullPath: '/register/profile'
+      preLoaderRoute: typeof RegisterProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register/pending': {
+      id: '/register/pending'
+      path: '/register/pending'
+      fullPath: '/register/pending'
+      preLoaderRoute: typeof RegisterPendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HealthRoute: HealthRoute,
+  SignInRoute: SignInRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
+  RegisterPendingRoute: RegisterPendingRoute,
+  RegisterProfileRoute: RegisterProfileRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

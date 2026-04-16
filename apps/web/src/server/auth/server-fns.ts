@@ -17,7 +17,10 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { consumeMagicLink, requestMagicLink } from "#/server/auth/magic-link";
-import { writeProofCookie } from "#/server/auth/proof-cookie";
+import type { Principal } from "#/server/auth/principal";
+import { readProofCookie, writeProofCookie } from "#/server/auth/proof-cookie";
+import type { EmailProof } from "#/server/auth/proof-cookie";
+import { closeSession, loadCurrentPrincipal } from "#/server/auth/session";
 import { getDb, schema } from "#/server/db";
 import {
   checkAuthRateLimitByEmail,
@@ -87,3 +90,35 @@ export const consumeMagicLinkFn = createServerFn({ method: "POST" })
 
     return { ok: true, intent: proof.intent };
   });
+
+/**
+ * Read the current session's principal. Called on every navigation via the
+ * root loader so the client-side `useAuth()` hook has a fresh value
+ * without its own fetch. GET + null on anonymous so SSR can always
+ * render something and hydration matches.
+ */
+export const getSessionFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ principal: Principal | null }> => {
+    const principal = await loadCurrentPrincipal();
+    return { principal };
+  },
+);
+
+/**
+ * Read the email-verified proof cookie, if any. Used by routes that gate
+ * on "magic link was clicked" rather than "user is signed in" —
+ * specifically `/register/profile`.
+ */
+export const getProofFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ proof: EmailProof | null }> => {
+    const proof = await readProofCookie();
+    return { proof };
+  },
+);
+
+export const signOutFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<{ ok: true }> => {
+    await closeSession();
+    return { ok: true };
+  },
+);

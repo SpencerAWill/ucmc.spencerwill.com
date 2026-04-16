@@ -14,6 +14,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { AppLayout } from "#/components/layouts/app-layout";
 import { ThemeProvider } from "#/components/theme-provider";
+import { sessionQueryOptions } from "#/lib/auth/use-auth";
 
 interface RouterContext {
   queryClient: QueryClient;
@@ -22,6 +23,11 @@ interface RouterContext {
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('ucmc-ui-theme');var mode=(stored==='light'||stored==='dark'||stored==='system')?stored:'system';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='system'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);root.style.colorScheme=resolved;}catch(e){}})();`;
 
 export const Route = createRootRouteWithContext<RouterContext>()({
+  // Prefetch the session on every SSR render so `useAuth()` hydrates with
+  // the correct state (UserMenu renders signed-in immediately instead of
+  // flashing the anonymous fallback).
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData(sessionQueryOptions()),
   head: () => ({
     meta: [
       {
