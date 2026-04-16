@@ -12,6 +12,8 @@ const workerName = cfg.require("workerName");
 const d1DatabaseName = cfg.require("d1DatabaseName");
 const r2BucketName = cfg.require("r2BucketName");
 const kvNamespaceTitle = cfg.require("kvNamespaceTitle");
+const webauthnRpName = cfg.require("webauthnRpName");
+const resendFromName = cfg.require("resendFromName");
 
 // D1 database for the web app. Wrangler binds to it by UUID
 // (see `apps/web/wrangler.jsonc`); the UUID is exported below and
@@ -100,3 +102,13 @@ export const r2BucketNameOutput = bucket.name;
 // build, mirroring the D1 UUID flow.
 export const kvNamespaceId = kvNamespace.id;
 export const kvNamespaceTitleOutput = kvNamespace.title;
+
+// Worker `vars` values. Single source of truth for per-env runtime config;
+// `web-deploy.yml` reads them via `pulumi stack output` and passes them to
+// `wrangler deploy --var`. Kept out of `wrangler.jsonc` to avoid drift
+// between the hostname Pulumi binds and the hostname the app advertises
+// to browsers / WebAuthn.
+export const appBaseUrl = `https://${hostname}`;
+export const webauthnRpId = hostname;
+export { webauthnRpName };
+export const resendFrom = `${resendFromName} <noreply@${hostname}>`;

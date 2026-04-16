@@ -6,3 +6,5 @@ config:
   ucmc-infra:d1DatabaseName: ucmc-web
   ucmc-infra:r2BucketName: ucmc-web-storage
   ucmc-infra:kvNamespaceTitle: ucmc-web-kv
+  ucmc-infra:webauthnRpName: UCMC
+  ucmc-infra:resendFromName: UCMC
