@@ -5,3 +5,4 @@ config:
   ucmc-infra:workerName: ucmc-web
   ucmc-infra:d1DatabaseName: ucmc-web
   ucmc-infra:r2BucketName: ucmc-web-storage
+  ucmc-infra:kvNamespaceTitle: ucmc-web-kv
