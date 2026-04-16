@@ -63,6 +63,16 @@
         "namespace_id": "1001",
         "simple": { "limit": 20, "period": 60 },
       },
+      // Shared limiter for every auth endpoint. Callers key by
+      // `ip:<addr>` or `email:<normalized>` (see `server/rate-limit`).
+      // 10 req / 60 s per key absorbs a curious user retrying magic
+      // links without letting a script enumerate or flood.
+      {
+        "name": "AUTH_RATE_LIMITER",
+        "type": "ratelimit",
+        "namespace_id": "2001",
+        "simple": { "limit": 10, "period": 60 },
+      },
     ],
   },
   "env": {
@@ -95,6 +105,12 @@
             "type": "ratelimit",
             "namespace_id": "1002",
             "simple": { "limit": 20, "period": 60 },
+          },
+          {
+            "name": "AUTH_RATE_LIMITER",
+            "type": "ratelimit",
+            "namespace_id": "2002",
+            "simple": { "limit": 10, "period": 60 },
           },
         ],
       },

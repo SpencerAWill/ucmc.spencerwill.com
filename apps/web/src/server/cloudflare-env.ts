@@ -14,6 +14,7 @@ export interface WorkerEnv {
   BUCKET: R2Bucket;
   KV: KVNamespace;
   HEALTH_RATE_LIMITER: RateLimit;
+  AUTH_RATE_LIMITER: RateLimit;
 
   // Vars — injected at deploy time from Pulumi stack outputs for dev/prod,
   // supplied via .dev.vars locally. See .dev.vars.example for documentation.

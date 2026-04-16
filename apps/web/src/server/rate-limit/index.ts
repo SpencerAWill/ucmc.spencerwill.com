@@ -27,3 +27,49 @@ export async function checkHealthRateLimit(): Promise<boolean> {
     return true;
   }
 }
+
+/**
+ * Client IP for auth rate-limit keys. Same Cloudflare-authoritative
+ * header as the health limiter; falls back to "local" under Miniflare.
+ */
+function clientIp(): string {
+  return getRequestHeader("cf-connecting-ip") ?? "local";
+}
+
+/**
+ * Gate an auth operation by IP. Call at the TOP of magic-link request,
+ * magic-link consume, and passkey authentication handlers — before any
+ * D1/KV work — so a flood can't amplify into storage calls.
+ *
+ * Returns true to allow the request; false to refuse it. Fails open on
+ * binding error (same reasoning as `checkHealthRateLimit`).
+ */
+export async function checkAuthRateLimitByIp(): Promise<boolean> {
+  try {
+    const { success } = await env.AUTH_RATE_LIMITER.limit({
+      key: `ip:${clientIp()}`,
+    });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Gate an auth operation by email. Layered on top of the IP limiter so
+ * one attacker can't enumerate by rotating IPs through a residential
+ * proxy pool: even with infinite IPs, the per-email budget bites. Caller
+ * must normalize the email (lowercase/trim) before keying.
+ */
+export async function checkAuthRateLimitByEmail(
+  normalizedEmail: string,
+): Promise<boolean> {
+  try {
+    const { success } = await env.AUTH_RATE_LIMITER.limit({
+      key: `email:${normalizedEmail}`,
+    });
+    return success;
+  } catch {
+    return true;
+  }
+}
