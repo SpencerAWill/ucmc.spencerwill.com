@@ -52,13 +52,19 @@ jobs:
       # artifact.
       - uses: pulumi/setup-pulumi@v2
 
-      - name: Fetch resource IDs from Pulumi
+      - name: Fetch resource IDs and vars from Pulumi
         id: pulumi
         working-directory: infra
         run: |
           pulumi stack select dev
-          echo "database_id=$(pulumi stack output d1DatabaseId)" >> "$GITHUB_OUTPUT"
-          echo "kv_id=$(pulumi stack output kvNamespaceId)" >> "$GITHUB_OUTPUT"
+          {
+            echo "database_id=$(pulumi stack output d1DatabaseId)"
+            echo "kv_id=$(pulumi stack output kvNamespaceId)"
+            echo "app_base_url=$(pulumi stack output appBaseUrl)"
+            echo "webauthn_rp_id=$(pulumi stack output webauthnRpId)"
+            echo "webauthn_rp_name=$(pulumi stack output webauthnRpName)"
+            echo "resend_from=$(pulumi stack output resendFrom)"
+          } >> "$GITHUB_OUTPUT"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -88,7 +94,12 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: deploy
+          command: >-
+            deploy
+            --var APP_BASE_URL:${{ steps.pulumi.outputs.app_base_url }}
+            --var WEBAUTHN_RP_ID:${{ steps.pulumi.outputs.webauthn_rp_id }}
+            --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthn_rp_name }}
+            --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
 
   deploy-prod:
     name: Deploy Web to Prod
@@ -115,13 +126,19 @@ jobs:
 
       - uses: pulumi/setup-pulumi@v2
 
-      - name: Fetch resource IDs from Pulumi
+      - name: Fetch resource IDs and vars from Pulumi
         id: pulumi
         working-directory: infra
         run: |
           pulumi stack select prod
-          echo "database_id=$(pulumi stack output d1DatabaseId)" >> "$GITHUB_OUTPUT"
-          echo "kv_id=$(pulumi stack output kvNamespaceId)" >> "$GITHUB_OUTPUT"
+          {
+            echo "database_id=$(pulumi stack output d1DatabaseId)"
+            echo "kv_id=$(pulumi stack output kvNamespaceId)"
+            echo "app_base_url=$(pulumi stack output appBaseUrl)"
+            echo "webauthn_rp_id=$(pulumi stack output webauthnRpId)"
+            echo "webauthn_rp_name=$(pulumi stack output webauthnRpName)"
+            echo "resend_from=$(pulumi stack output resendFrom)"
+          } >> "$GITHUB_OUTPUT"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -150,4 +167,9 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: deploy --env production
+          command: >-
+            deploy --env production
+            --var APP_BASE_URL:${{ steps.pulumi.outputs.app_base_url }}
+            --var WEBAUTHN_RP_ID:${{ steps.pulumi.outputs.webauthn_rp_id }}
+            --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthn_rp_name }}
+            --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}

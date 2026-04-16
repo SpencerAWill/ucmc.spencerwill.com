@@ -14,6 +14,18 @@ export interface WorkerEnv {
   BUCKET: R2Bucket;
   KV: KVNamespace;
   HEALTH_RATE_LIMITER: RateLimit;
+
+  // Vars — injected at deploy time from Pulumi stack outputs for dev/prod,
+  // supplied via .dev.vars locally. See .dev.vars.example for documentation.
+  APP_BASE_URL: string;
+  WEBAUTHN_RP_ID: string;
+  WEBAUTHN_RP_NAME: string;
+  RESEND_FROM: string;
+
+  // Secrets — set via `wrangler secret put` in deployed envs, or .dev.vars
+  // locally. Optional because the email adapter falls back to console-log
+  // when unset.
+  RESEND_API_KEY?: string;
 }
 
 export const env = workerEnv as unknown as WorkerEnv;
