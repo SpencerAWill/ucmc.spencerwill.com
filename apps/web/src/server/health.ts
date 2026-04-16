@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { sql } from "drizzle-orm";
 
 import { getDb } from "#/server/db";
+import { getKv } from "#/server/kv";
 import { getBucket } from "#/server/r2";
 import { checkHealthRateLimit } from "#/server/rate-limit";
 
@@ -68,6 +69,25 @@ async function checkR2(): Promise<HealthCheck> {
   }
 }
 
+async function checkKv(): Promise<HealthCheck> {
+  const time = new Date().toISOString();
+  try {
+    const kv = getKv();
+    // `get` on a missing key returns null — success on an empty namespace.
+    // Only throws when the binding itself is broken. O(1), no seed key
+    // required.
+    await kv.get("__healthcheck__");
+    return { name: "kv:read", status: "pass", time };
+  } catch {
+    return {
+      name: "kv:read",
+      status: "fail",
+      time,
+      output: "kv namespace unreachable",
+    };
+  }
+}
+
 export const checkHealth = createServerFn({ method: "GET" }).handler(
   async (): Promise<HealthReport> => {
     // Rate-limit check first — short-circuits BEFORE touching D1/R2, which
@@ -90,7 +110,7 @@ export const checkHealth = createServerFn({ method: "GET" }).handler(
 
     // Probes run in parallel — they're independent and the slowest one
     // dominates total latency of the /health page.
-    const checks = await Promise.all([checkD1(), checkR2()]);
+    const checks = await Promise.all([checkD1(), checkR2(), checkKv()]);
     const status = checks.every((c) => c.status === "pass") ? "pass" : "fail";
     return { status, checks };
   },

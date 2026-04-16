@@ -12,6 +12,7 @@ export interface WorkerEnv {
   // Bindings (wrangler.jsonc)
   DB: D1Database;
   BUCKET: R2Bucket;
+  KV: KVNamespace;
   HEALTH_RATE_LIMITER: RateLimit;
 }
 

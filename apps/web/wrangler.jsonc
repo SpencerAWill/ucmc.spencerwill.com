@@ -6,12 +6,15 @@
   //
   // env.production overrides for prod via `wrangler deploy --env production`.
   //
-  // ---- D1 database_id ----
-  // The database_id values below are placeholders. web-deploy.yml fetches
-  // the real UUID from the Pulumi `d1DatabaseId` stack output and rewrites
-  // this file via `sed` before running migrations/deploy. Miniflare ignores
-  // database_id locally (keys on database_name instead), so the placeholder
-  // is fine for `pnpm dev`.
+  // ---- D1 database_id / KV id ----
+  // Both the D1 `database_id` and KV `kv_namespaces[].id` values below are
+  // placeholders. web-deploy.yml fetches the real UUIDs from the Pulumi
+  // `d1DatabaseId` and `kvNamespaceId` stack outputs and rewrites this file
+  // via `sed` before running migrations/deploy. Each environment uses a
+  // distinct placeholder so the per-env `sed` replacement only rewrites its
+  // own value (dev: 00000000/22222222; prod: 11111111/33333333). Miniflare
+  // ignores these IDs locally (keys on binding name), so the placeholders
+  // are fine for `pnpm dev`.
   "name": "ucmc-web-dev",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
@@ -32,6 +35,12 @@
     {
       "binding": "BUCKET",
       "bucket_name": "ucmc-web-dev-storage",
+    },
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "22222222-2222-2222-2222-222222222222",
     },
   ],
   // Rate Limiting bindings live under `unsafe` in wrangler config even
@@ -71,6 +80,12 @@
         {
           "binding": "BUCKET",
           "bucket_name": "ucmc-web-storage",
+        },
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "KV",
+          "id": "33333333-3333-3333-3333-333333333333",
         },
       ],
       "unsafe": {
