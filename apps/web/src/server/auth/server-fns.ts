@@ -14,13 +14,22 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
+import { isValidPhoneNumber } from "react-phone-number-input";
 import { z } from "zod";
 
 import { consumeMagicLink, requestMagicLink } from "#/server/auth/magic-link";
 import type { Principal } from "#/server/auth/principal";
-import { readProofCookie, writeProofCookie } from "#/server/auth/proof-cookie";
+import {
+  clearProofCookie,
+  readProofCookie,
+  writeProofCookie,
+} from "#/server/auth/proof-cookie";
 import type { EmailProof } from "#/server/auth/proof-cookie";
-import { closeSession, loadCurrentPrincipal } from "#/server/auth/session";
+import {
+  closeSession,
+  loadCurrentPrincipal,
+  openSession,
+} from "#/server/auth/session";
 import { getDb, schema } from "#/server/db";
 import {
   checkAuthRateLimitByEmail,
@@ -122,3 +131,129 @@ export const signOutFn = createServerFn({ method: "POST" }).handler(
     return { ok: true };
   },
 );
+
+// ── profile submission ────────────────────────────────────────────────────
+
+// Validation constants are exported so the form UI can mirror them as
+// HTML `maxLength` attributes and help text (single source of truth).
+export const PROFILE_LIMITS = {
+  fullName: { min: 1, max: 120 },
+  preferredName: { min: 1, max: 60 },
+  emergencyContactName: { min: 1, max: 120 },
+} as const;
+
+const phoneSchema = z
+  .string()
+  .trim()
+  .refine(
+    (v) => v.length > 0 && isValidPhoneNumber(v),
+    "Enter a valid phone number",
+  );
+
+export const profileInputSchema = z.object({
+  fullName: z
+    .string()
+    .trim()
+    .min(PROFILE_LIMITS.fullName.min, "Required")
+    .max(
+      PROFILE_LIMITS.fullName.max,
+      `At most ${PROFILE_LIMITS.fullName.max} characters`,
+    ),
+  preferredName: z
+    .string()
+    .trim()
+    .min(PROFILE_LIMITS.preferredName.min, "Required")
+    .max(
+      PROFILE_LIMITS.preferredName.max,
+      `At most ${PROFILE_LIMITS.preferredName.max} characters`,
+    ),
+  // Optional: not every member has a UC M-number (alumni, community,
+  // some family members). Empty string passes; anything else must match
+  // the full `M########` format.
+  mNumber: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^$|^M\d{8}$/, "Must be 'M' followed by 8 digits"),
+  phone: phoneSchema,
+  emergencyContactName: z
+    .string()
+    .trim()
+    .min(PROFILE_LIMITS.emergencyContactName.min, "Required")
+    .max(
+      PROFILE_LIMITS.emergencyContactName.max,
+      `At most ${PROFILE_LIMITS.emergencyContactName.max} characters`,
+    ),
+  emergencyContactPhone: phoneSchema,
+  ucAffiliation: z.enum(schema.ucAffiliation, {
+    error: "Required",
+  }),
+});
+
+/**
+ * First-time profile submission. Callable by a user who has a valid
+ * email-verified proof cookie but no session yet (the register flow) OR
+ * by an already-signed-in user updating their profile (the re-submit
+ * flow in Phase 6+).
+ *
+ * On success:
+ *   - users row is upserted by email (pre-seeded row wins if present;
+ *     otherwise a fresh row is inserted with status='pending').
+ *   - profiles row is upserted with the submitted data.
+ *   - if the caller only had a proof cookie, we open a session for
+ *     them and clear the proof. Already-signed-in callers keep their
+ *     existing session.
+ *   - status stays 'pending' unless already 'approved' (profile edits
+ *     never downgrade; only an approver can promote).
+ */
+export const submitProfileFn = createServerFn({ method: "POST" })
+  .inputValidator(profileInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const principal = await loadCurrentPrincipal();
+    const proof = principal ? null : await readProofCookie();
+
+    if (!principal && !proof) {
+      throw new Error("Not authorized to submit a profile");
+    }
+
+    const email = principal?.email ?? proof!.email;
+
+    // Find or create the user row. Pre-seeded rows (email-only, no profile)
+    // are reused by hitting the unique email index. We do this in three
+    // steps — insert-on-conflict-do-nothing, then select — to stay portable
+    // across D1's SQLite dialect without depending on `returning`.
+    const id = `user_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.users)
+      .values({ id, email, status: "pending" })
+      .onConflictDoNothing({ target: schema.users.email });
+    const userRow = await getDb().query.users.findFirst({
+      where: eq(schema.users.email, email),
+    });
+    if (!userRow) {
+      throw new Error("User row not found after upsert (unexpected)");
+    }
+
+    const now = new Date();
+    await getDb()
+      .insert(schema.profiles)
+      .values({ userId: userRow.id, ...data, updatedAt: now })
+      .onConflictDoUpdate({
+        target: schema.profiles.userId,
+        set: { ...data, updatedAt: now },
+      });
+
+    if (userRow.status !== "approved") {
+      await getDb()
+        .update(schema.users)
+        .set({ status: "pending" })
+        .where(eq(schema.users.id, userRow.id));
+    }
+
+    if (!principal) {
+      await openSession(userRow.id);
+      clearProofCookie();
+    }
+
+    return { ok: true };
+  });

@@ -3,13 +3,16 @@ import { z } from "zod";
 
 import { MagicLinkForm } from "#/components/auth/magic-link-form";
 
+// URL search params arrive as strings; coerce so `?register=true` /
+// `?invalid=true` parse correctly whether the user landed here via a
+// TanStack Router redirect (actual boolean) or a hand-typed URL (string).
 const signInSearchSchema = z.object({
-  register: z.boolean().optional(),
+  register: z.coerce.boolean().optional(),
   redirect: z.string().optional(),
   // Set by /auth/callback when a magic-link token is already consumed,
   // expired, or otherwise invalid — the /sign-in page renders a small
   // explainer without needing a separate error route.
-  invalid: z.boolean().optional(),
+  invalid: z.coerce.boolean().optional(),
 });
 
 export const Route = createFileRoute("/sign-in")({

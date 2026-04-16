@@ -1,38 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { ProfileForm } from "#/components/auth/profile-form";
 import { requireProof } from "#/lib/auth/guards";
 
 /**
  * First-time profile completion. Gated on the email-verified proof
- * cookie (NOT a session) so a user can fill it in before any `users` row
- * exists. On submit (Phase 4d.2) we upsert the user, open a session,
- * clear the proof cookie, and redirect to /register/pending.
- *
- * This commit ships the guard + a stub — the real form lands in the
- * next sub-phase.
+ * cookie (NOT a session) so a user can fill it in before any `users`
+ * row exists. On submit, `submitProfileFn` upserts the user, upserts
+ * the profile, opens a session, clears the proof cookie, and the form
+ * navigates to /register/pending.
  */
 export const Route = createFileRoute("/register/profile")({
   beforeLoad: async () => {
     const proof = await requireProof();
     return { proof };
   },
-  component: ProfileStub,
+  component: ProfilePage,
 });
 
-function ProfileStub() {
+function ProfilePage() {
   const { proof } = Route.useRouteContext();
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-6 py-16">
-      <header className="space-y-1">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
+      <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Finish registering</h1>
         <p className="text-sm text-muted-foreground">
-          Signing up as <strong>{proof.email}</strong>.
+          These details are shared only with UCMC execs for member verification.
         </p>
       </header>
-      <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-        Profile form coming in the next commit. For now, this page just confirms
-        the proof cookie was set correctly by <code>/auth/callback</code>.
-      </p>
+      <ProfileForm email={proof.email} redirectTo="/register/pending" />
     </div>
   );
 }
