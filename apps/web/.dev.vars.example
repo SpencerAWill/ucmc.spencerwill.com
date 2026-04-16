@@ -16,6 +16,13 @@ RESEND_FROM=UCMC <noreply@localhost>
 # links print to the dev-server terminal — NOT the browser console).
 RESEND_API_KEY=
 
+# HMAC signing key for the short-lived email-verification proof cookie.
+# Must be >= 32 bytes of entropy. In deployed envs, set once per env via:
+#   wrangler secret put SESSION_SECRET [--env production]
+# Locally, any 32+ byte random string works. Rotating this value
+# invalidates all outstanding proof cookies (desirable on compromise).
+SESSION_SECRET=
+
 # ── Seeding (db:seed:local only; not read at runtime) ────────────────────
 # Email used as the seeded system_admin. This user is inserted with
 # status='approved' so they can sign in on day one without the approval

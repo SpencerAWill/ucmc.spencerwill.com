@@ -23,9 +23,12 @@ export interface WorkerEnv {
   RESEND_FROM: string;
 
   // Secrets — set via `wrangler secret put` in deployed envs, or .dev.vars
-  // locally. Optional because the email adapter falls back to console-log
-  // when unset.
+  // locally. RESEND_API_KEY is optional because the email adapter falls
+  // back to console-log when unset. SESSION_SECRET is required wherever
+  // the proof cookie is issued — the module that reads it throws at first
+  // use, not here at module scope.
   RESEND_API_KEY?: string;
+  SESSION_SECRET?: string;
 }
 
 export const env = workerEnv as unknown as WorkerEnv;

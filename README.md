@@ -99,6 +99,25 @@ pnpm --filter ucmc-web deploy:dev   # build and deploy to dev (dev.ucmc.spencerw
 pnpm --filter ucmc-web deploy:prod  # build and deploy to prod (ucmc.spencerwill.com)
 ```
 
+#### Local env (`.dev.vars`)
+
+Copy `apps/web/.dev.vars.example` to `apps/web/.dev.vars` and fill in the values. Wrangler loads this automatically during `pnpm --filter ucmc-web dev`. It is gitignored — never commit it.
+
+`.dev.vars` is the local analog of what Pulumi-injected `--var` flags and Cloudflare secrets do in deployed envs. Missing any required value will crash the Worker on first request that touches it.
+
+#### Worker secrets (deployed envs)
+
+Non-secret runtime vars are injected at deploy time from Pulumi stack outputs. Secrets can't ride along in `--var` — they're uploaded separately via `wrangler secret put`, automated per deploy by the `web-deploy.yml` workflow through `cloudflare/wrangler-action`'s `secrets:` field. That means **secrets live in GitHub Actions environment secrets**, not in Cloudflare directly: set them once under the `dev` and `prod` GitHub environments and every deploy re-applies them to the Worker.
+
+Required per-environment secrets (repo Settings → Environments → `dev` / `prod` → Environment secrets):
+
+| Name             | Purpose                                                                                                                                                                                 | Generate with             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `SESSION_SECRET` | HMAC signing key for the email-verification proof cookie. Rotating invalidates outstanding proofs.                                                                                      | `openssl rand -base64 48` |
+| `RESEND_API_KEY` | Resend API key for transactional email. Leaving it unset in an env's GitHub secrets causes that env's Worker to fall back to console logging (useful for dev; not acceptable for prod). | Resend dashboard          |
+
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `PULUMI_ACCESS_TOKEN` are also required but are covered under **Required GitHub setup** in the Infrastructure section below.
+
 ### Infrastructure
 
 Infrastructure is managed with [Pulumi](https://www.pulumi.com/) in the `infra/` directory, with two stacks:
@@ -119,7 +138,8 @@ pulumi up         # apply changes
 #### Required GitHub setup
 
 - **Environments**: Create `dev` (no protection) and `prod` (required reviewers) in repo Settings > Environments
-- **Secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `web-deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Workers R2 Storage (Edit), Workers KV Storage (Edit), D1 (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
+- **Repo-level secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `web-deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Workers R2 Storage (Edit), Workers KV Storage (Edit), D1 (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
+- **Per-environment secrets**: `SESSION_SECRET` and `RESEND_API_KEY` live on the `dev` and `prod` environments (Settings > Environments > `{env}` > Environment secrets). `web-deploy.yml` uploads them to the corresponding Worker via `wrangler secret put` on every deploy. See **Worker secrets (deployed envs)** above for details.
 - **Stack init** (one-time): `cd infra && pulumi stack init dev && pulumi stack init prod`
 - **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/Pulumi.dev.yaml` and `infra/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
 - **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. Trigger `web-deploy.yml` for dev first, then `infra-deploy.yml` for dev; repeat for prod. After bootstrap, either workflow can run independently.

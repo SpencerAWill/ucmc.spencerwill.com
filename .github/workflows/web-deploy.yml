@@ -88,18 +88,29 @@ jobs:
           workingDirectory: apps/web
           command: d1 migrations apply ucmc-web-dev --remote
 
+      # Secrets are uploaded via `wrangler secret put` (one call per name)
+      # immediately before `wrangler deploy`. Values come from the GitHub
+      # `dev` environment's secrets; rotating there + re-deploying is the
+      # rotation path. RESEND_API_KEY is tolerated as empty in dev (the
+      # Worker's email adapter falls back to console logging).
       - name: Deploy Worker (dev)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
+          secrets: |
+            SESSION_SECRET
+            RESEND_API_KEY
           command: >-
             deploy
             --var APP_BASE_URL:${{ steps.pulumi.outputs.app_base_url }}
             --var WEBAUTHN_RP_ID:${{ steps.pulumi.outputs.webauthn_rp_id }}
             --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthn_rp_name }}
             --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
+        env:
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 
   deploy-prod:
     name: Deploy Web to Prod
@@ -161,15 +172,25 @@ jobs:
           workingDirectory: apps/web
           command: d1 migrations apply ucmc-web --env production --remote
 
+      # Secrets come from the GitHub `prod` environment. Unlike dev, prod
+      # requires a real RESEND_API_KEY — leaving it empty will upload an
+      # empty secret and mail will silently fall back to console logs
+      # (invisible in deployed Workers). CI does not enforce this; set it.
       - name: Deploy Worker (prod)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
+          secrets: |
+            SESSION_SECRET
+            RESEND_API_KEY
           command: >-
             deploy --env production
             --var APP_BASE_URL:${{ steps.pulumi.outputs.app_base_url }}
             --var WEBAUTHN_RP_ID:${{ steps.pulumi.outputs.webauthn_rp_id }}
             --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthn_rp_name }}
             --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
+        env:
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
