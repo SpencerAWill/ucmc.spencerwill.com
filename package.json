@@ -40,7 +40,8 @@
       "lightningcss"
     ],
     "overrides": {
-      "esbuild@<0.25.0": ">=0.25.0"
+      "esbuild@<0.25.0": ">=0.25.0",
+      "protobufjs@<7.5.5": ">=7.5.5"
     }
   }
 }
