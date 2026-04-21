@@ -17,13 +17,13 @@ export interface WorkerEnv {
   AUTH_RATE_LIMITER: RateLimit;
 
   // Vars — injected at deploy time from Pulumi stack outputs for dev/prod,
-  // supplied via .dev.vars locally. See .dev.vars.example for documentation.
+  // supplied via .env.local locally. See .env.example for documentation.
   APP_BASE_URL: string;
   WEBAUTHN_RP_ID: string;
   WEBAUTHN_RP_NAME: string;
   RESEND_FROM: string;
 
-  // Secrets — set via `wrangler secret put` in deployed envs, or .dev.vars
+  // Secrets — set via `wrangler secret put` in deployed envs, or .env.local
   // locally. RESEND_API_KEY is optional because the email adapter falls
   // back to console-log when unset. SESSION_SECRET is required wherever
   // the proof cookie is issued — the module that reads it throws at first

@@ -3,6 +3,15 @@ services:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+    environment:
+      # Merge host process env into Worker dev bindings so host-exported
+      # vars reach `pnpm --filter ucmc-web dev` through the
+      # @cloudflare/vite-plugin. Host values win over apps/web/.env*.
+      CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+      # Host-shell passthroughs for local Worker secrets. `${VAR:-}` means
+      # "empty if unset on host" — apps/web/.env.local then fills in.
+      SESSION_SECRET: "${SESSION_SECRET:-}"
+      RESEND_API_KEY: "${RESEND_API_KEY:-}"
     volumes:
       - ..:/workspace:cached
       - pnpm-store:/home/vscode/.local/share/pnpm/store

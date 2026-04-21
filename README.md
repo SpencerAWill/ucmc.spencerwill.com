@@ -99,11 +99,13 @@ pnpm --filter ucmc-web deploy:dev   # build and deploy to dev (dev.ucmc.spencerw
 pnpm --filter ucmc-web deploy:prod  # build and deploy to prod (ucmc.spencerwill.com)
 ```
 
-#### Local env (`.dev.vars`)
+#### Local env (`.env.local`)
 
-Copy `apps/web/.dev.vars.example` to `apps/web/.dev.vars` and fill in the values. Wrangler loads this automatically during `pnpm --filter ucmc-web dev`. It is gitignored — never commit it.
+Copy `apps/web/.env.example` to `apps/web/.env.local` and fill in the values. Wrangler v4 (via `@cloudflare/vite-plugin`) loads this automatically during `pnpm --filter ucmc-web dev`. It is gitignored — never commit it.
 
-`.dev.vars` is the local analog of what Pulumi-injected `--var` flags and Cloudflare secrets do in deployed envs. Missing any required value will crash the Worker on first request that touches it.
+The full precedence chain (most → least specific, merged) is `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env`. The devcontainer also sets `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` in `docker-compose.yml`, so exporting a var in your host shell (e.g. `export SESSION_SECRET=…`) overrides whatever is in `.env.local` — useful for keeping per-developer secrets out of the workspace entirely.
+
+`.env.local` is the local analog of what Pulumi-injected `--var` flags and Cloudflare secrets do in deployed envs. Missing any required value will crash the Worker on first request that touches it.
 
 #### Worker secrets (deployed envs)
 
