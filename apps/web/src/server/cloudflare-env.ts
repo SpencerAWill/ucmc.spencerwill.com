@@ -22,6 +22,7 @@ export interface WorkerEnv {
   WEBAUTHN_RP_ID: string;
   WEBAUTHN_RP_NAME: string;
   RESEND_FROM: string;
+  RESEND_FROM_NAME: string;
 
   // Secrets — set via `wrangler secret put` in deployed envs, or .env.local
   // locally. RESEND_API_KEY is optional because the email adapter falls

@@ -30,7 +30,7 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM,
+      from: `${env.RESEND_FROM_NAME} <${env.RESEND_FROM}>`,
       to: message.to,
       subject: message.subject,
       text: message.text,

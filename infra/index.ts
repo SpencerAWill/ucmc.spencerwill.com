@@ -119,7 +119,14 @@ export const kvNamespaceTitleOutput = kvNamespace.title;
 export const appBaseUrl = `https://${hostname}`;
 export const webauthnRpId = hostname;
 export { webauthnRpName };
-export const resendFrom = `${resendFromName} <noreply@${hostname}>`;
+// Split into two vars (address + display name) rather than a composed
+// `Name <email>` string. wrangler-action tokenizes the `command:` input
+// on whitespace before wrangler sees it, so a value containing spaces
+// or `<>` gets chopped into separate argv entries and only the prefix
+// reaches the Worker — Resend then 422s because the `from` field isn't
+// a valid address. Composition happens in `apps/web/src/server/email/resend.ts`.
+export const resendFromEmail = `noreply@${hostname}`;
+export { resendFromName };
 
 // Resend sending domain + DNS records + sending-scoped API key. The
 // component handles domain creation, DNS record provisioning in the

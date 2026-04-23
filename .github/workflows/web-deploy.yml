@@ -63,7 +63,8 @@ jobs:
             echo "app_base_url=$(pulumi stack output appBaseUrl)"
             echo "webauthn_rp_id=$(pulumi stack output webauthnRpId)"
             echo "webauthn_rp_name=$(pulumi stack output webauthnRpName)"
-            echo "resend_from=$(pulumi stack output resendFrom)"
+            echo "resend_from=$(pulumi stack output resendFromEmail)"
+            echo "resend_from_name=$(pulumi stack output resendFromName)"
           } >> "$GITHUB_OUTPUT"
           # Secret output: masked in job logs, used only as an env var
           # for the deploy step. `--show-secrets` is required to get the
@@ -113,6 +114,7 @@ jobs:
             --var WEBAUTHN_RP_ID:${{ steps.pulumi.outputs.webauthn_rp_id }}
             --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthn_rp_name }}
             --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
+            --var RESEND_FROM_NAME:${{ steps.pulumi.outputs.resend_from_name }}
         env:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
@@ -153,7 +155,8 @@ jobs:
             echo "app_base_url=$(pulumi stack output appBaseUrl)"
             echo "webauthn_rp_id=$(pulumi stack output webauthnRpId)"
             echo "webauthn_rp_name=$(pulumi stack output webauthnRpName)"
-            echo "resend_from=$(pulumi stack output resendFrom)"
+            echo "resend_from=$(pulumi stack output resendFromEmail)"
+            echo "resend_from_name=$(pulumi stack output resendFromName)"
           } >> "$GITHUB_OUTPUT"
           echo "::add-mask::$(pulumi stack output resendApiKey --show-secrets)"
           echo "resend_api_key=$(pulumi stack output resendApiKey --show-secrets)" >> "$GITHUB_OUTPUT"
@@ -198,6 +201,7 @@ jobs:
             --var WEBAUTHN_RP_ID:${{ steps.pulumi.outputs.webauthn_rp_id }}
             --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthn_rp_name }}
             --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
+            --var RESEND_FROM_NAME:${{ steps.pulumi.outputs.resend_from_name }}
         env:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
