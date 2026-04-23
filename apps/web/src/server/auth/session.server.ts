@@ -18,8 +18,8 @@
  */
 import { eq } from "drizzle-orm";
 
-import { loadPrincipal } from "#/server/auth/principal";
-import type { Principal } from "#/server/auth/principal";
+import { loadPrincipal } from "#/server/auth/principal.server";
+import type { Principal } from "#/server/auth/principal.server";
 import {
   SESSION_SLIDING_REFRESH_MS,
   SESSION_TTL_MS,
@@ -29,7 +29,7 @@ import {
   clearSessionCookie,
   readSessionCookie,
   writeSessionCookie,
-} from "#/server/session-cookie";
+} from "#/server/session-cookie.server";
 
 interface SessionRow {
   id: string;

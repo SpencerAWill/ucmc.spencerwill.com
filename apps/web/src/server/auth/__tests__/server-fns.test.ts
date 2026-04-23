@@ -22,15 +22,16 @@ vi.mock("@tanstack/react-start/server", () => ({
 // to flip the allow/deny decision per test. The real limiter binding is
 // exercised by the deployed Worker, not by unit tests.
 let rateLimitAllowed = true;
-vi.mock("#/server/rate-limit", () => ({
+vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByIp: async () => rateLimitAllowed,
   checkAuthRateLimitByEmail: async () => rateLimitAllowed,
   checkHealthRateLimit: async () => rateLimitAllowed,
 }));
 
-// Import AFTER the mocks above so the server-fn module picks them up.
-const { consumeMagicLinkAction } = await import("#/server/auth/server-fns");
-const { MAGIC_LINK_TTL_MS } = await import("#/server/auth/magic-link");
+// Import AFTER the mocks above so the action module picks them up.
+const { consumeMagicLinkAction } =
+  await import("#/server/auth/magic-link-actions.server");
+const { MAGIC_LINK_TTL_MS } = await import("#/server/auth/magic-link.server");
 
 async function sha256Base64Url(input: string): Promise<string> {
   const digest = await crypto.subtle.digest(

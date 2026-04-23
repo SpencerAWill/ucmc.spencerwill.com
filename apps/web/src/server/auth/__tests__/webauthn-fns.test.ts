@@ -6,8 +6,8 @@ import type {
 } from "@simplewebauthn/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Principal } from "#/server/auth/principal";
-import type * as WebauthnModule from "#/server/auth/webauthn";
+import type { Principal } from "#/server/auth/principal.server";
+import type * as WebauthnModule from "#/server/auth/webauthn.server";
 import { getDb, schema } from "#/server/db";
 
 // ── shared mocks ─────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ vi.mock("@tanstack/react-start/server", () => ({
 }));
 
 let rateLimitAllowed = true;
-vi.mock("#/server/rate-limit", () => ({
+vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByIp: async () => rateLimitAllowed,
   checkAuthRateLimitByEmail: async () => rateLimitAllowed,
   checkHealthRateLimit: async () => rateLimitAllowed,
@@ -36,7 +36,7 @@ vi.mock("#/server/rate-limit", () => ({
 let currentPrincipal: Principal | null = null;
 const openSessionSpy = vi.fn();
 const rotateSessionSpy = vi.fn();
-vi.mock("#/server/auth/session", () => ({
+vi.mock("#/server/auth/session.server", () => ({
   loadCurrentPrincipal: async () => currentPrincipal,
   openSession: async (userId: string) => {
     openSessionSpy(userId);
@@ -75,9 +75,9 @@ let verifyAuthenticationResult = {
   verified: true,
   authenticationInfo: { newCounter: 1 },
 };
-vi.mock("#/server/auth/webauthn", async () => {
+vi.mock("#/server/auth/webauthn.server", async () => {
   const actual = await vi.importActual<typeof WebauthnModule>(
-    "#/server/auth/webauthn",
+    "#/server/auth/webauthn.server",
   );
   return {
     ...actual,
@@ -91,7 +91,7 @@ vi.mock("#/server/auth/webauthn", async () => {
 });
 
 const { putChallenge, getChallenge } =
-  await import("#/server/auth/webauthn-challenge");
+  await import("#/server/auth/webauthn-challenge.server");
 const {
   webauthnRegisterBeginAction,
   webauthnRegisterFinishAction,
@@ -99,9 +99,9 @@ const {
   webauthnAuthenticateFinishAction,
   removePasskeyAction,
   listPasskeysAction,
-} = await import("#/server/auth/webauthn-fns");
+} = await import("#/server/auth/webauthn-actions.server");
 const { insertCredential, listCredentialsForUser } =
-  await import("#/server/auth/passkey-credentials");
+  await import("#/server/auth/passkey-credentials.server");
 
 // ── helpers ──────────────────────────────────────────────────────────────
 

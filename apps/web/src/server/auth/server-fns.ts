@@ -1,73 +1,34 @@
 /**
- * TanStack Start server functions for the magic-link flow.
+ * Route-facing shells for the magic-link / session / profile server fns.
+ * Each handler dynamic-imports its implementation from
+ * `./magic-link-actions.server` — the TanStack Start compiler replaces
+ * handler bodies with RPC stubs in the client bundle, so the real code
+ * path never reaches the browser. Module-scope imports here are limited
+ * to client-safe things: createServerFn, zod, a value-only `schema`
+ * namespace for zod enums, and `import type` across server-only
+ * boundaries.
  *
- * Scope of this phase:
- *   - requestMagicLinkFn — issue a link for a given email, auto-detecting
- *     register vs login intent. Enumeration-proof: always resolves
- *     `{ ok: true }`, even when rate-limited or when the email has never
- *     been seen (the caller cannot tell the difference).
- *   - consumeMagicLinkFn — verify a token and, on success, write the
- *     short-lived email-verified proof cookie. Deliberately does NOT open
- *     a session or touch the users table. User creation / session opening
- *     lives in Phase 4d (profile submit) and Phase 5 (existing-user
- *     sign-in), respectively.
+ * Exports:
+ *   - requestMagicLinkFn  — enumeration-proof token issuance
+ *   - consumeMagicLinkFn  — single-use token redemption + session open
+ *   - getSessionFn        — current principal for the root loader
+ *   - getProofFn          — short-lived email-verified proof cookie
+ *   - signOutFn           — close current session
+ *   - submitProfileFn     — create/update profile, upsert user row
+ *
+ * Shared types (ConsumeMagicLinkResult, ProfileInput) are declared here
+ * so actions and clients can both reference them without pulling any
+ * runtime from `.server.ts`.
  */
 import { createServerFn } from "@tanstack/react-start";
-import { eq } from "drizzle-orm";
 import { isValidPhoneNumber } from "react-phone-number-input";
 import { z } from "zod";
 
-import { consumeMagicLink, requestMagicLink } from "#/server/auth/magic-link";
-import type { Principal } from "#/server/auth/principal";
-import {
-  clearProofCookie,
-  readProofCookie,
-  writeProofCookie,
-} from "#/server/auth/proof-cookie";
-import type { EmailProof } from "#/server/auth/proof-cookie";
-import {
-  closeSession,
-  loadCurrentPrincipal,
-  openSession,
-  rotateSession,
-} from "#/server/auth/session";
-import { getDb, schema } from "#/server/db";
-import {
-  checkAuthRateLimitByEmail,
-  checkAuthRateLimitByIp,
-} from "#/server/rate-limit";
+import type { Principal } from "#/server/auth/principal.server";
+import type { EmailProof } from "#/server/auth/proof-cookie.server";
+import { schema } from "#/server/db";
 
-// Matches the RFC 5321 local-part-plus-domain max length. Trimming and
-// lowercasing here keeps the same email canonical everywhere downstream
-// (D1 rows, proof cookie, rate-limit key).
-const emailSchema = z.email().trim().toLowerCase().max(254);
-
-export const requestMagicLinkFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: emailSchema }))
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    // Both rate-limit checks silently short-circuit to the success shape
-    // so the client can't distinguish rate-limited vs honored vs unknown
-    // email. Timing jitter (added in Phase 10) will flatten the remaining
-    // latency signal.
-    if (!(await checkAuthRateLimitByIp())) {
-      return { ok: true };
-    }
-    if (!(await checkAuthRateLimitByEmail(data.email))) {
-      return { ok: true };
-    }
-
-    const existing = await getDb().query.users.findFirst({
-      where: eq(schema.users.email, data.email),
-      columns: { id: true },
-    });
-
-    await requestMagicLink({
-      email: data.email,
-      intent: existing ? "login" : "register",
-    });
-
-    return { ok: true };
-  });
+// ── types shared with magic-link-actions.server.ts ───────────────────────
 
 export type ConsumeMagicLinkResult =
   | {
@@ -79,63 +40,20 @@ export type ConsumeMagicLinkResult =
   | { ok: true; mode: "proof"; intent: schema.MagicLinkIntent }
   | { ok: false; reason: "invalid" | "rate_limited" };
 
-/**
- * Core logic for consuming a magic-link token. Extracted from the
- * `createServerFn` wrapper below so unit tests can exercise it directly
- * — TanStack Start's `serverFn(...)` callable goes through the RPC
- * client at call-time, which isn't wired up in the vitest-pool-workers
- * environment.
- */
-export async function consumeMagicLinkAction(
-  token: string,
-): Promise<ConsumeMagicLinkResult> {
-  if (!(await checkAuthRateLimitByIp())) {
-    return { ok: false, reason: "rate_limited" };
-  }
+// ── request / consume ────────────────────────────────────────────────────
 
-  const proof = await consumeMagicLink(token);
-  if (!proof) {
-    return { ok: false, reason: "invalid" };
-  }
+// Matches the RFC 5321 local-part-plus-domain max length. Trimming and
+// lowercasing here keeps the same email canonical everywhere downstream
+// (D1 rows, proof cookie, rate-limit key).
+const emailSchema = z.email().trim().toLowerCase().max(254);
 
-  // If a user row already exists for this email, the magic-link click is
-  // a returning-user sign-in: open a session directly and skip the proof
-  // cookie entirely. The caller sees `mode: "session"` and can route by
-  // status + hasProfile instead of bouncing through /register/profile.
-  //
-  // If no user row exists, this is a first-time registration click —
-  // write the short-lived proof cookie that /register/profile gates on,
-  // and return `mode: "proof"` so the caller redirects there.
-  const existing = await getDb().query.users.findFirst({
-    where: eq(schema.users.email, proof.email),
-    columns: { id: true, status: true },
+export const requestMagicLinkFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ email: emailSchema }))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { requestMagicLinkAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return requestMagicLinkAction(data.email);
   });
-
-  if (existing) {
-    const profile = await getDb().query.profiles.findFirst({
-      where: eq(schema.profiles.userId, existing.id),
-      columns: { userId: true },
-    });
-    // rotateSession (not openSession) so any stale session cookie on the
-    // device gets replaced — same privilege-boundary discipline the
-    // other auth transitions follow.
-    await rotateSession(existing.id);
-    return {
-      ok: true,
-      mode: "session",
-      status: existing.status,
-      hasProfile: Boolean(profile),
-    };
-  }
-
-  await writeProofCookie({
-    email: proof.email,
-    intent: proof.intent,
-    issuedAt: Date.now(),
-  });
-
-  return { ok: true, mode: "proof", intent: proof.intent };
-}
 
 export const consumeMagicLinkFn = createServerFn({ method: "POST" })
   .inputValidator(
@@ -146,7 +64,13 @@ export const consumeMagicLinkFn = createServerFn({ method: "POST" })
       token: z.string().min(16).max(128),
     }),
   )
-  .handler(async ({ data }) => consumeMagicLinkAction(data.token));
+  .handler(async ({ data }): Promise<ConsumeMagicLinkResult> => {
+    const { consumeMagicLinkAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return consumeMagicLinkAction(data.token);
+  });
+
+// ── principal / proof / sign-out ─────────────────────────────────────────
 
 /**
  * Read the current session's principal. Called on every navigation via the
@@ -156,8 +80,9 @@ export const consumeMagicLinkFn = createServerFn({ method: "POST" })
  */
 export const getSessionFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ principal: Principal | null }> => {
-    const principal = await loadCurrentPrincipal();
-    return { principal };
+    const { getSessionAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return getSessionAction();
   },
 );
 
@@ -168,19 +93,21 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
  */
 export const getProofFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ proof: EmailProof | null }> => {
-    const proof = await readProofCookie();
-    return { proof };
+    const { getProofAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return getProofAction();
   },
 );
 
 export const signOutFn = createServerFn({ method: "POST" }).handler(
   async (): Promise<{ ok: true }> => {
-    await closeSession();
-    return { ok: true };
+    const { signOutAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return signOutAction();
   },
 );
 
-// ── profile submission ────────────────────────────────────────────────────
+// ── profile submission ───────────────────────────────────────────────────
 
 // Validation constants are exported so the form UI can mirror them as
 // HTML `maxLength` attributes and help text (single source of truth).
@@ -238,6 +165,8 @@ export const profileInputSchema = z.object({
   }),
 });
 
+export type ProfileInput = z.infer<typeof profileInputSchema>;
+
 /**
  * First-time profile submission. Callable by a user who has a valid
  * email-verified proof cookie but no session yet (the register flow) OR
@@ -257,51 +186,7 @@ export const profileInputSchema = z.object({
 export const submitProfileFn = createServerFn({ method: "POST" })
   .inputValidator(profileInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const principal = await loadCurrentPrincipal();
-    const proof = principal ? null : await readProofCookie();
-
-    if (!principal && !proof) {
-      throw new Error("Not authorized to submit a profile");
-    }
-
-    const email = principal?.email ?? proof!.email;
-
-    // Find or create the user row. Pre-seeded rows (email-only, no profile)
-    // are reused by hitting the unique email index. We do this in three
-    // steps — insert-on-conflict-do-nothing, then select — to stay portable
-    // across D1's SQLite dialect without depending on `returning`.
-    const id = `user_${crypto.randomUUID()}`;
-    await getDb()
-      .insert(schema.users)
-      .values({ id, email, status: "pending" })
-      .onConflictDoNothing({ target: schema.users.email });
-    const userRow = await getDb().query.users.findFirst({
-      where: eq(schema.users.email, email),
-    });
-    if (!userRow) {
-      throw new Error("User row not found after upsert (unexpected)");
-    }
-
-    const now = new Date();
-    await getDb()
-      .insert(schema.profiles)
-      .values({ userId: userRow.id, ...data, updatedAt: now })
-      .onConflictDoUpdate({
-        target: schema.profiles.userId,
-        set: { ...data, updatedAt: now },
-      });
-
-    if (userRow.status !== "approved") {
-      await getDb()
-        .update(schema.users)
-        .set({ status: "pending" })
-        .where(eq(schema.users.id, userRow.id));
-    }
-
-    if (!principal) {
-      await openSession(userRow.id);
-      clearProofCookie();
-    }
-
-    return { ok: true };
+    const { submitProfileAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return submitProfileAction(data);
   });

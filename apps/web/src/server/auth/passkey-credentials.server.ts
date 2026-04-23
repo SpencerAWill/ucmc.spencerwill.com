@@ -19,7 +19,7 @@
  */
 import { and, eq } from "drizzle-orm";
 
-import type { AuthenticatorTransportFuture } from "#/server/auth/webauthn";
+import type { AuthenticatorTransportFuture } from "#/server/auth/webauthn.server";
 import { getDb, schema } from "#/server/db";
 
 export interface PasskeyCredentialRecord {
