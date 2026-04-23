@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { KeyRound, LogOut, User as UserIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import {
@@ -78,6 +78,14 @@ export function UserMenu() {
             {principal.hasProfile ? "Home" : "Finish registering"}
           </Link>
         </DropdownMenuItem>
+        {principal.hasProfile ? (
+          <DropdownMenuItem asChild>
+            <Link to="/account/security">
+              <KeyRound className="mr-2 size-4" />
+              Security
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={async (e) => {

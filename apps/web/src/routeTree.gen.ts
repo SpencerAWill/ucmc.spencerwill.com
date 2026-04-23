@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AccountSecurityRouteImport } from './routes/account.security'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
@@ -46,11 +47,17 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountSecurityRoute = AccountSecurityRouteImport.update({
+  id: '/account/security',
+  path: '/account/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/sign-in': typeof SignInRoute
+  '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/sign-in': typeof SignInRoute
+  '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/sign-in': typeof SignInRoute
+  '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
@@ -78,6 +87,7 @@ export interface FileRouteTypes {
     | '/'
     | '/health'
     | '/sign-in'
+    | '/account/security'
     | '/auth/callback'
     | '/register/pending'
     | '/register/profile'
@@ -86,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/health'
     | '/sign-in'
+    | '/account/security'
     | '/auth/callback'
     | '/register/pending'
     | '/register/profile'
@@ -94,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/health'
     | '/sign-in'
+    | '/account/security'
     | '/auth/callback'
     | '/register/pending'
     | '/register/profile'
@@ -103,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HealthRoute: typeof HealthRoute
   SignInRoute: typeof SignInRoute
+  AccountSecurityRoute: typeof AccountSecurityRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
   RegisterProfileRoute: typeof RegisterProfileRoute
@@ -152,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/security': {
+      id: '/account/security'
+      path: '/account/security'
+      fullPath: '/account/security'
+      preLoaderRoute: typeof AccountSecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -159,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HealthRoute: HealthRoute,
   SignInRoute: SignInRoute,
+  AccountSecurityRoute: AccountSecurityRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   RegisterPendingRoute: RegisterPendingRoute,
   RegisterProfileRoute: RegisterProfileRoute,
