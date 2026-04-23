@@ -48,5 +48,5 @@ export function writeCeremonyCookie(ceremonyId: string): void {
 }
 
 export function clearCeremonyCookie(): void {
-  deleteCookie(cookieName(), { path: "/" });
+  deleteCookie(cookieName(), { path: "/", secure: isSecure() });
 }

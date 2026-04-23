@@ -38,5 +38,5 @@ export function writeSessionCookie(sid: string): void {
 }
 
 export function clearSessionCookie(): void {
-  deleteCookie(sessionCookieName(), { path: "/" });
+  deleteCookie(sessionCookieName(), { path: "/", secure: isSecure() });
 }

@@ -131,5 +131,5 @@ export async function readProofCookie(): Promise<EmailProof | null> {
 }
 
 export function clearProofCookie(): void {
-  deleteCookie(proofCookieName(), { path: "/" });
+  deleteCookie(proofCookieName(), { path: "/", secure: isSecure() });
 }
