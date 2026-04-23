@@ -193,8 +193,15 @@ export class ResendDomain extends pulumi.ComponentResource {
           PERMISSION: "sending_access",
           DOMAIN_ID: this.domainId,
         },
+        // Suppress stdout from Pulumi's deploy log — it contains the
+        // API key token in plaintext.
+        logging: "none",
       },
-      { ...parentOpts, dependsOn: [verifyCmd] },
+      {
+        ...parentOpts,
+        dependsOn: [verifyCmd],
+        additionalSecretOutputs: ["stdout"],
+      },
     );
 
     const apiKeyOutput = apiKeyCmd.stdout.apply(
