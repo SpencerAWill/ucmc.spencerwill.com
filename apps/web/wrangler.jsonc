@@ -19,6 +19,16 @@
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
+  // Workers Logs: structured logs + invocation traces viewable in the
+  // Cloudflare dashboard (~7 day retention) and streamable via `wrangler
+  // tail`. `head_sampling_rate: 1` logs 100% of invocations — fine at our
+  // traffic; drop it if volume grows. Purely a worker-config setting, so
+  // Pulumi and the deploy workflow need no changes; `wrangler deploy`
+  // applies it on the next push.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -78,6 +88,10 @@
   "env": {
     "production": {
       "name": "ucmc-web",
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+      },
       "d1_databases": [
         {
           "binding": "DB",
