@@ -65,6 +65,11 @@ jobs:
             echo "webauthn_rp_name=$(pulumi stack output webauthnRpName)"
             echo "resend_from=$(pulumi stack output resendFrom)"
           } >> "$GITHUB_OUTPUT"
+          # Secret output: masked in job logs, used only as an env var
+          # for the deploy step. `--show-secrets` is required to get the
+          # plaintext token.
+          echo "::add-mask::$(pulumi stack output resendApiKey --show-secrets)"
+          echo "resend_api_key=$(pulumi stack output resendApiKey --show-secrets)" >> "$GITHUB_OUTPUT"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -89,10 +94,10 @@ jobs:
           command: d1 migrations apply ucmc-web-dev --remote
 
       # Secrets are uploaded via `wrangler secret put` (one call per name)
-      # immediately before `wrangler deploy`. Values come from the GitHub
-      # `dev` environment's secrets; rotating there + re-deploying is the
-      # rotation path. RESEND_API_KEY is tolerated as empty in dev (the
-      # Worker's email adapter falls back to console logging).
+      # immediately before `wrangler deploy`. SESSION_SECRET comes from
+      # the GitHub `dev` environment; RESEND_API_KEY comes from the
+      # Pulumi stack output (the sending-scoped key that the ResendDomain
+      # component issues), masked above so it doesn't leak in job logs.
       - name: Deploy Worker (dev)
         uses: cloudflare/wrangler-action@v3
         with:
@@ -110,7 +115,7 @@ jobs:
             --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
         env:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
 
   deploy-prod:
     name: Deploy Web to Prod
@@ -150,6 +155,8 @@ jobs:
             echo "webauthn_rp_name=$(pulumi stack output webauthnRpName)"
             echo "resend_from=$(pulumi stack output resendFrom)"
           } >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$(pulumi stack output resendApiKey --show-secrets)"
+          echo "resend_api_key=$(pulumi stack output resendApiKey --show-secrets)" >> "$GITHUB_OUTPUT"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -172,10 +179,10 @@ jobs:
           workingDirectory: apps/web
           command: d1 migrations apply ucmc-web --env production --remote
 
-      # Secrets come from the GitHub `prod` environment. Unlike dev, prod
-      # requires a real RESEND_API_KEY — leaving it empty will upload an
-      # empty secret and mail will silently fall back to console logs
-      # (invisible in deployed Workers). CI does not enforce this; set it.
+      # SESSION_SECRET comes from the GitHub `prod` environment;
+      # RESEND_API_KEY is the sending-scoped key issued by the prod
+      # ResendDomain component, fetched from the Pulumi stack output and
+      # masked above.
       - name: Deploy Worker (prod)
         uses: cloudflare/wrangler-action@v3
         with:
@@ -193,4 +200,4 @@ jobs:
             --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
         env:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
