@@ -1,6 +1,8 @@
 import * as cloudflare from "@pulumi/cloudflare";
 import * as pulumi from "@pulumi/pulumi";
 
+import { ResendDomain } from "./resend.js";
+
 const stack = pulumi.getStack();
 
 const cfg = new pulumi.Config();
@@ -14,6 +16,12 @@ const r2BucketName = cfg.require("r2BucketName");
 const kvNamespaceTitle = cfg.require("kvNamespaceTitle");
 const webauthnRpName = cfg.require("webauthnRpName");
 const resendFromName = cfg.require("resendFromName");
+// Provider credential — authenticates against the Resend API during
+// `pulumi up`. Supplied via env var (from GitHub environment secrets in
+// CI, or `export` locally), matching how CLOUDFLARE_API_TOKEN works.
+const resendManagementApiKey = pulumi.secret(
+  process.env.RESEND_MANAGEMENT_API_KEY ?? "",
+);
 
 // D1 database for the web app. Wrangler binds to it by UUID
 // (see `apps/web/wrangler.jsonc`); the UUID is exported below and
@@ -112,3 +120,29 @@ export const appBaseUrl = `https://${hostname}`;
 export const webauthnRpId = hostname;
 export { webauthnRpName };
 export const resendFrom = `${resendFromName} <noreply@${hostname}>`;
+
+// Resend sending domain + DNS records + sending-scoped API key. The
+// component handles domain creation, DNS record provisioning in the
+// Cloudflare zone defined above, verification trigger, and issuance of
+// a token with `sending_access` permission scoped to this domain.
+//
+// `protect: true` — replacing a Resend domain re-issues DKIM keys and
+// invalidates previously-sent signatures; replacing the API key
+// invalidates any reference to the prior token. Remove protection
+// deliberately via `pulumi state` if a real rotation is needed.
+const resend = new ResendDomain(
+  `ucmc-web-${stack}-resend`,
+  {
+    domainName: hostname,
+    resendApiKey: resendManagementApiKey,
+    cloudflareZoneId: zoneId,
+    apiKeyName: `ucmc-web-${stack}-sending`,
+  },
+  { protect: true },
+);
+
+export const resendDomainId = resend.domainId;
+export const resendApiKeyId = resend.apiKeyId;
+// Sending-scoped API key. Consumed by `web-deploy.yml` as the Worker's
+// RESEND_API_KEY secret via `pulumi stack output --show-secrets`.
+export const resendApiKey = resend.apiKeyToken;
