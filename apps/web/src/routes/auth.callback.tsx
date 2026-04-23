@@ -1,7 +1,10 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { Button } from "#/components/ui/button";
 import { consumeMagicLinkFn } from "#/server/auth/server-fns";
+import type { ConsumeMagicLinkResult } from "#/server/auth/server-fns";
 
 const callbackSearchSchema = z.object({
   token: z.string().min(1),
@@ -13,56 +16,89 @@ const callbackSearchSchema = z.object({
 });
 
 /**
- * Magic-link landing page. Loader-only: it consumes the token, then
- * redirects based on the result. There is no component — the user never
- * sees this route.
+ * Magic-link landing page. Renders a "Continue" button that the user must
+ * click to actually consume the token. This defeats enterprise email
+ * scanners (Microsoft Safe Links, Proofpoint, Barracuda, etc.) that
+ * pre-fetch every link — they GET this page but never click the button,
+ * so the single-use token stays unconsumed until the real user arrives.
  *
  * Decision table (driven by current user state, not the link's intent):
  *
- *   no user row yet      → /register/profile      (proof cookie is set)
- *   user w/o profile     → /register/profile      (session opened)
- *   user + profile, not approved → /register/pending (session opened)
+ *   no user row yet              → /register/profile   (proof cookie set)
+ *   user w/o profile             → /register/profile   (session opened)
+ *   user + profile, not approved → /register/pending    (session opened)
  *   user + profile, approved     → search.redirect ?? "/"
  *
  * Failure paths send the user back to /sign-in with a hint the UI can
- * read so it can show "that link was invalid or already used" without a
- * separate error page.
+ * read so it renders a contextual banner.
  */
 export const Route = createFileRoute("/auth/callback")({
   validateSearch: callbackSearchSchema,
-  loaderDeps: ({ search }) => ({
-    token: search.token,
-    redirect: search.redirect,
-  }),
-  loader: async ({ deps }) => {
-    const result = await consumeMagicLinkFn({ data: { token: deps.token } });
-    if (!result.ok) {
-      throw redirect({
-        to: "/sign-in",
-        search: {
-          invalid: result.reason === "invalid" ? true : undefined,
-          rate_limited: result.reason === "rate_limited" ? true : undefined,
-        },
-      });
-    }
-
-    if (result.mode === "session") {
-      if (!result.hasProfile) {
-        throw redirect({ to: "/register/profile" });
-      }
-      if (result.status !== "approved") {
-        throw redirect({ to: "/register/pending" });
-      }
-      // `redirect` is validated as a string but we only honor it if it
-      // looks like an app-internal path — prevents an open-redirect via a
-      // crafted magic-link URL.
-      const target =
-        deps.redirect && deps.redirect.startsWith("/") ? deps.redirect : "/";
-      throw redirect({ to: target });
-    }
-
-    // mode === "proof" — first-time registrant. Proof cookie is already
-    // set server-side; /register/profile reads it via `requireProof`.
-    throw redirect({ to: "/register/profile" });
-  },
+  component: CallbackPage,
 });
+
+function CallbackPage() {
+  const { token, redirect: redirectTo } = Route.useSearch();
+  const navigate = useNavigate();
+
+  const mutation = useMutation({
+    mutationFn: () => consumeMagicLinkFn({ data: { token } }),
+    onSuccess: async (result: ConsumeMagicLinkResult) => {
+      if (!result.ok) {
+        await navigate({
+          to: "/sign-in",
+          search: {
+            invalid: result.reason === "invalid" ? true : undefined,
+            rate_limited: result.reason === "rate_limited" ? true : undefined,
+          },
+        });
+        return;
+      }
+
+      if (result.mode === "session") {
+        if (!result.hasProfile) {
+          await navigate({ to: "/register/profile" });
+          return;
+        }
+        if (result.status !== "approved") {
+          await navigate({ to: "/register/pending" });
+          return;
+        }
+        const target =
+          redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
+        await navigate({ to: target });
+        return;
+      }
+
+      // mode === "proof" — first-time registrant.
+      await navigate({ to: "/register/profile" });
+    },
+    onError: async () => {
+      await navigate({ to: "/sign-in", search: { invalid: true } });
+    },
+  });
+
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-6 py-16">
+      <header className="space-y-2 text-center">
+        <h1 className="text-2xl font-semibold">Verify your email</h1>
+        <p className="text-sm text-muted-foreground">
+          Click the button below to continue. This extra step keeps your link
+          safe from automated email scanners.
+        </p>
+      </header>
+      <Button
+        size="lg"
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+      >
+        {mutation.isPending ? "Verifying…" : "Continue to UCMC"}
+      </Button>
+      {mutation.isError ? (
+        <p className="text-sm text-destructive">
+          Something went wrong. Please request a new link.
+        </p>
+      ) : null}
+    </div>
+  );
+}
