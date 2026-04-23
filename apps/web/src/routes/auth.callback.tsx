@@ -1,8 +1,9 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { Button } from "#/components/ui/button";
+import { SESSION_QUERY_KEY } from "#/lib/auth/use-auth";
 import { consumeMagicLinkFn } from "#/server/auth/server-fns";
 import type { ConsumeMagicLinkResult } from "#/server/auth/server-fns";
 
@@ -40,10 +41,19 @@ export const Route = createFileRoute("/auth/callback")({
 function CallbackPage() {
   const { token, redirect: redirectTo } = Route.useSearch();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: () => consumeMagicLinkFn({ data: { token } }),
     onSuccess: async (result: ConsumeMagicLinkResult) => {
+      // Invalidate the cached session BEFORE navigating — the consume
+      // call just set a session cookie (or proof cookie), but the
+      // queryClient may still hold {principal: null} from the /sign-in
+      // page the user was on before clicking the magic link. Without
+      // this, the destination route's guard (requireAuth / requireProof)
+      // would read the stale cache and redirect back to /sign-in.
+      await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+
       if (!result.ok) {
         await navigate({
           to: "/sign-in",
