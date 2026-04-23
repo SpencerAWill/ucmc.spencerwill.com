@@ -48,11 +48,22 @@ export type ConsumeMagicLinkResult =
 const emailSchema = z.email().trim().toLowerCase().max(254);
 
 export const requestMagicLinkFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: emailSchema }))
+  .inputValidator(
+    z.object({
+      email: emailSchema,
+      // Turnstile challenge token. Empty string when the widget isn't
+      // rendered (local dev without VITE_TURNSTILE_SITE_KEY). The
+      // server skips verification when TURNSTILE_SECRET_KEY is unset.
+      turnstileToken: z.string().default(""),
+    }),
+  )
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { requestMagicLinkAction } =
       await import("#/server/auth/magic-link-actions.server");
-    return requestMagicLinkAction(data.email);
+    return requestMagicLinkAction({
+      email: data.email,
+      turnstileToken: data.turnstileToken,
+    });
   });
 
 export const consumeMagicLinkFn = createServerFn({ method: "POST" })

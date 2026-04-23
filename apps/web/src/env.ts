@@ -14,6 +14,10 @@ export const env = createEnv({
 
   client: {
     VITE_APP_TITLE: z.string().min(1).optional(),
+    // Cloudflare Turnstile widget site key. Public (embedded in the page).
+    // Use Cloudflare's always-pass test key for local dev:
+    //   1x00000000000000000000AA
+    VITE_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
   },
 
   /**

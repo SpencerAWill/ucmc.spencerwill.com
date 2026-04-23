@@ -1,9 +1,11 @@
+import { Turnstile } from "@marsidev/react-turnstile";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
+import { env } from "#/env";
 import { SESSION_QUERY_KEY } from "#/lib/auth/use-auth";
 import { useAppForm } from "#/lib/form/form";
 import { requestMagicLinkFn } from "#/server/auth/server-fns";
@@ -33,6 +35,8 @@ export function MagicLinkForm({
   defaultMode?: "sign-in" | "register";
 }) {
   const [submittedTo, setSubmittedTo] = useState<string | null>(null);
+  const turnstileToken = useRef("");
+  const turnstileSiteKey = env.VITE_TURNSTILE_SITE_KEY;
 
   // Passkey autofill runs in the background on sign-in. If it succeeds
   // the whole component navigates away before the magic-link mutation
@@ -40,7 +44,10 @@ export function MagicLinkForm({
   usePasskeyAutofill({ enabled: defaultMode === "sign-in" });
 
   const mutation = useMutation({
-    mutationFn: (email: string) => requestMagicLinkFn({ data: { email } }),
+    mutationFn: (email: string) =>
+      requestMagicLinkFn({
+        data: { email, turnstileToken: turnstileToken.current },
+      }),
     onSuccess: (_data, vars) => setSubmittedTo(vars),
   });
 
@@ -102,6 +109,19 @@ export function MagicLinkForm({
           />
         )}
       </form.AppField>
+
+      {turnstileSiteKey ? (
+        <Turnstile
+          siteKey={turnstileSiteKey}
+          onSuccess={(token) => {
+            turnstileToken.current = token;
+          }}
+          onExpire={() => {
+            turnstileToken.current = "";
+          }}
+          options={{ theme: "auto", size: "flexible" }}
+        />
+      ) : null}
 
       {mutation.isError ? (
         <p className="text-sm text-destructive">

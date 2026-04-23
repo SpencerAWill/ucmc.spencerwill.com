@@ -65,12 +65,14 @@ jobs:
             echo "webauthn_rp_name=$(pulumi stack output webauthnRpName)"
             echo "resend_from=$(pulumi stack output resendFromEmail)"
             echo "resend_from_name=$(pulumi stack output resendFromName)"
+            echo "turnstile_site_key=$(pulumi stack output turnstileSiteKey)"
           } >> "$GITHUB_OUTPUT"
-          # Secret output: masked in job logs, used only as an env var
-          # for the deploy step. `--show-secrets` is required to get the
-          # plaintext token.
+          # Secret outputs: masked in job logs, used only as env vars for
+          # the deploy step. `--show-secrets` is required to get plaintext.
           echo "::add-mask::$(pulumi stack output resendApiKey --show-secrets)"
           echo "resend_api_key=$(pulumi stack output resendApiKey --show-secrets)" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$(pulumi stack output turnstileSecretKey --show-secrets)"
+          echo "turnstile_secret_key=$(pulumi stack output turnstileSecretKey --show-secrets)" >> "$GITHUB_OUTPUT"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -85,6 +87,8 @@ jobs:
         # must be unset here — setting it to "dev" would make
         # @cloudflare/vite-plugin look up a nonexistent env.dev override.
         run: pnpm --filter ucmc-web build
+        env:
+          VITE_TURNSTILE_SITE_KEY: ${{ steps.pulumi.outputs.turnstile_site_key }}
 
       - name: Apply D1 migrations (dev)
         uses: cloudflare/wrangler-action@v3
@@ -95,10 +99,11 @@ jobs:
           command: d1 migrations apply ucmc-web-dev --remote
 
       # Secrets are uploaded via `wrangler secret put` (one call per name)
-      # immediately before `wrangler deploy`. SESSION_SECRET comes from
-      # the GitHub `dev` environment; RESEND_API_KEY comes from the
-      # Pulumi stack output (the sending-scoped key that the ResendDomain
-      # component issues), masked above so it doesn't leak in job logs.
+      # immediately before `wrangler deploy`. SESSION_SECRET and
+      # TURNSTILE_SECRET_KEY come from the GitHub `dev` environment;
+      # RESEND_API_KEY comes from the Pulumi stack output (the
+      # sending-scoped key that the ResendDomain component issues),
+      # masked above so it doesn't leak in job logs.
       - name: Deploy Worker (dev)
         uses: cloudflare/wrangler-action@v3
         with:
@@ -108,6 +113,7 @@ jobs:
           secrets: |
             SESSION_SECRET
             RESEND_API_KEY
+            TURNSTILE_SECRET_KEY
           command: >-
             deploy
             --var APP_BASE_URL:${{ steps.pulumi.outputs.app_base_url }}
@@ -118,6 +124,7 @@ jobs:
         env:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
+          TURNSTILE_SECRET_KEY: ${{ steps.pulumi.outputs.turnstile_secret_key }}
 
   deploy-prod:
     name: Deploy Web to Prod
@@ -157,9 +164,12 @@ jobs:
             echo "webauthn_rp_name=$(pulumi stack output webauthnRpName)"
             echo "resend_from=$(pulumi stack output resendFromEmail)"
             echo "resend_from_name=$(pulumi stack output resendFromName)"
+            echo "turnstile_site_key=$(pulumi stack output turnstileSiteKey)"
           } >> "$GITHUB_OUTPUT"
           echo "::add-mask::$(pulumi stack output resendApiKey --show-secrets)"
           echo "resend_api_key=$(pulumi stack output resendApiKey --show-secrets)" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$(pulumi stack output turnstileSecretKey --show-secrets)"
+          echo "turnstile_secret_key=$(pulumi stack output turnstileSecretKey --show-secrets)" >> "$GITHUB_OUTPUT"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -173,6 +183,7 @@ jobs:
         run: pnpm --filter ucmc-web build
         env:
           CLOUDFLARE_ENV: production
+          VITE_TURNSTILE_SITE_KEY: ${{ steps.pulumi.outputs.turnstile_site_key }}
 
       - name: Apply D1 migrations (prod)
         uses: cloudflare/wrangler-action@v3
@@ -183,9 +194,9 @@ jobs:
           command: d1 migrations apply ucmc-web --env production --remote
 
       # SESSION_SECRET comes from the GitHub `prod` environment;
-      # RESEND_API_KEY is the sending-scoped key issued by the prod
-      # ResendDomain component, fetched from the Pulumi stack output and
-      # masked above.
+      # RESEND_API_KEY and TURNSTILE_SECRET_KEY come from Pulumi stack
+      # outputs (the sending-scoped key and widget secret, respectively),
+      # fetched and masked above.
       - name: Deploy Worker (prod)
         uses: cloudflare/wrangler-action@v3
         with:
@@ -195,6 +206,7 @@ jobs:
           secrets: |
             SESSION_SECRET
             RESEND_API_KEY
+            TURNSTILE_SECRET_KEY
           command: >-
             deploy --env production
             --var APP_BASE_URL:${{ steps.pulumi.outputs.app_base_url }}
@@ -205,3 +217,4 @@ jobs:
         env:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
+          TURNSTILE_SECRET_KEY: ${{ steps.pulumi.outputs.turnstile_secret_key }}

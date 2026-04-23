@@ -28,9 +28,12 @@ export interface WorkerEnv {
   // locally. RESEND_API_KEY is optional because the email adapter falls
   // back to console-log when unset. SESSION_SECRET is required wherever
   // the proof cookie is issued — the module that reads it throws at first
-  // use, not here at module scope.
+  // use, not here at module scope. TURNSTILE_SECRET_KEY is optional —
+  // when unset, the sign-in form skips the challenge and Turnstile
+  // verification is bypassed server-side (local dev without a widget).
   RESEND_API_KEY?: string;
   SESSION_SECRET?: string;
+  TURNSTILE_SECRET_KEY?: string;
 }
 
 export const env = workerEnv as unknown as WorkerEnv;

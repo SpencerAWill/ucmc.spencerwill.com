@@ -36,32 +36,63 @@ import {
   checkAuthRateLimitByEmail,
   checkAuthRateLimitByIp,
 } from "#/server/rate-limit.server";
+import { verifyTurnstile } from "#/server/turnstile.server";
 
-export async function requestMagicLinkAction(
-  email: string,
-): Promise<{ ok: true }> {
-  // Both rate-limit checks silently short-circuit to the success shape
-  // so the client can't distinguish rate-limited vs honored vs unknown
-  // email. Timing jitter (added in Phase 10) will flatten the remaining
-  // latency signal.
-  if (!(await checkAuthRateLimitByIp())) {
-    return { ok: true };
+// ── timing jitter ────────────────────────────────────────────────────────
+// All paths through requestMagicLinkAction must take roughly the same
+// wall-clock time so an attacker can't distinguish "known email" (DB hit +
+// Resend fetch) from "unknown email" or "rate-limited" (early return) by
+// timing the response. We pad to a minimum + random jitter.
+
+const MIN_RESPONSE_MS = 500;
+const JITTER_RANGE_MS = 300;
+
+async function padTiming(start: number): Promise<void> {
+  const elapsed = Date.now() - start;
+  const target = MIN_RESPONSE_MS + Math.random() * JITTER_RANGE_MS;
+  if (elapsed < target) {
+    await new Promise((r) => setTimeout(r, target - elapsed));
   }
-  if (!(await checkAuthRateLimitByEmail(email))) {
+}
+
+export async function requestMagicLinkAction(args: {
+  email: string;
+  turnstileToken: string;
+}): Promise<{ ok: true }> {
+  const start = Date.now();
+  try {
+    // Turnstile check first — rejects bots before any rate-limit or DB
+    // work. Silently succeeds when TURNSTILE_SECRET_KEY is unset (local
+    // dev). Returns the same { ok: true } shape on failure so the caller
+    // can't distinguish a rejected challenge from a sent email.
+    if (args.turnstileToken && !(await verifyTurnstile(args.turnstileToken))) {
+      return { ok: true };
+    }
+
+    // Both rate-limit checks silently short-circuit to the success shape
+    // so the client can't distinguish rate-limited vs honored vs unknown
+    // email.
+    if (!(await checkAuthRateLimitByIp())) {
+      return { ok: true };
+    }
+    if (!(await checkAuthRateLimitByEmail(args.email))) {
+      return { ok: true };
+    }
+
+    const existing = await getDb().query.users.findFirst({
+      where: eq(schema.users.email, args.email),
+      columns: { id: true },
+    });
+
+    await requestMagicLink({
+      email: args.email,
+      intent: existing ? "login" : "register",
+    });
+
     return { ok: true };
+  } finally {
+    await padTiming(start);
   }
-
-  const existing = await getDb().query.users.findFirst({
-    where: eq(schema.users.email, email),
-    columns: { id: true },
-  });
-
-  await requestMagicLink({
-    email,
-    intent: existing ? "login" : "register",
-  });
-
-  return { ok: true };
 }
 
 export async function consumeMagicLinkAction(

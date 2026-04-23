@@ -153,3 +153,26 @@ export const resendApiKeyId = resend.apiKeyId;
 // Sending-scoped API key. Consumed by `web-deploy.yml` as the Worker's
 // RESEND_API_KEY secret via `pulumi stack output --show-secrets`.
 export const resendApiKey = resend.apiKeyToken;
+
+// Cloudflare Turnstile widget — anti-bot challenge on the sign-in form.
+// Pulumi creates the widget and exports both keys; the deploy workflow
+// reads them via `pulumi stack output`. The site key is public (baked
+// into the client bundle at build time as VITE_TURNSTILE_SITE_KEY); the
+// secret is a Worker secret (uploaded via `wrangler secret put`).
+//
+// `managed` mode shows an interactive challenge only when Cloudflare's
+// risk score is high; most humans pass invisibly.
+const turnstile = new cloudflare.TurnstileWidget(
+  `ucmc-web-${stack}-turnstile`,
+  {
+    accountId,
+    name: `ucmc-web-${stack} sign-in`,
+    domains: [hostname],
+    mode: "managed",
+  },
+);
+
+export const turnstileSiteKey = turnstile.sitekey;
+// Marked as a Pulumi secret so it's encrypted in state and masked in
+// logs, matching the resendApiKey pattern.
+export const turnstileSecretKey = pulumi.secret(turnstile.secret);
