@@ -29,6 +29,7 @@ import {
   closeSession,
   loadCurrentPrincipal,
   openSession,
+  rotateSession,
 } from "#/server/auth/session";
 import { getDb, schema } from "#/server/db";
 import {
@@ -68,9 +69,73 @@ export const requestMagicLinkFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-type ConsumeResult =
-  | { ok: true; intent: schema.MagicLinkIntent }
+export type ConsumeMagicLinkResult =
+  | {
+      ok: true;
+      mode: "session";
+      status: schema.UserStatus;
+      hasProfile: boolean;
+    }
+  | { ok: true; mode: "proof"; intent: schema.MagicLinkIntent }
   | { ok: false; reason: "invalid" | "rate_limited" };
+
+/**
+ * Core logic for consuming a magic-link token. Extracted from the
+ * `createServerFn` wrapper below so unit tests can exercise it directly
+ * — TanStack Start's `serverFn(...)` callable goes through the RPC
+ * client at call-time, which isn't wired up in the vitest-pool-workers
+ * environment.
+ */
+export async function consumeMagicLinkAction(
+  token: string,
+): Promise<ConsumeMagicLinkResult> {
+  if (!(await checkAuthRateLimitByIp())) {
+    return { ok: false, reason: "rate_limited" };
+  }
+
+  const proof = await consumeMagicLink(token);
+  if (!proof) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  // If a user row already exists for this email, the magic-link click is
+  // a returning-user sign-in: open a session directly and skip the proof
+  // cookie entirely. The caller sees `mode: "session"` and can route by
+  // status + hasProfile instead of bouncing through /register/profile.
+  //
+  // If no user row exists, this is a first-time registration click —
+  // write the short-lived proof cookie that /register/profile gates on,
+  // and return `mode: "proof"` so the caller redirects there.
+  const existing = await getDb().query.users.findFirst({
+    where: eq(schema.users.email, proof.email),
+    columns: { id: true, status: true },
+  });
+
+  if (existing) {
+    const profile = await getDb().query.profiles.findFirst({
+      where: eq(schema.profiles.userId, existing.id),
+      columns: { userId: true },
+    });
+    // rotateSession (not openSession) so any stale session cookie on the
+    // device gets replaced — same privilege-boundary discipline the
+    // other auth transitions follow.
+    await rotateSession(existing.id);
+    return {
+      ok: true,
+      mode: "session",
+      status: existing.status,
+      hasProfile: Boolean(profile),
+    };
+  }
+
+  await writeProofCookie({
+    email: proof.email,
+    intent: proof.intent,
+    issuedAt: Date.now(),
+  });
+
+  return { ok: true, mode: "proof", intent: proof.intent };
+}
 
 export const consumeMagicLinkFn = createServerFn({ method: "POST" })
   .inputValidator(
@@ -81,24 +146,7 @@ export const consumeMagicLinkFn = createServerFn({ method: "POST" })
       token: z.string().min(16).max(128),
     }),
   )
-  .handler(async ({ data }): Promise<ConsumeResult> => {
-    if (!(await checkAuthRateLimitByIp())) {
-      return { ok: false, reason: "rate_limited" };
-    }
-
-    const proof = await consumeMagicLink(data.token);
-    if (!proof) {
-      return { ok: false, reason: "invalid" };
-    }
-
-    await writeProofCookie({
-      email: proof.email,
-      intent: proof.intent,
-      issuedAt: Date.now(),
-    });
-
-    return { ok: true, intent: proof.intent };
-  });
+  .handler(async ({ data }) => consumeMagicLinkAction(data.token));
 
 /**
  * Read the current session's principal. Called on every navigation via the

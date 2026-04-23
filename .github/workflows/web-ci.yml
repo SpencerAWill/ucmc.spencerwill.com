@@ -1,0 +1,39 @@
+name: Web CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "libs/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/web-ci.yml"
+
+jobs:
+  lint-typecheck-test:
+    name: Lint, Type Check, Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter ucmc-web lint
+
+      - name: Type check
+        run: pnpm --filter ucmc-web typecheck
+
+      - name: Test
+        run: pnpm --filter ucmc-web test
