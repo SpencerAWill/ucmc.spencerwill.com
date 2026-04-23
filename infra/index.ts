@@ -1,7 +1,7 @@
 import * as cloudflare from "@pulumi/cloudflare";
 import * as pulumi from "@pulumi/pulumi";
 
-import { ResendDomain } from "./resend.js";
+import { ResendDomain } from "./resend";
 
 const stack = pulumi.getStack();
 
