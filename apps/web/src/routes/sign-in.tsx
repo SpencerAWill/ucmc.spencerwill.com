@@ -13,6 +13,10 @@ const signInSearchSchema = z.object({
   // expired, or otherwise invalid — the /sign-in page renders a small
   // explainer without needing a separate error route.
   invalid: z.coerce.boolean().optional(),
+  // Set by /auth/callback when the auth rate limiter tripped during
+  // token consumption — distinct from "invalid" so the user knows to
+  // wait rather than re-request.
+  rate_limited: z.coerce.boolean().optional(),
 });
 
 export const Route = createFileRoute("/sign-in")({
@@ -21,7 +25,7 @@ export const Route = createFileRoute("/sign-in")({
 });
 
 function SignInPage() {
-  const { register, invalid } = Route.useSearch();
+  const { register, invalid, rate_limited } = Route.useSearch();
   const mode = register ? "register" : "sign-in";
   const heading = register ? "Create your UCMC account" : "Sign in to UCMC";
   const subheading = register
@@ -41,6 +45,14 @@ function SignInPage() {
         >
           That link was invalid, expired, or already used. Request a new one
           below.
+        </div>
+      ) : null}
+      {rate_limited ? (
+        <div
+          role="alert"
+          className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+        >
+          Too many requests. Wait a minute and try again.
         </div>
       ) : null}
       <MagicLinkForm defaultMode={mode} />

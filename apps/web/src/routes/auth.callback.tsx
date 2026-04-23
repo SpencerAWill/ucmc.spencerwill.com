@@ -37,7 +37,13 @@ export const Route = createFileRoute("/auth/callback")({
   loader: async ({ deps }) => {
     const result = await consumeMagicLinkFn({ data: { token: deps.token } });
     if (!result.ok) {
-      throw redirect({ to: "/sign-in", search: { invalid: true } });
+      throw redirect({
+        to: "/sign-in",
+        search: {
+          invalid: result.reason === "invalid" ? true : undefined,
+          rate_limited: result.reason === "rate_limited" ? true : undefined,
+        },
+      });
     }
 
     if (result.mode === "session") {
