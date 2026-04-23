@@ -23,8 +23,8 @@ import {
   clearProofCookie,
   readProofCookie,
   writeProofCookie,
-} from "#/server/auth/proof-cookie.server";
-import type { EmailProof } from "#/server/auth/proof-cookie.server";
+} from "#/server/auth/proof-cookie";
+import type { EmailProof } from "#/server/auth/proof-cookie";
 import {
   closeSession,
   loadCurrentPrincipal,
@@ -35,7 +35,7 @@ import { getDb, schema } from "#/server/db";
 import {
   checkAuthRateLimitByEmail,
   checkAuthRateLimitByIp,
-} from "#/server/rate-limit.server";
+} from "#/server/rate-limit";
 
 // Matches the RFC 5321 local-part-plus-domain max length. Trimming and
 // lowercasing here keeps the same email canonical everywhere downstream

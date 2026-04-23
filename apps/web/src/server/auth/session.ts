@@ -29,7 +29,7 @@ import {
   clearSessionCookie,
   readSessionCookie,
   writeSessionCookie,
-} from "#/server/session-cookie.server";
+} from "#/server/session-cookie";
 
 interface SessionRow {
   id: string;

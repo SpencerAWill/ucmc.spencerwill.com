@@ -25,7 +25,7 @@ vi.mock("@tanstack/react-start/server", () => ({
 }));
 
 let rateLimitAllowed = true;
-vi.mock("#/server/rate-limit.server", () => ({
+vi.mock("#/server/rate-limit", () => ({
   checkAuthRateLimitByIp: async () => rateLimitAllowed,
   checkAuthRateLimitByEmail: async () => rateLimitAllowed,
   checkHealthRateLimit: async () => rateLimitAllowed,

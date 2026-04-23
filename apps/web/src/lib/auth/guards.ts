@@ -9,7 +9,7 @@ import { redirect } from "@tanstack/react-router";
 
 import { SESSION_QUERY_KEY, sessionQueryOptions } from "#/lib/auth/use-auth";
 import type { Principal } from "#/server/auth/principal";
-import type { EmailProof } from "#/server/auth/proof-cookie.server";
+import type { EmailProof } from "#/server/auth/proof-cookie";
 import { getProofFn } from "#/server/auth/server-fns";
 
 async function getPrincipal(
