@@ -48,7 +48,7 @@ import {
   clearCeremonyCookie,
   readCeremonyCookie,
   writeCeremonyCookie,
-} from "#/server/auth/webauthn-ceremony";
+} from "#/server/auth/webauthn-ceremony.server";
 import {
   deleteChallenge,
   getChallenge,
@@ -56,7 +56,7 @@ import {
   putChallenge,
 } from "#/server/auth/webauthn-challenge";
 import type { schema } from "#/server/db";
-import { checkAuthRateLimitByIp } from "#/server/rate-limit";
+import { checkAuthRateLimitByIp } from "#/server/rate-limit.server";
 
 // ── types ────────────────────────────────────────────────────────────────
 

@@ -22,7 +22,7 @@ vi.mock("@tanstack/react-start/server", () => ({
 // to flip the allow/deny decision per test. The real limiter binding is
 // exercised by the deployed Worker, not by unit tests.
 let rateLimitAllowed = true;
-vi.mock("#/server/rate-limit", () => ({
+vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByIp: async () => rateLimitAllowed,
   checkAuthRateLimitByEmail: async () => rateLimitAllowed,
   checkHealthRateLimit: async () => rateLimitAllowed,

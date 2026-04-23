@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { getDb } from "#/server/db";
 import { getKv } from "#/server/kv";
 import { getBucket } from "#/server/r2";
-import { checkHealthRateLimit } from "#/server/rate-limit";
+import { checkHealthRateLimit } from "#/server/rate-limit.server";
 
 /**
  * Per-check shape. `output` is set only on failure so the client can render
