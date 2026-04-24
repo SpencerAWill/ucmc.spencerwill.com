@@ -77,6 +77,33 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      # wrangler looks up D1 databases by NAME from wrangler.jsonc, not by
+      # UUID. Same mechanism web-deploy.yml uses: sed-inject the real
+      # Pulumi UUID over the placeholder in the committed jsonc, then
+      # invoke wrangler by the database_name. Dev and prod have different
+      # placeholders so the replacement only touches its own entry.
+      - name: Resolve deploy-time parameters
+        id: env
+        run: |
+          case "${{ github.event.inputs.environment }}" in
+            dev)
+              echo "db_name=ucmc-web-dev" >> "$GITHUB_OUTPUT"
+              echo "placeholder=00000000-0000-0000-0000-000000000000" >> "$GITHUB_OUTPUT"
+              echo "env_flag=" >> "$GITHUB_OUTPUT"
+              ;;
+            prod)
+              echo "db_name=ucmc-web" >> "$GITHUB_OUTPUT"
+              echo "placeholder=11111111-1111-1111-1111-111111111111" >> "$GITHUB_OUTPUT"
+              echo "env_flag=--env production" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unexpected environment input" && exit 1
+              ;;
+          esac
+
+      - name: Inject D1 UUID into wrangler.jsonc
+        run: sed -i "s/${{ steps.env.outputs.placeholder }}/${{ steps.pulumi.outputs.database_id }}/" apps/web/wrangler.jsonc
+
       # Generate the seed SQL in /tmp with shell-level escaping (double
       # any embedded single quotes — the stricter regex above means this
       # is belt-and-suspenders; the regex already rejects `'`).
@@ -106,11 +133,9 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: d1 execute ${{ steps.pulumi.outputs.database_id }} --remote --file /tmp/seed-admin.sql
+          command: d1 execute ${{ steps.env.outputs.db_name }} ${{ steps.env.outputs.env_flag }} --remote --file /tmp/seed-admin.sql
 
       # Read-back sanity check — verifies the (user, role) pair landed.
-      # `|| exit 1` on missing result turns an empty read-back into a
-      # workflow failure.
       - name: Verify promotion
         uses: cloudflare/wrangler-action@v3
         with:
@@ -118,7 +143,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
           command: >-
-            d1 execute ${{ steps.pulumi.outputs.database_id }} --remote
+            d1 execute ${{ steps.env.outputs.db_name }} ${{ steps.env.outputs.env_flag }} --remote
             --command
             "SELECT u.email, u.status, r.name AS role FROM users u
                JOIN user_roles ur ON ur.user_id = u.id
