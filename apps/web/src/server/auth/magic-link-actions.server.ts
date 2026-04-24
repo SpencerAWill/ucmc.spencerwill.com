@@ -160,6 +160,19 @@ export async function getProofAction(): Promise<{
   return { proof };
 }
 
+export async function getProfileAction(): Promise<{
+  profile: typeof schema.profiles.$inferSelect | null;
+}> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    return { profile: null };
+  }
+  const profile = await getDb().query.profiles.findFirst({
+    where: eq(schema.profiles.userId, principal.userId),
+  });
+  return { profile: profile ?? null };
+}
+
 export async function signOutAction(): Promise<{ ok: true }> {
   await closeSession();
   return { ok: true };

@@ -118,6 +118,21 @@ export const signOutFn = createServerFn({ method: "POST" }).handler(
   },
 );
 
+export type Profile = typeof schema.profiles.$inferSelect;
+
+/**
+ * Read the current user's profile row, if any. Returns `{ profile: null }`
+ * for anonymous callers or users who haven't completed registration. Used
+ * by `/account` to pre-fill the profile form with existing values.
+ */
+export const getProfileFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ profile: Profile | null }> => {
+    const { getProfileAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return getProfileAction();
+  },
+);
+
 // ── profile submission ───────────────────────────────────────────────────
 
 // Validation constants are exported so the form UI can mirror them as

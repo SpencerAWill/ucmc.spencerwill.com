@@ -29,9 +29,10 @@ vi.mock("#/server/rate-limit.server", () => ({
 }));
 
 // Import AFTER the mocks above so the action module picks them up.
-const { consumeMagicLinkAction } =
+const { consumeMagicLinkAction, getProfileAction } =
   await import("#/server/auth/magic-link-actions.server");
 const { MAGIC_LINK_TTL_MS } = await import("#/server/auth/magic-link.server");
+const { openSession } = await import("#/server/auth/session.server");
 
 async function sha256Base64Url(input: string): Promise<string> {
   const digest = await crypto.subtle.digest(
@@ -228,5 +229,55 @@ describe("consumeMagicLinkAction", () => {
 
     const second = await consumeMagicLinkAction(token);
     expect(second).toEqual({ ok: false, reason: "invalid" });
+  });
+});
+
+describe("getProfileAction", () => {
+  it("returns { profile: null } for anonymous callers", async () => {
+    const result = await getProfileAction();
+    expect(result).toEqual({ profile: null });
+  });
+
+  it("returns { profile: null } for a signed-in user without a profile row", async () => {
+    const email = "nopro@example.com";
+    const userId = await seedUser({ email, status: "pending" });
+    await openSession(userId);
+
+    const result = await getProfileAction();
+    expect(result).toEqual({ profile: null });
+  });
+
+  it("returns the signed-in user's profile row when one exists", async () => {
+    const email = "owner@example.com";
+    const userId = await seedUser({
+      email,
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(userId);
+
+    const result = await getProfileAction();
+    expect(result.profile).not.toBeNull();
+    expect(result.profile?.userId).toBe(userId);
+    expect(result.profile?.fullName).toBe("Test User");
+  });
+
+  it("scopes the query to the caller's userId (no IDOR)", async () => {
+    // Seed two users, each with a profile. Caller is user A; user B's
+    // profile must not leak.
+    const aId = await seedUser({
+      email: "a@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await seedUser({
+      email: "b@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(aId);
+
+    const result = await getProfileAction();
+    expect(result.profile?.userId).toBe(aId);
   });
 });

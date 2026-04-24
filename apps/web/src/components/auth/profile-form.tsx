@@ -46,7 +46,7 @@ export function ProfileForm({
    */
   email: string;
   defaults?: ProfileFormDefaults;
-  redirectTo?: "/register/pending" | "/";
+  redirectTo?: "/register/pending" | "/" | "/account";
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -56,8 +56,12 @@ export function ProfileForm({
     onSuccess: async () => {
       // Session just opened (or was re-affirmed) server-side; refetch the
       // principal before navigating so the destination guard sees the
-      // new state.
-      await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+      // new state. Also invalidate the cached profile row so the
+      // /account tab re-reads the saved values on next render.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: ["account", "profile"] }),
+      ]);
       await navigate({ to: redirectTo });
     },
   });

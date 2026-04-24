@@ -49,9 +49,8 @@ function SecurityPage() {
   const passkeys = query.data ?? [];
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
+    <div className="flex flex-col gap-8">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Security</h1>
         <p className="text-sm text-muted-foreground">
           Passkeys let you sign in with Face ID, Touch ID, a Windows Hello PIN,
           or a hardware security key. Register one on every device you use and

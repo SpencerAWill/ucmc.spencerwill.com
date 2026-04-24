@@ -72,20 +72,36 @@ export function UserMenu() {
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to={principal.hasProfile ? "/" : "/register/profile"}>
-            <UserIcon className="mr-2 size-4" />
-            {principal.hasProfile ? "Home" : "Finish registering"}
-          </Link>
-        </DropdownMenuItem>
-        {principal.hasProfile ? (
+        {!principal.hasProfile ? (
           <DropdownMenuItem asChild>
-            <Link to="/account/security">
-              <KeyRound className="mr-2 size-4" />
-              Security
+            <Link to="/register/profile">
+              <UserIcon className="mr-2 size-4" />
+              Finish registering
             </Link>
           </DropdownMenuItem>
-        ) : null}
+        ) : principal.status !== "approved" ? (
+          <DropdownMenuItem asChild>
+            <Link to="/register/pending">
+              <UserIcon className="mr-2 size-4" />
+              Pending approval
+            </Link>
+          </DropdownMenuItem>
+        ) : (
+          <>
+            <DropdownMenuItem asChild>
+              <Link to="/account">
+                <UserIcon className="mr-2 size-4" />
+                Account
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to="/account/security">
+                <KeyRound className="mr-2 size-4" />
+                Security
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={async (e) => {
