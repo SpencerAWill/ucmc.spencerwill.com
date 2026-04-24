@@ -135,17 +135,23 @@ jobs:
           workingDirectory: apps/web
           command: d1 execute ${{ steps.env.outputs.db_name }} ${{ steps.env.outputs.env_flag }} --remote --file /tmp/seed-admin.sql
 
-      # Read-back sanity check — verifies the (user, role) pair landed.
+      # Write the verify query to a file so wrangler-action's argv
+      # splitting can't truncate it the way it does with a spaces-only
+      # --command string.
+      - name: Generate verify SQL
+        run: |
+          cat > /tmp/verify-admin.sql <<'SQL'
+          SELECT u.email, u.status, r.name AS role
+            FROM users u
+            JOIN user_roles ur ON ur.user_id = u.id
+            JOIN roles r ON r.id = ur.role_id
+           WHERE r.name = 'system_admin';
+          SQL
+
       - name: Verify promotion
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: >-
-            d1 execute ${{ steps.env.outputs.db_name }} ${{ steps.env.outputs.env_flag }} --remote
-            --command
-            "SELECT u.email, u.status, r.name AS role FROM users u
-               JOIN user_roles ur ON ur.user_id = u.id
-               JOIN roles r ON r.id = ur.role_id
-              WHERE r.name = 'system_admin';"
+          command: d1 execute ${{ steps.env.outputs.db_name }} ${{ steps.env.outputs.env_flag }} --remote --file /tmp/verify-admin.sql
