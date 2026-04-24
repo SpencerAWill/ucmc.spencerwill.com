@@ -60,6 +60,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 
 - **Sync Wiki Submodule** (`sync-wiki.yml`) — updates the `.wiki/` submodule pointer on wiki edits (`gollum` event), 1st and 15th of each month at 06:00 UTC, or manual dispatch
 - **Web CI** (`web-ci.yml`) — runs ESLint, TypeScript type-checking, and the Vitest suite on PRs that touch `apps/web/**`, `libs/**`, or the lockfile
+- **Seed Admin** (`seed-admin.yml`) — manual-trigger (`workflow_dispatch`) workflow that promotes a given email to `system_admin` on a chosen environment's D1. Used to bootstrap the first admin on a new environment and as a disaster-recovery tool. Idempotent. Gated by the same GitHub environment protection as `web-deploy.yml` (prod requires approval).
 - **Web Deploy** (`web-deploy.yml`) — deploys the web app to Cloudflare Workers: auto-deploys dev on merge to main (when `apps/web/**`, `libs/**`, or lockfile changes), manual prod deploy via `workflow_dispatch` with GitHub environment approval
 - **Lint PR** (`lint-pr.yaml`) — validates PR titles follow conventional commit format
 - **Infra CI** (`infra-ci.yml`) — runs ESLint, TypeScript type-checking, and Pulumi preview on PRs that modify `infra/`

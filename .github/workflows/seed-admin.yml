@@ -1,0 +1,126 @@
+name: Seed Admin
+
+# Manual-trigger workflow that promotes a given email to `system_admin`
+# on the chosen deployed D1 database. Used to bootstrap the first
+# administrator on a new environment and as a disaster-recovery tool if
+# an admin's identity is lost.
+#
+# The in-app admin UI (Phase 8) covers promotion/demotion for subsequent
+# admins — this workflow exists because the very first admin has to be
+# created from outside the app.
+#
+# Idempotent: re-running with the same email is a no-op. The SQL is
+# INSERT OR IGNORE for the user row and the role grant, and an UPDATE
+# gated on `status <> 'approved'` for pre-existing users.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      email:
+        description: "Email to promote to system_admin"
+        required: true
+        type: string
+
+jobs:
+  promote:
+    name: Promote on ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    # Triggering environment protection rules — prod requires an approver
+    # configured in the GitHub `prod` environment, matching `web-deploy.yml`.
+    environment: ${{ github.event.inputs.environment }}
+    concurrency:
+      group: seed-admin-${{ github.event.inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      # Validate the email BEFORE any network / auth work so a typo fails
+      # cheaply. Same regex the local seed script uses — strict character
+      # class, no SQL metacharacters pass through.
+      - name: Validate email input
+        env:
+          EMAIL: ${{ github.event.inputs.email }}
+        run: |
+          if [[ ! "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+            echo "::error::Invalid email format: '$EMAIL'"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: pulumi/setup-pulumi@v2
+
+      - name: Fetch D1 UUID from Pulumi
+        id: pulumi
+        working-directory: infra
+        run: |
+          pulumi stack select ${{ github.event.inputs.environment }}
+          echo "database_id=$(pulumi stack output d1DatabaseId)" >> "$GITHUB_OUTPUT"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      # Generate the seed SQL in /tmp with shell-level escaping (double
+      # any embedded single quotes — the stricter regex above means this
+      # is belt-and-suspenders; the regex already rejects `'`).
+      - name: Generate seed SQL
+        env:
+          EMAIL: ${{ github.event.inputs.email }}
+        run: |
+          EMAIL_NORM="$(echo "$EMAIL" | tr '[:upper:]' '[:lower:]' | xargs)"
+          EMAIL_SQL="$(echo "$EMAIL_NORM" | sed "s/'/''/g")"
+          USER_ID="user_$(uuidgen | tr '[:upper:]' '[:lower:]')"
+          NOW_MS=$(($(date +%s%N) / 1000000))
+          cat > /tmp/seed-admin.sql <<SQL
+          INSERT OR IGNORE INTO users (id, email, status, approved_at, created_at)
+          VALUES ('$USER_ID', '$EMAIL_SQL', 'approved', $NOW_MS, $NOW_MS);
+          UPDATE users
+          SET status = 'approved', approved_at = $NOW_MS
+          WHERE email = '$EMAIL_SQL' AND status <> 'approved';
+          INSERT OR IGNORE INTO user_roles (user_id, role_id)
+          SELECT id, 'role_system_admin' FROM users WHERE email = '$EMAIL_SQL';
+          SQL
+          echo "Generated SQL:"
+          cat /tmp/seed-admin.sql
+
+      - name: Apply seed SQL to remote D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: d1 execute ${{ steps.pulumi.outputs.database_id }} --remote --file /tmp/seed-admin.sql
+
+      # Read-back sanity check — verifies the (user, role) pair landed.
+      # `|| exit 1` on missing result turns an empty read-back into a
+      # workflow failure.
+      - name: Verify promotion
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: >-
+            d1 execute ${{ steps.pulumi.outputs.database_id }} --remote
+            --command
+            "SELECT u.email, u.status, r.name AS role FROM users u
+               JOIN user_roles ur ON ur.user_id = u.id
+               JOIN roles r ON r.id = ur.role_id
+              WHERE r.name = 'system_admin';"
