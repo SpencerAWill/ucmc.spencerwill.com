@@ -8,6 +8,13 @@
       "when": 1776372046333,
       "tag": "0000_auth_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777032288870,
+      "tag": "0001_rbac_seed",
+      "breakpoints": true
     }
   ]
 }
