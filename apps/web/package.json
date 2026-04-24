@@ -18,6 +18,7 @@
     "deploy:prod": "CLOUDFLARE_ENV=production pnpm run build && wrangler deploy --env production",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply ucmc-web-dev --local",
+    "db:seed:local": "tsx drizzle/seed.ts",
     "storybook": "storybook dev -p 6006 --host 0.0.0.0",
     "build-storybook": "storybook build"
   },
@@ -69,6 +70,7 @@
     "drizzle-kit": "^0.31.10",
     "jsdom": "^29.0.2",
     "storybook": "^10.2.15",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.2",
     "vite": "^8.0.0",
     "vitest": "^3.0.5",

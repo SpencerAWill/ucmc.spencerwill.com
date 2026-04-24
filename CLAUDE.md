@@ -126,6 +126,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - `pnpm --filter ucmc-web deploy:prod` — build and deploy to prod (`ucmc-web` worker)
 - `pnpm --filter ucmc-web db:generate` — generate Drizzle SQL migrations from `drizzle/schema.ts`
 - `pnpm --filter ucmc-web db:migrate:local` — apply migrations to the local Miniflare D1 (SQLite under `apps/web/.wrangler/state/`)
+- `pnpm --filter ucmc-web db:seed:local` — promote `SEED_ADMIN_EMAIL` from `.env.local` to `system_admin` on the local D1 (idempotent). Remote sysadmin seeding is a separate manual-trigger GitHub Action (`seed-admin.yml`), not a pnpm script — it requires Pulumi + Cloudflare API access and is gated by GitHub environment protection.
 - `cd infra && pulumi preview` — preview infrastructure changes
 - `cd infra && pulumi up` — deploy infrastructure changes
 
