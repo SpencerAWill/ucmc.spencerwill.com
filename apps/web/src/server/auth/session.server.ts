@@ -17,6 +17,7 @@
  *   - `closeSession()` → delete row + clear cookie.
  */
 import { eq } from "drizzle-orm";
+import { uuidv7 } from "uuidv7";
 
 import { loadPrincipal } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
@@ -54,7 +55,7 @@ async function getSessionRow(sid: string): Promise<SessionRow | null> {
 }
 
 async function insertSessionRow(userId: string): Promise<string> {
-  const sid = crypto.randomUUID();
+  const sid = uuidv7();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
   await getDb().insert(schema.sessions).values({

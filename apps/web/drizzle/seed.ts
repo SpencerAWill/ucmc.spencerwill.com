@@ -20,6 +20,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { uuidv7 } from "uuidv7";
+
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = resolve(SCRIPT_DIR, "..");
 const DB_NAME = "ucmc-web-dev";
@@ -80,7 +82,7 @@ function main(): void {
     process.exit(1);
   }
 
-  const userId = `user_${randomUUID()}`;
+  const userId = `user_${uuidv7()}`;
   const nowMs = Date.now();
   const email = sqlQuote(rawEmail);
 

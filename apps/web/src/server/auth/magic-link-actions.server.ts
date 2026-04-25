@@ -9,6 +9,7 @@
  * exercise the actions here directly.
  */
 import { eq } from "drizzle-orm";
+import { uuidv7 } from "uuidv7";
 
 import {
   consumeMagicLink,
@@ -194,7 +195,7 @@ export async function submitProfileAction(
   // are reused by hitting the unique email index. We do this in three
   // steps — insert-on-conflict-do-nothing, then select — to stay portable
   // across D1's SQLite dialect without depending on `returning`.
-  const id = `user_${crypto.randomUUID()}`;
+  const id = `user_${uuidv7()}`;
   await getDb()
     .insert(schema.users)
     .values({ id, email, status: "pending" })

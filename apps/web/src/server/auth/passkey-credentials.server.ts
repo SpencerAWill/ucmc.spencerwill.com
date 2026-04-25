@@ -18,6 +18,7 @@
  *     slightly better prompt. Nullable.
  */
 import { and, eq } from "drizzle-orm";
+import { uuidv7 } from "uuidv7";
 
 import type { AuthenticatorTransportFuture } from "#/server/auth/webauthn.server";
 import { getDb, schema } from "#/server/db";
@@ -93,7 +94,7 @@ export async function insertCredential(args: {
   transports?: AuthenticatorTransportFuture[];
   nickname?: string;
 }): Promise<PasskeyCredentialRecord> {
-  const id = `pk_${crypto.randomUUID()}`;
+  const id = `pk_${uuidv7()}`;
   const now = new Date();
   await getDb()
     .insert(schema.passkeyCredentials)
