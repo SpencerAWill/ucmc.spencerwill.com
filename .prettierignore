@@ -11,3 +11,6 @@ apps/web/drizzle/migrations/
 **/.wrangler/
 **/.tanstack/
 **/.vite/
+
+# Tool-managed by pnpm; format follows pnpm's defaults, not ours.
+pnpm-lock.yaml
