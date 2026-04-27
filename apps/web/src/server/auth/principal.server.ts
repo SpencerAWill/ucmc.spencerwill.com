@@ -39,8 +39,18 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     .where(eq(schema.userRoles.userId, userId));
 
   const roleIds = userRoleRows.map((r) => r.roleId);
+  const isSystemAdmin = userRoleRows.some((r) => r.name === "system_admin");
+
   let permissions: string[] = [];
-  if (roleIds.length > 0) {
+  if (isSystemAdmin) {
+    // System admin always has every permission, including ones added
+    // after the role was created. This is the canonical enforcement
+    // point — no need to maintain role_permissions rows for system_admin.
+    const allPerms = await db.query.permissions.findMany({
+      columns: { name: true },
+    });
+    permissions = allPerms.map((p) => p.name);
+  } else if (roleIds.length > 0) {
     const rows = await db
       .select({ name: schema.permissions.name })
       .from(schema.rolePermissions)
