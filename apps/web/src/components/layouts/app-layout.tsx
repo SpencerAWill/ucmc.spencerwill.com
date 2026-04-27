@@ -1,15 +1,29 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
+import { ChevronRight, UserPlus, Users } from "lucide-react";
 
 import { UserMenu } from "#/components/auth/user-menu";
 import { ModeToggle } from "#/components/mode-toggle";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "#/components/ui/collapsible";
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
   SidebarHeader,
   SidebarInset,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
@@ -19,6 +33,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "#/components/ui/tooltip";
+import { useAuth } from "#/lib/auth/use-auth";
 
 const HEADER_HEIGHT = "3.5rem";
 
@@ -71,8 +86,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           collapsible="icon"
           className="top-(--header-height) h-[calc(100svh-var(--header-height))]"
         >
-          <SidebarHeader></SidebarHeader>
-          <SidebarContent></SidebarContent>
+          <SidebarHeader />
+          <SidebarContent>
+            <SidebarNav />
+          </SidebarContent>
           <SidebarFooter />
           <SidebarRail />
         </Sidebar>
@@ -82,6 +99,62 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarInset>
       </div>
     </SidebarProvider>
+  );
+}
+
+function SidebarNav() {
+  const { isApproved, hasPermission } = useAuth();
+  const canApproveRegistrations = hasPermission("registrations:approve");
+
+  if (!isApproved) {
+    return null;
+  }
+
+  // Sub-items gated by permission. If none are visible, the Members
+  // link still renders but without the collapsible chevron.
+  const hasSubItems = canApproveRegistrations;
+
+  return (
+    <SidebarGroup>
+      <SidebarMenu>
+        <Collapsible defaultOpen className="group/collapsible">
+          <SidebarMenuItem>
+            {/* Main button navigates to /members */}
+            <SidebarMenuButton asChild tooltip="Members">
+              <Link to="/members">
+                <Users />
+                <span>Members</span>
+              </Link>
+            </SidebarMenuButton>
+
+            {/* Chevron toggles sub-items — separate from the link */}
+            {hasSubItems ? (
+              <CollapsibleTrigger asChild>
+                <SidebarMenuAction className="data-[state=open]:rotate-90">
+                  <ChevronRight />
+                  <span className="sr-only">Toggle sub-menu</span>
+                </SidebarMenuAction>
+              </CollapsibleTrigger>
+            ) : null}
+
+            {hasSubItems ? (
+              <CollapsibleContent>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild>
+                      <Link to="/members/registrations">
+                        <UserPlus />
+                        <span>Registrations</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            ) : null}
+          </SidebarMenuItem>
+        </Collapsible>
+      </SidebarMenu>
+    </SidebarGroup>
   );
 }
 

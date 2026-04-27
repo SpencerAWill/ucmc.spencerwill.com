@@ -60,6 +60,24 @@ export async function requireApproved(
 }
 
 /**
+ * Require a signed-in, approved user who holds a specific permission.
+ * Layers on top of `requireApproved` — kicks unapproved users into the
+ * registration funnel, and sends approved users without the permission
+ * back to `/` (they're signed in and approved but not authorized for
+ * this particular page).
+ */
+export async function requirePermission(
+  queryClient: QueryClient,
+  permission: string,
+): Promise<Principal> {
+  const principal = await requireApproved(queryClient);
+  if (!principal.permissions.includes(permission)) {
+    throw redirect({ to: "/" });
+  }
+  return principal;
+}
+
+/**
  * Require a valid email-verification proof cookie (set by the magic-link
  * callback). Distinct from `requireAuth` — proof-only holders haven't
  * opened a session yet. Used by `/register/profile` to gate first-time

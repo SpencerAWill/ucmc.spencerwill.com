@@ -10,12 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as MembersRouteImport } from './routes/members'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MembersIndexRouteImport } from './routes/members.index'
 import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
+import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
@@ -23,6 +26,11 @@ import { Route as AccountPreferencesRouteImport } from './routes/account.prefere
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MembersRoute = MembersRouteImport.update({
+  id: '/members',
+  path: '/members',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HealthRoute = HealthRouteImport.update({
@@ -40,6 +48,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MembersIndexRoute = MembersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MembersRoute,
+} as any)
 const AccountIndexRoute = AccountIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -54,6 +67,11 @@ const RegisterPendingRoute = RegisterPendingRouteImport.update({
   id: '/register/pending',
   path: '/register/pending',
   getParentRoute: () => rootRouteImport,
+} as any)
+const MembersRegistrationsRoute = MembersRegistrationsRouteImport.update({
+  id: '/registrations',
+  path: '/registrations',
+  getParentRoute: () => MembersRoute,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
@@ -75,13 +93,16 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRouteWithChildren
   '/health': typeof HealthRoute
+  '/members': typeof MembersRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/members/registrations': typeof MembersRegistrationsRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
+  '/members/': typeof MembersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -90,22 +111,27 @@ export interface FileRoutesByTo {
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/members/registrations': typeof MembersRegistrationsRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account': typeof AccountIndexRoute
+  '/members': typeof MembersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/account': typeof AccountRouteWithChildren
   '/health': typeof HealthRoute
+  '/members': typeof MembersRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/members/registrations': typeof MembersRegistrationsRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
+  '/members/': typeof MembersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -113,13 +139,16 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/health'
+    | '/members'
     | '/sign-in'
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
+    | '/members/registrations'
     | '/register/pending'
     | '/register/profile'
     | '/account/'
+    | '/members/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -128,27 +157,33 @@ export interface FileRouteTypes {
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
+    | '/members/registrations'
     | '/register/pending'
     | '/register/profile'
     | '/account'
+    | '/members'
   id:
     | '__root__'
     | '/'
     | '/account'
     | '/health'
+    | '/members'
     | '/sign-in'
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
+    | '/members/registrations'
     | '/register/pending'
     | '/register/profile'
     | '/account/'
+    | '/members/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRouteWithChildren
   HealthRoute: typeof HealthRoute
+  MembersRoute: typeof MembersRouteWithChildren
   SignInRoute: typeof SignInRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
@@ -162,6 +197,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/members': {
+      id: '/members'
+      path: '/members'
+      fullPath: '/members'
+      preLoaderRoute: typeof MembersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/health': {
@@ -185,6 +227,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/members/': {
+      id: '/members/'
+      path: '/'
+      fullPath: '/members/'
+      preLoaderRoute: typeof MembersIndexRouteImport
+      parentRoute: typeof MembersRoute
+    }
     '/account/': {
       id: '/account/'
       path: '/'
@@ -205,6 +254,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/register/pending'
       preLoaderRoute: typeof RegisterPendingRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/members/registrations': {
+      id: '/members/registrations'
+      path: '/registrations'
+      fullPath: '/members/registrations'
+      preLoaderRoute: typeof MembersRegistrationsRouteImport
+      parentRoute: typeof MembersRoute
     }
     '/auth/callback': {
       id: '/auth/callback'
@@ -245,10 +301,24 @@ const AccountRouteChildren: AccountRouteChildren = {
 const AccountRouteWithChildren =
   AccountRoute._addFileChildren(AccountRouteChildren)
 
+interface MembersRouteChildren {
+  MembersRegistrationsRoute: typeof MembersRegistrationsRoute
+  MembersIndexRoute: typeof MembersIndexRoute
+}
+
+const MembersRouteChildren: MembersRouteChildren = {
+  MembersRegistrationsRoute: MembersRegistrationsRoute,
+  MembersIndexRoute: MembersIndexRoute,
+}
+
+const MembersRouteWithChildren =
+  MembersRoute._addFileChildren(MembersRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRouteWithChildren,
   HealthRoute: HealthRoute,
+  MembersRoute: MembersRouteWithChildren,
   SignInRoute: SignInRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   RegisterPendingRoute: RegisterPendingRoute,
