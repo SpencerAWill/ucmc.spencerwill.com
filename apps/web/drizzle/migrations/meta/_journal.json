@@ -22,6 +22,13 @@
       "when": 1777118400000,
       "tag": "0002_anonymous_role_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1777329232360,
+      "tag": "0003_role_position",
+      "breakpoints": true
     }
   ]
 }

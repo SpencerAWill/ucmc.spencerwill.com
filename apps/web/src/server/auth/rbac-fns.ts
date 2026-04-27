@@ -125,3 +125,18 @@ export const setUserRolesFn = createServerFn({ method: "POST" })
       await import("#/server/auth/rbac-actions.server");
     return setUserRolesAction(data);
   });
+
+// ── role reordering ────────────────────────────────────────────────────
+
+export const swapRolePositionsFn = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      roleId: z.string().min(1),
+      direction: z.enum(["up", "down"]),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { swapRolePositionsAction } =
+      await import("#/server/auth/rbac-actions.server");
+    return swapRolePositionsAction(data);
+  });

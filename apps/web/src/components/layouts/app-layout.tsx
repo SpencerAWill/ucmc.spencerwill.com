@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, UserPlus, Users } from "lucide-react";
+import { ChevronRight, Shield, UserPlus, Users } from "lucide-react";
 
 import { UserMenu } from "#/components/auth/user-menu";
 import { ModeToggle } from "#/components/mode-toggle";
@@ -105,6 +105,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 function SidebarNav() {
   const { isApproved, hasPermission } = useAuth();
   const canApproveRegistrations = hasPermission("registrations:approve");
+  const canManageRoles = hasPermission("roles:manage");
 
   if (!isApproved) {
     return null;
@@ -112,7 +113,7 @@ function SidebarNav() {
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
-  const hasSubItems = canApproveRegistrations;
+  const hasSubItems = canApproveRegistrations || canManageRoles;
 
   return (
     <SidebarGroup>
@@ -140,14 +141,26 @@ function SidebarNav() {
             {hasSubItems ? (
               <CollapsibleContent>
                 <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild>
-                      <Link to="/members/registrations">
-                        <UserPlus />
-                        <span>Registrations</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
+                  {canApproveRegistrations ? (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <Link to="/members/registrations">
+                          <UserPlus />
+                          <span>Registrations</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ) : null}
+                  {canManageRoles ? (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <Link to="/members/roles">
+                          <Shield />
+                          <span>Roles</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ) : null}
                 </SidebarMenuSub>
               </CollapsibleContent>
             ) : null}

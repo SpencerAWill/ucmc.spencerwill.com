@@ -18,10 +18,12 @@ import { Route as MembersIndexRouteImport } from './routes/members.index'
 import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
+import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
+import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
@@ -68,6 +70,11 @@ const RegisterPendingRoute = RegisterPendingRouteImport.update({
   path: '/register/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MembersRolesRoute = MembersRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => MembersRoute,
+} as any)
 const MembersRegistrationsRoute = MembersRegistrationsRouteImport.update({
   id: '/registrations',
   path: '/registrations',
@@ -88,6 +95,11 @@ const AccountPreferencesRoute = AccountPreferencesRouteImport.update({
   path: '/preferences',
   getParentRoute: () => AccountRoute,
 } as any)
+const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
+  id: '/roles_/$roleId',
+  path: '/roles/$roleId',
+  getParentRoute: () => MembersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -99,10 +111,12 @@ export interface FileRoutesByFullPath {
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/registrations': typeof MembersRegistrationsRoute
+  '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
   '/members/': typeof MembersIndexRoute
+  '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -112,10 +126,12 @@ export interface FileRoutesByTo {
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/registrations': typeof MembersRegistrationsRoute
+  '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account': typeof AccountIndexRoute
   '/members': typeof MembersIndexRoute
+  '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -128,10 +144,12 @@ export interface FileRoutesById {
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/registrations': typeof MembersRegistrationsRoute
+  '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
   '/members/': typeof MembersIndexRoute
+  '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -145,10 +163,12 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/auth/callback'
     | '/members/registrations'
+    | '/members/roles'
     | '/register/pending'
     | '/register/profile'
     | '/account/'
     | '/members/'
+    | '/members/roles/$roleId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -158,10 +178,12 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/auth/callback'
     | '/members/registrations'
+    | '/members/roles'
     | '/register/pending'
     | '/register/profile'
     | '/account'
     | '/members'
+    | '/members/roles/$roleId'
   id:
     | '__root__'
     | '/'
@@ -173,10 +195,12 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/auth/callback'
     | '/members/registrations'
+    | '/members/roles'
     | '/register/pending'
     | '/register/profile'
     | '/account/'
     | '/members/'
+    | '/members/roles_/$roleId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -255,6 +279,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterPendingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/members/roles': {
+      id: '/members/roles'
+      path: '/roles'
+      fullPath: '/members/roles'
+      preLoaderRoute: typeof MembersRolesRouteImport
+      parentRoute: typeof MembersRoute
+    }
     '/members/registrations': {
       id: '/members/registrations'
       path: '/registrations'
@@ -283,6 +314,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountPreferencesRouteImport
       parentRoute: typeof AccountRoute
     }
+    '/members/roles_/$roleId': {
+      id: '/members/roles_/$roleId'
+      path: '/roles/$roleId'
+      fullPath: '/members/roles/$roleId'
+      preLoaderRoute: typeof MembersRolesRoleIdRouteImport
+      parentRoute: typeof MembersRoute
+    }
   }
 }
 
@@ -303,12 +341,16 @@ const AccountRouteWithChildren =
 
 interface MembersRouteChildren {
   MembersRegistrationsRoute: typeof MembersRegistrationsRoute
+  MembersRolesRoute: typeof MembersRolesRoute
   MembersIndexRoute: typeof MembersIndexRoute
+  MembersRolesRoleIdRoute: typeof MembersRolesRoleIdRoute
 }
 
 const MembersRouteChildren: MembersRouteChildren = {
   MembersRegistrationsRoute: MembersRegistrationsRoute,
+  MembersRolesRoute: MembersRolesRoute,
   MembersIndexRoute: MembersIndexRoute,
+  MembersRolesRoleIdRoute: MembersRolesRoleIdRoute,
 }
 
 const MembersRouteWithChildren =

@@ -62,6 +62,7 @@ export const roles = sqliteTable(
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     description: text("description"),
+    position: integer("position").notNull().default(0),
   },
   (t) => [uniqueIndex("roles_name_unique").on(t.name)],
 );

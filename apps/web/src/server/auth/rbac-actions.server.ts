@@ -3,7 +3,7 @@
  * the shell + .server.ts split — the shell in `./rbac-fns.ts` loads
  * this via dynamic imports inside its createServerFn handlers.
  */
-import { count, eq, inArray } from "drizzle-orm";
+import { count, eq, inArray, max } from "drizzle-orm";
 
 import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
@@ -31,6 +31,7 @@ export interface RoleWithPermissions {
   isProtected: boolean;
   permissionIds: string[];
   memberCount: number;
+  position: number;
 }
 
 export interface RoleDetail extends RoleWithPermissions {
@@ -76,7 +77,7 @@ export async function listRolesDetailedAction(): Promise<
   const db = getDb();
 
   const roles = await db.query.roles.findMany({
-    orderBy: (roles, { asc }) => [asc(roles.name)],
+    orderBy: (roles, { asc }) => [asc(roles.position), asc(roles.name)],
   });
 
   // Batch-fetch permission grants for all roles.
@@ -115,6 +116,7 @@ export async function listRolesDetailedAction(): Promise<
     isProtected: PROTECTED_ROLE_IDS.has(r.id),
     permissionIds: permsByRole.get(r.id) ?? [],
     memberCount: countByRole.get(r.id) ?? 0,
+    position: r.position,
   }));
 }
 
@@ -153,6 +155,7 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
     isProtected: PROTECTED_ROLE_IDS.has(role.id),
     permissionIds: permGrants.map((g) => g.permissionId),
     memberCount: memberRows.length,
+    position: role.position,
     members: memberRows.map((m) => ({
       userId: m.userId,
       email: m.email,
@@ -181,10 +184,17 @@ export async function createRoleAction(input: {
     throw new Error(`Role "${input.name}" already exists`);
   }
 
+  // New roles go after all existing ones.
+  const [{ maxPos }] = await db
+    .select({ maxPos: max(schema.roles.position) })
+    .from(schema.roles);
+  const nextPos = (maxPos ?? -1) + 1;
+
   await db.insert(schema.roles).values({
     id: roleId,
     name: input.name,
     description: input.description ?? null,
+    position: nextPos,
   });
 
   return { roleId };
@@ -374,6 +384,49 @@ export async function setUserRolesAction(input: {
       })),
     );
   }
+
+  return { ok: true };
+}
+
+// ── role reordering ────────────────────────────────────────────────────
+
+/**
+ * Swap the position of two roles. Used by up/down arrow controls in the
+ * roles management UI.
+ */
+export async function swapRolePositionsAction(input: {
+  roleId: string;
+  direction: "up" | "down";
+}): Promise<{ ok: true }> {
+  await requireRolesManager();
+  const db = getDb();
+
+  const roles = await db.query.roles.findMany({
+    orderBy: (roles, { asc }) => [asc(roles.position), asc(roles.name)],
+  });
+
+  const idx = roles.findIndex((r) => r.id === input.roleId);
+  if (idx === -1) {
+    throw new Error("Role not found");
+  }
+
+  const swapIdx = input.direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= roles.length) {
+    return { ok: true }; // Already at boundary, no-op.
+  }
+
+  const current = roles[idx];
+  const neighbor = roles[swapIdx];
+
+  // Swap positions.
+  await db
+    .update(schema.roles)
+    .set({ position: neighbor.position })
+    .where(eq(schema.roles.id, current.id));
+  await db
+    .update(schema.roles)
+    .set({ position: current.position })
+    .where(eq(schema.roles.id, neighbor.id));
 
   return { ok: true };
 }
