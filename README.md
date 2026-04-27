@@ -97,7 +97,22 @@ pnpm --filter ucmc-web typecheck    # tsc --noEmit
 pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006
 pnpm --filter ucmc-web deploy:dev   # build and deploy to dev (dev.ucmc.spencerwill.com)
 pnpm --filter ucmc-web deploy:prod  # build and deploy to prod (ucmc.spencerwill.com)
+pnpm --filter ucmc-web db:generate  # generate Drizzle SQL migrations from schema.ts
+pnpm --filter ucmc-web db:migrate:local  # apply migrations to the local Miniflare D1
+pnpm --filter ucmc-web db:seed:local     # promote SEED_ADMIN_EMAIL to system_admin (local only)
 ```
+
+#### Authentication
+
+The app uses a two-path authentication system:
+
+1. **Magic links** (primary for registration, fallback for sign-in) — enter an email, receive a one-time link that expires in 15 minutes. The link lands on a click-through page (to defeat email scanners), then either opens a session (existing user) or sets a short-lived proof cookie (new user → profile form → pending approval).
+
+2. **Passkeys / WebAuthn** (primary for sign-in) — approved users can enroll FIDO2 passkeys on `/account/security`. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
+
+**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (fill profile) → `/register/pending` (wait for exec approval) → exec approves at `/members/registrations` → user is `approved` with the `member` role.
+
+**Anti-abuse**: Turnstile CAPTCHA on the magic-link form, per-IP + per-email rate limiting (10 req / 60 s), timing jitter (500–800 ms) to prevent email enumeration, SHA-256 hashed tokens in D1 (stolen DB can't replay links).
 
 #### Local env (`.env.local`)
 
@@ -107,16 +122,19 @@ The full precedence chain (most → least specific, merged) is `.env.<mode>.loca
 
 `.env.local` is the local analog of what Pulumi-injected `--var` flags and Cloudflare secrets do in deployed envs. Missing any required value will crash the Worker on first request that touches it.
 
+Notable vars: `VITE_TURNSTILE_SITE_KEY` (client-side — leave unset to skip the Turnstile widget in local dev, or use Cloudflare's [always-pass test key](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) for integration testing).
+
 #### Worker secrets (deployed envs)
 
 Non-secret runtime vars are injected at deploy time from Pulumi stack outputs. Secrets can't ride along in `--var` — they're uploaded separately via `wrangler secret put`, automated per deploy by the `web-deploy.yml` workflow through `cloudflare/wrangler-action`'s `secrets:` field. That means **secrets live in GitHub Actions environment secrets**, not in Cloudflare directly: set them once under the `dev` and `prod` GitHub environments and every deploy re-applies them to the Worker.
 
 Required per-environment secrets (repo Settings → Environments → `dev` / `prod` → Environment secrets):
 
-| Name             | Purpose                                                                                                                                                                                 | Generate with             |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `SESSION_SECRET` | HMAC signing key for the email-verification proof cookie. Rotating invalidates outstanding proofs.                                                                                      | `openssl rand -base64 48` |
-| `RESEND_API_KEY` | Resend API key for transactional email. Leaving it unset in an env's GitHub secrets causes that env's Worker to fall back to console logging (useful for dev; not acceptable for prod). | Resend dashboard          |
+| Name                   | Purpose                                                                                                                                                                                 | Generate with             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `SESSION_SECRET`       | HMAC signing key for the email-verification proof cookie. Rotating invalidates outstanding proofs.                                                                                      | `openssl rand -base64 48` |
+| `RESEND_API_KEY`       | Resend API key for transactional email. Leaving it unset in an env's GitHub secrets causes that env's Worker to fall back to console logging (useful for dev; not acceptable for prod). | Resend dashboard          |
+| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile server-side verification key. Leaving it unset skips verification (local dev). Required in prod to prevent bot registrations.                                      | Cloudflare dashboard      |
 
 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `PULUMI_ACCESS_TOKEN` are also required but are covered under **Required GitHub setup** in the Infrastructure section below.
 
