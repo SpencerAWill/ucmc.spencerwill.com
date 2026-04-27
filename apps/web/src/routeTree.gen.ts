@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as MembersRouteImport } from './routes/members'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MembersIndexRouteImport } from './routes/members.index'
@@ -20,6 +21,7 @@ import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
+import { Route as MembersUserIdRouteImport } from './routes/members.$userId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
@@ -38,6 +40,11 @@ const MembersRoute = MembersRouteImport.update({
 const HealthRoute = HealthRouteImport.update({
   id: '/health',
   path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeactivatedRoute = DeactivatedRouteImport.update({
+  id: '/deactivated',
+  path: '/deactivated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountRoute = AccountRouteImport.update({
@@ -80,6 +87,11 @@ const MembersRegistrationsRoute = MembersRegistrationsRouteImport.update({
   path: '/registrations',
   getParentRoute: () => MembersRoute,
 } as any)
+const MembersUserIdRoute = MembersUserIdRouteImport.update({
+  id: '/$userId',
+  path: '/$userId',
+  getParentRoute: () => MembersRoute,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
@@ -104,12 +116,14 @@ const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRouteWithChildren
+  '/deactivated': typeof DeactivatedRoute
   '/health': typeof HealthRoute
   '/members': typeof MembersRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/members/$userId': typeof MembersUserIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
@@ -120,11 +134,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/deactivated': typeof DeactivatedRoute
   '/health': typeof HealthRoute
   '/sign-in': typeof SignInRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/members/$userId': typeof MembersUserIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
@@ -137,12 +153,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/account': typeof AccountRouteWithChildren
+  '/deactivated': typeof DeactivatedRoute
   '/health': typeof HealthRoute
   '/members': typeof MembersRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/members/$userId': typeof MembersUserIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
@@ -156,12 +174,14 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/account'
+    | '/deactivated'
     | '/health'
     | '/members'
     | '/sign-in'
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
+    | '/members/$userId'
     | '/members/registrations'
     | '/members/roles'
     | '/register/pending'
@@ -172,11 +192,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/deactivated'
     | '/health'
     | '/sign-in'
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
+    | '/members/$userId'
     | '/members/registrations'
     | '/members/roles'
     | '/register/pending'
@@ -188,12 +210,14 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/account'
+    | '/deactivated'
     | '/health'
     | '/members'
     | '/sign-in'
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
+    | '/members/$userId'
     | '/members/registrations'
     | '/members/roles'
     | '/register/pending'
@@ -206,6 +230,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRouteWithChildren
+  DeactivatedRoute: typeof DeactivatedRoute
   HealthRoute: typeof HealthRoute
   MembersRoute: typeof MembersRouteWithChildren
   SignInRoute: typeof SignInRoute
@@ -235,6 +260,13 @@ declare module '@tanstack/react-router' {
       path: '/health'
       fullPath: '/health'
       preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/deactivated': {
+      id: '/deactivated'
+      path: '/deactivated'
+      fullPath: '/deactivated'
+      preLoaderRoute: typeof DeactivatedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/account': {
@@ -293,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersRegistrationsRouteImport
       parentRoute: typeof MembersRoute
     }
+    '/members/$userId': {
+      id: '/members/$userId'
+      path: '/$userId'
+      fullPath: '/members/$userId'
+      preLoaderRoute: typeof MembersUserIdRouteImport
+      parentRoute: typeof MembersRoute
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/auth/callback'
@@ -340,6 +379,7 @@ const AccountRouteWithChildren =
   AccountRoute._addFileChildren(AccountRouteChildren)
 
 interface MembersRouteChildren {
+  MembersUserIdRoute: typeof MembersUserIdRoute
   MembersRegistrationsRoute: typeof MembersRegistrationsRoute
   MembersRolesRoute: typeof MembersRolesRoute
   MembersIndexRoute: typeof MembersIndexRoute
@@ -347,6 +387,7 @@ interface MembersRouteChildren {
 }
 
 const MembersRouteChildren: MembersRouteChildren = {
+  MembersUserIdRoute: MembersUserIdRoute,
   MembersRegistrationsRoute: MembersRegistrationsRoute,
   MembersRolesRoute: MembersRolesRoute,
   MembersIndexRoute: MembersIndexRoute,
@@ -359,6 +400,7 @@ const MembersRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRouteWithChildren,
+  DeactivatedRoute: DeactivatedRoute,
   HealthRoute: HealthRoute,
   MembersRoute: MembersRouteWithChildren,
   SignInRoute: SignInRoute,

@@ -13,7 +13,12 @@ import {
 
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });
 
-export const userStatus = ["pending", "approved", "rejected"] as const;
+export const userStatus = [
+  "pending",
+  "approved",
+  "rejected",
+  "deactivated",
+] as const;
 export type UserStatus = (typeof userStatus)[number];
 
 export const ucAffiliation = [

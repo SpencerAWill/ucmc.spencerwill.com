@@ -119,9 +119,10 @@ export async function closeSession(): Promise<void> {
 
 /**
  * Resolve the current request's principal. Returns null for anonymous
- * requests, bad cookies, expired sessions, or orphaned sessions (session
- * row exists but its user was deleted). Also does the sliding-window
- * refresh of `expiresAt` if enough time has passed since `lastSeenAt`.
+ * requests, bad cookies, expired sessions, orphaned sessions (session
+ * row exists but its user was deleted), or deactivated users. Also does
+ * the sliding-window refresh of `expiresAt` if enough time has passed
+ * since `lastSeenAt`.
  */
 export async function loadCurrentPrincipal(): Promise<Principal | null> {
   const sid = readSessionCookie();
@@ -138,6 +139,14 @@ export async function loadCurrentPrincipal(): Promise<Principal | null> {
   const principal = await loadPrincipal(session.userId);
   if (!principal) {
     // Session points at a user that no longer exists — clean up.
+    await deleteSessionRow(sid);
+    clearSessionCookie();
+    return null;
+  }
+
+  if (principal.status === "deactivated") {
+    // Deactivated users must not retain active sessions. Clean up and
+    // return null so downstream code treats this as an anonymous request.
     await deleteSessionRow(sid);
     clearSessionCookie();
     return null;

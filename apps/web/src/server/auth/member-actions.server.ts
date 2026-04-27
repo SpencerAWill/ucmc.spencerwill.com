@@ -1,14 +1,17 @@
 /**
  * Action implementations for member-management server fns (registrations
- * approval queue). Follows the same shell + .server.ts split as
- * magic-link-actions.server.ts — the shell in `./member-fns.ts` loads
- * this via a dynamic import inside its createServerFn handlers.
+ * approval queue, member lifecycle, admin profile editing). Follows the
+ * same shell + .server.ts split as magic-link-actions.server.ts — the
+ * shell in `./member-fns.ts` loads this via a dynamic import inside its
+ * createServerFn handlers.
  */
 import { and, asc, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
 
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
+
+// ── auth helpers ────────────────────────────────────────────────────────
 
 /**
  * Loads the current principal and asserts that they hold the
@@ -27,7 +30,31 @@ async function requireApprover(): Promise<Principal> {
   return principal;
 }
 
-// ── list ─────────────────────────────────────────────────────────────────
+/** Requires the `members:manage` permission. */
+async function requireMembersManager(): Promise<Principal> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+  if (!principal.permissions.includes("members:manage")) {
+    throw new Error("Forbidden: missing members:manage");
+  }
+  return principal;
+}
+
+/** Requires the caller to be signed in and approved. */
+async function requireApprovedPrincipal(): Promise<Principal> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+  if (principal.status !== "approved") {
+    throw new Error("Not approved");
+  }
+  return principal;
+}
+
+// ── list pending registrations ──────────────────────────────────────────
 
 export interface PendingRegistration {
   userId: string;
@@ -105,7 +132,7 @@ export async function listPendingRegistrationsAction(opts: {
   };
 }
 
-// ── list approved members ─────────────────────────────────────────────────
+// ── list members (directory) ────────────────────────────────────────────
 
 export interface MemberSummary {
   userId: string;
@@ -114,27 +141,44 @@ export interface MemberSummary {
   preferredName: string | null;
   ucAffiliation: string | null;
   roles: string[];
+  status: schema.UserStatus;
+  // Private fields — null when the caller lacks members:view_private.
+  phone: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  mNumber: string | null;
 }
 
 export async function listMembersAction(opts: {
   search?: string;
   affiliations?: string;
   roles?: string;
+  statuses?: string;
   sort?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ rows: MemberSummary[]; total: number }> {
-  const principal = await loadCurrentPrincipal();
-  if (!principal) {
-    throw new Error("Not signed in");
-  }
-  if (principal.status !== "approved") {
-    throw new Error("Not approved");
-  }
+  const principal = await requireApprovedPrincipal();
 
   const db = getDb();
+  const canManage = principal.permissions.includes("members:manage");
+  const canViewPrivate = principal.permissions.includes("members:view_private");
 
-  const conditions = [eq(schema.users.status, "approved")];
+  // Status filter: members:manage holders can filter by any status;
+  // everyone else is locked to "approved".
+  const statusList = canManage
+    ? (opts.statuses?.split(",").filter(Boolean) ?? ["approved"])
+    : ["approved"];
+
+  const conditions =
+    statusList.length === 1
+      ? [eq(schema.users.status, statusList[0] as schema.UserStatus)]
+      : [
+          inArray(
+            schema.users.status,
+            statusList as [schema.UserStatus, ...schema.UserStatus[]],
+          ),
+        ];
 
   // Affiliation filter (comma-separated list).
   const affiliationList = opts.affiliations?.split(",").filter(Boolean) ?? [];
@@ -174,6 +218,19 @@ export async function listMembersAction(opts: {
     }
   })();
 
+  const selectFields = {
+    userId: schema.users.id,
+    email: schema.users.email,
+    status: schema.users.status,
+    fullName: schema.profiles.fullName,
+    preferredName: schema.profiles.preferredName,
+    ucAffiliation: schema.profiles.ucAffiliation,
+    phone: schema.profiles.phone,
+    emergencyContactName: schema.profiles.emergencyContactName,
+    emergencyContactPhone: schema.profiles.emergencyContactPhone,
+    mNumber: schema.profiles.mNumber,
+  };
+
   const [countResult, rows] = await Promise.all([
     db
       .select({ value: count() })
@@ -181,18 +238,12 @@ export async function listMembersAction(opts: {
       .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
       .where(where),
     db
-      .select({
-        userId: schema.users.id,
-        email: schema.users.email,
-        fullName: schema.profiles.fullName,
-        preferredName: schema.profiles.preferredName,
-        ucAffiliation: schema.profiles.ucAffiliation,
-      })
+      .select(selectFields)
       .from(schema.users)
       .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
       .where(where)
       .orderBy(orderBy)
-      .limit(opts.limit ?? 50)
+      .limit(opts.limit ?? DEFAULT_LIMIT)
       .offset(opts.offset ?? 0),
   ]);
 
@@ -217,13 +268,18 @@ export async function listMembersAction(opts: {
     rolesByUser.set(r.userId, list);
   }
 
-  let mappedRows = rows.map((r) => ({
+  let mappedRows: MemberSummary[] = rows.map((r) => ({
     userId: r.userId,
     email: r.email,
     fullName: r.fullName,
     preferredName: r.preferredName,
     ucAffiliation: r.ucAffiliation,
     roles: rolesByUser.get(r.userId) ?? [],
+    status: r.status,
+    phone: canViewPrivate ? r.phone : null,
+    emergencyContactName: canViewPrivate ? r.emergencyContactName : null,
+    emergencyContactPhone: canViewPrivate ? r.emergencyContactPhone : null,
+    mNumber: canViewPrivate ? r.mNumber : null,
   }));
 
   let total = countResult[0]?.value ?? 0;
@@ -238,6 +294,97 @@ export async function listMembersAction(opts: {
   }
 
   return { total, rows: mappedRows };
+}
+
+// ── get member detail ───────────────────────────────────────────────────
+
+export interface MemberDetail {
+  userId: string;
+  email: string;
+  status: schema.UserStatus;
+  createdAt: Date;
+  approvedAt: Date | null;
+  approvedBy: string | null;
+  fullName: string | null;
+  preferredName: string | null;
+  ucAffiliation: string | null;
+  roles: string[];
+  // Private fields — null when caller lacks members:view_private.
+  phone: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  mNumber: string | null;
+  // Session count — null when caller lacks sessions:revoke.
+  activeSessions: number | null;
+}
+
+export async function getMemberDetailAction(
+  userId: string,
+): Promise<MemberDetail> {
+  const principal = await requireApprovedPrincipal();
+  const db = getDb();
+  const canViewPrivate = principal.permissions.includes("members:view_private");
+  const canRevokeSessions = principal.permissions.includes("sessions:revoke");
+
+  const row = await db
+    .select({
+      userId: schema.users.id,
+      email: schema.users.email,
+      status: schema.users.status,
+      createdAt: schema.users.createdAt,
+      approvedAt: schema.users.approvedAt,
+      approvedBy: schema.users.approvedBy,
+      fullName: schema.profiles.fullName,
+      preferredName: schema.profiles.preferredName,
+      ucAffiliation: schema.profiles.ucAffiliation,
+      phone: schema.profiles.phone,
+      emergencyContactName: schema.profiles.emergencyContactName,
+      emergencyContactPhone: schema.profiles.emergencyContactPhone,
+      mNumber: schema.profiles.mNumber,
+    })
+    .from(schema.users)
+    .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+    .where(eq(schema.users.id, userId))
+    .get();
+
+  if (!row) {
+    throw new Error("User not found");
+  }
+
+  // Fetch roles.
+  const roleRows = await db
+    .select({ roleName: schema.roles.name })
+    .from(schema.userRoles)
+    .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
+    .where(eq(schema.userRoles.userId, userId));
+
+  // Optionally count active sessions.
+  let activeSessions: number | null = null;
+  if (canRevokeSessions) {
+    const sessionCount = await db
+      .select({ value: count() })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.userId, userId));
+    activeSessions = sessionCount[0]?.value ?? 0;
+  }
+
+  return {
+    userId: row.userId,
+    email: row.email,
+    status: row.status,
+    createdAt: row.createdAt,
+    approvedAt: row.approvedAt,
+    approvedBy: row.approvedBy,
+    fullName: row.fullName,
+    preferredName: row.preferredName,
+    ucAffiliation: row.ucAffiliation,
+    roles: roleRows.map((r) => r.roleName),
+    phone: canViewPrivate ? row.phone : null,
+    emergencyContactName: canViewPrivate ? row.emergencyContactName : null,
+    emergencyContactPhone: canViewPrivate ? row.emergencyContactPhone : null,
+    mNumber: canViewPrivate ? row.mNumber : null,
+    activeSessions,
+  };
 }
 
 // ── available roles ──────────────────────────────────────────────────────
@@ -302,6 +449,149 @@ export async function rejectRegistrationsAction(
     .where(inArray(schema.users.id, userIds));
 
   // TODO: send rejection notification emails (per-user).
+
+  return { ok: true };
+}
+
+// ── deactivate (bulk) ───────────────────────────────────────────────────
+
+export async function deactivateMembersAction(
+  userIds: string[],
+): Promise<{ ok: true }> {
+  const principal = await requireMembersManager();
+
+  if (userIds.includes(principal.userId)) {
+    throw new Error("Cannot deactivate yourself");
+  }
+
+  const db = getDb();
+
+  // Only deactivate users that are currently approved.
+  await db
+    .update(schema.users)
+    .set({ status: "deactivated" })
+    .where(
+      and(
+        inArray(schema.users.id, userIds),
+        eq(schema.users.status, "approved"),
+      ),
+    );
+
+  // Immediately revoke all sessions so deactivated users are signed out.
+  await db
+    .delete(schema.sessions)
+    .where(inArray(schema.sessions.userId, userIds));
+
+  return { ok: true };
+}
+
+// ── reactivate (bulk) ───────────────────────────────────────────────────
+
+export async function reactivateMembersAction(
+  userIds: string[],
+): Promise<{ ok: true }> {
+  const approver = await requireMembersManager();
+  const db = getDb();
+
+  // Only reactivate users that are currently deactivated.
+  await db
+    .update(schema.users)
+    .set({
+      status: "approved",
+      approvedAt: new Date(),
+      approvedBy: approver.userId,
+    })
+    .where(
+      and(
+        inArray(schema.users.id, userIds),
+        eq(schema.users.status, "deactivated"),
+      ),
+    );
+
+  // Ensure member role is granted (may already exist from prior approval).
+  await db
+    .insert(schema.userRoles)
+    .values(userIds.map((userId) => ({ userId, roleId: "role_member" })))
+    .onConflictDoNothing();
+
+  return { ok: true };
+}
+
+// ── un-reject (bulk) ────────────────────────────────────────────────────
+
+export async function unrejectMembersAction(
+  userIds: string[],
+): Promise<{ ok: true }> {
+  await requireMembersManager();
+
+  // Move rejected users back to pending so they re-enter the approval queue.
+  await getDb()
+    .update(schema.users)
+    .set({ status: "pending" })
+    .where(
+      and(
+        inArray(schema.users.id, userIds),
+        eq(schema.users.status, "rejected"),
+      ),
+    );
+
+  return { ok: true };
+}
+
+// ── revoke user sessions ────────────────────────────────────────────────
+
+export async function revokeUserSessionsAction(
+  userId: string,
+): Promise<{ ok: true }> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+  if (!principal.permissions.includes("sessions:revoke")) {
+    throw new Error("Forbidden: missing sessions:revoke");
+  }
+  if (userId === principal.userId) {
+    throw new Error("Cannot revoke your own sessions (use Sign Out)");
+  }
+
+  await getDb()
+    .delete(schema.sessions)
+    .where(eq(schema.sessions.userId, userId));
+
+  return { ok: true };
+}
+
+// ── admin profile edit ──────────────────────────────────────────────────
+
+export async function adminUpdateProfileAction(input: {
+  userId: string;
+  fullName: string;
+  preferredName: string;
+  mNumber: string;
+  phone: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  ucAffiliation: schema.UcAffiliation;
+}): Promise<{ ok: true }> {
+  await requireMembersManager();
+
+  const db = getDb();
+  const user = await db.query.users.findFirst({
+    where: eq(schema.users.id, input.userId),
+    columns: { id: true },
+  });
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const { userId, ...profileData } = input;
+  await db
+    .insert(schema.profiles)
+    .values({ userId, ...profileData, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: schema.profiles.userId,
+      set: { ...profileData, updatedAt: new Date() },
+    });
 
   return { ok: true };
 }
