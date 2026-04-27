@@ -113,6 +113,7 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
     hasProfile: true,
     roles: [],
     permissions: [],
+    rolePermissionMap: {},
     ...overrides,
   };
 }

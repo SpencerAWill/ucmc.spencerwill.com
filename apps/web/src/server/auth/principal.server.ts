@@ -16,6 +16,9 @@ export interface Principal {
   hasProfile: boolean;
   roles: string[];
   permissions: string[];
+  /** Per-role permission breakdown so the view-mode emulator can show
+   *  what a specific role grants without an extra fetch. */
+  rolePermissionMap: Record<string, string[]>;
 }
 
 export async function loadPrincipal(userId: string): Promise<Principal | null> {
@@ -42,7 +45,10 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
   const roleIds = userRoleRows.map((r) => r.roleId);
   const isSystemAdmin = userRoleRows.some((r) => r.name === "system_admin");
 
+  // Build the aggregated permission set and the per-role breakdown.
+  const rolePermissionMap: Record<string, string[]> = {};
   let permissions: string[] = [];
+
   if (isSystemAdmin) {
     // System admin always has every permission, including ones added
     // after the role was created. This is the canonical enforcement
@@ -51,16 +57,45 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
       columns: { name: true },
     });
     permissions = allPerms.map((p) => p.name);
-  } else if (roleIds.length > 0) {
+    // system_admin gets all; other roles still get their individual breakdowns.
+    rolePermissionMap["system_admin"] = permissions;
+  }
+
+  if (roleIds.length > 0) {
     const rows = await db
-      .select({ name: schema.permissions.name })
+      .select({
+        roleId: schema.rolePermissions.roleId,
+        permName: schema.permissions.name,
+      })
       .from(schema.rolePermissions)
       .innerJoin(
         schema.permissions,
         eq(schema.permissions.id, schema.rolePermissions.permissionId),
       )
       .where(inArray(schema.rolePermissions.roleId, roleIds));
-    permissions = Array.from(new Set(rows.map((r) => r.name)));
+
+    // Build per-role map using role names.
+    const roleIdToName = new Map(userRoleRows.map((r) => [r.roleId, r.name]));
+    for (const row of rows) {
+      const roleName = roleIdToName.get(row.roleId);
+      if (roleName && roleName !== "system_admin") {
+        const list = rolePermissionMap[roleName] ?? [];
+        list.push(row.permName);
+        rolePermissionMap[roleName] = list;
+      }
+    }
+
+    // For non-admin users, build the aggregated set from the per-role data.
+    if (!isSystemAdmin) {
+      permissions = Array.from(new Set(rows.map((r) => r.permName)));
+    }
+  }
+
+  // Ensure every role has an entry (even if empty).
+  for (const r of userRoleRows) {
+    if (!(r.name in rolePermissionMap)) {
+      rolePermissionMap[r.name] = [];
+    }
   }
 
   return {
@@ -70,6 +105,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     hasProfile: Boolean(profile),
     roles: userRoleRows.map((r) => r.name),
     permissions,
+    rolePermissionMap,
   };
 }
 

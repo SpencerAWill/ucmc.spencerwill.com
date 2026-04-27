@@ -15,6 +15,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { AppLayout } from "#/components/layouts/app-layout";
 import { ThemeProvider } from "#/components/theme-provider";
 import { sessionQueryOptions } from "#/lib/auth/use-auth";
+import { ViewModeProvider } from "#/lib/auth/view-mode";
 
 interface RouterContext {
   queryClient: QueryClient;
@@ -60,7 +61,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="font-sans antialiased wrap-anywhere selection:bg-[rgba(79,184,178,0.24)]">
         <ThemeProvider>
-          <AppLayout>{children}</AppLayout>
+          <ViewModeProvider>
+            <AppLayout>{children}</AppLayout>
+          </ViewModeProvider>
           <TanStackDevtools
             config={{
               position: "bottom-right",

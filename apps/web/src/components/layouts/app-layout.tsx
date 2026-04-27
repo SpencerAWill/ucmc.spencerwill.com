@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Shield, UserPlus, Users } from "lucide-react";
+import { ChevronRight, Eye, Shield, UserPlus, Users } from "lucide-react";
 
 import { UserMenu } from "#/components/auth/user-menu";
 import { ModeToggle } from "#/components/mode-toggle";
@@ -80,6 +80,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
       </header>
+      <EmulationBanner />
       <div className="flex flex-1">
         <Sidebar
           variant="sidebar"
@@ -99,6 +100,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarInset>
       </div>
     </SidebarProvider>
+  );
+}
+
+function EmulationBanner() {
+  const { emulatedRole } = useAuth();
+  if (!emulatedRole) {
+    return null;
+  }
+  return (
+    <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+      <Eye className="size-3.5" />
+      Viewing as {emulatedRole.replace(/_/g, " ")}
+    </div>
   );
 }
 

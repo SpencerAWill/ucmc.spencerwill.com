@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { KeyRound, LogOut, User as UserIcon } from "lucide-react";
+import { Eye, KeyRound, LogOut, User as UserIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import {
@@ -10,7 +10,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "#/components/ui/select";
 import { useAuth } from "#/lib/auth/use-auth";
+import { useViewMode } from "#/lib/auth/view-mode";
 
 function initialsFor(value: string): string {
   const parts = value.split(/\s+|@/).filter(Boolean);
@@ -20,7 +28,8 @@ function initialsFor(value: string): string {
 }
 
 export function UserMenu() {
-  const { principal, isLoading, signOut } = useAuth();
+  const { principal, isLoading, isElevated, emulatedRole, signOut } = useAuth();
+  const { setEmulatedRole } = useViewMode();
   const navigate = useNavigate();
 
   if (isLoading) {
@@ -48,7 +57,9 @@ export function UserMenu() {
   const display = principal.email;
   const statusLabel =
     principal.status === "approved"
-      ? (principal.roles[0] ?? "member")
+      ? emulatedRole
+        ? `viewing as ${emulatedRole.replace(/_/g, " ")}`
+        : (principal.roles[0] ?? "member")
       : principal.status;
 
   return (
@@ -68,7 +79,7 @@ export function UserMenu() {
         <DropdownMenuLabel className="flex flex-col gap-0.5">
           <span className="truncate text-sm">{display}</span>
           <span className="text-xs capitalize text-muted-foreground">
-            {statusLabel.replace("_", " ")}
+            {statusLabel.replace(/_/g, " ")}
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -102,6 +113,36 @@ export function UserMenu() {
             </DropdownMenuItem>
           </>
         )}
+        {/* Role emulation dropdown — only for users with multiple roles */}
+        {isElevated && principal.status === "approved" ? (
+          <>
+            <DropdownMenuSeparator />
+            <div
+              className="flex items-center gap-2 px-2 py-1.5"
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <Eye className="size-4 shrink-0 text-muted-foreground" />
+              <Select
+                value={emulatedRole ?? "__actual__"}
+                onValueChange={(value) => {
+                  setEmulatedRole(value === "__actual__" ? null : value);
+                }}
+              >
+                <SelectTrigger className="h-7 flex-1 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__actual__">Actual permissions</SelectItem>
+                  {principal.roles.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      View as {role.replace(/_/g, " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={async (e) => {
