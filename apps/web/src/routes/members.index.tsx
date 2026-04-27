@@ -7,11 +7,13 @@ import {
   LayoutGrid,
   List,
   Search,
+  Shield,
   User as UserIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
+import { RoleAssignmentSheet } from "#/components/auth/role-assignment-sheet";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
@@ -36,6 +38,7 @@ import {
   TooltipTrigger,
 } from "#/components/ui/tooltip";
 import { requireApproved } from "#/lib/auth/guards";
+import { useAuth } from "#/lib/auth/use-auth";
 import { listMembersFn, listRolesFn } from "#/server/auth/member-fns";
 import type { MemberSummary, RoleOption } from "#/server/auth/member-fns";
 
@@ -208,6 +211,11 @@ function MembersIndexPage() {
       }),
   });
 
+  const { hasPermission } = useAuth();
+  const canAssignRoles = hasPermission("roles:assign");
+
+  const [roleTarget, setRoleTarget] = useState<MemberSummary | null>(null);
+
   const members = data?.rows ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -357,9 +365,17 @@ function MembersIndexPage() {
       ) : (
         <>
           {view === "list" ? (
-            <MemberListView members={members} />
+            <MemberListView
+              members={members}
+              canAssignRoles={canAssignRoles}
+              onManageRoles={setRoleTarget}
+            />
           ) : (
-            <MemberGridView members={members} />
+            <MemberGridView
+              members={members}
+              canAssignRoles={canAssignRoles}
+              onManageRoles={setRoleTarget}
+            />
           )}
 
           {/* Pagination + rows per page */}
@@ -407,6 +423,21 @@ function MembersIndexPage() {
           </div>
         </>
       )}
+
+      {/* Role assignment sheet */}
+      {roleTarget ? (
+        <RoleAssignmentSheet
+          userId={roleTarget.userId}
+          email={roleTarget.email}
+          preferredName={roleTarget.preferredName}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) {
+              setRoleTarget(null);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -444,17 +475,38 @@ function AffiliationBadge({ affiliation }: { affiliation: string | null }) {
 
 // ── List view ─────────────────────────────────────────────────────────────
 
-function MemberListView({ members }: { members: MemberSummary[] }) {
+function MemberListView({
+  members,
+  canAssignRoles,
+  onManageRoles,
+}: {
+  members: MemberSummary[];
+  canAssignRoles: boolean;
+  onManageRoles: (member: MemberSummary) => void;
+}) {
   return (
     <ul className="divide-y rounded-lg border">
       {members.map((member) => (
-        <MemberRow key={member.userId} member={member} />
+        <MemberRow
+          key={member.userId}
+          member={member}
+          canAssignRoles={canAssignRoles}
+          onManageRoles={onManageRoles}
+        />
       ))}
     </ul>
   );
 }
 
-function MemberRow({ member }: { member: MemberSummary }) {
+function MemberRow({
+  member,
+  canAssignRoles,
+  onManageRoles,
+}: {
+  member: MemberSummary;
+  canAssignRoles: boolean;
+  onManageRoles: (member: MemberSummary) => void;
+}) {
   const name = member.preferredName ?? member.fullName;
   return (
     <li className="flex items-center gap-3 px-3 py-3">
@@ -477,23 +529,55 @@ function MemberRow({ member }: { member: MemberSummary }) {
           <RoleBadges roles={member.roles} />
         </div>
       </div>
+      {canAssignRoles ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          onClick={() => onManageRoles(member)}
+        >
+          <Shield className="size-4" />
+          <span className="sr-only">Manage roles</span>
+        </Button>
+      ) : null}
     </li>
   );
 }
 
 // ── Grid / card view ──────────────────────────────────────────────────────
 
-function MemberGridView({ members }: { members: MemberSummary[] }) {
+function MemberGridView({
+  members,
+  canAssignRoles,
+  onManageRoles,
+}: {
+  members: MemberSummary[];
+  canAssignRoles: boolean;
+  onManageRoles: (member: MemberSummary) => void;
+}) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {members.map((member) => (
-        <MemberCard key={member.userId} member={member} />
+        <MemberCard
+          key={member.userId}
+          member={member}
+          canAssignRoles={canAssignRoles}
+          onManageRoles={onManageRoles}
+        />
       ))}
     </div>
   );
 }
 
-function MemberCard({ member }: { member: MemberSummary }) {
+function MemberCard({
+  member,
+  canAssignRoles,
+  onManageRoles,
+}: {
+  member: MemberSummary;
+  canAssignRoles: boolean;
+  onManageRoles: (member: MemberSummary) => void;
+}) {
   const name = member.preferredName ?? member.fullName;
   return (
     <Card>
@@ -509,6 +593,16 @@ function MemberCard({ member }: { member: MemberSummary }) {
           <AffiliationBadge affiliation={member.ucAffiliation} />
           <RoleBadges roles={member.roles} />
         </div>
+        {canAssignRoles ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onManageRoles(member)}
+          >
+            <Shield className="mr-1 size-3" />
+            Roles
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   );
