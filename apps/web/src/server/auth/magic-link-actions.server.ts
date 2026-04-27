@@ -149,9 +149,15 @@ export async function consumeMagicLinkAction(
 
 export async function getSessionAction(): Promise<{
   principal: Principal | null;
+  anonymousPermissions: string[];
 }> {
-  const principal = await loadCurrentPrincipal();
-  return { principal };
+  const { loadAnonymousPermissions } =
+    await import("#/server/auth/principal.server");
+  const [principal, anonymousPermissions] = await Promise.all([
+    loadCurrentPrincipal(),
+    loadAnonymousPermissions(),
+  ]);
+  return { principal, anonymousPermissions };
 }
 
 export async function getProofAction(): Promise<{

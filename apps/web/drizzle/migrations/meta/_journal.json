@@ -15,6 +15,13 @@
       "when": 1777032288870,
       "tag": "0001_rbac_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777118400000,
+      "tag": "0002_anonymous_role_seed",
+      "breakpoints": true
     }
   ]
 }

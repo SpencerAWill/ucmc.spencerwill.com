@@ -90,7 +90,10 @@ export const consumeMagicLinkFn = createServerFn({ method: "POST" })
  * render something and hydration matches.
  */
 export const getSessionFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ principal: Principal | null }> => {
+  async (): Promise<{
+    principal: Principal | null;
+    anonymousPermissions: string[];
+  }> => {
     const { getSessionAction } =
       await import("#/server/auth/magic-link-actions.server");
     return getSessionAction();

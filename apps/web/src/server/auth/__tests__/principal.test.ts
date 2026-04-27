@@ -18,7 +18,11 @@ vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByEmail: async () => true,
 }));
 
-const { loadPrincipal } = await import("#/server/auth/principal.server");
+const {
+  loadPrincipal,
+  loadAnonymousPermissions,
+  invalidateAnonymousPermissionsCache,
+} = await import("#/server/auth/principal.server");
 
 async function seedUser(email: string): Promise<string> {
   const id = `user_${crypto.randomUUID()}`;
@@ -141,5 +145,57 @@ describe("loadPrincipal", () => {
     expect(principal).not.toBeNull();
     expect(principal!.roles).toEqual(["member"]);
     expect(principal!.permissions).not.toContain("test:only");
+  });
+});
+
+describe("loadAnonymousPermissions", () => {
+  it("returns empty array when the anonymous role has no permissions", async () => {
+    // Clear KV cache so we hit DB.
+    await invalidateAnonymousPermissionsCache();
+    const perms = await loadAnonymousPermissions();
+    expect(perms).toEqual([]);
+  });
+
+  it("returns permissions assigned to the anonymous role", async () => {
+    const db = getDb();
+    // Grant registrations:approve to anonymous for this test.
+    await db
+      .insert(schema.rolePermissions)
+      .values({
+        roleId: "role_anonymous",
+        permissionId: "perm_registrations_approve",
+      })
+      .onConflictDoNothing();
+
+    await invalidateAnonymousPermissionsCache();
+    const perms = await loadAnonymousPermissions();
+    expect(perms).toContain("registrations:approve");
+  });
+
+  it("caches results in KV so a second call skips DB", async () => {
+    await invalidateAnonymousPermissionsCache();
+
+    // First call populates the cache.
+    const first = await loadAnonymousPermissions();
+    expect(first).toEqual([]);
+
+    // Insert a permission grant AFTER the cache was set.
+    const db = getDb();
+    await db
+      .insert(schema.rolePermissions)
+      .values({
+        roleId: "role_anonymous",
+        permissionId: "perm_roles_manage",
+      })
+      .onConflictDoNothing();
+
+    // Second call should return the cached (empty) result.
+    const second = await loadAnonymousPermissions();
+    expect(second).toEqual([]);
+
+    // After invalidation, the fresh data appears.
+    await invalidateAnonymousPermissionsCache();
+    const third = await loadAnonymousPermissions();
+    expect(third).toContain("roles:manage");
   });
 });

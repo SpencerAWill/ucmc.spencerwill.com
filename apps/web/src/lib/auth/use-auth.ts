@@ -20,6 +20,7 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const query = useQuery(sessionQueryOptions());
   const principal = query.data?.principal ?? null;
+  const anonymousPermissions = query.data?.anonymousPermissions ?? [];
 
   return {
     principal,
@@ -27,8 +28,12 @@ export function useAuth() {
     isAuthenticated: principal !== null,
     isApproved: principal?.status === "approved",
     hasProfile: principal?.hasProfile ?? false,
-    hasPermission: (name: string) =>
-      principal?.permissions.includes(name) ?? false,
+    hasPermission: (name: string) => {
+      if (principal) {
+        return principal.permissions.includes(name);
+      }
+      return anonymousPermissions.includes(name);
+    },
     refresh: () =>
       queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
     signOut: async () => {

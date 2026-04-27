@@ -7,6 +7,7 @@
 import { eq, inArray } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
+import { getKv } from "#/server/kv";
 
 export interface Principal {
   userId: string;
@@ -70,4 +71,46 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     roles: userRoleRows.map((r) => r.name),
     permissions,
   };
+}
+
+// ── anonymous permissions ──────────────────────────────────────────────
+
+const ANONYMOUS_ROLE_ID = "role_anonymous";
+const ANONYMOUS_CACHE_KEY = "anonymous:permissions";
+const ANONYMOUS_CACHE_TTL = 300; // 5 minutes
+
+/**
+ * Load the permissions granted to the `anonymous` pseudo-role. Result is
+ * cached in KV for 5 minutes so unauthenticated page loads are fast.
+ * Call `invalidateAnonymousPermissionsCache()` after editing the role's
+ * permission grants.
+ */
+export async function loadAnonymousPermissions(): Promise<string[]> {
+  const kv = getKv();
+  const cached = await kv.get(ANONYMOUS_CACHE_KEY);
+  if (cached !== null) {
+    return JSON.parse(cached) as string[];
+  }
+
+  const db = getDb();
+  const rows = await db
+    .select({ name: schema.permissions.name })
+    .from(schema.rolePermissions)
+    .innerJoin(
+      schema.permissions,
+      eq(schema.permissions.id, schema.rolePermissions.permissionId),
+    )
+    .where(eq(schema.rolePermissions.roleId, ANONYMOUS_ROLE_ID));
+
+  const perms = rows.map((r) => r.name);
+  await kv.put(ANONYMOUS_CACHE_KEY, JSON.stringify(perms), {
+    expirationTtl: ANONYMOUS_CACHE_TTL,
+  });
+  return perms;
+}
+
+/** Delete the KV cache so the next call to `loadAnonymousPermissions`
+ *  hits D1. Called after `setRolePermissionsFn` touches the anonymous role. */
+export async function invalidateAnonymousPermissionsCache(): Promise<void> {
+  await getKv().delete(ANONYMOUS_CACHE_KEY);
 }
