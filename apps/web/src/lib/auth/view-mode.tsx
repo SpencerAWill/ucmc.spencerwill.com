@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useEffect, useState } from "react";
+import { createContext, use, useEffect, useState } from "react";
 
 const STORAGE_KEY = "ucmc-emulated-role";
 
@@ -22,14 +22,14 @@ export function ViewModeProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const setEmulatedRole = useCallback((role: string | null) => {
+  const setEmulatedRole = (role: string | null) => {
     if (role) {
       window.localStorage.setItem(STORAGE_KEY, role);
     } else {
       window.localStorage.removeItem(STORAGE_KEY);
     }
     setRole(role);
-  }, []);
+  };
 
   const value: ViewModeState = {
     emulatedRole,

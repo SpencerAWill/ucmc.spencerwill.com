@@ -74,9 +74,16 @@ function SidebarProvider({
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen);
   const open = openProp ?? _open;
+  // Latest-ref pattern: lets setOpen handle functional updaters in controlled
+  // mode without closing over `open`, so its identity stays stable across
+  // toggles (otherwise it cascades to toggleSidebar, the keyboard effect, and
+  // the context value, re-rendering every consumer on every toggle).
+  const openRef = React.useRef(open);
+  openRef.current = open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
-      const openState = typeof value === "function" ? value(open) : value;
+      const openState =
+        typeof value === "function" ? value(openRef.current) : value;
       if (setOpenProp) {
         setOpenProp(openState);
       } else {
@@ -86,7 +93,7 @@ function SidebarProvider({
       // This sets the cookie to keep the sidebar state.
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
     },
-    [setOpenProp, open],
+    [setOpenProp],
   );
 
   // Helper to toggle the sidebar.
@@ -124,7 +131,7 @@ function SidebarProvider({
       setOpenMobile,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+    [open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
   );
 
   return (
