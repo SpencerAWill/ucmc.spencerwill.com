@@ -29,6 +29,7 @@ import { UserAvatar } from "#/components/auth/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
+import { RouteErrorFallback } from "#/components/error-page";
 import { requireApproved } from "#/lib/auth/guards";
 import { useAuth } from "#/lib/auth/use-auth";
 import {
@@ -49,6 +50,7 @@ export const Route = createFileRoute("/members/$publicId")({
     await requireApproved(context.queryClient);
   },
   component: MemberDetailPage,
+  errorComponent: RouteErrorFallback,
 });
 
 function MemberDetailPage() {

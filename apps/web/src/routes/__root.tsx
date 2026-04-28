@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { AppLayout } from "#/components/layouts/app-layout";
+import { RouteErrorFallback } from "#/components/error-page";
 import { ThemeProvider } from "#/components/theme-provider";
 import { Toaster } from "#/components/ui/sonner";
 import { sessionQueryOptions } from "#/lib/auth/use-auth";
@@ -30,6 +31,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   // flashing the anonymous fallback).
   loader: ({ context }) =>
     context.queryClient.ensureQueryData(sessionQueryOptions()),
+  errorComponent: RouteErrorFallback,
   head: () => ({
     meta: [
       {

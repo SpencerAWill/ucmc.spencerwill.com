@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 
+import { RouteErrorFallback } from "#/components/error-page";
 import { requireApproved } from "#/lib/auth/guards";
 
 /**
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/account")({
     await requireApproved(context.queryClient, "/account");
   },
   component: AccountLayout,
+  errorComponent: RouteErrorFallback,
 });
 
 const TABS = [

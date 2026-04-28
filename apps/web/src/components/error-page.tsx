@@ -36,3 +36,32 @@ export function ErrorPage({ error, reset }: ErrorComponentProps) {
     </div>
   );
 }
+
+/**
+ * Compact fallback for route-segment-level error boundaries. Renders inside
+ * the parent layout (header / sidebar / tabs stay intact) so a failure in one
+ * section doesn't take the whole app down. Use as `errorComponent` on routes
+ * that own meaningful UI; `ErrorPage` (above) remains the global default.
+ */
+export function RouteErrorFallback({ error, reset }: ErrorComponentProps) {
+  return (
+    <div
+      role="alert"
+      className="my-6 flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
+    >
+      <div className="flex items-center gap-2 font-medium text-destructive">
+        <AlertTriangle className="size-4" />
+        Something went wrong loading this section.
+      </div>
+      {error.message ? (
+        <pre className="max-w-full overflow-x-auto rounded-sm bg-background/60 px-2 py-1 text-xs text-muted-foreground">
+          {error.message}
+        </pre>
+      ) : null}
+      <Button size="sm" variant="outline" onClick={reset}>
+        <RefreshCw className="size-3.5" />
+        Try again
+      </Button>
+    </div>
+  );
+}
