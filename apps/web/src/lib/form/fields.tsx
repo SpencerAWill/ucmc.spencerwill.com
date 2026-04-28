@@ -9,8 +9,13 @@ import { useEffect, useRef } from "react";
 import PhoneInputBase from "react-phone-number-input/input";
 
 import { Button } from "#/components/ui/button";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "#/components/ui/field";
 import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
 import * as ShadcnSelect from "#/components/ui/select";
 import { Slider as ShadcnSlider } from "#/components/ui/slider";
 import { Switch as ShadcnSwitch } from "#/components/ui/switch";
@@ -20,6 +25,23 @@ import { fieldValidationAttrs } from "#/lib/form/field-state";
 
 // Matches the `@keyframes form-autofill-detect` rule in `styles.css`.
 const AUTOFILL_ANIMATION_NAME = "form-autofill-detect";
+
+// TanStack Form aggregates errors as `Array<string | { message: string }>`
+// (string when a plain message is thrown, object when zod issues are
+// surfaced). shadcn's `FieldError` expects `Array<{ message?: string }>`,
+// so normalize before handing it the array.
+function toFieldErrors(
+  errors: Array<string | { message: string } | undefined>,
+): Array<{ message: string }> {
+  return errors
+    .map((e) => {
+      if (!e) {
+        return undefined;
+      }
+      return typeof e === "string" ? { message: e } : e;
+    })
+    .filter((e): e is { message: string } => Boolean(e?.message));
+}
 
 export function SubscribeButton({ label }: { label: string }) {
   const form = useFormContext();
@@ -50,36 +72,6 @@ export function SubscribeButton({ label }: { label: string }) {
 }
 
 /**
- * Renders per-field validation errors under an input. Exported so
- * domain-specific fields (e.g. MNumberField) can render the same
- * error presentation without duplicating the list markup.
- *
- * Deduplicates by message — tanstack-form aggregates errors across
- * every configured trigger (onChange, onBlur, onSubmit), so the same
- * zod message often appears two or three times in `meta.errors`. We
- * care about unique messages, not how many triggers fired them.
- */
-export function FieldErrors({
-  errors,
-}: {
-  errors: Array<string | { message: string }>;
-}) {
-  const messages = Array.from(
-    new Set(errors.map((e) => (typeof e === "string" ? e : e.message))),
-  );
-  if (messages.length === 0) {
-    return null;
-  }
-  return (
-    <ul className="space-y-0.5 text-xs text-destructive">
-      {messages.map((message) => (
-        <li key={message}>{message}</li>
-      ))}
-    </ul>
-  );
-}
-
-/**
  * General-purpose single-line text input bound to a TanStack Form
  * field. If you need an addon, a prefix, numeric-only input, or
  * custom display↔value mapping, build a dedicated field component
@@ -88,6 +80,7 @@ export function FieldErrors({
  */
 export function TextField({
   label,
+  description,
   placeholder,
   type = "text",
   autoComplete,
@@ -96,6 +89,7 @@ export function TextField({
   readOnly,
 }: {
   label: string;
+  description?: string;
   placeholder?: string;
   type?: "text" | "email" | "tel" | "url" | "password";
   autoComplete?: string;
@@ -138,10 +132,8 @@ export function TextField({
   }, [field]);
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={field.name} className="text-sm font-medium">
-        {label}
-      </Label>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       <Input
         ref={inputRef}
         id={field.name}
@@ -157,18 +149,23 @@ export function TextField({
         onChange={(e) => field.handleChange(e.target.value)}
         {...validation}
       />
-      {meta.isTouched ? <FieldErrors errors={meta.errors} /> : null}
-    </div>
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+      {meta.isTouched ? (
+        <FieldError errors={toFieldErrors(meta.errors)} />
+      ) : null}
+    </Field>
   );
 }
 
 export function TextArea({
   label,
+  description,
   rows = 3,
   maxLength,
   placeholder,
 }: {
   label: string;
+  description?: string;
   rows?: number;
   maxLength?: number;
   placeholder?: string;
@@ -178,10 +175,8 @@ export function TextArea({
   const validation = fieldValidationAttrs(meta, value);
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={field.name} className="text-sm font-medium">
-        {label}
-      </Label>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       <ShadcnTextarea
         id={field.name}
         name={field.name}
@@ -193,8 +188,11 @@ export function TextArea({
         onChange={(e) => field.handleChange(e.target.value)}
         {...validation}
       />
-      {meta.isTouched ? <FieldErrors errors={meta.errors} /> : null}
-    </div>
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+      {meta.isTouched ? (
+        <FieldError errors={toFieldErrors(meta.errors)} />
+      ) : null}
+    </Field>
   );
 }
 
@@ -209,10 +207,12 @@ export function TextArea({
  */
 export function Select({
   label,
+  description,
   values,
   placeholder,
 }: {
   label: string;
+  description?: string;
   values: Array<{ label: string; value: string }>;
   placeholder?: string;
 }) {
@@ -221,10 +221,8 @@ export function Select({
   const validation = fieldValidationAttrs(meta, value);
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={field.name} className="text-sm font-medium">
-        {label}
-      </Label>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       {/* Always pass the raw string as `value` so Radix stays controlled
           for the component's lifetime. An empty string won't match any
           SelectItem, so the placeholder still renders. */}
@@ -251,8 +249,11 @@ export function Select({
           ))}
         </ShadcnSelect.SelectContent>
       </ShadcnSelect.Select>
-      {meta.isTouched ? <FieldErrors errors={meta.errors} /> : null}
-    </div>
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+      {meta.isTouched ? (
+        <FieldError errors={toFieldErrors(meta.errors)} />
+      ) : null}
+    </Field>
   );
 }
 
@@ -269,11 +270,13 @@ export function Select({
  */
 export function PhoneField({
   label,
+  description,
   country = "US",
   autoComplete = "tel",
   placeholder,
 }: {
   label: string;
+  description?: string;
   country?: "US";
   autoComplete?: string;
   placeholder?: string;
@@ -283,10 +286,8 @@ export function PhoneField({
   const validation = fieldValidationAttrs(meta, value);
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={field.name} className="text-sm font-medium">
-        {label}
-      </Label>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       <PhoneInputBase
         id={field.name}
         name={field.name}
@@ -299,48 +300,65 @@ export function PhoneField({
         inputComponent={Input}
         {...validation}
       />
-      {meta.isTouched ? <FieldErrors errors={meta.errors} /> : null}
-    </div>
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+      {meta.isTouched ? (
+        <FieldError errors={toFieldErrors(meta.errors)} />
+      ) : null}
+    </Field>
   );
 }
 
-export function Slider({ label }: { label: string }) {
+export function Slider({
+  label,
+  description,
+}: {
+  label: string;
+  description?: string;
+}) {
   const field = useFieldContext<number>();
   const { meta } = field.state;
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={field.name} className="text-sm font-medium">
-        {label}
-      </Label>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       <ShadcnSlider
         id={field.name}
         onBlur={field.handleBlur}
         value={[field.state.value]}
         onValueChange={(v) => field.handleChange(v[0])}
       />
-      {meta.isTouched ? <FieldErrors errors={meta.errors} /> : null}
-    </div>
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+      {meta.isTouched ? (
+        <FieldError errors={toFieldErrors(meta.errors)} />
+      ) : null}
+    </Field>
   );
 }
 
-export function Switch({ label }: { label: string }) {
+export function Switch({
+  label,
+  description,
+}: {
+  label: string;
+  description?: string;
+}) {
   const field = useFieldContext<boolean>();
   const { meta } = field.state;
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        <ShadcnSwitch
-          id={field.name}
-          name={field.name}
-          onBlur={field.handleBlur}
-          checked={field.state.value}
-          onCheckedChange={(checked) => field.handleChange(checked)}
-        />
-        <Label htmlFor={field.name}>{label}</Label>
-      </div>
-      {meta.isTouched ? <FieldErrors errors={meta.errors} /> : null}
-    </div>
+    <Field orientation="horizontal" className="gap-2">
+      <ShadcnSwitch
+        id={field.name}
+        name={field.name}
+        onBlur={field.handleBlur}
+        checked={field.state.value}
+        onCheckedChange={(checked) => field.handleChange(checked)}
+      />
+      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+      {meta.isTouched ? (
+        <FieldError errors={toFieldErrors(meta.errors)} />
+      ) : null}
+    </Field>
   );
 }

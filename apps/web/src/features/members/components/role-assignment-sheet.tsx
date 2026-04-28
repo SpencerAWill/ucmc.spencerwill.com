@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#/components/ui/dialog";
+import { Spinner } from "#/components/ui/spinner";
 import {
   rolesQueryOptions,
   userRolesQueryOptions,
@@ -119,7 +120,10 @@ export function RoleAssignmentSheet({
           </DialogHeader>
           <div className="space-y-2">
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner />
+                <span>Loading…</span>
+              </div>
             ) : (
               assignableRoles.map((role) => {
                 const isMember = role.id === "role_member";

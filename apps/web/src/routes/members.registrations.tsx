@@ -1,14 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import {
-  CalendarIcon,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Undo2,
-  X,
-} from "lucide-react";
+import { CalendarIcon, Check, Undo2, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { DateRange } from "react-day-picker";
 import { z } from "zod";
@@ -16,18 +9,13 @@ import { z } from "zod";
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
 import { Checkbox } from "#/components/ui/checkbox";
+import { DataPagination } from "#/components/data-pagination";
+import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "#/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "#/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
@@ -283,10 +271,14 @@ function PendingView({ canManage }: { canManage: boolean }) {
           Loading…
         </div>
       ) : registrations.length === 0 ? (
-        <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No pending registrations
-          {dateRange?.from ? " in the selected date range" : ""}.
-        </div>
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>
+              No pending registrations
+              {dateRange?.from ? " in the selected date range" : ""}.
+            </EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <>
           {/* Toolbar: select-all + bulk actions */}
@@ -348,49 +340,15 @@ function PendingView({ canManage }: { canManage: boolean }) {
             ))}
           </ul>
 
-          {/* Pagination + rows per page */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground">
-                Page {page} of {totalPages}
-                <span className="ml-1 hidden sm:inline">({total} total)</span>
-              </span>
-              <Select value={limitStr} onValueChange={setLimit}>
-                <SelectTrigger className="h-8 w-[7rem] text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LIMIT_OPTIONS.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n} / page
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                <ChevronLeft className="size-4" />
-                <span className="sr-only">Previous page</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                <ChevronRight className="size-4" />
-                <span className="sr-only">Next page</span>
-              </Button>
-            </div>
-          </div>
+          <DataPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            perPage={perPage}
+            perPageOptions={LIMIT_OPTIONS}
+            onPageChange={setPage}
+            onPerPageChange={setLimit}
+          />
         </>
       )}
     </div>
@@ -621,9 +579,11 @@ function RejectedView() {
           Loading...
         </div>
       ) : members.length === 0 ? (
-        <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No rejected registrations.
-        </div>
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>No rejected registrations.</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <>
           {/* Toolbar */}
@@ -670,49 +630,15 @@ function RejectedView() {
             ))}
           </ul>
 
-          {/* Pagination */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground">
-                Page {page} of {totalPages}
-                <span className="ml-1 hidden sm:inline">({total} total)</span>
-              </span>
-              <Select value={limitStr} onValueChange={setLimit}>
-                <SelectTrigger className="h-8 w-[7rem] text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LIMIT_OPTIONS.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n} / page
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                <ChevronLeft className="size-4" />
-                <span className="sr-only">Previous page</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                <ChevronRight className="size-4" />
-                <span className="sr-only">Next page</span>
-              </Button>
-            </div>
-          </div>
+          <DataPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            perPage={perPage}
+            perPageOptions={LIMIT_OPTIONS}
+            onPageChange={setPage}
+            onPerPageChange={setLimit}
+          />
         </>
       )}
     </div>

@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Alert, AlertDescription } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { usePasskeyAuthenticate } from "#/features/auth/api/use-passkey-authenticate";
 
@@ -82,9 +83,9 @@ export function SignInWithPasskeyButton() {
         {mutation.isPending ? "Waiting for device…" : "Sign in with a passkey"}
       </Button>
       {errorMessage ? (
-        <p role="alert" className="text-sm text-destructive">
-          {errorMessage}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
       ) : null}
     </div>
   );

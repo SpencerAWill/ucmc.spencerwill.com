@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
 import { Button } from "#/components/ui/button";
+import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { requirePermission } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
 import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
@@ -97,9 +98,11 @@ function AnnouncementsPage() {
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : announcements.length === 0 ? (
-        <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No announcements yet.
-        </p>
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>No announcements yet.</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <ul className="space-y-3">
           {announcements.map((a) => (

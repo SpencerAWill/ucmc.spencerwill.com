@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { Alert, AlertDescription } from "#/components/ui/alert";
 import { MagicLinkForm } from "#/features/auth/components/magic-link-form";
 import { SignInWithPasskeyButton } from "#/features/auth/components/sign-in-with-passkey-button";
 
@@ -40,21 +41,19 @@ function SignInPage() {
         <p className="text-sm text-muted-foreground">{subheading}</p>
       </header>
       {invalid ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          That link was invalid, expired, or already used. Request a new one
-          below.
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            That link was invalid, expired, or already used. Request a new one
+            below.
+          </AlertDescription>
+        </Alert>
       ) : null}
       {rate_limited ? (
-        <div
-          role="alert"
-          className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
-        >
-          Too many requests. Wait a minute and try again.
-        </div>
+        <Alert variant="warning">
+          <AlertDescription>
+            Too many requests. Wait a minute and try again.
+          </AlertDescription>
+        </Alert>
       ) : null}
       <MagicLinkForm defaultMode={mode} />
       {/* Passkey users skip the email round-trip. The button hides itself

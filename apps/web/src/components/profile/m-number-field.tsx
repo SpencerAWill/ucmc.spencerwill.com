@@ -16,15 +16,14 @@
  * via `useFieldContext` and does not need to be registered with
  * `useAppForm`.
  */
+import { Field, FieldError, FieldLabel } from "#/components/ui/field";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from "#/components/ui/input-group";
-import { Label } from "#/components/ui/label";
 import { useFieldContext } from "#/lib/form/context";
 import { fieldValidationAttrs } from "#/lib/form/field-state";
-import { FieldErrors } from "#/lib/form/fields";
 
 const M_NUMBER_DIGITS = 8;
 
@@ -51,11 +50,13 @@ export function MNumberField({
     field.handleChange(sanitized.length > 0 ? `M${sanitized}` : "");
   };
 
+  const errorObjects = meta.errors
+    .map((e) => (typeof e === "string" ? { message: e } : e))
+    .filter((e): e is { message: string } => Boolean(e?.message));
+
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={field.name} className="text-sm font-medium">
-        {label}
-      </Label>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       <InputGroup>
         <InputGroupAddon align="inline-start">M</InputGroupAddon>
         <InputGroupInput
@@ -76,7 +77,7 @@ export function MNumberField({
           {...validation}
         />
       </InputGroup>
-      {meta.isTouched ? <FieldErrors errors={meta.errors} /> : null}
-    </div>
+      {meta.isTouched ? <FieldError errors={errorObjects} /> : null}
+    </Field>
   );
 }
