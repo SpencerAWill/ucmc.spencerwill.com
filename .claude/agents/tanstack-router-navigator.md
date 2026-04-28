@@ -16,6 +16,8 @@ You are the TanStack Start + TanStack Router navigator for `apps/web`. Your job 
   - Plain filenames like `about.tsx` become path segments.
 - SSR is on (TanStack Start), integrated with TanStack Query via `@tanstack/react-start-ssr-query`. Loaders run on server first, then hydrate.
 - Path alias: `#/*` → `./src/*` (both tsconfig and `package.json` `imports`).
+- Route guards live in `src/features/auth/guards.ts`: `requireAuth` (signed-in session), `requireApproved` (approved + has profile), `requirePermission` (approved + holds a named permission), `requireRegistrationContext` (proof cookie OR session-without-profile, used by `/register/profile`). Routes import them and call from `beforeLoad` — `await requireApproved(context.queryClient)` etc. The guards throw `redirect(...)` so don't try-catch them; let them propagate.
+- Route-level error boundaries are wired via `errorComponent: RouteErrorFallback` (from `src/components/error-page.tsx`) on `__root.tsx`, `account.tsx`, and `members.$publicId.tsx`. The router's global `defaultErrorComponent: ErrorPage` is the unscoped backstop.
 
 ## What to do when invoked
 
