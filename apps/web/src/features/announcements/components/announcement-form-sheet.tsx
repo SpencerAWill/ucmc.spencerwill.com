@@ -13,16 +13,16 @@ import { useAppForm } from "#/lib/form/form";
 import {
   ANNOUNCEMENT_LIMITS,
   announcementInputSchema,
-} from "#/server/announcements/limits";
-import type { AnnouncementInput } from "#/server/announcements/limits";
+} from "#/features/announcements/server/limits";
+import type { AnnouncementInput } from "#/features/announcements/server/limits";
 import {
   createAnnouncementFn,
   updateAnnouncementFn,
-} from "#/server/announcements/announcements-fns";
-import type { AnnouncementSummary } from "#/server/announcements/announcements-fns";
+} from "#/features/announcements/server/announcements-fns";
+import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
 
-import { ANNOUNCEMENTS_LIST_QUERY_KEY } from "#/components/announcements/announcements-query-keys";
-import { ANNOUNCEMENTS_UNREAD_QUERY_KEY } from "#/components/announcements/announcements-bell";
+import { ANNOUNCEMENTS_LIST_QUERY_KEY } from "#/features/announcements/api/query-keys";
+import { ANNOUNCEMENTS_UNREAD_QUERY_KEY } from "#/features/announcements/components/announcements-bell";
 
 export type AnnouncementFormMode =
   | { mode: "create" }

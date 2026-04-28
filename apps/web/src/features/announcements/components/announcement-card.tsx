@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
-import type { AnnouncementSummary } from "#/server/announcements/announcements-fns";
+import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
 
 const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 

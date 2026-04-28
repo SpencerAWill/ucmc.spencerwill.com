@@ -4,11 +4,11 @@ import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { AnnouncementCard } from "#/components/announcements/announcement-card";
-import { AnnouncementFormSheet } from "#/components/announcements/announcement-form-sheet";
-import type { AnnouncementFormMode } from "#/components/announcements/announcement-form-sheet";
-import { ANNOUNCEMENTS_UNREAD_QUERY_KEY } from "#/components/announcements/announcements-bell";
-import { ANNOUNCEMENTS_LIST_QUERY_KEY } from "#/components/announcements/announcements-query-keys";
+import { AnnouncementCard } from "#/features/announcements/components/announcement-card";
+import { AnnouncementFormSheet } from "#/features/announcements/components/announcement-form-sheet";
+import type { AnnouncementFormMode } from "#/features/announcements/components/announcement-form-sheet";
+import { ANNOUNCEMENTS_UNREAD_QUERY_KEY } from "#/features/announcements/components/announcements-bell";
+import { ANNOUNCEMENTS_LIST_QUERY_KEY } from "#/features/announcements/api/query-keys";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,8 +26,8 @@ import {
   deleteAnnouncementFn,
   listAnnouncementsFn,
   markAnnouncementsReadFn,
-} from "#/server/announcements/announcements-fns";
-import type { AnnouncementSummary } from "#/server/announcements/announcements-fns";
+} from "#/features/announcements/server/announcements-fns";
+import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
 
 export const Route = createFileRoute("/announcements/")({
   beforeLoad: async ({ context }) => {

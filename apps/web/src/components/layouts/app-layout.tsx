@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Eye, Shield, UserPlus, Users } from "lucide-react";
 
-import { AnnouncementsBell } from "#/components/announcements/announcements-bell";
+import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
 import { UserMenu } from "#/components/auth/user-menu";
 import { ModeToggle } from "#/components/mode-toggle";
 import {

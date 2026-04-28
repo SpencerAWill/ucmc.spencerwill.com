@@ -29,7 +29,8 @@ const {
   listAnnouncementsAction,
   markAnnouncementsReadAction,
   updateAnnouncementAction,
-} = await import("#/server/announcements/announcements-actions.server");
+} =
+  await import("#/features/announcements/server/announcements-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────

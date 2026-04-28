@@ -12,7 +12,7 @@ import {
   listAnnouncements,
   markAllRead,
   updateAnnouncement,
-} from "#/server/announcements/repo.server";
+} from "#/features/announcements/server/repo.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 
