@@ -76,6 +76,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
     "drizzle-kit": "^0.31.10",
+    "eslint-plugin-check-file": "^3.3.1",
     "jsdom": "^29.0.2",
     "storybook": "^10.2.15",
     "tsx": "^4.21.0",

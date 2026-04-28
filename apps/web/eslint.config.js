@@ -2,6 +2,7 @@
 
 import rootConfig from "../../eslint.config.js";
 import { tanstackConfig } from "@tanstack/eslint-config";
+import checkFile from "eslint-plugin-check-file";
 
 export default [
   ...rootConfig,
@@ -25,6 +26,35 @@ export default [
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/require-await": "off",
       "pnpm/json-enforce-catalog": "off",
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    // Routes use TanStack Router's special filename syntax (`__root`,
+    // `$param`, dot separators, trailing underscores), and `routeTree.gen.ts`
+    // is generated. Both are exempt from kebab-case enforcement.
+    ignores: ["src/routes/**", "src/routeTree.gen.ts"],
+    plugins: { "check-file": checkFile },
+    rules: {
+      "check-file/filename-naming-convention": [
+        "error",
+        { "**/*.{ts,tsx}": "KEBAB_CASE" },
+        { ignoreMiddleExtensions: true },
+      ],
+    },
+  },
+  {
+    // Folder rule is separate so we can additionally exempt `__tests__/`
+    // (the standard Vitest/Jest convention) without disabling the filename
+    // rule for test files.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/routes/**", "src/routeTree.gen.ts", "**/__tests__/**"],
+    plugins: { "check-file": checkFile },
+    rules: {
+      "check-file/folder-naming-convention": [
+        "error",
+        { "src/**/": "KEBAB_CASE" },
+      ],
     },
   },
   {
