@@ -18,6 +18,15 @@ export default defineConfig({
   resolve: {
     alias: {
       "#": path.join(import.meta.dirname, "src"),
+      // The `cloudflare:workers` synthetic module is only resolvable in the
+      // workerd runtime. Some component tests transitively import server-fn
+      // shells whose tree references it; stub it here so jsdom resolution
+      // doesn't fail. `vite.config.ts` does the equivalent for the client
+      // bundle in production.
+      "cloudflare:workers": path.join(
+        import.meta.dirname,
+        "test/cloudflare-workers-stub.ts",
+      ),
     },
   },
 });
