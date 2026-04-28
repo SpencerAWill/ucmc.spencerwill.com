@@ -19,6 +19,7 @@ services:
       - gh-config:/home/vscode/.config/gh
       - claude-data:/home/vscode/.claude
       - command-history:/commandhistory
+      - playwright-browsers:/home/vscode/.cache/ms-playwright
     command: sleep infinity
     depends_on:
       - mailpit
@@ -52,4 +53,5 @@ volumes:
   gh-config:
   claude-data:
   command-history:
+  playwright-browsers:
   mailpit-data:

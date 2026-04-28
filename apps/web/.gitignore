@@ -8,3 +8,8 @@ todos.json
 .env
 .env.*
 !.env.example
+
+# Playwright e2e
+test-results/
+playwright-report/
+playwright/.cache/
