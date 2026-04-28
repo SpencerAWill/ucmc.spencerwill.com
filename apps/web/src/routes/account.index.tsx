@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
+import { AvatarEditor } from "#/components/account/avatar-editor";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/auth/profile-form-shape";
 import type { ProfileFormShape } from "#/components/auth/profile-form-shape";
 import { PublicProfileFields } from "#/components/auth/public-profile-fields";
@@ -29,7 +30,8 @@ export const Route = createFileRoute("/account/")({
 export const ACCOUNT_PROFILE_QUERY_KEY = ["account", "profile"] as const;
 
 function AccountProfilePage() {
-  const { principal } = useAuth();
+  const { principal, refresh } = useAuth();
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ACCOUNT_PROFILE_QUERY_KEY,
     queryFn: () => getProfileFn(),
@@ -40,6 +42,9 @@ function AccountProfilePage() {
     return null;
   }
 
+  const avatarKey = data?.profile?.avatarKey ?? null;
+  const preferredName = data?.profile?.preferredName ?? "";
+
   return (
     <div className="space-y-4">
       <header>
@@ -48,6 +53,18 @@ function AccountProfilePage() {
           What other UCMC members see about you. Changes save immediately.
         </p>
       </header>
+      <AvatarEditor
+        avatarKey={avatarKey}
+        name={preferredName || principal.email}
+        onChanged={async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: ACCOUNT_PROFILE_QUERY_KEY,
+            }),
+            refresh(),
+          ]);
+        }}
+      />
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (

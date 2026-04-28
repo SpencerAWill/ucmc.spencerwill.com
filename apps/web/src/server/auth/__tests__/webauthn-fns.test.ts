@@ -111,6 +111,7 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
     email: "member@example.com",
     status: "approved",
     hasProfile: true,
+    avatarKey: null,
     roles: [],
     permissions: [],
     rolePermissionMap: {},

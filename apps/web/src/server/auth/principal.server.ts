@@ -14,6 +14,7 @@ export interface Principal {
   email: string;
   status: schema.UserStatus;
   hasProfile: boolean;
+  avatarKey: string | null;
   roles: string[];
   permissions: string[];
   /** Per-role permission breakdown so the view-mode emulator can show
@@ -33,7 +34,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
 
   const profile = await db.query.profiles.findFirst({
     where: eq(schema.profiles.userId, userId),
-    columns: { userId: true },
+    columns: { userId: true, avatarKey: true },
   });
 
   const userRoleRows = await db
@@ -103,6 +104,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     email: user.email,
     status: user.status,
     hasProfile: Boolean(profile),
+    avatarKey: profile?.avatarKey ?? null,
     roles: userRoleRows.map((r) => r.name),
     permissions,
     rolePermissionMap,

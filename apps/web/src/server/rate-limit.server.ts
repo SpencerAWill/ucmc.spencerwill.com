@@ -73,3 +73,19 @@ export async function checkAuthRateLimitByEmail(
     return true;
   }
 }
+
+/**
+ * Gate an avatar upload by user. Keyed by the signed-in user's id so
+ * one account can't burn R2 PUTs by replaying the form. Fails open on
+ * binding error.
+ */
+export async function checkUploadRateLimit(userId: string): Promise<boolean> {
+  try {
+    const { success } = await env.UPLOAD_RATE_LIMITER.limit({
+      key: `user:${userId}`,
+    });
+    return success;
+  } catch {
+    return true;
+  }
+}

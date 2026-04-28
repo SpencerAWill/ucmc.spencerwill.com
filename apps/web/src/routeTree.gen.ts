@@ -27,6 +27,7 @@ import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
 import { Route as AccountDetailsRouteImport } from './routes/account.details'
 import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
+import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
@@ -118,6 +119,11 @@ const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
   path: '/roles/$roleId',
   getParentRoute: () => MembersRoute,
 } as any)
+const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
+  id: '/api/avatars/$',
+  path: '/api/avatars/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
   '/members/': typeof MembersIndexRoute
+  '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRoutesByTo {
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/register/profile': typeof RegisterProfileRoute
   '/account': typeof AccountIndexRoute
   '/members': typeof MembersIndexRoute
+  '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRoutesById {
@@ -176,6 +184,7 @@ export interface FileRoutesById {
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
   '/members/': typeof MembersIndexRoute
+  '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRouteTypes {
@@ -198,6 +207,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/account/'
     | '/members/'
+    | '/api/avatars/$'
     | '/members/roles/$roleId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -216,6 +226,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/account'
     | '/members'
+    | '/api/avatars/$'
     | '/members/roles/$roleId'
   id:
     | '__root__'
@@ -236,6 +247,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/account/'
     | '/members/'
+    | '/api/avatars/$'
     | '/members/roles_/$roleId'
   fileRoutesById: FileRoutesById
 }
@@ -249,6 +261,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
   RegisterProfileRoute: typeof RegisterProfileRoute
+  ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -379,6 +392,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersRolesRoleIdRouteImport
       parentRoute: typeof MembersRoute
     }
+    '/api/avatars/$': {
+      id: '/api/avatars/$'
+      path: '/api/avatars/$'
+      fullPath: '/api/avatars/$'
+      preLoaderRoute: typeof ApiAvatarsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -428,6 +448,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   RegisterPendingRoute: RegisterPendingRoute,
   RegisterProfileRoute: RegisterProfileRoute,
+  ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

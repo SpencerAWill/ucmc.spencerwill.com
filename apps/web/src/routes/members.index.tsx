@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import { RoleAssignmentSheet } from "#/components/auth/role-assignment-sheet";
 import { StatusBadge } from "#/components/auth/status-badge";
-import { Avatar, AvatarFallback } from "#/components/ui/avatar";
+import { UserAvatar } from "#/components/auth/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Checkbox } from "#/components/ui/checkbox";
@@ -92,13 +92,6 @@ export const Route = createFileRoute("/members/")({
   },
   component: MembersIndexPage,
 });
-
-function initialsFor(name: string): string {
-  const parts = name.split(/\s+/).filter(Boolean);
-  return (
-    (parts[0]?.[0] ?? "").toUpperCase() + (parts[1]?.[0] ?? "").toUpperCase()
-  );
-}
 
 function MembersIndexPage() {
   const {
@@ -566,11 +559,12 @@ function MemberRow({
         params={{ userId: member.userId }}
         className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-80"
       >
-        <Avatar className="size-9 shrink-0">
-          <AvatarFallback>
-            {name ? initialsFor(name) : <UserIcon className="size-4" />}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar
+          avatarKey={member.avatarKey}
+          name={name}
+          className="size-9 shrink-0"
+          fallback={name ? undefined : <UserIcon className="size-4" />}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
             {name ? (
@@ -646,11 +640,13 @@ function MemberCard({
     <Link to="/members/$userId" params={{ userId: member.userId }}>
       <Card className="transition-colors hover:bg-muted/50">
         <CardContent className="flex flex-col items-center gap-3 pt-6 text-center">
-          <Avatar className="size-12">
-            <AvatarFallback className="text-lg">
-              {name ? initialsFor(name) : <UserIcon className="size-5" />}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar
+            avatarKey={member.avatarKey}
+            name={name}
+            className="size-12"
+            fallbackClassName="text-lg"
+            fallback={name ? undefined : <UserIcon className="size-5" />}
+          />
           {name ? <p className="truncate text-sm font-medium">{name}</p> : null}
           <p className="truncate text-xs text-muted-foreground">
             {member.email}

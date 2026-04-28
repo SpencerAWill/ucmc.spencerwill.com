@@ -17,6 +17,8 @@
  *   - submitProfileFn     — create/update profile, upsert user row
  *   - submitPublicProfileFn — partial update of public profile fields
  *   - submitDetailsFn     — partial update of private detail fields
+ *   - uploadAvatarFn      — store a new avatar image in R2 + DB
+ *   - removeAvatarFn      — clear the caller's avatar
  *
  * Shared types (ConsumeMagicLinkResult, ProfileInput) are declared here
  * so actions and clients can both reference them without pulling any
@@ -286,3 +288,44 @@ export const submitDetailsFn = createServerFn({ method: "POST" })
       await import("#/server/auth/magic-link-actions.server");
     return submitDetailsAction(data);
   });
+
+// ── avatar upload / remove ──────────────────────────────────────────────
+
+// `data:` URL for the cropped + compressed avatar. Length cap (~280 KB
+// of base64) leaves headroom over the 200 KB raw-byte ceiling enforced
+// inside the action.
+export const avatarUploadInputSchema = z.object({
+  dataUrl: z
+    .string()
+    .regex(/^data:image\/(?:webp|jpeg|png);base64,/, {
+      message: "Avatar must be a webp, jpeg, or png data URL",
+    })
+    .max(280_000),
+});
+
+export type AvatarUploadInput = z.infer<typeof avatarUploadInputSchema>;
+
+/**
+ * Upload (or replace) the caller's avatar. Stores a normalized image
+ * in R2 keyed by content hash, updates the profile row, and deletes
+ * the previous R2 object on replacement.
+ */
+export const uploadAvatarFn = createServerFn({ method: "POST" })
+  .inputValidator(avatarUploadInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true; avatarKey: string }> => {
+    const { uploadAvatarAction } =
+      await import("#/server/account/avatar-actions.server");
+    return uploadAvatarAction(data);
+  });
+
+/**
+ * Clear the caller's avatar. Nulls the `avatar_key` column and deletes
+ * the R2 object if one was set.
+ */
+export const removeAvatarFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<{ ok: true }> => {
+    const { removeAvatarAction } =
+      await import("#/server/account/avatar-actions.server");
+    return removeAvatarAction();
+  },
+);

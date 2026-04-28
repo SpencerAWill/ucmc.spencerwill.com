@@ -147,6 +147,7 @@ export interface MemberSummary {
   fullName: string | null;
   preferredName: string | null;
   ucAffiliation: string | null;
+  avatarKey: string | null;
   roles: string[];
   status: schema.UserStatus;
   // Private fields — null/empty when the caller lacks members:view_private.
@@ -231,6 +232,7 @@ export async function listMembersAction(opts: {
     fullName: schema.profiles.fullName,
     preferredName: schema.profiles.preferredName,
     ucAffiliation: schema.profiles.ucAffiliation,
+    avatarKey: schema.profiles.avatarKey,
     phone: schema.profiles.phone,
     mNumber: schema.profiles.mNumber,
   };
@@ -299,6 +301,7 @@ export async function listMembersAction(opts: {
     fullName: r.fullName,
     preferredName: r.preferredName,
     ucAffiliation: r.ucAffiliation,
+    avatarKey: r.avatarKey,
     roles: rolesByUser.get(r.userId) ?? [],
     status: r.status,
     phone: canViewPrivate ? r.phone : null,
@@ -334,6 +337,7 @@ export interface MemberDetail {
   fullName: string | null;
   preferredName: string | null;
   ucAffiliation: string | null;
+  avatarKey: string | null;
   roles: string[];
   // Private fields — null/empty when caller lacks members:view_private.
   phone: string | null;
@@ -362,6 +366,7 @@ export async function getMemberDetailAction(
       fullName: schema.profiles.fullName,
       preferredName: schema.profiles.preferredName,
       ucAffiliation: schema.profiles.ucAffiliation,
+      avatarKey: schema.profiles.avatarKey,
       phone: schema.profiles.phone,
       mNumber: schema.profiles.mNumber,
     })
@@ -413,6 +418,7 @@ export async function getMemberDetailAction(
     fullName: row.fullName,
     preferredName: row.preferredName,
     ucAffiliation: row.ucAffiliation,
+    avatarKey: row.avatarKey,
     roles: roleRows.map((r) => r.roleName),
     phone: canViewPrivate ? row.phone : null,
     emergencyContacts: contacts,

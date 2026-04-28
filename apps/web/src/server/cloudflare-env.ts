@@ -15,6 +15,7 @@ export interface WorkerEnv {
   KV: KVNamespace;
   HEALTH_RATE_LIMITER: RateLimit;
   AUTH_RATE_LIMITER: RateLimit;
+  UPLOAD_RATE_LIMITER: RateLimit;
 
   // Vars — injected at deploy time from Pulumi stack outputs for dev/prod,
   // supplied via .env.local locally. See .env.example for documentation.

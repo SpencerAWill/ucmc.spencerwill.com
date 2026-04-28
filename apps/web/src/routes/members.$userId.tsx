@@ -26,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
-import { Avatar, AvatarFallback } from "#/components/ui/avatar";
+import { UserAvatar } from "#/components/auth/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
@@ -98,11 +98,12 @@ function MemberDetailPage() {
 
       {/* Header */}
       <div className="flex items-start gap-4">
-        <Avatar className="size-16">
-          <AvatarFallback className="text-lg">
-            {initialsFor(name)}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar
+          avatarKey={member.avatarKey}
+          name={name}
+          className="size-16"
+          fallbackClassName="text-lg"
+        />
         <div className="min-w-0 flex-1 space-y-1">
           {name ? (
             <h1 className="truncate text-xl font-semibold">{name}</h1>
@@ -435,17 +436,4 @@ function RoleAssignButton({ member }: { member: MemberDetail }) {
       />
     </>
   );
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function initialsFor(name: string | null): string {
-  if (!name) {
-    return "?";
-  }
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) {
-    return parts[0][0].toUpperCase();
-  }
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }

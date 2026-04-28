@@ -103,6 +103,9 @@ importers:
       '@tanstack/router-plugin':
         specifier: ^1.167.26
         version: 1.167.26(@tanstack/react-router@1.168.25(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      browser-image-compression:
+        specifier: ^2.0.2
+        version: 2.0.2
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -130,6 +133,9 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.2.5(react@19.2.5)
+      react-image-crop:
+        specifier: ^11.0.10
+        version: 11.0.10(react@19.2.5)
       react-phone-number-input:
         specifier: ^3.4.16
         version: 3.4.16(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -3684,6 +3690,9 @@ packages:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
 
+  browser-image-compression@2.0.2:
+    resolution: {integrity: sha512-pBLlQyUf6yB8SmmngrcOw3EoS4RpQ1BcylI3T9Yqn7+4nrQTXJD4sJDe5ODnJdrvNMaio5OicFo75rDyJD2Ucw==}
+
   browserslist@4.28.2:
     resolution: {integrity: sha512-48xSriZYYg+8qXna9kwqjIVzuQxi+KYWp2+5nCYnYKPTr0LvD89Jqk2Or5ogxz0NUMfIjhh2lIUX/LyX9B4oIg==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
@@ -5228,6 +5237,11 @@ packages:
     peerDependencies:
       react: ^19.2.5
 
+  react-image-crop@11.0.10:
+    resolution: {integrity: sha512-+5FfDXUgYLLqBh1Y/uQhIycpHCbXkI50a+nbfkB1C0xXXUTwkisHDo2QCB1SQJyHCqIuia4FeyReqXuMDKWQTQ==}
+    peerDependencies:
+      react: '>=16.13.1'
+
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
 
@@ -5793,6 +5807,9 @@ packages:
   uuidv7@1.2.1:
     resolution: {integrity: sha512-4kPkK3/XTQW9Hbm4CaqfICn+kY9LJtDVEOfgsRRra/+n2Ofg4NqzRFceAkxvQ/Ud/6BpHOPzj8cirqM7TzTN5Q==}
     hasBin: true
+
+  uzip@0.20201231.0:
+    resolution: {integrity: sha512-OZeJfZP+R0z9D6TmBgLq2LHzSSptGMGDGigGiEe0pr8UBe/7fdflgHlHBNDASTXB5jnFuxHpNaJywSg8YFeGng==}
 
   validate-npm-package-license@3.0.4:
     resolution: {integrity: sha512-DpKm2Ui/xN7/HQKCtpZxoRWBhZ9Z0kqtygG8XCgNQ8ZlDnxuQmWhj566j8fN4Cu3/JmbhsDo7fcAJq4s9h27Ew==}
@@ -9509,6 +9526,10 @@ snapshots:
     dependencies:
       fill-range: 7.1.1
 
+  browser-image-compression@2.0.2:
+    dependencies:
+      uzip: 0.20201231.0
+
   browserslist@4.28.2:
     dependencies:
       baseline-browser-mapping: 2.10.22
@@ -11079,6 +11100,10 @@ snapshots:
       react: 19.2.5
       scheduler: 0.27.0
 
+  react-image-crop@11.0.10(react@19.2.5):
+    dependencies:
+      react: 19.2.5
+
   react-is@16.13.1: {}
 
   react-is@17.0.2: {}
@@ -11688,6 +11713,8 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   uuidv7@1.2.1: {}
+
+  uzip@0.20201231.0: {}
 
   validate-npm-package-license@3.0.4:
     dependencies:

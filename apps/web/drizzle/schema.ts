@@ -54,6 +54,7 @@ export const profiles = sqliteTable("profiles", {
   mNumber: text("m_number").notNull(),
   phone: text("phone").notNull(),
   ucAffiliation: text("uc_affiliation", { enum: ucAffiliation }).notNull(),
+  avatarKey: text("avatar_key"),
   updatedAt: timestamp("updated_at")
     .notNull()
     .default(sql`(unixepoch() * 1000)`),

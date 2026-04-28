@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Eye, KeyRound, LogOut, User as UserIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
+import { UserAvatar } from "#/components/auth/user-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,13 +20,6 @@ import {
 } from "#/components/ui/select";
 import { useAuth } from "#/lib/auth/use-auth";
 import { useViewMode } from "#/lib/auth/view-mode";
-
-function initialsFor(value: string): string {
-  const parts = value.split(/\s+|@/).filter(Boolean);
-  return (
-    (parts[0]?.[0] ?? "?").toUpperCase() + (parts[1]?.[0] ?? "").toUpperCase()
-  );
-}
 
 export function UserMenu() {
   const { principal, isLoading, isElevated, emulatedRole, signOut } = useAuth();
@@ -70,9 +64,7 @@ export function UserMenu() {
           aria-label="Account menu"
           className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Avatar>
-            <AvatarFallback>{initialsFor(display)}</AvatarFallback>
-          </Avatar>
+          <UserAvatar avatarKey={principal.avatarKey} name={display} />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
