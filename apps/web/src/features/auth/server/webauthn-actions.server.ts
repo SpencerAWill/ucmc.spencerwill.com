@@ -19,12 +19,12 @@ import {
   listCredentialsForUser,
   updateCredentialCounter,
 } from "#/features/auth/server/passkey-credentials.server";
-import { loadPrincipal } from "#/features/auth/server/principal.server";
+import { loadPrincipal } from "#/server/auth/principal.server";
 import {
   loadCurrentPrincipal,
   openSession,
   rotateSession,
-} from "#/features/auth/server/session.server";
+} from "#/server/auth/session.server";
 import {
   buildAuthenticationOptions,
   buildRegistrationOptions,

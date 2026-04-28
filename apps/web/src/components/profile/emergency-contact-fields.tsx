@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from "lucide-react";
 
-import { EMPTY_PROFILE_FORM_VALUES } from "#/features/auth/components/profile-form-shape";
+import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import { Button } from "#/components/ui/button";
 import {
   Card,
@@ -11,8 +11,8 @@ import {
 } from "#/components/ui/card";
 import { Label } from "#/components/ui/label";
 import { withForm } from "#/lib/form/form";
-import type { EmergencyContactInput } from "#/features/auth/server/server-fns";
-import { PROFILE_LIMITS } from "#/features/auth/server/server-fns";
+import type { EmergencyContactInput } from "#/server/profile/profile-schemas";
+import { PROFILE_LIMITS } from "#/server/profile/profile-schemas";
 
 const RELATIONSHIP_OPTIONS = [
   { label: "Parent", value: "parent" },

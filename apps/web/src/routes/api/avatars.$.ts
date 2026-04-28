@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/avatars/$")({
     handlers: {
       GET: async ({ params }: { params: { _splat?: string } }) => {
         const { loadCurrentPrincipal } =
-          await import("#/features/auth/server/session.server");
+          await import("#/server/auth/session.server");
         const { getAvatar } = await import("#/server/r2/avatars.server");
 
         const principal = await loadCurrentPrincipal();

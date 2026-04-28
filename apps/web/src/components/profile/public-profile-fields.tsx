@@ -1,11 +1,11 @@
-import { EMPTY_PROFILE_FORM_VALUES } from "#/features/auth/components/profile-form-shape";
+import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import { withForm } from "#/lib/form/form";
 import { cn } from "#/lib/utils";
 import {
   BIO_LIMITS,
   countWords,
   PROFILE_LIMITS,
-} from "#/features/auth/server/server-fns";
+} from "#/server/profile/profile-schemas";
 
 const AFFILIATION_OPTIONS = [
   { label: "Student", value: "student" },

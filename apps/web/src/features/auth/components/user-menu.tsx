@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Eye, KeyRound, LogOut, User as UserIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
-import { UserAvatar } from "#/features/auth/components/user-avatar";
+import { UserAvatar } from "#/components/user-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,

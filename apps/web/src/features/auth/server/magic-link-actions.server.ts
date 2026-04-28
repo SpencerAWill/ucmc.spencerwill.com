@@ -11,30 +11,30 @@
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
-import { generateUserPublicId } from "#/features/auth/server/ids";
+import { generateUserPublicId } from "#/server/auth/ids";
 import {
   consumeMagicLink,
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
-import type { Principal } from "#/features/auth/server/principal.server";
+import type { Principal } from "#/server/auth/principal.server";
 import {
   clearProofCookie,
   readProofCookie,
   writeProofCookie,
-} from "#/features/auth/server/proof-cookie.server";
-import type { EmailProof } from "#/features/auth/server/proof-cookie.server";
+} from "#/server/auth/proof-cookie.server";
+import type { EmailProof } from "#/server/auth/proof-cookie.server";
 import {
   closeSession,
   loadCurrentPrincipal,
   openSession,
   rotateSession,
-} from "#/features/auth/server/session.server";
+} from "#/server/auth/session.server";
+import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
 import type {
-  ConsumeMagicLinkResult,
   DetailsInput,
   ProfileInput,
   PublicProfileInput,
-} from "#/features/auth/server/server-fns";
+} from "#/server/profile/profile-schemas";
 import { getDb, schema } from "#/server/db";
 import {
   checkAuthRateLimitByEmail,
@@ -155,7 +155,7 @@ export async function getSessionAction(): Promise<{
   anonymousPermissions: string[];
 }> {
   const { loadAnonymousPermissions } =
-    await import("#/features/auth/server/principal.server");
+    await import("#/server/auth/principal.server");
   const [principal, anonymousPermissions] = await Promise.all([
     loadCurrentPrincipal(),
     loadAnonymousPermissions(),

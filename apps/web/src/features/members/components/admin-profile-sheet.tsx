@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { EmergencyContactFields } from "#/features/auth/components/emergency-contact-fields";
-import { MNumberField } from "#/features/auth/components/m-number-field";
+import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
+import { MNumberField } from "#/components/profile/m-number-field";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import {
@@ -19,13 +19,13 @@ import {
   useUnsavedChangesGuard,
 } from "#/lib/form/use-unsaved-changes-guard";
 import { cn } from "#/lib/utils";
-import type { EmergencyContactInput } from "#/features/auth/server/server-fns";
+import type { EmergencyContactInput } from "#/server/profile/profile-schemas";
 import {
   BIO_LIMITS,
   countWords,
   PROFILE_LIMITS,
   profileInputSchema,
-} from "#/features/auth/server/server-fns";
+} from "#/server/profile/profile-schemas";
 import { adminUpdateProfileFn } from "#/features/members/server/member-fns";
 
 type ProfileInput = z.infer<typeof profileInputSchema>;

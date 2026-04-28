@@ -8,8 +8,8 @@
 import { and, asc, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
-import { loadCurrentPrincipal } from "#/features/auth/server/session.server";
-import type { Principal } from "#/features/auth/server/principal.server";
+import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
 
 // ── auth helpers ────────────────────────────────────────────────────────

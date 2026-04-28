@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
 import { StatusBadge } from "#/features/members/components/status-badge";
-import { UserAvatar } from "#/features/auth/components/user-avatar";
+import { UserAvatar } from "#/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Checkbox } from "#/components/ui/checkbox";

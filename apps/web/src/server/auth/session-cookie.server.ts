@@ -8,7 +8,7 @@ import {
   setCookie,
 } from "@tanstack/react-start/server";
 
-import { SESSION_TTL_MS } from "#/features/auth/server/session-config";
+import { SESSION_TTL_MS } from "#/server/auth/session-config";
 import { env } from "#/server/cloudflare-env";
 
 // Browsers silently reject Secure cookies over http://, so in local dev

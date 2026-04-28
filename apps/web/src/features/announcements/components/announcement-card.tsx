@@ -1,6 +1,6 @@
 import { MoreVertical, Pencil, Trash2 } from "lucide-react";
 
-import { UserAvatar } from "#/features/auth/components/user-avatar";
+import { UserAvatar } from "#/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import {

@@ -1,4 +1,4 @@
-import type { EmergencyContactInput } from "#/features/auth/server/server-fns";
+import type { EmergencyContactInput } from "#/server/profile/profile-schemas";
 
 /**
  * Shape of every profile-editing form in the app: registration, the

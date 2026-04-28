@@ -1,7 +1,7 @@
-import { MNumberField } from "#/features/auth/components/m-number-field";
-import { EMPTY_PROFILE_FORM_VALUES } from "#/features/auth/components/profile-form-shape";
+import { MNumberField } from "#/components/profile/m-number-field";
+import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import { withForm } from "#/lib/form/form";
-import { PROFILE_LIMITS } from "#/features/auth/server/server-fns";
+import { PROFILE_LIMITS } from "#/server/profile/profile-schemas";
 
 /**
  * Private/PII profile fields: legal name, M-number, phone. These are

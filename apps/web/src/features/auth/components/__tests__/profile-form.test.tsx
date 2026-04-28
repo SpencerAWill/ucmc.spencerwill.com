@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProfileForm } from "#/features/auth/components/profile-form";
 
-import type * as ServerFns from "#/features/auth/server/server-fns";
 import type * as ReactRouter from "@tanstack/react-router";
 
 const submitProfileFn = vi.fn();
@@ -13,22 +12,15 @@ const navigateMock = vi.fn();
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 
-// `profile-form.tsx` imports both `submitProfileFn` (a server fn we want to
-// stub) AND validation schemas + limit constants from the same module
-// (`profileInputSchema`, `BIO_LIMITS`, `PROFILE_LIMITS`, `countWords`). Use
-// importActual so the real schemas/constants drive form validation while
-// the server-fn is replaced.
-vi.mock("#/features/auth/server/server-fns", async () => {
-  const actual = await vi.importActual<typeof ServerFns>(
-    "#/features/auth/server/server-fns",
-  );
-  return {
-    ...actual,
-    submitProfileFn: (...args: unknown[]) => submitProfileFn(...args),
-    getSessionFn: vi.fn(),
-    signOutFn: vi.fn(),
-  };
-});
+// profile-form.tsx imports submitProfileFn (the server fn we stub here)
+// from the auth server-fns shell. Validation schemas + limit constants
+// now live in #/server/profile/profile-schemas, imported by the form
+// directly — they don't need to be mocked.
+vi.mock("#/features/auth/server/server-fns", () => ({
+  submitProfileFn: (...args: unknown[]) => submitProfileFn(...args),
+  getSessionFn: vi.fn(),
+  signOutFn: vi.fn(),
+}));
 
 vi.mock("@tanstack/react-router", async (importOriginal) => {
   const actual = await importOriginal<typeof ReactRouter>();

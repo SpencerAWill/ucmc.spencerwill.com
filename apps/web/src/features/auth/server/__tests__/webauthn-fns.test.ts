@@ -6,7 +6,7 @@ import type {
 } from "@simplewebauthn/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Principal } from "#/features/auth/server/principal.server";
+import type { Principal } from "#/server/auth/principal.server";
 import type * as WebauthnModule from "#/features/auth/server/webauthn.server";
 import { getDb, schema } from "#/server/db";
 
@@ -36,7 +36,7 @@ vi.mock("#/server/rate-limit.server", () => ({
 let currentPrincipal: Principal | null = null;
 const openSessionSpy = vi.fn();
 const rotateSessionSpy = vi.fn();
-vi.mock("#/features/auth/server/session.server", () => ({
+vi.mock("#/server/auth/session.server", () => ({
   loadCurrentPrincipal: async () => currentPrincipal,
   openSession: async (userId: string) => {
     openSessionSpy(userId);

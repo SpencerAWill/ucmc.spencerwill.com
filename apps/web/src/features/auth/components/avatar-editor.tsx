@@ -16,7 +16,7 @@ import type { PercentCrop, PixelCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { toast } from "sonner";
 
-import { UserAvatar } from "#/features/auth/components/user-avatar";
+import { UserAvatar } from "#/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import {
   Dialog,

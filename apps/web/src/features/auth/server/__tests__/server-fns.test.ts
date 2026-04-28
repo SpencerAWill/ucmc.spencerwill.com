@@ -37,10 +37,10 @@ const {
   submitPublicProfileAction,
 } = await import("#/features/auth/server/magic-link-actions.server");
 const { BIO_LIMITS, profileInputSchema } =
-  await import("#/features/auth/server/server-fns");
+  await import("#/server/profile/profile-schemas");
 const { MAGIC_LINK_TTL_MS } =
   await import("#/features/auth/server/magic-link.server");
-const { openSession } = await import("#/features/auth/server/session.server");
+const { openSession } = await import("#/server/auth/session.server");
 
 async function sha256Base64Url(input: string): Promise<string> {
   const digest = await crypto.subtle.digest(

@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 import { uuidv7 } from "uuidv7";
 
-import { generateUserPublicId } from "../src/features/auth/server/ids.ts";
+import { generateUserPublicId } from "../src/server/auth/ids.ts";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = resolve(SCRIPT_DIR, "..");

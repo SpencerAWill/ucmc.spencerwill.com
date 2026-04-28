@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 
-import { EmergencyContactFields } from "#/features/auth/components/emergency-contact-fields";
-import { PrivateDetailFields } from "#/features/auth/components/private-detail-fields";
-import { EMPTY_PROFILE_FORM_VALUES } from "#/features/auth/components/profile-form-shape";
-import type { ProfileFormShape } from "#/features/auth/components/profile-form-shape";
+import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
+import { PrivateDetailFields } from "#/components/profile/private-detail-fields";
+import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
+import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { useAuth } from "#/features/auth/api/use-auth";
@@ -13,10 +13,10 @@ import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import {
   getProfileFn,
-  profileInputSchema,
   submitDetailsFn,
 } from "#/features/auth/server/server-fns";
-import type { DetailsInput } from "#/features/auth/server/server-fns";
+import { profileInputSchema } from "#/server/profile/profile-schemas";
+import type { DetailsInput } from "#/server/profile/profile-schemas";
 
 import { ACCOUNT_PROFILE_QUERY_KEY } from "./account.index";
 

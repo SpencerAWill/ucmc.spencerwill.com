@@ -19,18 +19,18 @@
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
-import { loadPrincipal } from "#/features/auth/server/principal.server";
-import type { Principal } from "#/features/auth/server/principal.server";
+import { loadPrincipal } from "#/server/auth/principal.server";
+import type { Principal } from "#/server/auth/principal.server";
 import {
   SESSION_SLIDING_REFRESH_MS,
   SESSION_TTL_MS,
-} from "#/features/auth/server/session-config";
+} from "#/server/auth/session-config";
 import { getDb, schema } from "#/server/db";
 import {
   clearSessionCookie,
   readSessionCookie,
   writeSessionCookie,
-} from "#/features/auth/server/session-cookie.server";
+} from "#/server/auth/session-cookie.server";
 
 interface SessionRow {
   id: string;

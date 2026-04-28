@@ -22,7 +22,7 @@ const {
   loadPrincipal,
   loadAnonymousPermissions,
   invalidateAnonymousPermissionsCache,
-} = await import("#/features/auth/server/principal.server");
+} = await import("#/server/auth/principal.server");
 
 async function seedUser(email: string): Promise<string> {
   const id = `user_${crypto.randomUUID()}`;

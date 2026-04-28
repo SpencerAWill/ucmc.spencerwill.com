@@ -3,19 +3,17 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { EmergencyContactFields } from "#/features/auth/components/emergency-contact-fields";
-import { PrivateDetailFields } from "#/features/auth/components/private-detail-fields";
-import { PublicProfileFields } from "#/features/auth/components/public-profile-fields";
+import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
+import { PrivateDetailFields } from "#/components/profile/private-detail-fields";
+import { PublicProfileFields } from "#/components/profile/public-profile-fields";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { SESSION_QUERY_KEY } from "#/features/auth/api/use-auth";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
-import type { EmergencyContactInput } from "#/features/auth/server/server-fns";
-import {
-  profileInputSchema,
-  submitProfileFn,
-} from "#/features/auth/server/server-fns";
+import type { EmergencyContactInput } from "#/server/profile/profile-schemas";
+import { profileInputSchema } from "#/server/profile/profile-schemas";
+import { submitProfileFn } from "#/features/auth/server/server-fns";
 
 type ProfileInput = z.infer<typeof profileInputSchema>;
 

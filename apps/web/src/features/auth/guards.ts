@@ -11,7 +11,7 @@ import {
   SESSION_QUERY_KEY,
   sessionQueryOptions,
 } from "#/features/auth/api/use-auth";
-import type { Principal } from "#/features/auth/server/principal.server";
+import type { Principal } from "#/server/auth/principal.server";
 import { getProofFn } from "#/features/auth/server/server-fns";
 
 async function getPrincipal(

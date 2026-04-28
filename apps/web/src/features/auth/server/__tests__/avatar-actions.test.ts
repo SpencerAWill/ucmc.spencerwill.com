@@ -25,7 +25,7 @@ vi.mock("#/server/rate-limit.server", () => ({
 
 const { uploadAvatarAction, removeAvatarAction } =
   await import("#/features/auth/server/avatar-actions.server");
-const { openSession } = await import("#/features/auth/server/session.server");
+const { openSession } = await import("#/server/auth/session.server");
 const { getBucket } = await import("#/server/r2");
 
 // ── helpers ────────────────────────────────────────────────────────────

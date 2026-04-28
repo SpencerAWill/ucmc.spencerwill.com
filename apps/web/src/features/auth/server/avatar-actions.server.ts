@@ -10,7 +10,7 @@
  */
 import { eq } from "drizzle-orm";
 
-import { loadCurrentPrincipal } from "#/features/auth/server/session.server";
+import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { getDb, schema } from "#/server/db";
 import {
   AVATAR_MAX_BYTES,
