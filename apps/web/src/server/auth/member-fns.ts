@@ -81,11 +81,11 @@ export const listMembersFn = createServerFn({ method: "GET" })
 // ── member detail ───────────────────────────────────────────────────────
 
 export const getMemberDetailFn = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ userId: z.string().min(1) }))
+  .inputValidator(z.object({ publicId: z.string().min(1) }))
   .handler(async ({ data }): Promise<MemberDetail> => {
     const { getMemberDetailAction } =
       await import("#/server/auth/member-actions.server");
-    return getMemberDetailAction(data.userId);
+    return getMemberDetailAction(data.publicId);
   });
 
 // ── pending registrations ───────────────────────────────────────────────

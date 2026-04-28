@@ -129,6 +129,7 @@ async function seedUser(args: {
     .insert(schema.users)
     .values({
       id: args.id,
+      publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
       email: args.email,
       status: args.status ?? "approved",
     });

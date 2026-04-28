@@ -555,8 +555,8 @@ function MemberRow({
   return (
     <li className="flex items-center gap-3 px-3 py-3">
       <Link
-        to="/members/$userId"
-        params={{ userId: member.userId }}
+        to="/members/$publicId"
+        params={{ publicId: member.publicId }}
         className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-80"
       >
         <UserAvatar
@@ -637,7 +637,7 @@ function MemberCard({
 }) {
   const name = member.preferredName ?? member.fullName;
   return (
-    <Link to="/members/$userId" params={{ userId: member.userId }}>
+    <Link to="/members/$publicId" params={{ publicId: member.publicId }}>
       <Card className="transition-colors hover:bg-muted/50">
         <CardContent className="flex flex-col items-center gap-3 text-center">
           <UserAvatar

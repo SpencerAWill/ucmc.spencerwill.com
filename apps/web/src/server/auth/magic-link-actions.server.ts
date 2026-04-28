@@ -11,6 +11,7 @@
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import { generateUserPublicId } from "#/server/auth/ids";
 import {
   consumeMagicLink,
   requestMagicLink,
@@ -228,7 +229,7 @@ export async function submitProfileAction(
   const id = `user_${uuidv7()}`;
   await db
     .insert(schema.users)
-    .values({ id, email, status: "pending" })
+    .values({ id, publicId: generateUserPublicId(), email, status: "pending" })
     .onConflictDoNothing({ target: schema.users.email });
   const userRow = await db.query.users.findFirst({
     where: eq(schema.users.email, email),

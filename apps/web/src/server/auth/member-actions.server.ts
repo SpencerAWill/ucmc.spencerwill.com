@@ -143,6 +143,7 @@ export interface EmergencyContactSummary {
 
 export interface MemberSummary {
   userId: string;
+  publicId: string;
   email: string;
   fullName: string | null;
   preferredName: string | null;
@@ -227,6 +228,7 @@ export async function listMembersAction(opts: {
 
   const selectFields = {
     userId: schema.users.id,
+    publicId: schema.users.publicId,
     email: schema.users.email,
     status: schema.users.status,
     fullName: schema.profiles.fullName,
@@ -297,6 +299,7 @@ export async function listMembersAction(opts: {
 
   let mappedRows: MemberSummary[] = rows.map((r) => ({
     userId: r.userId,
+    publicId: r.publicId,
     email: r.email,
     fullName: r.fullName,
     preferredName: r.preferredName,
@@ -329,6 +332,7 @@ export async function listMembersAction(opts: {
 
 export interface MemberDetail {
   userId: string;
+  publicId: string;
   email: string;
   status: schema.UserStatus;
   createdAt: Date;
@@ -349,7 +353,7 @@ export interface MemberDetail {
 }
 
 export async function getMemberDetailAction(
-  userId: string,
+  publicId: string,
 ): Promise<MemberDetail> {
   const principal = await requireApprovedPrincipal();
   const db = getDb();
@@ -359,6 +363,7 @@ export async function getMemberDetailAction(
   const row = await db
     .select({
       userId: schema.users.id,
+      publicId: schema.users.publicId,
       email: schema.users.email,
       status: schema.users.status,
       createdAt: schema.users.createdAt,
@@ -374,12 +379,14 @@ export async function getMemberDetailAction(
     })
     .from(schema.users)
     .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
-    .where(eq(schema.users.id, userId))
+    .where(eq(schema.users.publicId, publicId))
     .get();
 
   if (!row) {
     throw new Error("User not found");
   }
+
+  const userId = row.userId;
 
   // Fetch roles.
   const roleRows = await db
@@ -412,6 +419,7 @@ export async function getMemberDetailAction(
 
   return {
     userId: row.userId,
+    publicId: row.publicId,
     email: row.email,
     status: row.status,
     createdAt: row.createdAt,

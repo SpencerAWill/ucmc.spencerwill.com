@@ -34,6 +34,7 @@ export const users = sqliteTable(
   "users",
   {
     id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
     email: text("email").notNull(),
     status: text("status", { enum: userStatus }).notNull().default("pending"),
     createdAt: timestamp("created_at")

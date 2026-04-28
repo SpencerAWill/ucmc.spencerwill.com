@@ -21,7 +21,7 @@ import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
-import { Route as MembersUserIdRouteImport } from './routes/members.$userId'
+import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
@@ -89,9 +89,9 @@ const MembersRegistrationsRoute = MembersRegistrationsRouteImport.update({
   path: '/registrations',
   getParentRoute: () => MembersRoute,
 } as any)
-const MembersUserIdRoute = MembersUserIdRouteImport.update({
-  id: '/$userId',
-  path: '/$userId',
+const MembersPublicIdRoute = MembersPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
   getParentRoute: () => MembersRoute,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -136,7 +136,7 @@ export interface FileRoutesByFullPath {
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/members/$userId': typeof MembersUserIdRoute
+  '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
@@ -155,7 +155,7 @@ export interface FileRoutesByTo {
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/members/$userId': typeof MembersUserIdRoute
+  '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
@@ -177,7 +177,7 @@ export interface FileRoutesById {
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/members/$userId': typeof MembersUserIdRoute
+  '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/register/pending': typeof RegisterPendingRoute
@@ -200,7 +200,7 @@ export interface FileRouteTypes {
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
-    | '/members/$userId'
+    | '/members/$publicId'
     | '/members/registrations'
     | '/members/roles'
     | '/register/pending'
@@ -219,7 +219,7 @@ export interface FileRouteTypes {
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
-    | '/members/$userId'
+    | '/members/$publicId'
     | '/members/registrations'
     | '/members/roles'
     | '/register/pending'
@@ -240,7 +240,7 @@ export interface FileRouteTypes {
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
-    | '/members/$userId'
+    | '/members/$publicId'
     | '/members/registrations'
     | '/members/roles'
     | '/register/pending'
@@ -350,11 +350,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersRegistrationsRouteImport
       parentRoute: typeof MembersRoute
     }
-    '/members/$userId': {
-      id: '/members/$userId'
-      path: '/$userId'
-      fullPath: '/members/$userId'
-      preLoaderRoute: typeof MembersUserIdRouteImport
+    '/members/$publicId': {
+      id: '/members/$publicId'
+      path: '/$publicId'
+      fullPath: '/members/$publicId'
+      preLoaderRoute: typeof MembersPublicIdRouteImport
       parentRoute: typeof MembersRoute
     }
     '/auth/callback': {
@@ -420,7 +420,7 @@ const AccountRouteWithChildren =
   AccountRoute._addFileChildren(AccountRouteChildren)
 
 interface MembersRouteChildren {
-  MembersUserIdRoute: typeof MembersUserIdRoute
+  MembersPublicIdRoute: typeof MembersPublicIdRoute
   MembersRegistrationsRoute: typeof MembersRegistrationsRoute
   MembersRolesRoute: typeof MembersRolesRoute
   MembersIndexRoute: typeof MembersIndexRoute
@@ -428,7 +428,7 @@ interface MembersRouteChildren {
 }
 
 const MembersRouteChildren: MembersRouteChildren = {
-  MembersUserIdRoute: MembersUserIdRoute,
+  MembersPublicIdRoute: MembersPublicIdRoute,
   MembersRegistrationsRoute: MembersRegistrationsRoute,
   MembersRolesRoute: MembersRolesRoute,
   MembersIndexRoute: MembersIndexRoute,

@@ -114,10 +114,11 @@ jobs:
           EMAIL_NORM="$(echo "$EMAIL" | tr '[:upper:]' '[:lower:]' | xargs)"
           EMAIL_SQL="$(echo "$EMAIL_NORM" | sed "s/'/''/g")"
           USER_ID="user_$(uuidgen | tr '[:upper:]' '[:lower:]')"
+          PUBLIC_ID="$(LC_ALL=C tr -dc '0-9a-z' </dev/urandom | head -c 12)"
           NOW_MS=$(($(date +%s%N) / 1000000))
           cat > /tmp/seed-admin.sql <<SQL
-          INSERT OR IGNORE INTO users (id, email, status, approved_at, created_at)
-          VALUES ('$USER_ID', '$EMAIL_SQL', 'approved', $NOW_MS, $NOW_MS);
+          INSERT OR IGNORE INTO users (id, public_id, email, status, approved_at, created_at)
+          VALUES ('$USER_ID', '$PUBLIC_ID', '$EMAIL_SQL', 'approved', $NOW_MS, $NOW_MS);
           UPDATE users
           SET status = 'approved', approved_at = $NOW_MS
           WHERE email = '$EMAIL_SQL' AND status <> 'approved';

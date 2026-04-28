@@ -45,6 +45,7 @@ async function seedUser(
   const db = getDb();
   await db.insert(schema.users).values({
     id,
+    publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
     email,
     status: opts?.status ?? "approved",
   });
@@ -67,6 +68,18 @@ async function seedUser(
     });
   }
   return id;
+}
+
+async function publicIdOf(userId: string): Promise<string> {
+  const row = await getDb()
+    .select({ publicId: schema.users.publicId })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .get();
+  if (!row) {
+    throw new Error(`No user ${userId}`);
+  }
+  return row.publicId;
 }
 
 async function assignRole(userId: string, roleId: string): Promise<void> {
@@ -648,7 +661,9 @@ describe("getMemberDetailAction", () => {
     const targetId = await seedUser("target@example.com");
     await assignRole(targetId, "role_member");
 
-    const detail = await getMemberDetailAction(targetId);
+    const detail = await getMemberDetailAction(await publicIdOf(targetId));
+    expect(detail.userId).toBe(targetId);
+    expect(detail.publicId).toMatch(/^[a-z0-9]+$/);
     expect(detail.email).toBe("target@example.com");
     expect(detail.status).toBe("approved");
     expect(detail.fullName).toBe("Test User");
@@ -666,7 +681,7 @@ describe("getMemberDetailAction", () => {
 
     const targetId = await seedUser("target@example.com");
 
-    const detail = await getMemberDetailAction(targetId);
+    const detail = await getMemberDetailAction(await publicIdOf(targetId));
     expect(detail.phone).toBe("+15135551212");
     expect(detail.emergencyContacts).toEqual([
       {
@@ -694,7 +709,7 @@ describe("getMemberDetailAction", () => {
         expiresAt: new Date(Date.now() + 86_400_000),
       });
 
-    const detail = await getMemberDetailAction(targetId);
+    const detail = await getMemberDetailAction(await publicIdOf(targetId));
     expect(detail.activeSessions).toBe(1);
   });
 

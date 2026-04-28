@@ -40,11 +40,11 @@ import {
 } from "#/server/auth/member-fns";
 import type { MemberDetail } from "#/server/auth/member-fns";
 
-function memberDetailKey(userId: string) {
-  return ["members", "detail", userId] as const;
+function memberDetailKey(publicId: string) {
+  return ["members", "detail", publicId] as const;
 }
 
-export const Route = createFileRoute("/members/$userId")({
+export const Route = createFileRoute("/members/$publicId")({
   beforeLoad: async ({ context }) => {
     await requireApproved(context.queryClient);
   },
@@ -52,20 +52,20 @@ export const Route = createFileRoute("/members/$userId")({
 });
 
 function MemberDetailPage() {
-  const { userId } = Route.useParams();
+  const { publicId } = Route.useParams();
   const { hasPermission, principal } = useAuth();
 
-  const queryKey = memberDetailKey(userId);
+  const queryKey = memberDetailKey(publicId);
   const { data: member, isLoading } = useQuery({
     queryKey,
-    queryFn: () => getMemberDetailFn({ data: { userId } }),
+    queryFn: () => getMemberDetailFn({ data: { publicId } }),
   });
 
   const canManage = hasPermission("members:manage");
   const canViewPrivate = hasPermission("members:view_private");
   const canRevokeSessions = hasPermission("sessions:revoke");
   const canAssignRoles = hasPermission("roles:assign");
-  const isSelf = principal?.userId === userId;
+  const isSelf = principal?.userId === member?.userId;
 
   if (isLoading) {
     return (

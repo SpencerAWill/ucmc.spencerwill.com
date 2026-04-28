@@ -33,7 +33,12 @@ const { getBucket } = await import("#/server/r2");
 async function seedApprovedUser(email: string): Promise<string> {
   const id = `user_${crypto.randomUUID()}`;
   const db = getDb();
-  await db.insert(schema.users).values({ id, email, status: "approved" });
+  await db.insert(schema.users).values({
+    id,
+    publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+    email,
+    status: "approved",
+  });
   await db.insert(schema.profiles).values({
     userId: id,
     fullName: "Test User",

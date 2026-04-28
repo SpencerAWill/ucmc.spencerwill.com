@@ -57,6 +57,13 @@
       "when": 1777351099731,
       "tag": "0007_profile_bio",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1777352881003,
+      "tag": "0008_user_public_id",
+      "breakpoints": true
     }
   ]
 }

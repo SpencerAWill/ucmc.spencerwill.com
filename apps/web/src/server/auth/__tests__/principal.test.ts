@@ -26,11 +26,14 @@ const {
 
 async function seedUser(email: string): Promise<string> {
   const id = `user_${crypto.randomUUID()}`;
-  await getDb().insert(schema.users).values({
-    id,
-    email,
-    status: "approved",
-  });
+  await getDb()
+    .insert(schema.users)
+    .values({
+      id,
+      publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+      email,
+      status: "approved",
+    });
   await getDb().insert(schema.profiles).values({
     userId: id,
     fullName: "Test User",
