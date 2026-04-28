@@ -9,12 +9,15 @@
  */
 import { sql } from "drizzle-orm";
 
+import { env } from "#/server/cloudflare-env";
 import { getDb } from "#/server/db";
 import { getKv } from "#/server/kv";
 import { getBucket } from "#/server/r2";
 import { checkHealthRateLimit } from "#/server/rate-limit.server";
 
 import type { HealthCheck, HealthReport } from "#/server/health";
+
+const EMAIL_PROBE_TIMEOUT_MS = 3000;
 
 async function checkD1(): Promise<HealthCheck> {
   const time = new Date().toISOString();
@@ -70,6 +73,72 @@ async function checkKv(): Promise<HealthCheck> {
   }
 }
 
+async function checkEmail(): Promise<HealthCheck> {
+  const time = new Date().toISOString();
+
+  // Mirrors the tier order in `server/email/resend.ts` so /health reports
+  // which provider sendEmail() would actually use right now.
+  if (env.RESEND_API_KEY) {
+    try {
+      const res = await fetch("https://api.resend.com/domains", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}` },
+        signal: AbortSignal.timeout(EMAIL_PROBE_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        return {
+          name: "email:resend",
+          status: "fail",
+          time,
+          output: `resend api returned ${res.status}`,
+        };
+      }
+      return { name: "email:resend", status: "pass", time };
+    } catch {
+      return {
+        name: "email:resend",
+        status: "fail",
+        time,
+        output: "resend api unreachable",
+      };
+    }
+  }
+
+  if (env.MAILPIT_URL) {
+    try {
+      const res = await fetch(`${env.MAILPIT_URL}/api/v1/info`, {
+        method: "GET",
+        signal: AbortSignal.timeout(EMAIL_PROBE_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        return {
+          name: "email:mailpit",
+          status: "fail",
+          time,
+          output: `mailpit returned ${res.status}`,
+        };
+      }
+      return { name: "email:mailpit", status: "pass", time };
+    } catch {
+      return {
+        name: "email:mailpit",
+        status: "fail",
+        time,
+        output: "mailpit unreachable",
+      };
+    }
+  }
+
+  // No provider configured — sendEmail() falls back to console.log. Not a
+  // failure, but worth surfacing so it's obvious why no mail is going out.
+  return {
+    name: "email:console",
+    status: "pass",
+    time,
+    output: "console fallback (no email provider configured)",
+  };
+}
+
 export async function performHealthChecks(): Promise<HealthReport> {
   // Rate-limit check first — short-circuits BEFORE touching D1/R2, which
   // is the point: a flood of /health hits should not amplify into D1
@@ -91,7 +160,12 @@ export async function performHealthChecks(): Promise<HealthReport> {
 
   // Probes run in parallel — they're independent and the slowest one
   // dominates total latency of the /health page.
-  const checks = await Promise.all([checkD1(), checkR2(), checkKv()]);
+  const checks = await Promise.all([
+    checkD1(),
+    checkR2(),
+    checkKv(),
+    checkEmail(),
+  ]);
   const status = checks.every((c) => c.status === "pass") ? "pass" : "fail";
   return { status, checks };
 }
