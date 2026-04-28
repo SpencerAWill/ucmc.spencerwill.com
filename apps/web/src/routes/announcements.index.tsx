@@ -1,14 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { announcementsListQueryOptions } from "#/features/announcements/api/queries";
+import { useDeleteAnnouncement } from "#/features/announcements/api/use-delete-announcement";
+import { useMarkAnnouncementsRead } from "#/features/announcements/api/use-mark-announcements-read";
 import { AnnouncementCard } from "#/features/announcements/components/announcement-card";
 import { AnnouncementFormSheet } from "#/features/announcements/components/announcement-form-sheet";
 import type { AnnouncementFormMode } from "#/features/announcements/components/announcement-form-sheet";
-import { ANNOUNCEMENTS_UNREAD_QUERY_KEY } from "#/features/announcements/components/announcements-bell";
-import { ANNOUNCEMENTS_LIST_QUERY_KEY } from "#/features/announcements/api/query-keys";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,11 +23,6 @@ import {
 import { Button } from "#/components/ui/button";
 import { requirePermission } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
-import {
-  deleteAnnouncementFn,
-  listAnnouncementsFn,
-  markAnnouncementsReadFn,
-} from "#/features/announcements/server/announcements-fns";
 import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
 
 export const Route = createFileRoute("/announcements/")({
@@ -37,28 +33,23 @@ export const Route = createFileRoute("/announcements/")({
 });
 
 function AnnouncementsPage() {
-  const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const canManage = hasPermission("announcements:manage");
 
-  const { data, isLoading } = useQuery({
-    queryKey: ANNOUNCEMENTS_LIST_QUERY_KEY,
-    queryFn: () => listAnnouncementsFn(),
-    staleTime: 30_000,
-  });
+  const { data, isLoading } = useQuery(announcementsListQueryOptions());
 
-  // Mark all as read on mount and whenever the list changes — clears the
-  // unread badge as soon as the user lands on the page. Errors are
-  // non-fatal: viewing still works if the marker update fails.
+  const markRead = useMarkAnnouncementsRead();
+
+  // Mark all as read on mount and whenever the rendered count of
+  // announcements changes — clears the unread badge as soon as someone
+  // is looking at the page. The mutation handle from useMutation is
+  // stable across renders, so excluding it from deps is safe and
+  // avoids re-firing on every render. Errors are non-fatal; the hook
+  // doesn't toast on failure.
+  const markReadMutate = markRead.mutate;
   useEffect(() => {
-    void markAnnouncementsReadFn()
-      .then(() =>
-        queryClient.invalidateQueries({
-          queryKey: ANNOUNCEMENTS_UNREAD_QUERY_KEY,
-        }),
-      )
-      .catch(() => {});
-  }, [queryClient, data?.length]);
+    markReadMutate();
+  }, [markReadMutate, data?.length]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formIntent, setFormIntent] = useState<AnnouncementFormMode>({
@@ -67,19 +58,18 @@ function AnnouncementsPage() {
   const [pendingDelete, setPendingDelete] =
     useState<AnnouncementSummary | null>(null);
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteAnnouncementFn({ data: { id } }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ANNOUNCEMENTS_LIST_QUERY_KEY,
-      });
-      toast.success("Announcement deleted");
-      setPendingDelete(null);
-    },
-    onError: () => {
-      toast.error("Couldn’t delete the announcement. Please try again.");
-    },
-  });
+  const deleteMutation = useDeleteAnnouncement();
+  const onConfirmDelete = (id: string) => {
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success("Announcement deleted");
+        setPendingDelete(null);
+      },
+      onError: () => {
+        toast.error("Couldn’t delete the announcement. Please try again.");
+      },
+    });
+  };
 
   const announcements = data ?? [];
 
@@ -159,7 +149,7 @@ function AnnouncementsPage() {
                   onClick={(e) => {
                     e.preventDefault();
                     if (pendingDelete) {
-                      deleteMutation.mutate(pendingDelete.id);
+                      onConfirmDelete(pendingDelete.id);
                     }
                   }}
                 >

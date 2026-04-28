@@ -4,24 +4,16 @@ import { Bell } from "lucide-react";
 
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
+import { announcementsUnreadQueryOptions } from "#/features/announcements/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { unreadAnnouncementsCountFn } from "#/features/announcements/server/announcements-fns";
-
-export const ANNOUNCEMENTS_UNREAD_QUERY_KEY = [
-  "announcements",
-  "unreadCount",
-] as const;
 
 export function AnnouncementsBell() {
   const { hasPermission, isAuthenticated } = useAuth();
   const canRead = hasPermission("announcements:read");
 
-  const { data } = useQuery({
-    queryKey: ANNOUNCEMENTS_UNREAD_QUERY_KEY,
-    queryFn: () => unreadAnnouncementsCountFn(),
-    staleTime: 60_000,
-    enabled: isAuthenticated && canRead,
-  });
+  const { data } = useQuery(
+    announcementsUnreadQueryOptions({ enabled: isAuthenticated && canRead }),
+  );
 
   if (!canRead) {
     return null;

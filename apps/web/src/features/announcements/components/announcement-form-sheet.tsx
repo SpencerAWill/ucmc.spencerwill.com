@@ -1,4 +1,3 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
@@ -15,14 +14,9 @@ import {
   announcementInputSchema,
 } from "#/features/announcements/server/limits";
 import type { AnnouncementInput } from "#/features/announcements/server/limits";
-import {
-  createAnnouncementFn,
-  updateAnnouncementFn,
-} from "#/features/announcements/server/announcements-fns";
 import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
-
-import { ANNOUNCEMENTS_LIST_QUERY_KEY } from "#/features/announcements/api/query-keys";
-import { ANNOUNCEMENTS_UNREAD_QUERY_KEY } from "#/features/announcements/components/announcements-bell";
+import { useCreateAnnouncement } from "#/features/announcements/api/use-create-announcement";
+import { useUpdateAnnouncement } from "#/features/announcements/api/use-update-announcement";
 
 export type AnnouncementFormMode =
   | { mode: "create" }
@@ -70,38 +64,37 @@ function AnnouncementForm({
   intent: AnnouncementFormMode;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
   const isEdit = intent.mode === "edit";
 
-  const mutation = useMutation({
-    mutationFn: async (data: AnnouncementInput) => {
-      if (intent.mode === "edit") {
-        return updateAnnouncementFn({
-          data: { id: intent.announcement.id, ...data },
-        });
-      }
-      return createAnnouncementFn({ data });
-    },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ANNOUNCEMENTS_LIST_QUERY_KEY,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ANNOUNCEMENTS_UNREAD_QUERY_KEY,
-        }),
-      ]);
-      toast.success(isEdit ? "Announcement updated" : "Announcement posted");
-      onClose();
-    },
-    onError: () => {
-      toast.error(
-        isEdit
-          ? "Couldn’t update the announcement. Please try again."
-          : "Couldn’t post the announcement. Please try again.",
+  const createMutation = useCreateAnnouncement();
+  const updateMutation = useUpdateAnnouncement();
+
+  const submit = (data: AnnouncementInput) => {
+    if (intent.mode === "edit") {
+      updateMutation.mutate(
+        { id: intent.announcement.id, ...data },
+        {
+          onSuccess: () => {
+            toast.success("Announcement updated");
+            onClose();
+          },
+          onError: () => {
+            toast.error("Couldn’t update the announcement. Please try again.");
+          },
+        },
       );
-    },
-  });
+      return;
+    }
+    createMutation.mutate(data, {
+      onSuccess: () => {
+        toast.success("Announcement posted");
+        onClose();
+      },
+      onError: () => {
+        toast.error("Couldn’t post the announcement. Please try again.");
+      },
+    });
+  };
 
   const defaults: AnnouncementInput =
     intent.mode === "edit"
@@ -119,7 +112,7 @@ function AnnouncementForm({
       onSubmit: announcementInputSchema,
     },
     onSubmit: ({ value }) => {
-      mutation.mutate(value);
+      submit(value);
     },
   });
 
