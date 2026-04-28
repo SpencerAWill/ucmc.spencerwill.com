@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Shield } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -23,16 +23,10 @@ import {
   DialogTitle,
 } from "#/components/ui/dialog";
 import {
-  getUserRolesFn,
-  setUserRolesFn,
-} from "#/features/members/server/rbac-fns";
-import { listRolesFn } from "#/features/members/server/member-fns";
-
-const ROLES_QUERY_KEY = ["members", "roles"] as const;
-
-function userRolesKey(userId: string) {
-  return ["rbac", "user-roles", userId] as const;
-}
+  rolesQueryOptions,
+  userRolesQueryOptions,
+} from "#/features/members/api/queries";
+import { useSetUserRoles } from "#/features/members/api/use-set-user-roles";
 
 export function RoleAssignmentSheet({
   userId,
@@ -47,7 +41,6 @@ export function RoleAssignmentSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sysAdminConfirm, setSysAdminConfirm] = useState<
     "add" | "remove" | null
@@ -55,15 +48,14 @@ export function RoleAssignmentSheet({
 
   // Fetch all available roles.
   const { data: allRoles = [] } = useQuery({
-    queryKey: ROLES_QUERY_KEY,
-    queryFn: () => listRolesFn(),
+    ...rolesQueryOptions(),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch this user's current roles.
+  // Fetch this user's current roles. Only fires while the sheet is
+  // open so a closed sheet doesn't refetch on session changes.
   const { data: currentRoles = [], isLoading } = useQuery({
-    queryKey: userRolesKey(userId),
-    queryFn: () => getUserRolesFn({ data: { userId } }),
+    ...userRolesQueryOptions(userId),
     enabled: open,
   });
 
@@ -74,17 +66,7 @@ export function RoleAssignmentSheet({
     }
   }, [currentRoles]);
 
-  const mutation = useMutation({
-    mutationFn: (roleIds: string[]) =>
-      setUserRolesFn({ data: { userId, roleIds } }),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["members", "directory"] }),
-        queryClient.invalidateQueries({ queryKey: userRolesKey(userId) }),
-      ]);
-      onOpenChange(false);
-    },
-  });
+  const mutation = useSetUserRoles();
 
   function handleToggle(roleId: string, checked: boolean) {
     // System admin toggle needs confirmation.
@@ -178,7 +160,12 @@ export function RoleAssignmentSheet({
               Cancel
             </Button>
             <Button
-              onClick={() => mutation.mutate(Array.from(selected))}
+              onClick={() =>
+                mutation.mutate(
+                  { userId, roleIds: Array.from(selected) },
+                  { onSuccess: () => onOpenChange(false) },
+                )
+              }
               disabled={!hasChanges || mutation.isPending}
             >
               {mutation.isPending ? "Saving…" : "Save"}

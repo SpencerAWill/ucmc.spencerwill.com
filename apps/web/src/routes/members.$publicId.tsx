@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -11,6 +11,11 @@ import {
 } from "lucide-react";
 import { Fragment, useState } from "react";
 
+import { memberDetailQueryOptions } from "#/features/members/api/queries";
+import { useDeactivateMembers } from "#/features/members/api/use-deactivate-members";
+import { useReactivateMembers } from "#/features/members/api/use-reactivate-members";
+import { useRevokeUserSessions } from "#/features/members/api/use-revoke-user-sessions";
+import { useUnrejectMembers } from "#/features/members/api/use-unreject-members";
 import { AdminProfileSheet } from "#/features/members/components/admin-profile-sheet";
 import type { AdminProfileDefaults } from "#/features/members/components/admin-profile-sheet";
 import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
@@ -32,18 +37,7 @@ import { Separator } from "#/components/ui/separator";
 import { RouteErrorFallback } from "#/components/error-page";
 import { requireApproved } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
-import {
-  deactivateMembersFn,
-  getMemberDetailFn,
-  reactivateMembersFn,
-  revokeUserSessionsFn,
-  unrejectMembersFn,
-} from "#/features/members/server/member-fns";
 import type { MemberDetail } from "#/features/members/server/member-fns";
-
-function memberDetailKey(publicId: string) {
-  return ["members", "detail", publicId] as const;
-}
 
 export const Route = createFileRoute("/members/$publicId")({
   beforeLoad: async ({ context }) => {
@@ -57,11 +51,9 @@ function MemberDetailPage() {
   const { publicId } = Route.useParams();
   const { hasPermission, principal } = useAuth();
 
-  const queryKey = memberDetailKey(publicId);
-  const { data: member, isLoading } = useQuery({
-    queryKey,
-    queryFn: () => getMemberDetailFn({ data: { publicId } }),
-  });
+  const { data: member, isLoading } = useQuery(
+    memberDetailQueryOptions(publicId),
+  );
 
   const canManage = hasPermission("members:manage");
   const canViewPrivate = hasPermission("members:view_private");
@@ -220,12 +212,12 @@ function MemberDetailPage() {
             <h2 className="text-sm font-semibold">Actions</h2>
             <div className="flex flex-wrap gap-2">
               {canManage ? (
-                <MemberManageActions member={member} queryKey={queryKey} />
+                <MemberManageActions member={member} publicId={publicId} />
               ) : null}
               {canRevokeSessions &&
               member.activeSessions !== null &&
               member.activeSessions > 0 ? (
-                <RevokeSessionsButton member={member} queryKey={queryKey} />
+                <RevokeSessionsButton member={member} publicId={publicId} />
               ) : null}
               {canAssignRoles ? <RoleAssignButton member={member} /> : null}
             </div>
@@ -240,45 +232,18 @@ function MemberDetailPage() {
 
 function MemberManageActions({
   member,
-  queryKey,
+  publicId,
 }: {
   member: MemberDetail;
-  queryKey: readonly unknown[];
+  publicId: string;
 }) {
-  const queryClient = useQueryClient();
   const [confirmAction, setConfirmAction] = useState<
     "deactivate" | "profileEdit" | null
   >(null);
 
-  const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey }),
-      queryClient.invalidateQueries({ queryKey: ["members", "directory"] }),
-      queryClient.invalidateQueries({
-        queryKey: ["members", "registrations"],
-      }),
-    ]);
-  };
-
-  const deactivate = useMutation({
-    mutationFn: () =>
-      deactivateMembersFn({ data: { userIds: [member.userId] } }),
-    onSuccess: async () => {
-      setConfirmAction(null);
-      await invalidate();
-    },
-  });
-
-  const reactivate = useMutation({
-    mutationFn: () =>
-      reactivateMembersFn({ data: { userIds: [member.userId] } }),
-    onSuccess: invalidate,
-  });
-
-  const unreject = useMutation({
-    mutationFn: () => unrejectMembersFn({ data: { userIds: [member.userId] } }),
-    onSuccess: invalidate,
-  });
+  const deactivate = useDeactivateMembers(publicId);
+  const reactivate = useReactivateMembers(publicId);
+  const unreject = useUnrejectMembers(publicId);
 
   const profileDefaults: AdminProfileDefaults | null =
     member.fullName !== null
@@ -314,7 +279,7 @@ function MemberManageActions({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => reactivate.mutate()}
+          onClick={() => reactivate.mutate([member.userId])}
           disabled={reactivate.isPending}
         >
           <UserPlus className="mr-1 size-3.5" />
@@ -326,7 +291,7 @@ function MemberManageActions({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => unreject.mutate()}
+          onClick={() => unreject.mutate([member.userId])}
           disabled={unreject.isPending}
         >
           <Undo2 className="mr-1 size-3.5" />
@@ -364,7 +329,11 @@ function MemberManageActions({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deactivate.mutate()}
+              onClick={() =>
+                deactivate.mutate([member.userId], {
+                  onSuccess: () => setConfirmAction(null),
+                })
+              }
               disabled={deactivate.isPending}
             >
               {deactivate.isPending ? "Deactivating..." : "Deactivate"}
@@ -384,7 +353,7 @@ function MemberManageActions({
             setConfirmAction(null);
           }
         }}
-        detailQueryKey={queryKey}
+        detailPublicId={publicId}
       />
     </>
   );
@@ -392,21 +361,13 @@ function MemberManageActions({
 
 function RevokeSessionsButton({
   member,
-  queryKey,
+  publicId,
 }: {
   member: MemberDetail;
-  queryKey: readonly unknown[];
+  publicId: string;
 }) {
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-
-  const revoke = useMutation({
-    mutationFn: () => revokeUserSessionsFn({ data: { userId: member.userId } }),
-    onSuccess: async () => {
-      setOpen(false);
-      await queryClient.invalidateQueries({ queryKey });
-    },
-  });
+  const revoke = useRevokeUserSessions(publicId);
 
   const name = member.preferredName ?? member.email;
 
@@ -440,7 +401,11 @@ function RevokeSessionsButton({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => revoke.mutate()}
+              onClick={() =>
+                revoke.mutate(member.userId, {
+                  onSuccess: () => setOpen(false),
+                })
+              }
               disabled={revoke.isPending}
             >
               {revoke.isPending ? "Revoking..." : "Force Sign Out"}

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import {
@@ -36,19 +36,22 @@ import {
 import { cn } from "#/lib/utils";
 import { requirePermission } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { MEMBERS_REGISTRATIONS_QUERY_KEY } from "#/features/members/api/query-keys";
+import { useApproveRegistrations } from "#/features/members/api/use-approve-registrations";
+import { useRejectRegistrations } from "#/features/members/api/use-reject-registrations";
+import { useUnrejectMembers } from "#/features/members/api/use-unreject-members";
 import {
-  approveRegistrationsFn,
   listMembersFn,
   listPendingRegistrationsFn,
-  rejectRegistrationsFn,
-  unrejectMembersFn,
 } from "#/features/members/server/member-fns";
 import type {
   MemberSummary,
   PendingRegistration,
 } from "#/features/members/server/member-fns";
 
-const REGISTRATIONS_QUERY_KEY = ["members", "registrations"] as const;
+// Local alias for the centralized base key so the paginated queryKey
+// composition below stays narrative.
+const REGISTRATIONS_QUERY_KEY = MEMBERS_REGISTRATIONS_QUERY_KEY;
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
 const registrationsSearchSchema = z.object({
@@ -196,17 +199,8 @@ function PendingView({ canManage }: { canManage: boolean }) {
     await queryClient.invalidateQueries({ queryKey: REGISTRATIONS_QUERY_KEY });
   };
 
-  const bulkApprove = useMutation({
-    mutationFn: () =>
-      approveRegistrationsFn({ data: { userIds: [...selected] } }),
-    onSuccess: invalidate,
-  });
-
-  const bulkReject = useMutation({
-    mutationFn: () =>
-      rejectRegistrationsFn({ data: { userIds: [...selected] } }),
-    onSuccess: invalidate,
-  });
+  const bulkApprove = useApproveRegistrations();
+  const bulkReject = useRejectRegistrations();
 
   const isBulkPending = bulkApprove.isPending || bulkReject.isPending;
   const allSelected =
@@ -315,7 +309,11 @@ function PendingView({ canManage }: { canManage: boolean }) {
                 size="sm"
                 variant="outline"
                 disabled={isBulkPending || selected.size === 0}
-                onClick={() => bulkReject.mutate()}
+                onClick={() =>
+                  bulkReject.mutate([...selected], {
+                    onSuccess: invalidate,
+                  })
+                }
               >
                 {bulkReject.isPending
                   ? "Rejecting…"
@@ -324,7 +322,11 @@ function PendingView({ canManage }: { canManage: boolean }) {
               <Button
                 size="sm"
                 disabled={isBulkPending || selected.size === 0}
-                onClick={() => bulkApprove.mutate()}
+                onClick={() =>
+                  bulkApprove.mutate([...selected], {
+                    onSuccess: invalidate,
+                  })
+                }
               >
                 {bulkApprove.isPending
                   ? "Approving…"
@@ -406,21 +408,8 @@ function RegistrationRow({
   onToggle: () => void;
   disabled: boolean;
 }) {
-  const queryClient = useQueryClient();
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: REGISTRATIONS_QUERY_KEY });
-
-  const approve = useMutation({
-    mutationFn: () =>
-      approveRegistrationsFn({ data: { userIds: [registration.userId] } }),
-    onSuccess: invalidate,
-  });
-
-  const reject = useMutation({
-    mutationFn: () =>
-      rejectRegistrationsFn({ data: { userIds: [registration.userId] } }),
-    onSuccess: invalidate,
-  });
+  const approve = useApproveRegistrations();
+  const reject = useRejectRegistrations();
 
   const rowPending = approve.isPending || reject.isPending;
   const name = registration.preferredName ?? registration.fullName;
@@ -471,7 +460,7 @@ function RegistrationRow({
               size="icon"
               className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={disabled || rowPending}
-              onClick={() => reject.mutate()}
+              onClick={() => reject.mutate([registration.userId])}
             >
               <X className="size-4" />
               <span className="sr-only">Reject</span>
@@ -486,7 +475,7 @@ function RegistrationRow({
               size="icon"
               className="size-8 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
               disabled={disabled || rowPending}
-              onClick={() => approve.mutate()}
+              onClick={() => approve.mutate([registration.userId])}
             >
               <Check className="size-4" />
               <span className="sr-only">Approve</span>
@@ -591,10 +580,7 @@ function RejectedView() {
     ]);
   };
 
-  const bulkUnreject = useMutation({
-    mutationFn: () => unrejectMembersFn({ data: { userIds: [...selected] } }),
-    onSuccess: invalidate,
-  });
+  const bulkUnreject = useUnrejectMembers();
 
   const allSelected = members.length > 0 && selected.size === members.length;
   const someSelected = selected.size > 0 && !allSelected;
@@ -659,7 +645,9 @@ function RejectedView() {
               size="sm"
               variant="outline"
               disabled={bulkUnreject.isPending || selected.size === 0}
-              onClick={() => bulkUnreject.mutate()}
+              onClick={() =>
+                bulkUnreject.mutate([...selected], { onSuccess: invalidate })
+              }
             >
               <Undo2 className="mr-1 size-3.5" />
               {bulkUnreject.isPending
@@ -744,10 +732,7 @@ function RejectedRow({
   disabled: boolean;
   onSuccess: () => Promise<void>;
 }) {
-  const unreject = useMutation({
-    mutationFn: () => unrejectMembersFn({ data: { userIds: [member.userId] } }),
-    onSuccess,
-  });
+  const unreject = useUnrejectMembers();
 
   const name = member.preferredName ?? member.fullName;
 
@@ -785,7 +770,7 @@ function RejectedRow({
             size="icon"
             className="size-8"
             disabled={disabled || unreject.isPending}
-            onClick={() => unreject.mutate()}
+            onClick={() => unreject.mutate([member.userId], { onSuccess })}
           >
             <Undo2 className="size-4" />
             <span className="sr-only">Un-reject</span>

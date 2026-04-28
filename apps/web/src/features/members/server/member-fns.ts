@@ -47,7 +47,7 @@ export const listRolesFn = createServerFn({ method: "GET" }).handler(
 
 // ── members directory ────────────────────────────────────────────────────
 
-const listMembersInputSchema = z.object({
+export const listMembersInputSchema = z.object({
   search: z.string().max(200).optional(),
   affiliations: z.string().optional(), // comma-separated ucAffiliation values
   roles: z.string().optional(), // comma-separated role names
@@ -56,6 +56,8 @@ const listMembersInputSchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 });
+
+export type ListMembersInput = z.infer<typeof listMembersInputSchema>;
 
 export interface MembersPage {
   rows: MemberSummary[];

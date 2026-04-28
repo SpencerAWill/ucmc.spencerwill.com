@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowDown,
@@ -57,20 +57,17 @@ import {
 } from "#/components/ui/tooltip";
 import { requirePermission } from "#/features/auth/guards";
 import {
-  createRoleFn,
-  deleteRoleFn,
-  listPermissionsFn,
-  listRolesDetailedFn,
-  setRolePermissionsFn,
-  swapRolePositionsFn,
-} from "#/features/members/server/rbac-fns";
+  permissionsQueryOptions,
+  rolesDetailedQueryOptions,
+} from "#/features/members/api/queries";
+import { useCreateRole } from "#/features/members/api/use-create-role";
+import { useDeleteRole } from "#/features/members/api/use-delete-role";
+import { useSetRolePermissions } from "#/features/members/api/use-set-role-permissions";
+import { useSwapRolePositions } from "#/features/members/api/use-swap-role-positions";
 import type {
   PermissionSummary,
   RoleWithPermissions,
 } from "#/features/members/server/rbac-fns";
-
-const ROLES_QUERY_KEY = ["rbac", "roles"] as const;
-const PERMISSIONS_QUERY_KEY = ["rbac", "permissions"] as const;
 
 export const Route = createFileRoute("/members/roles")({
   beforeLoad: async ({ context }) => {
@@ -82,37 +79,18 @@ export const Route = createFileRoute("/members/roles")({
 // ── page ───────────────────────────────────────────────────────────────
 
 function RolesPage() {
-  const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RoleWithPermissions | null>(
     null,
   );
 
-  const { data: roles = [], isLoading: rolesLoading } = useQuery({
-    queryKey: ROLES_QUERY_KEY,
-    queryFn: () => listRolesDetailedFn(),
-  });
+  const { data: roles = [], isLoading: rolesLoading } = useQuery(
+    rolesDetailedQueryOptions(),
+  );
+  const { data: permissions = [] } = useQuery(permissionsQueryOptions());
 
-  const { data: permissions = [] } = useQuery({
-    queryKey: PERMISSIONS_QUERY_KEY,
-    queryFn: () => listPermissionsFn(),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (roleId: string) => deleteRoleFn({ data: { roleId } }),
-    onSuccess: async () => {
-      setDeleteTarget(null);
-      await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
-    },
-  });
-
-  const reorderMutation = useMutation({
-    mutationFn: (data: { roleId: string; direction: "up" | "down" }) =>
-      swapRolePositionsFn({ data }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
-    },
-  });
+  const deleteMutation = useDeleteRole();
+  const reorderMutation = useSwapRolePositions();
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-4 md:p-6">
@@ -388,7 +366,9 @@ function RolesPage() {
             <AlertDialogAction
               onClick={() => {
                 if (deleteTarget) {
-                  deleteMutation.mutate(deleteTarget.id);
+                  deleteMutation.mutate(deleteTarget.id, {
+                    onSuccess: () => setDeleteTarget(null),
+                  });
                 }
               }}
               disabled={deleteMutation.isPending}
@@ -421,25 +401,11 @@ function CreateRoleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: (data: { name: string; description?: string }) =>
-      createRoleFn({ data }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
-      setName("");
-      setDescription("");
-      setError(null);
-      onOpenChange(false);
-    },
-    onError: (err: Error) => {
-      setError(err.message);
-    },
-  });
+  const mutation = useCreateRole();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -449,10 +415,23 @@ function CreateRoleDialog({
       return;
     }
     setError(null);
-    mutation.mutate({
-      name: parsed.data,
-      description: description.trim() || undefined,
-    });
+    mutation.mutate(
+      {
+        name: parsed.data,
+        description: description.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setName("");
+          setDescription("");
+          setError(null);
+          onOpenChange(false);
+        },
+        onError: (err: Error) => {
+          setError(err.message);
+        },
+      },
+    );
   }
 
   return (
@@ -542,16 +521,9 @@ function PermissionMatrix({
   roles: RoleWithPermissions[];
   permissions: PermissionSummary[];
 }) {
-  const queryClient = useQueryClient();
   const grouped = groupPermissions(permissions);
 
-  const setPermsMutation = useMutation({
-    mutationFn: (data: { roleId: string; permissionIds: string[] }) =>
-      setRolePermissionsFn({ data }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
-    },
-  });
+  const setPermsMutation = useSetRolePermissions();
 
   function handleToggle(
     role: RoleWithPermissions,
@@ -663,16 +635,9 @@ function MobilePermissionAccordion({
   roles: RoleWithPermissions[];
   permissions: PermissionSummary[];
 }) {
-  const queryClient = useQueryClient();
   const grouped = groupPermissions(permissions);
 
-  const setPermsMutation = useMutation({
-    mutationFn: (data: { roleId: string; permissionIds: string[] }) =>
-      setRolePermissionsFn({ data }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
-    },
-  });
+  const setPermsMutation = useSetRolePermissions();
 
   function handleToggle(
     role: RoleWithPermissions,

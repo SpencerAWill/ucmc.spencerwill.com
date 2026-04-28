@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Shield, Users } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -10,21 +10,15 @@ import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
 import { requirePermission } from "#/features/auth/guards";
 import {
-  getRoleFn,
-  listPermissionsFn,
-  setRolePermissionsFn,
-  updateRoleFn,
-} from "#/features/members/server/rbac-fns";
+  permissionsQueryOptions,
+  roleQueryOptions,
+} from "#/features/members/api/queries";
+import { useSetRolePermissions } from "#/features/members/api/use-set-role-permissions";
+import { useUpdateRole } from "#/features/members/api/use-update-role";
 import type {
   PermissionSummary,
   RoleDetail,
 } from "#/features/members/server/rbac-fns";
-
-const PERMISSIONS_QUERY_KEY = ["rbac", "permissions"] as const;
-
-function roleQueryKey(roleId: string) {
-  return ["rbac", "roles", roleId] as const;
-}
 
 export const Route = createFileRoute("/members/roles_/$roleId")({
   beforeLoad: async ({ context }) => {
@@ -36,15 +30,10 @@ export const Route = createFileRoute("/members/roles_/$roleId")({
 function RoleDetailPage() {
   const { roleId } = Route.useParams();
 
-  const { data: role, isLoading: roleLoading } = useQuery({
-    queryKey: roleQueryKey(roleId),
-    queryFn: () => getRoleFn({ data: { roleId } }),
-  });
-
-  const { data: permissions = [] } = useQuery({
-    queryKey: PERMISSIONS_QUERY_KEY,
-    queryFn: () => listPermissionsFn(),
-  });
+  const { data: role, isLoading: roleLoading } = useQuery(
+    roleQueryOptions(roleId),
+  );
+  const { data: permissions = [] } = useQuery(permissionsQueryOptions());
 
   if (roleLoading || !role) {
     return (
@@ -139,7 +128,6 @@ function DescriptionEditor({
   roleId: string;
   initial: string | null;
 }) {
-  const queryClient = useQueryClient();
   const [value, setValue] = useState(initial ?? "");
   const [dirty, setDirty] = useState(false);
 
@@ -149,21 +137,13 @@ function DescriptionEditor({
     setDirty(false);
   }, [initial]);
 
-  const mutation = useMutation({
-    mutationFn: () =>
-      updateRoleFn({
-        data: { roleId, description: value.trim() || null },
-      }),
-    onSuccess: async () => {
-      setDirty(false);
-      await queryClient.invalidateQueries({
-        queryKey: roleQueryKey(roleId),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["rbac", "roles"],
-      });
-    },
-  });
+  const mutation = useUpdateRole();
+  const onSave = () => {
+    mutation.mutate(
+      { roleId, description: value.trim() || null },
+      { onSuccess: () => setDirty(false) },
+    );
+  };
 
   return (
     <div className="space-y-2">
@@ -181,11 +161,7 @@ function DescriptionEditor({
       />
       {dirty ? (
         <div className="flex gap-2">
-          <Button
-            size="sm"
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
-          >
+          <Button size="sm" onClick={onSave} disabled={mutation.isPending}>
             {mutation.isPending ? "Saving…" : "Save"}
           </Button>
           <Button
@@ -216,21 +192,9 @@ function PermissionGrants({
   role: RoleDetail;
   permissions: PermissionSummary[];
 }) {
-  const queryClient = useQueryClient();
   const isAdmin = role.name === "system_admin";
 
-  const mutation = useMutation({
-    mutationFn: (permissionIds: string[]) =>
-      setRolePermissionsFn({ data: { roleId: role.id, permissionIds } }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: roleQueryKey(role.id),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["rbac", "roles"],
-      });
-    },
-  });
+  const mutation = useSetRolePermissions();
 
   function handleToggle(permId: string, checked: boolean) {
     const current = new Set(role.permissionIds);
@@ -239,7 +203,10 @@ function PermissionGrants({
     } else {
       current.delete(permId);
     }
-    mutation.mutate(Array.from(current));
+    mutation.mutate({
+      roleId: role.id,
+      permissionIds: Array.from(current),
+    });
   }
 
   // Group by prefix.

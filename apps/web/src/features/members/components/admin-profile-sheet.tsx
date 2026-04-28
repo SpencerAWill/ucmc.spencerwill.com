@@ -1,4 +1,3 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { z } from "zod";
 
@@ -13,6 +12,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "#/components/ui/sheet";
+import { useAdminUpdateProfile } from "#/features/members/api/use-admin-update-profile";
 import { useAppForm } from "#/lib/form/form";
 import {
   UNSAVED_CHANGES_MESSAGE,
@@ -26,7 +26,6 @@ import {
   PROFILE_LIMITS,
   profileInputSchema,
 } from "#/server/profile/profile-schemas";
-import { adminUpdateProfileFn } from "#/features/members/server/member-fns";
 
 type ProfileInput = z.infer<typeof profileInputSchema>;
 
@@ -61,39 +60,17 @@ export function AdminProfileSheet({
   defaults,
   open,
   onOpenChange,
-  detailQueryKey,
+  detailPublicId,
 }: {
   userId: string;
   email: string;
   defaults: AdminProfileDefaults | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  detailQueryKey: readonly unknown[];
+  /** publicId of the detail page being edited, so the hook can refresh that cache. */
+  detailPublicId: string;
 }) {
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: (data: ProfileInput) =>
-      adminUpdateProfileFn({ data: { userId, ...data } }),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: detailQueryKey }),
-        queryClient.invalidateQueries({
-          queryKey: ["members", "directory"],
-        }),
-      ]);
-      toast.success("Profile updated");
-      // See profile-form.tsx for why this synchronous reset is needed.
-      // It also makes the Sheet-close interception below skip its
-      // window.confirm path, since `form.state.isDefaultValue` is
-      // now true.
-      form.reset(form.state.values);
-      onOpenChange(false);
-    },
-    onError: () => {
-      toast.error("Couldn’t save the profile. Please try again.");
-    },
-  });
+  const mutation = useAdminUpdateProfile(detailPublicId);
 
   const form = useAppForm({
     defaultValues: {
@@ -112,7 +89,23 @@ export function AdminProfileSheet({
       onSubmit: profileInputSchema,
     },
     onSubmit: ({ value }) => {
-      mutation.mutate(value as ProfileInput);
+      mutation.mutate(
+        { userId, ...(value as ProfileInput) },
+        {
+          onSuccess: () => {
+            toast.success("Profile updated");
+            // See profile-form.tsx for why this synchronous reset is
+            // needed. It also makes the Sheet-close interception below
+            // skip its window.confirm path, since
+            // `form.state.isDefaultValue` is now true.
+            form.reset(form.state.values);
+            onOpenChange(false);
+          },
+          onError: () => {
+            toast.error("Couldn’t save the profile. Please try again.");
+          },
+        },
+      );
     },
   });
 

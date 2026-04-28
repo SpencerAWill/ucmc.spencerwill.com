@@ -41,15 +41,14 @@ import {
 import { requireApproved } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
 import {
-  listMembersFn,
-  listRolesFn,
-} from "#/features/members/server/member-fns";
+  membersDirectoryQueryOptions,
+  rolesQueryOptions,
+} from "#/features/members/api/queries";
 import type {
   MemberSummary,
   RoleOption,
 } from "#/features/members/server/member-fns";
 
-const MEMBERS_QUERY_KEY = ["members", "directory"] as const;
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
 type ViewMode = "list" | "grid";
@@ -61,8 +60,6 @@ const AFFILIATION_OPTIONS = [
   { value: "alum", label: "Alum" },
   { value: "community", label: "Community" },
 ] as const;
-
-const ROLES_QUERY_KEY = ["members", "roles"] as const;
 
 const SORT_OPTIONS = [
   { value: "name_asc", label: "Name (A–Z)" },
@@ -190,38 +187,22 @@ function MembersIndexPage() {
 
   const activeFilterCount = affiliations.length + roles.length;
 
-  const queryKey = [
-    ...MEMBERS_QUERY_KEY,
-    search,
-    affiliationsParam,
-    rolesParam,
-    statusesParam,
-    sort,
-    perPage,
-    page,
-  ];
-
   const { data: roleOptions = [] } = useQuery({
-    queryKey: ROLES_QUERY_KEY,
-    queryFn: () => listRolesFn(),
+    ...rolesQueryOptions(),
     staleTime: 5 * 60 * 1000, // roles rarely change
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey,
-    queryFn: () =>
-      listMembersFn({
-        data: {
-          search,
-          affiliations: affiliationsParam,
-          roles: rolesParam,
-          statuses: statusesParam,
-          sort: sort ?? "name_asc",
-          limit: perPage,
-          offset,
-        },
-      }),
-  });
+  const { data, isLoading } = useQuery(
+    membersDirectoryQueryOptions({
+      search,
+      affiliations: affiliationsParam,
+      roles: rolesParam,
+      statuses: statusesParam,
+      sort: sort ?? "name_asc",
+      limit: perPage,
+      offset,
+    }),
+  );
 
   const { hasPermission } = useAuth();
   const canAssignRoles = hasPermission("roles:assign");
