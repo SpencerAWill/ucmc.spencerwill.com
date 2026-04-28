@@ -6,6 +6,7 @@ import {
   Eye,
   History,
   Mail,
+  MessageSquare,
   ScrollText,
   Shield,
   UserPlus,
@@ -168,6 +169,7 @@ function SidebarNav() {
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
   const canViewAudit = hasPermission("audit:view");
+  const canSubmitFeedback = hasPermission("feedback:submit");
 
   if (!isApproved) {
     return null;
@@ -254,6 +256,17 @@ function SidebarNav() {
               <Link to="/audit">
                 <History />
                 <span>Audit log</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
+
+        {canSubmitFeedback ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Feedback">
+              <Link to="/feedback">
+                <MessageSquare />
+                <span>Feedback</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
