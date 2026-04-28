@@ -31,6 +31,7 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - Host-dynamic env stays in devcontainer.json `containerEnv`: `TZ` reads from `${localEnv:TZ:America/New_York}` so it tracks the developer's laptop without rebuilding the image
 - VS Code extensions auto-installed: Prettier, ESLint, EditorConfig
 - `.dockerignore` excludes `node_modules/`, `.git/`, `.wiki/`, build outputs, and env files from the build context
+- **Mailpit sidecar** (service `mailpit` in `docker-compose.yml`) — dev mailbox catcher. Web UI + REST API at `http://localhost:8025` (forwarded), reachable from the workspace container as `http://mailpit:8025`. The web app routes outbound dev email here when `MAILPIT_URL` is set (see `apps/web/src/server/email/resend.ts`); Playwright e2e tests poll the REST API for magic-link tokens. SMTP intake on port 1025 is exposed but unused today. Adding/removing the sidecar requires a devcontainer rebuild.
 
 ## Tooling
 

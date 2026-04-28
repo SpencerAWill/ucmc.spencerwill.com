@@ -20,6 +20,31 @@ services:
       - claude-data:/home/vscode/.claude
       - command-history:/commandhistory
     command: sleep infinity
+    depends_on:
+      - mailpit
+
+  # Mailpit catches outbound dev email so magic links land in a real
+  # inbox UI (http://localhost:8025) instead of the wrangler terminal.
+  # The web app POSTs messages to Mailpit's HTTP send API
+  # (`POST /api/v1/send`) when MAILPIT_URL is set; see
+  # apps/web/src/server/email/resend.ts. The SMTP listener on 1025 is
+  # unused today but exposed for future tooling that speaks SMTP.
+  # Playwright e2e tests poll Mailpit's REST API to retrieve magic-link
+  # tokens during sign-in flows.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # Web UI + REST API
+      - "1025:1025" # SMTP intake
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+      # Bound the inbox so a long-running container can't grow without
+      # limit. Tests clear via DELETE /api/v1/messages anyway.
+      MP_MAX_MESSAGES: "500"
+    volumes:
+      - mailpit-data:/data
 
 volumes:
   pnpm-store:
@@ -27,3 +52,4 @@ volumes:
   gh-config:
   claude-data:
   command-history:
+  mailpit-data:
