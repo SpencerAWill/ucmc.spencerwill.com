@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { z } from "zod";
 
 import { EmergencyContactFields } from "#/components/auth/emergency-contact-fields";
@@ -13,6 +14,10 @@ import {
   SheetTitle,
 } from "#/components/ui/sheet";
 import { useAppForm } from "#/lib/form/form";
+import {
+  UNSAVED_CHANGES_MESSAGE,
+  useUnsavedChangesGuard,
+} from "#/lib/form/use-unsaved-changes-guard";
 import type { EmergencyContactInput } from "#/server/auth/server-fns";
 import { PROFILE_LIMITS, profileInputSchema } from "#/server/auth/server-fns";
 import { adminUpdateProfileFn } from "#/server/auth/member-fns";
@@ -70,7 +75,16 @@ export function AdminProfileSheet({
           queryKey: ["members", "directory"],
         }),
       ]);
+      toast.success("Profile updated");
+      // See profile-form.tsx for why this synchronous reset is needed.
+      // It also makes the Sheet-close interception below skip its
+      // window.confirm path, since `form.state.isDefaultValue` is
+      // now true.
+      form.reset(form.state.values);
       onOpenChange(false);
+    },
+    onError: () => {
+      toast.error("Couldn’t save the profile. Please try again.");
     },
   });
 
@@ -94,8 +108,28 @@ export function AdminProfileSheet({
     },
   });
 
+  // Route-level guard: in case the admin navigates away while the
+  // sheet is open with unsaved edits.
+  useUnsavedChangesGuard(form, { skip: () => mutation.isSuccess });
+
+  // Sheet-close interception: X / Escape / click-outside all flow
+  // through `onOpenChange(false)`. The mutation's own success handler
+  // also calls `onOpenChange(false)` — skip the prompt for that case
+  // by checking `mutation.isSuccess`.
+  const handleOpenChange = (next: boolean) => {
+    if (
+      !next &&
+      !mutation.isSuccess &&
+      !form.state.isDefaultValue &&
+      !window.confirm(UNSAVED_CHANGES_MESSAGE)
+    ) {
+      return;
+    }
+    onOpenChange(next);
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent className="overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>Edit profile</SheetTitle>
@@ -110,63 +144,66 @@ export function AdminProfileSheet({
             void form.handleSubmit();
           }}
         >
-          <div className="space-y-1.5">
-            <Label className="text-sm font-medium">Email</Label>
-            <Input
-              type="email"
-              value={email}
-              readOnly
-              className="bg-muted/40"
-            />
-          </div>
+          <form.Subscribe selector={(s) => s.isSubmitting}>
+            {(isSubmitting) => (
+              <fieldset
+                disabled={isSubmitting}
+                className="space-y-6 border-0 p-0"
+              >
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Email</Label>
+                  <Input
+                    type="email"
+                    value={email}
+                    readOnly
+                    className="bg-muted/40"
+                  />
+                </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <form.AppField name="fullName">
-              {(field) => (
-                <field.TextField
-                  label="Full name"
-                  autoComplete="name"
-                  maxLength={PROFILE_LIMITS.fullName.max}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="preferredName">
-              {(field) => (
-                <field.TextField
-                  label="Preferred name"
-                  autoComplete="nickname"
-                  maxLength={PROFILE_LIMITS.preferredName.max}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="mNumber">
-              {() => <MNumberField />}
-            </form.AppField>
-            <form.AppField name="ucAffiliation">
-              {(field) => (
-                <field.Select
-                  label="UC affiliation"
-                  placeholder="Select one..."
-                  values={AFFILIATION_OPTIONS}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="phone">
-              {(field) => <field.PhoneField label="Phone" />}
-            </form.AppField>
-          </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <form.AppField name="fullName">
+                    {(field) => (
+                      <field.TextField
+                        label="Full name"
+                        autoComplete="name"
+                        maxLength={PROFILE_LIMITS.fullName.max}
+                      />
+                    )}
+                  </form.AppField>
+                  <form.AppField name="preferredName">
+                    {(field) => (
+                      <field.TextField
+                        label="Preferred name"
+                        autoComplete="nickname"
+                        maxLength={PROFILE_LIMITS.preferredName.max}
+                      />
+                    )}
+                  </form.AppField>
+                  <form.AppField name="mNumber">
+                    {() => <MNumberField />}
+                  </form.AppField>
+                  <form.AppField name="ucAffiliation">
+                    {(field) => (
+                      <field.Select
+                        label="UC affiliation"
+                        placeholder="Select one..."
+                        values={AFFILIATION_OPTIONS}
+                      />
+                    )}
+                  </form.AppField>
+                  <form.AppField name="phone">
+                    {(field) => <field.PhoneField label="Phone" />}
+                  </form.AppField>
+                </div>
 
-          <EmergencyContactFields form={form} />
+                <EmergencyContactFields form={form} />
 
-          {mutation.isError ? (
-            <p className="text-sm text-destructive">
-              Couldn&rsquo;t save the profile. Please try again.
-            </p>
-          ) : null}
-
-          <form.AppForm>
-            <form.SubscribeButton label="Save profile" />
-          </form.AppForm>
+                <form.AppForm>
+                  <form.SubscribeButton label="Save profile" />
+                </form.AppForm>
+              </fieldset>
+            )}
+          </form.Subscribe>
         </form>
       </SheetContent>
     </Sheet>

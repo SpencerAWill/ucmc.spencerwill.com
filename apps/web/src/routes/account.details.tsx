@@ -1,34 +1,36 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 
+import { EmergencyContactFields } from "#/components/auth/emergency-contact-fields";
+import { PrivateDetailFields } from "#/components/auth/private-detail-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/auth/profile-form-shape";
 import type { ProfileFormShape } from "#/components/auth/profile-form-shape";
-import { PublicProfileFields } from "#/components/auth/public-profile-fields";
+import { Input } from "#/components/ui/input";
+import { Label } from "#/components/ui/label";
 import { useAuth } from "#/lib/auth/use-auth";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import {
   getProfileFn,
   profileInputSchema,
-  submitPublicProfileFn,
+  submitDetailsFn,
 } from "#/server/auth/server-fns";
-import type { PublicProfileInput } from "#/server/auth/server-fns";
+import type { DetailsInput } from "#/server/auth/server-fns";
+
+import { ACCOUNT_PROFILE_QUERY_KEY } from "./account.index";
 
 /**
- * Default `/account` tab — shows the public-ish profile fields
- * (preferred name, UC affiliation) that fellow members can see in the
- * directory. Private fields (legal name, M-number, phone, emergency
- * contacts) live on the sibling `/account/details` route, mirroring
- * the server-side `members:view_private` projection split.
+ * `/account/details` — private profile fields (legal name, M-number,
+ * phone) plus emergency contacts. Mirrors the server-side
+ * `members:view_private` projection: only the user themselves and
+ * admins ever see these values.
  */
-export const Route = createFileRoute("/account/")({
-  component: AccountProfilePage,
+export const Route = createFileRoute("/account/details")({
+  component: AccountDetailsPage,
 });
 
-export const ACCOUNT_PROFILE_QUERY_KEY = ["account", "profile"] as const;
-
-function AccountProfilePage() {
+function AccountDetailsPage() {
   const { principal } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ACCOUNT_PROFILE_QUERY_KEY,
@@ -43,17 +45,34 @@ function AccountProfilePage() {
   return (
     <div className="space-y-4">
       <header>
-        <h2 className="text-lg font-medium">Profile</h2>
+        <h2 className="text-lg font-medium">Details</h2>
         <p className="text-sm text-muted-foreground">
-          What other UCMC members see about you. Changes save immediately.
+          Private information only you and UCMC execs can see. Changes save
+          immediately.
         </p>
       </header>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="details-email" className="text-sm font-medium">
+          Email
+        </Label>
+        <Input
+          id="details-email"
+          type="email"
+          value={principal.email}
+          readOnly
+          aria-describedby="details-email-hint"
+          className="bg-muted/40"
+        />
+        <p id="details-email-hint" className="text-xs text-muted-foreground">
+          To change your email, sign out and re-register with the new address.
+        </p>
+      </div>
+
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <PublicProfileEditor
-          // Remount with fresh defaults after a save + refetch — useAppForm
-          // only reads defaultValues on mount.
+        <DetailsEditor
           key={data?.profile?.updatedAt.toString()}
           defaults={
             data?.profile
@@ -74,47 +93,32 @@ function AccountProfilePage() {
           }
         />
       )}
-      <p className="text-xs text-muted-foreground">
-        Looking for your phone, legal name, or emergency contacts? Those live on
-        the{" "}
-        <Link to="/account/details" className="underline">
-          Details
-        </Link>{" "}
-        tab.
-      </p>
     </div>
   );
 }
 
-function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
+function DetailsEditor({ defaults }: { defaults: ProfileFormShape }) {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: (data: PublicProfileInput) => submitPublicProfileFn({ data }),
+    mutationFn: (data: DetailsInput) => submitDetailsFn({ data }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ACCOUNT_PROFILE_QUERY_KEY,
       });
-      toast.success("Profile saved");
-      // Mark current values as new defaults so the unsaved-changes
-      // guard treats the form as clean. See the matching note in
-      // profile-form.tsx for why a synchronous form.reset is needed
-      // (React doesn't re-render between this callback and any
-      // subsequent navigation, so a closure-based skip is stale).
+      toast.success("Details saved");
+      // See profile-form.tsx for why this synchronous reset is needed.
       form.reset(form.state.values);
     },
     onError: () => {
-      toast.error("Couldn’t save your profile. Please try again.");
+      toast.error("Couldn’t save your details. Please try again.");
     },
   });
 
-  // Form holds the shared full shape so `PublicProfileFields` (which
-  // declares the same shape via `withForm`) matches its prop type. Only
-  // the fields rendered below are editable; the rest pass through
-  // unchanged from `defaults` (which come from the saved profile, so
-  // they're already valid). The full `profileInputSchema` validates
-  // the whole shape; submit picks just the public-ish columns and
-  // calls `submitPublicProfileFn`.
+  // Same full-form validation pattern as the Profile tab — see comment
+  // there. The form holds every profile field (populated from saved
+  // values), but only the Details fields below are editable. Submit
+  // picks just the private columns and calls `submitDetailsFn`.
   const form = useAppForm({
     defaultValues: defaults,
     validators: {
@@ -125,9 +129,11 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
     },
     onSubmit: ({ value }) => {
       mutation.mutate({
-        preferredName: value.preferredName,
-        ucAffiliation: value.ucAffiliation,
-      } as PublicProfileInput);
+        fullName: value.fullName,
+        mNumber: value.mNumber,
+        phone: value.phone,
+        emergencyContacts: value.emergencyContacts,
+      } as DetailsInput);
     },
   });
 
@@ -145,7 +151,8 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
       <form.Subscribe selector={(s) => s.isSubmitting}>
         {(isSubmitting) => (
           <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
-            <PublicProfileFields form={form} />
+            <PrivateDetailFields form={form} />
+            <EmergencyContactFields form={form} />
             <form.AppForm>
               <form.SubscribeButton label="Save changes" />
             </form.AppForm>

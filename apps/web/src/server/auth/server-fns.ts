@@ -15,6 +15,8 @@
  *   - getProofFn          — short-lived email-verified proof cookie
  *   - signOutFn           — close current session
  *   - submitProfileFn     — create/update profile, upsert user row
+ *   - submitPublicProfileFn — partial update of public profile fields
+ *   - submitDetailsFn     — partial update of private detail fields
  *
  * Shared types (ConsumeMagicLinkResult, ProfileInput) are declared here
  * so actions and clients can both reference them without pulling any
@@ -214,6 +216,26 @@ export const profileInputSchema = z.object({
 
 export type ProfileInput = z.infer<typeof profileInputSchema>;
 
+// Narrower schemas for the split account UI: `/account` (Profile tab)
+// edits the public-ish fields, `/account/details` (Details tab) edits the
+// PII fields + emergency contacts. Registration still uses the full
+// `profileInputSchema` for its single onboarding submit.
+export const publicProfileInputSchema = profileInputSchema.pick({
+  preferredName: true,
+  ucAffiliation: true,
+});
+
+export type PublicProfileInput = z.infer<typeof publicProfileInputSchema>;
+
+export const detailsInputSchema = profileInputSchema.pick({
+  fullName: true,
+  mNumber: true,
+  phone: true,
+  emergencyContacts: true,
+});
+
+export type DetailsInput = z.infer<typeof detailsInputSchema>;
+
 /**
  * First-time profile submission. Callable by a user who has a valid
  * email-verified proof cookie but no session yet (the register flow) OR
@@ -236,4 +258,31 @@ export const submitProfileFn = createServerFn({ method: "POST" })
     const { submitProfileAction } =
       await import("#/server/auth/magic-link-actions.server");
     return submitProfileAction(data);
+  });
+
+/**
+ * Partial update for the Profile tab. Writes preferredName + ucAffiliation
+ * onto the caller's existing profile row. Requires an authenticated
+ * principal (the route guard already enforces `requireApproved`); does
+ * not touch the user row, status, or emergency contacts.
+ */
+export const submitPublicProfileFn = createServerFn({ method: "POST" })
+  .inputValidator(publicProfileInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { submitPublicProfileAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return submitPublicProfileAction(data);
+  });
+
+/**
+ * Partial update for the Details tab. Writes fullName + mNumber + phone
+ * onto the caller's existing profile row and replaces the emergency
+ * contact set. Requires an authenticated principal.
+ */
+export const submitDetailsFn = createServerFn({ method: "POST" })
+  .inputValidator(detailsInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { submitDetailsAction } =
+      await import("#/server/auth/magic-link-actions.server");
+    return submitDetailsAction(data);
   });

@@ -1,29 +1,20 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import type { z } from "zod";
 
 import { EmergencyContactFields } from "#/components/auth/emergency-contact-fields";
-import { MNumberField } from "#/components/auth/m-number-field";
+import { PrivateDetailFields } from "#/components/auth/private-detail-fields";
+import { PublicProfileFields } from "#/components/auth/public-profile-fields";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { SESSION_QUERY_KEY } from "#/lib/auth/use-auth";
 import { useAppForm } from "#/lib/form/form";
+import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import type { EmergencyContactInput } from "#/server/auth/server-fns";
-import {
-  PROFILE_LIMITS,
-  profileInputSchema,
-  submitProfileFn,
-} from "#/server/auth/server-fns";
+import { profileInputSchema, submitProfileFn } from "#/server/auth/server-fns";
 
 type ProfileInput = z.infer<typeof profileInputSchema>;
-
-const AFFILIATION_OPTIONS = [
-  { label: "Student", value: "student" },
-  { label: "Faculty", value: "faculty" },
-  { label: "Staff", value: "staff" },
-  { label: "Alum", value: "alum" },
-  { label: "Community", value: "community" },
-];
 
 export interface ProfileFormDefaults {
   fullName?: string;
@@ -63,7 +54,19 @@ export function ProfileForm({
         queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
         queryClient.invalidateQueries({ queryKey: ["account", "profile"] }),
       ]);
+      toast.success("Profile submitted");
+      // Mark the current values as the new defaults so the
+      // unsaved-changes guard sees `isDefaultValue: true`
+      // synchronously. The guard reads `form.state` directly inside
+      // its blocker callback, so this short-circuits the prompt for
+      // the navigate() below — `mutation.isSuccess` alone wouldn't
+      // work because React doesn't re-render between this onSuccess
+      // and navigate (microtask awaits don't flush React).
+      form.reset(form.state.values);
       await navigate({ to: redirectTo });
+    },
+    onError: () => {
+      toast.error("Couldn’t save your profile. Please try again.");
     },
   });
 
@@ -93,6 +96,8 @@ export function ProfileForm({
     },
   });
 
+  useUnsavedChangesGuard(form, { skip: () => mutation.isSuccess });
+
   return (
     <form
       className="space-y-6"
@@ -102,70 +107,47 @@ export function ProfileForm({
         void form.handleSubmit();
       }}
     >
-      <div className="space-y-1.5">
-        <Label htmlFor="profile-email" className="text-sm font-medium">
-          Email
-        </Label>
-        <Input
-          id="profile-email"
-          type="email"
-          value={email}
-          readOnly
-          // Rendered in the form so a reviewer/autofill context knows
-          // whose profile this is, but editing the email means
-          // re-verifying via magic link — not a field-level change.
-          aria-describedby="profile-email-hint"
-          className="bg-muted/40"
-        />
-        <p id="profile-email-hint" className="text-xs text-muted-foreground">
-          To change your email, sign out and re-register with the new address.
-        </p>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <form.AppField name="fullName">
-          {(field) => (
-            <field.TextField
-              label="Full name"
-              autoComplete="name"
-              maxLength={PROFILE_LIMITS.fullName.max}
-            />
-          )}
-        </form.AppField>
-        <form.AppField name="preferredName">
-          {(field) => (
-            <field.TextField
-              label="Preferred name"
-              autoComplete="nickname"
-              maxLength={PROFILE_LIMITS.preferredName.max}
-            />
-          )}
-        </form.AppField>
-        <form.AppField name="mNumber">{() => <MNumberField />}</form.AppField>
-        <form.AppField name="ucAffiliation">
-          {(field) => (
-            <field.Select
-              label="UC affiliation"
-              placeholder="Select one…"
-              values={AFFILIATION_OPTIONS}
-            />
-          )}
-        </form.AppField>
-        <form.AppField name="phone">
-          {(field) => <field.PhoneField label="Phone" />}
-        </form.AppField>
-      </div>
+      {/* `fieldset disabled` natively disables every form control inside
+          it (inputs, selects, the submit button), so we get full-form
+          lockout during submission with no per-field plumbing. */}
+      <form.Subscribe selector={(s) => s.isSubmitting}>
+        {(isSubmitting) => (
+          <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-email" className="text-sm font-medium">
+                Email
+              </Label>
+              <Input
+                id="profile-email"
+                type="email"
+                value={email}
+                readOnly
+                // Rendered in the form so a reviewer/autofill context
+                // knows whose profile this is, but editing the email
+                // means re-verifying via magic link — not a field-level
+                // change.
+                aria-describedby="profile-email-hint"
+                className="bg-muted/40"
+              />
+              <p
+                id="profile-email-hint"
+                className="text-xs text-muted-foreground"
+              >
+                To change your email, sign out and re-register with the new
+                address.
+              </p>
+            </div>
+            <PublicProfileFields form={form} />
+            <PrivateDetailFields form={form} />
 
-      <EmergencyContactFields form={form} />
+            <EmergencyContactFields form={form} />
 
-      {mutation.isError ? (
-        <p className="text-sm text-destructive">
-          Couldn&rsquo;t save your profile. Please try again.
-        </p>
-      ) : null}
-
-      <form.AppForm>
-        <form.SubscribeButton label="Submit for review" />
-      </form.AppForm>
+            <form.AppForm>
+              <form.SubscribeButton label="Submit for review" />
+            </form.AppForm>
+          </fieldset>
+        )}
+      </form.Subscribe>
     </form>
   );
 }

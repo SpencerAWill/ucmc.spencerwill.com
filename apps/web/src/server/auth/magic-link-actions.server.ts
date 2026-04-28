@@ -30,7 +30,9 @@ import {
 } from "#/server/auth/session.server";
 import type {
   ConsumeMagicLinkResult,
+  DetailsInput,
   ProfileInput,
+  PublicProfileInput,
 } from "#/server/auth/server-fns";
 import { getDb, schema } from "#/server/db";
 import {
@@ -268,6 +270,69 @@ export async function submitProfileAction(
   if (!principal) {
     await openSession(userRow.id);
     clearProofCookie();
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Partial update for the Profile tab. Only writes the public-ish columns
+ * (preferredName, ucAffiliation) onto the existing profile row. Caller
+ * must be authenticated; the route guard at /account already enforces
+ * `requireApproved`, so the row is guaranteed to exist.
+ */
+export async function submitPublicProfileAction(
+  data: PublicProfileInput,
+): Promise<{ ok: true }> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not authorized to submit a profile");
+  }
+
+  await getDb()
+    .update(schema.profiles)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.profiles.userId, principal.userId));
+
+  return { ok: true };
+}
+
+/**
+ * Partial update for the Details tab. Writes fullName + mNumber + phone
+ * onto the existing profile row and replaces the emergency contact set
+ * (delete-then-insert, same pattern as `submitProfileAction`). Caller
+ * must be authenticated.
+ */
+export async function submitDetailsAction(
+  data: DetailsInput,
+): Promise<{ ok: true }> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not authorized to submit a profile");
+  }
+
+  const { emergencyContacts, ...profileData } = data;
+  const db = getDb();
+
+  await db
+    .update(schema.profiles)
+    .set({ ...profileData, updatedAt: new Date() })
+    .where(eq(schema.profiles.userId, principal.userId));
+
+  await db
+    .delete(schema.emergencyContacts)
+    .where(eq(schema.emergencyContacts.userId, principal.userId));
+
+  if (emergencyContacts.length > 0) {
+    await db.insert(schema.emergencyContacts).values(
+      emergencyContacts.map((ec) => ({
+        id: `ec_${uuidv7()}`,
+        userId: principal.userId,
+        name: ec.name,
+        phone: ec.phone,
+        relationship: ec.relationship,
+      })),
+    );
   }
 
   return { ok: true };

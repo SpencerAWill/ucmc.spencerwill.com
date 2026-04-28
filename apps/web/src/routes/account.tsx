@@ -23,6 +23,7 @@ export const Route = createFileRoute("/account")({
 
 const TABS = [
   { to: "/account", label: "Profile" },
+  { to: "/account/details", label: "Details" },
   { to: "/account/security", label: "Security" },
   { to: "/account/preferences", label: "Preferences" },
 ] as const;

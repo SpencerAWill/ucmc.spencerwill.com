@@ -25,6 +25,7 @@ import { Route as MembersUserIdRouteImport } from './routes/members.$userId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
+import { Route as AccountDetailsRouteImport } from './routes/account.details'
 import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
 
 const SignInRoute = SignInRouteImport.update({
@@ -107,6 +108,11 @@ const AccountPreferencesRoute = AccountPreferencesRouteImport.update({
   path: '/preferences',
   getParentRoute: () => AccountRoute,
 } as any)
+const AccountDetailsRoute = AccountDetailsRouteImport.update({
+  id: '/details',
+  path: '/details',
+  getParentRoute: () => AccountRoute,
+} as any)
 const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
   id: '/roles_/$roleId',
   path: '/roles/$roleId',
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/health': typeof HealthRoute
   '/members': typeof MembersRouteWithChildren
   '/sign-in': typeof SignInRoute
+  '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/deactivated': typeof DeactivatedRoute
   '/health': typeof HealthRoute
   '/sign-in': typeof SignInRoute
+  '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/health': typeof HealthRoute
   '/members': typeof MembersRouteWithChildren
   '/sign-in': typeof SignInRoute
+  '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -178,6 +187,7 @@ export interface FileRouteTypes {
     | '/health'
     | '/members'
     | '/sign-in'
+    | '/account/details'
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/health'
     | '/sign-in'
+    | '/account/details'
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '/health'
     | '/members'
     | '/sign-in'
+    | '/account/details'
     | '/account/preferences'
     | '/account/security'
     | '/auth/callback'
@@ -353,6 +365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountPreferencesRouteImport
       parentRoute: typeof AccountRoute
     }
+    '/account/details': {
+      id: '/account/details'
+      path: '/details'
+      fullPath: '/account/details'
+      preLoaderRoute: typeof AccountDetailsRouteImport
+      parentRoute: typeof AccountRoute
+    }
     '/members/roles_/$roleId': {
       id: '/members/roles_/$roleId'
       path: '/roles/$roleId'
@@ -364,12 +383,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AccountRouteChildren {
+  AccountDetailsRoute: typeof AccountDetailsRoute
   AccountPreferencesRoute: typeof AccountPreferencesRoute
   AccountSecurityRoute: typeof AccountSecurityRoute
   AccountIndexRoute: typeof AccountIndexRoute
 }
 
 const AccountRouteChildren: AccountRouteChildren = {
+  AccountDetailsRoute: AccountDetailsRoute,
   AccountPreferencesRoute: AccountPreferencesRoute,
   AccountSecurityRoute: AccountSecurityRoute,
   AccountIndexRoute: AccountIndexRoute,

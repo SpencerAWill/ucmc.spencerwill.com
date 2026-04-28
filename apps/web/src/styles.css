@@ -131,3 +131,22 @@ body,
     @apply bg-background text-foreground font-sans antialiased;
   }
 }
+
+/* Browser autofill detection: Chrome/Safari fire `:autofill` (or
+ * webkit-prefixed `:-webkit-autofill`) when an input is autofilled,
+ * but they do NOT fire React's `onChange` until the user interacts.
+ * For controlled TanStack Form inputs that means form state stays
+ * empty + invalid until blur, so the field never goes "valid green"
+ * while typing. Triggering a 1ms named animation gives JS an
+ * `animationstart` event it can listen for and sync the DOM value
+ * back into form state. See `useFormAutofillSync` in lib/form. */
+@keyframes form-autofill-detect {
+  to {
+    background: transparent;
+  }
+}
+input:-webkit-autofill,
+input:autofill {
+  animation-name: form-autofill-detect;
+  animation-duration: 0.001s;
+}

@@ -1,8 +1,15 @@
 import { Plus, Trash2 } from "lucide-react";
 
+import { EMPTY_PROFILE_FORM_VALUES } from "#/components/auth/profile-form-shape";
 import { Button } from "#/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "#/components/ui/card";
 import { Label } from "#/components/ui/label";
-import { Separator } from "#/components/ui/separator";
 import { withForm } from "#/lib/form/form";
 import type { EmergencyContactInput } from "#/server/auth/server-fns";
 import { PROFILE_LIMITS } from "#/server/auth/server-fns";
@@ -32,22 +39,11 @@ const EMPTY_CONTACT: EmergencyContactInput = {
  * `form` is the `useAppForm` return value from the parent form.
  */
 export const EmergencyContactFields = withForm({
-  // defaultValues must match the full parent form shape for type safety.
-  // Only the emergencyContacts field is rendered by this component.
-  defaultValues: {
-    fullName: "",
-    preferredName: "",
-    mNumber: "",
-    phone: "",
-    emergencyContacts: [] as EmergencyContactInput[],
-    ucAffiliation: "" as
-      | ""
-      | "student"
-      | "faculty"
-      | "staff"
-      | "alum"
-      | "community",
-  },
+  // All profile-editing forms in the app share one shape (see
+  // `profile-form-shape.ts`) because `withForm`'s generics are
+  // invariant — a wider parent form can't be passed to a narrower
+  // field-group component.
+  defaultValues: EMPTY_PROFILE_FORM_VALUES,
   render: function EmergencyContactFieldsRender({ form }) {
     return (
       <form.AppField name="emergencyContacts" mode="array">
@@ -66,48 +62,51 @@ export const EmergencyContactFields = withForm({
               </div>
 
               {contacts.map((_contact, i) => (
-                <div key={i} className="space-y-3">
-                  {i > 0 ? <Separator /> : null}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">
+                <Card key={i} className="gap-4 py-4">
+                  <CardHeader className="px-4">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
                       Contact {i + 1}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-destructive hover:text-destructive"
-                      onClick={() => field.removeValue(i)}
-                    >
-                      <Trash2 className="mr-1 size-3.5" />
-                      Remove
-                    </Button>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <form.AppField name={`emergencyContacts[${i}].name`}>
-                      {(f) => (
-                        <f.TextField
-                          label="Name"
-                          maxLength={PROFILE_LIMITS.emergencyContactName.max}
-                        />
-                      )}
-                    </form.AppField>
-                    <form.AppField name={`emergencyContacts[${i}].phone`}>
-                      {(f) => <f.PhoneField label="Phone" />}
-                    </form.AppField>
-                    <form.AppField
-                      name={`emergencyContacts[${i}].relationship`}
-                    >
-                      {(f) => (
-                        <f.Select
-                          label="Relationship"
-                          placeholder="Select..."
-                          values={RELATIONSHIP_OPTIONS}
-                        />
-                      )}
-                    </form.AppField>
-                  </div>
-                </div>
+                    </CardTitle>
+                    <CardAction>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-destructive hover:text-destructive"
+                        onClick={() => field.removeValue(i)}
+                      >
+                        <Trash2 className="mr-1 size-3.5" />
+                        Remove
+                      </Button>
+                    </CardAction>
+                  </CardHeader>
+                  <CardContent className="px-4">
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <form.AppField name={`emergencyContacts[${i}].name`}>
+                        {(f) => (
+                          <f.TextField
+                            label="Name"
+                            maxLength={PROFILE_LIMITS.emergencyContactName.max}
+                          />
+                        )}
+                      </form.AppField>
+                      <form.AppField name={`emergencyContacts[${i}].phone`}>
+                        {(f) => <f.PhoneField label="Phone" />}
+                      </form.AppField>
+                      <form.AppField
+                        name={`emergencyContacts[${i}].relationship`}
+                      >
+                        {(f) => (
+                          <f.Select
+                            label="Relationship"
+                            placeholder="Select..."
+                            values={RELATIONSHIP_OPTIONS}
+                          />
+                        )}
+                      </form.AppField>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
 
               <Button

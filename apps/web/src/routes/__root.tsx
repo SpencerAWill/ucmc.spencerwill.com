@@ -14,6 +14,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { AppLayout } from "#/components/layouts/app-layout";
 import { ThemeProvider } from "#/components/theme-provider";
+import { Toaster } from "#/components/ui/sonner";
 import { sessionQueryOptions } from "#/lib/auth/use-auth";
 import { ViewModeProvider } from "#/lib/auth/view-mode";
 
@@ -64,6 +65,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           <ViewModeProvider>
             <AppLayout>{children}</AppLayout>
           </ViewModeProvider>
+          <Toaster richColors position="bottom-right" />
           <TanStackDevtools
             config={{
               position: "bottom-right",

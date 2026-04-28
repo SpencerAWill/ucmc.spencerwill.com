@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, schema } from "#/server/db";
@@ -29,8 +30,12 @@ vi.mock("#/server/rate-limit.server", () => ({
 }));
 
 // Import AFTER the mocks above so the action module picks them up.
-const { consumeMagicLinkAction, getProfileAction } =
-  await import("#/server/auth/magic-link-actions.server");
+const {
+  consumeMagicLinkAction,
+  getProfileAction,
+  submitDetailsAction,
+  submitPublicProfileAction,
+} = await import("#/server/auth/magic-link-actions.server");
 const { MAGIC_LINK_TTL_MS } = await import("#/server/auth/magic-link.server");
 const { openSession } = await import("#/server/auth/session.server");
 
@@ -277,5 +282,152 @@ describe("getProfileAction", () => {
 
     const result = await getProfileAction();
     expect(result.profile?.userId).toBe(aId);
+  });
+});
+
+describe("submitPublicProfileAction", () => {
+  it("rejects anonymous callers", async () => {
+    await expect(
+      submitPublicProfileAction({
+        preferredName: "Pat",
+        ucAffiliation: "student",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("updates only preferredName + ucAffiliation, leaving private fields intact", async () => {
+    const userId = await seedUser({
+      email: "pub@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(userId);
+
+    await submitPublicProfileAction({
+      preferredName: "NewPreferred",
+      ucAffiliation: "alum",
+    });
+
+    const row = await getDb().query.profiles.findFirst({
+      where: eq(schema.profiles.userId, userId),
+    });
+    expect(row?.preferredName).toBe("NewPreferred");
+    expect(row?.ucAffiliation).toBe("alum");
+    // Private columns from seedUser's withProfile defaults must not be
+    // touched by a public-profile update.
+    expect(row?.fullName).toBe("Test User");
+    expect(row?.phone).toBe("+15135551212");
+  });
+
+  it("scopes the update to the caller's userId (no IDOR)", async () => {
+    const aId = await seedUser({
+      email: "a@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    const bId = await seedUser({
+      email: "b@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(aId);
+
+    await submitPublicProfileAction({
+      preferredName: "OnlyA",
+      ucAffiliation: "faculty",
+    });
+
+    const bRow = await getDb().query.profiles.findFirst({
+      where: eq(schema.profiles.userId, bId),
+    });
+    expect(bRow?.preferredName).toBe("Test");
+    expect(bRow?.ucAffiliation).toBe("student");
+  });
+});
+
+describe("submitDetailsAction", () => {
+  it("rejects anonymous callers", async () => {
+    await expect(
+      submitDetailsAction({
+        fullName: "Real Name",
+        mNumber: "",
+        phone: "+15135559999",
+        emergencyContacts: [],
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("updates private fields, replaces emergency contacts, leaves public fields intact", async () => {
+    const userId = await seedUser({
+      email: "det@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(userId);
+    // Seed an existing emergency contact so we can verify replace-on-write.
+    await getDb().insert(schema.emergencyContacts).values({
+      id: "ec_old",
+      userId,
+      name: "Old Contact",
+      phone: "+15135550000",
+      relationship: "friend",
+    });
+
+    await submitDetailsAction({
+      fullName: "Updated Legal",
+      mNumber: "M12345678",
+      phone: "+15135559999",
+      emergencyContacts: [
+        {
+          name: "New Contact",
+          phone: "+15135551111",
+          relationship: "parent",
+        },
+      ],
+    });
+
+    const row = await getDb().query.profiles.findFirst({
+      where: eq(schema.profiles.userId, userId),
+    });
+    expect(row?.fullName).toBe("Updated Legal");
+    expect(row?.mNumber).toBe("M12345678");
+    expect(row?.phone).toBe("+15135559999");
+    // Public-profile columns must not be clobbered by a details update.
+    expect(row?.preferredName).toBe("Test");
+    expect(row?.ucAffiliation).toBe("student");
+
+    const contacts = await getDb()
+      .select()
+      .from(schema.emergencyContacts)
+      .where(eq(schema.emergencyContacts.userId, userId));
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0]?.name).toBe("New Contact");
+  });
+
+  it("scopes the update to the caller's userId (no IDOR)", async () => {
+    const aId = await seedUser({
+      email: "a2@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    const bId = await seedUser({
+      email: "b2@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(aId);
+
+    await submitDetailsAction({
+      fullName: "Only A Legal",
+      mNumber: "",
+      phone: "+15135552222",
+      emergencyContacts: [],
+    });
+
+    const bRow = await getDb().query.profiles.findFirst({
+      where: eq(schema.profiles.userId, bId),
+    });
+    expect(bRow?.fullName).toBe("Test User");
+    expect(bRow?.phone).toBe("+15135551212");
   });
 });

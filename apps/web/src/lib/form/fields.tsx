@@ -5,6 +5,7 @@
 // useStore call would create a competing subscription that only
 // triggers on meta changes — missing value changes needed for
 // validation-attribute computation (e.g. isDirty + hasValue → green).
+import { useEffect, useRef } from "react";
 import PhoneInputBase from "react-phone-number-input/input";
 
 import { Button } from "#/components/ui/button";
@@ -17,6 +18,9 @@ import { Textarea as ShadcnTextarea } from "#/components/ui/textarea";
 import { useFieldContext, useFormContext } from "#/lib/form/context";
 import { fieldValidationAttrs } from "#/lib/form/field-state";
 
+// Matches the `@keyframes form-autofill-detect` rule in `styles.css`.
+const AUTOFILL_ANIMATION_NAME = "form-autofill-detect";
+
 export function SubscribeButton({ label }: { label: string }) {
   const form = useFormContext();
   return (
@@ -24,10 +28,20 @@ export function SubscribeButton({ label }: { label: string }) {
       selector={(state) => ({
         isSubmitting: state.isSubmitting,
         canSubmit: state.canSubmit,
+        isDefaultValue: state.isDefaultValue,
       })}
     >
-      {({ isSubmitting, canSubmit }) => (
-        <Button type="submit" disabled={isSubmitting || !canSubmit}>
+      {({ isSubmitting, canSubmit, isDefaultValue }) => (
+        // `isDefaultValue` is the value-comparison flag (current values
+        // === defaults), not the interaction flag — so the button
+        // re-disables if the user types a change and then reverts it.
+        // `isDirty`/`isPristine` are interaction-sticky and would stay
+        // enabled after a revert, which isn't what we want for a
+        // "nothing to save" gate.
+        <Button
+          type="submit"
+          disabled={isSubmitting || !canSubmit || isDefaultValue}
+        >
           {isSubmitting ? "Submitting…" : label}
         </Button>
       )}
@@ -92,6 +106,36 @@ export function TextField({
   const field = useFieldContext<string>();
   const { meta, value } = field.state;
   const validation = fieldValidationAttrs(meta, value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Browser autofill (esp. Chrome on autoComplete="name") sets the
+  // input's DOM value but does NOT fire React's onChange handler
+  // until the user interacts (focus + blur). For controlled
+  // TanStack Form inputs that means `field.state.value` stays at
+  // its empty default while the field visibly contains text — so
+  // it shows neutral, and only flips to green on blur (when the
+  // browser finally fires a synthetic change).
+  //
+  // The 1ms `form-autofill-detect` animation declared in
+  // styles.css fires when the `:autofill` pseudo-class is set,
+  // giving us an `animationstart` event we can listen for and
+  // push the DOM value into form state ourselves.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+    const handler = (e: AnimationEvent) => {
+      if (e.animationName !== AUTOFILL_ANIMATION_NAME) {
+        return;
+      }
+      if (input.value !== field.state.value) {
+        field.handleChange(input.value);
+      }
+    };
+    input.addEventListener("animationstart", handler);
+    return () => input.removeEventListener("animationstart", handler);
+  }, [field]);
 
   return (
     <div className="space-y-1.5">
@@ -99,6 +143,7 @@ export function TextField({
         {label}
       </Label>
       <Input
+        ref={inputRef}
         id={field.name}
         name={field.name}
         type={type}
