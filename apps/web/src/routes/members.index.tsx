@@ -639,7 +639,7 @@ function MemberCard({
   return (
     <Link to="/members/$userId" params={{ userId: member.userId }}>
       <Card className="transition-colors hover:bg-muted/50">
-        <CardContent className="flex flex-col items-center gap-3 pt-6 text-center">
+        <CardContent className="flex flex-col items-center gap-3 text-center">
           <UserAvatar
             avatarKey={member.avatarKey}
             name={name}

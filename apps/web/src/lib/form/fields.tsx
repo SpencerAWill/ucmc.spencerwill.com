@@ -166,10 +166,12 @@ export function TextArea({
   label,
   rows = 3,
   maxLength,
+  placeholder,
 }: {
   label: string;
   rows?: number;
   maxLength?: number;
+  placeholder?: string;
 }) {
   const field = useFieldContext<string>();
   const { meta, value } = field.state;
@@ -187,6 +189,7 @@ export function TextArea({
         onBlur={field.handleBlur}
         rows={rows}
         maxLength={maxLength}
+        placeholder={placeholder}
         onChange={(e) => field.handleChange(e.target.value)}
         {...validation}
       />

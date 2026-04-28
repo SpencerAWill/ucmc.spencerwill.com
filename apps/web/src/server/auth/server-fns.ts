@@ -159,6 +159,17 @@ export const PROFILE_LIMITS = {
   emergencyContactName: { min: 1, max: 120 },
 } as const;
 
+export const BIO_LIMITS = { maxWords: 150 } as const;
+
+/**
+ * Word count for bio validation + the live counter in the editor.
+ * Empty / whitespace-only → 0. Mirrored on both server (zod refine)
+ * and client (display) so the count never disagrees with the rule.
+ */
+export function countWords(value: string): number {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
 const phoneSchema = z
   .string()
   .trim()
@@ -214,6 +225,12 @@ export const profileInputSchema = z.object({
   ucAffiliation: z.enum(schema.ucAffiliation, {
     error: "Required",
   }),
+  bio: z
+    .string()
+    .trim()
+    .refine((v) => countWords(v) <= BIO_LIMITS.maxWords, {
+      message: `At most ${BIO_LIMITS.maxWords} words`,
+    }),
 });
 
 export type ProfileInput = z.infer<typeof profileInputSchema>;
@@ -225,6 +242,7 @@ export type ProfileInput = z.infer<typeof profileInputSchema>;
 export const publicProfileInputSchema = profileInputSchema.pick({
   preferredName: true,
   ucAffiliation: true,
+  bio: true,
 });
 
 export type PublicProfileInput = z.infer<typeof publicProfileInputSchema>;

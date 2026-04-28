@@ -20,6 +20,7 @@ export interface ProfileFormShape {
   phone: string;
   emergencyContacts: EmergencyContactInput[];
   ucAffiliation: "" | "student" | "faculty" | "staff" | "alum" | "community";
+  bio: string;
 }
 
 export const EMPTY_PROFILE_FORM_VALUES: ProfileFormShape = {
@@ -29,4 +30,5 @@ export const EMPTY_PROFILE_FORM_VALUES: ProfileFormShape = {
   phone: "",
   emergencyContacts: [],
   ucAffiliation: "",
+  bio: "",
 };

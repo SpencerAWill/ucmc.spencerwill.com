@@ -338,6 +338,7 @@ export interface MemberDetail {
   preferredName: string | null;
   ucAffiliation: string | null;
   avatarKey: string | null;
+  bio: string | null;
   roles: string[];
   // Private fields — null/empty when caller lacks members:view_private.
   phone: string | null;
@@ -367,6 +368,7 @@ export async function getMemberDetailAction(
       preferredName: schema.profiles.preferredName,
       ucAffiliation: schema.profiles.ucAffiliation,
       avatarKey: schema.profiles.avatarKey,
+      bio: schema.profiles.bio,
       phone: schema.profiles.phone,
       mNumber: schema.profiles.mNumber,
     })
@@ -419,6 +421,7 @@ export async function getMemberDetailAction(
     preferredName: row.preferredName,
     ucAffiliation: row.ucAffiliation,
     avatarKey: row.avatarKey,
+    bio: row.bio,
     roles: roleRows.map((r) => r.roleName),
     phone: canViewPrivate ? row.phone : null,
     emergencyContacts: contacts,

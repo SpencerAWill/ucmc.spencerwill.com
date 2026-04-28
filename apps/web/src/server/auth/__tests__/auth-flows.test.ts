@@ -166,6 +166,7 @@ const validProfile = {
     },
   ],
   ucAffiliation: "student" as const,
+  bio: "",
 };
 
 // ── setup ───────────────────────────────────────────────────────────────

@@ -215,7 +215,10 @@ export async function submitProfileAction(
 
   const email = principal?.email ?? proof!.email;
 
-  const { emergencyContacts, ...profileData } = data;
+  const { emergencyContacts, bio, ...rest } = data;
+  // Empty/whitespace-only bio normalizes to NULL so the DB has a single
+  // representation of "no bio set".
+  const profileData = { ...rest, bio: bio.length > 0 ? bio : null };
 
   // Find or create the user row. Pre-seeded rows (email-only, no profile)
   // are reused by hitting the unique email index. We do this in three
@@ -289,9 +292,14 @@ export async function submitPublicProfileAction(
     throw new Error("Not authorized to submit a profile");
   }
 
+  const { bio, ...rest } = data;
   await getDb()
     .update(schema.profiles)
-    .set({ ...data, updatedAt: new Date() })
+    .set({
+      ...rest,
+      bio: bio.length > 0 ? bio : null,
+      updatedAt: new Date(),
+    })
     .where(eq(schema.profiles.userId, principal.userId));
 
   return { ok: true };

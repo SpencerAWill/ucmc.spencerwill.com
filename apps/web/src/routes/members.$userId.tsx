@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   LogOut,
   Pencil,
-  Phone,
   Shield,
   Undo2,
   UserMinus,
@@ -139,43 +138,75 @@ function MemberDetailPage() {
 
       <Separator />
 
-      {/* Private contact info */}
-      {canViewPrivate &&
-      (member.phone || member.emergencyContacts.length > 0) ? (
+      {/* Public profile */}
+      <Card>
+        <CardContent className="space-y-3">
+          <h2 className="text-sm font-semibold">Public profile</h2>
+          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            {member.preferredName ? (
+              <>
+                <dt className="text-muted-foreground">Preferred name</dt>
+                <dd>{member.preferredName}</dd>
+              </>
+            ) : null}
+            {member.ucAffiliation ? (
+              <>
+                <dt className="text-muted-foreground">UC affiliation</dt>
+                <dd className="capitalize">{member.ucAffiliation}</dd>
+              </>
+            ) : null}
+          </dl>
+          {member.bio ? (
+            <p className="whitespace-pre-line pt-2 text-sm">{member.bio}</p>
+          ) : (
+            <p className="pt-2 text-sm italic text-muted-foreground">
+              No bio yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Private information */}
+      {canViewPrivate ? (
         <Card>
-          <CardContent className="space-y-3 pt-6">
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Phone className="size-4" />
-              Contact information
-            </h2>
-            <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-              {member.mNumber ? (
-                <>
-                  <dt className="text-muted-foreground">M-number</dt>
-                  <dd>{member.mNumber}</dd>
-                </>
-              ) : null}
-              {member.phone ? (
-                <>
-                  <dt className="text-muted-foreground">Phone</dt>
-                  <dd>{member.phone}</dd>
-                </>
-              ) : null}
-              {member.emergencyContacts.map((ec, i) => (
-                <Fragment key={i}>
-                  <dt className="text-muted-foreground">
-                    Emergency contact
-                    {member.emergencyContacts.length > 1 ? ` ${i + 1}` : ""}
-                  </dt>
-                  <dd>
-                    {ec.name} ({ec.phone})
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      — {ec.relationship.replace(/_/g, " ")}
-                    </span>
-                  </dd>
-                </Fragment>
-              ))}
-            </dl>
+          <CardContent className="space-y-3">
+            <h2 className="text-sm font-semibold">Private information</h2>
+            {member.phone ||
+            member.mNumber ||
+            member.emergencyContacts.length > 0 ? (
+              <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                {member.mNumber ? (
+                  <>
+                    <dt className="text-muted-foreground">M-number</dt>
+                    <dd>{member.mNumber}</dd>
+                  </>
+                ) : null}
+                {member.phone ? (
+                  <>
+                    <dt className="text-muted-foreground">Phone</dt>
+                    <dd>{member.phone}</dd>
+                  </>
+                ) : null}
+                {member.emergencyContacts.map((ec, i) => (
+                  <Fragment key={i}>
+                    <dt className="text-muted-foreground">
+                      Emergency contact
+                      {member.emergencyContacts.length > 1 ? ` ${i + 1}` : ""}
+                    </dt>
+                    <dd>
+                      {ec.name} ({ec.phone})
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        — {ec.relationship.replace(/_/g, " ")}
+                      </span>
+                    </dd>
+                  </Fragment>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-sm italic text-muted-foreground">
+                No private information on file.
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -183,7 +214,7 @@ function MemberDetailPage() {
       {/* Admin actions */}
       {!isSelf && (canManage || canRevokeSessions || canAssignRoles) ? (
         <Card>
-          <CardContent className="space-y-4 pt-6">
+          <CardContent className="space-y-4">
             <h2 className="text-sm font-semibold">Actions</h2>
             <div className="flex flex-wrap gap-2">
               {canManage ? (
@@ -257,6 +288,7 @@ function MemberManageActions({
           emergencyContacts: member.emergencyContacts,
           ucAffiliation:
             member.ucAffiliation as AdminProfileDefaults["ucAffiliation"],
+          bio: member.bio,
         }
       : null;
 

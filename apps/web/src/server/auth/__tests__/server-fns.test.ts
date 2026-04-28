@@ -36,6 +36,8 @@ const {
   submitDetailsAction,
   submitPublicProfileAction,
 } = await import("#/server/auth/magic-link-actions.server");
+const { BIO_LIMITS, profileInputSchema } =
+  await import("#/server/auth/server-fns");
 const { MAGIC_LINK_TTL_MS } = await import("#/server/auth/magic-link.server");
 const { openSession } = await import("#/server/auth/session.server");
 
@@ -291,6 +293,7 @@ describe("submitPublicProfileAction", () => {
       submitPublicProfileAction({
         preferredName: "Pat",
         ucAffiliation: "student",
+        bio: "",
       }),
     ).rejects.toThrow();
   });
@@ -306,6 +309,7 @@ describe("submitPublicProfileAction", () => {
     await submitPublicProfileAction({
       preferredName: "NewPreferred",
       ucAffiliation: "alum",
+      bio: "",
     });
 
     const row = await getDb().query.profiles.findFirst({
@@ -335,6 +339,7 @@ describe("submitPublicProfileAction", () => {
     await submitPublicProfileAction({
       preferredName: "OnlyA",
       ucAffiliation: "faculty",
+      bio: "",
     });
 
     const bRow = await getDb().query.profiles.findFirst({
@@ -429,5 +434,47 @@ describe("submitDetailsAction", () => {
     });
     expect(bRow?.fullName).toBe("Test User");
     expect(bRow?.phone).toBe("+15135551212");
+  });
+});
+
+describe("profileInputSchema bio", () => {
+  function baseInput(bio: string) {
+    return {
+      fullName: "Test User",
+      preferredName: "Test",
+      mNumber: "",
+      phone: "+15135551212",
+      emergencyContacts: [],
+      ucAffiliation: "student" as const,
+      bio,
+    };
+  }
+
+  it("accepts a bio at the word limit", () => {
+    const bio = Array.from(
+      { length: BIO_LIMITS.maxWords },
+      (_, i) => `word${i}`,
+    ).join(" ");
+    const result = profileInputSchema.safeParse(baseInput(bio));
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a bio over the word limit", () => {
+    const bio = Array.from(
+      { length: BIO_LIMITS.maxWords + 1 },
+      (_, i) => `word${i}`,
+    ).join(" ");
+    const result = profileInputSchema.safeParse(baseInput(bio));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => /At most/.test(i.message))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("accepts an empty bio", () => {
+    const result = profileInputSchema.safeParse(baseInput(""));
+    expect(result.success).toBe(true);
   });
 });

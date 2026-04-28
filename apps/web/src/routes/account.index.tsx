@@ -81,6 +81,7 @@ function AccountProfilePage() {
                   mNumber: data.profile.mNumber,
                   phone: data.profile.phone,
                   ucAffiliation: data.profile.ucAffiliation,
+                  bio: data.profile.bio ?? "",
                   emergencyContacts: data.emergencyContacts.map((c) => ({
                     name: c.name,
                     phone: c.phone,
@@ -144,6 +145,7 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
       mutation.mutate({
         preferredName: value.preferredName,
         ucAffiliation: value.ucAffiliation,
+        bio: value.bio,
       } as PublicProfileInput);
     },
   });

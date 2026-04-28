@@ -18,8 +18,14 @@ import {
   UNSAVED_CHANGES_MESSAGE,
   useUnsavedChangesGuard,
 } from "#/lib/form/use-unsaved-changes-guard";
+import { cn } from "#/lib/utils";
 import type { EmergencyContactInput } from "#/server/auth/server-fns";
-import { PROFILE_LIMITS, profileInputSchema } from "#/server/auth/server-fns";
+import {
+  BIO_LIMITS,
+  countWords,
+  PROFILE_LIMITS,
+  profileInputSchema,
+} from "#/server/auth/server-fns";
 import { adminUpdateProfileFn } from "#/server/auth/member-fns";
 
 type ProfileInput = z.infer<typeof profileInputSchema>;
@@ -46,6 +52,7 @@ export interface AdminProfileDefaults {
     | "community"
     | ""
     | null;
+  bio: string | null;
 }
 
 export function AdminProfileSheet({
@@ -96,6 +103,7 @@ export function AdminProfileSheet({
       phone: defaults?.phone ?? "",
       emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",
+      bio: defaults?.bio ?? "",
     },
     validators: {
       onMount: profileInputSchema,
@@ -194,6 +202,34 @@ export function AdminProfileSheet({
                   <form.AppField name="phone">
                     {(field) => <field.PhoneField label="Phone" />}
                   </form.AppField>
+                </div>
+
+                <div className="space-y-1">
+                  <form.AppField name="bio">
+                    {(field) => (
+                      <field.TextArea
+                        label="Bio"
+                        rows={4}
+                        placeholder="A short description shown on the member's public profile."
+                      />
+                    )}
+                  </form.AppField>
+                  <form.Subscribe selector={(s) => s.values.bio}>
+                    {(value) => {
+                      const count = countWords(value);
+                      const over = count > BIO_LIMITS.maxWords;
+                      return (
+                        <p
+                          className={cn(
+                            "text-xs text-muted-foreground",
+                            over && "text-destructive",
+                          )}
+                        >
+                          {count} / {BIO_LIMITS.maxWords} words
+                        </p>
+                      );
+                    }}
+                  </form.Subscribe>
                 </div>
 
                 <EmergencyContactFields form={form} />

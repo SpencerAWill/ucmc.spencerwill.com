@@ -23,6 +23,7 @@ export interface ProfileFormDefaults {
   phone?: string;
   emergencyContacts?: EmergencyContactInput[];
   ucAffiliation?: "student" | "faculty" | "staff" | "alum" | "community" | "";
+  bio?: string;
 }
 
 export function ProfileForm({
@@ -78,6 +79,7 @@ export function ProfileForm({
       phone: defaults?.phone ?? "",
       emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",
+      bio: defaults?.bio ?? "",
     },
     // onMount validates once on load — if defaults are invalid (e.g.
     // empty required fields on the registration form), form-level
