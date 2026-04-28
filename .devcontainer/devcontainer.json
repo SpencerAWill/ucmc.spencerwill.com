@@ -28,7 +28,7 @@
       "onAutoForward": "silent"
     }
   },
-  "postCreateCommand": "corepack enable && git submodule update --init --remote --merge && pnpm install && npx playwright install chromium",
+  "postCreateCommand": "corepack enable && git submodule update --init --remote --merge && pnpm install && pnpm --filter ucmc-web exec playwright install chromium",
   "customizations": {
     "vscode": {
       "settings": {
