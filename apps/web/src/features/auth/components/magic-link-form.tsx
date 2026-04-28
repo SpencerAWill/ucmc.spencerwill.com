@@ -1,14 +1,14 @@
 import { Turnstile } from "@marsidev/react-turnstile";
 import { startAuthentication } from "@simplewebauthn/browser";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import { env } from "#/config/env";
-import { SESSION_QUERY_KEY } from "#/features/auth/api/use-auth";
+import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
+import { useRequestMagicLink } from "#/features/auth/api/use-request-magic-link";
 import { useAppForm } from "#/lib/form/form";
-import { requestMagicLinkFn } from "#/features/auth/server/server-fns";
 import {
   webauthnAuthenticateBeginFn,
   webauthnAuthenticateFinishFn,
@@ -43,13 +43,7 @@ export function MagicLinkForm({
   // ever fires, so nothing special is needed to "cancel" it.
   usePasskeyAutofill({ enabled: defaultMode === "sign-in" });
 
-  const mutation = useMutation({
-    mutationFn: (email: string) =>
-      requestMagicLinkFn({
-        data: { email, turnstileToken: turnstileToken.current },
-      }),
-    onSuccess: (_data, vars) => setSubmittedTo(vars),
-  });
+  const mutation = useRequestMagicLink();
 
   const form = useAppForm({
     defaultValues: { email: "" },
@@ -60,7 +54,10 @@ export function MagicLinkForm({
       onSubmit: magicLinkSchema,
     },
     onSubmit: ({ value }) => {
-      mutation.mutate(value.email);
+      mutation.mutate(
+        { email: value.email, turnstileToken: turnstileToken.current },
+        { onSuccess: () => setSubmittedTo(value.email) },
+      );
     },
   });
 

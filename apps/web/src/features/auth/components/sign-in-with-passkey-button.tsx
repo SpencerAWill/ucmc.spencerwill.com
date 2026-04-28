@@ -1,31 +1,25 @@
-import { startAuthentication } from "@simplewebauthn/browser";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "#/components/ui/button";
-import { SESSION_QUERY_KEY } from "#/features/auth/api/use-auth";
-import {
-  webauthnAuthenticateBeginFn,
-  webauthnAuthenticateFinishFn,
-} from "#/features/auth/server/webauthn-fns";
+import { usePasskeyAuthenticate } from "#/features/auth/api/use-passkey-authenticate";
 
 /**
- * Explicit "Sign in with a passkey" trigger for the sign-in page. Runs the
- * same begin → browser ceremony → finish flow as the magic-link form's
- * Conditional-UI autofill hook, but with `useBrowserAutofill: false` so the
- * browser shows its full passkey picker on click rather than waiting for an
- * autofill interaction.
+ * Explicit "Sign in with a passkey" trigger for the sign-in page. Runs
+ * the same begin → browser ceremony → finish flow as the magic-link
+ * form's Conditional-UI autofill hook, but with `useBrowserAutofill:
+ * false` so the browser shows its full passkey picker on click rather
+ * than waiting for an autofill interaction.
  *
- * Conditional UI is still the fast path for users who reflexively type their
- * email; this button is the discoverable fallback (and the deterministic
- * affordance for e2e tests). Hides itself entirely when WebAuthn isn't
- * supported by the browser.
+ * Conditional UI is still the fast path for users who reflexively type
+ * their email; this button is the discoverable fallback (and the
+ * deterministic affordance for e2e tests). Hides itself entirely when
+ * WebAuthn isn't supported by the browser.
  */
 export function SignInWithPasskeyButton() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const mutation = usePasskeyAuthenticate();
   const [isSupported, setIsSupported] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -38,45 +32,38 @@ export function SignInWithPasskeyButton() {
     );
   }, []);
 
-  const mutation = useMutation({
-    mutationFn: async (): Promise<void> => {
-      setErrorMessage(null);
-      const begin = await webauthnAuthenticateBeginFn();
-      if (!begin.ok) {
-        throw new Error(reasonToMessage(begin.reason));
-      }
-      const response = await startAuthentication({
-        optionsJSON: begin.options,
-        // Explicit picker — opposite of the conditional-UI autofill in
-        // usePasskeyAutofill.
-        useBrowserAutofill: false,
-      });
-      const finish = await webauthnAuthenticateFinishFn({ data: { response } });
-      if (!finish.ok) {
-        throw new Error(reasonToMessage(finish.reason));
-      }
-      await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-      if (!finish.hasProfile) {
-        await navigate({ to: "/register/profile" });
-        return;
-      }
-      if (finish.status !== "approved") {
-        await navigate({ to: "/register/pending" });
-        return;
-      }
-      await navigate({ to: "/" });
-    },
-    onError: (e: unknown) => {
-      // User cancellation throws a DOMException with name "NotAllowedError";
-      // browser/OS quirks throw various others. Show the message we have
-      // rather than a generic banner so debugging is easier.
-      if (e instanceof Error) {
-        setErrorMessage(e.message);
-      } else {
-        setErrorMessage("Something went wrong.");
-      }
-    },
-  });
+  const onClick = () => {
+    setErrorMessage(null);
+    mutation.mutate(
+      { useBrowserAutofill: false },
+      {
+        onSuccess: async (finish) => {
+          if (!finish.ok) {
+            setErrorMessage(reasonToMessage(finish.reason));
+            return;
+          }
+          if (!finish.hasProfile) {
+            await navigate({ to: "/register/profile" });
+            return;
+          }
+          if (finish.status !== "approved") {
+            await navigate({ to: "/register/pending" });
+            return;
+          }
+          await navigate({ to: "/" });
+        },
+        onError: (e: unknown) => {
+          // User cancellation throws a DOMException with name
+          // "NotAllowedError"; browser/OS quirks throw various others.
+          // Show the message we have rather than a generic banner so
+          // debugging is easier.
+          setErrorMessage(
+            e instanceof Error ? e.message : "Something went wrong.",
+          );
+        },
+      },
+    );
+  };
 
   if (!isSupported) {
     return null;
@@ -88,7 +75,7 @@ export function SignInWithPasskeyButton() {
         type="button"
         variant="outline"
         className="w-full"
-        onClick={() => mutation.mutate()}
+        onClick={onClick}
         disabled={mutation.isPending}
       >
         <KeyRound />

@@ -1,7 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
+import { PROFILE_QUERY_KEY } from "#/features/auth/api/query-keys";
+import { profileQueryOptions } from "#/features/auth/api/queries";
+import { useSubmitPublicProfile } from "#/features/auth/api/use-submit-public-profile";
 import { AvatarEditor } from "#/features/auth/components/avatar-editor";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
@@ -9,10 +12,6 @@ import { PublicProfileFields } from "#/components/profile/public-profile-fields"
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
-import {
-  getProfileFn,
-  submitPublicProfileFn,
-} from "#/features/auth/server/server-fns";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
 import type { PublicProfileInput } from "#/server/profile/profile-schemas";
 
@@ -27,16 +26,14 @@ export const Route = createFileRoute("/account/")({
   component: AccountProfilePage,
 });
 
-export const ACCOUNT_PROFILE_QUERY_KEY = ["account", "profile"] as const;
+// Re-exported so existing importers (e.g. account.details.tsx) keep
+// working; canonical location is `#/features/auth/api/query-keys`.
+export { PROFILE_QUERY_KEY as ACCOUNT_PROFILE_QUERY_KEY } from "#/features/auth/api/query-keys";
 
 function AccountProfilePage() {
   const { principal, refresh } = useAuth();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ACCOUNT_PROFILE_QUERY_KEY,
-    queryFn: () => getProfileFn(),
-    staleTime: 30_000,
-  });
+  const { data, isLoading } = useQuery(profileQueryOptions());
 
   if (!principal) {
     return null;
@@ -58,9 +55,7 @@ function AccountProfilePage() {
         name={preferredName || principal.email}
         onChanged={async () => {
           await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: ACCOUNT_PROFILE_QUERY_KEY,
-            }),
+            queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY }),
             refresh(),
           ]);
         }}
@@ -105,26 +100,7 @@ function AccountProfilePage() {
 }
 
 function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: (data: PublicProfileInput) => submitPublicProfileFn({ data }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ACCOUNT_PROFILE_QUERY_KEY,
-      });
-      toast.success("Profile saved");
-      // Mark current values as new defaults so the unsaved-changes
-      // guard treats the form as clean. See the matching note in
-      // profile-form.tsx for why a synchronous form.reset is needed
-      // (React doesn't re-render between this callback and any
-      // subsequent navigation, so a closure-based skip is stale).
-      form.reset(form.state.values);
-    },
-    onError: () => {
-      toast.error("Couldn’t save your profile. Please try again.");
-    },
-  });
+  const mutation = useSubmitPublicProfile();
 
   // Form holds the shared full shape so `PublicProfileFields` (which
   // declares the same shape via `withForm`) matches its prop type. Only
@@ -142,11 +118,25 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
       onSubmit: profileInputSchema,
     },
     onSubmit: ({ value }) => {
-      mutation.mutate({
-        preferredName: value.preferredName,
-        ucAffiliation: value.ucAffiliation,
-        bio: value.bio,
-      } as PublicProfileInput);
+      mutation.mutate(
+        {
+          preferredName: value.preferredName,
+          ucAffiliation: value.ucAffiliation,
+          bio: value.bio,
+        } as PublicProfileInput,
+        {
+          onSuccess: () => {
+            toast.success("Profile saved");
+            // Mark current values as new defaults so the unsaved-
+            // changes guard treats the form as clean. See profile-
+            // form.tsx for why a synchronous form.reset is needed.
+            form.reset(form.state.values);
+          },
+          onError: () => {
+            toast.error("Couldn’t save your profile. Please try again.");
+          },
+        },
+      );
     },
   });
 

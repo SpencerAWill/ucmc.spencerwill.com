@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 
@@ -8,17 +8,13 @@ import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-sha
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { useSubmitDetails } from "#/features/auth/api/use-submit-details";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
-import {
-  getProfileFn,
-  submitDetailsFn,
-} from "#/features/auth/server/server-fns";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
 import type { DetailsInput } from "#/server/profile/profile-schemas";
-
-import { ACCOUNT_PROFILE_QUERY_KEY } from "./account.index";
 
 /**
  * `/account/details` — private profile fields (legal name, M-number,
@@ -32,11 +28,7 @@ export const Route = createFileRoute("/account/details")({
 
 function AccountDetailsPage() {
   const { principal } = useAuth();
-  const { data, isLoading } = useQuery({
-    queryKey: ACCOUNT_PROFILE_QUERY_KEY,
-    queryFn: () => getProfileFn(),
-    staleTime: 30_000,
-  });
+  const { data, isLoading } = useQuery(profileQueryOptions());
 
   if (!principal) {
     return null;
@@ -98,22 +90,7 @@ function AccountDetailsPage() {
 }
 
 function DetailsEditor({ defaults }: { defaults: ProfileFormShape }) {
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: (data: DetailsInput) => submitDetailsFn({ data }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ACCOUNT_PROFILE_QUERY_KEY,
-      });
-      toast.success("Details saved");
-      // See profile-form.tsx for why this synchronous reset is needed.
-      form.reset(form.state.values);
-    },
-    onError: () => {
-      toast.error("Couldn’t save your details. Please try again.");
-    },
-  });
+  const mutation = useSubmitDetails();
 
   // Same full-form validation pattern as the Profile tab — see comment
   // there. The form holds every profile field (populated from saved
@@ -128,12 +105,24 @@ function DetailsEditor({ defaults }: { defaults: ProfileFormShape }) {
       onSubmit: profileInputSchema,
     },
     onSubmit: ({ value }) => {
-      mutation.mutate({
-        fullName: value.fullName,
-        mNumber: value.mNumber,
-        phone: value.phone,
-        emergencyContacts: value.emergencyContacts,
-      } as DetailsInput);
+      mutation.mutate(
+        {
+          fullName: value.fullName,
+          mNumber: value.mNumber,
+          phone: value.phone,
+          emergencyContacts: value.emergencyContacts,
+        } as DetailsInput,
+        {
+          onSuccess: () => {
+            toast.success("Details saved");
+            // See profile-form.tsx for why this synchronous reset is needed.
+            form.reset(form.state.values);
+          },
+          onError: () => {
+            toast.error("Couldn’t save your details. Please try again.");
+          },
+        },
+      );
     },
   });
 

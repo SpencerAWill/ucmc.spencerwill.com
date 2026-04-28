@@ -1,71 +1,46 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { startRegistration } from "@simplewebauthn/browser";
 import { useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
-import { SESSION_QUERY_KEY } from "#/features/auth/api/use-auth";
-import {
-  webauthnRegisterBeginFn,
-  webauthnRegisterFinishFn,
-} from "#/features/auth/server/webauthn-fns";
+import { useAddPasskey } from "#/features/auth/api/use-add-passkey";
 
 /**
- * "Add passkey" button. Runs the full browser-side WebAuthn registration
- * ceremony on click:
- *   1. Ask the server for options (challenge is stashed in KV server-side).
- *   2. Hand them to @simplewebauthn/browser so the browser prompts the
- *      OS passkey UI.
- *   3. POST the OS's response back to the server for verification. The
- *      server inserts the credential and rotates the session.
- * On success, invalidates the passkey list query so the caller's UI
- * re-renders with the new credential.
+ * "Add passkey" button. Drives the full browser-side WebAuthn
+ * registration ceremony via `useAddPasskey`:
+ *   1. Ask the server for options (challenge stashed in KV).
+ *   2. Hand them to the browser → OS passkey UI.
+ *   3. POST the attestation back; server verifies, inserts the
+ *      credential, and rotates the session.
+ * On success, the hook invalidates the passkey list + session caches.
+ * The component owns local nickname state and the error display.
  */
-export function AddPasskeyButton({
-  listQueryKey,
-}: {
-  /** Query key for the passkey list so we can invalidate on success. */
-  listQueryKey: readonly unknown[];
-}) {
-  const queryClient = useQueryClient();
+export function AddPasskeyButton() {
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const mutation = useAddPasskey();
 
-  const mutation = useMutation({
-    mutationFn: async (inputNickname: string): Promise<void> => {
-      setError(null);
-      const begin = await webauthnRegisterBeginFn();
-      if (!begin.ok) {
-        throw new Error(reasonToMessage(begin.reason));
-      }
-      // Browser handles the rest: OS prompt, credential creation,
-      // returning the attestation. Can throw if the user cancels.
-      const response = await startRegistration({ optionsJSON: begin.options });
-      const finish = await webauthnRegisterFinishFn({
-        data: {
-          response,
-          nickname: inputNickname.trim() || undefined,
-        },
-      });
-      if (!finish.ok) {
-        throw new Error(reasonToMessage(finish.reason));
-      }
-    },
-    onSuccess: async () => {
-      setNickname("");
-      await queryClient.invalidateQueries({ queryKey: listQueryKey });
-      // Session was rotated server-side — refetch the principal too.
-      await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-    },
-    onError: (e: unknown) => {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError("Something went wrong.");
-      }
-    },
-  });
+  const onClick = () => {
+    setError(null);
+    mutation.mutate(nickname, {
+      onSuccess: (result) => {
+        // `mutate` resolves whether finish reported ok or not — surface
+        // the mapped reason for the latter and clear the field for
+        // the former.
+        if (!result.ok) {
+          setError(reasonToMessage(result.reason));
+          return;
+        }
+        setNickname("");
+      },
+      onError: (e: unknown) => {
+        // startRegistration throws (user cancel, OS dismiss, browser
+        // unsupported); the begin/finish branches don't throw, they
+        // resolve with `{ ok: false, reason }` and are handled above.
+        setError(e instanceof Error ? e.message : "Something went wrong.");
+      },
+    });
+  };
 
   return (
     <div className="flex flex-col gap-3 rounded-md border p-4">
@@ -87,11 +62,7 @@ export function AddPasskeyButton({
         </p>
       </div>
       <div>
-        <Button
-          type="button"
-          onClick={() => mutation.mutate(nickname)}
-          disabled={mutation.isPending}
-        >
+        <Button type="button" onClick={onClick} disabled={mutation.isPending}>
           {mutation.isPending ? "Waiting for device…" : "Add this device"}
         </Button>
       </div>

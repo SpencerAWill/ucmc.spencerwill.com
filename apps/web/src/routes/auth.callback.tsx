@@ -1,10 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { Button } from "#/components/ui/button";
-import { SESSION_QUERY_KEY } from "#/features/auth/api/use-auth";
-import { consumeMagicLinkFn } from "#/features/auth/server/server-fns";
+import { useConsumeMagicLink } from "#/features/auth/api/use-consume-magic-link";
 import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
 
 const callbackSearchSchema = z.object({
@@ -41,52 +39,49 @@ export const Route = createFileRoute("/auth/callback")({
 function CallbackPage() {
   const { token, redirect: redirectTo } = Route.useSearch();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const mutation = useConsumeMagicLink();
 
-  const mutation = useMutation({
-    mutationFn: () => consumeMagicLinkFn({ data: { token } }),
-    onSuccess: async (result: ConsumeMagicLinkResult) => {
-      // Invalidate the cached session BEFORE navigating — the consume
-      // call just set a session cookie (or proof cookie), but the
-      // queryClient may still hold {principal: null} from the /sign-in
-      // page the user was on before clicking the magic link. Without
-      // this, the destination route's guard (requireAuth / requireProof)
-      // would read the stale cache and redirect back to /sign-in.
-      await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-
-      if (!result.ok) {
-        await navigate({
-          to: "/sign-in",
-          search: {
-            invalid: result.reason === "invalid" ? true : undefined,
-            rate_limited: result.reason === "rate_limited" ? true : undefined,
-          },
-        });
-        return;
-      }
-
-      if (result.mode === "session") {
-        if (!result.hasProfile) {
-          await navigate({ to: "/register/profile" });
+  const onContinue = () => {
+    // The hook invalidates the session query cache on success, BEFORE
+    // we navigate, so the destination route's guard sees the fresh
+    // principal instead of {principal: null} from the /sign-in page
+    // the user was on before clicking the magic link.
+    mutation.mutate(token, {
+      onSuccess: async (result: ConsumeMagicLinkResult) => {
+        if (!result.ok) {
+          await navigate({
+            to: "/sign-in",
+            search: {
+              invalid: result.reason === "invalid" ? true : undefined,
+              rate_limited: result.reason === "rate_limited" ? true : undefined,
+            },
+          });
           return;
         }
-        if (result.status !== "approved") {
-          await navigate({ to: "/register/pending" });
+
+        if (result.mode === "session") {
+          if (!result.hasProfile) {
+            await navigate({ to: "/register/profile" });
+            return;
+          }
+          if (result.status !== "approved") {
+            await navigate({ to: "/register/pending" });
+            return;
+          }
+          const target =
+            redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
+          await navigate({ to: target });
           return;
         }
-        const target =
-          redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
-        await navigate({ to: target });
-        return;
-      }
 
-      // mode === "proof" — first-time registrant.
-      await navigate({ to: "/register/profile" });
-    },
-    onError: async () => {
-      await navigate({ to: "/sign-in", search: { invalid: true } });
-    },
-  });
+        // mode === "proof" — first-time registrant.
+        await navigate({ to: "/register/profile" });
+      },
+      onError: async () => {
+        await navigate({ to: "/sign-in", search: { invalid: true } });
+      },
+    });
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-6 py-16">
@@ -97,11 +92,7 @@ function CallbackPage() {
           safe from automated email scanners.
         </p>
       </header>
-      <Button
-        size="lg"
-        onClick={() => mutation.mutate()}
-        disabled={mutation.isPending}
-      >
+      <Button size="lg" onClick={onContinue} disabled={mutation.isPending}>
         {mutation.isPending ? "Verifying…" : "Continue to UCMC"}
       </Button>
       {mutation.isError ? (

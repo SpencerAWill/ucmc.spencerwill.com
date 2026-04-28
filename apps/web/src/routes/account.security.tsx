@@ -1,26 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { passkeyListQueryOptions } from "#/features/auth/api/queries";
+import { useRemovePasskey } from "#/features/auth/api/use-remove-passkey";
 import { AddPasskeyButton } from "#/features/auth/components/passkey-button";
 import { Button } from "#/components/ui/button";
 import { requireAuth } from "#/features/auth/guards";
-import {
-  listPasskeysFn,
-  removePasskeyFn,
-} from "#/features/auth/server/webauthn-fns";
-
-const PASSKEY_LIST_QUERY_KEY = ["account", "passkeys"] as const;
-
-function passkeyListOptions() {
-  return {
-    queryKey: PASSKEY_LIST_QUERY_KEY,
-    queryFn: async () => {
-      const result = await listPasskeysFn();
-      return result.ok ? result.passkeys : [];
-    },
-    staleTime: 30_000,
-  } as const;
-}
 
 /**
  * Account → Security. Lists the user's registered passkeys with an
@@ -33,21 +18,14 @@ export const Route = createFileRoute("/account/security")({
     return { principal };
   },
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(passkeyListOptions());
+    await context.queryClient.ensureQueryData(passkeyListQueryOptions());
   },
   component: SecurityPage,
 });
 
 function SecurityPage() {
-  const query = useQuery(passkeyListOptions());
-  const queryClient = useQueryClient();
-  const removal = useMutation({
-    mutationFn: (credentialId: string) =>
-      removePasskeyFn({ data: { credentialId } }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: PASSKEY_LIST_QUERY_KEY });
-    },
-  });
+  const query = useQuery(passkeyListQueryOptions());
+  const removal = useRemovePasskey();
 
   const passkeys = query.data ?? [];
 
@@ -115,7 +93,7 @@ function SecurityPage() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Add a passkey</h2>
-        <AddPasskeyButton listQueryKey={PASSKEY_LIST_QUERY_KEY} />
+        <AddPasskeyButton />
       </section>
     </div>
   );

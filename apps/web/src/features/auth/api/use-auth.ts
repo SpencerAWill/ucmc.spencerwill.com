@@ -1,21 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
+import { sessionQueryOptions } from "#/features/auth/api/queries";
 import { useViewMode } from "#/features/auth/api/view-mode";
-import { getSessionFn, signOutFn } from "#/features/auth/server/server-fns";
+import { signOutFn } from "#/features/auth/server/server-fns";
 
-export const SESSION_QUERY_KEY = ["auth", "session"] as const;
-
-export function sessionQueryOptions() {
-  return {
-    queryKey: SESSION_QUERY_KEY,
-    queryFn: () => getSessionFn(),
-    // 60s is long enough that most navigations avoid a refetch, short
-    // enough that an approval flip or sign-out is reflected promptly
-    // without a hard reload. Privileged actions still invalidate
-    // explicitly via `refresh()`.
-    staleTime: 60_000,
-  } as const;
-}
+// Re-exported so legacy importers can keep their call sites unchanged.
+// Canonical location is `./query-keys`; canonical query options are in
+// `./queries`.
+export { SESSION_QUERY_KEY, sessionQueryOptions };
 
 export function useAuth() {
   const queryClient = useQueryClient();

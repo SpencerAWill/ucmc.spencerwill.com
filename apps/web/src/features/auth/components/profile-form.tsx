@@ -1,4 +1,3 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { z } from "zod";
@@ -8,12 +7,11 @@ import { PrivateDetailFields } from "#/components/profile/private-detail-fields"
 import { PublicProfileFields } from "#/components/profile/public-profile-fields";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
-import { SESSION_QUERY_KEY } from "#/features/auth/api/use-auth";
+import { useSubmitProfile } from "#/features/auth/api/use-submit-profile";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import type { EmergencyContactInput } from "#/server/profile/profile-schemas";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
-import { submitProfileFn } from "#/features/auth/server/server-fns";
 
 type ProfileInput = z.infer<typeof profileInputSchema>;
 
@@ -42,35 +40,9 @@ export function ProfileForm({
   defaults?: ProfileFormDefaults;
   redirectTo?: "/register/pending" | "/" | "/account";
 }) {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const mutation = useMutation({
-    mutationFn: (data: ProfileInput) => submitProfileFn({ data }),
-    onSuccess: async () => {
-      // Session just opened (or was re-affirmed) server-side; refetch the
-      // principal before navigating so the destination guard sees the
-      // new state. Also invalidate the cached profile row so the
-      // /account tab re-reads the saved values on next render.
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
-        queryClient.invalidateQueries({ queryKey: ["account", "profile"] }),
-      ]);
-      toast.success("Profile submitted");
-      // Mark the current values as the new defaults so the
-      // unsaved-changes guard sees `isDefaultValue: true`
-      // synchronously. The guard reads `form.state` directly inside
-      // its blocker callback, so this short-circuits the prompt for
-      // the navigate() below — `mutation.isSuccess` alone wouldn't
-      // work because React doesn't re-render between this onSuccess
-      // and navigate (microtask awaits don't flush React).
-      form.reset(form.state.values);
-      await navigate({ to: redirectTo });
-    },
-    onError: () => {
-      toast.error("Couldn’t save your profile. Please try again.");
-    },
-  });
+  const mutation = useSubmitProfile();
 
   const form = useAppForm({
     defaultValues: {
@@ -95,7 +67,24 @@ export function ProfileForm({
       onSubmit: profileInputSchema,
     },
     onSubmit: ({ value }) => {
-      mutation.mutate(value as ProfileInput);
+      mutation.mutate(value as ProfileInput, {
+        onSuccess: async () => {
+          toast.success("Profile submitted");
+          // Mark the current values as the new defaults so the
+          // unsaved-changes guard sees `isDefaultValue: true`
+          // synchronously. The guard reads `form.state` directly
+          // inside its blocker callback, so this short-circuits the
+          // prompt for the navigate() below — `mutation.isSuccess`
+          // alone wouldn't work because React doesn't re-render
+          // between this onSuccess and navigate (microtask awaits
+          // don't flush React).
+          form.reset(form.state.values);
+          await navigate({ to: redirectTo });
+        },
+        onError: () => {
+          toast.error("Couldn’t save your profile. Please try again.");
+        },
+      });
     },
   });
 

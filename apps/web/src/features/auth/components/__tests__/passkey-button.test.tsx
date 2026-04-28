@@ -20,15 +20,15 @@ vi.mock("@simplewebauthn/browser", () => ({
   startRegistration: (...args: unknown[]) => startRegistration(...args),
 }));
 
-// AddPasskeyButton imports SESSION_QUERY_KEY from use-auth, which transitively
-// pulls in #/server/auth/server-fns. We never call those fns from this test —
-// the stub keeps the module tree happy.
+// AddPasskeyButton (via useAddPasskey) imports SESSION_QUERY_KEY from
+// the auth public API; nothing calls these stubbed fns at runtime, but
+// the module graph needs them to resolve.
 vi.mock("#/features/auth/server/server-fns", () => ({
   getSessionFn: vi.fn(),
   signOutFn: vi.fn(),
 }));
 
-const LIST_KEY = ["passkeys", "list"] as const;
+const PASSKEY_LIST_QUERY_KEY = ["account", "passkeys"] as const;
 
 function renderButton() {
   const queryClient = new QueryClient({
@@ -38,7 +38,7 @@ function renderButton() {
     queryClient,
     ...render(
       <QueryClientProvider client={queryClient}>
-        <AddPasskeyButton listQueryKey={LIST_KEY} />
+        <AddPasskeyButton />
       </QueryClientProvider>,
     ),
   };
@@ -88,7 +88,9 @@ describe("AddPasskeyButton", () => {
     expect(startRegistration).toHaveBeenCalledWith({
       optionsJSON: { challenge: "abc" },
     });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: LIST_KEY });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: PASSKEY_LIST_QUERY_KEY,
+    });
   });
 
   it("disables the button and shows the pending label while the ceremony runs", async () => {
