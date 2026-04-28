@@ -199,6 +199,45 @@ export const announcements = sqliteTable(
   (t) => [index("announcements_published_at_idx").on(t.publishedAt)],
 );
 
+export const feedbackKind = ["bug", "feature", "general", "question"] as const;
+export type FeedbackKind = (typeof feedbackKind)[number];
+
+export const feedbackStatus = [
+  "open",
+  "acknowledged",
+  "resolved",
+  "closed",
+] as const;
+export type FeedbackStatus = (typeof feedbackStatus)[number];
+
+export const feedback = sqliteTable(
+  "feedback",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind", { enum: feedbackKind }).notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    status: text("status", { enum: feedbackStatus }).notNull().default("open"),
+    pageUrl: text("page_url"),
+    userAgent: text("user_agent"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    githubIssueNumber: integer("github_issue_number"),
+    githubIssueUrl: text("github_issue_url"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index("feedback_status_created_at_idx").on(t.status, t.createdAt),
+    index("feedback_created_by_idx").on(t.createdBy),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
@@ -208,3 +247,4 @@ export type PasskeyCredential = typeof passkeyCredentials.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type MagicLink = typeof magicLinks.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
+export type Feedback = typeof feedback.$inferSelect;

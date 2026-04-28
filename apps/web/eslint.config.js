@@ -107,6 +107,35 @@ export default [
               target: "./src/features/members",
               from: "./src/features/announcements",
             },
+            {
+              target: "./src/features/announcements",
+              from: "./src/features/feedback",
+            },
+            {
+              target: "./src/features/members",
+              from: "./src/features/feedback",
+            },
+            {
+              target: "./src/features/auth",
+              from: "./src/features/feedback",
+            },
+            {
+              target: "./src/features/feedback",
+              from: "./src/features/auth",
+              except: [
+                "./api/use-auth.ts",
+                "./api/view-mode.tsx",
+                "./guards.ts",
+              ],
+            },
+            {
+              target: "./src/features/feedback",
+              from: "./src/features/announcements",
+            },
+            {
+              target: "./src/features/feedback",
+              from: "./src/features/members",
+            },
             // 2. Shared can't import features
             { target: "./src/components/ui", from: "./src/features" },
             { target: "./src/components/profile", from: "./src/features" },
