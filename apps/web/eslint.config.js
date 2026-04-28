@@ -29,6 +29,98 @@ export default [
     },
   },
   {
+    // Bulletproof React's unidirectional architecture, mechanically
+    // enforced. Three rules:
+    //   1. Features don't import other features. Compose at the route
+    //      level. The narrow exception is auth's public API
+    //      (api/use-auth, api/view-mode, guards.ts) — every feature
+    //      legitimately needs to ask "who is the user / what can they
+    //      do" and these surfaces are auth's contract for that. All
+    //      other features/auth/** internals — magic-link, webauthn,
+    //      sign-in UI, server-fns shells — stay private.
+    //   2. Shared utilities can't reach into features. components/ui,
+    //      lib, hooks, config are feature-blind primitives.
+    //      components/layouts/ is intentionally NOT scoped here because
+    //      AppLayout is app-shell territory and legitimately renders
+    //      AnnouncementsBell + UserMenu.
+    //   3. Features can't import routes. Routes compose features, not
+    //      the reverse.
+    //
+    // Settings: import-x's resolver follows tsconfig path aliases, so
+    // `#/features/...` actually resolves to a path the zone matcher can
+    // compare against. Without it, import-x just sees the literal
+    // alias string and the rule silently no-ops.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.test.{ts,tsx}", "src/**/__tests__/**"],
+    settings: {
+      "import-x/resolver": {
+        typescript: { project: "./tsconfig.json" },
+      },
+      "import/resolver": {
+        typescript: { project: "./tsconfig.json" },
+      },
+    },
+    rules: {
+      "import/no-restricted-paths": [
+        "error",
+        {
+          // `except` paths are relative to the zone's `from` and carve
+          // out the foundational auth public API. Adding to this list
+          // is a flag to consider hoisting that surface to a truly
+          // shared location instead.
+          zones: [
+            // 1. No cross-feature imports.
+            //    features/auth's public API (use-auth, view-mode,
+            //    guards) is exempted because it's the foundational
+            //    "who is the user" surface every feature needs.
+            {
+              target: "./src/features/announcements",
+              from: "./src/features/auth",
+              except: [
+                "./api/use-auth.ts",
+                "./api/view-mode.tsx",
+                "./guards.ts",
+              ],
+            },
+            {
+              target: "./src/features/announcements",
+              from: "./src/features/members",
+            },
+            {
+              target: "./src/features/auth",
+              from: "./src/features/announcements",
+            },
+            {
+              target: "./src/features/auth",
+              from: "./src/features/members",
+            },
+            {
+              target: "./src/features/members",
+              from: "./src/features/auth",
+              except: [
+                "./api/use-auth.ts",
+                "./api/view-mode.tsx",
+                "./guards.ts",
+              ],
+            },
+            {
+              target: "./src/features/members",
+              from: "./src/features/announcements",
+            },
+            // 2. Shared can't import features
+            { target: "./src/components/ui", from: "./src/features" },
+            { target: "./src/components/profile", from: "./src/features" },
+            { target: "./src/lib", from: "./src/features" },
+            { target: "./src/hooks", from: "./src/features" },
+            { target: "./src/config", from: "./src/features" },
+            // 3. Features can't import routes
+            { target: "./src/features", from: "./src/routes" },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     // Routes use TanStack Router's special filename syntax (`__root`,
     // `$param`, dot separators, trailing underscores), and `routeTree.gen.ts`
