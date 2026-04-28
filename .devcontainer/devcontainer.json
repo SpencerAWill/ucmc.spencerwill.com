@@ -13,7 +13,7 @@
   "containerEnv": {
     "TZ": "${localEnv:TZ:America/New_York}"
   },
-  "forwardPorts": [3000, 6006, 8025],
+  "forwardPorts": [3000, 6006],
   "portsAttributes": {
     "3000": {
       "label": "Web (Vite)",
@@ -21,10 +21,6 @@
     },
     "6006": {
       "label": "Storybook",
-      "onAutoForward": "silent"
-    },
-    "8025": {
-      "label": "Mailpit (dev mailbox)",
       "onAutoForward": "silent"
     }
   },
