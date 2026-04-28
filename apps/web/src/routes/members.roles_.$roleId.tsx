@@ -14,8 +14,11 @@ import {
   listPermissionsFn,
   setRolePermissionsFn,
   updateRoleFn,
-} from "#/server/auth/rbac-fns";
-import type { PermissionSummary, RoleDetail } from "#/server/auth/rbac-fns";
+} from "#/features/members/server/rbac-fns";
+import type {
+  PermissionSummary,
+  RoleDetail,
+} from "#/features/members/server/rbac-fns";
 
 const PERMISSIONS_QUERY_KEY = ["rbac", "permissions"] as const;
 

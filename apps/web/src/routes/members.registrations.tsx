@@ -42,11 +42,11 @@ import {
   listPendingRegistrationsFn,
   rejectRegistrationsFn,
   unrejectMembersFn,
-} from "#/server/auth/member-fns";
+} from "#/features/members/server/member-fns";
 import type {
   MemberSummary,
   PendingRegistration,
-} from "#/server/auth/member-fns";
+} from "#/features/members/server/member-fns";
 
 const REGISTRATIONS_QUERY_KEY = ["members", "registrations"] as const;
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;

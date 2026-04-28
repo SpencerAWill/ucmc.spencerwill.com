@@ -11,7 +11,7 @@ import type {
   PermissionSummary,
   RoleDetail,
   RoleWithPermissions,
-} from "#/server/auth/rbac-actions.server";
+} from "#/features/members/server/rbac-actions.server";
 
 export type { PermissionSummary, RoleDetail, RoleWithPermissions };
 
@@ -20,7 +20,7 @@ export type { PermissionSummary, RoleDetail, RoleWithPermissions };
 export const listRolesDetailedFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<RoleWithPermissions[]> => {
     const { listRolesDetailedAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return listRolesDetailedAction();
   },
 );
@@ -28,7 +28,8 @@ export const listRolesDetailedFn = createServerFn({ method: "GET" }).handler(
 export const getRoleFn = createServerFn({ method: "GET" })
   .inputValidator(z.object({ roleId: z.string().min(1) }))
   .handler(async ({ data }): Promise<RoleDetail> => {
-    const { getRoleAction } = await import("#/server/auth/rbac-actions.server");
+    const { getRoleAction } =
+      await import("#/features/members/server/rbac-actions.server");
     return getRoleAction(data.roleId);
   });
 
@@ -53,7 +54,7 @@ export const createRoleFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<{ roleId: string }> => {
     const { createRoleAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return createRoleAction(data);
   });
 
@@ -66,7 +67,7 @@ export const updateRoleFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateRoleAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return updateRoleAction(data);
   });
 
@@ -74,7 +75,7 @@ export const deleteRoleFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ roleId: z.string().min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteRoleAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return deleteRoleAction(data.roleId);
   });
 
@@ -83,7 +84,7 @@ export const deleteRoleFn = createServerFn({ method: "POST" })
 export const listPermissionsFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<PermissionSummary[]> => {
     const { listPermissionsAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return listPermissionsAction();
   },
 );
@@ -99,7 +100,7 @@ export const setRolePermissionsFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { setRolePermissionsAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return setRolePermissionsAction(data);
   });
 
@@ -109,7 +110,7 @@ export const getUserRolesFn = createServerFn({ method: "GET" })
   .inputValidator(z.object({ userId: z.string().min(1) }))
   .handler(async ({ data }): Promise<{ roleId: string; name: string }[]> => {
     const { getUserRolesAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return getUserRolesAction(data.userId);
   });
 
@@ -122,7 +123,7 @@ export const setUserRolesFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { setUserRolesAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return setUserRolesAction(data);
   });
 
@@ -137,6 +138,6 @@ export const swapRolePositionsFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { swapRolePositionsAction } =
-      await import("#/server/auth/rbac-actions.server");
+      await import("#/features/members/server/rbac-actions.server");
     return swapRolePositionsAction(data);
   });

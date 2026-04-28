@@ -26,7 +26,7 @@ import {
   PROFILE_LIMITS,
   profileInputSchema,
 } from "#/features/auth/server/server-fns";
-import { adminUpdateProfileFn } from "#/server/auth/member-fns";
+import { adminUpdateProfileFn } from "#/features/members/server/member-fns";
 
 type ProfileInput = z.infer<typeof profileInputSchema>;
 

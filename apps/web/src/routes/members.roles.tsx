@@ -63,11 +63,11 @@ import {
   listRolesDetailedFn,
   setRolePermissionsFn,
   swapRolePositionsFn,
-} from "#/server/auth/rbac-fns";
+} from "#/features/members/server/rbac-fns";
 import type {
   PermissionSummary,
   RoleWithPermissions,
-} from "#/server/auth/rbac-fns";
+} from "#/features/members/server/rbac-fns";
 
 const ROLES_QUERY_KEY = ["rbac", "roles"] as const;
 const PERMISSIONS_QUERY_KEY = ["rbac", "permissions"] as const;

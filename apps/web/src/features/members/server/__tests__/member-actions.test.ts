@@ -31,7 +31,7 @@ const {
   adminUpdateProfileAction,
   listMembersAction,
   getMemberDetailAction,
-} = await import("#/server/auth/member-actions.server");
+} = await import("#/features/members/server/member-actions.server");
 const { openSession, loadCurrentPrincipal } =
   await import("#/features/auth/server/session.server");
 

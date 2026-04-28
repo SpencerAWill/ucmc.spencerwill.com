@@ -22,8 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#/components/ui/dialog";
-import { getUserRolesFn, setUserRolesFn } from "#/server/auth/rbac-fns";
-import { listRolesFn } from "#/server/auth/member-fns";
+import {
+  getUserRolesFn,
+  setUserRolesFn,
+} from "#/features/members/server/rbac-fns";
+import { listRolesFn } from "#/features/members/server/member-fns";
 
 const ROLES_QUERY_KEY = ["members", "roles"] as const;
 

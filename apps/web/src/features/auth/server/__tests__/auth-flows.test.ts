@@ -52,7 +52,7 @@ const {
   approveRegistrationsAction,
   rejectRegistrationsAction,
   listPendingRegistrationsAction,
-} = await import("#/server/auth/member-actions.server");
+} = await import("#/features/members/server/member-actions.server");
 const { openSession } = await import("#/features/auth/server/session.server");
 
 // ── helpers ─────────────────────────────────────────────────────────────

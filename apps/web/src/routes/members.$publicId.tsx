@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 import { Fragment, useState } from "react";
 
-import { AdminProfileSheet } from "#/components/auth/admin-profile-sheet";
-import type { AdminProfileDefaults } from "#/components/auth/admin-profile-sheet";
-import { RoleAssignmentSheet } from "#/components/auth/role-assignment-sheet";
-import { StatusBadge } from "#/components/auth/status-badge";
+import { AdminProfileSheet } from "#/features/members/components/admin-profile-sheet";
+import type { AdminProfileDefaults } from "#/features/members/components/admin-profile-sheet";
+import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
+import { StatusBadge } from "#/features/members/components/status-badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,8 +38,8 @@ import {
   reactivateMembersFn,
   revokeUserSessionsFn,
   unrejectMembersFn,
-} from "#/server/auth/member-fns";
-import type { MemberDetail } from "#/server/auth/member-fns";
+} from "#/features/members/server/member-fns";
+import type { MemberDetail } from "#/features/members/server/member-fns";
 
 function memberDetailKey(publicId: string) {
   return ["members", "detail", publicId] as const;

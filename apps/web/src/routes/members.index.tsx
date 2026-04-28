@@ -13,8 +13,8 @@ import {
 import { useState } from "react";
 import { z } from "zod";
 
-import { RoleAssignmentSheet } from "#/components/auth/role-assignment-sheet";
-import { StatusBadge } from "#/components/auth/status-badge";
+import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
+import { StatusBadge } from "#/features/members/components/status-badge";
 import { UserAvatar } from "#/features/auth/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
@@ -40,8 +40,14 @@ import {
 } from "#/components/ui/tooltip";
 import { requireApproved } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { listMembersFn, listRolesFn } from "#/server/auth/member-fns";
-import type { MemberSummary, RoleOption } from "#/server/auth/member-fns";
+import {
+  listMembersFn,
+  listRolesFn,
+} from "#/features/members/server/member-fns";
+import type {
+  MemberSummary,
+  RoleOption,
+} from "#/features/members/server/member-fns";
 
 const MEMBERS_QUERY_KEY = ["members", "directory"] as const;
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;

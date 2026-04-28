@@ -13,7 +13,7 @@ import type {
   MemberSummary,
   PendingRegistration,
   RoleOption,
-} from "#/server/auth/member-actions.server";
+} from "#/features/members/server/member-actions.server";
 import { profileInputSchema } from "#/features/auth/server/server-fns";
 
 export type {
@@ -40,7 +40,7 @@ export type ListPendingRegistrationsInput = z.infer<
 export const listRolesFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<RoleOption[]> => {
     const { listRolesAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return listRolesAction();
   },
 );
@@ -66,7 +66,7 @@ export const listMembersFn = createServerFn({ method: "GET" })
   .inputValidator(listMembersInputSchema)
   .handler(async ({ data }): Promise<MembersPage> => {
     const { listMembersAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return listMembersAction({
       search: data.search,
       affiliations: data.affiliations,
@@ -84,7 +84,7 @@ export const getMemberDetailFn = createServerFn({ method: "GET" })
   .inputValidator(z.object({ publicId: z.string().min(1) }))
   .handler(async ({ data }): Promise<MemberDetail> => {
     const { getMemberDetailAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return getMemberDetailAction(data.publicId);
   });
 
@@ -99,7 +99,7 @@ export const listPendingRegistrationsFn = createServerFn({ method: "GET" })
   .inputValidator(listPendingRegistrationsInputSchema)
   .handler(async ({ data }): Promise<PendingRegistrationsPage> => {
     const { listPendingRegistrationsAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return listPendingRegistrationsAction({
       from: data.from,
       to: data.to,
@@ -112,7 +112,7 @@ export const approveRegistrationsFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { approveRegistrationsAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return approveRegistrationsAction(data.userIds);
   });
 
@@ -120,7 +120,7 @@ export const rejectRegistrationsFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { rejectRegistrationsAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return rejectRegistrationsAction(data.userIds);
   });
 
@@ -130,7 +130,7 @@ export const deactivateMembersFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deactivateMembersAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return deactivateMembersAction(data.userIds);
   });
 
@@ -138,7 +138,7 @@ export const reactivateMembersFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { reactivateMembersAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return reactivateMembersAction(data.userIds);
   });
 
@@ -146,7 +146,7 @@ export const unrejectMembersFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { unrejectMembersAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return unrejectMembersAction(data.userIds);
   });
 
@@ -156,7 +156,7 @@ export const revokeUserSessionsFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ userId: z.string().min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { revokeUserSessionsAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return revokeUserSessionsAction(data.userId);
   });
 
@@ -166,6 +166,6 @@ export const adminUpdateProfileFn = createServerFn({ method: "POST" })
   .inputValidator(profileInputSchema.extend({ userId: z.string().min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { adminUpdateProfileAction } =
-      await import("#/server/auth/member-actions.server");
+      await import("#/features/members/server/member-actions.server");
     return adminUpdateProfileAction(data);
   });

@@ -34,7 +34,7 @@ const {
   getUserRolesAction,
   setUserRolesAction,
   PROTECTED_ROLE_IDS,
-} = await import("#/server/auth/rbac-actions.server");
+} = await import("#/features/members/server/rbac-actions.server");
 const { openSession } = await import("#/features/auth/server/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
