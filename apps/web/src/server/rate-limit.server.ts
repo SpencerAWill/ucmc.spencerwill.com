@@ -3,6 +3,17 @@ import { getRequestHeader } from "@tanstack/react-start/server";
 import { env } from "#/server/cloudflare-env";
 
 /**
+ * E2e-only escape hatch. When `E2E_BYPASS_RATE_LIMIT=1` is set on the
+ * Worker env, every limiter check short-circuits to "allowed". Set by
+ * Playwright's webServer config because the suite hits 6+ auth endpoints
+ * per run and the 10 req/60 s budget would trip mid-run on a reused dev
+ * server. Production envs MUST NEVER set this.
+ */
+function isBypassed(): boolean {
+  return env.E2E_BYPASS_RATE_LIMIT === "1";
+}
+
+/**
  * Checks the /health rate-limiter binding for the caller's IP. Returns
  * `true` when the request is within budget, `false` when it should be
  * degraded or refused.
@@ -19,6 +30,9 @@ import { env } from "#/server/cloudflare-env";
  * health page 500ing.
  */
 export async function checkHealthRateLimit(): Promise<boolean> {
+  if (isBypassed()) {
+    return true;
+  }
   try {
     const key = getRequestHeader("cf-connecting-ip") ?? "local";
     const { success } = await env.HEALTH_RATE_LIMITER.limit({ key });
@@ -45,6 +59,9 @@ function clientIp(): string {
  * binding error (same reasoning as `checkHealthRateLimit`).
  */
 export async function checkAuthRateLimitByIp(): Promise<boolean> {
+  if (isBypassed()) {
+    return true;
+  }
   try {
     const { success } = await env.AUTH_RATE_LIMITER.limit({
       key: `ip:${clientIp()}`,
@@ -64,6 +81,9 @@ export async function checkAuthRateLimitByIp(): Promise<boolean> {
 export async function checkAuthRateLimitByEmail(
   normalizedEmail: string,
 ): Promise<boolean> {
+  if (isBypassed()) {
+    return true;
+  }
   try {
     const { success } = await env.AUTH_RATE_LIMITER.limit({
       key: `email:${normalizedEmail}`,
@@ -80,6 +100,9 @@ export async function checkAuthRateLimitByEmail(
  * binding error.
  */
 export async function checkUploadRateLimit(userId: string): Promise<boolean> {
+  if (isBypassed()) {
+    return true;
+  }
   try {
     const { success } = await env.UPLOAD_RATE_LIMITER.limit({
       key: `user:${userId}`,

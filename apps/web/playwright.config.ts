@@ -50,6 +50,12 @@ export default defineConfig({
       // the server skips verification (per CLAUDE.md auth notes).
       VITE_TURNSTILE_SITE_KEY: "",
       TURNSTILE_SECRET_KEY: "",
+      // Bypass auth/health/upload rate limiters for the duration of the
+      // suite. The passkey spec hits 6 rate-limited endpoints per run,
+      // and dev-server reuse means runs share an IP bucket — without
+      // the bypass the second consecutive run would trip the
+      // 10 req/60 s budget. Production never sets this.
+      E2E_BYPASS_RATE_LIMIT: "1",
     },
   },
 

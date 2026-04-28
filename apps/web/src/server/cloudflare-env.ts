@@ -41,6 +41,14 @@ export interface WorkerEnv {
   // email adapter POSTs to Mailpit's HTTP send API instead of writing to
   // the Worker console. See docker-compose.yml for the sidecar config.
   MAILPIT_URL?: string;
+
+  // E2e-only escape hatch — when set to "1", auth/health/upload rate
+  // limiters fail open (allow every request). The Playwright suite does
+  // 6+ rate-limited calls per run and reuses the dev server between
+  // runs, so the 10 req/60 s budget per IP would otherwise trip mid-run.
+  // Production envs MUST NEVER set this; only Playwright's webServer env
+  // and a dev who's actively running e2e should ever flip it on.
+  E2E_BYPASS_RATE_LIMIT?: string;
 }
 
 export const env = workerEnv as unknown as WorkerEnv;
