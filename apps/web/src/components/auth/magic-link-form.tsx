@@ -5,7 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
-import { env } from "#/env";
+import { env } from "#/config/env";
 import { SESSION_QUERY_KEY } from "#/lib/auth/use-auth";
 import { useAppForm } from "#/lib/form/form";
 import { requestMagicLinkFn } from "#/server/auth/server-fns";
