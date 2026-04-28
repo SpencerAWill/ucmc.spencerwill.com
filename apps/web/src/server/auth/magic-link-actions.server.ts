@@ -169,15 +169,31 @@ export async function getProofAction(): Promise<{
 
 export async function getProfileAction(): Promise<{
   profile: typeof schema.profiles.$inferSelect | null;
+  emergencyContacts: Array<{
+    name: string;
+    phone: string;
+    relationship: schema.ContactRelationship;
+  }>;
 }> {
   const principal = await loadCurrentPrincipal();
   if (!principal) {
-    return { profile: null };
+    return { profile: null, emergencyContacts: [] };
   }
-  const profile = await getDb().query.profiles.findFirst({
+  const db = getDb();
+  const profile = await db.query.profiles.findFirst({
     where: eq(schema.profiles.userId, principal.userId),
   });
-  return { profile: profile ?? null };
+  const contacts = profile
+    ? await db
+        .select({
+          name: schema.emergencyContacts.name,
+          phone: schema.emergencyContacts.phone,
+          relationship: schema.emergencyContacts.relationship,
+        })
+        .from(schema.emergencyContacts)
+        .where(eq(schema.emergencyContacts.userId, principal.userId))
+    : [];
+  return { profile: profile ?? null, emergencyContacts: contacts };
 }
 
 export async function signOutAction(): Promise<{ ok: true }> {
@@ -197,16 +213,19 @@ export async function submitProfileAction(
 
   const email = principal?.email ?? proof!.email;
 
+  const { emergencyContacts, ...profileData } = data;
+
   // Find or create the user row. Pre-seeded rows (email-only, no profile)
   // are reused by hitting the unique email index. We do this in three
   // steps — insert-on-conflict-do-nothing, then select — to stay portable
   // across D1's SQLite dialect without depending on `returning`.
+  const db = getDb();
   const id = `user_${uuidv7()}`;
-  await getDb()
+  await db
     .insert(schema.users)
     .values({ id, email, status: "pending" })
     .onConflictDoNothing({ target: schema.users.email });
-  const userRow = await getDb().query.users.findFirst({
+  const userRow = await db.query.users.findFirst({
     where: eq(schema.users.email, email),
   });
   if (!userRow) {
@@ -214,16 +233,33 @@ export async function submitProfileAction(
   }
 
   const now = new Date();
-  await getDb()
+  await db
     .insert(schema.profiles)
-    .values({ userId: userRow.id, ...data, updatedAt: now })
+    .values({ userId: userRow.id, ...profileData, updatedAt: now })
     .onConflictDoUpdate({
       target: schema.profiles.userId,
-      set: { ...data, updatedAt: now },
+      set: { ...profileData, updatedAt: now },
     });
 
+  // Replace emergency contacts: delete existing, then insert new set.
+  await db
+    .delete(schema.emergencyContacts)
+    .where(eq(schema.emergencyContacts.userId, userRow.id));
+
+  if (emergencyContacts.length > 0) {
+    await db.insert(schema.emergencyContacts).values(
+      emergencyContacts.map((ec) => ({
+        id: `ec_${uuidv7()}`,
+        userId: userRow.id,
+        name: ec.name,
+        phone: ec.phone,
+        relationship: ec.relationship,
+      })),
+    );
+  }
+
   if (userRow.status !== "approved") {
-    await getDb()
+    await db
       .update(schema.users)
       .set({ status: "pending" })
       .where(eq(schema.users.id, userRow.id));

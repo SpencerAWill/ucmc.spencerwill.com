@@ -10,7 +10,7 @@ import {
   UserMinus,
   UserPlus,
 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { AdminProfileSheet } from "#/components/auth/admin-profile-sheet";
 import type { AdminProfileDefaults } from "#/components/auth/admin-profile-sheet";
@@ -139,7 +139,8 @@ function MemberDetailPage() {
       <Separator />
 
       {/* Private contact info */}
-      {canViewPrivate && (member.phone || member.emergencyContactName) ? (
+      {canViewPrivate &&
+      (member.phone || member.emergencyContacts.length > 0) ? (
         <Card>
           <CardContent className="space-y-3 pt-6">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
@@ -159,17 +160,20 @@ function MemberDetailPage() {
                   <dd>{member.phone}</dd>
                 </>
               ) : null}
-              {member.emergencyContactName ? (
-                <>
-                  <dt className="text-muted-foreground">Emergency contact</dt>
+              {member.emergencyContacts.map((ec, i) => (
+                <Fragment key={i}>
+                  <dt className="text-muted-foreground">
+                    Emergency contact
+                    {member.emergencyContacts.length > 1 ? ` ${i + 1}` : ""}
+                  </dt>
                   <dd>
-                    {member.emergencyContactName}
-                    {member.emergencyContactPhone
-                      ? ` (${member.emergencyContactPhone})`
-                      : null}
+                    {ec.name} ({ec.phone})
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      — {ec.relationship.replace(/_/g, " ")}
+                    </span>
                   </dd>
-                </>
-              ) : null}
+                </Fragment>
+              ))}
             </dl>
           </CardContent>
         </Card>
@@ -249,9 +253,9 @@ function MemberManageActions({
           preferredName: member.preferredName,
           mNumber: member.mNumber,
           phone: member.phone,
-          emergencyContactName: member.emergencyContactName,
-          emergencyContactPhone: member.emergencyContactPhone,
-          ucAffiliation: member.ucAffiliation,
+          emergencyContacts: member.emergencyContacts,
+          ucAffiliation:
+            member.ucAffiliation as AdminProfileDefaults["ucAffiliation"],
         }
       : null;
 

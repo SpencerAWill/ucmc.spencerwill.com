@@ -44,8 +44,24 @@ function AccountProfilePage() {
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <ProfileForm
+          // Key on updatedAt so React remounts the form with fresh
+          // defaultValues after a successful save + query refetch.
+          // useAppForm only reads defaultValues on mount; without
+          // this key the form would retain stale values.
+          key={data?.profile?.updatedAt.toString()}
           email={principal.email}
-          defaults={data?.profile ?? undefined}
+          defaults={
+            data?.profile
+              ? {
+                  ...data.profile,
+                  emergencyContacts: data.emergencyContacts.map((c) => ({
+                    name: c.name,
+                    phone: c.phone,
+                    relationship: c.relationship,
+                  })),
+                }
+              : undefined
+          }
           redirectTo="/account"
         />
       )}

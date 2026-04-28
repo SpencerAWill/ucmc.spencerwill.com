@@ -138,8 +138,6 @@ async function seedUser(args: {
       preferredName: "Test",
       mNumber: "",
       phone: "+15135551212",
-      emergencyContactName: "EC",
-      emergencyContactPhone: "+15135551213",
       ucAffiliation: "student",
       updatedAt: new Date(),
     });

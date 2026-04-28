@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 
+import { EmergencyContactFields } from "#/components/auth/emergency-contact-fields";
 import { MNumberField } from "#/components/auth/m-number-field";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
@@ -12,6 +13,7 @@ import {
   SheetTitle,
 } from "#/components/ui/sheet";
 import { useAppForm } from "#/lib/form/form";
+import type { EmergencyContactInput } from "#/server/auth/server-fns";
 import { PROFILE_LIMITS, profileInputSchema } from "#/server/auth/server-fns";
 import { adminUpdateProfileFn } from "#/server/auth/member-fns";
 
@@ -30,9 +32,15 @@ export interface AdminProfileDefaults {
   preferredName: string | null;
   mNumber: string | null;
   phone: string | null;
-  emergencyContactName: string | null;
-  emergencyContactPhone: string | null;
-  ucAffiliation: string | null;
+  emergencyContacts: EmergencyContactInput[];
+  ucAffiliation:
+    | "student"
+    | "faculty"
+    | "staff"
+    | "alum"
+    | "community"
+    | ""
+    | null;
 }
 
 export function AdminProfileSheet({
@@ -72,8 +80,7 @@ export function AdminProfileSheet({
       preferredName: defaults?.preferredName ?? "",
       mNumber: defaults?.mNumber ?? "",
       phone: defaults?.phone ?? "",
-      emergencyContactName: defaults?.emergencyContactName ?? "",
-      emergencyContactPhone: defaults?.emergencyContactPhone ?? "",
+      emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",
     },
     validators: {
@@ -147,19 +154,9 @@ export function AdminProfileSheet({
             <form.AppField name="phone">
               {(field) => <field.PhoneField label="Phone" />}
             </form.AppField>
-            <div />
-            <form.AppField name="emergencyContactName">
-              {(field) => (
-                <field.TextField
-                  label="Emergency contact name"
-                  maxLength={PROFILE_LIMITS.emergencyContactName.max}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="emergencyContactPhone">
-              {(field) => <field.PhoneField label="Emergency contact phone" />}
-            </form.AppField>
           </div>
+
+          <EmergencyContactFields form={form} />
 
           {mutation.isError ? (
             <p className="text-sm text-destructive">

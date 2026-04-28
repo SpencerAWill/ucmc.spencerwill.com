@@ -90,8 +90,6 @@ async function seedUser(args: {
       preferredName: "Test",
       mNumber: "",
       phone: "+15135551212",
-      emergencyContactName: "EC",
-      emergencyContactPhone: "+15135551213",
       ucAffiliation: "student",
       updatedAt: new Date(),
     });
@@ -160,8 +158,13 @@ const validProfile = {
   preferredName: "Alice",
   mNumber: "M12345678",
   phone: "+15135551234",
-  emergencyContactName: "Bob Smith",
-  emergencyContactPhone: "+15135555678",
+  emergencyContacts: [
+    {
+      name: "Bob Smith",
+      phone: "+15135555678",
+      relationship: "parent" as const,
+    },
+  ],
   ucAffiliation: "student" as const,
 };
 
@@ -174,6 +177,7 @@ beforeEach(async () => {
   await db.delete(schema.userRoles);
   await db.delete(schema.rolePermissions);
   await db.delete(schema.sessions);
+  await db.delete(schema.emergencyContacts);
   await db.delete(schema.profiles);
   await db.delete(schema.magicLinks);
   await db.delete(schema.users);

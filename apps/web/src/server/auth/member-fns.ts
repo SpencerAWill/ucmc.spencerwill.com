@@ -8,6 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import type {
+  EmergencyContactSummary,
   MemberDetail,
   MemberSummary,
   PendingRegistration,
@@ -15,7 +16,13 @@ import type {
 } from "#/server/auth/member-actions.server";
 import { profileInputSchema } from "#/server/auth/server-fns";
 
-export type { MemberDetail, MemberSummary, PendingRegistration, RoleOption };
+export type {
+  EmergencyContactSummary,
+  MemberDetail,
+  MemberSummary,
+  PendingRegistration,
+  RoleOption,
+};
 
 export const listPendingRegistrationsInputSchema = z.object({
   from: z.iso.date().optional(),

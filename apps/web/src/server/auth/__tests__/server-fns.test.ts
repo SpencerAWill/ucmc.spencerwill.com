@@ -86,8 +86,6 @@ async function seedUser(args: {
       preferredName: "Test",
       mNumber: "",
       phone: "+15135551212",
-      emergencyContactName: "EC",
-      emergencyContactPhone: "+15135551213",
       ucAffiliation: "student",
       updatedAt: new Date(),
     });
@@ -235,7 +233,7 @@ describe("consumeMagicLinkAction", () => {
 describe("getProfileAction", () => {
   it("returns { profile: null } for anonymous callers", async () => {
     const result = await getProfileAction();
-    expect(result).toEqual({ profile: null });
+    expect(result).toEqual({ profile: null, emergencyContacts: [] });
   });
 
   it("returns { profile: null } for a signed-in user without a profile row", async () => {
@@ -244,7 +242,7 @@ describe("getProfileAction", () => {
     await openSession(userId);
 
     const result = await getProfileAction();
-    expect(result).toEqual({ profile: null });
+    expect(result).toEqual({ profile: null, emergencyContacts: [] });
   });
 
   it("returns the signed-in user's profile row when one exists", async () => {

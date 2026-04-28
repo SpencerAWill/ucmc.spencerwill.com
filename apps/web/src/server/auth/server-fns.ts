@@ -123,13 +123,22 @@ export const signOutFn = createServerFn({ method: "POST" }).handler(
 
 export type Profile = typeof schema.profiles.$inferSelect;
 
+export interface EmergencyContactRow {
+  name: string;
+  phone: string;
+  relationship: schema.ContactRelationship;
+}
+
 /**
  * Read the current user's profile row, if any. Returns `{ profile: null }`
  * for anonymous callers or users who haven't completed registration. Used
  * by `/account` to pre-fill the profile form with existing values.
  */
 export const getProfileFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ profile: Profile | null }> => {
+  async (): Promise<{
+    profile: Profile | null;
+    emergencyContacts: EmergencyContactRow[];
+  }> => {
     const { getProfileAction } =
       await import("#/server/auth/magic-link-actions.server");
     return getProfileAction();
@@ -153,6 +162,23 @@ const phoneSchema = z
     (v) => v.length > 0 && isValidPhoneNumber(v),
     "Enter a valid phone number",
   );
+
+export const emergencyContactSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(PROFILE_LIMITS.emergencyContactName.min, "Required")
+    .max(
+      PROFILE_LIMITS.emergencyContactName.max,
+      `At most ${PROFILE_LIMITS.emergencyContactName.max} characters`,
+    ),
+  phone: phoneSchema,
+  relationship: z.enum(schema.contactRelationship, {
+    error: "Required",
+  }),
+});
+
+export type EmergencyContactInput = z.infer<typeof emergencyContactSchema>;
 
 export const profileInputSchema = z.object({
   fullName: z
@@ -180,15 +206,7 @@ export const profileInputSchema = z.object({
     .toUpperCase()
     .regex(/^$|^M\d{8}$/, "Must be 'M' followed by 8 digits"),
   phone: phoneSchema,
-  emergencyContactName: z
-    .string()
-    .trim()
-    .min(PROFILE_LIMITS.emergencyContactName.min, "Required")
-    .max(
-      PROFILE_LIMITS.emergencyContactName.max,
-      `At most ${PROFILE_LIMITS.emergencyContactName.max} characters`,
-    ),
-  emergencyContactPhone: phoneSchema,
+  emergencyContacts: z.array(emergencyContactSchema),
   ucAffiliation: z.enum(schema.ucAffiliation, {
     error: "Required",
   }),

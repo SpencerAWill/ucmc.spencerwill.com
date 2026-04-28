@@ -6,6 +6,7 @@
  * createServerFn handlers.
  */
 import { and, asc, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { uuidv7 } from "uuidv7";
 
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
@@ -134,6 +135,12 @@ export async function listPendingRegistrationsAction(opts: {
 
 // ── list members (directory) ────────────────────────────────────────────
 
+export interface EmergencyContactSummary {
+  name: string;
+  phone: string;
+  relationship: schema.ContactRelationship;
+}
+
 export interface MemberSummary {
   userId: string;
   email: string;
@@ -142,10 +149,9 @@ export interface MemberSummary {
   ucAffiliation: string | null;
   roles: string[];
   status: schema.UserStatus;
-  // Private fields — null when the caller lacks members:view_private.
+  // Private fields — null/empty when the caller lacks members:view_private.
   phone: string | null;
-  emergencyContactName: string | null;
-  emergencyContactPhone: string | null;
+  emergencyContacts: EmergencyContactSummary[];
   mNumber: string | null;
 }
 
@@ -226,8 +232,6 @@ export async function listMembersAction(opts: {
     preferredName: schema.profiles.preferredName,
     ucAffiliation: schema.profiles.ucAffiliation,
     phone: schema.profiles.phone,
-    emergencyContactName: schema.profiles.emergencyContactName,
-    emergencyContactPhone: schema.profiles.emergencyContactPhone,
     mNumber: schema.profiles.mNumber,
   };
 
@@ -268,6 +272,27 @@ export async function listMembersAction(opts: {
     rolesByUser.set(r.userId, list);
   }
 
+  // Batch-fetch emergency contacts for page users (private data).
+  const contactRows =
+    canViewPrivate && userIds.length > 0
+      ? await db
+          .select({
+            userId: schema.emergencyContacts.userId,
+            name: schema.emergencyContacts.name,
+            phone: schema.emergencyContacts.phone,
+            relationship: schema.emergencyContacts.relationship,
+          })
+          .from(schema.emergencyContacts)
+          .where(inArray(schema.emergencyContacts.userId, userIds))
+      : [];
+
+  const contactsByUser = new Map<string, EmergencyContactSummary[]>();
+  for (const c of contactRows) {
+    const list = contactsByUser.get(c.userId) ?? [];
+    list.push({ name: c.name, phone: c.phone, relationship: c.relationship });
+    contactsByUser.set(c.userId, list);
+  }
+
   let mappedRows: MemberSummary[] = rows.map((r) => ({
     userId: r.userId,
     email: r.email,
@@ -277,8 +302,9 @@ export async function listMembersAction(opts: {
     roles: rolesByUser.get(r.userId) ?? [],
     status: r.status,
     phone: canViewPrivate ? r.phone : null,
-    emergencyContactName: canViewPrivate ? r.emergencyContactName : null,
-    emergencyContactPhone: canViewPrivate ? r.emergencyContactPhone : null,
+    emergencyContacts: canViewPrivate
+      ? (contactsByUser.get(r.userId) ?? [])
+      : [],
     mNumber: canViewPrivate ? r.mNumber : null,
   }));
 
@@ -309,10 +335,9 @@ export interface MemberDetail {
   preferredName: string | null;
   ucAffiliation: string | null;
   roles: string[];
-  // Private fields — null when caller lacks members:view_private.
+  // Private fields — null/empty when caller lacks members:view_private.
   phone: string | null;
-  emergencyContactName: string | null;
-  emergencyContactPhone: string | null;
+  emergencyContacts: EmergencyContactSummary[];
   mNumber: string | null;
   // Session count — null when caller lacks sessions:revoke.
   activeSessions: number | null;
@@ -338,8 +363,6 @@ export async function getMemberDetailAction(
       preferredName: schema.profiles.preferredName,
       ucAffiliation: schema.profiles.ucAffiliation,
       phone: schema.profiles.phone,
-      emergencyContactName: schema.profiles.emergencyContactName,
-      emergencyContactPhone: schema.profiles.emergencyContactPhone,
       mNumber: schema.profiles.mNumber,
     })
     .from(schema.users)
@@ -357,6 +380,18 @@ export async function getMemberDetailAction(
     .from(schema.userRoles)
     .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
     .where(eq(schema.userRoles.userId, userId));
+
+  // Fetch emergency contacts (private data).
+  const contacts: EmergencyContactSummary[] = canViewPrivate
+    ? await db
+        .select({
+          name: schema.emergencyContacts.name,
+          phone: schema.emergencyContacts.phone,
+          relationship: schema.emergencyContacts.relationship,
+        })
+        .from(schema.emergencyContacts)
+        .where(eq(schema.emergencyContacts.userId, userId))
+    : [];
 
   // Optionally count active sessions.
   let activeSessions: number | null = null;
@@ -380,8 +415,7 @@ export async function getMemberDetailAction(
     ucAffiliation: row.ucAffiliation,
     roles: roleRows.map((r) => r.roleName),
     phone: canViewPrivate ? row.phone : null,
-    emergencyContactName: canViewPrivate ? row.emergencyContactName : null,
-    emergencyContactPhone: canViewPrivate ? row.emergencyContactPhone : null,
+    emergencyContacts: contacts,
     mNumber: canViewPrivate ? row.mNumber : null,
     activeSessions,
   };
@@ -569,8 +603,11 @@ export async function adminUpdateProfileAction(input: {
   preferredName: string;
   mNumber: string;
   phone: string;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
+  emergencyContacts: Array<{
+    name: string;
+    phone: string;
+    relationship: schema.ContactRelationship;
+  }>;
   ucAffiliation: schema.UcAffiliation;
 }): Promise<{ ok: true }> {
   await requireMembersManager();
@@ -584,7 +621,7 @@ export async function adminUpdateProfileAction(input: {
     throw new Error("User not found");
   }
 
-  const { userId, ...profileData } = input;
+  const { userId, emergencyContacts, ...profileData } = input;
   await db
     .insert(schema.profiles)
     .values({ userId, ...profileData, updatedAt: new Date() })
@@ -592,6 +629,23 @@ export async function adminUpdateProfileAction(input: {
       target: schema.profiles.userId,
       set: { ...profileData, updatedAt: new Date() },
     });
+
+  // Replace emergency contacts: delete existing, then insert new set.
+  await db
+    .delete(schema.emergencyContacts)
+    .where(eq(schema.emergencyContacts.userId, userId));
+
+  if (emergencyContacts.length > 0) {
+    await db.insert(schema.emergencyContacts).values(
+      emergencyContacts.map((ec) => ({
+        id: `ec_${uuidv7()}`,
+        userId,
+        name: ec.name,
+        phone: ec.phone,
+        relationship: ec.relationship,
+      })),
+    );
+  }
 
   return { ok: true };
 }

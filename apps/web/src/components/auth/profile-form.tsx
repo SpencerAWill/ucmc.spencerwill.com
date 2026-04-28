@@ -2,11 +2,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { z } from "zod";
 
+import { EmergencyContactFields } from "#/components/auth/emergency-contact-fields";
 import { MNumberField } from "#/components/auth/m-number-field";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { SESSION_QUERY_KEY } from "#/lib/auth/use-auth";
 import { useAppForm } from "#/lib/form/form";
+import type { EmergencyContactInput } from "#/server/auth/server-fns";
 import {
   PROFILE_LIMITS,
   profileInputSchema,
@@ -28,8 +30,7 @@ export interface ProfileFormDefaults {
   preferredName?: string;
   mNumber?: string;
   phone?: string;
-  emergencyContactName?: string;
-  emergencyContactPhone?: string;
+  emergencyContacts?: EmergencyContactInput[];
   ucAffiliation?: "student" | "faculty" | "staff" | "alum" | "community" | "";
 }
 
@@ -72,16 +73,15 @@ export function ProfileForm({
       preferredName: defaults?.preferredName ?? "",
       mNumber: defaults?.mNumber ?? "",
       phone: defaults?.phone ?? "",
-      emergencyContactName: defaults?.emergencyContactName ?? "",
-      emergencyContactPhone: defaults?.emergencyContactPhone ?? "",
+      emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",
     },
-    // onMount runs the schema once on load so `canSubmit` starts false
-    // (empty required fields are invalid). No field is `isTouched` yet
-    // so no red indicators appear — just the button stays disabled.
-    // onBlur establishes the first visible validation per field;
-    // onChange re-runs on every keystroke so invalid → valid transitions
-    // flip red to green immediately. onSubmit is the final gate.
+    // onMount validates once on load — if defaults are invalid (e.g.
+    // empty required fields on the registration form), form-level
+    // errors are set. onBlur establishes the first visible validation
+    // per field; onChange re-runs on every keystroke so invalid → valid
+    // transitions flip red to green immediately. onSubmit is the final
+    // gate.
     validators: {
       onMount: profileInputSchema,
       onChange: profileInputSchema,
@@ -153,19 +153,9 @@ export function ProfileForm({
         <form.AppField name="phone">
           {(field) => <field.PhoneField label="Phone" />}
         </form.AppField>
-        <div />
-        <form.AppField name="emergencyContactName">
-          {(field) => (
-            <field.TextField
-              label="Emergency contact name"
-              maxLength={PROFILE_LIMITS.emergencyContactName.max}
-            />
-          )}
-        </form.AppField>
-        <form.AppField name="emergencyContactPhone">
-          {(field) => <field.PhoneField label="Emergency contact phone" />}
-        </form.AppField>
       </div>
+
+      <EmergencyContactFields form={form} />
 
       {mutation.isError ? (
         <p className="text-sm text-destructive">

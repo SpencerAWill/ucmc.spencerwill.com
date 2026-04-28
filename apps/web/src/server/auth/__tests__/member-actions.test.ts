@@ -55,10 +55,15 @@ async function seedUser(
       preferredName: "Test",
       mNumber: "M12345678",
       phone: "+15135551212",
-      emergencyContactName: "Emergency Contact",
-      emergencyContactPhone: "+15135551213",
       ucAffiliation: "student",
       updatedAt: new Date(),
+    });
+    await db.insert(schema.emergencyContacts).values({
+      id: `ec_${crypto.randomUUID()}`,
+      userId: id,
+      name: "Emergency Contact",
+      phone: "+15135551213",
+      relationship: "other",
     });
   }
   return id;
@@ -132,6 +137,7 @@ beforeEach(async () => {
   await db.delete(schema.userRoles);
   await db.delete(schema.rolePermissions);
   await db.delete(schema.sessions);
+  await db.delete(schema.emergencyContacts);
   await db.delete(schema.profiles);
   await db.delete(schema.users);
   // Remove test-created roles (keep seeded ones).
@@ -191,8 +197,7 @@ describe("authorization", () => {
         preferredName: "Test",
         mNumber: "",
         phone: "+15135551212",
-        emergencyContactName: "EC",
-        emergencyContactPhone: "+15135551213",
+        emergencyContacts: [],
         ucAffiliation: "student",
       }),
     ).rejects.toThrow("Forbidden: missing members:manage");
@@ -467,8 +472,13 @@ describe("adminUpdateProfileAction", () => {
       preferredName: "Updated",
       mNumber: "M99999999",
       phone: "+15135559999",
-      emergencyContactName: "New EC",
-      emergencyContactPhone: "+15135559998",
+      emergencyContacts: [
+        {
+          name: "New EC",
+          phone: "+15135559998",
+          relationship: "friend" as const,
+        },
+      ],
       ucAffiliation: "faculty",
     });
 
@@ -493,8 +503,7 @@ describe("adminUpdateProfileAction", () => {
       preferredName: "New",
       mNumber: "",
       phone: "+15135551111",
-      emergencyContactName: "EC",
-      emergencyContactPhone: "+15135551112",
+      emergencyContacts: [],
       ucAffiliation: "community",
     });
 
@@ -514,8 +523,7 @@ describe("adminUpdateProfileAction", () => {
         preferredName: "Test",
         mNumber: "",
         phone: "+15135551212",
-        emergencyContactName: "EC",
-        emergencyContactPhone: "+15135551213",
+        emergencyContacts: [],
         ucAffiliation: "student",
       }),
     ).rejects.toThrow("User not found");
@@ -535,8 +543,7 @@ describe("listMembersAction private data", () => {
     const target = result.rows.find((r) => r.email === "visible@example.com");
     expect(target).toBeDefined();
     expect(target!.phone).toBeNull();
-    expect(target!.emergencyContactName).toBeNull();
-    expect(target!.emergencyContactPhone).toBeNull();
+    expect(target!.emergencyContacts).toEqual([]);
     expect(target!.mNumber).toBeNull();
   });
 
@@ -550,8 +557,13 @@ describe("listMembersAction private data", () => {
     const target = result.rows.find((r) => r.email === "visible@example.com");
     expect(target).toBeDefined();
     expect(target!.phone).toBe("+15135551212");
-    expect(target!.emergencyContactName).toBe("Emergency Contact");
-    expect(target!.emergencyContactPhone).toBe("+15135551213");
+    expect(target!.emergencyContacts).toEqual([
+      {
+        name: "Emergency Contact",
+        phone: "+15135551213",
+        relationship: "other",
+      },
+    ]);
     expect(target!.mNumber).toBe("M12345678");
   });
 
@@ -641,9 +653,10 @@ describe("getMemberDetailAction", () => {
     expect(detail.status).toBe("approved");
     expect(detail.fullName).toBe("Test User");
     expect(detail.roles).toContain("member");
-    // Private fields should be null.
+    // Private fields should be null/empty.
     expect(detail.phone).toBeNull();
     expect(detail.mNumber).toBeNull();
+    expect(detail.emergencyContacts).toEqual([]);
     // Session count should be null.
     expect(detail.activeSessions).toBeNull();
   });
@@ -655,7 +668,13 @@ describe("getMemberDetailAction", () => {
 
     const detail = await getMemberDetailAction(targetId);
     expect(detail.phone).toBe("+15135551212");
-    expect(detail.emergencyContactName).toBe("Emergency Contact");
+    expect(detail.emergencyContacts).toEqual([
+      {
+        name: "Emergency Contact",
+        phone: "+15135551213",
+        relationship: "other",
+      },
+    ]);
     expect(detail.mNumber).toBe("M12345678");
   });
 

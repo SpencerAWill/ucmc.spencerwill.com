@@ -53,10 +53,30 @@ export const profiles = sqliteTable("profiles", {
   preferredName: text("preferred_name").notNull(),
   mNumber: text("m_number").notNull(),
   phone: text("phone").notNull(),
-  emergencyContactName: text("emergency_contact_name").notNull(),
-  emergencyContactPhone: text("emergency_contact_phone").notNull(),
   ucAffiliation: text("uc_affiliation", { enum: ucAffiliation }).notNull(),
   updatedAt: timestamp("updated_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
+export const contactRelationship = [
+  "parent",
+  "spouse_partner",
+  "sibling",
+  "friend",
+  "other",
+] as const;
+export type ContactRelationship = (typeof contactRelationship)[number];
+
+export const emergencyContacts = sqliteTable("emergency_contacts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  relationship: text("relationship", { enum: contactRelationship }).notNull(),
+  createdAt: timestamp("created_at")
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
 });
@@ -154,6 +174,7 @@ export const magicLinks = sqliteTable("magic_links", {
 
 export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
+export type EmergencyContact = typeof emergencyContacts.$inferSelect;
 export type Role = typeof roles.$inferSelect;
 export type Permission = typeof permissions.$inferSelect;
 export type PasskeyCredential = typeof passkeyCredentials.$inferSelect;
