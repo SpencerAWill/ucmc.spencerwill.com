@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { MagicLinkForm } from "#/components/auth/magic-link-form";
+import { SignInWithPasskeyButton } from "#/components/auth/sign-in-with-passkey-button";
 
 // URL search params arrive as strings; coerce so `?register=true` /
 // `?invalid=true` parse correctly whether the user landed here via a
@@ -56,6 +57,15 @@ function SignInPage() {
         </div>
       ) : null}
       <MagicLinkForm defaultMode={mode} />
+      {/* Passkey users skip the email round-trip. The button hides itself
+          when the browser doesn't support WebAuthn, so we don't need a
+          conditional gate here. */}
+      <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <SignInWithPasskeyButton />
     </div>
   );
 }
