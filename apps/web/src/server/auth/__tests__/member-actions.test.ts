@@ -33,7 +33,7 @@ const {
   getMemberDetailAction,
 } = await import("#/server/auth/member-actions.server");
 const { openSession, loadCurrentPrincipal } =
-  await import("#/server/auth/session.server");
+  await import("#/features/auth/server/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 

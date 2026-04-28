@@ -14,7 +14,7 @@ import type {
   PendingRegistration,
   RoleOption,
 } from "#/server/auth/member-actions.server";
-import { profileInputSchema } from "#/server/auth/server-fns";
+import { profileInputSchema } from "#/features/auth/server/server-fns";
 
 export type {
   EmergencyContactSummary,

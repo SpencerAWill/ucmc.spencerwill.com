@@ -34,8 +34,8 @@ import {
   TooltipTrigger,
 } from "#/components/ui/tooltip";
 import { cn } from "#/lib/utils";
-import { requirePermission } from "#/lib/auth/guards";
-import { useAuth } from "#/lib/auth/use-auth";
+import { requirePermission } from "#/features/auth/guards";
+import { useAuth } from "#/features/auth/api/use-auth";
 import {
   approveRegistrationsFn,
   listMembersFn,

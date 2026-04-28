@@ -31,7 +31,7 @@ const {
   updateAnnouncementAction,
 } =
   await import("#/features/announcements/server/announcements-actions.server");
-const { openSession } = await import("#/server/auth/session.server");
+const { openSession } = await import("#/features/auth/server/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 

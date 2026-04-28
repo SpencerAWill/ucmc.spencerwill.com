@@ -25,13 +25,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
-import { UserAvatar } from "#/components/auth/user-avatar";
+import { UserAvatar } from "#/features/auth/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
 import { RouteErrorFallback } from "#/components/error-page";
-import { requireApproved } from "#/lib/auth/guards";
-import { useAuth } from "#/lib/auth/use-auth";
+import { requireApproved } from "#/features/auth/guards";
+import { useAuth } from "#/features/auth/api/use-auth";
 import {
   deactivateMembersFn,
   getMemberDetailFn,

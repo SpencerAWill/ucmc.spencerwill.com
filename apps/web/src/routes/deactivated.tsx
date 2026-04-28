@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { requireAuth } from "#/lib/auth/guards";
+import { requireAuth } from "#/features/auth/guards";
 
 /**
  * Shown to signed-in users whose account has been deactivated by an

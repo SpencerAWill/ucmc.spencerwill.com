@@ -2,19 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
-import { AvatarEditor } from "#/components/account/avatar-editor";
-import { EMPTY_PROFILE_FORM_VALUES } from "#/components/auth/profile-form-shape";
-import type { ProfileFormShape } from "#/components/auth/profile-form-shape";
-import { PublicProfileFields } from "#/components/auth/public-profile-fields";
-import { useAuth } from "#/lib/auth/use-auth";
+import { AvatarEditor } from "#/features/auth/components/avatar-editor";
+import { EMPTY_PROFILE_FORM_VALUES } from "#/features/auth/components/profile-form-shape";
+import type { ProfileFormShape } from "#/features/auth/components/profile-form-shape";
+import { PublicProfileFields } from "#/features/auth/components/public-profile-fields";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import {
   getProfileFn,
   profileInputSchema,
   submitPublicProfileFn,
-} from "#/server/auth/server-fns";
-import type { PublicProfileInput } from "#/server/auth/server-fns";
+} from "#/features/auth/server/server-fns";
+import type { PublicProfileInput } from "#/features/auth/server/server-fns";
 
 /**
  * Default `/account` tab — shows the public-ish profile fields

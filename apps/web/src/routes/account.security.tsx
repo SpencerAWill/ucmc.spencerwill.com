@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { AddPasskeyButton } from "#/components/auth/passkey-button";
+import { AddPasskeyButton } from "#/features/auth/components/passkey-button";
 import { Button } from "#/components/ui/button";
-import { requireAuth } from "#/lib/auth/guards";
-import { listPasskeysFn, removePasskeyFn } from "#/server/auth/webauthn-fns";
+import { requireAuth } from "#/features/auth/guards";
+import {
+  listPasskeysFn,
+  removePasskeyFn,
+} from "#/features/auth/server/webauthn-fns";
 
 const PASSKEY_LIST_QUERY_KEY = ["account", "passkeys"] as const;
 

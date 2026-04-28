@@ -55,7 +55,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "#/components/ui/tooltip";
-import { requirePermission } from "#/lib/auth/guards";
+import { requirePermission } from "#/features/auth/guards";
 import {
   createRoleFn,
   deleteRoleFn,

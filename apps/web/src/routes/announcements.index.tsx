@@ -20,8 +20,8 @@ import {
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
 import { Button } from "#/components/ui/button";
-import { requirePermission } from "#/lib/auth/guards";
-import { useAuth } from "#/lib/auth/use-auth";
+import { requirePermission } from "#/features/auth/guards";
+import { useAuth } from "#/features/auth/api/use-auth";
 import {
   deleteAnnouncementFn,
   listAnnouncementsFn,

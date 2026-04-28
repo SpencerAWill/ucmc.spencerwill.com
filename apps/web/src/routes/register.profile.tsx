@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { ProfileForm } from "#/components/auth/profile-form";
-import { requireRegistrationContext } from "#/lib/auth/guards";
+import { ProfileForm } from "#/features/auth/components/profile-form";
+import { requireRegistrationContext } from "#/features/auth/guards";
 
 /**
  * First-time profile completion. Reachable two ways from the magic-link

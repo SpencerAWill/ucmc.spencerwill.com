@@ -3,9 +3,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { Button } from "#/components/ui/button";
-import { SESSION_QUERY_KEY } from "#/lib/auth/use-auth";
-import { consumeMagicLinkFn } from "#/server/auth/server-fns";
-import type { ConsumeMagicLinkResult } from "#/server/auth/server-fns";
+import { SESSION_QUERY_KEY } from "#/features/auth/api/use-auth";
+import { consumeMagicLinkFn } from "#/features/auth/server/server-fns";
+import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
 
 const callbackSearchSchema = z.object({
   token: z.string().min(1),

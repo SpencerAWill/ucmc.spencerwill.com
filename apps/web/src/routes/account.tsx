@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 
 import { RouteErrorFallback } from "#/components/error-page";
-import { requireApproved } from "#/lib/auth/guards";
+import { requireApproved } from "#/features/auth/guards";
 
 /**
  * Account hub layout: a page-level container with a horizontal tab bar

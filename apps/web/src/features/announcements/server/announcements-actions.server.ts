@@ -13,8 +13,8 @@ import {
   markAllRead,
   updateAnnouncement,
 } from "#/features/announcements/server/repo.server";
-import type { Principal } from "#/server/auth/principal.server";
-import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import type { Principal } from "#/features/auth/server/principal.server";
+import { loadCurrentPrincipal } from "#/features/auth/server/session.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
 

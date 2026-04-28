@@ -16,8 +16,8 @@ import { AppLayout } from "#/components/layouts/app-layout";
 import { RouteErrorFallback } from "#/components/error-page";
 import { ThemeProvider } from "#/components/theme-provider";
 import { Toaster } from "#/components/ui/sonner";
-import { sessionQueryOptions } from "#/lib/auth/use-auth";
-import { ViewModeProvider } from "#/lib/auth/view-mode";
+import { sessionQueryOptions } from "#/features/auth/api/use-auth";
+import { ViewModeProvider } from "#/features/auth/api/view-mode";
 
 interface RouterContext {
   queryClient: QueryClient;

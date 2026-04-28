@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import { RoleAssignmentSheet } from "#/components/auth/role-assignment-sheet";
 import { StatusBadge } from "#/components/auth/status-badge";
-import { UserAvatar } from "#/components/auth/user-avatar";
+import { UserAvatar } from "#/features/auth/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Checkbox } from "#/components/ui/checkbox";
@@ -38,8 +38,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "#/components/ui/tooltip";
-import { requireApproved } from "#/lib/auth/guards";
-import { useAuth } from "#/lib/auth/use-auth";
+import { requireApproved } from "#/features/auth/guards";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { listMembersFn, listRolesFn } from "#/server/auth/member-fns";
 import type { MemberSummary, RoleOption } from "#/server/auth/member-fns";
 

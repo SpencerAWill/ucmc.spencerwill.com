@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { MagicLinkForm } from "#/components/auth/magic-link-form";
-import { SignInWithPasskeyButton } from "#/components/auth/sign-in-with-passkey-button";
+import { MagicLinkForm } from "#/features/auth/components/magic-link-form";
+import { SignInWithPasskeyButton } from "#/features/auth/components/sign-in-with-passkey-button";
 
 // URL search params arrive as strings; coerce so `?register=true` /
 // `?invalid=true` parse correctly whether the user landed here via a

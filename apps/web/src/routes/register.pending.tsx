@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { requireAuth } from "#/lib/auth/guards";
+import { requireAuth } from "#/features/auth/guards";
 
 /**
  * Holding page for approved-but-not-yet-active members. Requires a

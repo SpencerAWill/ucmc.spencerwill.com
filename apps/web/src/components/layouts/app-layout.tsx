@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { ChevronRight, Eye, Shield, UserPlus, Users } from "lucide-react";
 
 import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
-import { UserMenu } from "#/components/auth/user-menu";
+import { UserMenu } from "#/features/auth/components/user-menu";
 import { ModeToggle } from "#/components/mode-toggle";
 import {
   Collapsible,
@@ -34,7 +34,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "#/components/ui/tooltip";
-import { useAuth } from "#/lib/auth/use-auth";
+import { useAuth } from "#/features/auth/api/use-auth";
 
 const HEADER_HEIGHT = "3.5rem";
 
