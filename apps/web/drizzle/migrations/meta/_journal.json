@@ -64,6 +64,20 @@
       "when": 1777352881003,
       "tag": "0008_user_public_id",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1777354221226,
+      "tag": "0009_announcements",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1777354221227,
+      "tag": "0010_announcements_permissions_seed",
+      "breakpoints": true
     }
   ]
 }

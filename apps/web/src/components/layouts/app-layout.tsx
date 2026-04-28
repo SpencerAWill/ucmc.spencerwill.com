@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Eye, Shield, UserPlus, Users } from "lucide-react";
 
+import { AnnouncementsBell } from "#/components/announcements/announcements-bell";
 import { UserMenu } from "#/components/auth/user-menu";
 import { ModeToggle } from "#/components/mode-toggle";
 import {
@@ -76,6 +77,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex flex-1 flex-nowrap flex-row-reverse gap-x-2">
             <UserMenu />
+            <AnnouncementsBell />
             <ModeToggle />
           </div>
         </nav>

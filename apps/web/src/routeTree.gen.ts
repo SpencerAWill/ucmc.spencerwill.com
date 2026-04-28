@@ -16,6 +16,7 @@ import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MembersIndexRouteImport } from './routes/members.index'
+import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
@@ -63,6 +64,11 @@ const MembersIndexRoute = MembersIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MembersRoute,
+} as any)
+const AnnouncementsIndexRoute = AnnouncementsIndexRouteImport.update({
+  id: '/announcements/',
+  path: '/announcements/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AccountIndexRoute = AccountIndexRouteImport.update({
   id: '/',
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
+  '/announcements/': typeof AnnouncementsIndexRoute
   '/members/': typeof MembersIndexRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account': typeof AccountIndexRoute
+  '/announcements': typeof AnnouncementsIndexRoute
   '/members': typeof MembersIndexRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
@@ -183,6 +191,7 @@ export interface FileRoutesById {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
+  '/announcements/': typeof AnnouncementsIndexRoute
   '/members/': typeof MembersIndexRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
@@ -206,6 +215,7 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/account/'
+    | '/announcements/'
     | '/members/'
     | '/api/avatars/$'
     | '/members/roles/$roleId'
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/account'
+    | '/announcements'
     | '/members'
     | '/api/avatars/$'
     | '/members/roles/$roleId'
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/account/'
+    | '/announcements/'
     | '/members/'
     | '/api/avatars/$'
     | '/members/roles_/$roleId'
@@ -261,6 +273,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
   RegisterProfileRoute: typeof RegisterProfileRoute
+  AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
 }
 
@@ -314,6 +327,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/members/'
       preLoaderRoute: typeof MembersIndexRouteImport
       parentRoute: typeof MembersRoute
+    }
+    '/announcements/': {
+      id: '/announcements/'
+      path: '/announcements'
+      fullPath: '/announcements/'
+      preLoaderRoute: typeof AnnouncementsIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/account/': {
       id: '/account/'
@@ -448,6 +468,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   RegisterPendingRoute: RegisterPendingRoute,
   RegisterProfileRoute: RegisterProfileRoute,
+  AnnouncementsIndexRoute: AnnouncementsIndexRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
 }
 export const routeTree = rootRouteImport

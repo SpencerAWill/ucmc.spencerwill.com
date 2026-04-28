@@ -4,6 +4,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  index,
   integer,
   primaryKey,
   sqliteTable,
@@ -42,6 +43,7 @@ export const users = sqliteTable(
       .default(sql`(unixepoch() * 1000)`),
     approvedAt: timestamp("approved_at"),
     approvedBy: text("approved_by"),
+    lastReadAnnouncementsAt: timestamp("last_read_announcements_at"),
   },
   (t) => [uniqueIndex("users_email_unique").on(t.email)],
 );
@@ -175,6 +177,28 @@ export const magicLinks = sqliteTable("magic_links", {
   consumedAt: timestamp("consumed_at"),
 });
 
+export const announcements = sqliteTable(
+  "announcements",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    publishedAt: timestamp("published_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("announcements_published_at_idx").on(t.publishedAt)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
@@ -183,3 +207,4 @@ export type Permission = typeof permissions.$inferSelect;
 export type PasskeyCredential = typeof passkeyCredentials.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type MagicLink = typeof magicLinks.$inferSelect;
+export type Announcement = typeof announcements.$inferSelect;
