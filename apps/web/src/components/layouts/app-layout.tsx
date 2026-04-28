@@ -130,7 +130,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarContent>
             <SidebarNav />
           </SidebarContent>
-          <SidebarFooter />
+          <SidebarFooter>
+            <SidebarFooterNav />
+          </SidebarFooter>
           <SidebarRail />
         </Sidebar>
         <SidebarInset>
@@ -169,7 +171,6 @@ function SidebarNav() {
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
   const canViewAudit = hasPermission("audit:view");
-  const canSubmitFeedback = hasPermission("feedback:submit");
 
   if (!isApproved) {
     return null;
@@ -260,19 +261,27 @@ function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : null}
-
-        {canSubmitFeedback ? (
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Feedback">
-              <Link to="/feedback">
-                <MessageSquare />
-                <span>Feedback</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ) : null}
       </SidebarMenu>
     </SidebarGroup>
+  );
+}
+
+function SidebarFooterNav() {
+  const { isApproved, hasPermission } = useAuth();
+  if (!isApproved || !hasPermission("feedback:submit")) {
+    return null;
+  }
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild tooltip="Feedback">
+          <Link to="/feedback">
+            <MessageSquare />
+            <span>Feedback</span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
 

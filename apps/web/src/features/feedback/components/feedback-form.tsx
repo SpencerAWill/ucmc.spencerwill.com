@@ -32,9 +32,13 @@ const DEFAULTS: FeedbackInput = {
 export function FeedbackForm() {
   const submitMutation = useSubmitFeedback();
 
+  const titleSchema = feedbackInputSchema.shape.title;
+  const bodySchema = feedbackInputSchema.shape.body;
+
   const form = useAppForm({
     defaultValues: DEFAULTS,
     validators: {
+      onMount: feedbackInputSchema,
       onChange: feedbackInputSchema,
       onBlur: feedbackInputSchema,
       onSubmit: feedbackInputSchema,
@@ -85,7 +89,10 @@ export function FeedbackForm() {
                 />
               )}
             </form.AppField>
-            <form.AppField name="title">
+            <form.AppField
+              name="title"
+              validators={{ onChange: titleSchema, onBlur: titleSchema }}
+            >
               {(field) => (
                 <field.TextField
                   label="Title"
@@ -94,7 +101,10 @@ export function FeedbackForm() {
                 />
               )}
             </form.AppField>
-            <form.AppField name="body">
+            <form.AppField
+              name="body"
+              validators={{ onChange: bodySchema, onBlur: bodySchema }}
+            >
               {(field) => (
                 <field.TextArea
                   label="Details"
