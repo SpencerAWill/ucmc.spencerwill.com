@@ -35,6 +35,12 @@ export interface WorkerEnv {
   RESEND_API_KEY?: string;
   SESSION_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
+
+  // Dev-only — base URL of the Mailpit sidecar (e.g.
+  // "http://mailpit:8025"). When set AND RESEND_API_KEY is absent, the
+  // email adapter POSTs to Mailpit's HTTP send API instead of writing to
+  // the Worker console. See docker-compose.yml for the sidecar config.
+  MAILPIT_URL?: string;
 }
 
 export const env = workerEnv as unknown as WorkerEnv;
