@@ -9,7 +9,6 @@ import { redirect } from "@tanstack/react-router";
 
 import { SESSION_QUERY_KEY, sessionQueryOptions } from "#/lib/auth/use-auth";
 import type { Principal } from "#/server/auth/principal.server";
-import type { EmailProof } from "#/server/auth/proof-cookie.server";
 import { getProofFn } from "#/server/auth/server-fns";
 
 async function getPrincipal(
@@ -81,15 +80,41 @@ export async function requirePermission(
 }
 
 /**
- * Require a valid email-verification proof cookie (set by the magic-link
- * callback). Distinct from `requireAuth` — proof-only holders haven't
- * opened a session yet. Used by `/register/profile` to gate first-time
- * profile submission.
+ * Authorization context for the `/register/profile` page. Accepts either
+ * a fresh email-verification proof cookie OR a returning-user session
+ * for someone who hasn't completed a profile yet — mirrors the magic-link
+ * callback's two paths into this route:
+ *
+ *   no user row yet              → consume sets proof cookie  → here
+ *   user row exists, no profile  → consume opens a session    → here
+ *
+ * Anyone else gets bounced:
+ *   - no proof and no session  → /sign-in?register=true (start over)
+ *   - signed-in user *with* a profile → /account (already registered)
+ *
+ * The shared shape exposes `email` regardless of source, so the form
+ * can render its read-only field and the server's submit action (which
+ * reads either cookie itself) stays the source of truth.
  */
-export async function requireProof(): Promise<EmailProof> {
+export type RegistrationContext =
+  | { source: "proof"; email: string }
+  | { source: "session"; email: string };
+
+export async function requireRegistrationContext(
+  queryClient: QueryClient,
+): Promise<RegistrationContext> {
+  // Proof cookie is the first-time-registrant path; check it first so a
+  // stale session never shadows a freshly-verified email.
   const { proof } = await getProofFn();
-  if (!proof) {
+  if (proof) {
+    return { source: "proof", email: proof.email };
+  }
+  const principal = await getPrincipal(queryClient);
+  if (!principal) {
     throw redirect({ to: "/sign-in", search: { register: true } });
   }
-  return proof;
+  if (principal.hasProfile) {
+    throw redirect({ to: "/account" });
+  }
+  return { source: "session", email: principal.email };
 }
