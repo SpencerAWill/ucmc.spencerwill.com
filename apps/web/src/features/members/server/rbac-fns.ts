@@ -129,15 +129,33 @@ export const setUserRolesFn = createServerFn({ method: "POST" })
 
 // ── role reordering ────────────────────────────────────────────────────
 
-export const swapRolePositionsFn = createServerFn({ method: "POST" })
+export const reorderRolesFn = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
-      roleId: z.string().min(1),
-      direction: z.enum(["up", "down"]),
+      orderedRoleIds: z.array(z.string().min(1)),
     }),
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const { swapRolePositionsAction } =
+    const { reorderRolesAction } =
       await import("#/features/members/server/rbac-actions.server");
-    return swapRolePositionsAction(data);
+    return reorderRolesAction(data);
+  });
+
+// ── bulk permission grants ─────────────────────────────────────────────
+
+export const bulkSetRolePermissionsFn = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      roles: z.array(
+        z.object({
+          roleId: z.string().min(1),
+          permissionIds: z.array(z.string().min(1)),
+        }),
+      ),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { bulkSetRolePermissionsAction } =
+      await import("#/features/members/server/rbac-actions.server");
+    return bulkSetRolePermissionsAction(data);
   });

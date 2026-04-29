@@ -391,42 +391,110 @@ export async function setUserRolesAction(input: {
 // ── role reordering ────────────────────────────────────────────────────
 
 /**
- * Swap the position of two roles. Used by up/down arrow controls in the
- * roles management UI.
+ * Reorder all roles. Caller passes the full list of role ids in their
+ * desired order; we assign `position = index` to each. Atomic via D1's
+ * batch API (see `landing-repo` for the same pattern — Drizzle's
+ * `db.transaction` issues `BEGIN/COMMIT` SQL that workerd D1 rejects).
  */
-export async function swapRolePositionsAction(input: {
-  roleId: string;
-  direction: "up" | "down";
+export async function reorderRolesAction(input: {
+  orderedRoleIds: string[];
 }): Promise<{ ok: true }> {
   await requireRolesManager();
   const db = getDb();
 
-  const roles = await db.query.roles.findMany({
-    orderBy: (roles, { asc }) => [asc(roles.position), asc(roles.name)],
-  });
-
-  const idx = roles.findIndex((r) => r.id === input.roleId);
-  if (idx === -1) {
-    throw new Error("Role not found");
+  const seen = new Set<string>();
+  for (const id of input.orderedRoleIds) {
+    if (seen.has(id)) {
+      throw new Error(`Duplicate role id in order: ${id}`);
+    }
+    seen.add(id);
   }
 
-  const swapIdx = input.direction === "up" ? idx - 1 : idx + 1;
-  if (swapIdx < 0 || swapIdx >= roles.length) {
-    return { ok: true }; // Already at boundary, no-op.
+  const existing = await db.query.roles.findMany({ columns: { id: true } });
+  if (existing.length !== input.orderedRoleIds.length) {
+    throw new Error(
+      `Order list size (${input.orderedRoleIds.length}) does not match role count (${existing.length})`,
+    );
+  }
+  for (const r of existing) {
+    if (!seen.has(r.id)) {
+      throw new Error(`Order list missing role: ${r.id}`);
+    }
   }
 
-  const current = roles[idx];
-  const neighbor = roles[swapIdx];
+  if (input.orderedRoleIds.length === 0) {
+    return { ok: true };
+  }
 
-  // Swap positions.
-  await db
-    .update(schema.roles)
-    .set({ position: neighbor.position })
-    .where(eq(schema.roles.id, current.id));
-  await db
-    .update(schema.roles)
-    .set({ position: current.position })
-    .where(eq(schema.roles.id, neighbor.id));
+  const stmts = input.orderedRoleIds.map((id, i) =>
+    db.update(schema.roles).set({ position: i }).where(eq(schema.roles.id, id)),
+  );
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+
+  return { ok: true };
+}
+
+/**
+ * Replace the permission grants for several roles in a single round-trip.
+ * Each entry is a full replace of that role's grants. Atomic across all
+ * entries via D1's batch API.
+ */
+export async function bulkSetRolePermissionsAction(input: {
+  roles: { roleId: string; permissionIds: string[] }[];
+}): Promise<{ ok: true }> {
+  await requireRolesManager();
+
+  if (input.roles.length === 0) {
+    return { ok: true };
+  }
+
+  const seen = new Set<string>();
+  for (const entry of input.roles) {
+    if (entry.roleId === SYSTEM_ADMIN_ROLE_ID) {
+      throw new Error(
+        "Cannot modify system_admin permissions — system admin automatically gets all permissions",
+      );
+    }
+    if (seen.has(entry.roleId)) {
+      throw new Error(`Duplicate role id in bulk set: ${entry.roleId}`);
+    }
+    seen.add(entry.roleId);
+  }
+
+  const db = getDb();
+
+  const existing = await db
+    .select({ id: schema.roles.id })
+    .from(schema.roles)
+    .where(inArray(schema.roles.id, Array.from(seen)));
+  const existingIds = new Set(existing.map((r) => r.id));
+  for (const id of seen) {
+    if (!existingIds.has(id)) {
+      throw new Error(`Role not found: ${id}`);
+    }
+  }
+
+  const deletes = input.roles.map((entry) =>
+    db
+      .delete(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, entry.roleId)),
+  );
+  const inserts = input.roles
+    .filter((entry) => entry.permissionIds.length > 0)
+    .map((entry) =>
+      db.insert(schema.rolePermissions).values(
+        entry.permissionIds.map((permissionId) => ({
+          roleId: entry.roleId,
+          permissionId,
+        })),
+      ),
+    );
+  const stmts = [...deletes, ...inserts];
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+
+  if (seen.has(ANONYMOUS_ROLE_ID)) {
+    await invalidateAnonymousPermissionsCache();
+  }
 
   return { ok: true };
 }

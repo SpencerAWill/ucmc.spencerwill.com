@@ -33,9 +33,12 @@ const {
   setRolePermissionsAction,
   getUserRolesAction,
   setUserRolesAction,
+  reorderRolesAction,
+  bulkSetRolePermissionsAction,
   PROTECTED_ROLE_IDS,
 } = await import("#/features/members/server/rbac-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const { getKv } = await import("#/server/kv");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -415,5 +418,145 @@ describe("getUserRolesAction / setUserRolesAction", () => {
         roleIds: ["role_member", "role_does_not_exist"],
       }),
     ).rejects.toThrow('Role "role_does_not_exist" does not exist');
+  });
+});
+
+describe("reorderRolesAction", () => {
+  it("writes positions in the supplied order", async () => {
+    await signInAsAdmin();
+    await createRoleAction({ name: "test_custom" });
+    await createRoleAction({ name: "another" });
+
+    const before = await listRolesDetailedAction();
+    const ids = before.map((r) => r.id);
+
+    // Reverse the order.
+    const reversed = [...ids].reverse();
+    await reorderRolesAction({ orderedRoleIds: reversed });
+
+    const after = await listRolesDetailedAction();
+    expect(after.map((r) => r.id)).toEqual(reversed);
+    after.forEach((r, i) => {
+      expect(r.position).toBe(i);
+    });
+  });
+
+  it("rejects an order list with extra ids", async () => {
+    await signInAsAdmin();
+    const roles = await listRolesDetailedAction();
+    const ids = roles.map((r) => r.id);
+    await expect(
+      reorderRolesAction({ orderedRoleIds: [...ids, "role_phantom"] }),
+    ).rejects.toThrow(/does not match role count/);
+  });
+
+  it("rejects an order list missing an existing role", async () => {
+    await signInAsAdmin();
+    const roles = await listRolesDetailedAction();
+    const truncated = roles.slice(1).map((r) => r.id);
+    await expect(
+      reorderRolesAction({ orderedRoleIds: truncated }),
+    ).rejects.toThrow(/does not match role count/);
+  });
+
+  it("rejects duplicate role ids in the order list", async () => {
+    await signInAsAdmin();
+    const roles = await listRolesDetailedAction();
+    const ids = roles.map((r) => r.id);
+    const dup = [ids[0], ids[0], ...ids.slice(1, -1)];
+    await expect(reorderRolesAction({ orderedRoleIds: dup })).rejects.toThrow(
+      /Duplicate role id/,
+    );
+  });
+});
+
+describe("bulkSetRolePermissionsAction", () => {
+  it("replaces grants for multiple roles in one call", async () => {
+    await signInAsAdmin();
+    const { roleId: a } = await createRoleAction({ name: "test_custom" });
+    const { roleId: b } = await createRoleAction({ name: "another" });
+
+    await bulkSetRolePermissionsAction({
+      roles: [
+        {
+          roleId: a,
+          permissionIds: ["perm_registrations_approve", "perm_roles_assign"],
+        },
+        { roleId: b, permissionIds: ["perm_roles_manage"] },
+      ],
+    });
+
+    const grantsA = await getDb()
+      .select({ permissionId: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, a));
+    const grantsB = await getDb()
+      .select({ permissionId: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, b));
+
+    expect(grantsA.map((g) => g.permissionId).sort()).toEqual([
+      "perm_registrations_approve",
+      "perm_roles_assign",
+    ]);
+    expect(grantsB.map((g) => g.permissionId)).toEqual(["perm_roles_manage"]);
+  });
+
+  it("clears grants when given an empty permissionIds array", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({ name: "test_custom" });
+    await setRolePermissionsAction({
+      roleId,
+      permissionIds: ["perm_roles_manage"],
+    });
+
+    await bulkSetRolePermissionsAction({
+      roles: [{ roleId, permissionIds: [] }],
+    });
+
+    const grants = await getDb()
+      .select()
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, roleId));
+    expect(grants).toEqual([]);
+  });
+
+  it("rejects entries that target system_admin", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({ name: "test_custom" });
+    await expect(
+      bulkSetRolePermissionsAction({
+        roles: [
+          { roleId, permissionIds: ["perm_roles_manage"] },
+          { roleId: "role_system_admin", permissionIds: [] },
+        ],
+      }),
+    ).rejects.toThrow("Cannot modify system_admin permissions");
+  });
+
+  it("rejects duplicate role ids in the input", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({ name: "test_custom" });
+    await expect(
+      bulkSetRolePermissionsAction({
+        roles: [
+          { roleId, permissionIds: ["perm_roles_manage"] },
+          { roleId, permissionIds: [] },
+        ],
+      }),
+    ).rejects.toThrow(/Duplicate role id/);
+  });
+
+  it("invalidates the anonymous permissions cache when anonymous is touched", async () => {
+    await signInAsAdmin();
+    const kv = getKv();
+    await kv.put("anonymous:permissions", JSON.stringify(["roles:manage"]));
+    expect(await kv.get("anonymous:permissions")).not.toBeNull();
+
+    await bulkSetRolePermissionsAction({
+      roles: [{ roleId: "role_anonymous", permissionIds: [] }],
+    });
+
+    expect(await kv.get("anonymous:permissions")).toBeNull();
   });
 });
