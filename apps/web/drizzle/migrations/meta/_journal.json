@@ -99,6 +99,13 @@
       "when": 1777498009679,
       "tag": "0013_modern_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1777498714201,
+      "tag": "0014_next_wrecker",
+      "breakpoints": true
     }
   ]
 }
