@@ -28,6 +28,7 @@ import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
 import { Route as AccountDetailsRouteImport } from './routes/account.details'
 import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
+import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
 
 const SignInRoute = SignInRouteImport.update({
@@ -125,6 +126,11 @@ const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
   path: '/roles/$roleId',
   getParentRoute: () => MembersRoute,
 } as any)
+const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
+  id: '/api/landing/$',
+  path: '/api/landing/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   id: '/api/avatars/$',
   path: '/api/avatars/$',
@@ -151,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/announcements/': typeof AnnouncementsIndexRoute
   '/members/': typeof MembersIndexRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRoutesByTo {
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/announcements': typeof AnnouncementsIndexRoute
   '/members': typeof MembersIndexRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRoutesById {
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/announcements/': typeof AnnouncementsIndexRoute
   '/members/': typeof MembersIndexRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
 }
 export interface FileRouteTypes {
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/announcements/'
     | '/members/'
     | '/api/avatars/$'
+    | '/api/landing/$'
     | '/members/roles/$roleId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -238,6 +248,7 @@ export interface FileRouteTypes {
     | '/announcements'
     | '/members'
     | '/api/avatars/$'
+    | '/api/landing/$'
     | '/members/roles/$roleId'
   id:
     | '__root__'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/announcements/'
     | '/members/'
     | '/api/avatars/$'
+    | '/api/landing/$'
     | '/members/roles_/$roleId'
   fileRoutesById: FileRoutesById
 }
@@ -275,6 +287,7 @@ export interface RootRouteChildren {
   RegisterProfileRoute: typeof RegisterProfileRoute
   AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
+  ApiLandingSplatRoute: typeof ApiLandingSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -412,6 +425,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersRolesRoleIdRouteImport
       parentRoute: typeof MembersRoute
     }
+    '/api/landing/$': {
+      id: '/api/landing/$'
+      path: '/api/landing/$'
+      fullPath: '/api/landing/$'
+      preLoaderRoute: typeof ApiLandingSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/avatars/$': {
       id: '/api/avatars/$'
       path: '/api/avatars/$'
@@ -470,6 +490,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterProfileRoute: RegisterProfileRoute,
   AnnouncementsIndexRoute: AnnouncementsIndexRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
+  ApiLandingSplatRoute: ApiLandingSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

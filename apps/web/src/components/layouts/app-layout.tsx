@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Eye, Shield, UserPlus, Users } from "lucide-react";
+import {
+  ChevronRight,
+  ExternalLink,
+  Eye,
+  Mail,
+  Shield,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
 import { UserMenu } from "#/features/auth/components/user-menu";
@@ -188,13 +196,45 @@ function SidebarNav() {
 }
 
 function AppFooter() {
+  const year = new Date().getFullYear();
   return (
-    <footer className="mt-auto border-t px-4 py-3 text-xs text-muted-foreground">
-      <div className="flex items-center justify-between gap-4">
-        <span>University of Cincinnati Mountaineering Club</span>
-        <Link to="/health" className="hover:text-foreground">
-          Status
-        </Link>
+    <footer className="mt-auto border-t px-4 py-6 text-xs text-muted-foreground">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <p className="font-medium text-foreground">
+            University of Cincinnati Mountaineering Club
+          </p>
+          <p>
+            {/* TODO(content): affiliations line — UC Campus Recreation, AAC, partner gyms, etc. */}
+            TODO(content): affiliated with UC Campus Recreation
+          </p>
+          <p>
+            Climbing and mountaineering carry inherent risk. Members participate
+            at their own risk and are responsible for their own safety on trips.
+          </p>
+          <p>&copy; {year} UCMC</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <a
+            href="https://instagram.com/uc.mountaineering"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 hover:text-foreground"
+          >
+            Instagram
+            <ExternalLink className="size-3" />
+          </a>
+          <a
+            href="mailto:ucmc@example.com"
+            className="hover:text-foreground"
+            aria-label="Email"
+          >
+            <Mail className="size-4" />
+          </a>
+          <Link to="/health" className="hover:text-foreground">
+            Status
+          </Link>
+        </div>
       </div>
     </footer>
   );

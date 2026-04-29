@@ -199,6 +199,76 @@ export const announcements = sqliteTable(
   (t) => [index("announcements_published_at_idx").on(t.publishedAt)],
 );
 
+// Singleton key/value store for editable landing-page text. One row per
+// well-known key (e.g. "hero.heading", "about.paragraphs"). Values are JSON
+// so list-shaped settings (about paragraphs) and scalar strings can share
+// the same shape.
+export const landingSettings = sqliteTable("landing_settings", {
+  key: text("key").primaryKey(),
+  valueJson: text("value_json").notNull(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedBy: text("updated_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+});
+
+export const landingHeroSlides = sqliteTable(
+  "landing_hero_slides",
+  {
+    id: text("id").primaryKey(),
+    imageKey: text("image_key").notNull(),
+    alt: text("alt").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("landing_hero_slides_sort_idx").on(t.sortOrder)],
+);
+
+export const landingFaqItems = sqliteTable(
+  "landing_faq_items",
+  {
+    id: text("id").primaryKey(),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("landing_faq_items_sort_idx").on(t.sortOrder)],
+);
+
+export const landingActivities = sqliteTable(
+  "landing_activities",
+  {
+    id: text("id").primaryKey(),
+    icon: text("icon").notNull(),
+    title: text("title").notNull(),
+    blurb: text("blurb").notNull(),
+    // Optional R2 key (under `landing/activities/`). When present, the
+    // section component reveals the image on hover/tap.
+    imageKey: text("image_key"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("landing_activities_sort_idx").on(t.sortOrder)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
@@ -208,3 +278,7 @@ export type PasskeyCredential = typeof passkeyCredentials.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type MagicLink = typeof magicLinks.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
+export type LandingSetting = typeof landingSettings.$inferSelect;
+export type LandingHeroSlide = typeof landingHeroSlides.$inferSelect;
+export type LandingFaqItem = typeof landingFaqItems.$inferSelect;
+export type LandingActivity = typeof landingActivities.$inferSelect;
