@@ -197,9 +197,9 @@ export const submitPublicProfileFn = createServerFn({ method: "POST" })
   });
 
 /**
- * Partial update for the Details tab. Writes fullName + mNumber + phone
- * onto the caller's existing profile row and replaces the emergency
- * contact set. Requires an authenticated principal.
+ * Partial update for the Details tab. Writes fullName + phone onto the
+ * caller's existing profile row and replaces the emergency contact set.
+ * Requires an authenticated principal.
  */
 export const submitDetailsFn = createServerFn({ method: "POST" })
   .inputValidator(detailsInputSchema)

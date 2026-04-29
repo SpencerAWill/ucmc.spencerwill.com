@@ -2,7 +2,6 @@ import { toast } from "sonner";
 import type { z } from "zod";
 
 import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
-import { MNumberField } from "#/components/profile/m-number-field";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import {
@@ -40,7 +39,6 @@ const AFFILIATION_OPTIONS = [
 export interface AdminProfileDefaults {
   fullName: string | null;
   preferredName: string | null;
-  mNumber: string | null;
   phone: string | null;
   emergencyContacts: EmergencyContactInput[];
   ucAffiliation:
@@ -76,7 +74,6 @@ export function AdminProfileSheet({
     defaultValues: {
       fullName: defaults?.fullName ?? "",
       preferredName: defaults?.preferredName ?? "",
-      mNumber: defaults?.mNumber ?? "",
       phone: defaults?.phone ?? "",
       emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",
@@ -179,9 +176,6 @@ export function AdminProfileSheet({
                         maxLength={PROFILE_LIMITS.preferredName.max}
                       />
                     )}
-                  </form.AppField>
-                  <form.AppField name="mNumber">
-                    {() => <MNumberField />}
                   </form.AppField>
                   <form.AppField name="ucAffiliation">
                     {(field) => (

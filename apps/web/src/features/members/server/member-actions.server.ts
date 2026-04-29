@@ -154,7 +154,6 @@ export interface MemberSummary {
   // Private fields — null/empty when the caller lacks members:view_private.
   phone: string | null;
   emergencyContacts: EmergencyContactSummary[];
-  mNumber: string | null;
 }
 
 export async function listMembersAction(opts: {
@@ -236,7 +235,6 @@ export async function listMembersAction(opts: {
     ucAffiliation: schema.profiles.ucAffiliation,
     avatarKey: schema.profiles.avatarKey,
     phone: schema.profiles.phone,
-    mNumber: schema.profiles.mNumber,
   };
 
   const [countResult, rows] = await Promise.all([
@@ -311,7 +309,6 @@ export async function listMembersAction(opts: {
     emergencyContacts: canViewPrivate
       ? (contactsByUser.get(r.userId) ?? [])
       : [],
-    mNumber: canViewPrivate ? r.mNumber : null,
   }));
 
   let total = countResult[0]?.value ?? 0;
@@ -347,7 +344,6 @@ export interface MemberDetail {
   // Private fields — null/empty when caller lacks members:view_private.
   phone: string | null;
   emergencyContacts: EmergencyContactSummary[];
-  mNumber: string | null;
   // Session count — null when caller lacks sessions:revoke.
   activeSessions: number | null;
 }
@@ -375,7 +371,6 @@ export async function getMemberDetailAction(
       avatarKey: schema.profiles.avatarKey,
       bio: schema.profiles.bio,
       phone: schema.profiles.phone,
-      mNumber: schema.profiles.mNumber,
     })
     .from(schema.users)
     .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
@@ -433,7 +428,6 @@ export async function getMemberDetailAction(
     roles: roleRows.map((r) => r.roleName),
     phone: canViewPrivate ? row.phone : null,
     emergencyContacts: contacts,
-    mNumber: canViewPrivate ? row.mNumber : null,
     activeSessions,
   };
 }
@@ -618,7 +612,6 @@ export async function adminUpdateProfileAction(input: {
   userId: string;
   fullName: string;
   preferredName: string;
-  mNumber: string;
   phone: string;
   emergencyContacts: Array<{
     name: string;

@@ -44,7 +44,6 @@ vi.mock("sonner", () => ({
 const VALID_DEFAULTS = {
   fullName: "Alice Example",
   preferredName: "Ali",
-  mNumber: "M12345678",
   phone: "+15135551234",
   emergencyContacts: [
     {

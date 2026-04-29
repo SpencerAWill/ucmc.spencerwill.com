@@ -165,16 +165,8 @@ function MemberDetailPage() {
         <Card>
           <CardContent className="space-y-3">
             <h2 className="text-sm font-semibold">Private information</h2>
-            {member.phone ||
-            member.mNumber ||
-            member.emergencyContacts.length > 0 ? (
+            {member.phone || member.emergencyContacts.length > 0 ? (
               <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                {member.mNumber ? (
-                  <>
-                    <dt className="text-muted-foreground">M-number</dt>
-                    <dd>{member.mNumber}</dd>
-                  </>
-                ) : null}
                 {member.phone ? (
                   <>
                     <dt className="text-muted-foreground">Phone</dt>
@@ -250,7 +242,6 @@ function MemberManageActions({
       ? {
           fullName: member.fullName,
           preferredName: member.preferredName,
-          mNumber: member.mNumber,
           phone: member.phone,
           emergencyContacts: member.emergencyContacts,
           ucAffiliation:
