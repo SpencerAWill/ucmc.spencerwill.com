@@ -197,12 +197,22 @@ jobs:
       # RESEND_API_KEY and TURNSTILE_SECRET_KEY come from Pulumi stack
       # outputs (the sending-scoped key and widget secret, respectively),
       # fetched and masked above.
+      #
+      # `environment: production` is required so wrangler-action runs
+      # `wrangler secret put NAME --env production`. Without it, the
+      # action falls back to the top-level worker (ucmc-web-dev) when
+      # multiple environments are defined in wrangler.jsonc — every
+      # prior prod deploy was silently uploading prod's secrets into
+      # the dev worker, leaving prod with no secrets at all. The dev
+      # job correctly omits this input because dev IS the top-level
+      # worker.
       - name: Deploy Worker (prod)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
+          environment: production
           secrets: |
             SESSION_SECRET
             RESEND_API_KEY
