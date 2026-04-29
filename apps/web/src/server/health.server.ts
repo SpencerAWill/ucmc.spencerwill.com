@@ -80,20 +80,36 @@ async function checkEmail(): Promise<HealthCheck> {
   // which provider sendEmail() would actually use right now.
   if (env.RESEND_API_KEY) {
     try {
-      const res = await fetch("https://api.resend.com/domains", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}` },
+      // Probe via POST /emails with an empty body. The keys we mint per
+      // stack are `sending_access`-scoped and Resend returns
+      // `401 restricted_api_key` ("This API key is restricted to only
+      // send emails") when those keys hit admin endpoints like
+      // GET /domains, so we can't probe there. POST /emails always runs
+      // auth+scope before validation, so a valid sending key returns
+      // `400 validation_error` or `422 missing_required_field` for an
+      // empty body — those become the pass signal. A revoked or
+      // malformed key returns `403 invalid_api_key` or
+      // `401 missing_api_key`, and Resend outages return 5xx; any of
+      // those (or a thrown fetch) become the fail signal. Validation
+      // errors do not consume sending quota.
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: "{}",
         signal: AbortSignal.timeout(EMAIL_PROBE_TIMEOUT_MS),
       });
-      if (!res.ok) {
-        return {
-          name: "email:resend",
-          status: "fail",
-          time,
-          output: `resend api returned ${res.status}`,
-        };
+      if (res.status === 400 || res.status === 422) {
+        return { name: "email:resend", status: "pass", time };
       }
-      return { name: "email:resend", status: "pass", time };
+      return {
+        name: "email:resend",
+        status: "fail",
+        time,
+        output: `resend api returned ${res.status}`,
+      };
     } catch {
       return {
         name: "email:resend",
