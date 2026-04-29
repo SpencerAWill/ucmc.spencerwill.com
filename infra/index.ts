@@ -125,7 +125,9 @@ export { webauthnRpName };
 // or `<>` gets chopped into separate argv entries and only the prefix
 // reaches the Worker — Resend then 422s because the `from` field isn't
 // a valid address. Composition happens in `apps/web/src/server/email/resend.ts`.
-export const resendFromEmail = `noreply@${hostname}`;
+//
+// `resendFromEmail` is exported below alongside the Resend resources,
+// because its value depends on which stack owns the verified domain.
 export { resendFromName };
 
 // Resend sending domain + DNS records + sending-scoped API key. The
@@ -133,26 +135,60 @@ export { resendFromName };
 // Cloudflare zone defined above, verification trigger, and issuance of
 // a token with `sending_access` permission scoped to this domain.
 //
+// Resend's free tier allows only one verified domain per account, so
+// we provision the resource on a single "owner" stack (prod) and have
+// other stacks borrow the sending key + from-address via a
+// StackReference. Behavior is selected by the `resendOwnerStack`
+// config: when unset, this stack owns the resource and provisions it;
+// when set to another stack name (e.g. "prod"), this stack reads the
+// outputs from that stack instead. The shared from-address means dev
+// emails are sent from the prod-domain envelope; that's invisible to
+// any real recipient and only matters in test inboxes.
+//
 // `protect: true` — replacing a Resend domain re-issues DKIM keys and
 // invalidates previously-sent signatures; replacing the API key
 // invalidates any reference to the prior token. Remove protection
 // deliberately via `pulumi state` if a real rotation is needed.
-const resend = new ResendDomain(
-  `ucmc-web-${stack}-resend`,
-  {
-    domainName: hostname,
-    resendApiKey: resendManagementApiKey,
-    cloudflareZoneId: zoneId,
-    apiKeyName: `ucmc-web-${stack}-sending`,
-  },
-  { protect: true },
-);
+const resendOwnerStack = cfg.get("resendOwnerStack");
 
-export const resendDomainId = resend.domainId;
-export const resendApiKeyId = resend.apiKeyId;
+let resendApiKeyOutput: pulumi.Output<string>;
+let resendFromEmailOutput: pulumi.Output<string>;
+let resendDomainIdOutput: pulumi.Output<string> | undefined;
+let resendApiKeyIdOutput: pulumi.Output<string> | undefined;
+
+if (resendOwnerStack) {
+  const ownerRef = new pulumi.StackReference(
+    `${pulumi.getOrganization()}/${pulumi.getProject()}/${resendOwnerStack}`,
+  );
+  resendApiKeyOutput = ownerRef.requireOutput(
+    "resendApiKey",
+  ) as pulumi.Output<string>;
+  resendFromEmailOutput = ownerRef.requireOutput(
+    "resendFromEmail",
+  ) as pulumi.Output<string>;
+} else {
+  const resend = new ResendDomain(
+    `ucmc-web-${stack}-resend`,
+    {
+      domainName: hostname,
+      resendApiKey: resendManagementApiKey,
+      cloudflareZoneId: zoneId,
+      apiKeyName: `ucmc-web-${stack}-sending`,
+    },
+    { protect: true },
+  );
+  resendApiKeyOutput = resend.apiKeyToken;
+  resendFromEmailOutput = pulumi.output(`noreply@${hostname}`);
+  resendDomainIdOutput = resend.domainId;
+  resendApiKeyIdOutput = resend.apiKeyId;
+}
+
+export const resendDomainId = resendDomainIdOutput;
+export const resendApiKeyId = resendApiKeyIdOutput;
 // Sending-scoped API key. Consumed by `web-deploy.yml` as the Worker's
 // RESEND_API_KEY secret via `pulumi stack output --show-secrets`.
-export const resendApiKey = resend.apiKeyToken;
+export const resendApiKey = resendApiKeyOutput;
+export const resendFromEmail = resendFromEmailOutput;
 
 // Cloudflare Turnstile widget — anti-bot challenge on the sign-in form.
 // Pulumi creates the widget and exports both keys; the deploy workflow
