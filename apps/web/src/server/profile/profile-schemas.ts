@@ -79,14 +79,6 @@ export const profileInputSchema = z.object({
       PROFILE_LIMITS.preferredName.max,
       `At most ${PROFILE_LIMITS.preferredName.max} characters`,
     ),
-  // Optional: not every member has a UC M-number (alumni, community,
-  // some family members). Empty string passes; anything else must match
-  // the full `M########` format.
-  mNumber: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^$|^M\d{8}$/, "Must be 'M' followed by 8 digits"),
   phone: phoneSchema,
   emergencyContacts: z.array(emergencyContactSchema),
   ucAffiliation: z.enum(schema.ucAffiliation, {
@@ -116,7 +108,6 @@ export type PublicProfileInput = z.infer<typeof publicProfileInputSchema>;
 
 export const detailsInputSchema = profileInputSchema.pick({
   fullName: true,
-  mNumber: true,
   phone: true,
   emergencyContacts: true,
 });

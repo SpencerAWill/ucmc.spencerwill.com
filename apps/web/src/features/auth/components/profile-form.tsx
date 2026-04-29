@@ -18,7 +18,6 @@ type ProfileInput = z.infer<typeof profileInputSchema>;
 export interface ProfileFormDefaults {
   fullName?: string;
   preferredName?: string;
-  mNumber?: string;
   phone?: string;
   emergencyContacts?: EmergencyContactInput[];
   ucAffiliation?: "student" | "faculty" | "staff" | "alum" | "community" | "";
@@ -48,7 +47,6 @@ export function ProfileForm({
     defaultValues: {
       fullName: defaults?.fullName ?? "",
       preferredName: defaults?.preferredName ?? "",
-      mNumber: defaults?.mNumber ?? "",
       phone: defaults?.phone ?? "",
       emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",

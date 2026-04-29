@@ -9,14 +9,13 @@ import type { EmergencyContactInput } from "#/server/profile/profile-schemas";
  * parents and all field groups must agree.
  *
  * Routes that only edit a subset (Profile = preferredName +
- * ucAffiliation; Details = fullName/mNumber/phone + emergency
- * contacts) still initialize the full shape, but their server-fn
- * submission only picks the relevant fields.
+ * ucAffiliation; Details = fullName/phone + emergency contacts) still
+ * initialize the full shape, but their server-fn submission only picks
+ * the relevant fields.
  */
 export interface ProfileFormShape {
   fullName: string;
   preferredName: string;
-  mNumber: string;
   phone: string;
   emergencyContacts: EmergencyContactInput[];
   ucAffiliation: "" | "student" | "faculty" | "staff" | "alum" | "community";
@@ -26,7 +25,6 @@ export interface ProfileFormShape {
 export const EMPTY_PROFILE_FORM_VALUES: ProfileFormShape = {
   fullName: "",
   preferredName: "",
-  mNumber: "",
   phone: "",
   emergencyContacts: [],
   ucAffiliation: "",

@@ -307,8 +307,8 @@ export async function submitPublicProfileAction(
 }
 
 /**
- * Partial update for the Details tab. Writes fullName + mNumber + phone
- * onto the existing profile row and replaces the emergency contact set
+ * Partial update for the Details tab. Writes fullName + phone onto the
+ * existing profile row and replaces the emergency contact set
  * (delete-then-insert, same pattern as `submitProfileAction`). Caller
  * must be authenticated.
  */
