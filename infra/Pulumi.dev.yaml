@@ -8,3 +8,7 @@ config:
   ucmc-infra:kvNamespaceTitle: ucmc-web-dev-kv
   ucmc-infra:webauthnRpName: UCMC (dev)
   ucmc-infra:resendFromName: UCMC
+  # Resend free tier allows only one verified domain per account, so the
+  # prod stack owns the Resend resources and dev borrows the sending key
+  # + from-address via a StackReference. See `index.ts` for the logic.
+  ucmc-infra:resendOwnerStack: prod
