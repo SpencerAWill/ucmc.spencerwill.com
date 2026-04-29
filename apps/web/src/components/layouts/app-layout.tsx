@@ -15,6 +15,10 @@ import { AnnouncementsBell } from "#/features/announcements/components/announcem
 import { UserMenu } from "#/features/auth/components/user-menu";
 import { ModeToggle } from "#/components/mode-toggle";
 import {
+  REGISTRATION_DISCLAIMER,
+  SUBBRAND_DISAMBIGUATION,
+} from "#/config/legal";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -199,41 +203,68 @@ function AppFooter() {
   const year = new Date().getFullYear();
   return (
     <footer className="mt-auto border-t px-4 py-6 text-xs text-muted-foreground">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <p className="font-medium text-foreground">
             University of Cincinnati Mountaineering Club
           </p>
-          <p>
-            {/* TODO(content): affiliations line — UC Campus Recreation, AAC, partner gyms, etc. */}
-            TODO(content): affiliated with UC Campus Recreation
-          </p>
-          <p>
-            Climbing and mountaineering carry inherent risk. Members participate
-            at their own risk and are responsible for their own safety on trips.
-          </p>
-          <p>&copy; {year} UCMC</p>
+          <div className="flex items-center gap-4">
+            <a
+              href="https://instagram.com/uc.mountaineering"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 hover:text-foreground"
+            >
+              Instagram
+              <ExternalLink className="size-3" />
+            </a>
+            <a
+              href="mailto:ucmc@example.com"
+              className="hover:text-foreground"
+              aria-label="Email"
+            >
+              <Mail className="size-4" />
+            </a>
+            <Link to="/health" className="hover:text-foreground">
+              Status
+            </Link>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          <a
-            href="https://instagram.com/uc.mountaineering"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 hover:text-foreground"
-          >
-            Instagram
-            <ExternalLink className="size-3" />
-          </a>
-          <a
-            href="mailto:ucmc@example.com"
-            className="hover:text-foreground"
-            aria-label="Email"
-          >
-            <Mail className="size-4" />
-          </a>
-          <Link to="/health" className="hover:text-foreground">
-            Status
-          </Link>
+
+        {/*
+         * Registration disclaimer (Rule 40-03-01) + sub-brand
+         * disambiguation. Required on every page that uses the UC name;
+         * font is forced to Arial via inline `style` to satisfy the
+         * rule's typeface requirement and survive Tailwind class purging.
+         */}
+        <p
+          className="leading-relaxed"
+          style={{ fontFamily: 'Arial, "Helvetica Neue", sans-serif' }}
+        >
+          {REGISTRATION_DISCLAIMER} {SUBBRAND_DISAMBIGUATION}
+        </p>
+
+        <p>
+          Climbing and mountaineering carry inherent risk. Members participate
+          at their own risk and are responsible for their own safety on trips.
+        </p>
+
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-1">
+            <Link to="/disclaimer" className="hover:text-foreground">
+              Disclaimer
+            </Link>
+            <Link to="/nondiscrimination" className="hover:text-foreground">
+              Non-discrimination
+            </Link>
+            <Link to="/anti-hazing" className="hover:text-foreground">
+              Anti-hazing
+            </Link>
+            <Link to="/waiver" className="hover:text-foreground">
+              Waiver
+            </Link>
+          </nav>
+          <p>&copy; {year} UCMC</p>
         </div>
       </div>
     </footer>
