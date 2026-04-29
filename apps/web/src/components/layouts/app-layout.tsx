@@ -223,7 +223,7 @@ function AppFooter() {
           </p>
           <div className="flex items-center gap-4">
             <a
-              href="https://instagram.com/uc.mountaineering"
+              href="https://instagram.com/uc_mountaineering"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 hover:text-foreground"
