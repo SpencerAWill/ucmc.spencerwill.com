@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { Alert, AlertDescription } from "#/components/ui/alert";
@@ -56,15 +56,44 @@ function SignInPage() {
         </Alert>
       ) : null}
       <MagicLinkForm defaultMode={mode} />
-      {/* Passkey users skip the email round-trip. The button hides itself
-          when the browser doesn't support WebAuthn, so we don't need a
-          conditional gate here. */}
-      <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        or
-        <span className="h-px flex-1 bg-border" />
-      </div>
-      <SignInWithPasskeyButton />
+      {register ? null : (
+        <>
+          {/* Passkey users skip the email round-trip. The button hides itself
+              when the browser doesn't support WebAuthn, so we don't need a
+              conditional gate here. */}
+          <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <SignInWithPasskeyButton />
+        </>
+      )}
+      <p className="text-center text-sm text-muted-foreground">
+        {register ? (
+          <>
+            Already have an account?{" "}
+            <Link
+              to="/sign-in"
+              search={{ register: false }}
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              Sign in
+            </Link>
+          </>
+        ) : (
+          <>
+            New here?{" "}
+            <Link
+              to="/sign-in"
+              search={{ register: true }}
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              Create an account
+            </Link>
+          </>
+        )}
+      </p>
     </div>
   );
 }
