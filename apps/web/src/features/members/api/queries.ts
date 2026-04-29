@@ -2,6 +2,7 @@ import {
   MEMBERS_DIRECTORY_QUERY_KEY,
   MEMBERS_REGISTRATIONS_QUERY_KEY,
   PERMISSIONS_QUERY_KEY,
+  ROLES_DETAILED_QUERY_KEY,
   ROLES_QUERY_KEY,
   memberDetailQueryKey,
   roleQueryKey,
@@ -57,13 +58,14 @@ export function rolesQueryOptions() {
 
 /**
  * Detailed roles list with member counts and permission summaries.
- * Lives at the same query key as the lightweight list because consumers
- * never need both at once — choose your shape with this options factory
- * vs. `rolesQueryOptions()`.
+ * Keyed as a child of `ROLES_QUERY_KEY` so role mutations invalidate both
+ * shapes by prefix, but the cache entries stay distinct — sharing a key
+ * with the lightweight list let the directory's cached `RoleOption[]`
+ * flash through this consumer and crash on `permissionIds`.
  */
 export function rolesDetailedQueryOptions() {
   return {
-    queryKey: ROLES_QUERY_KEY,
+    queryKey: ROLES_DETAILED_QUERY_KEY,
     queryFn: () => listRolesDetailedFn(),
   } as const;
 }

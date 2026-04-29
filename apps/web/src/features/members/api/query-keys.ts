@@ -22,6 +22,8 @@ export const memberDetailQueryKey = (publicId: string) =>
 // RBAC queries
 export const ROLES_QUERY_KEY = ["rbac", "roles"] as const;
 
+export const ROLES_DETAILED_QUERY_KEY = ["rbac", "roles", "detailed"] as const;
+
 export const PERMISSIONS_QUERY_KEY = ["rbac", "permissions"] as const;
 
 export const userRolesQueryKey = (userId: string) =>
