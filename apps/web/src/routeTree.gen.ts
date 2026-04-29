@@ -24,10 +24,12 @@ import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.i
 import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
+import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
 import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AccountWaiverRouteImport } from './routes/account.waiver'
 import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
 import { Route as AccountDetailsRouteImport } from './routes/account.details'
@@ -110,6 +112,11 @@ const RegisterPendingRoute = RegisterPendingRouteImport.update({
   path: '/register/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MembersWaiversRoute = MembersWaiversRouteImport.update({
+  id: '/waivers',
+  path: '/waivers',
+  getParentRoute: () => MembersRoute,
+} as any)
 const MembersRolesRoute = MembersRolesRouteImport.update({
   id: '/roles',
   path: '/roles',
@@ -129,6 +136,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AccountWaiverRoute = AccountWaiverRouteImport.update({
+  id: '/waiver',
+  path: '/waiver',
+  getParentRoute: () => AccountRoute,
 } as any)
 const AccountSecurityRoute = AccountSecurityRouteImport.update({
   id: '/security',
@@ -175,10 +187,12 @@ export interface FileRoutesByFullPath {
   '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
+  '/account/waiver': typeof AccountWaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
+  '/members/waivers': typeof MembersWaiversRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
@@ -200,10 +214,12 @@ export interface FileRoutesByTo {
   '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
+  '/account/waiver': typeof AccountWaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
+  '/members/waivers': typeof MembersWaiversRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account': typeof AccountIndexRoute
@@ -228,10 +244,12 @@ export interface FileRoutesById {
   '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
   '/account/security': typeof AccountSecurityRoute
+  '/account/waiver': typeof AccountWaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
+  '/members/waivers': typeof MembersWaiversRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
@@ -257,10 +275,12 @@ export interface FileRouteTypes {
     | '/account/details'
     | '/account/preferences'
     | '/account/security'
+    | '/account/waiver'
     | '/auth/callback'
     | '/members/$publicId'
     | '/members/registrations'
     | '/members/roles'
+    | '/members/waivers'
     | '/register/pending'
     | '/register/profile'
     | '/account/'
@@ -282,10 +302,12 @@ export interface FileRouteTypes {
     | '/account/details'
     | '/account/preferences'
     | '/account/security'
+    | '/account/waiver'
     | '/auth/callback'
     | '/members/$publicId'
     | '/members/registrations'
     | '/members/roles'
+    | '/members/waivers'
     | '/register/pending'
     | '/register/profile'
     | '/account'
@@ -309,10 +331,12 @@ export interface FileRouteTypes {
     | '/account/details'
     | '/account/preferences'
     | '/account/security'
+    | '/account/waiver'
     | '/auth/callback'
     | '/members/$publicId'
     | '/members/registrations'
     | '/members/roles'
+    | '/members/waivers'
     | '/register/pending'
     | '/register/profile'
     | '/account/'
@@ -449,6 +473,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterPendingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/members/waivers': {
+      id: '/members/waivers'
+      path: '/waivers'
+      fullPath: '/members/waivers'
+      preLoaderRoute: typeof MembersWaiversRouteImport
+      parentRoute: typeof MembersRoute
+    }
     '/members/roles': {
       id: '/members/roles'
       path: '/roles'
@@ -476,6 +507,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/account/waiver': {
+      id: '/account/waiver'
+      path: '/waiver'
+      fullPath: '/account/waiver'
+      preLoaderRoute: typeof AccountWaiverRouteImport
+      parentRoute: typeof AccountRoute
     }
     '/account/security': {
       id: '/account/security'
@@ -526,6 +564,7 @@ interface AccountRouteChildren {
   AccountDetailsRoute: typeof AccountDetailsRoute
   AccountPreferencesRoute: typeof AccountPreferencesRoute
   AccountSecurityRoute: typeof AccountSecurityRoute
+  AccountWaiverRoute: typeof AccountWaiverRoute
   AccountIndexRoute: typeof AccountIndexRoute
 }
 
@@ -533,6 +572,7 @@ const AccountRouteChildren: AccountRouteChildren = {
   AccountDetailsRoute: AccountDetailsRoute,
   AccountPreferencesRoute: AccountPreferencesRoute,
   AccountSecurityRoute: AccountSecurityRoute,
+  AccountWaiverRoute: AccountWaiverRoute,
   AccountIndexRoute: AccountIndexRoute,
 }
 
@@ -543,6 +583,7 @@ interface MembersRouteChildren {
   MembersPublicIdRoute: typeof MembersPublicIdRoute
   MembersRegistrationsRoute: typeof MembersRegistrationsRoute
   MembersRolesRoute: typeof MembersRolesRoute
+  MembersWaiversRoute: typeof MembersWaiversRoute
   MembersIndexRoute: typeof MembersIndexRoute
   MembersRolesRoleIdRoute: typeof MembersRolesRoleIdRoute
 }
@@ -551,6 +592,7 @@ const MembersRouteChildren: MembersRouteChildren = {
   MembersPublicIdRoute: MembersPublicIdRoute,
   MembersRegistrationsRoute: MembersRegistrationsRoute,
   MembersRolesRoute: MembersRolesRoute,
+  MembersWaiversRoute: MembersWaiversRoute,
   MembersIndexRoute: MembersIndexRoute,
   MembersRolesRoleIdRoute: MembersRolesRoleIdRoute,
 }
