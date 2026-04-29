@@ -44,12 +44,12 @@ function formatRelative(date: Date): string {
 
 const STATUS_VARIANTS: Record<
   FeedbackStatus,
-  "default" | "secondary" | "outline"
+  "default" | "warning" | "success" | "secondary"
 > = {
   open: "default",
-  acknowledged: "secondary",
-  resolved: "outline",
-  closed: "outline",
+  acknowledged: "warning",
+  resolved: "success",
+  closed: "secondary",
 };
 
 export function FeedbackCard({

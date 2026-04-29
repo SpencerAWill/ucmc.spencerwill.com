@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import {
   allFeedbackQueryOptions,
   myFeedbackQueryOptions,
@@ -46,9 +47,11 @@ function FeedbackPage() {
         {myQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : mySubmissions.length === 0 ? (
-          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            You haven’t sent any feedback yet.
-          </p>
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyTitle>You haven’t sent any feedback yet.</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <ul className="space-y-3">
             {mySubmissions.map((entry) => (
@@ -72,9 +75,11 @@ function FeedbackPage() {
           {adminQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : allSubmissions.length === 0 ? (
-            <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-              No feedback submitted yet.
-            </p>
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyTitle>No feedback submitted yet.</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <ul className="space-y-3">
               {allSubmissions.map((entry) => (
