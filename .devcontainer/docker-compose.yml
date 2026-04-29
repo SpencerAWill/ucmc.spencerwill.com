@@ -16,7 +16,11 @@ services:
       - ..:/workspace:cached
       - pnpm-store:/home/vscode/.local/share/pnpm/store
       - pulumi-config:/home/vscode/.pulumi
-      - gh-config:/home/vscode/.config/gh
+      # Bind-mount host's gh auth so the container inherits `gh auth login`
+      # from the host. Requires the token to live in ~/.config/gh/hosts.yml
+      # (Linux/WSL default; on macOS run `gh auth login --insecure-storage`
+      # on the host once, since Keychain-stored tokens don't cross the mount).
+      - ${HOME}/.config/gh:/home/vscode/.config/gh:cached
       - claude-data:/home/vscode/.claude
       - command-history:/commandhistory
       - playwright-browsers:/home/vscode/.cache/ms-playwright
@@ -50,7 +54,6 @@ services:
 volumes:
   pnpm-store:
   pulumi-config:
-  gh-config:
   claude-data:
   command-history:
   playwright-browsers:

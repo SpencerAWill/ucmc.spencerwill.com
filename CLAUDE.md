@@ -26,7 +26,8 @@ This is the software system for the University of Cincinnati Mountaineering Club
 - Base image: `mcr.microsoft.com/devcontainers/base:debian`
 - Installs Node.js 22 (via devcontainer feature), Pulumi CLI, GitHub CLI, and Claude Code CLI
 - `postCreateCommand` runs `corepack enable`, initializes the wiki submodule, and runs `pnpm install`
-- Named Docker volumes persist: pnpm store, Pulumi config (`~/.pulumi`), GitHub CLI config (`~/.config/gh`), Claude data (`~/.claude`), shell history (`/commandhistory`, symlinked to `~/.bash_history` and `~/.zsh_history`), Playwright browsers (`~/.cache/ms-playwright`)
+- Named Docker volumes persist: pnpm store, Pulumi config (`~/.pulumi`), Claude data (`~/.claude`), shell history (`/commandhistory`, symlinked to `~/.bash_history` and `~/.zsh_history`), Playwright browsers (`~/.cache/ms-playwright`)
+- GitHub CLI auth (`~/.config/gh`) is **bind-mounted** from the host instead of using a named volume, so `gh auth login` on the host carries into the container. Linux/WSL hosts work out of the box; macOS hosts that stored the token in Keychain need `gh auth login --insecure-storage` on the host once so the token lands in `hosts.yml`
 - Static image-wide env is set via Dockerfile `ENV`: `CLAUDE_CONFIG_DIR=/home/vscode/.claude` (so Claude Code's account/auth config — normally at `~/.claude.json` — lives inside the mounted `claude-data` volume and survives rebuilds), `NODE_OPTIONS=--max-old-space-size=4096`, `DEVCONTAINER=true`, and `PATH` extended with `~/.pulumi/bin`
 - Host-dynamic env stays in devcontainer.json `containerEnv`: `TZ` reads from `${localEnv:TZ:America/New_York}` so it tracks the developer's laptop without rebuilding the image
 - VS Code extensions auto-installed: Prettier, ESLint, EditorConfig

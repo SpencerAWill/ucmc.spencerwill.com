@@ -28,7 +28,7 @@ The container provides:
 - Claude Code CLI
 - VS Code extensions: Prettier, ESLint, EditorConfig
 
-Named Docker volumes persist the pnpm store, Pulumi config, GitHub CLI config, and Claude data across container rebuilds.
+Named Docker volumes persist the pnpm store, Pulumi config, and Claude data across container rebuilds. GitHub CLI auth is bind-mounted from the host's `~/.config/gh`, so a one-time `gh auth login` on the host carries into every container (macOS users: run it with `--insecure-storage` so the token lands in `hosts.yml` rather than Keychain).
 
 To use it, open the repo in VS Code and select **Reopen in Container** when prompted, or run `Dev Containers: Reopen in Container` from the command palette.
 

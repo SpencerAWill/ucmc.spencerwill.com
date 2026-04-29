@@ -10,11 +10,11 @@ ENV CLAUDE_CONFIG_DIR=/home/vscode/.claude \
     PATH=/home/vscode/.pulumi/bin:${PATH}
 
 # Pre-create volume mount points with correct ownership so Docker
-# initializes named volumes as vscode instead of root
+# initializes named volumes as vscode instead of root. (.config/gh is
+# a host bind-mount, not a named volume, so it's omitted here.)
 RUN for dir in \
       .local/share/pnpm/store \
       .pulumi \
-      .config/gh \
       .claude \
       .cache/ms-playwright \
     ; do \
@@ -23,7 +23,6 @@ RUN for dir in \
     && chown -R vscode:vscode \
       /home/vscode/.local \
       /home/vscode/.pulumi \
-      /home/vscode/.config/gh \
       /home/vscode/.claude \
       /home/vscode/.cache
 
