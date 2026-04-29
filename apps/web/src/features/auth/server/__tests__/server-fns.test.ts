@@ -443,6 +443,7 @@ describe("profileInputSchema bio", () => {
       emergencyContacts: [],
       ucAffiliation: "student" as const,
       bio,
+      policiesAck: true,
     };
   }
 

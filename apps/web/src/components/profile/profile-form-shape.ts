@@ -20,6 +20,13 @@ export interface ProfileFormShape {
   emergencyContacts: EmergencyContactInput[];
   ucAffiliation: "" | "student" | "faculty" | "staff" | "alum" | "community";
   bio: string;
+  // Registration-only checkbox. Subset forms (Profile, Details, admin
+  // sheet) keep the field on the shape so `PublicProfileFields` /
+  // `PrivateDetailFields` (declared via `withForm` with the full
+  // shape) match, but they never render or persist it; the
+  // registration form's `registrationInputSchema` is what enforces
+  // the literal-true requirement.
+  policiesAck: boolean;
 }
 
 export const EMPTY_PROFILE_FORM_VALUES: ProfileFormShape = {
@@ -29,4 +36,5 @@ export const EMPTY_PROFILE_FORM_VALUES: ProfileFormShape = {
   emergencyContacts: [],
   ucAffiliation: "",
   bio: "",
+  policiesAck: false,
 };

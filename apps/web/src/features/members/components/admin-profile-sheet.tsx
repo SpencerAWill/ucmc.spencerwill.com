@@ -78,6 +78,10 @@ export function AdminProfileSheet({
       emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",
       bio: defaults?.bio ?? "",
+      // Carried only to satisfy the shared form shape; the admin
+      // sheet never persists or surfaces this field — only the
+      // registration form does.
+      policiesAck: false,
     },
     validators: {
       onMount: profileInputSchema,
