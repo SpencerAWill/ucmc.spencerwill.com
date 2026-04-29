@@ -1,12 +1,12 @@
 /**
  * Manage the list of hero slides — add, edit one in place, reorder, delete.
- * Lives inside the EditAffordance dialog. Reorder uses up/down buttons +
- * sort_order ints (no drag-and-drop in v1).
+ * Lives inside the EditAffordance dialog. Reorder uses drag-and-drop.
  */
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { SortableItem, SortableList } from "#/components/sortable-list";
 import { Button } from "#/components/ui/button";
 import { useDeleteHeroSlide } from "#/features/landing/api/use-delete-hero-slide";
 import { useReorderHeroSlides } from "#/features/landing/api/use-reorder-hero-slides";
@@ -28,13 +28,7 @@ export function HeroSlidesManager({ slides }: HeroSlidesManagerProps) {
   const reorder = useReorderHeroSlides();
   const remove = useDeleteHeroSlide();
 
-  async function moveSlide(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= slides.length) {
-      return;
-    }
-    const ids = slides.map((s) => s.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
+  async function applyReorder(ids: string[]) {
     try {
       await reorder.mutateAsync({ ids });
     } catch {
@@ -85,64 +79,66 @@ export function HeroSlidesManager({ slides }: HeroSlidesManagerProps) {
           No slides yet. Add your first one to start the gallery.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {slides.map((slide, i) => (
-            <li
-              key={slide.id}
-              className="flex items-center gap-3 rounded-md border bg-card p-2"
-            >
-              <div className="aspect-[16/9] w-32 shrink-0 overflow-hidden rounded">
-                <img
-                  src={landingImageUrlFor(slide.imageKey)}
-                  alt={slide.alt}
-                  className="size-full object-cover"
-                />
-              </div>
-              <p className="flex-1 truncate text-sm">{slide.alt}</p>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => moveSlide(i, -1)}
-                  disabled={i === 0 || reorder.isPending}
-                  aria-label="Move up"
-                >
-                  <ArrowUp className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => moveSlide(i, 1)}
-                  disabled={i === slides.length - 1 || reorder.isPending}
-                  aria-label="Move down"
-                >
-                  <ArrowDown className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setMode({ kind: "edit", slide })}
-                  aria-label="Edit slide"
-                >
-                  <Pencil className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => deleteSlide(slide.id)}
-                  disabled={remove.isPending}
-                  aria-label="Delete slide"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <SortableList
+          ids={slides.map((s) => s.id)}
+          onReorder={applyReorder}
+          disabled={reorder.isPending}
+        >
+          <ul className="space-y-2">
+            {slides.map((slide) => (
+              <SortableItem key={slide.id} id={slide.id}>
+                {({ setNodeRef, style, attributes, listeners, isDragging }) => (
+                  <li
+                    ref={setNodeRef}
+                    style={style}
+                    className={`flex items-center gap-3 rounded-md border bg-card p-2 ${
+                      isDragging ? "shadow-md" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                      aria-label="Drag to reorder"
+                      {...attributes}
+                      {...listeners}
+                    >
+                      <GripVertical className="size-4" />
+                    </button>
+                    <div className="aspect-[16/9] w-32 shrink-0 overflow-hidden rounded">
+                      <img
+                        src={landingImageUrlFor(slide.imageKey)}
+                        alt={slide.alt}
+                        className="size-full object-cover"
+                      />
+                    </div>
+                    <p className="flex-1 truncate text-sm">{slide.alt}</p>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setMode({ kind: "edit", slide })}
+                        aria-label="Edit slide"
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => deleteSlide(slide.id)}
+                        disabled={remove.isPending}
+                        aria-label="Delete slide"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
+                )}
+              </SortableItem>
+            ))}
+          </ul>
+        </SortableList>
       )}
       <Button type="button" onClick={() => setMode({ kind: "create" })}>
         <Plus className="mr-1.5 size-4" />

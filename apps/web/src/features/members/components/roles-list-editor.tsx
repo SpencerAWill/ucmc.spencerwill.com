@@ -1,26 +1,10 @@
-import type { DragEndEvent } from "@dnd-kit/core";
-import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { GripVertical, Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
+import { SortableItem, SortableList } from "#/components/sortable-list";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -109,28 +93,6 @@ export function RolesListEditor() {
   const reorderMutation = useReorderRoles();
   const deleteMutation = useDeleteRole();
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) {
-      return;
-    }
-    setOrder((prev) => {
-      const oldIdx = prev.indexOf(active.id as string);
-      const newIdx = prev.indexOf(over.id as string);
-      if (oldIdx === -1 || newIdx === -1) {
-        return prev;
-      }
-      return arrayMove(prev, oldIdx, newIdx);
-    });
-  }
-
   function handleSave() {
     reorderMutation.mutate({ orderedRoleIds: order });
   }
@@ -156,29 +118,110 @@ export function RolesListEditor() {
         </Button>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
+      <SortableList
+        ids={order}
+        onReorder={setOrder}
+        disabled={reorderMutation.isPending}
       >
-        <SortableContext items={order} strategy={verticalListSortingStrategy}>
-          <ul className="divide-y rounded-md border">
-            {order.map((id) => {
-              const role = rolesById.get(id);
-              if (!role) {
-                return null;
-              }
-              return (
-                <SortableRoleRow
-                  key={id}
-                  role={role}
-                  onDelete={() => setDeleteTarget(role)}
-                />
-              );
-            })}
-          </ul>
-        </SortableContext>
-      </DndContext>
+        <ul className="divide-y rounded-md border">
+          {order.map((id) => {
+            const role = rolesById.get(id);
+            if (!role) {
+              return null;
+            }
+            return (
+              <SortableItem key={id} id={id}>
+                {({ setNodeRef, style, attributes, listeners, isDragging }) => (
+                  <li
+                    ref={setNodeRef}
+                    style={style}
+                    className={`flex items-center gap-2 px-3 py-2 ${
+                      isDragging ? "bg-muted shadow-md" : "bg-background"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                      aria-label={`Drag ${role.name}`}
+                      {...attributes}
+                      {...listeners}
+                    >
+                      <GripVertical className="size-4" />
+                    </button>
+
+                    <Shield className="size-4 shrink-0 text-muted-foreground" />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link
+                              to="/members/roles/$roleId"
+                              params={{ roleId: role.id }}
+                              className="truncate font-medium hover:underline"
+                            >
+                              {role.name}
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs">
+                            {role.description ?? "No description."}
+                          </TooltipContent>
+                        </Tooltip>
+                        {role.isProtected ? (
+                          <Badge variant="outline" className="text-xs">
+                            protected
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="hidden shrink-0 items-center gap-4 text-xs text-muted-foreground sm:flex">
+                      <span>{role.memberCount} member(s)</span>
+                      <span>
+                        {role.name === "system_admin"
+                          ? "All perms"
+                          : `${role.permissionIds.length} perm(s)`}
+                      </span>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link
+                              to="/members/roles/$roleId"
+                              params={{ roleId: role.id }}
+                              aria-label={`Edit ${role.name}`}
+                            >
+                              <Pencil className="size-4" />
+                            </Link>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit</TooltipContent>
+                      </Tooltip>
+                      {!role.isProtected ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeleteTarget(role)}
+                              aria-label={`Delete ${role.name}`}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete</TooltipContent>
+                        </Tooltip>
+                      ) : null}
+                    </div>
+                  </li>
+                )}
+              </SortableItem>
+            );
+          })}
+        </ul>
+      </SortableList>
 
       {orderDirty ? (
         <div className="sticky bottom-0 mt-4 -mx-4 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
@@ -242,116 +285,6 @@ export function RolesListEditor() {
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-function SortableRoleRow({
-  role,
-  onDelete,
-}: {
-  role: RoleWithPermissions;
-  onDelete: () => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: role.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : undefined,
-  };
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-2 px-3 py-2 ${
-        isDragging ? "bg-muted shadow-md" : "bg-background"
-      }`}
-    >
-      <button
-        type="button"
-        className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
-        aria-label={`Drag ${role.name}`}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" />
-      </button>
-
-      <Shield className="size-4 shrink-0 text-muted-foreground" />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                to="/members/roles/$roleId"
-                params={{ roleId: role.id }}
-                className="truncate font-medium hover:underline"
-              >
-                {role.name}
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              {role.description ?? "No description."}
-            </TooltipContent>
-          </Tooltip>
-          {role.isProtected ? (
-            <Badge variant="outline" className="text-xs">
-              protected
-            </Badge>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="hidden shrink-0 items-center gap-4 text-xs text-muted-foreground sm:flex">
-        <span>{role.memberCount} member(s)</span>
-        <span>
-          {role.name === "system_admin"
-            ? "All perms"
-            : `${role.permissionIds.length} perm(s)`}
-        </span>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" asChild>
-              <Link
-                to="/members/roles/$roleId"
-                params={{ roleId: role.id }}
-                aria-label={`Edit ${role.name}`}
-              >
-                <Pencil className="size-4" />
-              </Link>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Edit</TooltipContent>
-        </Tooltip>
-        {!role.isProtected ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onDelete}
-                aria-label={`Delete ${role.name}`}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Delete</TooltipContent>
-          </Tooltip>
-        ) : null}
-      </div>
-    </li>
   );
 }
 

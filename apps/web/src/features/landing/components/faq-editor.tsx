@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { SortableItem, SortableList } from "#/components/sortable-list";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
@@ -32,13 +33,7 @@ export function FaqEditor({ items, onSaved, onCancel }: FaqEditorProps) {
   const remove = useDeleteFaqItem();
   const reorder = useReorderFaqItems();
 
-  async function moveItem(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= items.length) {
-      return;
-    }
-    const ids = items.map((it) => it.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
+  async function applyReorder(ids: string[]) {
     try {
       await reorder.mutateAsync({ ids });
     } catch {
@@ -97,62 +92,66 @@ export function FaqEditor({ items, onSaved, onCancel }: FaqEditorProps) {
           No FAQ items yet.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {items.map((item, i) => (
-            <li
-              key={item.id}
-              className="flex items-start gap-2 rounded-md border bg-card p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{item.question}</p>
-                <p className="line-clamp-2 text-xs text-muted-foreground">
-                  {item.answer}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => moveItem(i, -1)}
-                  disabled={i === 0 || reorder.isPending}
-                  aria-label="Move up"
-                >
-                  <ArrowUp className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => moveItem(i, 1)}
-                  disabled={i === items.length - 1 || reorder.isPending}
-                  aria-label="Move down"
-                >
-                  <ArrowDown className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setMode({ kind: "edit", item })}
-                  aria-label="Edit"
-                >
-                  <Pencil className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => deleteItem(item.id)}
-                  disabled={remove.isPending}
-                  aria-label="Delete"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <SortableList
+          ids={items.map((it) => it.id)}
+          onReorder={applyReorder}
+          disabled={reorder.isPending}
+        >
+          <ul className="space-y-2">
+            {items.map((item) => (
+              <SortableItem key={item.id} id={item.id}>
+                {({ setNodeRef, style, attributes, listeners, isDragging }) => (
+                  <li
+                    ref={setNodeRef}
+                    style={style}
+                    className={`flex items-start gap-2 rounded-md border bg-card p-3 ${
+                      isDragging ? "shadow-md" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="mt-0.5 flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                      aria-label="Drag to reorder"
+                      {...attributes}
+                      {...listeners}
+                    >
+                      <GripVertical className="size-4" />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {item.question}
+                      </p>
+                      <p className="line-clamp-2 text-xs text-muted-foreground">
+                        {item.answer}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setMode({ kind: "edit", item })}
+                        aria-label="Edit"
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => deleteItem(item.id)}
+                        disabled={remove.isPending}
+                        aria-label="Delete"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
+                )}
+              </SortableItem>
+            ))}
+          </ul>
+        </SortableList>
       )}
 
       <div className="flex items-center justify-between">
