@@ -167,6 +167,7 @@ const validProfile = {
   ],
   ucAffiliation: "student" as const,
   bio: "",
+  policiesAck: true as const,
 };
 
 // ── setup ───────────────────────────────────────────────────────────────

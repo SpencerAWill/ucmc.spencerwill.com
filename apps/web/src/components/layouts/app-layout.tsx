@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Eye,
   Mail,
+  ScrollText,
   Shield,
   UserPlus,
   Users,
@@ -134,6 +135,7 @@ function SidebarNav() {
   const { isApproved, hasPermission } = useAuth();
   const canApproveRegistrations = hasPermission("registrations:approve");
   const canManageRoles = hasPermission("roles:manage");
+  const canVerifyWaivers = hasPermission("waivers:verify");
 
   if (!isApproved) {
     return null;
@@ -141,7 +143,8 @@ function SidebarNav() {
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
-  const hasSubItems = canApproveRegistrations || canManageRoles;
+  const hasSubItems =
+    canApproveRegistrations || canManageRoles || canVerifyWaivers;
 
   return (
     <SidebarGroup>
@@ -175,6 +178,16 @@ function SidebarNav() {
                         <Link to="/members/registrations">
                           <UserPlus />
                           <span>Registrations</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ) : null}
+                  {canVerifyWaivers ? (
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <Link to="/members/waivers">
+                          <ScrollText />
+                          <span>Waivers</span>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

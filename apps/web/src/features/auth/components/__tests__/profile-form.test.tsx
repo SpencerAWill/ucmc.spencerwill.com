@@ -102,6 +102,10 @@ describe("ProfileForm", () => {
     // The submit button is gated on `isDefaultValue` — so dirty up the form
     // by appending to the bio field before clicking submit.
     await user.type(screen.getByLabelText(/bio/i), " Edited.");
+    // Registration also requires acknowledging the anti-hazing +
+    // non-discrimination policies (literal-true on
+    // `registrationInputSchema.policiesAck`).
+    await user.click(screen.getByLabelText(/acknowledge.*policies/i));
     await user.click(
       screen.getByRole("button", { name: /submit for review/i }),
     );
@@ -110,16 +114,35 @@ describe("ProfileForm", () => {
       expect(submitProfileFn).toHaveBeenCalledTimes(1);
     });
     const [{ data }] = submitProfileFn.mock.calls[0] as [
-      { data: typeof VALID_DEFAULTS },
+      { data: typeof VALID_DEFAULTS & { policiesAck: true } },
     ];
     expect(data.fullName).toBe("Alice Example");
     expect(data.ucAffiliation).toBe("student");
     expect(data.bio).toBe("I climb things. Edited.");
+    expect(data.policiesAck).toBe(true);
 
     await waitFor(() => {
       expect(toastSuccess).toHaveBeenCalledWith("Profile submitted");
     });
     expect(navigateMock).toHaveBeenCalledWith({ to: "/account" });
+  });
+
+  it("does not submit when the policies-ack checkbox is left unchecked", async () => {
+    const user = userEvent.setup();
+    submitProfileFn.mockResolvedValue({ ok: true });
+
+    renderForm();
+
+    // Dirty the form so isDefaultValue won't gate the submit button,
+    // but leave the ack checkbox unchecked. The validator should still
+    // refuse to call the server fn.
+    await user.type(screen.getByLabelText(/bio/i), " Edited.");
+    await user.click(
+      screen.getByRole("button", { name: /submit for review/i }),
+    );
+
+    expect(submitProfileFn).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it("shows an error toast and does not navigate when submission fails", async () => {
@@ -129,6 +152,7 @@ describe("ProfileForm", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/bio/i), " Edited.");
+    await user.click(screen.getByLabelText(/acknowledge.*policies/i));
     await user.click(
       screen.getByRole("button", { name: /submit for review/i }),
     );
