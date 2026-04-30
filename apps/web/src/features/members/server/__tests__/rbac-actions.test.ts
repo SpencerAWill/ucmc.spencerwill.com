@@ -58,7 +58,6 @@ async function seedUser(
     userId: id,
     fullName: "Test User",
     preferredName: "Test",
-    mNumber: "",
     phone: "+15135551212",
     ucAffiliation: "student",
     updatedAt: new Date(),

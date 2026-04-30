@@ -72,7 +72,6 @@ function AccountDetailsPage() {
                   ...EMPTY_PROFILE_FORM_VALUES,
                   fullName: data.profile.fullName,
                   preferredName: data.profile.preferredName,
-                  mNumber: data.profile.mNumber,
                   phone: data.profile.phone,
                   ucAffiliation: data.profile.ucAffiliation,
                   emergencyContacts: data.emergencyContacts.map((c) => ({
@@ -108,7 +107,6 @@ function DetailsEditor({ defaults }: { defaults: ProfileFormShape }) {
       mutation.mutate(
         {
           fullName: value.fullName,
-          mNumber: value.mNumber,
           phone: value.phone,
           emergencyContacts: value.emergencyContacts,
         } as DetailsInput,

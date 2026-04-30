@@ -73,7 +73,6 @@ function AccountProfilePage() {
                   ...EMPTY_PROFILE_FORM_VALUES,
                   fullName: data.profile.fullName,
                   preferredName: data.profile.preferredName,
-                  mNumber: data.profile.mNumber,
                   phone: data.profile.phone,
                   ucAffiliation: data.profile.ucAffiliation,
                   bio: data.profile.bio ?? "",

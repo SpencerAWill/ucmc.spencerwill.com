@@ -29,11 +29,12 @@ import {
   openSession,
   rotateSession,
 } from "#/server/auth/session.server";
+import { POLICIES_VERSION } from "#/config/legal";
 import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
 import type {
   DetailsInput,
-  ProfileInput,
   PublicProfileInput,
+  RegistrationInput,
 } from "#/server/profile/profile-schemas";
 import { getDb, schema } from "#/server/db";
 import {
@@ -205,7 +206,7 @@ export async function signOutAction(): Promise<{ ok: true }> {
 }
 
 export async function submitProfileAction(
-  data: ProfileInput,
+  data: RegistrationInput,
 ): Promise<{ ok: true }> {
   const principal = await loadCurrentPrincipal();
   const proof = principal ? null : await readProofCookie();
@@ -216,10 +217,18 @@ export async function submitProfileAction(
 
   const email = principal?.email ?? proof!.email;
 
-  const { emergencyContacts, bio, ...rest } = data;
+  const { emergencyContacts, bio, policiesAck: _ack, ...rest } = data;
   // Empty/whitespace-only bio normalizes to NULL so the DB has a single
-  // representation of "no bio set".
-  const profileData = { ...rest, bio: bio.length > 0 ? bio : null };
+  // representation of "no bio set". `policiesAck` is enforced by the
+  // zod schema; we don't store the boolean — we record the moment it
+  // was ticked plus the policy version so a future POLICIES_VERSION
+  // bump can require re-ack.
+  const profileData = {
+    ...rest,
+    bio: bio.length > 0 ? bio : null,
+    policiesAcknowledgedAt: new Date(),
+    policiesVersion: POLICIES_VERSION,
+  };
 
   // Find or create the user row. Pre-seeded rows (email-only, no profile)
   // are reused by hitting the unique email index. We do this in three
@@ -307,8 +316,8 @@ export async function submitPublicProfileAction(
 }
 
 /**
- * Partial update for the Details tab. Writes fullName + mNumber + phone
- * onto the existing profile row and replaces the emergency contact set
+ * Partial update for the Details tab. Writes fullName + phone onto the
+ * existing profile row and replaces the emergency contact set
  * (delete-then-insert, same pattern as `submitProfileAction`). Caller
  * must be authenticated.
  */
