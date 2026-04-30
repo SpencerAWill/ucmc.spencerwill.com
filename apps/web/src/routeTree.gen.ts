@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WaiverRouteImport } from './routes/waiver'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as OpenSourceRouteImport } from './routes/open-source'
 import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
 import { Route as MembersRouteImport } from './routes/members'
 import { Route as HealthRouteImport } from './routes/health'
@@ -45,6 +46,11 @@ const WaiverRoute = WaiverRouteImport.update({
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpenSourceRoute = OpenSourceRouteImport.update({
+  id: '/open-source',
+  path: '/open-source',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NondiscriminationRoute = NondiscriminationRouteImport.update({
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/health': typeof HealthRoute
   '/members': typeof MembersRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
+  '/open-source': typeof OpenSourceRoute
   '/sign-in': typeof SignInRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
@@ -209,6 +216,7 @@ export interface FileRoutesByTo {
   '/disclaimer': typeof DisclaimerRoute
   '/health': typeof HealthRoute
   '/nondiscrimination': typeof NondiscriminationRoute
+  '/open-source': typeof OpenSourceRoute
   '/sign-in': typeof SignInRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/health': typeof HealthRoute
   '/members': typeof MembersRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
+  '/open-source': typeof OpenSourceRoute
   '/sign-in': typeof SignInRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
@@ -270,6 +279,7 @@ export interface FileRouteTypes {
     | '/health'
     | '/members'
     | '/nondiscrimination'
+    | '/open-source'
     | '/sign-in'
     | '/waiver'
     | '/account/details'
@@ -297,6 +307,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/health'
     | '/nondiscrimination'
+    | '/open-source'
     | '/sign-in'
     | '/waiver'
     | '/account/details'
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/health'
     | '/members'
     | '/nondiscrimination'
+    | '/open-source'
     | '/sign-in'
     | '/waiver'
     | '/account/details'
@@ -356,6 +368,7 @@ export interface RootRouteChildren {
   HealthRoute: typeof HealthRoute
   MembersRoute: typeof MembersRouteWithChildren
   NondiscriminationRoute: typeof NondiscriminationRoute
+  OpenSourceRoute: typeof OpenSourceRoute
   SignInRoute: typeof SignInRoute
   WaiverRoute: typeof WaiverRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -380,6 +393,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/open-source': {
+      id: '/open-source'
+      path: '/open-source'
+      fullPath: '/open-source'
+      preLoaderRoute: typeof OpenSourceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/nondiscrimination': {
@@ -609,6 +629,7 @@ const rootRouteChildren: RootRouteChildren = {
   HealthRoute: HealthRoute,
   MembersRoute: MembersRouteWithChildren,
   NondiscriminationRoute: NondiscriminationRoute,
+  OpenSourceRoute: OpenSourceRoute,
   SignInRoute: SignInRoute,
   WaiverRoute: WaiverRoute,
   AuthCallbackRoute: AuthCallbackRoute,
