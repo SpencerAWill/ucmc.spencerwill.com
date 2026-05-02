@@ -10,6 +10,7 @@
  * forwards `className` so callers can size them with Tailwind's
  * `size-4` / `size-5` etc., matching the lucide pattern.
  */
+import { useId } from "react";
 import type { SVGProps } from "react";
 
 export function InstagramIcon({
@@ -22,9 +23,11 @@ export function InstagramIcon({
   // layer is independently styleable: gradient backdrop, camera body
   // outline, lens outline, viewfinder dot.
   //
-  // The gradient ID is suffixed with `ucmc-` so it can't collide with
-  // a third-party gradient defined elsewhere on the page.
-  const gradientId = "ucmc-instagram-gradient";
+  // `useId()` produces a per-render gradient ID stable across SSR and
+  // hydration — guards against collision when the icon renders more
+  // than once on a page or when an unrelated SVG happens to share the
+  // same id.
+  const gradientId = `ucmc-instagram-gradient-${useId()}`;
   return (
     <svg
       role="img"

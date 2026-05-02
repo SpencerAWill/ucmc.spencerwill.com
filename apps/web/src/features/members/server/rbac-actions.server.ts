@@ -16,6 +16,15 @@ export const PROTECTED_ROLE_IDS = new Set([
   "role_system_admin",
   "role_member",
   "role_anonymous",
+  // Seeded officer roles (0016_officer_roles_seed.sql). Protect them
+  // from deletion so an officer with `roles:manage` can't accidentally
+  // drop a constitutional officer role and break the permission grants
+  // that depend on it (e.g. President + Treasurer → `waivers:verify`).
+  // Permission grants on these roles remain editable through the
+  // admin UI; this only blocks deletion.
+  "role_advisor",
+  "role_president",
+  "role_treasurer",
 ]);
 
 const SYSTEM_ADMIN_ROLE_ID = "role_system_admin";

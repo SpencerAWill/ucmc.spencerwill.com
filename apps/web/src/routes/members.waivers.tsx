@@ -113,9 +113,19 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
       const next = new Set(prev);
       if (next.has(userId)) {
         next.delete(userId);
-      } else {
-        next.add(userId);
+        return next;
       }
+      // Refuse to grow `selected` past the server's bulk cap. This
+      // mirrors the "Select all" cap (which selects exactly the first
+      // BULK_ATTEST_MAX rows) and keeps the UI from ever building a
+      // request the validator will reject.
+      if (next.size >= BULK_ATTEST_MAX) {
+        toast.error(
+          `Bulk attestation is capped at ${BULK_ATTEST_MAX} per request.`,
+        );
+        return prev;
+      }
+      next.add(userId);
       return next;
     });
   };
