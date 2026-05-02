@@ -267,6 +267,23 @@ describe("bulkAttestWaiversAction", () => {
     const rows = await getDb().query.waiverAttestations.findMany();
     expect(rows).toHaveLength(0);
   });
+
+  it("de-duplicates repeated userIds in the same request", async () => {
+    await signInAsOfficer();
+    const a = await seedUser("a@example.com");
+    const b = await seedUser("b@example.com");
+
+    // `a` listed three times; the action should attest each member
+    // exactly once and report a count of 2.
+    const { count } = await bulkAttestWaiversAction({
+      userIds: [a, a, b, a],
+    });
+    expect(count).toBe(2);
+
+    const rows = await getDb().query.waiverAttestations.findMany();
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.userId))).toEqual(new Set([a, b]));
+  });
 });
 
 // ── revoke + history ───────────────────────────────────────────────────

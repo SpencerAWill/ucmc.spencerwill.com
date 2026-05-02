@@ -120,6 +120,13 @@
       "when": 1777498716201,
       "tag": "0016_officer_roles_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1777761742187,
+      "tag": "0017_waiver_attestations_queue_index",
+      "breakpoints": true
     }
   ]
 }

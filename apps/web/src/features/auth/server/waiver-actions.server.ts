@@ -216,17 +216,25 @@ export async function bulkAttestWaiversAction(input: {
   if (input.userIds.length === 0) {
     return { count: 0 };
   }
+
+  // De-dupe up front. A buggy caller (or a UI race) sending the same
+  // userId twice would otherwise insert two attestation rows for the
+  // same `(user, cycle, version)` and inflate the returned count.
+  // Silent dedup is friendlier than rejecting — the officer's intent
+  // is "attest these members", and seeing the same name twice is an
+  // accident, not a different action.
+  const userIds = [...new Set(input.userIds)];
   const db = getDb();
 
   // Pre-validate every target is approved — fail before any insert if
   // even one is wrong. drizzle-kit doesn't expose a true transaction
   // over D1, so the pre-check + multi-row insert is best-effort.
   const allTargets = await db.query.users.findMany({
-    where: (users, { inArray }) => inArray(users.id, input.userIds),
+    where: (users, { inArray }) => inArray(users.id, userIds),
     columns: { id: true, status: true },
   });
   const found = new Set(allTargets.map((t) => t.id));
-  for (const id of input.userIds) {
+  for (const id of userIds) {
     if (!found.has(id)) {
       throw new Error(`Target user not found: ${id}`);
     }
@@ -240,7 +248,7 @@ export async function bulkAttestWaiversAction(input: {
   const cycle = currentWaiverCycle();
   const now = new Date();
   const notes = input.notes?.trim() || null;
-  const rows = input.userIds.map((userId) => ({
+  const rows = userIds.map((userId) => ({
     id: `wa_${uuidv7()}`,
     userId,
     cycle,

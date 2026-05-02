@@ -173,7 +173,23 @@ export const waiverAttestations = sqliteTable(
     revocationReason: text("revocation_reason"),
     notes: text("notes"),
   },
-  (t) => [index("waiver_attestations_user_cycle").on(t.userId, t.cycle)],
+  (t) => [
+    // (userId, cycle) supports per-user lookups: the
+    // `requireCurrentWaiver` guard, member history, and admin "show
+    // me Y's attestations" reads.
+    index("waiver_attestations_user_cycle").on(t.userId, t.cycle),
+    // (cycle, version, revokedAt) supports the officer-queue
+    // anti-join subquery that finds approved users *without* a
+    // current attestation. The query filters on (cycle, version)
+    // first, then on `revoked_at IS NULL`, so an index in that
+    // column order avoids a full-table scan as the attestation
+    // history grows year over year.
+    index("waiver_attestations_cycle_version_revoked").on(
+      t.cycle,
+      t.version,
+      t.revokedAt,
+    ),
+  ],
 );
 
 export const passkeyCredentials = sqliteTable(
