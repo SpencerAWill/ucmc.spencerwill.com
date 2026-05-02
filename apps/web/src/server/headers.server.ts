@@ -21,7 +21,14 @@
 const CSP_VALUE = [
   "default-src 'self'",
   "img-src 'self' data: https:",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+  // `'unsafe-inline'` is required for React's hydration scripts and
+  // for the Tailwind-emitted style tags. We deliberately do *not*
+  // include `'unsafe-eval'` — the production build doesn't need it,
+  // and report-only mode should mirror the eventual enforced policy
+  // as closely as possible to surface real issues. If a dev-only
+  // tooling chunk ever needs eval, we'll inject it via a dev-mode
+  // branch rather than weakening the production policy.
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
   "frame-src https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://challenges.cloudflare.com",

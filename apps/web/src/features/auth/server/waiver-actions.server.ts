@@ -79,8 +79,8 @@ export interface MemberNeedingAttestation {
 // ── reads ──────────────────────────────────────────────────────────────
 
 /**
- * Returns the caller's full attestation history (oldest first). Member-
- * facing read for `/account/waiver` history list.
+ * Returns the caller's full attestation history (newest first, matching
+ * the order `/account/waiver` renders). Member-facing read.
  */
 export async function listMyWaiverHistoryAction(): Promise<
   WaiverAttestationSummary[]

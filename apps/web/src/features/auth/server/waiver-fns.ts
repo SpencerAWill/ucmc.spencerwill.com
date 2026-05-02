@@ -1,9 +1,10 @@
 /**
  * Route-facing shells for the paper-waiver attestation server fns. Each
  * handler dynamic-imports its action from `./waiver-actions.server` so
- * server-only code never reaches the client bundle. See `waiver-actions
- * .server.ts` for the action bodies and the rationale for the paper-
- * attestation model (Bylaw 1.3 keeps medical PII off the platform).
+ * server-only code never reaches the client bundle. See
+ * `waiver-actions.server.ts` for the action bodies and the rationale
+ * for the paper-attestation model (Bylaw 1.3 keeps medical PII off the
+ * platform).
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -19,6 +20,15 @@ export type {
   WaiverAttestationSummary,
   WaiverStatus,
 };
+
+/**
+ * Largest batch the bulk-attest endpoint accepts in one call. Exported
+ * so the officer queue UI can disable / chunk "select all" when the
+ * pending list exceeds this — keeping the same number on both sides
+ * means the UI never builds a request the server is going to reject.
+ */
+export const BULK_ATTEST_MAX = 200;
+const NOTES_MAX = 500;
 
 // Member-facing reads.
 
@@ -58,8 +68,6 @@ export const listWaiverHistoryForUserFn = createServerFn({ method: "GET" })
 
 // Officer-only writes.
 
-const NOTES_MAX = 500;
-
 export const attestWaiverFn = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
@@ -76,7 +84,7 @@ export const attestWaiverFn = createServerFn({ method: "POST" })
 export const bulkAttestWaiversFn = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
-      userIds: z.array(z.string().min(1)).min(1).max(200),
+      userIds: z.array(z.string().min(1)).min(1).max(BULK_ATTEST_MAX),
       notes: z.string().max(NOTES_MAX).optional(),
     }),
   )

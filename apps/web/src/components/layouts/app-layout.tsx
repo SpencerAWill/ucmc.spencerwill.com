@@ -230,7 +230,7 @@ function AppFooter() {
             <a
               href="https://instagram.com/uc_mountaineering"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="inline-flex items-center transition-opacity hover:opacity-80"
               aria-label="UCMC on Instagram"
             >
@@ -239,7 +239,7 @@ function AppFooter() {
             <a
               href="https://www.facebook.com/groups/19204046466/"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="inline-flex items-center transition-opacity hover:opacity-80"
               aria-label="UCMC on Facebook"
             >
@@ -248,7 +248,7 @@ function AppFooter() {
             <a
               href="https://www.youtube.com/channel/UC1zpNSpQI784F-zOtVHjUMQ"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="inline-flex items-center transition-opacity hover:opacity-80"
               aria-label="UCMC on YouTube"
             >
@@ -257,7 +257,7 @@ function AppFooter() {
             <a
               href={GITHUB_REPO_URL}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="inline-flex items-center text-foreground transition-opacity hover:opacity-80"
               aria-label="View this site's source on GitHub"
             >

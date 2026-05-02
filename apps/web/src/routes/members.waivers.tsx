@@ -18,6 +18,7 @@ import {
   useBulkAttestWaivers,
 } from "#/features/auth/api/use-attest-waiver";
 import { waiverPendingQueueQueryOptions } from "#/features/auth/api/waiver-queries";
+import { BULK_ATTEST_MAX } from "#/features/auth/server/waiver-fns";
 import type { MemberNeedingAttestation } from "#/features/auth/server/waiver-fns";
 
 /**
@@ -87,11 +88,20 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
     setSelected(next);
   };
 
+  // Cap "select all" at the same limit the server validator enforces
+  // (BULK_ATTEST_MAX). Without this, a queue larger than the cap would
+  // build a request the server is guaranteed to reject. When the queue
+  // exceeds the cap we select the first N rows in queue order
+  // (oldest-approval-first), which matches what an officer working
+  // top-down would do anyway.
+  const selectableCount = Math.min(queue.length, BULK_ATTEST_MAX);
   const toggleAll = () => {
-    if (selected.size === queue.length) {
+    if (selected.size === selectableCount) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(queue.map((m) => m.userId)));
+      setSelected(
+        new Set(queue.slice(0, BULK_ATTEST_MAX).map((m) => m.userId)),
+      );
     }
   };
 
@@ -133,12 +143,20 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
     );
   };
 
-  const allSelected = selected.size === queue.length && queue.length > 0;
+  const allSelected = selected.size === selectableCount && selectableCount > 0;
   const someSelected = selected.size > 0;
+  const queueExceedsCap = queue.length > BULK_ATTEST_MAX;
 
   return (
     <Card>
       <CardContent className="space-y-4">
+        {queueExceedsCap ? (
+          <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            {queue.length} members are pending attestation. &quot;Select
+            all&quot; will pick the {BULK_ATTEST_MAX} oldest entries; bulk
+            attestations are capped at {BULK_ATTEST_MAX} per request.
+          </p>
+        ) : null}
         {/* Bulk action bar — visible only when something is selected. */}
         {someSelected ? (
           <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-3 sm:flex-row sm:items-end">
