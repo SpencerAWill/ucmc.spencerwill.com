@@ -10,15 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WaiverRouteImport } from './routes/waiver'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OpenSourceRouteImport } from './routes/open-source'
 import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
+import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MembersRouteImport } from './routes/members'
+import { Route as LegalRouteImport } from './routes/legal'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MembersIndexRouteImport } from './routes/members.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
@@ -43,9 +48,19 @@ const WaiverRoute = WaiverRouteImport.update({
   path: '/waiver',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpenSourceRoute = OpenSourceRouteImport.update({
@@ -58,9 +73,19 @@ const NondiscriminationRoute = NondiscriminationRouteImport.update({
   path: '/nondiscrimination',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MembershipRoute = MembershipRouteImport.update({
+  id: '/membership',
+  path: '/membership',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MembersRoute = MembersRouteImport.update({
   id: '/members',
   path: '/members',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalRoute = LegalRouteImport.update({
+  id: '/legal',
+  path: '/legal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HealthRoute = HealthRouteImport.update({
@@ -86,6 +111,11 @@ const AntiHazingRoute = AntiHazingRouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -181,15 +211,20 @@ const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/account': typeof AccountRouteWithChildren
   '/anti-hazing': typeof AntiHazingRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/health': typeof HealthRoute
+  '/legal': typeof LegalRoute
   '/members': typeof MembersRouteWithChildren
+  '/membership': typeof MembershipRoute
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
+  '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
@@ -211,13 +246,18 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/health': typeof HealthRoute
+  '/legal': typeof LegalRoute
+  '/membership': typeof MembershipRoute
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
+  '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
@@ -240,15 +280,20 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/account': typeof AccountRouteWithChildren
   '/anti-hazing': typeof AntiHazingRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/health': typeof HealthRoute
+  '/legal': typeof LegalRoute
   '/members': typeof MembersRouteWithChildren
+  '/membership': typeof MembershipRoute
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
+  '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
   '/account/preferences': typeof AccountPreferencesRoute
@@ -272,15 +317,20 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/about'
     | '/account'
     | '/anti-hazing'
     | '/deactivated'
     | '/disclaimer'
     | '/health'
+    | '/legal'
     | '/members'
+    | '/membership'
     | '/nondiscrimination'
     | '/open-source'
+    | '/privacy'
     | '/sign-in'
+    | '/terms'
     | '/waiver'
     | '/account/details'
     | '/account/preferences'
@@ -302,13 +352,18 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/about'
     | '/anti-hazing'
     | '/deactivated'
     | '/disclaimer'
     | '/health'
+    | '/legal'
+    | '/membership'
     | '/nondiscrimination'
     | '/open-source'
+    | '/privacy'
     | '/sign-in'
+    | '/terms'
     | '/waiver'
     | '/account/details'
     | '/account/preferences'
@@ -330,15 +385,20 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/about'
     | '/account'
     | '/anti-hazing'
     | '/deactivated'
     | '/disclaimer'
     | '/health'
+    | '/legal'
     | '/members'
+    | '/membership'
     | '/nondiscrimination'
     | '/open-source'
+    | '/privacy'
     | '/sign-in'
+    | '/terms'
     | '/waiver'
     | '/account/details'
     | '/account/preferences'
@@ -361,15 +421,20 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRouteWithChildren
   AntiHazingRoute: typeof AntiHazingRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
   HealthRoute: typeof HealthRoute
+  LegalRoute: typeof LegalRoute
   MembersRoute: typeof MembersRouteWithChildren
+  MembershipRoute: typeof MembershipRoute
   NondiscriminationRoute: typeof NondiscriminationRoute
   OpenSourceRoute: typeof OpenSourceRoute
+  PrivacyRoute: typeof PrivacyRoute
   SignInRoute: typeof SignInRoute
+  TermsRoute: typeof TermsRoute
   WaiverRoute: typeof WaiverRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
@@ -388,11 +453,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WaiverRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sign-in': {
       id: '/sign-in'
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/open-source': {
@@ -409,11 +488,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NondiscriminationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/membership': {
+      id: '/membership'
+      path: '/membership'
+      fullPath: '/membership'
+      preLoaderRoute: typeof MembershipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/members': {
       id: '/members'
       path: '/members'
       fullPath: '/members'
       preLoaderRoute: typeof MembersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal': {
+      id: '/legal'
+      path: '/legal'
+      fullPath: '/legal'
+      preLoaderRoute: typeof LegalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/health': {
@@ -449,6 +542,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -622,15 +722,20 @@ const MembersRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
   AccountRoute: AccountRouteWithChildren,
   AntiHazingRoute: AntiHazingRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
   HealthRoute: HealthRoute,
+  LegalRoute: LegalRoute,
   MembersRoute: MembersRouteWithChildren,
+  MembershipRoute: MembershipRoute,
   NondiscriminationRoute: NondiscriminationRoute,
   OpenSourceRoute: OpenSourceRoute,
+  PrivacyRoute: PrivacyRoute,
   SignInRoute: SignInRoute,
+  TermsRoute: TermsRoute,
   WaiverRoute: WaiverRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   RegisterPendingRoute: RegisterPendingRoute,

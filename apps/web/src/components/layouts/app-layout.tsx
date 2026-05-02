@@ -294,6 +294,18 @@ function AppFooter() {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-1">
             <Link
+              to="/about"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              About
+            </Link>
+            <Link
+              to="/membership"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Membership
+            </Link>
+            <Link
               to="/disclaimer"
               className="underline underline-offset-2 hover:text-foreground"
             >
@@ -316,6 +328,18 @@ function AppFooter() {
               className="underline underline-offset-2 hover:text-foreground"
             >
               Waiver
+            </Link>
+            <Link
+              to="/privacy"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Privacy
+            </Link>
+            <Link
+              to="/terms"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Terms
             </Link>
             <Link
               to="/open-source"
