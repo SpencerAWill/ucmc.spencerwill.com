@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "#/components/ui/badge";
@@ -78,30 +78,59 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
   const attest = useAttestWaiver();
   const bulkAttest = useBulkAttestWaivers();
 
+  // The "selectable set" is the first BULK_ATTEST_MAX rows of the
+  // queue — server-side bulk attestation tops out there, and
+  // "select all" should never build a request the server will reject.
+  // Recomputed when `queue` changes so it stays in sync with the
+  // current ordering.
+  const selectableIds = useMemo(
+    () => queue.slice(0, BULK_ATTEST_MAX).map((m) => m.userId),
+    [queue],
+  );
+
+  // When `queue` updates (after a successful mutation refetch),
+  // members that were just attested fall off the queue. Drop them
+  // from `selected` so a follow-up bulk attest doesn't include
+  // already-processed IDs (which would create duplicate attestations).
+  useEffect(() => {
+    setSelected((prev) => {
+      const queueIds = new Set(queue.map((m) => m.userId));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (queueIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [queue]);
+
   const toggle = (userId: string) => {
-    const next = new Set(selected);
-    if (next.has(userId)) {
-      next.delete(userId);
-    } else {
-      next.add(userId);
-    }
-    setSelected(next);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
   };
 
-  // Cap "select all" at the same limit the server validator enforces
-  // (BULK_ATTEST_MAX). Without this, a queue larger than the cap would
-  // build a request the server is guaranteed to reject. When the queue
-  // exceeds the cap we select the first N rows in queue order
-  // (oldest-approval-first), which matches what an officer working
-  // top-down would do anyway.
-  const selectableCount = Math.min(queue.length, BULK_ATTEST_MAX);
+  // `allSelected` reflects whether every selectable row is currently
+  // selected — not merely the count. The count-based check would tick
+  // the box even when an officer manually selected a different 200 rows
+  // outside the selectable set.
+  const allSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
   const toggleAll = () => {
-    if (selected.size === selectableCount) {
+    if (allSelected) {
       setSelected(new Set());
     } else {
-      setSelected(
-        new Set(queue.slice(0, BULK_ATTEST_MAX).map((m) => m.userId)),
-      );
+      setSelected(new Set(selectableIds));
     }
   };
 
@@ -111,6 +140,19 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
       {
         onSuccess: () => {
           toast.success(`Marked ${label} attested`);
+          // Drop the just-attested member from `selected` so a later
+          // bulk submit doesn't re-include them via stale state. The
+          // queue refetch also prunes them on next render, but
+          // updating state immediately keeps the UI consistent
+          // before the refetch lands.
+          setSelected((prev) => {
+            if (!prev.has(userId)) {
+              return prev;
+            }
+            const next = new Set(prev);
+            next.delete(userId);
+            return next;
+          });
         },
         onError: (err) => {
           toast.error(
@@ -143,7 +185,6 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
     );
   };
 
-  const allSelected = selected.size === selectableCount && selectableCount > 0;
   const someSelected = selected.size > 0;
   const queueExceedsCap = queue.length > BULK_ATTEST_MAX;
 

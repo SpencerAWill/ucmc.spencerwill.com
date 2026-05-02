@@ -164,8 +164,17 @@ export const revokeUserSessionsFn = createServerFn({ method: "POST" })
 
 // ── admin profile edit ──────────────────────────────────────────────────
 
+// Officers don't acknowledge policies on a member's behalf — that
+// happens once at member registration via the registration form. Drop
+// `policiesAck` from the validated payload here so it can never reach
+// the profiles insert/update spread (the column doesn't exist; spreading
+// it would surface as a runtime SQL/Drizzle error).
 export const adminUpdateProfileFn = createServerFn({ method: "POST" })
-  .inputValidator(profileInputSchema.extend({ userId: z.string().min(1) }))
+  .inputValidator(
+    profileInputSchema
+      .omit({ policiesAck: true })
+      .extend({ userId: z.string().min(1) }),
+  )
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { adminUpdateProfileAction } =
       await import("#/features/members/server/member-actions.server");

@@ -33,8 +33,17 @@ export const SUBBRAND_DISAMBIGUATION =
 
 /**
  * Version of the policies-acknowledgment block (anti-hazing +
- * non-discrimination) that members tick at registration. Bumping this
- * forces re-acknowledgment on next sign-in.
+ * non-discrimination) that members tick at registration. Captured on
+ * the profile row as `policiesVersion` + `policiesAcknowledgedAt` at
+ * submit time.
+ *
+ * Groundwork for a future re-ack flow: once a "stale ack" guard
+ * exists (compare `profiles.policiesVersion` to this constant on
+ * sign-in / on entry to gated routes, redirect to a re-ack screen
+ * when they don't match), bumping this string will force every
+ * member to re-acknowledge. No such enforcement exists yet —
+ * versioning the column from day one means the data is ready when
+ * the guard lands.
  */
 export const POLICIES_VERSION = "v1";
 

@@ -6,8 +6,9 @@
  * Simple Icons, https://simpleicons.org/) and rendered with their
  * canonical colors so the row reads as "go off-platform to us".
  *
- * Both components forward `className` so callers can size them with
- * Tailwind's `size-4` / `size-5` etc., matching the lucide pattern.
+ * Exports: InstagramIcon, FacebookIcon, YouTubeIcon, GitHubIcon. Each
+ * forwards `className` so callers can size them with Tailwind's
+ * `size-4` / `size-5` etc., matching the lucide pattern.
  */
 import type { SVGProps } from "react";
 
