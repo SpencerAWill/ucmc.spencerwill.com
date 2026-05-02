@@ -9,26 +9,32 @@ import type { EmergencyContactInput } from "#/server/profile/profile-schemas";
  * parents and all field groups must agree.
  *
  * Routes that only edit a subset (Profile = preferredName +
- * ucAffiliation; Details = fullName/mNumber/phone + emergency
- * contacts) still initialize the full shape, but their server-fn
- * submission only picks the relevant fields.
+ * ucAffiliation; Details = fullName/phone + emergency contacts) still
+ * initialize the full shape, but their server-fn submission only picks
+ * the relevant fields.
  */
 export interface ProfileFormShape {
   fullName: string;
   preferredName: string;
-  mNumber: string;
   phone: string;
   emergencyContacts: EmergencyContactInput[];
   ucAffiliation: "" | "student" | "faculty" | "staff" | "alum" | "community";
   bio: string;
+  // Registration-only checkbox. Subset forms (Profile, Details, admin
+  // sheet) keep the field on the shape so `PublicProfileFields` /
+  // `PrivateDetailFields` (declared via `withForm` with the full
+  // shape) match, but they never render or persist it; the
+  // registration form's `registrationInputSchema` is what enforces
+  // the literal-true requirement.
+  policiesAck: boolean;
 }
 
 export const EMPTY_PROFILE_FORM_VALUES: ProfileFormShape = {
   fullName: "",
   preferredName: "",
-  mNumber: "",
   phone: "",
   emergencyContacts: [],
   ucAffiliation: "",
   bio: "",
+  policiesAck: false,
 };

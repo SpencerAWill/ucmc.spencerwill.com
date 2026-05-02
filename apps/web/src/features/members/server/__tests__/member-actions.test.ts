@@ -54,7 +54,6 @@ async function seedUser(
       userId: id,
       fullName: "Test User",
       preferredName: "Test",
-      mNumber: "M12345678",
       phone: "+15135551212",
       ucAffiliation: "student",
       updatedAt: new Date(),
@@ -208,7 +207,6 @@ describe("authorization", () => {
         userId: "x",
         fullName: "Test",
         preferredName: "Test",
-        mNumber: "",
         phone: "+15135551212",
         emergencyContacts: [],
         ucAffiliation: "student",
@@ -483,7 +481,6 @@ describe("adminUpdateProfileAction", () => {
       userId: targetId,
       fullName: "Updated Name",
       preferredName: "Updated",
-      mNumber: "M99999999",
       phone: "+15135559999",
       emergencyContacts: [
         {
@@ -500,7 +497,6 @@ describe("adminUpdateProfileAction", () => {
     });
     expect(profile!.fullName).toBe("Updated Name");
     expect(profile!.preferredName).toBe("Updated");
-    expect(profile!.mNumber).toBe("M99999999");
     expect(profile!.ucAffiliation).toBe("faculty");
   });
 
@@ -514,7 +510,6 @@ describe("adminUpdateProfileAction", () => {
       userId: targetId,
       fullName: "New Profile",
       preferredName: "New",
-      mNumber: "",
       phone: "+15135551111",
       emergencyContacts: [],
       ucAffiliation: "community",
@@ -534,7 +529,6 @@ describe("adminUpdateProfileAction", () => {
         userId: "nonexistent",
         fullName: "Test",
         preferredName: "Test",
-        mNumber: "",
         phone: "+15135551212",
         emergencyContacts: [],
         ucAffiliation: "student",
@@ -557,7 +551,6 @@ describe("listMembersAction private data", () => {
     expect(target).toBeDefined();
     expect(target!.phone).toBeNull();
     expect(target!.emergencyContacts).toEqual([]);
-    expect(target!.mNumber).toBeNull();
   });
 
   it("returns private fields with members:view_private", async () => {
@@ -577,7 +570,6 @@ describe("listMembersAction private data", () => {
         relationship: "other",
       },
     ]);
-    expect(target!.mNumber).toBe("M12345678");
   });
 
   it("includes status field in the response", async () => {
@@ -670,7 +662,6 @@ describe("getMemberDetailAction", () => {
     expect(detail.roles).toContain("member");
     // Private fields should be null/empty.
     expect(detail.phone).toBeNull();
-    expect(detail.mNumber).toBeNull();
     expect(detail.emergencyContacts).toEqual([]);
     // Session count should be null.
     expect(detail.activeSessions).toBeNull();
@@ -690,7 +681,6 @@ describe("getMemberDetailAction", () => {
         relationship: "other",
       },
     ]);
-    expect(detail.mNumber).toBe("M12345678");
   });
 
   it("includes session count for sessions:revoke holders", async () => {

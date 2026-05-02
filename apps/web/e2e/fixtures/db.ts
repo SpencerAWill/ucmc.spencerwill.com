@@ -41,8 +41,8 @@ UPDATE users
 SET status = 'approved', approved_at = ${nowMs}
 WHERE email = ${escapedEmail} AND status <> 'approved';
 INSERT OR IGNORE INTO profiles
-  (user_id, full_name, preferred_name, m_number, phone, uc_affiliation, updated_at)
-SELECT id, 'E2E Tester', 'E2E', 'M00000000', '+15555550100', 'student', ${nowMs}
+  (user_id, full_name, preferred_name, phone, uc_affiliation, updated_at)
+SELECT id, 'E2E Tester', 'E2E', '+15555550100', 'student', ${nowMs}
 FROM users WHERE email = ${escapedEmail};
 DELETE FROM passkey_credentials
 WHERE user_id IN (SELECT id FROM users WHERE email = ${escapedEmail});

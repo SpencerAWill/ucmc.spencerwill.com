@@ -138,7 +138,6 @@ async function seedUser(args: {
       userId: args.id,
       fullName: "Test",
       preferredName: "Test",
-      mNumber: "",
       phone: "+15135551212",
       ucAffiliation: "student",
       updatedAt: new Date(),

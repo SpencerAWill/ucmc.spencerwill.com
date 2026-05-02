@@ -79,14 +79,6 @@ export const profileInputSchema = z.object({
       PROFILE_LIMITS.preferredName.max,
       `At most ${PROFILE_LIMITS.preferredName.max} characters`,
     ),
-  // Optional: not every member has a UC M-number (alumni, community,
-  // some family members). Empty string passes; anything else must match
-  // the full `M########` format.
-  mNumber: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^$|^M\d{8}$/, "Must be 'M' followed by 8 digits"),
   phone: phoneSchema,
   emergencyContacts: z.array(emergencyContactSchema),
   ucAffiliation: z.enum(schema.ucAffiliation, {
@@ -98,14 +90,37 @@ export const profileInputSchema = z.object({
     .refine((v) => countWords(v) <= BIO_LIMITS.maxWords, {
       message: `At most ${BIO_LIMITS.maxWords} words`,
     }),
+  // Carried on the shape so non-registration forms (Profile, Details,
+  // admin sheet) match the same validator. Accepts any boolean here;
+  // the registration submit overrides this to literal-true via
+  // `registrationInputSchema`. Subset schemas (`publicProfileInputSchema`,
+  // `detailsInputSchema`) `.pick()` only the keys they want, so they
+  // never read this field.
+  policiesAck: z.boolean(),
 });
 
 export type ProfileInput = z.infer<typeof profileInputSchema>;
 
+/**
+ * Registration submit shape. Extends `profileInputSchema` with a
+ * required acknowledgment of UCMC's anti-hazing + non-discrimination
+ * policies — captured once at registration, re-prompted only when
+ * `POLICIES_VERSION` is bumped (handled server-side, not in this
+ * schema). The checkbox must be ticked; `z.literal(true)` rejects
+ * unchecked submits with a clear message.
+ */
+export const registrationInputSchema = profileInputSchema.extend({
+  policiesAck: z.literal(true, {
+    error: "Please acknowledge the policies to continue",
+  }),
+});
+
+export type RegistrationInput = z.infer<typeof registrationInputSchema>;
+
 // Narrower schemas for the split account UI: `/account` (Profile tab)
 // edits the public-ish fields, `/account/details` (Details tab) edits
-// the PII fields + emergency contacts. Registration still uses the full
-// `profileInputSchema` for its single onboarding submit.
+// the PII fields + emergency contacts. Registration uses
+// `registrationInputSchema` (above) which adds the policies ack.
 export const publicProfileInputSchema = profileInputSchema.pick({
   preferredName: true,
   ucAffiliation: true,
@@ -116,7 +131,6 @@ export type PublicProfileInput = z.infer<typeof publicProfileInputSchema>;
 
 export const detailsInputSchema = profileInputSchema.pick({
   fullName: true,
-  mNumber: true,
   phone: true,
   emergencyContacts: true,
 });

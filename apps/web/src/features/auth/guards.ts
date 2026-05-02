@@ -11,8 +11,10 @@ import {
   SESSION_QUERY_KEY,
   sessionQueryOptions,
 } from "#/features/auth/api/use-auth";
+import { myWaiverStatusQueryOptions } from "#/features/auth/api/waiver-queries";
 import type { Principal } from "#/server/auth/principal.server";
 import { getProofFn } from "#/features/auth/server/server-fns";
+import type { WaiverStatus } from "#/features/auth/server/waiver-fns";
 
 async function getPrincipal(
   queryClient: QueryClient,
@@ -102,6 +104,42 @@ export async function requirePermission(
 export type RegistrationContext =
   | { source: "proof"; email: string }
   | { source: "session"; email: string };
+
+/**
+ * Returns the caller's current-cycle waiver status (cached) without
+ * redirecting. Use this from the layout to render a "waiver missing"
+ * banner without blocking navigation. Pre-supposes the caller is
+ * signed in; safe to call from inside a `requireApproved`'d route.
+ */
+export async function getCurrentWaiverStatus(
+  queryClient: QueryClient,
+): Promise<WaiverStatus> {
+  return queryClient.ensureQueryData(myWaiverStatusQueryOptions());
+}
+
+/**
+ * Hard gate for routes that require an active paper-waiver attestation
+ * for the current academic cycle (e.g. trip RSVP, equipment checkout,
+ * future participation-gated actions). Layers on top of `requireApproved`
+ * — no profile / not approved / deactivated all redirect first; an
+ * approved member without a current attestation gets bounced to
+ * `/account/waiver` so they see the "how to get attested" instructions.
+ *
+ * Today no production route invokes this. It exists so the future
+ * `/trips`-style features can drop it into their `beforeLoad` without
+ * re-deriving the cycle/version comparison.
+ */
+export async function requireCurrentWaiver(
+  queryClient: QueryClient,
+  redirectFrom?: string,
+): Promise<{ principal: Principal; waiver: WaiverStatus }> {
+  const principal = await requireApproved(queryClient, redirectFrom);
+  const waiver = await getCurrentWaiverStatus(queryClient);
+  if (!waiver.current) {
+    throw redirect({ to: "/account/waiver" });
+  }
+  return { principal, waiver };
+}
 
 export async function requireRegistrationContext(
   queryClient: QueryClient,

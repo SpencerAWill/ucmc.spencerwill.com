@@ -76,7 +76,7 @@ export function SubscribeButton({ label }: { label: string }) {
  * field. If you need an addon, a prefix, numeric-only input, or
  * custom display↔value mapping, build a dedicated field component
  * that reads `useFieldContext()` directly rather than growing props
- * here — see `components/auth/m-number-field.tsx` for the pattern.
+ * here.
  */
 export function TextField({
   label,

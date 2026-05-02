@@ -54,11 +54,16 @@ export const profiles = sqliteTable("profiles", {
     .references(() => users.id, { onDelete: "cascade" }),
   fullName: text("full_name").notNull(),
   preferredName: text("preferred_name").notNull(),
-  mNumber: text("m_number").notNull(),
   phone: text("phone").notNull(),
   ucAffiliation: text("uc_affiliation", { enum: ucAffiliation }).notNull(),
   avatarKey: text("avatar_key"),
   bio: text("bio"),
+  // Acknowledgment of UCMC's anti-hazing + non-discrimination policies,
+  // captured at registration as a single checkbox. Bumping
+  // POLICIES_VERSION (in `#/config/legal`) invalidates prior
+  // acknowledgments and forces re-ack on next sign-in.
+  policiesAcknowledgedAt: timestamp("policies_acknowledged_at"),
+  policiesVersion: text("policies_version"),
   updatedAt: timestamp("updated_at")
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
@@ -131,6 +136,60 @@ export const userRoles = sqliteTable(
       .references(() => roles.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.userId, t.roleId] })],
+);
+
+/**
+ * Officer attestation that a member's *paper* signed waiver is on file
+ * for a given academic cycle. The signed PDF lives off-platform with
+ * the Treasurer (Bylaw 1.3); this table only records that an officer
+ * confirmed receipt — no medical PII, no signature image, no R2 object.
+ *
+ * One row per attestation event. A `revokedAt` is set when an officer
+ * needs to undo a mistaken attestation (the row stays for audit). The
+ * `requireCurrentWaiver` guard looks for any non-revoked row where
+ * `cycle = currentWaiverCycle()` and `version = WAIVER_VERSION`.
+ */
+export const waiverAttestations = sqliteTable(
+  "waiver_attestations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // "YYYY-YY" — see `#/config/waiver-cycle`.
+    cycle: text("cycle").notNull(),
+    // Tied to the canonical waiver PDF filename — see WAIVER_VERSION
+    // in `#/config/legal`. Bumping forces re-attestation under the new
+    // PDF even if the cycle hasn't rolled.
+    version: text("version").notNull(),
+    attestedAt: timestamp("attested_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    attestedBy: text("attested_by")
+      .notNull()
+      .references(() => users.id),
+    revokedAt: timestamp("revoked_at"),
+    revokedBy: text("revoked_by").references(() => users.id),
+    revocationReason: text("revocation_reason"),
+    notes: text("notes"),
+  },
+  (t) => [
+    // (userId, cycle) supports per-user lookups: the
+    // `requireCurrentWaiver` guard, member history, and admin "show
+    // me Y's attestations" reads.
+    index("waiver_attestations_user_cycle").on(t.userId, t.cycle),
+    // (cycle, version, revokedAt) supports the officer-queue
+    // anti-join subquery that finds approved users *without* a
+    // current attestation. The query filters on (cycle, version)
+    // first, then on `revoked_at IS NULL`, so an index in that
+    // column order avoids a full-table scan as the attestation
+    // history grows year over year.
+    index("waiver_attestations_cycle_version_revoked").on(
+      t.cycle,
+      t.version,
+      t.revokedAt,
+    ),
+  ],
 );
 
 export const passkeyCredentials = sqliteTable(

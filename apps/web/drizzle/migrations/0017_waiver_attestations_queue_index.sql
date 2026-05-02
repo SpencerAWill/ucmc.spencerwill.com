@@ -1,0 +1,1 @@
+CREATE INDEX `waiver_attestations_cycle_version_revoked` ON `waiver_attestations` (`cycle`,`version`,`revoked_at`);

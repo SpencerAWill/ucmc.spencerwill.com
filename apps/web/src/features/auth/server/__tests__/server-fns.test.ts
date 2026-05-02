@@ -93,7 +93,6 @@ async function seedUser(args: {
       userId: id,
       fullName: "Test User",
       preferredName: "Test",
-      mNumber: "",
       phone: "+15135551212",
       ucAffiliation: "student",
       updatedAt: new Date(),
@@ -357,7 +356,6 @@ describe("submitDetailsAction", () => {
     await expect(
       submitDetailsAction({
         fullName: "Real Name",
-        mNumber: "",
         phone: "+15135559999",
         emergencyContacts: [],
       }),
@@ -382,7 +380,6 @@ describe("submitDetailsAction", () => {
 
     await submitDetailsAction({
       fullName: "Updated Legal",
-      mNumber: "M12345678",
       phone: "+15135559999",
       emergencyContacts: [
         {
@@ -397,7 +394,6 @@ describe("submitDetailsAction", () => {
       where: eq(schema.profiles.userId, userId),
     });
     expect(row?.fullName).toBe("Updated Legal");
-    expect(row?.mNumber).toBe("M12345678");
     expect(row?.phone).toBe("+15135559999");
     // Public-profile columns must not be clobbered by a details update.
     expect(row?.preferredName).toBe("Test");
@@ -426,7 +422,6 @@ describe("submitDetailsAction", () => {
 
     await submitDetailsAction({
       fullName: "Only A Legal",
-      mNumber: "",
       phone: "+15135552222",
       emergencyContacts: [],
     });
@@ -444,11 +439,11 @@ describe("profileInputSchema bio", () => {
     return {
       fullName: "Test User",
       preferredName: "Test",
-      mNumber: "",
       phone: "+15135551212",
       emergencyContacts: [],
       ucAffiliation: "student" as const,
       bio,
+      policiesAck: true,
     };
   }
 

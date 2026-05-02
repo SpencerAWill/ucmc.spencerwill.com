@@ -29,8 +29,8 @@ import { z } from "zod";
 
 import {
   detailsInputSchema,
-  profileInputSchema,
   publicProfileInputSchema,
+  registrationInputSchema,
 } from "#/server/profile/profile-schemas";
 import type { Principal } from "#/server/auth/principal.server";
 import type { EmailProof } from "#/server/auth/proof-cookie.server";
@@ -175,7 +175,7 @@ export const getProfileFn = createServerFn({ method: "GET" }).handler(
  *     never downgrade; only an approver can promote).
  */
 export const submitProfileFn = createServerFn({ method: "POST" })
-  .inputValidator(profileInputSchema)
+  .inputValidator(registrationInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { submitProfileAction } =
       await import("#/features/auth/server/magic-link-actions.server");
@@ -197,9 +197,9 @@ export const submitPublicProfileFn = createServerFn({ method: "POST" })
   });
 
 /**
- * Partial update for the Details tab. Writes fullName + mNumber + phone
- * onto the caller's existing profile row and replaces the emergency
- * contact set. Requires an authenticated principal.
+ * Partial update for the Details tab. Writes fullName + phone onto the
+ * caller's existing profile row and replaces the emergency contact set.
+ * Requires an authenticated principal.
  */
 export const submitDetailsFn = createServerFn({ method: "POST" })
   .inputValidator(detailsInputSchema)

@@ -90,7 +90,6 @@ async function seedUser(args: {
       userId: id,
       fullName: "Test User",
       preferredName: "Test",
-      mNumber: "",
       phone: "+15135551212",
       ucAffiliation: "student",
       updatedAt: new Date(),
@@ -158,7 +157,6 @@ function signInAs(userId: string): Promise<void> {
 const validProfile = {
   fullName: "Alice Smith",
   preferredName: "Alice",
-  mNumber: "M12345678",
   phone: "+15135551234",
   emergencyContacts: [
     {
@@ -169,6 +167,7 @@ const validProfile = {
   ],
   ucAffiliation: "student" as const,
   bio: "",
+  policiesAck: true as const,
 };
 
 // ── setup ───────────────────────────────────────────────────────────────

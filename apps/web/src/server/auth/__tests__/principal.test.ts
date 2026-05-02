@@ -38,7 +38,6 @@ async function seedUser(email: string): Promise<string> {
     userId: id,
     fullName: "Test User",
     preferredName: "Test",
-    mNumber: "",
     phone: "+15135551212",
     ucAffiliation: "student",
     updatedAt: new Date(),
