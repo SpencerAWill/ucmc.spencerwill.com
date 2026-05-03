@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import {
   ChevronRight,
   Eye,
+  History,
   Mail,
   ScrollText,
   Shield,
@@ -166,13 +167,15 @@ function SidebarNav() {
   const canApproveRegistrations = hasPermission("registrations:approve");
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
+  const canViewAudit = hasPermission("audit:view");
 
   if (!isApproved) {
     return null;
   }
 
   // Sub-items gated by permission. If none are visible, the Members
-  // link still renders but without the collapsible chevron.
+  // link still renders but without the collapsible chevron. Audit is
+  // intentionally NOT in this set — it's a top-level sibling below.
   const hasSubItems =
     canApproveRegistrations || canManageRoles || canVerifyWaivers;
 
@@ -237,6 +240,24 @@ function SidebarNav() {
             ) : null}
           </SidebarMenuItem>
         </Collapsible>
+
+        {/*
+         * Audit log is intentionally a sibling of Members rather than
+         * a sub-item: it covers landing edits, role changes, waiver
+         * attestations, account deletions — i.e. everything the audit
+         * action enum lists. Nesting it under Members would imply
+         * "audit of members specifically", which it isn't.
+         */}
+        {canViewAudit ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Audit log">
+              <Link to="/audit">
+                <History />
+                <span>Audit log</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
       </SidebarMenu>
     </SidebarGroup>
   );
