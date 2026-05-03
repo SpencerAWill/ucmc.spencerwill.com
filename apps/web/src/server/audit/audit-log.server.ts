@@ -23,14 +23,14 @@
  *
  * **Atomic vs sequential.** This module exposes two flavors:
  *
- *   - `buildAuditEventStatement` / `buildAuditEventStatements` return
- *     the prepared INSERT(s) so callers can spread them into a
- *     `db.batch([...])` together with the parent mutation. That's the
- *     **preferred path** — D1 batches are atomic at the storage layer,
- *     so the parent and audit either both commit or both roll back.
- *     Use this whenever the audit row(s) can be determined upfront
- *     from the action's input, which is true for create / delete /
- *     attest / role / landing-CRUD flows.
+ *   - `buildAuditEventStatement` / `buildBulkAuditEventStatement`
+ *     return the prepared INSERT(s) so callers can spread them into
+ *     a `db.batch([...])` together with the parent mutation. That's
+ *     the **preferred path** — D1 batches are atomic at the storage
+ *     layer, so the parent and audit either both commit or both
+ *     roll back. Use this whenever the audit row(s) can be
+ *     determined upfront from the action's input, which today
+ *     covers create / delete / attest / role flows.
  *
  *   - `recordAuditEvent` / `recordAuditEvents` execute the audit
  *     INSERT in a separate await. They're the **escape hatch** for

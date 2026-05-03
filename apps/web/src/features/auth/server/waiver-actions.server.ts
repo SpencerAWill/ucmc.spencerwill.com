@@ -293,12 +293,15 @@ export async function bulkAttestWaiversAction(input: {
       metadata: { cycle, version: WAIVER_VERSION, bulk: true },
     })),
   );
-  // `auditStmt` is non-null because rows.length > 0 here (we returned
-  // early when userIds was empty).
-  await db.batch([
+  // `auditStmt` is non-null in practice because we returned early
+  // when userIds was empty, but use the spread-conditional pattern
+  // used by the other batched call sites so a future change to the
+  // early-return logic doesn't silently leave a `null` in the batch.
+  const stmts = [
     db.insert(schema.waiverAttestations).values(rows),
-    auditStmt!,
-  ]);
+    ...(auditStmt ? [auditStmt] : []),
+  ];
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
   return { count: rows.length };
 }

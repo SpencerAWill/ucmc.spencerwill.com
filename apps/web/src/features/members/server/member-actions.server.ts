@@ -487,10 +487,9 @@ export async function approveRegistrationsAction(
       .onConflictDoNothing();
   }
 
-  // Sequential (not batched) because the audit row set is derived
-  // from the `.returning()` result above — D1 batches can't
-  // reference a prior statement's output. The atomicity gap here is
-  // the documented residual case in `audit-log.server.ts`.
+  // Sequential audit — see `audit-log.server.ts` residual case
+  // (`.returning()` result drives the audit set; D1 batches can't
+  // reference a prior statement's output).
   await recordAuditEvents(
     updatedIds.map((userId) => ({
       actorUserId: approver.userId,
@@ -522,6 +521,7 @@ export async function rejectRegistrationsAction(
     .where(inArray(schema.users.id, userIds))
     .returning({ id: schema.users.id });
 
+  // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
     updated.map(({ id }) => ({
       actorUserId: approver.userId,
@@ -573,6 +573,7 @@ export async function deactivateMembersAction(
       .where(inArray(schema.sessions.userId, updatedIds));
   }
 
+  // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
     updatedIds.map((userId) => ({
       actorUserId: principal.userId,
@@ -623,6 +624,7 @@ export async function reactivateMembersAction(
       .onConflictDoNothing();
   }
 
+  // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
     updatedIds.map((userId) => ({
       actorUserId: approver.userId,
@@ -656,6 +658,7 @@ export async function unrejectMembersAction(
     )
     .returning({ id: schema.users.id });
 
+  // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
     updated.map(({ id }) => ({
       actorUserId: principal.userId,
@@ -691,9 +694,7 @@ export async function revokeUserSessionsAction(
   // Audit only when something was actually revoked. Session count
   // captured in metadata so the audit page can show the blast
   // radius without joining back to a now-empty sessions table.
-  // Sequential (not batched) because the audit decision depends on
-  // the `.returning()` count above — same residual case as the
-  // bulk lifecycle actions; documented in audit-log.server.ts.
+  // Sequential audit — see `audit-log.server.ts` residual case.
   if (deleted.length > 0) {
     await recordAuditEvent({
       actorUserId: principal.userId,
