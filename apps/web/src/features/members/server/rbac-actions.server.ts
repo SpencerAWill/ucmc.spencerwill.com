@@ -348,11 +348,23 @@ export async function setRolePermissionsAction(input: {
   ];
   await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
-  // KV cache invalidation isn't part of D1's transaction; do it
-  // after the batch commits so we don't invalidate ahead of a
-  // rollback.
+  // KV invalidation is best-effort post-commit: D1 has already
+  // committed the permission change AND the audit row, so throwing
+  // here would return an error to a caller whose action did succeed,
+  // and the retry would write a duplicate audit row for the same
+  // logical change. Swallow + log instead — the cache has a 5-minute
+  // TTL, so a missed invalidation self-corrects.
   if (input.roleId === ANONYMOUS_ROLE_ID) {
-    await invalidateAnonymousPermissionsCache();
+    try {
+      await invalidateAnonymousPermissionsCache();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("rbac.cache_invalidation_failed", {
+        scope: "anonymous_permissions",
+        roleId: input.roleId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   return { ok: true };
@@ -591,8 +603,20 @@ export async function bulkSetRolePermissionsAction(input: {
   const stmts = [...deletes, ...inserts, ...(auditStmt ? [auditStmt] : [])];
   await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
+  // Best-effort post-commit cache bust — see `setRolePermissionsAction`
+  // for the same try/catch reasoning (avoids the retry-makes-duplicate-
+  // audit-row regression that surfaced in PR #43 review).
   if (seen.has(ANONYMOUS_ROLE_ID)) {
-    await invalidateAnonymousPermissionsCache();
+    try {
+      await invalidateAnonymousPermissionsCache();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("rbac.cache_invalidation_failed", {
+        scope: "anonymous_permissions",
+        path: "bulkSetRolePermissionsAction",
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   return { ok: true };
