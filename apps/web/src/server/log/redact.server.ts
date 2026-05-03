@@ -27,12 +27,13 @@ const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const STRICT_EMAIL_PATTERN =
   /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 // URL pattern for `redactString`. Stops at characters that are
-// almost always URL terminators in the contexts we redact (JSON
-// bodies, error messages, log lines): whitespace, quote/angle
-// brackets, common punctuation surrounding embedded URLs. The
-// trailing-junk dance (`(?:[?&][^...]*)?`) handles legitimate
-// query strings, which we want to capture as part of the URL
-// before redacting it.
+// almost always URL terminators in the contexts we redact — JSON
+// bodies, error messages, log lines: whitespace, quotes, angle
+// brackets, parens/brackets/braces, and the comma/semicolon
+// punctuation that commonly surrounds embedded URLs. `?`, `&`,
+// `=`, and `#` are deliberately NOT terminators, so a query
+// string with a token gets captured as part of the URL match
+// and the whole thing gets redacted.
 const URL_PATTERN = /https?:\/\/[^\s"'<>(){}[\]|\\^`,;]+/g;
 
 /**
