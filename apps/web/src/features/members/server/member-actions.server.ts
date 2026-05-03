@@ -8,6 +8,10 @@
 import { and, asc, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import {
+  recordAuditEvent,
+  recordAuditEvents,
+} from "#/server/audit/audit-log.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
@@ -475,6 +479,14 @@ export async function approveRegistrationsAction(
     .values(userIds.map((userId) => ({ userId, roleId: "role_member" })))
     .onConflictDoNothing();
 
+  await recordAuditEvents(
+    userIds.map((userId) => ({
+      actorUserId: approver.userId,
+      action: "registration.approved",
+      targetUserId: userId,
+    })),
+  );
+
   // TODO: send approval notification emails (per-user; will need a loop
   // or a batch email API call here when email notifications are added).
 
@@ -486,12 +498,20 @@ export async function approveRegistrationsAction(
 export async function rejectRegistrationsAction(
   userIds: string[],
 ): Promise<{ ok: true }> {
-  await requireApprover();
+  const approver = await requireApprover();
 
   await getDb()
     .update(schema.users)
     .set({ status: "rejected", rejectedAt: new Date() })
     .where(inArray(schema.users.id, userIds));
+
+  await recordAuditEvents(
+    userIds.map((userId) => ({
+      actorUserId: approver.userId,
+      action: "registration.rejected",
+      targetUserId: userId,
+    })),
+  );
 
   // TODO: send rejection notification emails (per-user).
 
@@ -526,6 +546,14 @@ export async function deactivateMembersAction(
   await db
     .delete(schema.sessions)
     .where(inArray(schema.sessions.userId, userIds));
+
+  await recordAuditEvents(
+    userIds.map((userId) => ({
+      actorUserId: principal.userId,
+      action: "member.deactivated",
+      targetUserId: userId,
+    })),
+  );
 
   return { ok: true };
 }
@@ -562,6 +590,14 @@ export async function reactivateMembersAction(
     .values(userIds.map((userId) => ({ userId, roleId: "role_member" })))
     .onConflictDoNothing();
 
+  await recordAuditEvents(
+    userIds.map((userId) => ({
+      actorUserId: approver.userId,
+      action: "member.reactivated",
+      targetUserId: userId,
+    })),
+  );
+
   return { ok: true };
 }
 
@@ -570,7 +606,7 @@ export async function reactivateMembersAction(
 export async function unrejectMembersAction(
   userIds: string[],
 ): Promise<{ ok: true }> {
-  await requireMembersManager();
+  const principal = await requireMembersManager();
 
   // Move rejected users back to pending so they re-enter the approval
   // queue. Clear `rejectedAt` so a future rejection gets a fresh
@@ -584,6 +620,14 @@ export async function unrejectMembersAction(
         eq(schema.users.status, "rejected"),
       ),
     );
+
+  await recordAuditEvents(
+    userIds.map((userId) => ({
+      actorUserId: principal.userId,
+      action: "registration.unrejected",
+      targetUserId: userId,
+    })),
+  );
 
   return { ok: true };
 }
@@ -625,7 +669,7 @@ export async function adminUpdateProfileAction(input: {
   }>;
   ucAffiliation: schema.UcAffiliation;
 }): Promise<{ ok: true }> {
-  await requireMembersManager();
+  const principal = await requireMembersManager();
 
   const db = getDb();
   const user = await db.query.users.findFirst({
@@ -661,6 +705,21 @@ export async function adminUpdateProfileAction(input: {
       })),
     );
   }
+
+  // Field names only — never the values themselves (those would be PII
+  // by definition since this action edits a person's identifying info).
+  // The before/after diff lives in the row's history if anyone needs
+  // to investigate; the audit row just establishes that an admin
+  // touched this profile.
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "profile.force_edited",
+    targetUserId: userId,
+    metadata: {
+      emergencyContactCount: emergencyContacts.length,
+      ucAffiliation: profileData.ucAffiliation,
+    },
+  });
 
   return { ok: true };
 }

@@ -344,6 +344,24 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
     }
   }
 
+  // Record the audit event BEFORE the user row goes away. The
+  // user-deletion FK cascade sets both `actorUserId` and
+  // `targetUserId` to NULL on this audit row; capturing the original
+  // userId + email in metadata preserves attribution. This is a
+  // documented exception to the no-PII-in-metadata rule (see
+  // `audit-log.server.ts`'s module doc-comment) — no other event
+  // type follows this pattern.
+  const { recordAuditEvent } = await import("#/server/audit/audit-log.server");
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "member.self_deleted",
+    targetUserId: principal.userId,
+    metadata: {
+      userId: principal.userId,
+      email: principal.email,
+    },
+  });
+
   // Delete the avatar object from R2 before the row goes away. The
   // R2 helper is a no-op if the key doesn't exist.
   if (principal.avatarKey) {

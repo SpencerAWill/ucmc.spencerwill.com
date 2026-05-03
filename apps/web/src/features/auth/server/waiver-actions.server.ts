@@ -14,6 +14,10 @@ import { uuidv7 } from "uuidv7";
 
 import { WAIVER_VERSION } from "#/config/legal";
 import { currentWaiverCycle } from "#/config/waiver-cycle";
+import {
+  recordAuditEvent,
+  recordAuditEvents,
+} from "#/server/audit/audit-log.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { getDb, schema } from "#/server/db";
@@ -193,14 +197,23 @@ export async function attestWaiverAction(input: {
   }
 
   const id = `wa_${uuidv7()}`;
+  const cycle = currentWaiverCycle();
   await db.insert(schema.waiverAttestations).values({
     id,
     userId: input.userId,
-    cycle: currentWaiverCycle(),
+    cycle,
     version: WAIVER_VERSION,
     attestedAt: new Date(),
     attestedBy: officer.userId,
     notes: input.notes?.trim() || null,
+  });
+  await recordAuditEvent({
+    actorUserId: officer.userId,
+    action: "waiver.attested",
+    targetUserId: input.userId,
+    targetType: "waiver_attestation",
+    targetId: id,
+    metadata: { cycle, version: WAIVER_VERSION },
   });
   return { id };
 }
@@ -264,6 +277,17 @@ export async function bulkAttestWaiversAction(input: {
   }));
   await db.insert(schema.waiverAttestations).values(rows);
 
+  await recordAuditEvents(
+    rows.map((row) => ({
+      actorUserId: officer.userId,
+      action: "waiver.attested",
+      targetUserId: row.userId,
+      targetType: "waiver_attestation",
+      targetId: row.id,
+      metadata: { cycle, version: WAIVER_VERSION, bulk: true },
+    })),
+  );
+
   return { count: rows.length };
 }
 
@@ -285,7 +309,7 @@ export async function revokeWaiverAttestationAction(input: {
 
   const existing = await db.query.waiverAttestations.findFirst({
     where: eq(schema.waiverAttestations.id, input.attestationId),
-    columns: { id: true, revokedAt: true },
+    columns: { id: true, userId: true, revokedAt: true },
   });
   if (!existing) {
     throw new Error("Attestation not found");
@@ -302,6 +326,18 @@ export async function revokeWaiverAttestationAction(input: {
       revocationReason: reason,
     })
     .where(eq(schema.waiverAttestations.id, input.attestationId));
+
+  // Reason text is officer-authored decision text (not member PII) —
+  // safe to capture verbatim in metadata so the audit page can show
+  // why a revocation happened without an extra DB hop.
+  await recordAuditEvent({
+    actorUserId: officer.userId,
+    action: "waiver.revoked",
+    targetUserId: existing.userId,
+    targetType: "waiver_attestation",
+    targetId: existing.id,
+    metadata: { reason },
+  });
 
   return { ok: true };
 }

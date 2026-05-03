@@ -5,6 +5,10 @@
  */
 import { count, eq, inArray, max } from "drizzle-orm";
 
+import {
+  recordAuditEvent,
+  recordAuditEvents,
+} from "#/server/audit/audit-log.server";
 import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
@@ -179,7 +183,7 @@ export async function createRoleAction(input: {
   name: string;
   description?: string;
 }): Promise<{ roleId: string }> {
-  await requireRolesManager();
+  const principal = await requireRolesManager();
   const db = getDb();
 
   const roleId = `role_${input.name}`;
@@ -204,6 +208,14 @@ export async function createRoleAction(input: {
     name: input.name,
     description: input.description ?? null,
     position: nextPos,
+  });
+
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "role.created",
+    targetType: "role",
+    targetId: roleId,
+    metadata: { name: input.name },
   });
 
   return { roleId };
@@ -233,7 +245,7 @@ export async function updateRoleAction(input: {
 }
 
 export async function deleteRoleAction(roleId: string): Promise<{ ok: true }> {
-  await requireRolesManager();
+  const principal = await requireRolesManager();
 
   if (PROTECTED_ROLE_IDS.has(roleId)) {
     throw new Error("Cannot delete a protected role");
@@ -242,7 +254,7 @@ export async function deleteRoleAction(roleId: string): Promise<{ ok: true }> {
   const db = getDb();
   const role = await db.query.roles.findFirst({
     where: eq(schema.roles.id, roleId),
-    columns: { id: true },
+    columns: { id: true, name: true },
   });
   if (!role) {
     throw new Error("Role not found");
@@ -250,6 +262,14 @@ export async function deleteRoleAction(roleId: string): Promise<{ ok: true }> {
 
   // Cascade deletes handle role_permissions and user_roles rows.
   await db.delete(schema.roles).where(eq(schema.roles.id, roleId));
+
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "role.deleted",
+    targetType: "role",
+    targetId: roleId,
+    metadata: { name: role.name },
+  });
 
   return { ok: true };
 }
@@ -277,7 +297,7 @@ export async function setRolePermissionsAction(input: {
   roleId: string;
   permissionIds: string[];
 }): Promise<{ ok: true }> {
-  await requireRolesManager();
+  const principal = await requireRolesManager();
 
   if (input.roleId === SYSTEM_ADMIN_ROLE_ID) {
     throw new Error(
@@ -289,7 +309,7 @@ export async function setRolePermissionsAction(input: {
 
   const role = await db.query.roles.findFirst({
     where: eq(schema.roles.id, input.roleId),
-    columns: { id: true },
+    columns: { id: true, name: true },
   });
   if (!role) {
     throw new Error("Role not found");
@@ -314,6 +334,17 @@ export async function setRolePermissionsAction(input: {
   if (input.roleId === ANONYMOUS_ROLE_ID) {
     await invalidateAnonymousPermissionsCache();
   }
+
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "role.permissions_set",
+    targetType: "role",
+    targetId: input.roleId,
+    metadata: {
+      roleName: role.name,
+      permissionIds: input.permissionIds,
+    },
+  });
 
   return { ok: true };
 }
@@ -380,6 +411,18 @@ export async function setUserRolesAction(input: {
     }
   }
 
+  // Capture the prior role set so we can audit the diff (assigned /
+  // unassigned), not just the post-state. The viewer cares about
+  // "who got promoted to system_admin?", which is a delta question.
+  const prior = await db
+    .select({ roleId: schema.userRoles.roleId })
+    .from(schema.userRoles)
+    .where(eq(schema.userRoles.userId, input.userId));
+  const priorIds = new Set(prior.map((r) => r.roleId));
+  const nextIds = new Set(roleIds);
+  const assigned = roleIds.filter((id) => !priorIds.has(id));
+  const unassigned = [...priorIds].filter((id) => !nextIds.has(id));
+
   // Replace-all: delete existing assignments, insert new set.
   await db
     .delete(schema.userRoles)
@@ -393,6 +436,26 @@ export async function setUserRolesAction(input: {
       })),
     );
   }
+
+  // One row per added / removed role so the audit page can answer
+  // "who granted X this role?" with a single index lookup.
+  const events = [
+    ...assigned.map((roleId) => ({
+      actorUserId: principal.userId,
+      action: "role.assigned" as const,
+      targetUserId: input.userId,
+      targetType: "role",
+      targetId: roleId,
+    })),
+    ...unassigned.map((roleId) => ({
+      actorUserId: principal.userId,
+      action: "role.unassigned" as const,
+      targetUserId: input.userId,
+      targetType: "role",
+      targetId: roleId,
+    })),
+  ];
+  await recordAuditEvents(events);
 
   return { ok: true };
 }
@@ -451,7 +514,7 @@ export async function reorderRolesAction(input: {
 export async function bulkSetRolePermissionsAction(input: {
   roles: { roleId: string; permissionIds: string[] }[];
 }): Promise<{ ok: true }> {
-  await requireRolesManager();
+  const principal = await requireRolesManager();
 
   if (input.roles.length === 0) {
     return { ok: true };
@@ -504,6 +567,16 @@ export async function bulkSetRolePermissionsAction(input: {
   if (seen.has(ANONYMOUS_ROLE_ID)) {
     await invalidateAnonymousPermissionsCache();
   }
+
+  await recordAuditEvents(
+    input.roles.map((entry) => ({
+      actorUserId: principal.userId,
+      action: "role.permissions_set",
+      targetType: "role",
+      targetId: entry.roleId,
+      metadata: { permissionIds: entry.permissionIds },
+    })),
+  );
 
   return { ok: true };
 }

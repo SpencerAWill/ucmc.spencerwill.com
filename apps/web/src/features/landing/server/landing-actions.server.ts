@@ -59,6 +59,7 @@ import type {
   UpdateHeroSlideInput,
   UpdateSettingInput,
 } from "#/features/landing/server/landing-schemas";
+import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 
@@ -174,6 +175,12 @@ export async function updateSettingAction(
 ): Promise<{ ok: true }> {
   const principal = await requireLandingEditor();
   await upsertSetting(input.key, JSON.stringify(input.value), principal.userId);
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.settings_edited",
+    targetType: "landing_setting",
+    targetId: input.key,
+  });
   return { ok: true };
 }
 
@@ -182,7 +189,7 @@ export async function updateSettingAction(
 export async function createHeroSlideAction(
   input: CreateHeroSlideInput,
 ): Promise<{ id: string; imageKey: string }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   const { contentType, bytes } = decodeImageDataUrl(input.dataUrl);
   const hash = await shortContentHash(bytes);
   const imageKey = landingImageKey("hero", hash, contentType);
@@ -191,13 +198,21 @@ export async function createHeroSlideAction(
   const id = `hslide_${uuidv7()}`;
   const sortOrder = await nextHeroSlideSortOrder();
   await insertHeroSlide({ id, imageKey, alt: input.alt, sortOrder });
+
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.hero_slide_edited",
+    targetType: "landing_hero_slide",
+    targetId: id,
+    metadata: { op: "create" },
+  });
   return { id, imageKey };
 }
 
 export async function updateHeroSlideAction(
   input: UpdateHeroSlideInput,
 ): Promise<{ ok: true }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   const existing = await getHeroSlide(input.id);
   if (!existing) {
     throw new Error("Hero slide not found");
@@ -226,13 +241,20 @@ export async function updateHeroSlideAction(
     }
   }
 
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.hero_slide_edited",
+    targetType: "landing_hero_slide",
+    targetId: input.id,
+    metadata: { op: "update", imageReplaced: Boolean(nextImageKey) },
+  });
   return { ok: true };
 }
 
 export async function deleteHeroSlideAction(input: {
   id: string;
 }): Promise<{ ok: true }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   const existing = await getHeroSlide(input.id);
   if (!existing) {
     return { ok: true };
@@ -242,6 +264,13 @@ export async function deleteHeroSlideAction(input: {
   if (remaining === 0) {
     await deleteLandingImage(existing.imageKey);
   }
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.hero_slide_edited",
+    targetType: "landing_hero_slide",
+    targetId: input.id,
+    metadata: { op: "delete" },
+  });
   return { ok: true };
 }
 
@@ -258,7 +287,7 @@ export async function reorderHeroSlidesAction(
 export async function createFaqItemAction(
   input: FaqInput,
 ): Promise<{ id: string }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   const existing = await countFaqItems();
   if (existing >= LANDING_LIMITS.faqItemCount.max) {
     throw new Error(
@@ -273,22 +302,43 @@ export async function createFaqItemAction(
     answer: input.answer,
     sortOrder,
   });
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.faq_edited",
+    targetType: "landing_faq_item",
+    targetId: id,
+    metadata: { op: "create" },
+  });
   return { id };
 }
 
 export async function updateFaqItemAction(
   input: FaqUpdateInput,
 ): Promise<{ ok: true }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   await updateFaqItem(input);
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.faq_edited",
+    targetType: "landing_faq_item",
+    targetId: input.id,
+    metadata: { op: "update" },
+  });
   return { ok: true };
 }
 
 export async function deleteFaqItemAction(input: {
   id: string;
 }): Promise<{ ok: true }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   await deleteFaqItem(input.id);
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.faq_edited",
+    targetType: "landing_faq_item",
+    targetId: input.id,
+    metadata: { op: "delete" },
+  });
   return { ok: true };
 }
 
@@ -323,7 +373,7 @@ async function maybeDeleteActivityImage(key: string | null): Promise<void> {
 export async function createActivityAction(
   input: ActivityInput,
 ): Promise<{ id: string; imageKey: string | null }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   const imageKey = input.dataUrl
     ? await uploadActivityImage(input.dataUrl)
     : null;
@@ -337,13 +387,20 @@ export async function createActivityAction(
     imageKey,
     sortOrder,
   });
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.activity_edited",
+    targetType: "landing_activity",
+    targetId: id,
+    metadata: { op: "create" },
+  });
   return { id, imageKey };
 }
 
 export async function updateActivityAction(
   input: ActivityUpdateInput,
 ): Promise<{ ok: true }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   if (input.dataUrl && input.removeImage) {
     throw new Error("Cannot both replace and remove the image");
   }
@@ -373,19 +430,33 @@ export async function updateActivityAction(
   if (oldKeyToCleanup && oldKeyToCleanup !== imageKeyChange) {
     await maybeDeleteActivityImage(oldKeyToCleanup);
   }
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.activity_edited",
+    targetType: "landing_activity",
+    targetId: input.id,
+    metadata: { op: "update" },
+  });
   return { ok: true };
 }
 
 export async function deleteActivityAction(input: {
   id: string;
 }): Promise<{ ok: true }> {
-  await requireLandingEditor();
+  const principal = await requireLandingEditor();
   const existing = await getActivity(input.id);
   if (!existing) {
     return { ok: true };
   }
   await deleteActivity(input.id);
   await maybeDeleteActivityImage(existing.imageKey);
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.activity_edited",
+    targetType: "landing_activity",
+    targetId: input.id,
+    metadata: { op: "delete" },
+  });
   return { ok: true };
 }
 
@@ -443,40 +514,72 @@ export async function setAboutImageAction(
   input: SetSectionImageInput,
 ): Promise<{ ok: true; imageKey: string }> {
   const principal = await requireLandingEditor();
-  return setSectionImage(
+  const result = await setSectionImage(
     LANDING_SETTING_KEYS.aboutImageKey,
     "about",
     input,
     principal.userId,
   );
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.settings_edited",
+    targetType: "landing_setting",
+    targetId: LANDING_SETTING_KEYS.aboutImageKey,
+    metadata: { op: "set_image" },
+  });
+  return result;
 }
 
 export async function removeAboutImageAction(): Promise<{ ok: true }> {
   const principal = await requireLandingEditor();
-  return removeSectionImage(
+  const result = await removeSectionImage(
     LANDING_SETTING_KEYS.aboutImageKey,
     principal.userId,
   );
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.settings_edited",
+    targetType: "landing_setting",
+    targetId: LANDING_SETTING_KEYS.aboutImageKey,
+    metadata: { op: "remove_image" },
+  });
+  return result;
 }
 
 export async function setMeetingImageAction(
   input: SetSectionImageInput,
 ): Promise<{ ok: true; imageKey: string }> {
   const principal = await requireLandingEditor();
-  return setSectionImage(
+  const result = await setSectionImage(
     LANDING_SETTING_KEYS.meetingImageKey,
     "meeting",
     input,
     principal.userId,
   );
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.settings_edited",
+    targetType: "landing_setting",
+    targetId: LANDING_SETTING_KEYS.meetingImageKey,
+    metadata: { op: "set_image" },
+  });
+  return result;
 }
 
 export async function removeMeetingImageAction(): Promise<{ ok: true }> {
   const principal = await requireLandingEditor();
-  return removeSectionImage(
+  const result = await removeSectionImage(
     LANDING_SETTING_KEYS.meetingImageKey,
     principal.userId,
   );
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "landing.settings_edited",
+    targetType: "landing_setting",
+    targetId: LANDING_SETTING_KEYS.meetingImageKey,
+    metadata: { op: "remove_image" },
+  });
+  return result;
 }
 
 export async function reorderActivitiesAction(

@@ -344,6 +344,94 @@ export const landingActivities = sqliteTable(
   (t) => [index("landing_activities_sort_idx").on(t.sortOrder)],
 );
 
+/**
+ * Append-only audit log of admin / officer actions. Constitutionally
+ * load-bearing now that the retention cron auto-deletes user rows: a
+ * member rejected for cause and then purged 30 days later leaves zero
+ * trace anywhere else; the audit row is the only surviving record of
+ * who did what.
+ *
+ * **Append-only.** Nothing in the app is allowed to UPDATE or DELETE
+ * rows here. The retention cron explicitly skips this table. If a
+ * particular event needs to be redacted (e.g. legal hold lifted),
+ * that's a manual SQL operation, not a feature.
+ *
+ * **PII discipline.** `metadata_json` is for non-PII context only —
+ * role names, status transitions, decision text, counts. Identifying
+ * info (email, phone, full name) is reachable via the `actor_user_id`
+ * / `target_user_id` FKs while those rows still exist; once they're
+ * hard-deleted, the SET NULL preserves the action's existence without
+ * leaking PII through this surface. Never put email/phone/name in the
+ * JSON blob.
+ */
+export const auditAction = [
+  // Membership lifecycle (status transitions on `users`).
+  "registration.approved",
+  "registration.rejected",
+  "registration.unrejected",
+  "member.deactivated",
+  "member.reactivated",
+  "member.hard_deleted",
+  "member.self_deleted",
+  "profile.force_edited",
+  // RBAC.
+  "role.created",
+  "role.deleted",
+  "role.permissions_set",
+  "role.assigned",
+  "role.unassigned",
+  // Waivers — paper attestations are constitutionally significant.
+  "waiver.attested",
+  "waiver.revoked",
+  // Landing-page edits — officer-published club voice; worth a record.
+  "landing.settings_edited",
+  "landing.hero_slide_edited",
+  "landing.activity_edited",
+  "landing.faq_edited",
+  // Announcements — same reasoning as landing.
+  "announcement.published",
+  "announcement.deleted",
+] as const;
+export type AuditAction = (typeof auditAction)[number];
+
+export const auditLog = sqliteTable(
+  "audit_log",
+  {
+    id: text("id").primaryKey(),
+    // Actor (the user who performed the action). Nullable + SET NULL
+    // so an admin who has audit rows can later self-delete without
+    // FK violation; the row survives, just loses the actor identity.
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    action: text("action", { enum: auditAction }).notNull(),
+    // The common case is a user-targeted action (approve / reject /
+    // role assignment). Typed FK so we can join when present.
+    targetUserId: text("target_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // For non-user targets — role IDs, landing setting keys,
+    // announcement IDs. Loose `text` because the universe of types
+    // grows as features land; the action enum disambiguates.
+    targetType: text("target_type"),
+    targetId: text("target_id"),
+    // Non-PII context only. See the table doc-comment.
+    metadataJson: text("metadata_json"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    // Default chronological view (newest first) on the audit page.
+    index("audit_log_created_at_idx").on(t.createdAt),
+    // "What did this admin do?" / "What happened to this member?" —
+    // both common questions when investigating an incident.
+    index("audit_log_actor_idx").on(t.actorUserId),
+    index("audit_log_target_user_idx").on(t.targetUserId),
+    index("audit_log_action_idx").on(t.action),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
@@ -357,3 +445,4 @@ export type LandingSetting = typeof landingSettings.$inferSelect;
 export type LandingHeroSlide = typeof landingHeroSlides.$inferSelect;
 export type LandingFaqItem = typeof landingFaqItems.$inferSelect;
 export type LandingActivity = typeof landingActivities.$inferSelect;
+export type AuditLogEntry = typeof auditLog.$inferSelect;
