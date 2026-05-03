@@ -228,6 +228,10 @@ describe("sweepRevokedWaiverAttestations", () => {
   });
 });
 
+// Tests pass `minOrphanAgeMs: 0` so freshly-`put`-ed Miniflare objects
+// (whose `uploaded` timestamp is the test's wall clock) aren't skipped
+// by the production 5-minute upload-race guard. The guard behavior
+// itself has a dedicated test at the bottom of this describe block.
 describe("sweepOrphanR2Keys", () => {
   it("deletes objects under avatars/ that aren't referenced by any profile", async () => {
     const userId = await seedUser({ status: "approved" });
@@ -246,7 +250,7 @@ describe("sweepOrphanR2Keys", () => {
       avatarKey: liveKey,
     });
 
-    const count = await sweepOrphanR2Keys();
+    const count = await sweepOrphanR2Keys(NOW, 0);
 
     expect(count).toBe(1);
     expect(await bucket.head(liveKey)).not.toBeNull();
@@ -269,7 +273,7 @@ describe("sweepOrphanR2Keys", () => {
         sortOrder: 0,
       });
 
-    const count = await sweepOrphanR2Keys();
+    const count = await sweepOrphanR2Keys(NOW, 0);
 
     expect(count).toBe(1);
     expect(await bucket.head(liveKey)).not.toBeNull();
@@ -292,7 +296,7 @@ describe("sweepOrphanR2Keys", () => {
         { key: "meeting.image_key", valueJson: JSON.stringify(meetingKey) },
       ]);
 
-    const count = await sweepOrphanR2Keys();
+    const count = await sweepOrphanR2Keys(NOW, 0);
 
     expect(count).toBe(1);
     expect(await bucket.head(aboutKey)).not.toBeNull();
@@ -311,10 +315,27 @@ describe("sweepOrphanR2Keys", () => {
 
     // Should not throw — sweep continues, treating the malformed row as
     // "no live key found" and orphaning the bucket object.
-    const count = await sweepOrphanR2Keys();
+    const count = await sweepOrphanR2Keys(NOW, 0);
 
     expect(count).toBe(1);
     expect(await bucket.head(orphanKey)).toBeNull();
+  });
+
+  it("skips R2 objects newer than minOrphanAgeMs (PUT/UPDATE race guard)", async () => {
+    // Simulates a member upload caught mid-flight: R2 PUT has landed
+    // but the corresponding profile.avatar_key UPDATE hasn't yet, so
+    // the cron sees the key as unreferenced. The age guard must keep
+    // it for the next sweep instead of clipping a real upload.
+    const orphanKey = "avatars/inflight/upload.webp";
+    const bucket = getBucket();
+    await bucket.put(orphanKey, new Uint8Array([7]));
+
+    // 5-minute guard, run "now" — the just-uploaded object is well
+    // inside the skip window.
+    const count = await sweepOrphanR2Keys(new Date(), 5 * 60 * 1000);
+
+    expect(count).toBe(0);
+    expect(await bucket.head(orphanKey)).not.toBeNull();
   });
 });
 
@@ -336,7 +357,10 @@ describe("runRetentionSweeps", () => {
     });
     await getBucket().put("avatars/orphan/x.webp", new Uint8Array([0]));
 
-    const counts = await runRetentionSweeps(NOW);
+    // minOrphanAgeMs: 0 — bypass the orphan-GC upload-race guard so
+    // the just-`put`-ed fixture object isn't held back; the guard
+    // itself is exercised in `sweepOrphanR2Keys` tests.
+    const counts = await runRetentionSweeps(NOW, { minOrphanAgeMs: 0 });
 
     expect(counts).toEqual({
       rejectedRegistrations: 1,

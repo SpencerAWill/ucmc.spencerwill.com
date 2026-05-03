@@ -31,6 +31,19 @@ const REJECTED_RETENTION_DAYS = 30;
 const DEACTIVATED_RETENTION_DAYS = 365;
 const REVOKED_WAIVER_RETENTION_DAYS = 90;
 
+// Skip orphan-GC for any R2 object uploaded in the last 5 minutes.
+// Avatars are uploaded in two steps (PUT R2, then UPDATE D1); a cron
+// pass that snapshots both the bucket and the DB while a member's
+// upload is in flight could otherwise treat the freshly-PUT R2 key
+// as orphan and clip it. 5 minutes is many orders of magnitude longer
+// than any plausible PUT→UPDATE gap, so a real upload is never within
+// the skip window. Any genuine orphan younger than 5 minutes simply
+// gets picked up on the next day's sweep — never lost, just delayed.
+const DEFAULT_MIN_ORPHAN_AGE_MS = 5 * 60 * 1000;
+
+// R2's batch-delete API accepts up to 1000 keys per call.
+const R2_BATCH_DELETE_LIMIT = 1000;
+
 // R2 prefixes the cron is allowed to GC. Any object outside these
 // prefixes (e.g. a future `static/` bucket layout) is left alone.
 const GC_PREFIXES = ["avatars/", "landing/"] as const;
@@ -96,37 +109,78 @@ export async function sweepRevokedWaiverAttestations(
 }
 
 /**
- * Walks every R2 object under the GC prefixes, builds the set of keys
- * still referenced by D1, and deletes anything outside that set.
+ * Snapshots the bucket and the DB live-key set, then deletes any R2
+ * object that's (a) not referenced by any DB row AND (b) older than
+ * `minOrphanAgeMs`.
  *
- * Pagination via `cursor` so we don't materialize the entire bucket
- * in memory; the live-keys set IS held in memory but it's a cap of
- * (member count + landing slides + activities + ~2 settings rows),
- * which is bounded by how many users the club has ever had.
+ * **Race-safety design.** Avatar / landing-image uploads do PUT R2
+ * first, then UPDATE D1 — there's a sub-second window where the new
+ * R2 key exists but no DB row references it yet. A naive "DB-then-R2"
+ * cron could mistake an in-flight upload for an orphan. Two
+ * mitigations together make this impossible:
+ *
+ *   1. **R2-first ordering.** List the bucket fully, *then* read the
+ *      DB live set. A new key uploaded after the R2 list isn't in our
+ *      snapshot, so we never consider it. A key uploaded before the
+ *      list with its UPDATE happening before the DB read shows up in
+ *      both — kept correctly.
+ *
+ *   2. **Age guard.** Skip any object whose `uploaded` timestamp is
+ *      within the last `minOrphanAgeMs`. Even if the cron runs slow,
+ *      the PUT-to-UPDATE gap (sub-second in practice) can never
+ *      exceed five minutes.
+ *
+ * Memory: collects all R2 keys + the DB live set in memory. Bounded
+ * by club membership + landing assets — a few hundred KB at worst.
  */
-export async function sweepOrphanR2Keys(): Promise<number> {
-  const liveKeys = await loadReferencedR2Keys();
+export async function sweepOrphanR2Keys(
+  now: Date = new Date(),
+  minOrphanAgeMs: number = DEFAULT_MIN_ORPHAN_AGE_MS,
+): Promise<number> {
   const bucket = getBucket();
 
-  let deleted = 0;
+  // 1. List every key under the GC prefixes BEFORE reading the DB.
+  const r2Objects: R2Object[] = [];
   for (const prefix of GC_PREFIXES) {
     let cursor: string | undefined;
     let truncated = true;
     while (truncated) {
-      const page = await bucket.list({ prefix, cursor, limit: 1000 });
-      const orphans = page.objects
-        .map((o) => o.key)
-        .filter((key) => !liveKeys.has(key));
-
-      if (orphans.length > 0) {
-        // R2's delete() accepts a string array up to 1000 keys.
-        await bucket.delete(orphans);
-        deleted += orphans.length;
-      }
-
+      const page = await bucket.list({
+        prefix,
+        cursor,
+        limit: R2_BATCH_DELETE_LIMIT,
+      });
+      r2Objects.push(...page.objects);
       truncated = page.truncated;
       cursor = page.truncated ? page.cursor : undefined;
     }
+  }
+
+  // 2. Read the DB live set after R2 listing, so any key visible in
+  //    R2 has either also landed in DB (no-op) or is too new for the
+  //    age guard (skipped).
+  const liveKeys = await loadReferencedR2Keys();
+  const ageCutoffMs = now.getTime() - minOrphanAgeMs;
+
+  const orphans: string[] = [];
+  for (const object of r2Objects) {
+    if (liveKeys.has(object.key)) {
+      continue;
+    }
+    if (object.uploaded.getTime() >= ageCutoffMs) {
+      // Skip — within the upload-race window. Next sweep picks it up
+      // if it's still unreferenced then.
+      continue;
+    }
+    orphans.push(object.key);
+  }
+
+  // 3. Batch-delete in chunks of 1000 (R2's API limit).
+  let deleted = 0;
+  for (let i = 0; i < orphans.length; i += R2_BATCH_DELETE_LIMIT) {
+    const batch = orphans.slice(i, i + R2_BATCH_DELETE_LIMIT);
+    await bucket.delete(batch);
+    deleted += batch.length;
   }
   return deleted;
 }
@@ -187,8 +241,19 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
   return live;
 }
 
+export interface RunRetentionSweepsOptions {
+  /**
+   * Override for the orphan-GC age guard (default: 5 minutes). The
+   * scheduled handler in production never sets this — only tests
+   * pass `0` so freshly-uploaded fixture objects don't fall into the
+   * upload-race skip window.
+   */
+  minOrphanAgeMs?: number;
+}
+
 export async function runRetentionSweeps(
   now: Date = new Date(),
+  options: RunRetentionSweepsOptions = {},
 ): Promise<SweepCounts> {
   const counts: SweepCounts = {
     rejectedRegistrations: 0,
@@ -210,7 +275,10 @@ export async function runRetentionSweeps(
     },
     { name: "deactivatedAccounts", run: () => sweepDeactivatedAccounts(now) },
     { name: "revokedWaivers", run: () => sweepRevokedWaiverAttestations(now) },
-    { name: "orphanR2Keys", run: () => sweepOrphanR2Keys() },
+    {
+      name: "orphanR2Keys",
+      run: () => sweepOrphanR2Keys(now, options.minOrphanAgeMs),
+    },
   ];
 
   for (const sweep of sweeps) {
