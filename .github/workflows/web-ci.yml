@@ -59,6 +59,16 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter ucmc-web exec playwright install --with-deps chromium
 
+      # Apply Drizzle migrations to the Miniflare-backed local D1 before
+      # the dev server boots. Without this, the home-page loader queries
+      # `landingContentQueryOptions` which selects from tables that
+      # don't exist yet — Vite returns 500 on every request, and
+      # Playwright's webServer probe treats every 500 as "not ready" and
+      # times out after 120 s. Local dev applies migrations once via
+      # `db:migrate:local`; CI starts from zero state on each runner.
+      - name: Apply local D1 migrations
+        run: pnpm --filter ucmc-web db:migrate:local
+
       # Runs axe-core against every public + auth-entry route. Fails the
       # job on any `serious` or `critical` violation (WCAG 2.1 AA gate
       # per UC EIT 9.2.1). The spec doesn't need Mailpit, so no sidecar
@@ -66,8 +76,7 @@ jobs:
       #
       # Worker env vars are passthrough placeholders — the dev server's
       # first SSR request crashes without APP_BASE_URL / SESSION_SECRET
-      # / WEBAUTHN_RP_ID populated, which is what made Playwright's
-      # webServer URL probe time out. None of these are secrets in the
+      # / WEBAUTHN_RP_ID populated. None of these are secrets in the
       # test environment; they exist only to satisfy module-load
       # assertions on a transient runner.
       - name: Run axe-core specs
