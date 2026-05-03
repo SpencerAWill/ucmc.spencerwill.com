@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { format, parseISO } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { CalendarIcon, X } from "lucide-react";
 import { useCallback } from "react";
 import type { DateRange } from "react-day-picker";
@@ -46,6 +46,7 @@ const AUDIT_ACTIONS = [
   "member.deactivated",
   "member.reactivated",
   "member.self_deleted",
+  "member.sessions_revoked",
   "profile.force_edited",
   "role.created",
   "role.deleted",
@@ -59,6 +60,27 @@ const AUDIT_ACTIONS = [
   "landing.activity_edited",
   "landing.faq_edited",
 ] as const;
+
+// Actions whose `target_user_id` always points at a member. Used by
+// the viewer when the FK has cascade-NULLed (member hard-deleted) so
+// we can still render a "(deleted user)" placeholder instead of
+// silently dropping the target column. Non-user-targeted actions
+// (role.* on a role row, landing.* on a settings key, etc.) are
+// intentionally absent.
+const USER_TARGETED_ACTIONS = new Set<(typeof AUDIT_ACTIONS)[number]>([
+  "registration.approved",
+  "registration.rejected",
+  "registration.unrejected",
+  "member.deactivated",
+  "member.reactivated",
+  "member.self_deleted",
+  "member.sessions_revoked",
+  "profile.force_edited",
+  "role.assigned",
+  "role.unassigned",
+  "waiver.attested",
+  "waiver.revoked",
+]);
 
 const PER_PAGE_OPTIONS = ["25", "50", "100", "200"] as const;
 const DEFAULT_PER_PAGE = 50;
@@ -89,15 +111,19 @@ function toISODate(d: Date): string {
   return format(d, "yyyy-MM-dd");
 }
 
-// Inclusive `to` parses as start-of-day; the server expects an exclusive
-// upper bound, so add one day to capture events from the user's chosen
-// end date.
+// Inclusive `to` parses as start-of-day in local time; the server
+// expects an exclusive upper bound, so we want the start of the
+// NEXT calendar day. Use `addDays` rather than `+ 24h ms` because a
+// fixed millisecond offset is wrong across DST transitions — the
+// chosen day can be 23 or 25 hours long, and a flat +24h would
+// either include an hour of the next day or drop the last hour of
+// the chosen day. `addDays` does calendar arithmetic correctly.
 function dateRangeToMs(
   from: string | undefined,
   to: string | undefined,
 ): { fromMs: number | undefined; toMs: number | undefined } {
   const fromMs = from ? parseISO(from).getTime() : undefined;
-  const toMs = to ? parseISO(to).getTime() + 24 * 60 * 60 * 1000 : undefined;
+  const toMs = to ? addDays(parseISO(to), 1).getTime() : undefined;
   return { fromMs, toMs };
 }
 
@@ -425,6 +451,15 @@ function TargetLabel({ entry }: { entry: AuditEntrySummary }) {
     return (
       <p className="text-muted-foreground">Target: {meta.email} (deleted)</p>
     );
+  }
+  // User-targeted action whose FK has cascaded AND no email
+  // captured in metadata — e.g. an old `member.deactivated` whose
+  // target was later hard-deleted via the retention sweep. Show a
+  // generic deleted-user placeholder rather than dropping the
+  // target column entirely; otherwise the row reads as if it had
+  // no target at all.
+  if (USER_TARGETED_ACTIONS.has(entry.action)) {
+    return <p className="text-muted-foreground">Target: (deleted user)</p>;
   }
   // Non-user target (role / landing setting / waiver attestation).
   if (entry.targetType && entry.targetId) {

@@ -384,6 +384,11 @@ export const auditAction = [
   "member.deactivated",
   "member.reactivated",
   "member.self_deleted",
+  // Officer-initiated termination of another member's active
+  // sessions. Distinct from deactivation (which terminates sessions
+  // as a side effect of the status change) — this one keeps the
+  // member approved.
+  "member.sessions_revoked",
   "profile.force_edited",
   // RBAC.
   "role.created",

@@ -463,24 +463,31 @@ export async function approveRegistrationsAction(
   const approver = await requireApprover();
   const db = getDb();
 
-  // Single UPDATE for all users.
-  await db
+  // `.returning({ id })` so the audit + role-grant operate on the
+  // rows the UPDATE actually touched, not the raw request list.
+  // This dedupes a buggy caller that repeats the same id and filters
+  // out nonexistent IDs — without it, both cases would emit phantom
+  // `registration.approved` rows.
+  const updated = await db
     .update(schema.users)
     .set({
       status: "approved",
       approvedAt: new Date(),
       approvedBy: approver.userId,
     })
-    .where(inArray(schema.users.id, userIds));
+    .where(inArray(schema.users.id, userIds))
+    .returning({ id: schema.users.id });
+  const updatedIds = updated.map(({ id }) => id);
 
-  // Batch-insert the member role grant for every approved user.
-  await db
-    .insert(schema.userRoles)
-    .values(userIds.map((userId) => ({ userId, roleId: "role_member" })))
-    .onConflictDoNothing();
+  if (updatedIds.length > 0) {
+    await db
+      .insert(schema.userRoles)
+      .values(updatedIds.map((userId) => ({ userId, roleId: "role_member" })))
+      .onConflictDoNothing();
+  }
 
   await recordAuditEvents(
-    userIds.map((userId) => ({
+    updatedIds.map((userId) => ({
       actorUserId: approver.userId,
       action: "registration.approved",
       targetUserId: userId,
@@ -671,9 +678,22 @@ export async function revokeUserSessionsAction(
     throw new Error("Cannot revoke your own sessions (use Sign Out)");
   }
 
-  await getDb()
+  const deleted = await getDb()
     .delete(schema.sessions)
-    .where(eq(schema.sessions.userId, userId));
+    .where(eq(schema.sessions.userId, userId))
+    .returning({ id: schema.sessions.id });
+
+  // Audit only when something was actually revoked. Session count
+  // captured in metadata so the audit page can show the blast
+  // radius without joining back to a now-empty sessions table.
+  if (deleted.length > 0) {
+    await recordAuditEvent({
+      actorUserId: principal.userId,
+      action: "member.sessions_revoked",
+      targetUserId: userId,
+      metadata: { revokedCount: deleted.length },
+    });
+  }
 
   return { ok: true };
 }

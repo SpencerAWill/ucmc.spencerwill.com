@@ -1,7 +1,7 @@
 /**
- * Read-side actions for the audit log viewer at `/members/audit`. The
- * viewer is read-only by design; writes go through `recordAuditEvent`
- * in the various feature server modules. The shell wrapper is in
+ * Read-side actions for the audit log viewer at `/audit`. The viewer
+ * is read-only by design; writes go through `recordAuditEvent` in
+ * the various feature server modules. The shell wrapper is in
  * `./audit-fns.ts`.
  */
 import { aliasedTable, and, count, desc, eq, gte, lt } from "drizzle-orm";
@@ -100,48 +100,48 @@ export async function listAuditEventsAction(input: {
 
   const whereClause = filters.length > 0 ? and(...filters) : undefined;
 
-  // Total count first so the UI can render correct page numbers even
-  // when the user lands directly on page N. Filtered indexes
-  // (`audit_log_action_idx`, `audit_log_created_at_idx`) keep this
-  // cheap.
-  const [{ totalCount }] = await db
-    .select({ totalCount: count() })
-    .from(schema.auditLog)
-    .where(whereClause);
-
-  const rows = await db
-    .select({
-      id: schema.auditLog.id,
-      action: schema.auditLog.action,
-      createdAt: schema.auditLog.createdAt,
-      actorUserId: schema.auditLog.actorUserId,
-      actorPublicId: actorUsers.publicId,
-      actorEmail: actorUsers.email,
-      actorPreferredName: actorProfiles.preferredName,
-      targetUserId: schema.auditLog.targetUserId,
-      targetPublicId: targetUsers.publicId,
-      targetEmail: targetUsers.email,
-      targetPreferredName: targetProfiles.preferredName,
-      targetType: schema.auditLog.targetType,
-      targetId: schema.auditLog.targetId,
-      metadataJson: schema.auditLog.metadataJson,
-    })
-    .from(schema.auditLog)
-    .leftJoin(actorUsers, eq(actorUsers.id, schema.auditLog.actorUserId))
-    .leftJoin(actorProfiles, eq(actorProfiles.userId, actorUsers.id))
-    .leftJoin(targetUsers, eq(targetUsers.id, schema.auditLog.targetUserId))
-    .leftJoin(targetProfiles, eq(targetProfiles.userId, targetUsers.id))
-    .where(whereClause)
-    // Tiebreak on `id` so pagination stays stable across requests
-    // even when many rows share the same `createdAt` — `recordAuditEvents`
-    // inserts bulk rows with the same default timestamp, so without
-    // the secondary sort the page boundary could skip or duplicate
-    // entries between requests. `id` is uuidv7-prefixed so newer ids
-    // sort lexicographically after older ones, matching createdAt
-    // direction.
-    .orderBy(desc(schema.auditLog.createdAt), desc(schema.auditLog.id))
-    .limit(perPage)
-    .offset(offset);
+  // Count + page query are independent — run them in parallel so
+  // every /audit load saves a D1 round-trip. Filtered indexes
+  // (`audit_log_action_idx`, `audit_log_created_at_idx`) keep the
+  // count cheap. The two queries use the same `whereClause` so
+  // their result sets are consistent for any page the UI shows.
+  const [countResult, rows] = await Promise.all([
+    db.select({ totalCount: count() }).from(schema.auditLog).where(whereClause),
+    db
+      .select({
+        id: schema.auditLog.id,
+        action: schema.auditLog.action,
+        createdAt: schema.auditLog.createdAt,
+        actorUserId: schema.auditLog.actorUserId,
+        actorPublicId: actorUsers.publicId,
+        actorEmail: actorUsers.email,
+        actorPreferredName: actorProfiles.preferredName,
+        targetUserId: schema.auditLog.targetUserId,
+        targetPublicId: targetUsers.publicId,
+        targetEmail: targetUsers.email,
+        targetPreferredName: targetProfiles.preferredName,
+        targetType: schema.auditLog.targetType,
+        targetId: schema.auditLog.targetId,
+        metadataJson: schema.auditLog.metadataJson,
+      })
+      .from(schema.auditLog)
+      .leftJoin(actorUsers, eq(actorUsers.id, schema.auditLog.actorUserId))
+      .leftJoin(actorProfiles, eq(actorProfiles.userId, actorUsers.id))
+      .leftJoin(targetUsers, eq(targetUsers.id, schema.auditLog.targetUserId))
+      .leftJoin(targetProfiles, eq(targetProfiles.userId, targetUsers.id))
+      .where(whereClause)
+      // Tiebreak on `id` so pagination stays stable across requests
+      // even when many rows share the same `createdAt` —
+      // `recordAuditEvents` inserts bulk rows with the same default
+      // timestamp, so without the secondary sort the page boundary
+      // could skip or duplicate entries between requests. `id` is
+      // uuidv7-prefixed so newer ids sort lexicographically after
+      // older ones, matching createdAt direction.
+      .orderBy(desc(schema.auditLog.createdAt), desc(schema.auditLog.id))
+      .limit(perPage)
+      .offset(offset),
+  ]);
+  const totalCount = countResult[0]?.totalCount ?? 0;
 
   return {
     totalCount,

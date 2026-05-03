@@ -1,8 +1,18 @@
 /**
- * Append-only audit log writes. Called from every officer / admin
- * action whose effect we want to be reconstructable after the fact —
- * registration approvals, role changes, waiver attestations, landing
- * edits, hard deletes.
+ * Append-only audit log writes. Called from officer / admin actions
+ * whose effect we want to be reconstructable after the fact — the
+ * lifecycle state transitions on `users`, RBAC mutations, waiver
+ * attestations, landing-page CRUD, member self-delete, and
+ * officer-initiated session revocation. The `auditAction` enum in
+ * `drizzle/schema.ts` is the canonical list.
+ *
+ * **What's deliberately NOT audited.** Cosmetic/no-effect mutations
+ * are skipped to keep the log signal-to-noise high: role description
+ * edits (`updateRoleAction`), and reorder operations across roles,
+ * hero slides, FAQ items, and activities. These don't change *what*
+ * the system says or does, only the order it presents things in.
+ * Reconstructing intent from order changes would also require a
+ * before/after diff that we don't capture today.
  *
  * **Strict, not best-effort.** A failed audit insert throws and
  * propagates back to the caller, which means the parent action fails

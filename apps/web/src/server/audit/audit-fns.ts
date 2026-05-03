@@ -23,6 +23,7 @@ const auditActionEnum = z.enum([
   "member.deactivated",
   "member.reactivated",
   "member.self_deleted",
+  "member.sessions_revoked",
   "profile.force_edited",
   "role.created",
   "role.deleted",
