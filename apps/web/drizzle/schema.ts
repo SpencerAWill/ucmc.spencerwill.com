@@ -165,11 +165,19 @@ export const waiverAttestations = sqliteTable(
     attestedAt: timestamp("attested_at")
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
-    attestedBy: text("attested_by")
-      .notNull()
-      .references(() => users.id),
+    // Officer who attested. Nullable + ON DELETE SET NULL so an officer
+    // who has attested another member's waiver can later self-delete
+    // without an FK violation. The attestation row survives (audit
+    // trail), it just loses the officer's identity. Mirrors the
+    // pattern `announcements.created_by` already uses.
+    attestedBy: text("attested_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
     revokedAt: timestamp("revoked_at"),
-    revokedBy: text("revoked_by").references(() => users.id),
+    // Same pattern: nullable already, just adds the SET NULL clause.
+    revokedBy: text("revoked_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
     revocationReason: text("revocation_reason"),
     notes: text("notes"),
   },

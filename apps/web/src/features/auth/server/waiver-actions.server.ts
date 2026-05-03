@@ -51,9 +51,14 @@ export interface WaiverAttestationSummary {
   cycle: string;
   version: string;
   attestedAt: Date;
-  attestedByUserId: string;
+  // All attestor-side identity fields are nullable because the FK is
+  // `ON DELETE SET NULL` (0018_waiver_attestedby_set_null.sql) — when
+  // an officer self-deletes, their prior attestations survive but
+  // lose the officer's identity. UI renders "(deleted user)" in that
+  // case. Same shape applies to revoker-side fields.
+  attestedByUserId: string | null;
   attestedByPreferredName: string | null;
-  attestedByEmail: string;
+  attestedByEmail: string | null;
   revokedAt: Date | null;
   revokedByUserId: string | null;
   revocationReason: string | null;
@@ -326,7 +331,11 @@ async function loadAttestationHistory(
       notes: att.notes,
     })
     .from(att)
-    .innerJoin(attestor, eq(attestor.id, att.attestedBy))
+    // Both joins are LEFT — when attestedBy is NULL (officer was
+    // deleted), the attestation row still surfaces and the
+    // attestor-side fields come back as null, which the UI renders
+    // as "(deleted user)".
+    .leftJoin(attestor, eq(attestor.id, att.attestedBy))
     .leftJoin(profile, eq(profile.userId, att.attestedBy))
     .where(eq(att.userId, userId))
     .orderBy(desc(att.attestedAt));
@@ -358,7 +367,11 @@ async function loadCurrentAttestation(
       notes: att.notes,
     })
     .from(att)
-    .innerJoin(attestor, eq(attestor.id, att.attestedBy))
+    // Both joins are LEFT — when attestedBy is NULL (officer was
+    // deleted), the attestation row still surfaces and the
+    // attestor-side fields come back as null, which the UI renders
+    // as "(deleted user)".
+    .leftJoin(attestor, eq(attestor.id, att.attestedBy))
     .leftJoin(profile, eq(profile.userId, att.attestedBy))
     .where(
       and(

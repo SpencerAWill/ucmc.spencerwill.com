@@ -127,6 +127,13 @@
       "when": 1777761742187,
       "tag": "0017_waiver_attestations_queue_index",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1777774270043,
+      "tag": "0018_waiver_attestedby_set_null",
+      "breakpoints": true
     }
   ]
 }

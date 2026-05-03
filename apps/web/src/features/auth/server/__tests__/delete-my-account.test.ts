@@ -252,4 +252,73 @@ describe("deleteMyAccountAction", () => {
     expect(remaining).toHaveLength(1);
     expect(remaining[0]?.createdBy).toBeNull();
   });
+
+  // Regression: an officer who has attested another member's waiver
+  // used to fail self-delete with a foreign-key violation on
+  // waiver_attestations.attested_by (issue #32). After
+  // 0018_waiver_attestedby_set_null.sql the FK is ON DELETE SET NULL,
+  // so the officer's row goes away cleanly and the attestation
+  // survives with attested_by = null (rendered as "(deleted user)"
+  // in the UI).
+  it("preserves another member's attestation when the attesting officer self-deletes", async () => {
+    const officerId = await seedUser("officer@example.com");
+    const memberId = await seedUser("member@example.com");
+    const db = getDb();
+    const attestationId = `wa_${crypto.randomUUID()}`;
+    await db.insert(schema.waiverAttestations).values({
+      id: attestationId,
+      userId: memberId,
+      cycle: "2025-26",
+      version: "v1",
+      attestedAt: new Date(),
+      attestedBy: officerId,
+    });
+    await signInAs(officerId);
+
+    await expect(deleteMyAccountAction()).resolves.toEqual({ ok: true });
+
+    // The officer is gone…
+    expect(
+      await db.query.users.findFirst({
+        where: eq(schema.users.id, officerId),
+      }),
+    ).toBeUndefined();
+    // …but the attestation row survives, with attested_by nulled.
+    const attestation = await db.query.waiverAttestations.findFirst({
+      where: eq(schema.waiverAttestations.id, attestationId),
+    });
+    expect(attestation).toBeDefined();
+    expect(attestation?.attestedBy).toBeNull();
+  });
+
+  it("preserves another member's revoked attestation when the revoking officer self-deletes", async () => {
+    const officerId = await seedUser("revoker@example.com");
+    const memberId = await seedUser("member@example.com");
+    const db = getDb();
+    const attestationId = `wa_${crypto.randomUUID()}`;
+    await db.insert(schema.waiverAttestations).values({
+      id: attestationId,
+      userId: memberId,
+      cycle: "2025-26",
+      version: "v1",
+      attestedAt: new Date(),
+      attestedBy: memberId,
+      revokedAt: new Date(),
+      revokedBy: officerId,
+      revocationReason: "wrong member",
+    });
+    await signInAs(officerId);
+
+    await expect(deleteMyAccountAction()).resolves.toEqual({ ok: true });
+
+    const attestation = await db.query.waiverAttestations.findFirst({
+      where: eq(schema.waiverAttestations.id, attestationId),
+    });
+    expect(attestation).toBeDefined();
+    expect(attestation?.revokedBy).toBeNull();
+    // The revocation reason + timestamp survive the officer's
+    // deletion — the audit trail loses identity, not the event.
+    expect(attestation?.revokedAt).not.toBeNull();
+    expect(attestation?.revocationReason).toBe("wrong member");
+  });
 });

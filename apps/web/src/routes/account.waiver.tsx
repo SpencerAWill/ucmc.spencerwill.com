@@ -78,7 +78,9 @@ function CurrentStatusCard({
           </div>
           <p className="text-sm">
             Marked attested by{" "}
-            {attestation.attestedByPreferredName ?? attestation.attestedByEmail}{" "}
+            {attestation.attestedByPreferredName ??
+              attestation.attestedByEmail ??
+              "(deleted user)"}{" "}
             on{" "}
             <time dateTime={new Date(attestation.attestedAt).toISOString()}>
               {new Date(attestation.attestedAt).toLocaleDateString()}
@@ -170,7 +172,9 @@ function HistoryCard({ history }: { history: WaiverAttestationSummary[] }) {
               </div>
               <p className="text-muted-foreground">
                 {new Date(row.attestedAt).toLocaleDateString()} by{" "}
-                {row.attestedByPreferredName ?? row.attestedByEmail}
+                {row.attestedByPreferredName ??
+                  row.attestedByEmail ??
+                  "(deleted user)"}
                 {row.notes ? ` — "${row.notes}"` : null}
               </p>
               {row.revokedAt ? (
