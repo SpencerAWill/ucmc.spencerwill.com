@@ -145,53 +145,65 @@ export function ProfileForm({
               Ohio SB 1, CAMPUS Act).
             */}
             <form.AppField name="policiesAck">
-              {(field) => (
-                <div className="space-y-1">
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id={field.name}
-                      checked={field.state.value}
-                      onCheckedChange={(checked) =>
-                        field.handleChange(checked === true)
-                      }
-                      onBlur={field.handleBlur}
-                    />
-                    <Label
-                      htmlFor={field.name}
-                      className="text-sm font-normal leading-snug"
-                    >
-                      I have read and acknowledge UCMC's{" "}
-                      <a
-                        href="/anti-hazing"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline underline-offset-4"
+              {(field) => {
+                const showError =
+                  field.state.meta.isTouched &&
+                  field.state.meta.errors.length > 0;
+                return (
+                  <div className="space-y-1">
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id={field.name}
+                        checked={field.state.value}
+                        onCheckedChange={(checked) =>
+                          field.handleChange(checked === true)
+                        }
+                        onBlur={field.handleBlur}
+                        aria-invalid={showError || undefined}
+                        aria-describedby={
+                          showError ? `${field.name}-error` : undefined
+                        }
+                      />
+                      <Label
+                        htmlFor={field.name}
+                        className="text-sm font-normal leading-snug"
                       >
-                        Anti-Hazing
-                      </a>{" "}
-                      and{" "}
-                      <a
-                        href="/nondiscrimination"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline underline-offset-4"
+                        I have read and acknowledge UCMC's{" "}
+                        <a
+                          href="/anti-hazing"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-4"
+                        >
+                          Anti-Hazing
+                        </a>{" "}
+                        and{" "}
+                        <a
+                          href="/nondiscrimination"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-4"
+                        >
+                          Non-Discrimination
+                        </a>{" "}
+                        policies.
+                      </Label>
+                    </div>
+                    {showError ? (
+                      <p
+                        id={`${field.name}-error`}
+                        role="alert"
+                        className="ml-6 text-xs text-destructive"
                       >
-                        Non-Discrimination
-                      </a>{" "}
-                      policies.
-                    </Label>
+                        {typeof field.state.meta.errors[0] === "string"
+                          ? field.state.meta.errors[0]
+                          : (field.state.meta.errors[0]?.message ??
+                            "Please acknowledge the policies to continue")}
+                      </p>
+                    ) : null}
                   </div>
-                  {field.state.meta.isTouched &&
-                  field.state.meta.errors.length > 0 ? (
-                    <p className="ml-6 text-xs text-destructive">
-                      {typeof field.state.meta.errors[0] === "string"
-                        ? field.state.meta.errors[0]
-                        : (field.state.meta.errors[0]?.message ??
-                          "Please acknowledge the policies to continue")}
-                    </p>
-                  ) : null}
-                </div>
-              )}
+                );
+              }}
             </form.AppField>
 
             <div className="rounded-md border bg-muted/40 p-3 text-sm">

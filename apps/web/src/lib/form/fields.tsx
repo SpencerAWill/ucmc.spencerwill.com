@@ -43,6 +43,29 @@ function toFieldErrors(
     .filter((e): e is { message: string } => Boolean(e?.message));
 }
 
+// IDs for the description / error nodes so the input can point at them
+// via `aria-describedby`. Screen readers announce the description on
+// focus and the error when validation flips invalid; without the
+// association, the announce stops at the label.
+function describedById({
+  fieldName,
+  hasDescription,
+  hasError,
+}: {
+  fieldName: string;
+  hasDescription: boolean;
+  hasError: boolean;
+}): string | undefined {
+  const ids: string[] = [];
+  if (hasDescription) {
+    ids.push(`${fieldName}-description`);
+  }
+  if (hasError) {
+    ids.push(`${fieldName}-error`);
+  }
+  return ids.length > 0 ? ids.join(" ") : undefined;
+}
+
 export function SubscribeButton({ label }: { label: string }) {
   const form = useFormContext();
   return (
@@ -131,6 +154,13 @@ export function TextField({
     return () => input.removeEventListener("animationstart", handler);
   }, [field]);
 
+  const hasError = meta.isTouched && meta.errors.length > 0;
+  const ariaDescribedBy = describedById({
+    fieldName: field.name,
+    hasDescription: Boolean(description),
+    hasError,
+  });
+
   return (
     <Field className="gap-1.5">
       <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
@@ -145,13 +175,21 @@ export function TextField({
         value={field.state.value}
         placeholder={placeholder}
         readOnly={readOnly}
+        aria-describedby={ariaDescribedBy}
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
         {...validation}
       />
-      {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {meta.isTouched ? (
-        <FieldError errors={toFieldErrors(meta.errors)} />
+      {description ? (
+        <FieldDescription id={`${field.name}-description`}>
+          {description}
+        </FieldDescription>
+      ) : null}
+      {hasError ? (
+        <FieldError
+          id={`${field.name}-error`}
+          errors={toFieldErrors(meta.errors)}
+        />
       ) : null}
     </Field>
   );
@@ -173,6 +211,12 @@ export function TextArea({
   const field = useFieldContext<string>();
   const { meta, value } = field.state;
   const validation = fieldValidationAttrs(meta, value);
+  const hasError = meta.isTouched && meta.errors.length > 0;
+  const ariaDescribedBy = describedById({
+    fieldName: field.name,
+    hasDescription: Boolean(description),
+    hasError,
+  });
 
   return (
     <Field className="gap-1.5">
@@ -185,12 +229,20 @@ export function TextArea({
         rows={rows}
         maxLength={maxLength}
         placeholder={placeholder}
+        aria-describedby={ariaDescribedBy}
         onChange={(e) => field.handleChange(e.target.value)}
         {...validation}
       />
-      {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {meta.isTouched ? (
-        <FieldError errors={toFieldErrors(meta.errors)} />
+      {description ? (
+        <FieldDescription id={`${field.name}-description`}>
+          {description}
+        </FieldDescription>
+      ) : null}
+      {hasError ? (
+        <FieldError
+          id={`${field.name}-error`}
+          errors={toFieldErrors(meta.errors)}
+        />
       ) : null}
     </Field>
   );
@@ -219,6 +271,12 @@ export function Select({
   const field = useFieldContext<string>();
   const { meta, value } = field.state;
   const validation = fieldValidationAttrs(meta, value);
+  const hasError = meta.isTouched && meta.errors.length > 0;
+  const ariaDescribedBy = describedById({
+    fieldName: field.name,
+    hasDescription: Boolean(description),
+    hasError,
+  });
 
   return (
     <Field className="gap-1.5">
@@ -237,6 +295,7 @@ export function Select({
         <ShadcnSelect.SelectTrigger
           id={field.name}
           className="w-full"
+          aria-describedby={ariaDescribedBy}
           {...validation}
         >
           <ShadcnSelect.SelectValue placeholder={placeholder ?? "Select…"} />
@@ -249,9 +308,16 @@ export function Select({
           ))}
         </ShadcnSelect.SelectContent>
       </ShadcnSelect.Select>
-      {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {meta.isTouched ? (
-        <FieldError errors={toFieldErrors(meta.errors)} />
+      {description ? (
+        <FieldDescription id={`${field.name}-description`}>
+          {description}
+        </FieldDescription>
+      ) : null}
+      {hasError ? (
+        <FieldError
+          id={`${field.name}-error`}
+          errors={toFieldErrors(meta.errors)}
+        />
       ) : null}
     </Field>
   );
@@ -284,6 +350,12 @@ export function PhoneField({
   const field = useFieldContext<string>();
   const { meta, value } = field.state;
   const validation = fieldValidationAttrs(meta, value);
+  const hasError = meta.isTouched && meta.errors.length > 0;
+  const ariaDescribedBy = describedById({
+    fieldName: field.name,
+    hasDescription: Boolean(description),
+    hasError,
+  });
 
   return (
     <Field className="gap-1.5">
@@ -298,11 +370,19 @@ export function PhoneField({
         onChange={(v) => field.handleChange(v ?? "")}
         onBlur={field.handleBlur}
         inputComponent={Input}
+        aria-describedby={ariaDescribedBy}
         {...validation}
       />
-      {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {meta.isTouched ? (
-        <FieldError errors={toFieldErrors(meta.errors)} />
+      {description ? (
+        <FieldDescription id={`${field.name}-description`}>
+          {description}
+        </FieldDescription>
+      ) : null}
+      {hasError ? (
+        <FieldError
+          id={`${field.name}-error`}
+          errors={toFieldErrors(meta.errors)}
+        />
       ) : null}
     </Field>
   );

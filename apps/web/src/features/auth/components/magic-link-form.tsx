@@ -121,7 +121,7 @@ export function MagicLinkForm({
       ) : null}
 
       {mutation.isError ? (
-        <p className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           Couldn&rsquo;t send the email. Please try again.
         </p>
       ) : null}
