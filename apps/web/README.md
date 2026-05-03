@@ -1,223 +1,152 @@
-Welcome to your new TanStack Start app!
+# ucmc-web
 
-# Getting Started
+Member portal for the **University of Cincinnati Mountaineering Club** (UCMC), a Registered Student Organization. Deployed at <https://ucmc.spencerwill.com> with a dev twin at <https://dev.ucmc.spencerwill.com>.
 
-To run this application:
+This file is the human-developer entry point. For the model's source of truth (every tooling, env, and test convention), see [`/CLAUDE.md`](../../CLAUDE.md). For the legal/policy obligation → site behavior matrix, see [`.wiki/Compliance.md`](../../.wiki/Compliance.md).
 
-```bash
-pnpm install
-pnpm dev
-```
+## Stack
 
-# Building For Production
+- **TanStack Start** (file-router mode) + **React 19** + **Vite 8**
+- **Cloudflare Workers** runtime, Wrangler-deployed (`wrangler.jsonc`)
+- **D1** (SQLite) for the database, **R2** for avatars + landing images, **KV** for short-lived auth state
+- **Drizzle ORM** + **drizzle-kit** for schema + migrations
+- **shadcn/ui** + **Tailwind CSS v4**
+- Auth: **magic link** (Resend → Cloudflare-hosted email) and **WebAuthn passkeys**, both backed by KV-stored ceremonies
+- Tests: **Vitest** (workers + jsdom pools) for units, **Playwright + axe-core** for e2e accessibility
 
-To build this application for production:
-
-```bash
-pnpm build
-```
-
-## Testing
-
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+## Running it
 
 ```bash
-pnpm test
+pnpm install                              # at the repo root
+pnpm --filter ucmc-web dev                # http://localhost:3000
+pnpm --filter ucmc-web db:migrate:local   # apply migrations to Miniflare D1
+pnpm --filter ucmc-web db:seed:local      # promote SEED_ADMIN_EMAIL to system_admin
 ```
 
-## Styling
-
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `pnpm add @tailwindcss/vite tailwindcss --dev`
-
-## Linting & Formatting
-
-This project uses [eslint](https://eslint.org/) and [prettier](https://prettier.io/) for linting and formatting. Eslint is configured using [tanstack/eslint-config](https://tanstack.com/config/latest/docs/eslint). The following scripts are available:
+`.env.local` (gitignored) needs the values listed in `.env.example`. The devcontainer ships a Mailpit sidecar; with `MAILPIT_URL` set and `RESEND_API_KEY` unset, magic-link emails land at <http://localhost:8025>.
 
 ```bash
-pnpm lint
-pnpm format
-pnpm check
+pnpm --filter ucmc-web test               # Vitest (workers + jsdom)
+pnpm --filter ucmc-web typecheck          # tsc --noEmit
+pnpm --filter ucmc-web lint               # eslint
+pnpm --filter ucmc-web e2e                # Playwright (full suite)
+pnpm --filter ucmc-web e2e a11y.spec.ts   # just the axe-core gate
+pnpm --filter ucmc-web build              # production worker bundle
+pnpm --filter ucmc-web storybook          # http://localhost:6006
 ```
 
-## Shadcn
+## Source layout
 
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
+Bulletproof React–aligned. Three features under `src/features/`:
+
+- `auth/` — magic-link + passkey flows, the user's own profile/avatar editing, the `useAuth`/`view-mode`/`guards.ts` "auth public API" surface, the waiver guard.
+- `members/` — registration approval queue, member directory, admin profile editing, RBAC, paper-waiver attestation queue.
+- `announcements/` — admin-authored announcements feed with read-tracking.
+
+Plus `landing/` for the editable public homepage. Shared/foundational code stays outside features: `server/auth/`, `server/profile/`, `server/r2/`, `server/kv/`, `server/db/`, `components/`, `lib/`, `hooks/`, `config/`. Routes (`src/routes/`) compose features but never the reverse — enforced mechanically by `import/no-restricted-paths` in `eslint.config.js`.
+
+## Routes worth knowing
+
+### Public legal / disclosure routes
+
+Required for the site to use the UC name (UC Rule 40-03-01) and to satisfy state/federal requirements.
+
+| Route                | What it is                                                                        |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `/disclaimer`        | Verbatim Rule 40-03-01 registration disclaimer + UCMC-vs-UC-Health disambiguation |
+| `/nondiscrimination` | UC protected categories + Ohio SB 1 + EO 2022-06D antisemitism definition         |
+| `/anti-hazing`       | UCMC stance + links to UC's hazing policy + Maxient + Ohio anonymous tip line     |
+| `/waiver`            | Transcribed waiver of liability text + canonical PDF download                     |
+| `/privacy`           | Data inventory, processors, retention, cookies, deletion path                     |
+| `/terms`             | Acceptable use, no-UC-endorsement, Ohio governing law                             |
+| `/about`             | What UCMC is + the additive-not-canonical relationship to CampusLINK              |
+| `/membership`        | Eligibility, dues, verification (not gatekeeping) framing                         |
+| `/legal`             | Index page surfacing all of the above                                             |
+| `/open-source`       | Colophon (this site is open source; see the linked GitHub repo)                   |
+
+The footer also shows the registration disclaimer text **on every page** (not just `/disclaimer`); that's a Rule 40-03-01 hard requirement, implemented in `apps/web/src/components/layouts/app-layout.tsx`.
+
+### Auth-gated routes
+
+- `/account` + `/account/details` + `/account/security` — member's own profile, sessions, passkeys, data export, hard delete
+- `/account/waiver` — read-only view of the member's paper-waiver attestation status
+- `/members` — directory (auth-gated, robots-disallowed)
+- `/members/registrations` — approval queue (`registrations:approve`)
+- `/members/waivers` — officer attestation queue (`waivers:verify`; held by Treasurer + President)
+- `/members/roles` — RBAC editor (`roles:manage`)
+
+## Compliance conventions
+
+These are non-obvious decisions that affect what code is allowed to do:
+
+### M-numbers are not collected
+
+UC's student/staff ID number is intentionally **not** stored anywhere — schema, forms, exports. The canonical roster lives on CampusLINK, maintained by the Treasurer per Bylaw 1.3. This avoids a FERPA-adjacent edge case and keeps the site additive rather than canonical.
+
+### Waiver attestation is paper-in-hand, not digital upload
+
+Members print and sign the canonical PDF (`apps/web/public/legal/ucmc-waiver-v1.pdf`), then physically hand it to an officer. The officer marks the member attested for the current cycle via `/members/waivers`. The signed paper lives off-platform with the Treasurer; **medical PII never touches Cloudflare**, no R2 PDFs, no signature images.
+
+The attestation row schema is `(userId, cycle, version)` together — the `requireCurrentWaiver` guard requires all three to match `currentWaiverCycle()` and `WAIVER_VERSION`. Re-attestation is required every fall semester; the cycle rolls over on August 15.
+
+### Compliance content source of truth
+
+`apps/web/src/config/legal.ts` holds every legal/policy string rendered by the site — the registration disclaimer, all nine legal-route bodies, the canonical `WAIVER_PDF_PATH`, `WAIVER_VERSION`, and `POLICIES_VERSION`. Edits to these strings are legal review, not word-smithing — the on-site text must match the canonical PDF byte-for-byte. Bumping `WAIVER_VERSION` invalidates every existing waiver attestation.
+
+`apps/web/src/config/waiver-cycle.ts` is the **only** place that should compute "what cycle are we in." Always import `currentWaiverCycle()`; never derive it ad-hoc.
+
+### Retention is automated
+
+A daily Cloudflare cron (08:00 UTC, see `wrangler.jsonc` `triggers.crons` and `apps/web/src/server/cron/retention.server.ts`) sweeps:
+
+- Rejected registrations 30 days after rejection
+- Deactivated accounts 12 months after deactivation
+- Revoked waiver attestations 90 days after revocation
+- R2 objects (avatars + landing images) not referenced by any DB row, with a 5-minute upload-race age guard
+
+Pre-migration rows with NULL `rejected_at` / `deactivated_at` are deliberately skipped — historical state isn't auto-purged retroactively.
+
+### WCAG 2.1 AA, gated in CI
+
+`eslint-plugin-jsx-a11y` runs at error on every PR, and a Playwright job runs axe-core against every public + auth-entry route, failing on serious/critical violations. UC EIT 9.2.1 effectively makes this binding for an official RSO surface.
+
+## Adding common things
+
+### A new route
+
+Drop a file in `src/routes/`. TanStack Router's file-router conventions apply: `route.tsx` for a regular page, `__root.tsx` for the shell, `_layout/foo.tsx` for nested layouts, `$param.tsx` for dynamic segments, dot-separated segments for paths with slashes. The `routeTree.gen.ts` regenerates on `pnpm dev`. See [TanStack Router file-routing docs](https://tanstack.com/router/latest/docs/framework/react/guide/file-based-routing) for the full convention surface.
+
+### A new database column / table
+
+1. Edit `drizzle/schema.ts`.
+2. `pnpm --filter ucmc-web db:generate` — produces `drizzle/migrations/NNNN_<auto-name>.sql`.
+3. **Rename the file** to something descriptive and update `meta/_journal.json` to match — auto-generated names rot fast.
+4. Apply locally with `pnpm --filter ucmc-web db:migrate:local`.
+5. CI applies it on the next deploy.
+
+### A new shadcn/ui component
 
 ```bash
-pnpm dlx shadcn@latest add button
+pnpm dlx shadcn@latest add <component>
 ```
 
-## T3Env
+Files land in `src/components/ui/` per the project's `components.json` config.
 
-- You can use T3Env to add type safety to your environment variables.
-- Add Environment variables to the `src/config/env.ts` file.
-- Use the environment variables in your code.
+### A new server function
 
-### Usage
+Three-layer pattern (server-only module boundary requires this; see `/CLAUDE.md` for the full reasoning):
 
-```ts
-import { env } from "#/config/env";
+1. **Leaf helpers** in `*.server.ts` — D1/R2/KV access, cookies, rate limiting.
+2. **Action functions** in `*-actions.server.ts` — the actual business logic. Tests call these directly.
+3. **Shell** in `*-fns.ts` — `createServerFn` definitions whose handler bodies are one-liners that dynamic-import the action module. Route files and form components only import from the shell.
 
-console.log(env.VITE_APP_TITLE);
-```
+## Deployment
 
-## Routing
+Auto-deploys to dev on merge to main; prod is manual via `workflow_dispatch` on `web-deploy.yml` with a GitHub environment approval gate. Custom domain bindings, D1 / R2 / KV resources, the Resend sending domain, and DNS records are provisioned by Pulumi (`infra/`). Don't `wrangler deploy` from a developer machine — it bypasses CI's secret + env handling.
 
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
+## Where to read more
 
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "My App" },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-});
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from "@tanstack/react-start";
-
-const getServerTime = createServerFn({
-  method: "GET",
-}).handler(async () => {
-  return new Date().toISOString();
-});
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState("");
-
-  useEffect(() => {
-    getServerTime().then(setTime);
-  }, []);
-
-  return <div>Server time: {time}</div>;
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from "@tanstack/react-router";
-import { json } from "@tanstack/react-start";
-
-export const Route = createFileRoute("/api/hello")({
-  server: {
-    handlers: {
-      GET: () => json({ message: "Hello, World!" }),
-    },
-  },
-});
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from "@tanstack/react-router";
-
-export const Route = createFileRoute("/people")({
-  loader: async () => {
-    const response = await fetch("https://swapi.dev/api/people");
-    return response.json();
-  },
-  component: PeopleComponent,
-});
-
-function PeopleComponent() {
-  const data = Route.useLoaderData();
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  );
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+- [`/CLAUDE.md`](../../CLAUDE.md) — full tooling/conventions reference
+- [`.wiki/Compliance.md`](../../.wiki/Compliance.md) — obligation → site behavior matrix
+- [`.wiki/Ohio Law and Student Organizations.md`](../../.wiki/Ohio%20Law%20and%20Student%20Organizations.md), [`.wiki/UC Trademark and Licensing for RSOs.md`](../../.wiki/UC%20Trademark%20and%20Licensing%20for%20RSOs.md), [`.wiki/UC RSO Resources.md`](../../.wiki/UC%20RSO%20Resources.md) — research that drove the compliance design
+- [`.wiki/UCMC Constitution & Bylaws.md`](../../.wiki/UCMC%20Constitution%20&%20Bylaws.md) — governance reference
