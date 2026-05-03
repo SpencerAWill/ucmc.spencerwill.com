@@ -233,3 +233,271 @@ export const ANTI_HAZING_BODY: readonly LegalSection[] = [
     ],
   },
 ];
+
+/**
+ * Public privacy notice. The promises here must match what the website
+ * actually does — when adding a new column, processor, or retention
+ * window, update this text first and treat the implementation as the
+ * follow-on. Industry-standard plain-language notice; UC is silent on
+ * RSO PII storage so this is not a UC compliance artifact, just a
+ * good-faith disclosure.
+ */
+export const PRIVACY_BODY: readonly LegalSection[] = [
+  {
+    heading: "What we collect",
+    paragraphs: [
+      "When you register, we collect your email, full legal name, preferred name, phone number, UC affiliation, optional bio, optional avatar, and one or more emergency contacts (name, phone, relationship). We also record the date you acknowledged UCMC's anti-hazing and non-discrimination policies, plus the version of those policies you ticked.",
+      "When an officer attests your paper waiver for the current academic cycle, we record that attestation: the cycle, the waiver version, the officer who attested, and the timestamp. We do not record the contents of the waiver itself.",
+      "We capture the timestamp of your most recent visit to /announcements so the bell-icon unread count works.",
+    ],
+  },
+  {
+    heading: "What we explicitly do not collect",
+    bullets: [
+      "UC student/staff IDs (M-numbers). The Treasurer maintains the canonical roster — including IDs — on UC's official CampusLINK platform per Bylaw 1.3.",
+      "Medical information, insurance information, and signed waivers. These exist only on the paper waiver, which lives off-platform with the Treasurer.",
+      "Payment information. UCMC dues are collected off-platform.",
+      "Browser fingerprinting, third-party analytics, ad-tech identifiers, or any tracking beyond essential session cookies.",
+    ],
+  },
+  {
+    heading: "Why each thing is collected",
+    bullets: [
+      "Email — to send you a magic-link sign-in and identify your account.",
+      "Names + UC affiliation + bio — to populate the member directory other approved members see.",
+      "Phone + emergency contact — to reach you (or someone on your behalf) about a club activity.",
+      "Avatar — purely cosmetic; you choose whether to upload one.",
+      "Waiver attestation metadata — to gate participation in club activities on a current paper waiver.",
+      "Policies-acknowledgment timestamp + version — to track that you've read the anti-hazing and non-discrimination policies, and to re-prompt if those policies are updated in a future version.",
+    ],
+  },
+  {
+    heading: "Who we share it with (processors)",
+    paragraphs: [
+      "The site runs on Cloudflare Workers; member data lives in Cloudflare's managed services in the United States. We do not sell, rent, or share member data with third parties beyond the technical processors listed below.",
+    ],
+    bullets: [
+      "Cloudflare — hosting, edge TLS, D1 (database), R2 (avatars), KV (short-lived auth state), Turnstile (anti-bot challenge on the magic-link form), rate limiting, observability logs (~7 day retention).",
+      "Resend — outbound email delivery (the magic-link emails). Recipient address and email body are sent to Resend; Resend does not retain message content beyond the sending window.",
+    ],
+  },
+  {
+    heading: "Retention",
+    bullets: [
+      "Active member data is retained as long as your account is active.",
+      "Pending registrations not approved within 30 days may be purged.",
+      "Deactivated accounts may be purged after 12 months of inactivity.",
+      "Waiver attestation records (metadata only — not the paper waiver) may be retained for up to 7 years post-cycle for liability documentation.",
+      "You can delete your account immediately at any time via the controls on /account; this also removes your avatar from R2 and signs you out everywhere.",
+    ],
+  },
+  {
+    heading: "Your rights",
+    paragraphs: [
+      "You can download a JSON copy of everything we have on you from your /account page. You can hard-delete your account from the same page; the deletion is immediate and irreversible. To correct or update individual fields, edit them on /account or /account/details.",
+    ],
+  },
+  {
+    heading: "Cookies",
+    paragraphs: ["We set only essential cookies needed to operate the site:"],
+    bullets: [
+      "Session cookie (HTTP-only, SameSite=Strict, 30-day TTL with sliding refresh) — keeps you signed in.",
+      "Proof cookie (HTTP-only, short-lived) — set after a magic-link click for first-time registrants who don't have an account row yet.",
+      "WebAuthn ceremony cookie (HTTP-only, 5-minute TTL) — links a passkey-registration begin/finish pair.",
+      "Theme + view-mode cookies — your light/dark/role-emulation UI preferences.",
+    ],
+  },
+  {
+    heading: "Contact",
+    paragraphs: [
+      "Questions, requests for correction, or privacy complaints can be emailed to the website maintainer (see the colophon for the current email).",
+    ],
+    references: [{ label: "Open source / colophon", href: "/open-source" }],
+  },
+];
+
+/**
+ * Public terms of use for the website itself. Distinct from the waiver
+ * (which covers club activities) — these terms cover the use of the
+ * member portal at ucmc.spencerwill.com. Plain-language and
+ * intentionally short.
+ */
+export const TERMS_BODY: readonly LegalSection[] = [
+  {
+    heading: "What this is",
+    paragraphs: [
+      "This site is the member portal for the University of Cincinnati Mountaineering Club (UCMC), a Registered Student Organization at the University of Cincinnati. It is operated by UCMC officers on a personal Cloudflare account, independent of UC IT. By using the site you agree to the terms below.",
+    ],
+  },
+  {
+    heading: "Account responsibility",
+    bullets: [
+      "Don't share your sign-in link, session, or passkey with anyone else.",
+      "If you suspect unauthorized access, sign out (which clears all your sessions) and contact a club officer.",
+      "Keep your name, phone, and emergency contact accurate while your account is active. The information we hold may be used to reach you (or someone on your behalf) about a club activity.",
+    ],
+  },
+  {
+    heading: "Acceptable use",
+    paragraphs: [
+      "Don't use the site to harass, threaten, or impersonate anyone. Don't attempt to bypass auth, scrape the member directory, or interfere with site operations. Don't post content that violates UCMC's anti-hazing or non-discrimination policies (linked in the footer).",
+    ],
+  },
+  {
+    heading: "No UC endorsement",
+    paragraphs: [
+      "UCMC is registered at the University of Cincinnati but operates independently of UC IT. Registration is not endorsement — see the registration disclaimer in the footer for the verbatim notice required by UC Rule 40-03-01.",
+    ],
+  },
+  {
+    heading: "Liability",
+    paragraphs: [
+      "These terms cover use of the website. They do not replace the UCMC Waiver of Liability, which separately governs participation in club activities. Use of the site is provided as-is; the maintainer makes no warranty as to availability, fitness for a particular purpose, or accuracy of any information presented.",
+    ],
+  },
+  {
+    heading: "Account termination",
+    paragraphs: [
+      "You can delete your account at any time from /account; deletion is immediate and irreversible. UCMC officers may deactivate accounts that violate these terms or club policies; deactivated accounts can be reactivated by an officer.",
+    ],
+  },
+  {
+    heading: "Governing law",
+    paragraphs: [
+      "These terms are governed by the laws of the State of Ohio, without regard to conflict-of-law principles. Any dispute arising from use of the site will be brought in a court of competent jurisdiction in Hamilton County, Ohio.",
+    ],
+  },
+];
+
+/**
+ * Public "about UCMC" copy. Frames the club, the open-membership
+ * Article III §3.2 invariant, and the additive-not-canonical
+ * relationship to CampusLINK.
+ */
+export const ABOUT_BODY: readonly LegalSection[] = [
+  {
+    heading: "Who we are",
+    paragraphs: [
+      "The University of Cincinnati Mountaineering Club (UCMC) is a student-run Registered Student Organization. We climb, hike, backpack, ice climb, kayak, and otherwise spend time outside together. New members of any experience level are welcome — including total beginners.",
+    ],
+  },
+  {
+    heading: "How we run",
+    paragraphs: [
+      "UCMC is governed by an elected officer board (President, Vice President, Treasurer, Secretary, Equipment Officer, Outings Officer) and a faculty advisor. Day-to-day operations — meetings, trips, gear lending, dues collection — happen at the club, not on this website.",
+      "The canonical UCMC roster is maintained by the Treasurer on UC's official CampusLINK platform per Bylaw 1.3. This site is an additive operational tool: it surfaces announcements, lets officers track paper-waiver attestations, and gives members a place to update their contact information. It is never a replacement for the official roster.",
+    ],
+  },
+  {
+    heading: "Joining",
+    paragraphs: [
+      "Membership is open to any UC student in good standing per Article III §3.2 of our constitution. See the membership page for the full eligibility, dues, and registration flow.",
+    ],
+    references: [{ label: "Membership", href: "/membership" }],
+  },
+];
+
+/**
+ * Public membership/eligibility/dues/how-to-join page. The verification-
+ * not-gatekeeping framing of the registration approval queue lives here
+ * — it's the constitutional invariant from Art III §3.2 that the
+ * approval flow is checking eligibility, not making discretionary
+ * admission decisions.
+ */
+export const MEMBERSHIP_BODY: readonly LegalSection[] = [
+  {
+    heading: "Eligibility",
+    paragraphs: [
+      'Per Article III §3.2 of the UCMC Constitution, voting membership is open to "any full/part-time undergraduate or graduate student, enrolled in any of the colleges, schools or divisions of the University at the time of applying for membership." Non-voting membership is open more broadly to UC alumni, faculty, staff, family members, and guests.',
+      "The approval queue exists to verify eligibility (UC enrollment, anti-bot, deduplication) — not to gatekeep on viewpoint, identity, or ideology. UCMC does not discriminate on any basis listed in our non-discrimination policy or in Ohio Senate Bill 1 (2025).",
+    ],
+    references: [{ label: "Non-discrimination", href: "/nondiscrimination" }],
+  },
+  {
+    heading: "Dues",
+    paragraphs: [
+      "Per Bylaw §7.1, members pay an annual equipment fee of $60 to access club gear and participate in club trips. Dues are collected off-platform; this site does not process payments. Talk to the Treasurer at a club meeting for current payment options.",
+    ],
+  },
+  {
+    heading: "How to join",
+    paragraphs: [
+      "Sign up via the website. After you register, an officer will verify your eligibility and approve your account, usually within a week. Once approved, you'll be asked to print, sign, and bring UCMC's paper waiver to a club meeting; the Treasurer or President will mark you attested in the member portal so you can participate in club activities.",
+      "The waiver is a paper form. We do not collect or store signed waivers, medical information, or insurance information digitally — those live with the Treasurer off-platform per Bylaw 1.3.",
+    ],
+    references: [
+      { label: "Sign up", href: "/sign-in?register=true" },
+      { label: "Waiver of liability (reference copy)", href: "/waiver" },
+    ],
+  },
+  {
+    heading: "Anti-hazing and non-discrimination",
+    paragraphs: [
+      "Membership in UCMC is conditioned on agreement with our anti-hazing and non-discrimination policies, which are constitutional commitments under Article XII. Both are linked in the footer of every page.",
+    ],
+  },
+];
+
+/**
+ * Public legal-page index — surfaces all five legal/policy routes
+ * (disclaimer, non-discrimination, anti-hazing, waiver, privacy,
+ * terms) plus the colophon, in one place. Not strictly required, but
+ * useful as a "what's the official line on X" landing pad.
+ */
+export const LEGAL_INDEX_LINKS: readonly {
+  href: string;
+  label: string;
+  description: string;
+}[] = [
+  {
+    href: "/disclaimer",
+    label: "Registration disclaimer",
+    description:
+      "Verbatim notice required by UC Rule 40-03-01 — what UCMC's registration with UC does and does not mean.",
+  },
+  {
+    href: "/nondiscrimination",
+    label: "Non-discrimination",
+    description:
+      "Protected categories under federal law, Ohio SB 1 (2025), and UC's CAMPUS Act Policy.",
+  },
+  {
+    href: "/anti-hazing",
+    label: "Anti-hazing",
+    description:
+      "UCMC's commitment under Constitution Art XII and Ohio's Collin's Law (ORC §2903.311), with reporting links.",
+  },
+  {
+    href: "/waiver",
+    label: "Waiver of liability",
+    description:
+      "Reference copy of the paper waiver members sign before participating in club activities.",
+  },
+  {
+    href: "/privacy",
+    label: "Privacy",
+    description:
+      "What data this site collects, who it's shared with, how long it's kept, and how to delete it.",
+  },
+  {
+    href: "/terms",
+    label: "Terms of use",
+    description: "Acceptable use of the website itself.",
+  },
+  {
+    href: "/membership",
+    label: "Membership",
+    description:
+      "Who can join, how dues work, and how the registration approval queue checks eligibility.",
+  },
+  {
+    href: "/about",
+    label: "About UCMC",
+    description: "Who we are, how we operate, and how this site fits in.",
+  },
+  {
+    href: "/open-source",
+    label: "Open source",
+    description: "How this site is built, maintained, and licensed.",
+  },
+];

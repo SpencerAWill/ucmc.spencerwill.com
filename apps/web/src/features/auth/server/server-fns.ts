@@ -129,6 +129,21 @@ export const signOutFn = createServerFn({ method: "POST" }).handler(
   },
 );
 
+/**
+ * Hard-delete the caller's account. Cascades through profile, emergency
+ * contacts, sessions, passkeys, role assignments, and waiver
+ * attestations (per the ON DELETE CASCADE rules in schema.ts), drops
+ * the avatar from R2, and clears the session cookie. Refuses for the
+ * last `system_admin` to avoid bricking the platform.
+ */
+export const deleteMyAccountFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<{ ok: true }> => {
+    const { deleteMyAccountAction } =
+      await import("#/features/auth/server/magic-link-actions.server");
+    return deleteMyAccountAction();
+  },
+);
+
 export type Profile = typeof schema.profiles.$inferSelect;
 
 export interface EmergencyContactRow {
