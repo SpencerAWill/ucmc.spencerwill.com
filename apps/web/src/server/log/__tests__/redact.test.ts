@@ -22,9 +22,17 @@ describe("redactEmail", () => {
     expect(redactEmail(undefined)).toBe("<empty>");
   });
 
-  it("returns a placeholder for malformed input (no @ or @ at start)", () => {
+  it("returns a placeholder for malformed input", () => {
+    // No @, leading @, trailing @, double @, missing TLD, missing
+    // domain — none of these should leak any substring of the
+    // raw value.
     expect(redactEmail("not-an-email")).toBe("<malformed>");
     expect(redactEmail("@example.com")).toBe("<malformed>");
+    expect(redactEmail("a@")).toBe("<malformed>");
+    expect(redactEmail("foo@@bar.com")).toBe("<malformed>");
+    expect(redactEmail("alice@example")).toBe("<malformed>");
+    expect(redactEmail("alice@.com")).toBe("<malformed>");
+    expect(redactEmail("alice@example.")).toBe("<malformed>");
   });
 });
 
@@ -58,6 +66,28 @@ describe("redactString", () => {
         "Click https://app.example.com/auth/callback?token=abc to sign in",
       ),
     ).toBe("Click <url-redacted> to sign in");
+  });
+
+  // URL terminator handling — the previous greedy `[^\s]+` pattern
+  // would consume across JSON quotes and object delimiters,
+  // erasing most of an error body. The tightened pattern stops at
+  // characters that are almost always URL terminators in the
+  // contexts we redact.
+  it("stops the URL match at JSON / common-string terminators", () => {
+    expect(
+      redactString(
+        '{"help":"https://docs.example/page","message":"bad recipient"}',
+      ),
+    ).toBe('{"help":"<url-redacted>","message":"bad recipient"}');
+  });
+
+  it("doesn't consume trailing punctuation that's not part of the URL", () => {
+    expect(redactString("See https://example.com/x, then retry.")).toBe(
+      "See <url-redacted>, then retry.",
+    );
+    expect(redactString("(see https://example.com/x)")).toBe(
+      "(see <url-redacted>)",
+    );
   });
 
   it("strips email-shaped substrings from freeform text", () => {

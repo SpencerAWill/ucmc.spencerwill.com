@@ -1,5 +1,6 @@
 /**
- * Email sender with a three-tier fallback:
+ * Email sender with two configurable providers and a hard-fail
+ * fallback:
  *
  * 1. **Resend** (`RESEND_API_KEY` set) — production path. Posts to the
  *    Resend transactional-email API.
@@ -7,11 +8,29 @@
  *    sidecar path. Posts to the Mailpit HTTP send API so emails land in
  *    a real inbox UI at http://localhost:8025. Playwright e2e tests poll
  *    the same API to retrieve magic-link tokens.
- * 3. **Console** (neither set) — minimal fallback. Prints the email to
- *    the Worker console so magic links still appear somewhere.
+ *
+ * If neither is configured, `sendEmail` THROWS rather than silently
+ * succeeding. An earlier revision logged the email to the Worker
+ * console as a "fallback", but that approach has two failure modes
+ * — it either dumps magic-link URLs (auth material) into Workers
+ * Logs where anyone with dashboard access can extract them within
+ * the 15-minute TTL, or it suppresses the body and leaves users
+ * staring at a never-arriving email. The right behavior is to fail
+ * loudly so an operator notices the misconfiguration and the user
+ * sees an error rather than a phantom success.
  */
 import { env } from "#/server/cloudflare-env";
-import { redactEmail, redactString } from "#/server/log/redact.server";
+import { redactString } from "#/server/log/redact.server";
+
+export class EmailNotConfiguredError extends Error {
+  constructor() {
+    super(
+      "Email provider not configured. Set RESEND_API_KEY (production) " +
+        "or MAILPIT_URL (development) so magic-link emails actually go out.",
+    );
+    this.name = "EmailNotConfiguredError";
+  }
+}
 
 export interface EmailMessage {
   to: string;
@@ -33,25 +52,14 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
     return;
   }
 
-  // Tier 3 — console fallback. This path is only meant to fire when
-  // an operator has misconfigured the worker (neither Resend nor
-  // Mailpit reachable). It MUST NOT echo the email body — the
-  // magic-link URL is the only thing the body of a login email
-  // contains, and that URL is auth material with a 15-minute TTL.
-  // Workers Logs has ~7-day retention and is readable by anyone
-  // with Cloudflare dashboard access, so a body dump here is a
-  // takeover-grade leak.
-  //
-  // Print a structured warning with the subject and a redacted
-  // recipient so an operator notices the misconfig and can
-  // re-enable a real provider; suppress the body entirely.
-  // eslint-disable-next-line no-console
-  console.warn("email.console_fallback_no_provider_configured", {
-    subject: message.subject,
-    to: redactEmail(message.to),
-    bodyLength: message.text.length,
-    note: "Set RESEND_API_KEY (prod) or MAILPIT_URL (dev) to actually send. Body suppressed for safety — magic-link URLs would otherwise land in Workers Logs.",
-  });
+  // No provider — fail loudly. An earlier revision logged a
+  // structured-warning placeholder here, but the rest of the system
+  // would still mark the magic-link request as successful, leaving
+  // the user with a token they can never see. Throwing instead
+  // surfaces a 500 to the user and a clear stack trace to the
+  // operator. The error message names the env vars so the fix is
+  // discoverable from the log line.
+  throw new EmailNotConfiguredError();
 }
 
 async function sendViaResend(message: EmailMessage): Promise<void> {

@@ -23,23 +23,36 @@
  */
 
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const URL_PATTERN = /https?:\/\/[^\s]+/g;
+// Anchored variant for whole-string validation in `redactEmail`.
+const STRICT_EMAIL_PATTERN =
+  /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+// URL pattern for `redactString`. Stops at characters that are
+// almost always URL terminators in the contexts we redact (JSON
+// bodies, error messages, log lines): whitespace, quote/angle
+// brackets, common punctuation surrounding embedded URLs. The
+// trailing-junk dance (`(?:[?&][^...]*)?`) handles legitimate
+// query strings, which we want to capture as part of the URL
+// before redacting it.
+const URL_PATTERN = /https?:\/\/[^\s"'<>(){}[\]|\\^`,;]+/g;
 
 /**
  * Mask the local part of an email. `alice@example.com` →
  * `a***@example.com`. Preserves the domain so an operator reading
  * logs can distinguish populations of users without learning
- * identities. Empty / malformed input returns a safe placeholder
- * rather than echoing the raw value.
+ * identities. Returns `<malformed>` rather than echoing anything
+ * resembling the raw value when the input doesn't match a strict
+ * RFC-shaped pattern (e.g. `a@`, `foo@@bar.com`, `alice@example`
+ * with no TLD all reach the malformed branch).
  */
 export function redactEmail(email: string | null | undefined): string {
   if (!email) {
     return "<empty>";
   }
-  const at = email.indexOf("@");
-  if (at <= 0) {
+  if (!STRICT_EMAIL_PATTERN.test(email)) {
     return "<malformed>";
   }
+  // After the strict validation we know the shape is `local@domain.tld`.
+  const at = email.indexOf("@");
   const local = email.slice(0, at);
   const domain = email.slice(at);
   if (local.length <= 1) {

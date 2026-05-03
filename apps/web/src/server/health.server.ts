@@ -145,13 +145,16 @@ async function checkEmail(): Promise<HealthCheck> {
     }
   }
 
-  // No provider configured — sendEmail() falls back to console.log. Not a
-  // failure, but worth surfacing so it's obvious why no mail is going out.
+  // No provider configured — `sendEmail` will throw, which means
+  // every magic-link request will 500. Treat as a hard fail so
+  // `/health` reflects reality (`?` would be an upgrade if there
+  // were a useful third state, but `pass`-with-a-warning misled
+  // operators in an earlier revision).
   return {
-    name: "email:console",
-    status: "pass",
+    name: "email:misconfigured",
+    status: "fail",
     time,
-    output: "console fallback (no email provider configured)",
+    output: "no email provider configured (set RESEND_API_KEY or MAILPIT_URL)",
   };
 }
 
