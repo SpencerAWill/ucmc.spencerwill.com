@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WaiverRouteImport } from './routes/waiver'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OpenSourceRouteImport } from './routes/open-source'
@@ -53,6 +54,11 @@ const WaiverRoute = WaiverRouteImport.update({
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -237,6 +243,7 @@ export interface FileRoutesByFullPath {
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
@@ -272,6 +279,7 @@ export interface FileRoutesByTo {
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
@@ -310,6 +318,7 @@ export interface FileRoutesById {
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
   '/sign-in': typeof SignInRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
   '/account/details': typeof AccountDetailsRoute
@@ -349,6 +358,7 @@ export interface FileRouteTypes {
     | '/open-source'
     | '/privacy'
     | '/sign-in'
+    | '/sitemap.xml'
     | '/terms'
     | '/waiver'
     | '/account/details'
@@ -384,6 +394,7 @@ export interface FileRouteTypes {
     | '/open-source'
     | '/privacy'
     | '/sign-in'
+    | '/sitemap.xml'
     | '/terms'
     | '/waiver'
     | '/account/details'
@@ -421,6 +432,7 @@ export interface FileRouteTypes {
     | '/open-source'
     | '/privacy'
     | '/sign-in'
+    | '/sitemap.xml'
     | '/terms'
     | '/waiver'
     | '/account/details'
@@ -459,6 +471,7 @@ export interface RootRouteChildren {
   OpenSourceRoute: typeof OpenSourceRoute
   PrivacyRoute: typeof PrivacyRoute
   SignInRoute: typeof SignInRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
   WaiverRoute: typeof WaiverRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -484,6 +497,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -776,6 +796,7 @@ const rootRouteChildren: RootRouteChildren = {
   OpenSourceRoute: OpenSourceRoute,
   PrivacyRoute: PrivacyRoute,
   SignInRoute: SignInRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
   WaiverRoute: WaiverRoute,
   AuthCallbackRoute: AuthCallbackRoute,

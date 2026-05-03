@@ -1,3 +1,19 @@
 # https://www.robotstxt.org/robotstxt.html
+#
+# Public legal/disclosure pages, the homepage, sign-in, and the
+# colophon are crawlable. Member-data surfaces (auth-gated by
+# `requireApproved` / `requirePermission`) are disallowed so a
+# misbehaving crawler doesn't hammer the login wall and doesn't
+# accidentally cache any session-conditional response. The
+# sitemap below enumerates the public set explicitly so search
+# engines don't have to discover it.
+
 User-agent: *
-Disallow:
+Disallow: /account
+Disallow: /api/
+Disallow: /audit
+Disallow: /members
+Disallow: /register
+Disallow: /health
+
+Sitemap: https://ucmc.spencerwill.com/sitemap.xml

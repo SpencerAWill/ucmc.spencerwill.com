@@ -34,15 +34,45 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   errorComponent: RouteErrorFallback,
   head: () => ({
     meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { title: "UC Mountaineering Club" },
+      // Search-engine description — kept short enough to render in
+      // SERP snippets. Mirrors the "what UCMC is" framing on /about.
       {
-        charSet: "utf-8",
+        name: "description",
+        content:
+          "Official member portal for the University of Cincinnati Mountaineering Club — registered student organization for climbers, mountaineers, and outdoor enthusiasts at UC.",
+      },
+      // Open Graph (Facebook / Slack / Discord / iMessage previews).
+      // Routes that want a more specific title or description can
+      // override these via their own `head` block; the values here
+      // are the all-pages default.
+      { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "UC Mountaineering Club" },
+      { property: "og:title", content: "UC Mountaineering Club" },
+      {
+        property: "og:description",
+        content:
+          "Official member portal for the University of Cincinnati Mountaineering Club.",
       },
       {
-        name: "viewport",
-        content: "width=device-width, initial-scale=1",
+        property: "og:image",
+        content: "https://ucmc.spencerwill.com/logo512.png",
+      },
+      // Twitter / X card. `summary` (square logo) rather than
+      // `summary_large_image` since we don't yet have a 1200x630
+      // banner; revisit when we do.
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "UC Mountaineering Club" },
+      {
+        name: "twitter:description",
+        content:
+          "Official member portal for the University of Cincinnati Mountaineering Club.",
       },
       {
-        title: "UC Mountaineering Club",
+        name: "twitter:image",
+        content: "https://ucmc.spencerwill.com/logo512.png",
       },
     ],
     links: [
