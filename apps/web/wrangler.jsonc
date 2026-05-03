@@ -37,6 +37,13 @@
   // traffic; drop it if volume grows. Purely a worker-config setting, so
   // Pulumi and the deploy workflow need no changes; `wrangler deploy`
   // applies it on the next push.
+  //
+  // PII discipline: any `console.*` call that touches user-shaped data
+  // is expected to redact via `src/server/log/redact.server.ts` —
+  // `redactEmail` for addresses, `redactUrl` for tokens-in-query,
+  // `redactString` for freeform text. Workers Logs is dashboard-readable
+  // by anyone with Cloudflare access on the account; treat it as a
+  // PII-bounded surface, not an internal-only one.
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

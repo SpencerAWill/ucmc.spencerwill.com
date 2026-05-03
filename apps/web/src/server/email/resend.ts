@@ -11,6 +11,7 @@
  *    the Worker console so magic links still appear somewhere.
  */
 import { env } from "#/server/cloudflare-env";
+import { redactEmail, redactString } from "#/server/log/redact.server";
 
 export interface EmailMessage {
   to: string;
@@ -32,12 +33,25 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
     return;
   }
 
-  // Tier 3 — console fallback
-  /* eslint-disable no-console */
-  console.log("[email:console] —", message.subject);
-  console.log(`  to: ${message.to}`);
-  console.log(`  ${message.text.replace(/\n/g, "\n  ")}`);
-  /* eslint-enable no-console */
+  // Tier 3 — console fallback. This path is only meant to fire when
+  // an operator has misconfigured the worker (neither Resend nor
+  // Mailpit reachable). It MUST NOT echo the email body — the
+  // magic-link URL is the only thing the body of a login email
+  // contains, and that URL is auth material with a 15-minute TTL.
+  // Workers Logs has ~7-day retention and is readable by anyone
+  // with Cloudflare dashboard access, so a body dump here is a
+  // takeover-grade leak.
+  //
+  // Print a structured warning with the subject and a redacted
+  // recipient so an operator notices the misconfig and can
+  // re-enable a real provider; suppress the body entirely.
+  // eslint-disable-next-line no-console
+  console.warn("email.console_fallback_no_provider_configured", {
+    subject: message.subject,
+    to: redactEmail(message.to),
+    bodyLength: message.text.length,
+    note: "Set RESEND_API_KEY (prod) or MAILPIT_URL (dev) to actually send. Body suppressed for safety — magic-link URLs would otherwise land in Workers Logs.",
+  });
 }
 
 async function sendViaResend(message: EmailMessage): Promise<void> {
@@ -57,8 +71,13 @@ async function sendViaResend(message: EmailMessage): Promise<void> {
   });
 
   if (!res.ok) {
+    // Resend's validation error responses echo back the offending
+    // request payload (including the `to` address) — running
+    // through `redactString` keeps an operator-useful error
+    // message without dumping recipient PII into Workers Logs when
+    // this throw propagates up as an unhandled rejection.
     const body = await res.text();
-    throw new Error(`Resend failed (${res.status}): ${body}`);
+    throw new Error(`Resend failed (${res.status}): ${redactString(body)}`);
   }
 }
 
@@ -79,7 +98,9 @@ async function sendViaMailpit(message: EmailMessage): Promise<void> {
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Mailpit send failed (${res.status}): ${body}`);
+    throw new Error(
+      `Mailpit send failed (${res.status}): ${redactString(body)}`,
+    );
   }
 }
 
