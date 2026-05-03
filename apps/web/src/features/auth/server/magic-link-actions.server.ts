@@ -205,6 +205,164 @@ export async function signOutAction(): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+/**
+ * Bundles every piece of data the site stores about the caller into a
+ * single plain-JSON shape — used by the `/api/account/export` route
+ * handler to back the "download my data" promise on /privacy.
+ *
+ * Excludes:
+ *   - passkey public-key material + counters (not useful to the
+ *     member; dumping authenticator metadata is a foothold for a
+ *     stolen-account scenario, not a recovery aid),
+ *   - magic-link token hashes (one-shot auth state, never user-facing).
+ *
+ * Caller-auth is the responsibility of the route handler — it knows
+ * how to return a 401 Response. Throwing here would force the
+ * handler to translate, which adds a layer for no reason.
+ */
+export async function exportMyDataAction(): Promise<{
+  exportedAt: string;
+  schemaVersion: 1;
+  user: typeof schema.users.$inferSelect | null;
+  profile: typeof schema.profiles.$inferSelect | null;
+  emergencyContacts: Array<{
+    name: string;
+    phone: string;
+    relationship: schema.ContactRelationship;
+    createdAt: Date;
+  }>;
+  roles: string[];
+  waiverAttestations: Array<{
+    cycle: string;
+    version: string;
+    attestedAt: Date;
+    attestedBy: string;
+    revokedAt: Date | null;
+    revokedBy: string | null;
+    revocationReason: string | null;
+    notes: string | null;
+  }>;
+  excluded: string[];
+}> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+
+  const db = getDb();
+  const userId = principal.userId;
+
+  const [user, profile, emergencyContacts, userRoles, attestations] =
+    await Promise.all([
+      db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
+      db.query.profiles.findFirst({
+        where: eq(schema.profiles.userId, userId),
+      }),
+      db
+        .select({
+          name: schema.emergencyContacts.name,
+          phone: schema.emergencyContacts.phone,
+          relationship: schema.emergencyContacts.relationship,
+          createdAt: schema.emergencyContacts.createdAt,
+        })
+        .from(schema.emergencyContacts)
+        .where(eq(schema.emergencyContacts.userId, userId)),
+      db
+        .select({ roleId: schema.userRoles.roleId })
+        .from(schema.userRoles)
+        .where(eq(schema.userRoles.userId, userId)),
+      db
+        .select({
+          cycle: schema.waiverAttestations.cycle,
+          version: schema.waiverAttestations.version,
+          attestedAt: schema.waiverAttestations.attestedAt,
+          attestedBy: schema.waiverAttestations.attestedBy,
+          revokedAt: schema.waiverAttestations.revokedAt,
+          revokedBy: schema.waiverAttestations.revokedBy,
+          revocationReason: schema.waiverAttestations.revocationReason,
+          notes: schema.waiverAttestations.notes,
+        })
+        .from(schema.waiverAttestations)
+        .where(eq(schema.waiverAttestations.userId, userId)),
+    ]);
+
+  return {
+    exportedAt: new Date().toISOString(),
+    schemaVersion: 1,
+    user: user ?? null,
+    profile: profile ?? null,
+    emergencyContacts,
+    roles: userRoles.map((r) => r.roleId),
+    waiverAttestations: attestations,
+    excluded: [
+      "Passkey credentials (public keys, counters, transports)",
+      "Magic-link token hashes",
+    ],
+  };
+}
+
+/**
+ * Self-serve hard delete. Removes the caller's user row and cascades
+ * through profiles, emergency_contacts, sessions, passkey_credentials,
+ * user_roles, and waiver_attestations (the ON DELETE CASCADE rules in
+ * schema.ts handle each child table). Explicitly deletes the caller's
+ * avatar from R2 — Drizzle cascades only cover relational rows, not
+ * blob storage. Closes the session cookie before returning so the
+ * browser redirects to a signed-out state.
+ *
+ * Self-protection: if the caller is the only `system_admin` left, we
+ * refuse — deleting the last admin would leave the platform with no
+ * way to grant `system_admin` to anyone else without a manual D1
+ * intervention. Officers in that position should promote a successor
+ * via /members/roles before deleting their own account.
+ */
+export async function deleteMyAccountAction(): Promise<{ ok: true }> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+
+  const db = getDb();
+
+  // Last-system-admin guard. system_admin is granted via a
+  // user_roles row with roleId=role_system_admin; if exactly one
+  // such row exists and it points at us, refuse. Off-by-one here
+  // would silently leave the platform admin-less, so the comparison
+  // is intentionally a strict count + identity check.
+  if (principal.roles.includes("system_admin")) {
+    const rows = await db
+      .select({ userId: schema.userRoles.userId })
+      .from(schema.userRoles)
+      .where(eq(schema.userRoles.roleId, "role_system_admin"));
+    if (rows.length === 1 && rows[0]?.userId === principal.userId) {
+      throw new Error(
+        "Cannot delete the only remaining system_admin. Promote a successor via /members/roles first.",
+      );
+    }
+  }
+
+  // Delete the avatar object from R2 before the row goes away. The
+  // R2 helper is a no-op if the key doesn't exist.
+  if (principal.avatarKey) {
+    const { deleteAvatar } = await import("#/server/r2/avatars.server");
+    await deleteAvatar(principal.avatarKey);
+  }
+
+  // Drop the user row. Foreign-key cascades in schema.ts handle:
+  //   profiles, emergency_contacts, sessions, passkey_credentials,
+  //   user_roles, waiver_attestations.
+  // announcements.created_by is ON DELETE SET NULL, so authored
+  // announcements stay but lose the author attribution.
+  await db.delete(schema.users).where(eq(schema.users.id, principal.userId));
+
+  // Clear the session cookie. closeSession would also try to delete a
+  // sessions row by id, but the cascade above already removed it; the
+  // cookie clear is the part that matters here.
+  await closeSession();
+
+  return { ok: true };
+}
+
 export async function submitProfileAction(
   data: RegistrationInput,
 ): Promise<{ ok: true }> {

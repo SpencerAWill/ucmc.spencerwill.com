@@ -42,6 +42,7 @@ import { Route as AccountDetailsRouteImport } from './routes/account.details'
 import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
+import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
 
 const WaiverRoute = WaiverRouteImport.update({
   id: '/waiver',
@@ -208,6 +209,11 @@ const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   path: '/api/avatars/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
+  id: '/api/account/export',
+  path: '/api/account/export',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -240,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/account/': typeof AccountIndexRoute
   '/announcements/': typeof AnnouncementsIndexRoute
   '/members/': typeof MembersIndexRoute
+  '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
@@ -273,6 +280,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountIndexRoute
   '/announcements': typeof AnnouncementsIndexRoute
   '/members': typeof MembersIndexRoute
+  '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
@@ -309,6 +317,7 @@ export interface FileRoutesById {
   '/account/': typeof AccountIndexRoute
   '/announcements/': typeof AnnouncementsIndexRoute
   '/members/': typeof MembersIndexRoute
+  '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
@@ -346,6 +355,7 @@ export interface FileRouteTypes {
     | '/account/'
     | '/announcements/'
     | '/members/'
+    | '/api/account/export'
     | '/api/avatars/$'
     | '/api/landing/$'
     | '/members/roles/$roleId'
@@ -379,6 +389,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/announcements'
     | '/members'
+    | '/api/account/export'
     | '/api/avatars/$'
     | '/api/landing/$'
     | '/members/roles/$roleId'
@@ -414,6 +425,7 @@ export interface FileRouteTypes {
     | '/account/'
     | '/announcements/'
     | '/members/'
+    | '/api/account/export'
     | '/api/avatars/$'
     | '/api/landing/$'
     | '/members/roles_/$roleId'
@@ -440,6 +452,7 @@ export interface RootRouteChildren {
   RegisterPendingRoute: typeof RegisterPendingRoute
   RegisterProfileRoute: typeof RegisterProfileRoute
   AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
+  ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
 }
@@ -677,6 +690,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAvatarsSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/account/export': {
+      id: '/api/account/export'
+      path: '/api/account/export'
+      fullPath: '/api/account/export'
+      preLoaderRoute: typeof ApiAccountExportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -741,6 +761,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterPendingRoute: RegisterPendingRoute,
   RegisterProfileRoute: RegisterProfileRoute,
   AnnouncementsIndexRoute: AnnouncementsIndexRoute,
+  ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,
 }
