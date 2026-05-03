@@ -10,6 +10,7 @@
 import { eq as drizzleEq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as Resend from "#/server/email/resend";
 import { getDb, schema } from "#/server/db";
 
 // ── mocks (declared before action imports) ──────────────────────────────
@@ -36,6 +37,18 @@ vi.mock("#/server/rate-limit.server", () => ({
 vi.mock("#/features/auth/server/turnstile.server", () => ({
   verifyTurnstile: async () => true,
 }));
+
+// `sendEmail` would otherwise throw `EmailNotConfiguredError` in the
+// test environment (no `RESEND_API_KEY`, no `MAILPIT_URL`). The
+// magic-link flow under test reads the token straight from D1, so
+// the actual email send is irrelevant — stub to a no-op.
+vi.mock("#/server/email/resend", async () => {
+  const actual = await vi.importActual<typeof Resend>("#/server/email/resend");
+  return {
+    ...actual,
+    sendEmail: vi.fn(async () => {}),
+  };
+});
 
 // ── imports (after mocks) ───────────────────────────────────────────────
 
