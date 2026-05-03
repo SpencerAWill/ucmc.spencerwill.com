@@ -490,7 +490,7 @@ export async function rejectRegistrationsAction(
 
   await getDb()
     .update(schema.users)
-    .set({ status: "rejected" })
+    .set({ status: "rejected", rejectedAt: new Date() })
     .where(inArray(schema.users.id, userIds));
 
   // TODO: send rejection notification emails (per-user).
@@ -514,7 +514,7 @@ export async function deactivateMembersAction(
   // Only deactivate users that are currently approved.
   await db
     .update(schema.users)
-    .set({ status: "deactivated" })
+    .set({ status: "deactivated", deactivatedAt: new Date() })
     .where(
       and(
         inArray(schema.users.id, userIds),
@@ -538,13 +538,16 @@ export async function reactivateMembersAction(
   const approver = await requireMembersManager();
   const db = getDb();
 
-  // Only reactivate users that are currently deactivated.
+  // Only reactivate users that are currently deactivated. Clear
+  // `deactivatedAt` so a future deactivation gets a fresh retention
+  // clock rather than counting from the *first* deactivation.
   await db
     .update(schema.users)
     .set({
       status: "approved",
       approvedAt: new Date(),
       approvedBy: approver.userId,
+      deactivatedAt: null,
     })
     .where(
       and(
@@ -569,10 +572,12 @@ export async function unrejectMembersAction(
 ): Promise<{ ok: true }> {
   await requireMembersManager();
 
-  // Move rejected users back to pending so they re-enter the approval queue.
+  // Move rejected users back to pending so they re-enter the approval
+  // queue. Clear `rejectedAt` so a future rejection gets a fresh
+  // retention clock rather than counting from the *first* rejection.
   await getDb()
     .update(schema.users)
-    .set({ status: "pending" })
+    .set({ status: "pending", rejectedAt: null })
     .where(
       and(
         inArray(schema.users.id, userIds),

@@ -43,6 +43,14 @@ export const users = sqliteTable(
       .default(sql`(unixepoch() * 1000)`),
     approvedAt: timestamp("approved_at"),
     approvedBy: text("approved_by"),
+    // Set when an approver clicks Reject. Drives the retention cron's
+    // 30-day rejected-registration purge. NULL on rows that pre-date
+    // this column — the cron skips NULL so historical rejections never
+    // auto-purge retroactively; an admin can clean those up by hand.
+    rejectedAt: timestamp("rejected_at"),
+    // Set when a member is deactivated. Drives the 12-month
+    // deactivated-account purge. Same NULL-skip rule.
+    deactivatedAt: timestamp("deactivated_at"),
     lastReadAnnouncementsAt: timestamp("last_read_announcements_at"),
   },
   (t) => [uniqueIndex("users_email_unique").on(t.email)],

@@ -18,7 +18,19 @@
   "name": "ucmc-web-dev",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry",
+  // Custom worker module that re-exports TanStack Start's `fetch`
+  // handler and adds a `scheduled` handler so cron triggers below
+  // reach the retention sweeps. See `src/server-entry.ts`.
+  "main": "src/server-entry.ts",
+  // Daily retention sweeps. 08:00 UTC = 03:00 EST / 04:00 EDT —
+  // overnight in the US Midwest, well outside any plausible
+  // member-traffic window. Daily rather than weekly so the
+  // privacy-page promises ("rejected after 30 days", etc.) never
+  // drift by more than a day. Same schedule for dev + prod; dev runs
+  // against an empty bucket most of the time, which is fine.
+  "triggers": {
+    "crons": ["0 8 * * *"],
+  },
   // Workers Logs: structured logs + invocation traces viewable in the
   // Cloudflare dashboard (~7 day retention) and streamable via `wrangler
   // tail`. `head_sampling_rate: 1` logs 100% of invocations — fine at our
@@ -100,6 +112,12 @@
       "observability": {
         "enabled": true,
         "head_sampling_rate": 1,
+      },
+      // Inherit retention-cron schedule from the top-level config.
+      // Cloudflare doesn't merge `triggers` from parent env, so this
+      // has to be repeated explicitly per env.
+      "triggers": {
+        "crons": ["0 8 * * *"],
       },
       "d1_databases": [
         {
