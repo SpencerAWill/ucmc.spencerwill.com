@@ -3,10 +3,38 @@
 import rootConfig from "../../eslint.config.js";
 import { tanstackConfig } from "@tanstack/eslint-config";
 import checkFile from "eslint-plugin-check-file";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 
 export default [
   ...rootConfig,
   ...tanstackConfig,
+  {
+    // Accessibility lint, scoped to TSX (the only place JSX appears).
+    // Promotes a curated set of jsx-a11y rules to error so CI gates on
+    // them. The plugin's full recommended config is available as
+    // `jsxA11y.flatConfigs.recommended` if we want to widen the net
+    // later, but the explicit list below is what's been audited and
+    // intentionally enforced — picking up new rules implicitly on a
+    // plugin upgrade isn't desirable for a CI gate.
+    files: ["**/*.tsx"],
+    plugins: { "jsx-a11y": jsxA11y },
+    rules: {
+      "jsx-a11y/alt-text": "error",
+      "jsx-a11y/anchor-has-content": "error",
+      "jsx-a11y/anchor-is-valid": "error",
+      "jsx-a11y/aria-props": "error",
+      "jsx-a11y/aria-role": "error",
+      "jsx-a11y/aria-unsupported-elements": "error",
+      "jsx-a11y/click-events-have-key-events": "error",
+      "jsx-a11y/heading-has-content": "error",
+      "jsx-a11y/img-redundant-alt": "error",
+      "jsx-a11y/label-has-associated-control": "error",
+      "jsx-a11y/no-noninteractive-element-interactions": "error",
+      "jsx-a11y/no-redundant-roles": "error",
+      "jsx-a11y/role-has-required-aria-props": "error",
+      "jsx-a11y/role-supports-aria-props": "error",
+    },
+  },
   {
     // Disable core JS-only rules that conflict with TypeScript on TS/TSX
     // files — typescript-eslint (via the tanstack config) covers these with

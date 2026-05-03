@@ -184,6 +184,8 @@ export function MeetingInfoEditor({
         {crop.workingUrl ? (
           <div className="space-y-2">
             <ReactCrop {...crop.reactCropProps}>
+              {/* alt is set inside crop.imgProps; the rule can't see through the spread */}
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
               <img {...crop.imgProps} />
             </ReactCrop>
             <div className="flex gap-2">

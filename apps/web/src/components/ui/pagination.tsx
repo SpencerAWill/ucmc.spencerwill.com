@@ -50,6 +50,11 @@ function PaginationLink({
   ...props
 }: PaginationLinkProps) {
   return (
+    // Children are spread in via `...props` from callers
+    // (PaginationPrevious/Next/page-number wrappers); the rule can't see
+    // through the spread. PaginationPrevious/Next supply icons + visible
+    // labels, and page-number callers supply the digit as a child.
+    // eslint-disable-next-line jsx-a11y/anchor-has-content
     <a
       aria-current={isActive ? "page" : undefined}
       data-slot="pagination-link"
