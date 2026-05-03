@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type * as SessionServer from "#/server/auth/session.server";
 import { getDb, schema } from "#/server/db";
 import {
+  buildAuditEventStatement,
+  buildBulkAuditEventStatement,
   recordAuditEvent,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
@@ -118,6 +120,122 @@ describe("recordAuditEvents (bulk)", () => {
     await expect(recordAuditEvents([])).resolves.toBeUndefined();
     const rows = await getDb().select().from(schema.auditLog);
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("buildAuditEventStatement (atomic batch path)", () => {
+  // The "build" helpers exist so callers can spread the audit INSERT
+  // into their own `db.batch([...])` together with the parent
+  // mutation. These tests exercise the atomicity contract: when a
+  // statement in the batch fails, the audit row must NOT be left
+  // behind, and when the batch succeeds, both the parent and the
+  // audit row commit together.
+
+  it("commits the audit row when the batch succeeds", async () => {
+    const actor = await seedUser();
+    const target = await seedUser();
+    const db = getDb();
+
+    // Mimic a real call site: parent UPDATE + audit INSERT, batched.
+    await db.batch([
+      db
+        .update(schema.users)
+        .set({ status: "rejected", rejectedAt: new Date() })
+        .where(eq(schema.users.id, target)),
+      buildAuditEventStatement({
+        actorUserId: actor,
+        action: "registration.rejected",
+        targetUserId: target,
+      }),
+    ]);
+
+    const updatedTarget = await db.query.users.findFirst({
+      where: eq(schema.users.id, target),
+    });
+    const auditRows = await db.select().from(schema.auditLog);
+    expect(updatedTarget?.status).toBe("rejected");
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]?.action).toBe("registration.rejected");
+  });
+
+  it("rolls back the audit row when a sibling statement in the batch fails", async () => {
+    const actor = await seedUser();
+    const target = await seedUser();
+    const db = getDb();
+
+    // Force a batch failure by writing an audit row with a duplicate
+    // primary key. The parent UPDATE in the same batch must NOT
+    // commit because D1 batches are atomic at the storage layer.
+    const dupId = "audit_duplicate_id";
+    await db.insert(schema.auditLog).values({
+      id: dupId,
+      actorUserId: actor,
+      action: "registration.approved",
+      createdAt: new Date(2026, 0, 1),
+    });
+
+    const targetBeforeBatch = await db.query.users.findFirst({
+      where: eq(schema.users.id, target),
+    });
+    const initialStatus = targetBeforeBatch?.status;
+
+    await expect(
+      db.batch([
+        db
+          .update(schema.users)
+          .set({ status: "rejected", rejectedAt: new Date() })
+          .where(eq(schema.users.id, target)),
+        // Drizzle insert with the colliding id; D1 will reject the
+        // statement, which aborts the entire batch.
+        db.insert(schema.auditLog).values({
+          id: dupId,
+          actorUserId: actor,
+          action: "registration.rejected",
+          createdAt: new Date(),
+        }),
+      ]),
+    ).rejects.toThrow();
+
+    const targetAfter = await db.query.users.findFirst({
+      where: eq(schema.users.id, target),
+    });
+    // Parent UPDATE must have rolled back along with the audit
+    // INSERT — the whole point of the atomicity fix.
+    expect(targetAfter?.status).toBe(initialStatus);
+
+    // And only the original (pre-batch) audit row exists.
+    const auditRows = await db.select().from(schema.auditLog);
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]?.id).toBe(dupId);
+    // The pre-existing row's action is the one we seeded, not the
+    // one the batch tried to insert.
+    expect(auditRows[0]?.action).toBe("registration.approved");
+  });
+
+  it("buildBulkAuditEventStatement returns null on empty input", () => {
+    // Important contract: callers that compute events from a
+    // `.returning()` result must be able to handle the empty case
+    // without `db.batch` choking on a zero-row insert.
+    expect(buildBulkAuditEventStatement([])).toBeNull();
+  });
+
+  it("buildBulkAuditEventStatement returns a single statement for many events", async () => {
+    const actor = await seedUser();
+    const t1 = await seedUser();
+    const t2 = await seedUser();
+
+    const stmt = buildBulkAuditEventStatement([
+      { actorUserId: actor, action: "registration.approved", targetUserId: t1 },
+      { actorUserId: actor, action: "registration.approved", targetUserId: t2 },
+    ]);
+    expect(stmt).not.toBeNull();
+    await stmt!;
+
+    const rows = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.actorUserId, actor));
+    expect(rows).toHaveLength(2);
   });
 });
 

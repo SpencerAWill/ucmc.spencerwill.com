@@ -6,8 +6,8 @@
 import { count, eq, inArray, max } from "drizzle-orm";
 
 import {
-  recordAuditEvent,
-  recordAuditEvents,
+  buildAuditEventStatement,
+  buildBulkAuditEventStatement,
 } from "#/server/audit/audit-log.server";
 import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
@@ -203,20 +203,22 @@ export async function createRoleAction(input: {
     .from(schema.roles);
   const nextPos = (maxPos ?? -1) + 1;
 
-  await db.insert(schema.roles).values({
-    id: roleId,
-    name: input.name,
-    description: input.description ?? null,
-    position: nextPos,
-  });
-
-  await recordAuditEvent({
-    actorUserId: principal.userId,
-    action: "role.created",
-    targetType: "role",
-    targetId: roleId,
-    metadata: { name: input.name },
-  });
+  // Atomic with the audit row.
+  await db.batch([
+    db.insert(schema.roles).values({
+      id: roleId,
+      name: input.name,
+      description: input.description ?? null,
+      position: nextPos,
+    }),
+    buildAuditEventStatement({
+      actorUserId: principal.userId,
+      action: "role.created",
+      targetType: "role",
+      targetId: roleId,
+      metadata: { name: input.name },
+    }),
+  ]);
 
   return { roleId };
 }
@@ -261,15 +263,17 @@ export async function deleteRoleAction(roleId: string): Promise<{ ok: true }> {
   }
 
   // Cascade deletes handle role_permissions and user_roles rows.
-  await db.delete(schema.roles).where(eq(schema.roles.id, roleId));
-
-  await recordAuditEvent({
-    actorUserId: principal.userId,
-    action: "role.deleted",
-    targetType: "role",
-    targetId: roleId,
-    metadata: { name: role.name },
-  });
+  // Atomic with the audit row.
+  await db.batch([
+    db.delete(schema.roles).where(eq(schema.roles.id, roleId)),
+    buildAuditEventStatement({
+      actorUserId: principal.userId,
+      action: "role.deleted",
+      targetType: "role",
+      targetId: roleId,
+      metadata: { name: role.name },
+    }),
+  ]);
 
   return { ok: true };
 }
@@ -315,36 +319,41 @@ export async function setRolePermissionsAction(input: {
     throw new Error("Role not found");
   }
 
-  // Replace-all strategy: delete existing grants, insert the new set.
-  await db
-    .delete(schema.rolePermissions)
-    .where(eq(schema.rolePermissions.roleId, input.roleId));
+  // Replace-all strategy: delete existing grants, insert the new
+  // set, all atomic with the audit row via D1 batch.
+  const stmts = [
+    db
+      .delete(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, input.roleId)),
+    ...(input.permissionIds.length > 0
+      ? [
+          db.insert(schema.rolePermissions).values(
+            input.permissionIds.map((permissionId) => ({
+              roleId: input.roleId,
+              permissionId,
+            })),
+          ),
+        ]
+      : []),
+    buildAuditEventStatement({
+      actorUserId: principal.userId,
+      action: "role.permissions_set",
+      targetType: "role",
+      targetId: input.roleId,
+      metadata: {
+        roleName: role.name,
+        permissionIds: input.permissionIds,
+      },
+    }),
+  ];
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
-  if (input.permissionIds.length > 0) {
-    await db.insert(schema.rolePermissions).values(
-      input.permissionIds.map((permissionId) => ({
-        roleId: input.roleId,
-        permissionId,
-      })),
-    );
-  }
-
-  // Invalidate anonymous permissions cache if we just changed the
-  // anonymous role's grants.
+  // KV cache invalidation isn't part of D1's transaction; do it
+  // after the batch commits so we don't invalidate ahead of a
+  // rollback.
   if (input.roleId === ANONYMOUS_ROLE_ID) {
     await invalidateAnonymousPermissionsCache();
   }
-
-  await recordAuditEvent({
-    actorUserId: principal.userId,
-    action: "role.permissions_set",
-    targetType: "role",
-    targetId: input.roleId,
-    metadata: {
-      roleName: role.name,
-      permissionIds: input.permissionIds,
-    },
-  });
 
   return { ok: true };
 }
@@ -423,20 +432,6 @@ export async function setUserRolesAction(input: {
   const assigned = roleIds.filter((id) => !priorIds.has(id));
   const unassigned = [...priorIds].filter((id) => !nextIds.has(id));
 
-  // Replace-all: delete existing assignments, insert new set.
-  await db
-    .delete(schema.userRoles)
-    .where(eq(schema.userRoles.userId, input.userId));
-
-  if (roleIds.length > 0) {
-    await db.insert(schema.userRoles).values(
-      roleIds.map((roleId) => ({
-        userId: input.userId,
-        roleId,
-      })),
-    );
-  }
-
   // One row per added / removed role so the audit page can answer
   // "who granted X this role?" with a single index lookup.
   const events = [
@@ -455,7 +450,27 @@ export async function setUserRolesAction(input: {
       targetId: roleId,
     })),
   ];
-  await recordAuditEvents(events);
+
+  // Replace-all: delete existing assignments, insert new set, audit
+  // the diff. All atomic via D1 batch.
+  const auditStmt = buildBulkAuditEventStatement(events);
+  const stmts = [
+    db
+      .delete(schema.userRoles)
+      .where(eq(schema.userRoles.userId, input.userId)),
+    ...(roleIds.length > 0
+      ? [
+          db.insert(schema.userRoles).values(
+            roleIds.map((roleId) => ({
+              userId: input.userId,
+              roleId,
+            })),
+          ),
+        ]
+      : []),
+    ...(auditStmt ? [auditStmt] : []),
+  ];
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
   return { ok: true };
 }
@@ -561,14 +576,10 @@ export async function bulkSetRolePermissionsAction(input: {
         })),
       ),
     );
-  const stmts = [...deletes, ...inserts];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
-
-  if (seen.has(ANONYMOUS_ROLE_ID)) {
-    await invalidateAnonymousPermissionsCache();
-  }
-
-  await recordAuditEvents(
+  // Audit one row per role-grants change. Bundled into the same
+  // batch so the permission mutations and the audit rows commit
+  // atomically.
+  const auditStmt = buildBulkAuditEventStatement(
     input.roles.map((entry) => ({
       actorUserId: principal.userId,
       action: "role.permissions_set",
@@ -577,6 +588,12 @@ export async function bulkSetRolePermissionsAction(input: {
       metadata: { permissionIds: entry.permissionIds },
     })),
   );
+  const stmts = [...deletes, ...inserts, ...(auditStmt ? [auditStmt] : [])];
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+
+  if (seen.has(ANONYMOUS_ROLE_ID)) {
+    await invalidateAnonymousPermissionsCache();
+  }
 
   return { ok: true };
 }
