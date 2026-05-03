@@ -341,6 +341,58 @@ describe("listAuditEventsAction", () => {
     expect(ids.size).toBe(25);
   });
 
+  // Guards the pagination tiebreaker fix from PR #41 review:
+  // `recordAuditEvents` writes bulk rows with the same default
+  // `createdAt`, so without `desc(id)` as a secondary sort the
+  // page boundary could re-order ties between requests and skip
+  // or duplicate rows. With the tiebreaker, identical timestamps
+  // are sorted by id (uuidv7-prefixed, sorts lex with createdAt).
+  it("paginates stably across rows that share createdAt (id tiebreaker)", async () => {
+    await asViewer();
+    const actor = await seedUser();
+    const sharedTimestamp = new Date("2026-05-01T12:00:00Z");
+    // 10 rows with identical timestamps. Use ids that wouldn't sort
+    // in the same order as insertion to make the tiebreaker visible.
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      id: `audit_tie_${String(i).padStart(3, "0")}`,
+      actorUserId: actor,
+      action: "registration.approved" as const,
+      createdAt: sharedTimestamp,
+    }));
+    await getDb().insert(schema.auditLog).values(rows);
+
+    const { listAuditEventsAction } =
+      await import("#/server/audit/audit-actions.server");
+    const page1 = await listAuditEventsAction({ page: 1, perPage: 4 });
+    const page2 = await listAuditEventsAction({ page: 2, perPage: 4 });
+    const page3 = await listAuditEventsAction({ page: 3, perPage: 4 });
+
+    expect(page1.totalCount).toBe(10);
+    expect(page1.entries).toHaveLength(4);
+    expect(page2.entries).toHaveLength(4);
+    expect(page3.entries).toHaveLength(2);
+
+    const allIds = [
+      ...page1.entries.map((e) => e.id),
+      ...page2.entries.map((e) => e.id),
+      ...page3.entries.map((e) => e.id),
+    ];
+    // No duplicates and no skipped rows. `[...allIds].sort(...)`
+    // because `.sort()` mutates and we still need allIds in its
+    // original page-traversal order for the next assertion.
+    expect(new Set(allIds).size).toBe(10);
+    expect([...allIds].sort()).toEqual(rows.map((r) => r.id).sort());
+
+    // The order within tied rows is `desc(id)` — verify the page
+    // boundaries sit at the right positions instead of the planner
+    // returning rows in some other arbitrary order.
+    const expectedOrder = [...rows]
+      .map((r) => r.id)
+      .sort()
+      .reverse();
+    expect(allIds).toEqual(expectedOrder);
+  });
+
   it("rejects callers without audit:view", async () => {
     await asViewer([]); // no permissions
 

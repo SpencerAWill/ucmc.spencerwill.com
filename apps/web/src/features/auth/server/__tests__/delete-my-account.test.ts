@@ -321,4 +321,70 @@ describe("deleteMyAccountAction", () => {
     expect(attestation?.revokedAt).not.toBeNull();
     expect(attestation?.revocationReason).toBe("wrong member");
   });
+
+  // Guards the audit-ordering fix from PR #41 review: the audit row
+  // must be written AFTER the destructive work succeeds, not before,
+  // so a failed avatar/user delete doesn't leave a false-positive
+  // "this account was deleted" entry behind.
+  describe("audit log: member.self_deleted", () => {
+    it("writes a self_deleted row on success with null FKs and metadata-captured identity", async () => {
+      const userId = await seedUser("selfdeleter@example.com");
+      await signInAs(userId);
+
+      await deleteMyAccountAction();
+
+      const auditRows = await getDb()
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, "member.self_deleted"));
+      expect(auditRows).toHaveLength(1);
+
+      // Both FKs are null (the user row is gone, so the cascade
+      // would have nulled them anyway — the action sets them
+      // explicitly to avoid relying on cascade timing).
+      expect(auditRows[0]?.actorUserId).toBeNull();
+      expect(auditRows[0]?.targetUserId).toBeNull();
+
+      // Metadata carries the documented PII exception so the row
+      // stays meaningful after the FKs are gone.
+      expect(auditRows[0]?.metadataJson).not.toBeNull();
+      const meta = JSON.parse(auditRows[0]?.metadataJson ?? "") as {
+        userId: string;
+        email: string;
+      };
+      expect(meta.userId).toBe(userId);
+      expect(meta.email).toBe("selfdeleter@example.com");
+    });
+
+    it("writes NO audit row if the avatar delete throws", async () => {
+      const userId = await seedUser("avatarboom@example.com", {
+        avatarKey: "avatars/avatarboom/abc.webp",
+      });
+      await signInAs(userId);
+
+      // Force the R2 helper to throw — simulates a transient R2
+      // outage during the delete flow.
+      deleteAvatarSpy.mockImplementationOnce(() => {
+        throw new Error("R2 unavailable");
+      });
+
+      await expect(deleteMyAccountAction()).rejects.toThrow("R2 unavailable");
+
+      // Pre-fix, the action wrote the audit row before this throw,
+      // leaving a "selfdeleted" entry for an account that still
+      // exists. Post-fix, no audit row should be present.
+      const auditRows = await getDb()
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, "member.self_deleted"));
+      expect(auditRows).toHaveLength(0);
+
+      // And the user row is also still present (the throw aborts
+      // before the DELETE).
+      const user = await getDb().query.users.findFirst({
+        where: eq(schema.users.id, userId),
+      });
+      expect(user).toBeDefined();
+    });
+  });
 });

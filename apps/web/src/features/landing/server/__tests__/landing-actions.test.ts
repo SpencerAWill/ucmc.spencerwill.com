@@ -28,6 +28,7 @@ const {
   createFaqItemAction,
   createHeroSlideAction,
   deleteActivityAction,
+  deleteFaqItemAction,
   deleteHeroSlideAction,
   getLandingContentAction,
   removeAboutImageAction,
@@ -311,6 +312,36 @@ describe("faq items", () => {
     const content = await getLandingContentAction();
     expect(content.faqItems).toHaveLength(1);
     expect(content.faqItems[0].answer).toBe("Sometimes.");
+  });
+
+  // Guards the existence-check fix from PR #41 review: the repo's
+  // updateFaqItem/deleteFaqItem silently no-op on missing IDs, which
+  // (without a guard) would emit a `landing.faq_edited` audit row for
+  // an edit that never happened.
+  it("updateFaqItemAction does not write an audit row for a nonexistent id", async () => {
+    await signInAsAdmin();
+    await updateFaqItemAction({
+      id: "faq_does_not_exist",
+      question: "Q?",
+      answer: "A.",
+    });
+
+    const auditRows = await getDb()
+      .select({ id: schema.auditLog.id })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "landing.faq_edited"));
+    expect(auditRows).toHaveLength(0);
+  });
+
+  it("deleteFaqItemAction does not write an audit row for a nonexistent id", async () => {
+    await signInAsAdmin();
+    await deleteFaqItemAction({ id: "faq_does_not_exist" });
+
+    const auditRows = await getDb()
+      .select({ id: schema.auditLog.id })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "landing.faq_edited"));
+    expect(auditRows).toHaveLength(0);
   });
 });
 
