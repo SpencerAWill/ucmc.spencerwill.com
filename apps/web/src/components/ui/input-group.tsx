@@ -65,6 +65,11 @@ function InputGroupAddon({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
+    // Visual addon that delegates click-to-focus to the sibling input,
+    // mimicking native <label> behavior. Keyboard users tab directly to
+    // the input, so a separate key handler would be redundant — focus
+    // already lands where it should without going through this element.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <div
       role="group"
       data-slot="input-group-addon"

@@ -76,7 +76,7 @@ function SignInPage() {
             <Link
               to="/sign-in"
               search={{ register: false }}
-              className="text-primary underline-offset-4 hover:underline"
+              className="text-primary underline underline-offset-4"
             >
               Sign in
             </Link>
@@ -87,7 +87,7 @@ function SignInPage() {
             <Link
               to="/sign-in"
               search={{ register: true }}
-              className="text-primary underline-offset-4 hover:underline"
+              className="text-primary underline underline-offset-4"
             >
               Create an account
             </Link>

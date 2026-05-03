@@ -206,10 +206,15 @@ export function AvatarEditor({
                 circularCrop
                 keepSelection
               >
+                {/* onLoad fires the initial crop calculation once the
+                    image is decoded — not a user interaction, but the
+                    rule flags every listener on a non-interactive
+                    element regardless of semantics. */}
+                {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
                 <img
                   ref={imgRef}
                   src={workingUrl}
-                  alt="Photo to crop"
+                  alt="Selected file, awaiting crop"
                   onLoad={onImageLoad}
                   className="max-h-[60vh] max-w-full"
                 />

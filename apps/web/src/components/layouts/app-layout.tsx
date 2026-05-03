@@ -84,14 +84,30 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       className="flex-col"
       style={{ "--header-height": HEADER_HEIGHT } as CSSProperties}
     >
+      {/*
+       * Skip link — visually hidden until it receives focus, at which
+       * point it slides into the top-left of the viewport. First
+       * focusable element on every page so keyboard users can jump
+       * past the header + sidebar without tabbing through every nav
+       * item. WCAG 2.1 AA, SC 2.4.1 (Bypass Blocks).
+       */}
+      <a
+        href="#main"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-2 focus-visible:top-2 focus-visible:z-50 focus-visible:rounded-md focus-visible:bg-background focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-foreground focus-visible:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        Skip to main content
+      </a>
       <header className="sticky top-0 z-30 flex h-(--header-height) w-full items-center border-b bg-primary/95 px-4 text-primary-foreground backdrop-blur-lg">
-        <nav className="flex w-full flex-nowrap items-center gap-x-3">
+        <nav
+          aria-label="Primary"
+          className="flex w-full flex-nowrap items-center gap-x-3"
+        >
           <div className="flex-1">
             <SidebarTriggerWithTooltip />
           </div>
           <div className="flex flex-1 flex-nowrap justify-center">
-            <Link to="/" className="text-center">
-              <img src="/logo192.png" alt="Logo" className="h-8 w-auto" />
+            <Link to="/" className="text-center" aria-label="UCMC home">
+              <img src="/logo192.png" alt="" className="h-8 w-auto" />
             </Link>
           </div>
           <div className="flex flex-1 flex-nowrap flex-row-reverse gap-x-2">
@@ -116,7 +132,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarRail />
         </Sidebar>
         <SidebarInset>
-          {children}
+          {/*
+           * `tabIndex={-1}` makes the landmark programmatically
+           * focusable so the skip-link target receives focus on
+           * activation; without it, browsers vary on whether they
+           * move focus or only scroll position.
+           */}
+          <main id="main" tabIndex={-1} className="outline-none">
+            {children}
+          </main>
           <AppFooter />
         </SidebarInset>
       </div>
