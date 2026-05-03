@@ -9,6 +9,7 @@ import { and, asc, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import {
+  buildAuditEventStatement,
   recordAuditEvent,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
@@ -486,6 +487,9 @@ export async function approveRegistrationsAction(
       .onConflictDoNothing();
   }
 
+  // Sequential audit — see `audit-log.server.ts` residual case
+  // (`.returning()` result drives the audit set; D1 batches can't
+  // reference a prior statement's output).
   await recordAuditEvents(
     updatedIds.map((userId) => ({
       actorUserId: approver.userId,
@@ -517,6 +521,7 @@ export async function rejectRegistrationsAction(
     .where(inArray(schema.users.id, userIds))
     .returning({ id: schema.users.id });
 
+  // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
     updated.map(({ id }) => ({
       actorUserId: approver.userId,
@@ -568,6 +573,7 @@ export async function deactivateMembersAction(
       .where(inArray(schema.sessions.userId, updatedIds));
   }
 
+  // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
     updatedIds.map((userId) => ({
       actorUserId: principal.userId,
@@ -618,6 +624,7 @@ export async function reactivateMembersAction(
       .onConflictDoNothing();
   }
 
+  // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
     updatedIds.map((userId) => ({
       actorUserId: approver.userId,
@@ -651,6 +658,7 @@ export async function unrejectMembersAction(
     )
     .returning({ id: schema.users.id });
 
+  // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
     updated.map(({ id }) => ({
       actorUserId: principal.userId,
@@ -686,6 +694,7 @@ export async function revokeUserSessionsAction(
   // Audit only when something was actually revoked. Session count
   // captured in metadata so the audit page can show the blast
   // radius without joining back to a now-empty sessions table.
+  // Sequential audit — see `audit-log.server.ts` residual case.
   if (deleted.length > 0) {
     await recordAuditEvent({
       actorUserId: principal.userId,
@@ -724,45 +733,45 @@ export async function adminUpdateProfileAction(input: {
   }
 
   const { userId, emergencyContacts, ...profileData } = input;
-  await db
-    .insert(schema.profiles)
-    .values({ userId, ...profileData, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: schema.profiles.userId,
-      set: { ...profileData, updatedAt: new Date() },
-    });
-
-  // Replace emergency contacts: delete existing, then insert new set.
-  await db
-    .delete(schema.emergencyContacts)
-    .where(eq(schema.emergencyContacts.userId, userId));
-
-  if (emergencyContacts.length > 0) {
-    await db.insert(schema.emergencyContacts).values(
-      emergencyContacts.map((ec) => ({
-        id: `ec_${uuidv7()}`,
-        userId,
-        name: ec.name,
-        phone: ec.phone,
-        relationship: ec.relationship,
-      })),
-    );
-  }
-
-  // Field names only — never the values themselves (those would be PII
-  // by definition since this action edits a person's identifying info).
-  // The before/after diff lives in the row's history if anyone needs
-  // to investigate; the audit row just establishes that an admin
-  // touched this profile.
-  await recordAuditEvent({
-    actorUserId: principal.userId,
-    action: "profile.force_edited",
-    targetUserId: userId,
-    metadata: {
-      emergencyContactCount: emergencyContacts.length,
-      ucAffiliation: profileData.ucAffiliation,
-    },
-  });
+  // Profile upsert + emergency-contact replace + audit row, all
+  // committed as one D1 batch. Field names only in audit metadata —
+  // the values themselves would be PII by definition since this
+  // action edits a person's identifying info.
+  const stmts = [
+    db
+      .insert(schema.profiles)
+      .values({ userId, ...profileData, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: schema.profiles.userId,
+        set: { ...profileData, updatedAt: new Date() },
+      }),
+    db
+      .delete(schema.emergencyContacts)
+      .where(eq(schema.emergencyContacts.userId, userId)),
+    ...(emergencyContacts.length > 0
+      ? [
+          db.insert(schema.emergencyContacts).values(
+            emergencyContacts.map((ec) => ({
+              id: `ec_${uuidv7()}`,
+              userId,
+              name: ec.name,
+              phone: ec.phone,
+              relationship: ec.relationship,
+            })),
+          ),
+        ]
+      : []),
+    buildAuditEventStatement({
+      actorUserId: principal.userId,
+      action: "profile.force_edited",
+      targetUserId: userId,
+      metadata: {
+        emergencyContactCount: emergencyContacts.length,
+        ucAffiliation: profileData.ucAffiliation,
+      },
+    }),
+  ];
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
   return { ok: true };
 }
