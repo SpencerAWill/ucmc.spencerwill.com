@@ -285,9 +285,10 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
     heading: "Retention",
     bullets: [
       "Active member data is retained as long as your account is active.",
-      "Pending registrations not approved within 30 days may be purged.",
-      "Deactivated accounts may be purged after 12 months of inactivity.",
-      "Waiver attestation records (metadata only — not the paper waiver) may be retained for up to 7 years post-cycle for liability documentation.",
+      "Rejected registrations are deleted 30 days after rejection. (If you re-register and are approved before then, the original row is reset and the clock starts over.)",
+      "Deactivated accounts are deleted 12 months after deactivation. Reactivation before then resets the clock.",
+      "Waiver attestation records (metadata only — not the paper waiver) are retained while still in effect; revoked attestations are deleted 90 days after revocation.",
+      "Avatar images and landing-page images stored in object storage are reconciled against the database daily; any object no longer referenced by an active row is deleted.",
       "You can delete your account immediately at any time via the controls on /account; this also removes your avatar from R2 and signs you out everywhere.",
     ],
   },
