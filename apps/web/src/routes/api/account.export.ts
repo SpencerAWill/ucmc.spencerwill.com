@@ -10,6 +10,8 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 
+import { sanitizeFilenameSegment } from "#/lib/sanitize-filename";
+
 export const Route = createFileRoute("/api/account/export")({
   server: {
     handlers: {
@@ -27,12 +29,16 @@ export const Route = createFileRoute("/api/account/export")({
           throw err;
         }
 
-        const filename = `ucmc-export-${payload.user?.email ?? "account"}-${new Date().toISOString().slice(0, 10)}.json`;
+        const safeIdentifier = sanitizeFilenameSegment(
+          payload.user?.email ?? "account",
+        );
+        const date = new Date().toISOString().slice(0, 10);
+        const filename = `ucmc-export-${safeIdentifier}-${date}.json`;
 
         return new Response(JSON.stringify(payload, null, 2), {
           headers: {
             "Content-Type": "application/json; charset=utf-8",
-            "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+            "Content-Disposition": `attachment; filename="${filename}"`,
             "Cache-Control": "private, no-store",
           },
         });

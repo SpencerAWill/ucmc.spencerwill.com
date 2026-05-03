@@ -236,7 +236,10 @@ export async function exportMyDataAction(): Promise<{
     cycle: string;
     version: string;
     attestedAt: Date;
-    attestedBy: string;
+    // attestedBy + revokedBy can be null when the officer who acted
+    // on the row has since deleted their account (FK ON DELETE SET
+    // NULL, see 0018_waiver_attestedby_set_null.sql).
+    attestedBy: string | null;
     revokedAt: Date | null;
     revokedBy: string | null;
     revocationReason: string | null;
