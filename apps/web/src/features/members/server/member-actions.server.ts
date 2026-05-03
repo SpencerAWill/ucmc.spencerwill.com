@@ -8,6 +8,10 @@
 import { and, asc, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import {
+  recordAuditEvent,
+  recordAuditEvents,
+} from "#/server/audit/audit-log.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
@@ -459,21 +463,36 @@ export async function approveRegistrationsAction(
   const approver = await requireApprover();
   const db = getDb();
 
-  // Single UPDATE for all users.
-  await db
+  // `.returning({ id })` so the audit + role-grant operate on the
+  // rows the UPDATE actually touched, not the raw request list.
+  // This dedupes a buggy caller that repeats the same id and filters
+  // out nonexistent IDs — without it, both cases would emit phantom
+  // `registration.approved` rows.
+  const updated = await db
     .update(schema.users)
     .set({
       status: "approved",
       approvedAt: new Date(),
       approvedBy: approver.userId,
     })
-    .where(inArray(schema.users.id, userIds));
+    .where(inArray(schema.users.id, userIds))
+    .returning({ id: schema.users.id });
+  const updatedIds = updated.map(({ id }) => id);
 
-  // Batch-insert the member role grant for every approved user.
-  await db
-    .insert(schema.userRoles)
-    .values(userIds.map((userId) => ({ userId, roleId: "role_member" })))
-    .onConflictDoNothing();
+  if (updatedIds.length > 0) {
+    await db
+      .insert(schema.userRoles)
+      .values(updatedIds.map((userId) => ({ userId, roleId: "role_member" })))
+      .onConflictDoNothing();
+  }
+
+  await recordAuditEvents(
+    updatedIds.map((userId) => ({
+      actorUserId: approver.userId,
+      action: "registration.approved",
+      targetUserId: userId,
+    })),
+  );
 
   // TODO: send approval notification emails (per-user; will need a loop
   // or a batch email API call here when email notifications are added).
@@ -486,12 +505,25 @@ export async function approveRegistrationsAction(
 export async function rejectRegistrationsAction(
   userIds: string[],
 ): Promise<{ ok: true }> {
-  await requireApprover();
+  const approver = await requireApprover();
 
-  await getDb()
+  // `.returning({ id })` gives us the rows the UPDATE actually
+  // touched. Audit only those so a stale or malformed request that
+  // includes already-rejected or nonexistent IDs doesn't produce
+  // false-positive audit rows.
+  const updated = await getDb()
     .update(schema.users)
     .set({ status: "rejected", rejectedAt: new Date() })
-    .where(inArray(schema.users.id, userIds));
+    .where(inArray(schema.users.id, userIds))
+    .returning({ id: schema.users.id });
+
+  await recordAuditEvents(
+    updated.map(({ id }) => ({
+      actorUserId: approver.userId,
+      action: "registration.rejected",
+      targetUserId: id,
+    })),
+  );
 
   // TODO: send rejection notification emails (per-user).
 
@@ -511,8 +543,10 @@ export async function deactivateMembersAction(
 
   const db = getDb();
 
-  // Only deactivate users that are currently approved.
-  await db
+  // Only deactivate users that are currently approved. `.returning`
+  // gives the IDs of rows the UPDATE actually touched so the audit
+  // log doesn't claim a deactivation for users in the wrong status.
+  const updated = await db
     .update(schema.users)
     .set({ status: "deactivated", deactivatedAt: new Date() })
     .where(
@@ -520,12 +554,27 @@ export async function deactivateMembersAction(
         inArray(schema.users.id, userIds),
         eq(schema.users.status, "approved"),
       ),
-    );
+    )
+    .returning({ id: schema.users.id });
 
-  // Immediately revoke all sessions so deactivated users are signed out.
-  await db
-    .delete(schema.sessions)
-    .where(inArray(schema.sessions.userId, userIds));
+  // Immediately revoke all sessions so deactivated users are signed
+  // out. Limit to the IDs that actually transitioned — purging
+  // sessions for users we didn't touch would be a surprise side
+  // effect of the bulk endpoint.
+  const updatedIds = updated.map(({ id }) => id);
+  if (updatedIds.length > 0) {
+    await db
+      .delete(schema.sessions)
+      .where(inArray(schema.sessions.userId, updatedIds));
+  }
+
+  await recordAuditEvents(
+    updatedIds.map((userId) => ({
+      actorUserId: principal.userId,
+      action: "member.deactivated",
+      targetUserId: userId,
+    })),
+  );
 
   return { ok: true };
 }
@@ -541,7 +590,9 @@ export async function reactivateMembersAction(
   // Only reactivate users that are currently deactivated. Clear
   // `deactivatedAt` so a future deactivation gets a fresh retention
   // clock rather than counting from the *first* deactivation.
-  await db
+  // `.returning` so the audit + role-grant operate on the rows that
+  // actually transitioned, not the raw request list.
+  const updated = await db
     .update(schema.users)
     .set({
       status: "approved",
@@ -554,13 +605,26 @@ export async function reactivateMembersAction(
         inArray(schema.users.id, userIds),
         eq(schema.users.status, "deactivated"),
       ),
-    );
+    )
+    .returning({ id: schema.users.id });
+  const updatedIds = updated.map(({ id }) => id);
 
-  // Ensure member role is granted (may already exist from prior approval).
-  await db
-    .insert(schema.userRoles)
-    .values(userIds.map((userId) => ({ userId, roleId: "role_member" })))
-    .onConflictDoNothing();
+  // Ensure member role is granted on the rows we actually
+  // reactivated (may already exist from prior approval).
+  if (updatedIds.length > 0) {
+    await db
+      .insert(schema.userRoles)
+      .values(updatedIds.map((userId) => ({ userId, roleId: "role_member" })))
+      .onConflictDoNothing();
+  }
+
+  await recordAuditEvents(
+    updatedIds.map((userId) => ({
+      actorUserId: approver.userId,
+      action: "member.reactivated",
+      targetUserId: userId,
+    })),
+  );
 
   return { ok: true };
 }
@@ -570,12 +634,13 @@ export async function reactivateMembersAction(
 export async function unrejectMembersAction(
   userIds: string[],
 ): Promise<{ ok: true }> {
-  await requireMembersManager();
+  const principal = await requireMembersManager();
 
   // Move rejected users back to pending so they re-enter the approval
   // queue. Clear `rejectedAt` so a future rejection gets a fresh
   // retention clock rather than counting from the *first* rejection.
-  await getDb()
+  // `.returning` so we only audit rows that actually changed.
+  const updated = await getDb()
     .update(schema.users)
     .set({ status: "pending", rejectedAt: null })
     .where(
@@ -583,7 +648,16 @@ export async function unrejectMembersAction(
         inArray(schema.users.id, userIds),
         eq(schema.users.status, "rejected"),
       ),
-    );
+    )
+    .returning({ id: schema.users.id });
+
+  await recordAuditEvents(
+    updated.map(({ id }) => ({
+      actorUserId: principal.userId,
+      action: "registration.unrejected",
+      targetUserId: id,
+    })),
+  );
 
   return { ok: true };
 }
@@ -604,9 +678,22 @@ export async function revokeUserSessionsAction(
     throw new Error("Cannot revoke your own sessions (use Sign Out)");
   }
 
-  await getDb()
+  const deleted = await getDb()
     .delete(schema.sessions)
-    .where(eq(schema.sessions.userId, userId));
+    .where(eq(schema.sessions.userId, userId))
+    .returning({ id: schema.sessions.id });
+
+  // Audit only when something was actually revoked. Session count
+  // captured in metadata so the audit page can show the blast
+  // radius without joining back to a now-empty sessions table.
+  if (deleted.length > 0) {
+    await recordAuditEvent({
+      actorUserId: principal.userId,
+      action: "member.sessions_revoked",
+      targetUserId: userId,
+      metadata: { revokedCount: deleted.length },
+    });
+  }
 
   return { ok: true };
 }
@@ -625,7 +712,7 @@ export async function adminUpdateProfileAction(input: {
   }>;
   ucAffiliation: schema.UcAffiliation;
 }): Promise<{ ok: true }> {
-  await requireMembersManager();
+  const principal = await requireMembersManager();
 
   const db = getDb();
   const user = await db.query.users.findFirst({
@@ -661,6 +748,21 @@ export async function adminUpdateProfileAction(input: {
       })),
     );
   }
+
+  // Field names only — never the values themselves (those would be PII
+  // by definition since this action edits a person's identifying info).
+  // The before/after diff lives in the row's history if anyone needs
+  // to investigate; the audit row just establishes that an admin
+  // touched this profile.
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "profile.force_edited",
+    targetUserId: userId,
+    metadata: {
+      emergencyContactCount: emergencyContacts.length,
+      ucAffiliation: profileData.ucAffiliation,
+    },
+  });
 
   return { ok: true };
 }

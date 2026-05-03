@@ -141,6 +141,20 @@
       "when": 1777777804644,
       "tag": "0019_user_rejected_deactivated_timestamps",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1777781252251,
+      "tag": "0020_audit_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1777781252252,
+      "tag": "0021_audit_view_permission_seed",
+      "breakpoints": true
     }
   ]
 }

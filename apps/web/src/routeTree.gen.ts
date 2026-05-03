@@ -21,6 +21,7 @@ import { Route as LegalRouteImport } from './routes/legal'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
+import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AboutRouteImport } from './routes/about'
@@ -102,6 +103,11 @@ const DisclaimerRoute = DisclaimerRouteImport.update({
 const DeactivatedRoute = DeactivatedRouteImport.update({
   id: '/deactivated',
   path: '/deactivated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AntiHazingRoute = AntiHazingRouteImport.update({
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/account': typeof AccountRouteWithChildren
   '/anti-hazing': typeof AntiHazingRoute
+  '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/health': typeof HealthRoute
@@ -255,6 +262,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/anti-hazing': typeof AntiHazingRoute
+  '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/health': typeof HealthRoute
@@ -291,6 +299,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/account': typeof AccountRouteWithChildren
   '/anti-hazing': typeof AntiHazingRoute
+  '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/health': typeof HealthRoute
@@ -329,6 +338,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/anti-hazing'
+    | '/audit'
     | '/deactivated'
     | '/disclaimer'
     | '/health'
@@ -364,6 +374,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/anti-hazing'
+    | '/audit'
     | '/deactivated'
     | '/disclaimer'
     | '/health'
@@ -399,6 +410,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/anti-hazing'
+    | '/audit'
     | '/deactivated'
     | '/disclaimer'
     | '/health'
@@ -436,6 +448,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRouteWithChildren
   AntiHazingRoute: typeof AntiHazingRoute
+  AuditRoute: typeof AuditRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
   HealthRoute: typeof HealthRoute
@@ -541,6 +554,13 @@ declare module '@tanstack/react-router' {
       path: '/deactivated'
       fullPath: '/deactivated'
       preLoaderRoute: typeof DeactivatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/anti-hazing': {
@@ -745,6 +765,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AccountRoute: AccountRouteWithChildren,
   AntiHazingRoute: AntiHazingRoute,
+  AuditRoute: AuditRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
   HealthRoute: HealthRoute,

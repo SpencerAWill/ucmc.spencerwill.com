@@ -162,6 +162,17 @@ export async function listFaqItems() {
     );
 }
 
+export async function getFaqItem(
+  id: string,
+): Promise<schema.LandingFaqItem | null> {
+  const rows = await getDb()
+    .select()
+    .from(schema.landingFaqItems)
+    .where(eq(schema.landingFaqItems.id, id))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertFaqItem(input: {
   id: string;
   question: string;

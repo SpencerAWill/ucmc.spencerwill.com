@@ -31,6 +31,8 @@ const {
   adminUpdateProfileAction,
   listMembersAction,
   getMemberDetailAction,
+  rejectRegistrationsAction,
+  approveRegistrationsAction,
 } = await import("#/features/members/server/member-actions.server");
 const { openSession, loadCurrentPrincipal } =
   await import("#/server/auth/session.server");
@@ -739,5 +741,163 @@ describe("loadCurrentPrincipal deactivated check", () => {
       .from(schema.sessions)
       .where(eq(schema.sessions.userId, targetId));
     expect(sessions).toHaveLength(0);
+  });
+});
+
+// ── audit-log integration ──────────────────────────────────────────────
+//
+// These tests guard the bulk-lifecycle audit fix from PR #41 review:
+// the audit row count must equal the count of users that ACTUALLY
+// transitioned, not the raw `userIds[]` length. Without `.returning()`
+// on the UPDATE, a stale or malformed request was producing
+// false-positive audit entries for accounts that didn't change state.
+
+describe("audit log: bulk lifecycle audits transitions, not requests", () => {
+  it("rejectRegistrationsAction: nonexistent IDs don't produce audit rows", async () => {
+    await signInAsAdmin();
+    const pendingId = await seedUser("pending@example.com", {
+      status: "pending",
+    });
+
+    // Mix of a valid pending user + a bogus ID. `rejectRegistrationsAction`
+    // doesn't filter on prior status (so it can also operate on an
+    // already-rejected row idempotently), but it MUST refuse to emit
+    // an audit row for an ID the UPDATE didn't touch.
+    await rejectRegistrationsAction([pendingId, "user_does_not_exist"]);
+
+    const rejectedRows = await getDb()
+      .select({ targetUserId: schema.auditLog.targetUserId })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "registration.rejected"));
+
+    expect(rejectedRows).toHaveLength(1);
+    expect(rejectedRows[0]?.targetUserId).toBe(pendingId);
+  });
+
+  it("deactivateMembersAction: only audits approved users that actually transitioned", async () => {
+    await signInAsAdmin();
+    const approvedId = await seedUser("approved-bulk@example.com", {
+      status: "approved",
+    });
+    const pendingId = await seedUser("pending-bulk@example.com", {
+      status: "pending",
+    });
+    const rejectedId = await seedUser("rejected-bulk@example.com", {
+      status: "rejected",
+    });
+
+    await deactivateMembersAction([
+      approvedId,
+      pendingId,
+      rejectedId,
+      "user_does_not_exist",
+    ]);
+
+    const auditRows = await getDb()
+      .select({ targetUserId: schema.auditLog.targetUserId })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "member.deactivated"));
+
+    // Only the approved user actually transitioned to deactivated;
+    // the audit log must reflect that and not advertise phantom
+    // deactivations for the other three IDs.
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]?.targetUserId).toBe(approvedId);
+  });
+
+  it("unrejectMembersAction: only audits rejected users that actually transitioned", async () => {
+    await signInAsAdmin();
+    const rejectedId = await seedUser("rejected-unreject@example.com", {
+      status: "rejected",
+    });
+    const pendingId = await seedUser("pending-unreject@example.com", {
+      status: "pending",
+    });
+
+    await unrejectMembersAction([rejectedId, pendingId, "user_does_not_exist"]);
+
+    const auditRows = await getDb()
+      .select({ targetUserId: schema.auditLog.targetUserId })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "registration.unrejected"));
+
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]?.targetUserId).toBe(rejectedId);
+  });
+
+  it("approveRegistrationsAction: dedupes and ignores nonexistent IDs in the audit log", async () => {
+    await signInAsAdmin();
+    const pendingId = await seedUser("pending-approve@example.com", {
+      status: "pending",
+    });
+
+    // Pass the same pending id twice plus a bogus id. The fix routes
+    // through `.returning({ id })`, which means the UPDATE returns the
+    // affected row once (per existing `pendingId`) regardless of how
+    // many times the caller sent it, and skips the bogus id entirely.
+    await approveRegistrationsAction([
+      pendingId,
+      pendingId,
+      "user_does_not_exist",
+    ]);
+
+    const approvedRows = await getDb()
+      .select({ targetUserId: schema.auditLog.targetUserId })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "registration.approved"));
+
+    expect(approvedRows).toHaveLength(1);
+    expect(approvedRows[0]?.targetUserId).toBe(pendingId);
+  });
+
+  it("revokeUserSessionsAction: writes a member.sessions_revoked audit row with revokedCount metadata", async () => {
+    const adminId = await signInAsAdmin();
+    const targetId = await seedUser("revoke-target@example.com");
+    const db = getDb();
+
+    // Seed two sessions for the target so we can verify the count is
+    // captured and not just the existence of the action.
+    await db.insert(schema.sessions).values([
+      {
+        id: "sess_revoke_1",
+        userId: targetId,
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+      {
+        id: "sess_revoke_2",
+        userId: targetId,
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    ]);
+
+    await revokeUserSessionsAction(targetId);
+
+    const auditRows = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "member.sessions_revoked"));
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]?.actorUserId).toBe(adminId);
+    expect(auditRows[0]?.targetUserId).toBe(targetId);
+    expect(JSON.parse(auditRows[0]?.metadataJson ?? "")).toEqual({
+      revokedCount: 2,
+    });
+  });
+
+  it("revokeUserSessionsAction: writes NO audit row when the user had no active sessions", async () => {
+    await signInAsAdmin();
+    const targetId = await seedUser("revoke-empty@example.com");
+
+    await revokeUserSessionsAction(targetId);
+
+    const auditRows = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "member.sessions_revoked"));
+    expect(auditRows).toHaveLength(0);
   });
 });
