@@ -22,7 +22,6 @@ const auditActionEnum = z.enum([
   "registration.unrejected",
   "member.deactivated",
   "member.reactivated",
-  "member.hard_deleted",
   "member.self_deleted",
   "profile.force_edited",
   "role.created",
@@ -36,8 +35,6 @@ const auditActionEnum = z.enum([
   "landing.hero_slide_edited",
   "landing.activity_edited",
   "landing.faq_edited",
-  "announcement.published",
-  "announcement.deleted",
 ]);
 
 export const listAuditEventsInputSchema = z.object({

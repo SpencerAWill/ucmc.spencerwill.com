@@ -500,16 +500,21 @@ export async function rejectRegistrationsAction(
 ): Promise<{ ok: true }> {
   const approver = await requireApprover();
 
-  await getDb()
+  // `.returning({ id })` gives us the rows the UPDATE actually
+  // touched. Audit only those so a stale or malformed request that
+  // includes already-rejected or nonexistent IDs doesn't produce
+  // false-positive audit rows.
+  const updated = await getDb()
     .update(schema.users)
     .set({ status: "rejected", rejectedAt: new Date() })
-    .where(inArray(schema.users.id, userIds));
+    .where(inArray(schema.users.id, userIds))
+    .returning({ id: schema.users.id });
 
   await recordAuditEvents(
-    userIds.map((userId) => ({
+    updated.map(({ id }) => ({
       actorUserId: approver.userId,
       action: "registration.rejected",
-      targetUserId: userId,
+      targetUserId: id,
     })),
   );
 
@@ -531,8 +536,10 @@ export async function deactivateMembersAction(
 
   const db = getDb();
 
-  // Only deactivate users that are currently approved.
-  await db
+  // Only deactivate users that are currently approved. `.returning`
+  // gives the IDs of rows the UPDATE actually touched so the audit
+  // log doesn't claim a deactivation for users in the wrong status.
+  const updated = await db
     .update(schema.users)
     .set({ status: "deactivated", deactivatedAt: new Date() })
     .where(
@@ -540,15 +547,22 @@ export async function deactivateMembersAction(
         inArray(schema.users.id, userIds),
         eq(schema.users.status, "approved"),
       ),
-    );
+    )
+    .returning({ id: schema.users.id });
 
-  // Immediately revoke all sessions so deactivated users are signed out.
-  await db
-    .delete(schema.sessions)
-    .where(inArray(schema.sessions.userId, userIds));
+  // Immediately revoke all sessions so deactivated users are signed
+  // out. Limit to the IDs that actually transitioned — purging
+  // sessions for users we didn't touch would be a surprise side
+  // effect of the bulk endpoint.
+  const updatedIds = updated.map(({ id }) => id);
+  if (updatedIds.length > 0) {
+    await db
+      .delete(schema.sessions)
+      .where(inArray(schema.sessions.userId, updatedIds));
+  }
 
   await recordAuditEvents(
-    userIds.map((userId) => ({
+    updatedIds.map((userId) => ({
       actorUserId: principal.userId,
       action: "member.deactivated",
       targetUserId: userId,
@@ -569,7 +583,9 @@ export async function reactivateMembersAction(
   // Only reactivate users that are currently deactivated. Clear
   // `deactivatedAt` so a future deactivation gets a fresh retention
   // clock rather than counting from the *first* deactivation.
-  await db
+  // `.returning` so the audit + role-grant operate on the rows that
+  // actually transitioned, not the raw request list.
+  const updated = await db
     .update(schema.users)
     .set({
       status: "approved",
@@ -582,16 +598,21 @@ export async function reactivateMembersAction(
         inArray(schema.users.id, userIds),
         eq(schema.users.status, "deactivated"),
       ),
-    );
+    )
+    .returning({ id: schema.users.id });
+  const updatedIds = updated.map(({ id }) => id);
 
-  // Ensure member role is granted (may already exist from prior approval).
-  await db
-    .insert(schema.userRoles)
-    .values(userIds.map((userId) => ({ userId, roleId: "role_member" })))
-    .onConflictDoNothing();
+  // Ensure member role is granted on the rows we actually
+  // reactivated (may already exist from prior approval).
+  if (updatedIds.length > 0) {
+    await db
+      .insert(schema.userRoles)
+      .values(updatedIds.map((userId) => ({ userId, roleId: "role_member" })))
+      .onConflictDoNothing();
+  }
 
   await recordAuditEvents(
-    userIds.map((userId) => ({
+    updatedIds.map((userId) => ({
       actorUserId: approver.userId,
       action: "member.reactivated",
       targetUserId: userId,
@@ -611,7 +632,8 @@ export async function unrejectMembersAction(
   // Move rejected users back to pending so they re-enter the approval
   // queue. Clear `rejectedAt` so a future rejection gets a fresh
   // retention clock rather than counting from the *first* rejection.
-  await getDb()
+  // `.returning` so we only audit rows that actually changed.
+  const updated = await getDb()
     .update(schema.users)
     .set({ status: "pending", rejectedAt: null })
     .where(
@@ -619,13 +641,14 @@ export async function unrejectMembersAction(
         inArray(schema.users.id, userIds),
         eq(schema.users.status, "rejected"),
       ),
-    );
+    )
+    .returning({ id: schema.users.id });
 
   await recordAuditEvents(
-    userIds.map((userId) => ({
+    updated.map(({ id }) => ({
       actorUserId: principal.userId,
       action: "registration.unrejected",
-      targetUserId: userId,
+      targetUserId: id,
     })),
   );
 

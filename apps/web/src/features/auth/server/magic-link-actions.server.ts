@@ -344,23 +344,16 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
     }
   }
 
-  // Record the audit event BEFORE the user row goes away. The
-  // user-deletion FK cascade sets both `actorUserId` and
-  // `targetUserId` to NULL on this audit row; capturing the original
-  // userId + email in metadata preserves attribution. This is a
-  // documented exception to the no-PII-in-metadata rule (see
-  // `audit-log.server.ts`'s module doc-comment) — no other event
-  // type follows this pattern.
-  const { recordAuditEvent } = await import("#/server/audit/audit-log.server");
-  await recordAuditEvent({
-    actorUserId: principal.userId,
-    action: "member.self_deleted",
-    targetUserId: principal.userId,
-    metadata: {
-      userId: principal.userId,
-      email: principal.email,
-    },
-  });
+  // Capture the identifying info we'll need on the audit row BEFORE
+  // the user is gone — once the FK cascade fires, both
+  // `actorUserId` and `targetUserId` go to NULL and the row would
+  // otherwise have no way to identify whose account was deleted.
+  // This is a documented exception to the no-PII-in-metadata rule;
+  // see `audit-log.server.ts`'s module doc-comment.
+  const auditMetadata = {
+    userId: principal.userId,
+    email: principal.email,
+  };
 
   // Delete the avatar object from R2 before the row goes away. The
   // R2 helper is a no-op if the key doesn't exist.
@@ -375,6 +368,19 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
   // announcements.created_by is ON DELETE SET NULL, so authored
   // announcements stay but lose the author attribution.
   await db.delete(schema.users).where(eq(schema.users.id, principal.userId));
+
+  // Audit AFTER the destructive work succeeds — recording before
+  // would leave a false-positive row if the avatar cleanup or the
+  // user-row delete threw. Both `actorUserId` and `targetUserId`
+  // are NULL because the user is already gone; the captured
+  // metadata is the surviving attribution.
+  const { recordAuditEvent } = await import("#/server/audit/audit-log.server");
+  await recordAuditEvent({
+    actorUserId: null,
+    action: "member.self_deleted",
+    targetUserId: null,
+    metadata: auditMetadata,
+  });
 
   // Clear the session cookie. closeSession would also try to delete a
   // sessions row by id, but the cascade above already removed it; the

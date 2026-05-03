@@ -10,7 +10,7 @@
 INSERT OR IGNORE INTO permissions (id, name, description) VALUES
   ('perm_audit_view',
    'audit:view',
-   'Read the append-only audit log of admin / officer actions at /members/audit');
+   'Read the append-only audit log of admin / officer actions at /audit');
 --> statement-breakpoint
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES

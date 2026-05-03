@@ -363,6 +363,18 @@ export const landingActivities = sqliteTable(
  * hard-deleted, the SET NULL preserves the action's existence without
  * leaking PII through this surface. Never put email/phone/name in the
  * JSON blob.
+ *
+ * **One exception:** `member.self_deleted` deliberately captures the
+ * deleting user's `email + userId` in `metadata` because the FK
+ * cascade nulls both `actor_user_id` and `target_user_id` on the same
+ * row. Without that exception the audit row would survive with no
+ * way to identify the account, defeating the audit's whole purpose.
+ * No other action type follows this pattern; the helper module
+ * doc-comment in `src/server/audit/audit-log.server.ts` is the
+ * canonical statement of the rule.
+ *
+ * Adding a new action here requires it to actually be written by some
+ * code path — empty enum entries pollute the viewer's filter UI.
  */
 export const auditAction = [
   // Membership lifecycle (status transitions on `users`).
@@ -371,7 +383,6 @@ export const auditAction = [
   "registration.unrejected",
   "member.deactivated",
   "member.reactivated",
-  "member.hard_deleted",
   "member.self_deleted",
   "profile.force_edited",
   // RBAC.
@@ -388,9 +399,6 @@ export const auditAction = [
   "landing.hero_slide_edited",
   "landing.activity_edited",
   "landing.faq_edited",
-  // Announcements — same reasoning as landing.
-  "announcement.published",
-  "announcement.deleted",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 

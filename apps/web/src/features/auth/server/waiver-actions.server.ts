@@ -327,16 +327,18 @@ export async function revokeWaiverAttestationAction(input: {
     })
     .where(eq(schema.waiverAttestations.id, input.attestationId));
 
-  // Reason text is officer-authored decision text (not member PII) —
-  // safe to capture verbatim in metadata so the audit page can show
-  // why a revocation happened without an extra DB hop.
+  // Don't put `reason` in the audit metadata — it's officer-entered
+  // free text and can plausibly include a member's name, medical
+  // detail, or other PII. The reason is already persisted on the
+  // waiver_attestations row (`revocationReason` column) which the
+  // viewer can join to when needed; no need to duplicate it on the
+  // audit-log surface, where the PII discipline is stricter.
   await recordAuditEvent({
     actorUserId: officer.userId,
     action: "waiver.revoked",
     targetUserId: existing.userId,
     targetType: "waiver_attestation",
     targetId: existing.id,
-    metadata: { reason },
   });
 
   return { ok: true };

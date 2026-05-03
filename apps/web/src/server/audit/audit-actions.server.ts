@@ -12,20 +12,22 @@ import { getDb, schema } from "#/server/db";
 const PER_PAGE_DEFAULT = 50;
 const PER_PAGE_MAX = 200;
 
+export interface AuditUserRef {
+  userId: string;
+  /** `users.public_id` — the routable token used by `/members/$publicId`.
+   *  Exposed so the viewer can link to a member's profile without an
+   *  extra fetch. */
+  publicId: string;
+  preferredName: string | null;
+  email: string;
+}
+
 export interface AuditEntrySummary {
   id: string;
   action: schema.AuditAction;
   createdAt: number;
-  actor: {
-    userId: string;
-    preferredName: string | null;
-    email: string;
-  } | null;
-  target: {
-    userId: string;
-    preferredName: string | null;
-    email: string;
-  } | null;
+  actor: AuditUserRef | null;
+  target: AuditUserRef | null;
   /** Non-user target (role / landing setting / waiver attestation / etc.) */
   targetType: string | null;
   targetId: string | null;
@@ -113,9 +115,11 @@ export async function listAuditEventsAction(input: {
       action: schema.auditLog.action,
       createdAt: schema.auditLog.createdAt,
       actorUserId: schema.auditLog.actorUserId,
+      actorPublicId: actorUsers.publicId,
       actorEmail: actorUsers.email,
       actorPreferredName: actorProfiles.preferredName,
       targetUserId: schema.auditLog.targetUserId,
+      targetPublicId: targetUsers.publicId,
       targetEmail: targetUsers.email,
       targetPreferredName: targetProfiles.preferredName,
       targetType: schema.auditLog.targetType,
@@ -128,7 +132,14 @@ export async function listAuditEventsAction(input: {
     .leftJoin(targetUsers, eq(targetUsers.id, schema.auditLog.targetUserId))
     .leftJoin(targetProfiles, eq(targetProfiles.userId, targetUsers.id))
     .where(whereClause)
-    .orderBy(desc(schema.auditLog.createdAt))
+    // Tiebreak on `id` so pagination stays stable across requests
+    // even when many rows share the same `createdAt` — `recordAuditEvents`
+    // inserts bulk rows with the same default timestamp, so without
+    // the secondary sort the page boundary could skip or duplicate
+    // entries between requests. `id` is uuidv7-prefixed so newer ids
+    // sort lexicographically after older ones, matching createdAt
+    // direction.
+    .orderBy(desc(schema.auditLog.createdAt), desc(schema.auditLog.id))
     .limit(perPage)
     .offset(offset);
 
@@ -141,6 +152,7 @@ export async function listAuditEventsAction(input: {
       actor: r.actorUserId
         ? {
             userId: r.actorUserId,
+            publicId: r.actorPublicId ?? "",
             email: r.actorEmail ?? "",
             preferredName: r.actorPreferredName ?? null,
           }
@@ -148,6 +160,7 @@ export async function listAuditEventsAction(input: {
       target: r.targetUserId
         ? {
             userId: r.targetUserId,
+            publicId: r.targetPublicId ?? "",
             email: r.targetEmail ?? "",
             preferredName: r.targetPreferredName ?? null,
           }

@@ -17,6 +17,7 @@ import {
   deleteFaqItem,
   deleteHeroSlide,
   getActivity,
+  getFaqItem,
   getHeroSlide,
   insertActivity,
   insertFaqItem,
@@ -316,6 +317,13 @@ export async function updateFaqItemAction(
   input: FaqUpdateInput,
 ): Promise<{ ok: true }> {
   const principal = await requireLandingEditor();
+  // The repo's UPDATE silently no-ops on a missing id; audit only
+  // when the row actually exists so a stale request can't produce a
+  // false-positive `faq_edited` row.
+  const existing = await getFaqItem(input.id);
+  if (!existing) {
+    return { ok: true };
+  }
   await updateFaqItem(input);
   await recordAuditEvent({
     actorUserId: principal.userId,
@@ -331,6 +339,12 @@ export async function deleteFaqItemAction(input: {
   id: string;
 }): Promise<{ ok: true }> {
   const principal = await requireLandingEditor();
+  // Same existence guard as update — the repo's DELETE silently
+  // no-ops on missing rows, and we don't want phantom audit entries.
+  const existing = await getFaqItem(input.id);
+  if (!existing) {
+    return { ok: true };
+  }
   await deleteFaqItem(input.id);
   await recordAuditEvent({
     actorUserId: principal.userId,

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { CalendarIcon, X } from "lucide-react";
 import { useCallback } from "react";
@@ -45,7 +45,6 @@ const AUDIT_ACTIONS = [
   "registration.unrejected",
   "member.deactivated",
   "member.reactivated",
-  "member.hard_deleted",
   "member.self_deleted",
   "profile.force_edited",
   "role.created",
@@ -59,8 +58,6 @@ const AUDIT_ACTIONS = [
   "landing.hero_slide_edited",
   "landing.activity_edited",
   "landing.faq_edited",
-  "announcement.published",
-  "announcement.deleted",
 ] as const;
 
 const PER_PAGE_OPTIONS = ["25", "50", "100", "200"] as const;
@@ -303,12 +300,15 @@ function DateRangeCalendar({
   onSelect: (range: DateRange | undefined) => void;
 }) {
   const today = new Date();
-  const fiveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+  // Unlike the registrations queue (whose source rows are bounded by
+  // the user-retention sweeps), the audit log is intentionally
+  // retained beyond those windows and includes non-user events
+  // (landing edits, role changes) that have no retention sweep at
+  // all. Show three years of history so older incident reviews can
+  // still navigate to the right month — picking an earlier date than
+  // the table actually has is harmless (returns no rows).
+  const startMonth = new Date(today.getFullYear() - 3, today.getMonth(), 1);
 
-  // Audit log only goes as far back as the table was first written
-  // to (migration 0020), and the deactivation retention sweep gives
-  // the practical history a 12-month upper bound. Six visible months
-  // is more than enough for any realistic incident review.
   const scrollRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
       node.scrollTop = node.scrollHeight;
@@ -316,7 +316,7 @@ function DateRangeCalendar({
   }, []);
 
   return (
-    <div ref={scrollRef} className="max-h-[22rem] overflow-y-auto">
+    <div ref={scrollRef} className="max-h-88 overflow-y-auto">
       <Calendar
         mode="range"
         selected={dateRange}
@@ -325,7 +325,7 @@ function DateRangeCalendar({
         showOutsideDays={false}
         disabled={{ after: today }}
         classNames={{ months: "flex flex-col gap-4" }}
-        startMonth={fiveMonthsAgo}
+        startMonth={startMonth}
         endMonth={today}
         defaultMonth={today}
       />
@@ -350,7 +350,7 @@ function AuditCard({ entry }: { entry: AuditEntrySummary }) {
             {entry.action}
           </Badge>
           <CardTitle className="text-sm font-medium">
-            {describeActor(entry)}
+            <ActorLabel entry={entry} />
           </CardTitle>
         </div>
         <CardDescription className="text-xs">
@@ -360,21 +360,7 @@ function AuditCard({ entry }: { entry: AuditEntrySummary }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
-        {entry.target ? (
-          <p>
-            Target:{" "}
-            <span className="font-medium">
-              {entry.target.preferredName ?? entry.target.email}
-            </span>
-          </p>
-        ) : entry.targetType && entry.targetId ? (
-          <p>
-            Target:{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              {entry.targetType}:{entry.targetId}
-            </code>
-          </p>
-        ) : null}
+        <TargetLabel entry={entry} />
         {entry.metadata ? (
           <pre className="overflow-x-auto rounded bg-muted p-2 text-xs">
             {JSON.stringify(entry.metadata, null, 2)}
@@ -385,9 +371,71 @@ function AuditCard({ entry }: { entry: AuditEntrySummary }) {
   );
 }
 
-function describeActor(entry: AuditEntrySummary): string {
-  if (!entry.actor) {
-    return "(deleted user)";
+function ActorLabel({ entry }: { entry: AuditEntrySummary }) {
+  if (entry.actor) {
+    const name = entry.actor.preferredName ?? entry.actor.email;
+    // Link to the member's profile page — fastest way to investigate
+    // "what else has this person done?".
+    return (
+      <Link
+        to="/members/$publicId"
+        params={{ publicId: entry.actor.publicId }}
+        className="underline-offset-2 hover:underline"
+      >
+        {name}
+      </Link>
+    );
   }
-  return entry.actor.preferredName ?? entry.actor.email;
+  // Actor FK has been cascade-NULLed (user hard-deleted). For
+  // self-delete events the original email is captured in metadata as
+  // a documented exception; surface it so the row remains useful.
+  const meta = entry.metadata;
+  if (typeof meta?.email === "string" && meta.email.length > 0) {
+    return (
+      <span className="text-muted-foreground">{meta.email} (deleted)</span>
+    );
+  }
+  return <span className="text-muted-foreground">(deleted user)</span>;
+}
+
+function TargetLabel({ entry }: { entry: AuditEntrySummary }) {
+  // User target with a live FK — link to their profile.
+  if (entry.target) {
+    const name = entry.target.preferredName ?? entry.target.email;
+    return (
+      <p>
+        Target:{" "}
+        <Link
+          to="/members/$publicId"
+          params={{ publicId: entry.target.publicId }}
+          className="font-medium underline-offset-2 hover:underline"
+        >
+          {name}
+        </Link>
+      </p>
+    );
+  }
+  // User target whose FK has cascaded to NULL — fall back to the
+  // metadata-captured email if the action documented one (today
+  // that's only `member.self_deleted`). Without this fallback, most
+  // historical member-targeted events lose their target label
+  // entirely after retention runs.
+  const meta = entry.metadata;
+  if (typeof meta?.email === "string" && meta.email.length > 0) {
+    return (
+      <p className="text-muted-foreground">Target: {meta.email} (deleted)</p>
+    );
+  }
+  // Non-user target (role / landing setting / waiver attestation).
+  if (entry.targetType && entry.targetId) {
+    return (
+      <p>
+        Target:{" "}
+        <code className="rounded bg-muted px-1 py-0.5 text-xs">
+          {entry.targetType}:{entry.targetId}
+        </code>
+      </p>
+    );
+  }
+  return null;
 }

@@ -16,13 +16,14 @@
  * phone, full name, or anything reversible to a specific person; that
  * comes from the FK relationships if the row still exists.
  *
- * **One exception:** `member.self_deleted` and `member.hard_deleted`
- * cascade-NULL both `actorUserId` and `targetUserId` immediately on
- * the user-row delete, leaving the audit row with no attribution at
- * all. For those two events specifically, capture `email` (and the
- * original `userId` as a text value) in `metadata` so the row stays
- * meaningful — that's the whole point of preserving an audit trail
- * across deletions. No other event type should follow this pattern.
+ * **One exception:** `member.self_deleted` cascade-NULLs both
+ * `actorUserId` and `targetUserId` immediately on the user-row
+ * delete, leaving the audit row with no attribution at all. For that
+ * event specifically, capture `email` (and the original `userId` as
+ * a text value) in `metadata` so the row stays meaningful — that's
+ * the whole point of preserving an audit trail across deletions. No
+ * other event type follows this pattern; if you find yourself adding
+ * one, the audit story for that flow is probably wrong.
  *
  * The schema doc-comment in `drizzle/schema.ts` is the canonical
  * statement of this rule.
