@@ -63,6 +63,7 @@ async function padTiming(start: number): Promise<void> {
 export async function requestMagicLinkAction(args: {
   email: string;
   turnstileToken: string;
+  redirect?: string;
 }): Promise<{ ok: true }> {
   const start = Date.now();
   try {
@@ -92,6 +93,7 @@ export async function requestMagicLinkAction(args: {
     await requestMagicLink({
       email: args.email,
       intent: existing ? "login" : "register",
+      redirect: args.redirect,
     });
 
     return { ok: true };

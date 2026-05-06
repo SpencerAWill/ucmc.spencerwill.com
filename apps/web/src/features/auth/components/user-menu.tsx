@@ -1,5 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Eye, KeyRound, LogOut, User as UserIcon } from "lucide-react";
+import {
+  Backpack,
+  Eye,
+  LayoutDashboard,
+  LogOut,
+  Map,
+  User as UserIcon,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { UserAvatar } from "#/components/user-avatar";
@@ -92,16 +99,22 @@ export function UserMenu() {
         ) : (
           <>
             <DropdownMenuItem asChild>
-              <Link to="/account">
+              <Link to="/my/account">
                 <UserIcon className="mr-2 size-4" />
-                Account
+                My Account
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/account/security">
-                <KeyRound className="mr-2 size-4" />
-                Security
-              </Link>
+            <DropdownMenuItem disabled>
+              <LayoutDashboard className="mr-2 size-4" />
+              My Dashboard
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled>
+              <Map className="mr-2 size-4" />
+              My Trips
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled>
+              <Backpack className="mr-2 size-4" />
+              My Gear
             </DropdownMenuItem>
           </>
         )}

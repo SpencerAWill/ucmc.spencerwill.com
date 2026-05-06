@@ -289,13 +289,13 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
       "Deactivated accounts are deleted 12 months after deactivation. Reactivation before then resets the clock.",
       "Waiver attestation records (metadata only — not the paper waiver) are retained while still in effect; revoked attestations are deleted 90 days after revocation.",
       "Avatar images and landing-page images stored in object storage are reconciled against the database daily; any object no longer referenced by an active row is deleted.",
-      "You can delete your account immediately at any time via the controls on /account; this also removes your avatar from R2 and signs you out everywhere.",
+      "You can delete your account immediately at any time via the controls on /my/account; this also removes your avatar from R2 and signs you out everywhere.",
     ],
   },
   {
     heading: "Your rights",
     paragraphs: [
-      "You can download a JSON copy of everything we have on you from your /account page. You can hard-delete your account from the same page; the deletion is immediate and irreversible. To correct or update individual fields, edit them on /account or /account/details.",
+      "You can download a JSON copy of everything we have on you from your /my/account page. You can hard-delete your account from the same page; the deletion is immediate and irreversible. To correct or update individual fields, edit them on /my/account or /my/account/details.",
     ],
   },
   {
@@ -359,7 +359,7 @@ export const TERMS_BODY: readonly LegalSection[] = [
   {
     heading: "Account termination",
     paragraphs: [
-      "You can delete your account at any time from /account; deletion is immediate and irreversible. UCMC officers may deactivate accounts that violate these terms or club policies; deactivated accounts can be reactivated by an officer.",
+      "You can delete your account at any time from /my/account; deletion is immediate and irreversible. UCMC officers may deactivate accounts that violate these terms or club policies; deactivated accounts can be reactivated by an officer.",
     ],
   },
   {

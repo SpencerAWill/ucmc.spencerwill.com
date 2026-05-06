@@ -17,12 +17,12 @@ import { profileInputSchema } from "#/server/profile/profile-schemas";
 import type { DetailsInput } from "#/server/profile/profile-schemas";
 
 /**
- * `/account/details` — private profile fields (legal name, M-number,
+ * `/my/account/details` — private profile fields (legal name, M-number,
  * phone) plus emergency contacts. Mirrors the server-side
  * `members:view_private` projection: only the user themselves and
  * admins ever see these values.
  */
-export const Route = createFileRoute("/account/details")({
+export const Route = createFileRoute("/my/account/details")({
   component: AccountDetailsPage,
 });
 

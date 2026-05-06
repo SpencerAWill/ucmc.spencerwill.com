@@ -27,7 +27,12 @@ export const Route = createFileRoute("/sign-in")({
 });
 
 function SignInPage() {
-  const { register, invalid, rate_limited } = Route.useSearch();
+  const { register, invalid, rate_limited, redirect } = Route.useSearch();
+  // Only honor relative-path redirects — anything else (external URL,
+  // protocol-relative, missing leading slash) is dropped to prevent
+  // open-redirect via crafted /sign-in?redirect=... links.
+  const safeRedirect =
+    redirect && redirect.startsWith("/") ? redirect : undefined;
   const mode = register ? "register" : "sign-in";
   const heading = register ? "Create your UCMC account" : "Sign in to UCMC";
   const subheading = register
@@ -55,7 +60,7 @@ function SignInPage() {
           </AlertDescription>
         </Alert>
       ) : null}
-      <MagicLinkForm defaultMode={mode} />
+      <MagicLinkForm defaultMode={mode} redirectTo={safeRedirect} />
       {register ? null : (
         <>
           {/* Passkey users skip the email round-trip. The button hides itself
@@ -66,7 +71,7 @@ function SignInPage() {
             or
             <span className="h-px flex-1 bg-border" />
           </div>
-          <SignInWithPasskeyButton />
+          <SignInWithPasskeyButton redirectTo={safeRedirect} />
         </>
       )}
       <p className="text-center text-sm text-muted-foreground">

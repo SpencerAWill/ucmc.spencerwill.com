@@ -16,13 +16,13 @@ import { profileInputSchema } from "#/server/profile/profile-schemas";
 import type { PublicProfileInput } from "#/server/profile/profile-schemas";
 
 /**
- * Default `/account` tab — shows the public-ish profile fields
+ * Default `/my/account` tab — shows the public-ish profile fields
  * (preferred name, UC affiliation) that fellow members can see in the
  * directory. Private fields (legal name, M-number, phone, emergency
- * contacts) live on the sibling `/account/details` route, mirroring
+ * contacts) live on the sibling `/my/account/details` route, mirroring
  * the server-side `members:view_private` projection split.
  */
-export const Route = createFileRoute("/account/")({
+export const Route = createFileRoute("/my/account/")({
   component: AccountProfilePage,
 });
 
@@ -89,7 +89,7 @@ function AccountProfilePage() {
       <p className="text-xs text-muted-foreground">
         Looking for your phone, legal name, or emergency contacts? Those live on
         the{" "}
-        <Link to="/account/details" className="underline">
+        <Link to="/my/account/details" className="underline">
           Details
         </Link>{" "}
         tab.

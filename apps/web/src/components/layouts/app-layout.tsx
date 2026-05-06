@@ -2,16 +2,42 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import {
+  BarChart3,
+  Boxes,
+  Briefcase,
+  CalendarClock,
+  CalendarDays,
   ChevronRight,
+  Compass,
+  Crown,
   Eye,
+  FileText,
+  Gavel,
+  GraduationCap,
+  HandCoins,
+  HandHeart,
+  Handshake,
+  HelpCircle,
   History,
+  Images,
+  Landmark,
+  ListChecks,
   Mail,
+  Wallet,
   Megaphone,
   MessageSquare,
+  MessagesSquare,
+  Newspaper,
+  Package,
+  Rss,
   ScrollText,
+  Settings,
   Shield,
+  Star,
+  Target,
   UserPlus,
   Users,
+  Vote,
 } from "lucide-react";
 
 import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
@@ -38,7 +64,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuAction,
@@ -127,7 +152,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           collapsible="icon"
           className="top-(--header-height) h-[calc(100svh-var(--header-height))]"
         >
-          <SidebarHeader />
           <SidebarContent>
             <SidebarNav />
           </SidebarContent>
@@ -172,128 +196,398 @@ function SidebarNav() {
   const canApproveRegistrations = hasPermission("registrations:approve");
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
-  const canViewAudit = hasPermission("audit:view");
-
-  if (!isApproved) {
-    return null;
-  }
 
   // Sub-items gated by permission. If none are visible, the Members
-  // link still renders but without the collapsible chevron. Audit is
-  // intentionally NOT in this set — it's a top-level sibling below.
+  // link still renders but without the collapsible chevron.
   const hasSubItems =
     canApproveRegistrations || canManageRoles || canVerifyWaivers;
 
   return (
-    <SidebarGroup>
-      <SidebarMenu>
-        {canReadAnnouncements ? (
+    <>
+      <SidebarGroup>
+        <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Announcements">
-              <Link to="/announcements">
-                <Megaphone />
-                <span>Announcements</span>
-              </Link>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="The Gear Cave (coming soon)"
+            >
+              <Boxes />
+              <span>The Gear Cave</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        ) : null}
-
-        <Collapsible defaultOpen className="group/collapsible">
           <SidebarMenuItem>
-            {/* Main button navigates to /members */}
-            <SidebarMenuButton asChild tooltip="Members">
-              <Link to="/members">
-                <Users />
-                <span>Members</span>
-              </Link>
-            </SidebarMenuButton>
-
-            {/* Chevron toggles sub-items — separate from the link */}
-            {hasSubItems ? (
+            {/*
+             * Collapsible sits inside SidebarMenuItem (not the other way
+             * around) so the <ul> only has <li> direct children — axe-core
+             * rule `list` rejects a <ul> with a <div> child, which is what
+             * Radix Collapsible renders as. Same pattern is used for
+             * Members below.
+             */}
+            <Collapsible className="group/collapsible">
+              <SidebarMenuButton
+                aria-disabled
+                tabIndex={-1}
+                tooltip="Scholarships (coming soon)"
+              >
+                <GraduationCap />
+                <span>Scholarships</span>
+              </SidebarMenuButton>
               <CollapsibleTrigger asChild>
                 <SidebarMenuAction className="data-[state=open]:rotate-90">
                   <ChevronRight />
                   <span className="sr-only">Toggle sub-menu</span>
                 </SidebarMenuAction>
               </CollapsibleTrigger>
-            ) : null}
-
-            {hasSubItems ? (
               <CollapsibleContent>
                 <SidebarMenuSub>
-                  {canApproveRegistrations ? (
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild>
-                        <Link to="/members/registrations">
-                          <UserPlus />
-                          <span>Registrations</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ) : null}
-                  {canVerifyWaivers ? (
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild>
-                        <Link to="/members/waivers">
-                          <ScrollText />
-                          <span>Waivers</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ) : null}
-                  {canManageRoles ? (
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild>
-                        <Link to="/members/roles">
-                          <Shield />
-                          <span>Roles</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ) : null}
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                      <HandCoins />
+                      <span>Earn It</span>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                      <Star />
+                      <span>Experiences</span>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                      <HelpCircle />
+                      <span>Questions</span>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </CollapsibleContent>
-            ) : null}
+            </Collapsible>
           </SidebarMenuItem>
-        </Collapsible>
-
-        {/*
-         * Audit log is intentionally a sibling of Members rather than
-         * a sub-item: it covers landing edits, role changes, waiver
-         * attestations, account deletions — i.e. everything the audit
-         * action enum lists. Nesting it under Members would imply
-         * "audit of members specifically", which it isn't.
-         */}
-        {canViewAudit ? (
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Audit log">
-              <Link to="/audit">
-                <History />
-                <span>Audit log</span>
-              </Link>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="Trip Gallery (coming soon)"
+            >
+              <Images />
+              <span>Trip Gallery</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        ) : null}
-      </SidebarMenu>
-    </SidebarGroup>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="Blog (coming soon)"
+            >
+              <Rss />
+              <span>Blog</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="Goosedown Gazette (coming soon)"
+            >
+              <Newspaper />
+              <span>Goosedown Gazette</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="Volunteer (coming soon)"
+            >
+              <HandHeart />
+              <span>Volunteer</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="History (coming soon)"
+            >
+              <Landmark />
+              <span>History</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroup>
+
+      {canReadAnnouncements || isApproved ? (
+        <SidebarGroup>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                aria-disabled
+                tabIndex={-1}
+                tooltip="Calendar (coming soon)"
+              >
+                <CalendarDays />
+                <span>Calendar</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+
+            {canReadAnnouncements ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Announcements">
+                  <Link to="/announcements">
+                    <Megaphone />
+                    <span>Announcements</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
+
+            {isApproved ? (
+              <>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    aria-disabled
+                    tabIndex={-1}
+                    tooltip="Forum (coming soon)"
+                  >
+                    <MessagesSquare />
+                    <span>Forum</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  {/*
+                   * Collapsible sits inside SidebarMenuItem (not the
+                   * other way around) so the <ul> only has <li> direct
+                   * children — axe-core's `list` rule rejects a <ul>
+                   * with a <div> child, which is what Radix Collapsible
+                   * renders as.
+                   */}
+                  <Collapsible defaultOpen className="group/collapsible">
+                    {/* Main button navigates to /members */}
+                    <SidebarMenuButton asChild tooltip="Members">
+                      <Link to="/members">
+                        <Users />
+                        <span>Members</span>
+                      </Link>
+                    </SidebarMenuButton>
+
+                    {/* Chevron toggles sub-items — separate from the link */}
+                    {hasSubItems ? (
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuAction className="data-[state=open]:rotate-90">
+                          <ChevronRight />
+                          <span className="sr-only">Toggle sub-menu</span>
+                        </SidebarMenuAction>
+                      </CollapsibleTrigger>
+                    ) : null}
+
+                    {hasSubItems ? (
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {canApproveRegistrations ? (
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link to="/members/registrations">
+                                  <UserPlus />
+                                  <span>Registrations</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ) : null}
+                          {canVerifyWaivers ? (
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link to="/members/waivers">
+                                  <ScrollText />
+                                  <span>Waivers</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ) : null}
+                          {canManageRoles ? (
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link to="/members/roles">
+                                  <Shield />
+                                  <span>Roles</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ) : null}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    ) : null}
+                  </Collapsible>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    aria-disabled
+                    tabIndex={-1}
+                    tooltip="Trips (coming soon)"
+                  >
+                    <Compass />
+                    <span>Trips</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    aria-disabled
+                    tabIndex={-1}
+                    tooltip="Gear (coming soon)"
+                  >
+                    <Package />
+                    <span>Gear</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    aria-disabled
+                    tabIndex={-1}
+                    tooltip="Elections (coming soon)"
+                  >
+                    <Vote />
+                    <span>Elections</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  {/*
+                   * Executive: workflow tools for the exec board
+                   * (meeting agendas + minutes, quarterly goals,
+                   * accountability tasks). Currently gated on
+                   * `isApproved` like the other placeholder items;
+                   * when these features ship, swap to a proper
+                   * `executive:read`-style permission so non-officer
+                   * members don't see the section.
+                   */}
+                  <Collapsible className="group/collapsible">
+                    <SidebarMenuButton
+                      aria-disabled
+                      tabIndex={-1}
+                      tooltip="Executive (coming soon)"
+                    >
+                      <Briefcase />
+                      <span>Executive</span>
+                    </SidebarMenuButton>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuAction className="data-[state=open]:rotate-90">
+                        <ChevronRight />
+                        <span className="sr-only">Toggle sub-menu</span>
+                      </SidebarMenuAction>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Crown />
+                            <span>Board</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <CalendarClock />
+                            <span>Meetings</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Gavel />
+                            <span>Decisions</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Target />
+                            <span>Goals</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <ListChecks />
+                            <span>Tasks</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Wallet />
+                            <span>Budget</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Handshake />
+                            <span>Handoff</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarMenuItem>
+              </>
+            ) : null}
+          </SidebarMenu>
+        </SidebarGroup>
+      ) : null}
+    </>
   );
 }
 
 function SidebarFooterNav() {
   const { isApproved, hasPermission } = useAuth();
-  if (!isApproved || !hasPermission("feedback:submit")) {
-    return null;
-  }
+  const canSubmitFeedback = isApproved && hasPermission("feedback:submit");
+  const canViewAudit = hasPermission("audit:view");
+  // Settings is always rendered (disabled placeholder), so the footer is
+  // never empty and the wrapper always renders.
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton asChild tooltip="Feedback">
-          <Link to="/feedback">
-            <MessageSquare />
-            <span>Feedback</span>
-          </Link>
+        <SidebarMenuButton
+          aria-disabled
+          tabIndex={-1}
+          tooltip="Settings (coming soon)"
+        >
+          <Settings />
+          <span>Settings</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
+      {canSubmitFeedback ? (
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild tooltip="Feedback">
+            <Link to="/feedback">
+              <MessageSquare />
+              <span>Feedback</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ) : null}
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          aria-disabled
+          tabIndex={-1}
+          tooltip="Analytics (coming soon)"
+        >
+          <BarChart3 />
+          <span>Analytics</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          aria-disabled
+          tabIndex={-1}
+          tooltip="Reports (coming soon)"
+        >
+          <FileText />
+          <span>Reports</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      {canViewAudit ? (
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild tooltip="Audit log">
+            <Link to="/audit">
+              <History />
+              <span>Audit log</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ) : null}
     </SidebarMenu>
   );
 }

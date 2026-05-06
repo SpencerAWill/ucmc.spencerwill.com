@@ -108,7 +108,7 @@ The app uses a two-path authentication system:
 
 1. **Magic links** (primary for registration, fallback for sign-in) — enter an email, receive a one-time link that expires in 15 minutes. The link lands on a click-through page (to defeat email scanners), then either opens a session (existing user) or sets a short-lived proof cookie (new user → profile form → pending approval).
 
-2. **Passkeys / WebAuthn** (primary for sign-in) — approved users can enroll FIDO2 passkeys on `/account/security`. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
+2. **Passkeys / WebAuthn** (primary for sign-in) — approved users can enroll FIDO2 passkeys on `/my/account/security`. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
 
 **Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (fill profile) → `/register/pending` (wait for exec approval) → exec approves at `/members/registrations` → user is `approved` with the `member` role.
 

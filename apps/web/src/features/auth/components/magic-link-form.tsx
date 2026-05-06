@@ -31,8 +31,14 @@ const magicLinkSchema = z.object({
  */
 export function MagicLinkForm({
   defaultMode = "sign-in",
+  redirectTo,
 }: {
   defaultMode?: "sign-in" | "register";
+  // Optional post-sign-in destination passed through to the emailed
+  // callback URL (and used by the inline passkey-autofill ceremony).
+  // Caller is expected to have already validated leading-"/"; the
+  // server-fn re-validates as defense in depth.
+  redirectTo?: string;
 }) {
   const [submittedTo, setSubmittedTo] = useState<string | null>(null);
   const turnstileToken = useRef("");
@@ -41,7 +47,7 @@ export function MagicLinkForm({
   // Passkey autofill runs in the background on sign-in. If it succeeds
   // the whole component navigates away before the magic-link mutation
   // ever fires, so nothing special is needed to "cancel" it.
-  usePasskeyAutofill({ enabled: defaultMode === "sign-in" });
+  usePasskeyAutofill({ enabled: defaultMode === "sign-in", redirectTo });
 
   const mutation = useRequestMagicLink();
 
@@ -55,7 +61,11 @@ export function MagicLinkForm({
     },
     onSubmit: ({ value }) => {
       mutation.mutate(
-        { email: value.email, turnstileToken: turnstileToken.current },
+        {
+          email: value.email,
+          turnstileToken: turnstileToken.current,
+          redirect: redirectTo,
+        },
         { onSuccess: () => setSubmittedTo(value.email) },
       );
     },
@@ -144,7 +154,13 @@ export function MagicLinkForm({
 // effect's cleanup runs. Disable no-unnecessary-condition for the hook
 // body so the between-await abort checks stay readable.
 /* eslint-disable @typescript-eslint/no-unnecessary-condition */
-function usePasskeyAutofill({ enabled }: { enabled: boolean }): void {
+function usePasskeyAutofill({
+  enabled,
+  redirectTo,
+}: {
+  enabled: boolean;
+  redirectTo?: string;
+}): void {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -202,7 +218,9 @@ function usePasskeyAutofill({ enabled }: { enabled: boolean }): void {
           await navigate({ to: "/register/pending" });
           return;
         }
-        await navigate({ to: "/" });
+        const target =
+          redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
+        await navigate({ to: target });
       } catch {
         // User cancelled, browser timed out, or the ceremony was aborted
         // by a newer call. Silent fallback to magic-link is fine —
@@ -214,6 +232,6 @@ function usePasskeyAutofill({ enabled }: { enabled: boolean }): void {
     return () => {
       controller.abort();
     };
-  }, [enabled, navigate, queryClient]);
+  }, [enabled, navigate, queryClient, redirectTo]);
 }
 /* eslint-enable @typescript-eslint/no-unnecessary-condition */

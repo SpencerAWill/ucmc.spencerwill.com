@@ -10,7 +10,7 @@ const PASSKEY_USER_EMAIL = "e2e-passkey@example.com";
  *      magic-link callback lands them on "/" (the registration funnel
  *      and admin-approval flow are exercised by other paths).
  *   2. Sign in via magic link to get a session.
- *   3. Register a passkey at /account/security with a Playwright
+ *   3. Register a passkey at /my/account/security with a Playwright
  *      WebAuthn virtual authenticator.
  *   4. Sign out via the user-menu dropdown.
  *   5. Sign back in: navigate to /sign-in. The MagicLinkForm's
@@ -72,7 +72,7 @@ test("register a passkey and sign back in with it", async ({
   });
 
   // ── Step 2: register a passkey ────────────────────────────────────────
-  await page.goto("/account/security");
+  await page.goto("/my/account/security");
   await waitForHydration(page);
 
   await page.getByLabel(/nickname/i).fill("e2e device");

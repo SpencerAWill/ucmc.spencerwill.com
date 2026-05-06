@@ -9,7 +9,7 @@ import { Button } from "#/components/ui/button";
  * notifications, default trip visibility, etc.) will persist to D1 and
  * slot in under new section headers below.
  */
-export const Route = createFileRoute("/account/preferences")({
+export const Route = createFileRoute("/my/account/preferences")({
   component: PreferencesPage,
 });
 
