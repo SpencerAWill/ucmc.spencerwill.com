@@ -445,7 +445,7 @@ export const auditLog = sqliteTable(
   ],
 );
 
-export const feedbackKind = ["bug", "feature", "general", "question"] as const;
+export const feedbackKind = ["bug", "feature", "general"] as const;
 export type FeedbackKind = (typeof feedbackKind)[number];
 
 export const feedbackStatus = [

@@ -5,6 +5,7 @@
  */
 import { uuidv7 } from "uuidv7";
 
+import { composeFeedbackBody } from "#/features/feedback/server/format";
 import { mirrorToGithub } from "#/features/feedback/server/github.server";
 import type {
   FeedbackInput,
@@ -153,12 +154,13 @@ export async function submitFeedbackAction(
   const id = `fb_${uuidv7()}`;
   const pageUrl = normalizePageUrl(input.pageUrl);
   const userAgent = input.userAgent?.trim() ? input.userAgent.trim() : null;
+  const body = composeFeedbackBody(input);
 
   await insertFeedback({
     id,
     kind: input.kind,
     title: input.title,
-    body: input.body,
+    body,
     pageUrl,
     userAgent,
     createdBy: principal.userId,
@@ -172,7 +174,7 @@ export async function submitFeedbackAction(
     const result = await mirrorToGithub({
       kind: input.kind,
       title: input.title,
-      body: input.body,
+      body,
       submitterPublicId,
       pageUrl,
     });

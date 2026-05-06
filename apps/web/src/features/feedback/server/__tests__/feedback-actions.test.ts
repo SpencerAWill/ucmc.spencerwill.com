@@ -123,7 +123,9 @@ describe("feedback authorization", () => {
       submitFeedbackAction({
         kind: "bug",
         title: "x",
-        body: "y",
+        bugDescription: "y",
+        stepsToReproduce: "z",
+        expectedBehavior: "w",
       }),
     ).rejects.toThrow("Not signed in");
   });
@@ -134,7 +136,9 @@ describe("feedback authorization", () => {
       submitFeedbackAction({
         kind: "bug",
         title: "x",
-        body: "y",
+        bugDescription: "y",
+        stepsToReproduce: "z",
+        expectedBehavior: "w",
       }),
     ).rejects.toThrow("Forbidden: missing feedback:submit");
   });
@@ -162,7 +166,9 @@ describe("feedback lifecycle", () => {
     const { id } = await submitFeedbackAction({
       kind: "bug",
       title: "Login button is hidden on mobile",
-      body: "Steps: open the site on iPhone Safari…",
+      bugDescription: "Sign-in form's primary button is offscreen on iOS.",
+      stepsToReproduce: "Open the site on iPhone Safari, tap Sign in.",
+      expectedBehavior: "The Sign in button should be visible.",
     });
     expect(id).toMatch(/^fb_/);
 
@@ -172,6 +178,13 @@ describe("feedback lifecycle", () => {
     expect(mine[0].kind).toBe("bug");
     expect(mine[0].status).toBe("open");
     expect(mine[0].createdBy).toBe(memberId);
+    // Composed body uses Markdown section headings, not the raw input.
+    expect(mine[0].body).toContain("**Describe the bug**");
+    expect(mine[0].body).toContain("**Steps to reproduce**");
+    expect(mine[0].body).toContain("**Expected behavior**");
+    expect(mine[0].body).toContain(
+      "Sign-in form's primary button is offscreen on iOS.",
+    );
   });
 
   it("listMyFeedbackAction scopes to the caller, not other members", async () => {
@@ -202,7 +215,8 @@ describe("feedback lifecycle", () => {
     const { id } = await submitFeedbackAction({
       kind: "feature",
       title: "Dark mode for the trip planner",
-      body: "Pretty please",
+      problem: "Trip planner is hard to read at night.",
+      proposedSolution: "Add a dark mode toggle.",
     });
 
     const row = await getDb().query.feedback.findFirst({
@@ -211,6 +225,14 @@ describe("feedback lifecycle", () => {
     expect(row?.githubIssueNumber).toBe(1234);
     expect(row?.githubIssueUrl).toBe(
       "https://github.com/example/repo/issues/1234",
+    );
+    // Mirror gets the same composed body that landed in D1.
+    expect(mirrorToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining(
+          "**Describe the solution you'd like**",
+        ) as string,
+      }),
     );
   });
 
@@ -221,7 +243,9 @@ describe("feedback lifecycle", () => {
     const { id } = await submitFeedbackAction({
       kind: "bug",
       title: "Another bug",
-      body: "Body",
+      bugDescription: "Something is wrong somewhere.",
+      stepsToReproduce: "Repro steps go here.",
+      expectedBehavior: "It should not be wrong.",
     });
 
     const row = await getDb().query.feedback.findFirst({
@@ -237,7 +261,9 @@ describe("feedback lifecycle", () => {
     const { id } = await submitFeedbackAction({
       kind: "bug",
       title: "Strange thing",
-      body: "Saw it on the callback page",
+      bugDescription: "Saw it on the callback page",
+      stepsToReproduce: "Click the magic link in your inbox.",
+      expectedBehavior: "Should land on the dashboard.",
       pageUrl: "https://app.example.com/auth/callback?token=secret#frag",
     });
 
@@ -272,9 +298,9 @@ describe("feedback lifecycle", () => {
 
     await signInAsMember();
     const { id } = await submitFeedbackAction({
-      kind: "question",
-      title: "Where is the trip calendar?",
-      body: "Asking for a friend",
+      kind: "general",
+      title: "Just a quick note",
+      body: "Thanks for the recent updates.",
     });
 
     const row = await getDb().query.feedback.findFirst({
@@ -289,10 +315,17 @@ describe("feedback lifecycle", () => {
     const a = await submitFeedbackAction({
       kind: "bug",
       title: "From A",
-      body: "x",
+      bugDescription: "Something",
+      stepsToReproduce: "Steps",
+      expectedBehavior: "Expected",
     });
     await signInAsMember("b@example.com");
-    await submitFeedbackAction({ kind: "feature", title: "From B", body: "y" });
+    await submitFeedbackAction({
+      kind: "feature",
+      title: "From B",
+      problem: "Annoying thing",
+      proposedSolution: "Less annoying thing",
+    });
 
     await signInAsAdmin();
     const all = await listAllFeedbackAction();

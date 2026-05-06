@@ -26,7 +26,6 @@ const KIND_LABELS: Record<FeedbackKind, string[]> = {
   bug: ["bug", "feedback"],
   feature: ["enhancement", "feedback"],
   general: ["feedback"],
-  question: ["question", "feedback"],
 };
 
 export async function mirrorToGithub(input: {
