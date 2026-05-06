@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import {
+  BarChart3,
   Boxes,
   Briefcase,
   CalendarClock,
@@ -10,6 +11,7 @@ import {
   Compass,
   Crown,
   Eye,
+  FileText,
   Gavel,
   GraduationCap,
   HandCoins,
@@ -556,6 +558,26 @@ function SidebarFooterNav() {
           </SidebarMenuButton>
         </SidebarMenuItem>
       ) : null}
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          aria-disabled
+          tabIndex={-1}
+          tooltip="Analytics (coming soon)"
+        >
+          <BarChart3 />
+          <span>Analytics</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          aria-disabled
+          tabIndex={-1}
+          tooltip="Reports (coming soon)"
+        >
+          <FileText />
+          <span>Reports</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
       {canViewAudit ? (
         <SidebarMenuItem>
           <SidebarMenuButton asChild tooltip="Audit log">
