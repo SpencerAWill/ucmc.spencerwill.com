@@ -6,6 +6,8 @@ import {
   Eye,
   History,
   Mail,
+  Megaphone,
+  MessageSquare,
   ScrollText,
   Shield,
   UserPlus,
@@ -129,7 +131,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarContent>
             <SidebarNav />
           </SidebarContent>
-          <SidebarFooter />
+          <SidebarFooter>
+            <SidebarFooterNav />
+          </SidebarFooter>
           <SidebarRail />
         </Sidebar>
         <SidebarInset>
@@ -164,6 +168,7 @@ function EmulationBanner() {
 
 function SidebarNav() {
   const { isApproved, hasPermission } = useAuth();
+  const canReadAnnouncements = hasPermission("announcements:read");
   const canApproveRegistrations = hasPermission("registrations:approve");
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
@@ -182,6 +187,17 @@ function SidebarNav() {
   return (
     <SidebarGroup>
       <SidebarMenu>
+        {canReadAnnouncements ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Announcements">
+              <Link to="/announcements">
+                <Megaphone />
+                <span>Announcements</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
+
         <Collapsible defaultOpen className="group/collapsible">
           <SidebarMenuItem>
             {/* Main button navigates to /members */}
@@ -260,6 +276,25 @@ function SidebarNav() {
         ) : null}
       </SidebarMenu>
     </SidebarGroup>
+  );
+}
+
+function SidebarFooterNav() {
+  const { isApproved, hasPermission } = useAuth();
+  if (!isApproved || !hasPermission("feedback:submit")) {
+    return null;
+  }
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild tooltip="Feedback">
+          <Link to="/feedback">
+            <MessageSquare />
+            <span>Feedback</span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
 

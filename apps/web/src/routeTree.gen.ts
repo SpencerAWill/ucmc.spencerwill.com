@@ -28,6 +28,7 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MembersIndexRouteImport } from './routes/members.index'
+import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
@@ -140,6 +141,11 @@ const MembersIndexRoute = MembersIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MembersRoute,
+} as any)
+const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
+  id: '/feedback/',
+  path: '/feedback/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AnnouncementsIndexRoute = AnnouncementsIndexRouteImport.update({
   id: '/announcements/',
@@ -259,6 +265,7 @@ export interface FileRoutesByFullPath {
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
   '/announcements/': typeof AnnouncementsIndexRoute
+  '/feedback/': typeof FeedbackIndexRoute
   '/members/': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -295,6 +302,7 @@ export interface FileRoutesByTo {
   '/register/profile': typeof RegisterProfileRoute
   '/account': typeof AccountIndexRoute
   '/announcements': typeof AnnouncementsIndexRoute
+  '/feedback': typeof FeedbackIndexRoute
   '/members': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -334,6 +342,7 @@ export interface FileRoutesById {
   '/register/profile': typeof RegisterProfileRoute
   '/account/': typeof AccountIndexRoute
   '/announcements/': typeof AnnouncementsIndexRoute
+  '/feedback/': typeof FeedbackIndexRoute
   '/members/': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -374,6 +383,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/account/'
     | '/announcements/'
+    | '/feedback/'
     | '/members/'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -410,6 +420,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/account'
     | '/announcements'
+    | '/feedback'
     | '/members'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -448,6 +459,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/account/'
     | '/announcements/'
+    | '/feedback/'
     | '/members/'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -478,6 +490,7 @@ export interface RootRouteChildren {
   RegisterPendingRoute: typeof RegisterPendingRoute
   RegisterProfileRoute: typeof RegisterProfileRoute
   AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
+  FeedbackIndexRoute: typeof FeedbackIndexRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
@@ -617,6 +630,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/members/'
       preLoaderRoute: typeof MembersIndexRouteImport
       parentRoute: typeof MembersRoute
+    }
+    '/feedback/': {
+      id: '/feedback/'
+      path: '/feedback'
+      fullPath: '/feedback/'
+      preLoaderRoute: typeof FeedbackIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/announcements/': {
       id: '/announcements/'
@@ -803,6 +823,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterPendingRoute: RegisterPendingRoute,
   RegisterProfileRoute: RegisterProfileRoute,
   AnnouncementsIndexRoute: AnnouncementsIndexRoute,
+  FeedbackIndexRoute: FeedbackIndexRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,

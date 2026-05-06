@@ -112,3 +112,25 @@ export async function checkUploadRateLimit(userId: string): Promise<boolean> {
     return true;
   }
 }
+
+/**
+ * Gate a feedback submission by user. Reuses the AUTH_RATE_LIMITER
+ * binding under a distinct key namespace (`feedback:user:<id>`) — the
+ * limiter counts per key, so this does not contend with auth-flow keys.
+ * The 10 req/60 s budget is far more than legitimate feedback usage and
+ * cheaper than provisioning a fourth binding. Fails open on binding
+ * error so a broken limiter doesn't block submissions.
+ */
+export async function checkFeedbackRateLimit(userId: string): Promise<boolean> {
+  if (isBypassed()) {
+    return true;
+  }
+  try {
+    const { success } = await env.AUTH_RATE_LIMITER.limit({
+      key: `feedback:user:${userId}`,
+    });
+    return success;
+  } catch {
+    return true;
+  }
+}
