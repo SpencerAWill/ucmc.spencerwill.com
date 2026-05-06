@@ -24,8 +24,10 @@ import {
   Wallet,
   Megaphone,
   MessageSquare,
+  MessagesSquare,
   Newspaper,
   Package,
+  Rss,
   ScrollText,
   Settings,
   Shield,
@@ -273,6 +275,16 @@ function SidebarNav() {
             <SidebarMenuButton
               aria-disabled
               tabIndex={-1}
+              tooltip="Blog (coming soon)"
+            >
+              <Rss />
+              <span>Blog</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
               tooltip="Goosedown Gazette (coming soon)"
             >
               <Newspaper />
@@ -329,6 +341,16 @@ function SidebarNav() {
 
             {isApproved ? (
               <>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    aria-disabled
+                    tabIndex={-1}
+                    tooltip="Forum (coming soon)"
+                  >
+                    <MessagesSquare />
+                    <span>Forum</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   {/*
                    * Collapsible sits inside SidebarMenuItem (not the
