@@ -11,6 +11,7 @@ import {
   HandCoins,
   HelpCircle,
   History,
+  Images,
   Landmark,
   Mail,
   Megaphone,
@@ -249,6 +250,16 @@ function SidebarNav() {
             >
               <Newspaper />
               <span>Goosedown Gazette</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="Trip Gallery (coming soon)"
+            >
+              <Images />
+              <span>Trip Gallery</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
