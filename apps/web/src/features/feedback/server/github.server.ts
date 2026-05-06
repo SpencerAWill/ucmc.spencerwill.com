@@ -2,7 +2,7 @@
  * Best-effort mirror of a feedback submission to a GitHub issue.
  *
  * Patterned on the Turnstile verifier (`features/auth/server/turnstile.server`):
- *  - Reads `GITHUB_FEEDBACK_TOKEN` and `GITHUB_FEEDBACK_REPO` from the
+ *  - Reads `FEEDBACK_GITHUB_TOKEN` and `FEEDBACK_GITHUB_REPO` from the
  *    Worker env. Both optional — when either is unset, the call is a
  *    no-op (returns null) so local dev and any environment that opts
  *    out of the mirror still works unchanged.
@@ -36,8 +36,8 @@ export async function mirrorToGithub(input: {
   submitterPublicId: string | null;
   pageUrl: string | null;
 }): Promise<{ number: number; url: string } | null> {
-  const token = env.GITHUB_FEEDBACK_TOKEN;
-  const repo = env.GITHUB_FEEDBACK_REPO;
+  const token = env.FEEDBACK_GITHUB_TOKEN;
+  const repo = env.FEEDBACK_GITHUB_REPO;
   if (!token || !repo) {
     return null;
   }

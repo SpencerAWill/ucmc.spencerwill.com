@@ -37,13 +37,13 @@ export interface WorkerEnv {
   TURNSTILE_SECRET_KEY?: string;
 
   // GitHub feedback mirror — when both are set, submitFeedback opens a
-  // GitHub issue against GITHUB_FEEDBACK_REPO ("owner/name") authenticated
-  // with GITHUB_FEEDBACK_TOKEN (a fine-grained PAT scoped to issues:write).
+  // GitHub issue against FEEDBACK_GITHUB_REPO ("owner/name") authenticated
+  // with FEEDBACK_GITHUB_TOKEN (a fine-grained PAT scoped to issues:write).
   // Both optional: if unset, the mirror call is skipped silently and the
   // submission stays in D1 only. Failures during the mirror call never
   // propagate to the user — best-effort only.
-  GITHUB_FEEDBACK_TOKEN?: string;
-  GITHUB_FEEDBACK_REPO?: string;
+  FEEDBACK_GITHUB_TOKEN?: string;
+  FEEDBACK_GITHUB_REPO?: string;
 
   // Dev-only — base URL of the Mailpit sidecar (e.g.
   // "http://mailpit:8025"). When set AND RESEND_API_KEY is absent, the

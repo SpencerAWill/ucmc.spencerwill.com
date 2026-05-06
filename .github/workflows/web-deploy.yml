@@ -100,12 +100,12 @@ jobs:
 
       # Secrets are uploaded via `wrangler secret put` (one call per name)
       # immediately before `wrangler deploy`. SESSION_SECRET,
-      # TURNSTILE_SECRET_KEY, GITHUB_FEEDBACK_TOKEN, and
-      # GITHUB_FEEDBACK_REPO come from the GitHub `dev` environment;
+      # TURNSTILE_SECRET_KEY, FEEDBACK_GITHUB_TOKEN, and
+      # FEEDBACK_GITHUB_REPO come from the GitHub `dev` environment;
       # RESEND_API_KEY comes from the Pulumi stack output (the
       # sending-scoped key that the ResendDomain component issues),
       # masked above so it doesn't leak in job logs. The two
-      # GITHUB_FEEDBACK_* secrets are optional — leave them unset to
+      # FEEDBACK_GITHUB_* secrets are optional — leave them unset to
       # disable the GitHub mirror; submissions still land in D1.
       - name: Deploy Worker (dev)
         uses: cloudflare/wrangler-action@v3
@@ -117,8 +117,8 @@ jobs:
             SESSION_SECRET
             RESEND_API_KEY
             TURNSTILE_SECRET_KEY
-            GITHUB_FEEDBACK_TOKEN
-            GITHUB_FEEDBACK_REPO
+            FEEDBACK_GITHUB_TOKEN
+            FEEDBACK_GITHUB_REPO
           command: >-
             deploy
             --var APP_BASE_URL:${{ steps.pulumi.outputs.app_base_url }}
@@ -130,8 +130,8 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
           TURNSTILE_SECRET_KEY: ${{ steps.pulumi.outputs.turnstile_secret_key }}
-          GITHUB_FEEDBACK_TOKEN: ${{ secrets.GITHUB_FEEDBACK_TOKEN }}
-          GITHUB_FEEDBACK_REPO: ${{ vars.GITHUB_FEEDBACK_REPO }}
+          FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
+          FEEDBACK_GITHUB_REPO: ${{ vars.FEEDBACK_GITHUB_REPO }}
 
   deploy-prod:
     name: Deploy Web to Prod
@@ -200,11 +200,11 @@ jobs:
           workingDirectory: apps/web
           command: d1 migrations apply ucmc-web --env production --remote
 
-      # SESSION_SECRET, GITHUB_FEEDBACK_TOKEN, and GITHUB_FEEDBACK_REPO
+      # SESSION_SECRET, FEEDBACK_GITHUB_TOKEN, and FEEDBACK_GITHUB_REPO
       # come from the GitHub `prod` environment; RESEND_API_KEY and
       # TURNSTILE_SECRET_KEY come from Pulumi stack outputs (the
       # sending-scoped key and widget secret, respectively), fetched and
-      # masked above. The GITHUB_FEEDBACK_* values are optional — leave
+      # masked above. The FEEDBACK_GITHUB_* values are optional — leave
       # them unset to disable the mirror; submissions still land in D1.
       #
       # `environment: production` is required so wrangler-action runs
@@ -226,8 +226,8 @@ jobs:
             SESSION_SECRET
             RESEND_API_KEY
             TURNSTILE_SECRET_KEY
-            GITHUB_FEEDBACK_TOKEN
-            GITHUB_FEEDBACK_REPO
+            FEEDBACK_GITHUB_TOKEN
+            FEEDBACK_GITHUB_REPO
           command: >-
             deploy --env production
             --var APP_BASE_URL:${{ steps.pulumi.outputs.app_base_url }}
@@ -239,5 +239,5 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
           TURNSTILE_SECRET_KEY: ${{ steps.pulumi.outputs.turnstile_secret_key }}
-          GITHUB_FEEDBACK_TOKEN: ${{ secrets.GITHUB_FEEDBACK_TOKEN }}
-          GITHUB_FEEDBACK_REPO: ${{ vars.GITHUB_FEEDBACK_REPO }}
+          FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
+          FEEDBACK_GITHUB_REPO: ${{ vars.FEEDBACK_GITHUB_REPO }}
