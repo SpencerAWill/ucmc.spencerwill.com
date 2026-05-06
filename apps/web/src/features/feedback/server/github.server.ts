@@ -18,6 +18,9 @@
  */
 import { env } from "#/server/cloudflare-env";
 import type { FeedbackKind } from "#/features/feedback/server/limits";
+import { redactString } from "#/server/log/redact.server";
+
+const MAX_LOGGED_ERROR_BODY = 500;
 
 const KIND_LABELS: Record<FeedbackKind, string[]> = {
   bug: ["bug", "feedback"],
@@ -60,8 +63,13 @@ export async function mirrorToGithub(input: {
       }),
     });
     if (!res.ok) {
+      const raw = await res.text().catch(() => "<unreadable>");
+      const truncated =
+        raw.length > MAX_LOGGED_ERROR_BODY
+          ? `${raw.slice(0, MAX_LOGGED_ERROR_BODY)}…`
+          : raw;
       console.error(
-        `[feedback] GitHub mirror returned ${res.status}: ${await res.text().catch(() => "<unreadable>")}`,
+        `[feedback] GitHub mirror returned ${res.status}: ${redactString(truncated)}`,
       );
       return null;
     }
@@ -78,7 +86,9 @@ export async function mirrorToGithub(input: {
     }
     return { number: json.number, url: json.html_url };
   } catch (err) {
-    console.error("[feedback] GitHub mirror threw", err);
+    console.error(
+      `[feedback] GitHub mirror threw: ${redactString(String(err))}`,
+    );
     return null;
   }
 }

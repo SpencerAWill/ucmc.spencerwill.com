@@ -22,7 +22,30 @@ import {
 } from "#/features/feedback/server/repo.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import { redactString } from "#/server/log/redact.server";
 import { checkFeedbackRateLimit } from "#/server/rate-limit.server";
+
+// Strip query + fragment from a submitter-provided URL before it
+// reaches D1 or the GitHub mirror. Submitters set `pageUrl` to
+// `window.location.href`, which routinely carries tokens / emails in
+// query params on auth-callback-shaped routes; mirroring those into
+// a public-ish issue tracker would leak. Keep origin + pathname so
+// the routing context is still useful in triage.
+function normalizePageUrl(input: string | null | undefined): string | null {
+  if (!input) {
+    return null;
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return null;
+  }
+}
 
 // ── auth helpers ────────────────────────────────────────────────────────
 
@@ -128,7 +151,7 @@ export async function submitFeedbackAction(
   }
 
   const id = `fb_${uuidv7()}`;
-  const pageUrl = input.pageUrl?.trim() ? input.pageUrl.trim() : null;
+  const pageUrl = normalizePageUrl(input.pageUrl);
   const userAgent = input.userAgent?.trim() ? input.userAgent.trim() : null;
 
   await insertFeedback({
@@ -157,7 +180,9 @@ export async function submitFeedbackAction(
       await setGithubIssue(id, result.number, result.url);
     }
   } catch (err) {
-    console.error("[feedback] mirror/setGithubIssue failed", err);
+    console.error(
+      `[feedback] mirror/setGithubIssue failed: ${redactString(String(err))}`,
+    );
   }
 
   return { id };

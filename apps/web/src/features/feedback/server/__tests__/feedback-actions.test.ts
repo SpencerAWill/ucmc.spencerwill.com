@@ -232,6 +232,41 @@ describe("feedback lifecycle", () => {
     expect(row?.githubIssueUrl).toBeNull();
   });
 
+  it("normalizes pageUrl to origin+pathname before storing or mirroring", async () => {
+    await signInAsMember();
+    const { id } = await submitFeedbackAction({
+      kind: "bug",
+      title: "Strange thing",
+      body: "Saw it on the callback page",
+      pageUrl: "https://app.example.com/auth/callback?token=secret#frag",
+    });
+
+    const row = await getDb().query.feedback.findFirst({
+      where: eq(schema.feedback.id, id),
+    });
+    expect(row?.pageUrl).toBe("https://app.example.com/auth/callback");
+
+    expect(mirrorToGithub).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageUrl: "https://app.example.com/auth/callback",
+      }),
+    );
+  });
+
+  it("stores null pageUrl when input is not a parseable URL", async () => {
+    await signInAsMember();
+    const { id } = await submitFeedbackAction({
+      kind: "general",
+      title: "Hi",
+      body: "Body",
+      pageUrl: "not a url",
+    });
+    const row = await getDb().query.feedback.findFirst({
+      where: eq(schema.feedback.id, id),
+    });
+    expect(row?.pageUrl).toBeNull();
+  });
+
   it("leaves mirror columns null when the mirror is unconfigured (returns null)", async () => {
     vi.mocked(mirrorToGithub).mockResolvedValueOnce(null);
 
