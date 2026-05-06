@@ -38,7 +38,7 @@ export function ProfileForm({
    */
   email: string;
   defaults?: ProfileFormDefaults;
-  redirectTo?: "/register/pending" | "/" | "/account";
+  redirectTo?: "/register/pending" | "/" | "/my/account";
 }) {
   const navigate = useNavigate();
 

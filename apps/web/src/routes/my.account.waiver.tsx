@@ -23,7 +23,7 @@ import type { WaiverAttestationSummary } from "#/features/auth/server/waiver-fns
  * No file upload, no medical PII storage — the signed paper lives
  * with the Treasurer per Bylaw 1.3.
  */
-export const Route = createFileRoute("/account/waiver")({
+export const Route = createFileRoute("/my/account/waiver")({
   loader: ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(myWaiverStatusQueryOptions()),

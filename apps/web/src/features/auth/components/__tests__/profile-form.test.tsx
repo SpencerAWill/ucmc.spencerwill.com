@@ -97,7 +97,7 @@ describe("ProfileForm", () => {
     const user = userEvent.setup();
     submitProfileFn.mockResolvedValue({ ok: true });
 
-    renderForm({ redirectTo: "/account" });
+    renderForm({ redirectTo: "/my/account" });
 
     // The submit button is gated on `isDefaultValue` — so dirty up the form
     // by appending to the bio field before clicking submit.
@@ -124,7 +124,7 @@ describe("ProfileForm", () => {
     await waitFor(() => {
       expect(toastSuccess).toHaveBeenCalledWith("Profile submitted");
     });
-    expect(navigateMock).toHaveBeenCalledWith({ to: "/account" });
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/my/account" });
   });
 
   it("does not submit when the policies-ack checkbox is left unchecked", async () => {

@@ -16,6 +16,7 @@ import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OpenSourceRouteImport } from './routes/open-source'
 import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
+import { Route as MyRouteImport } from './routes/my'
 import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MembersRouteImport } from './routes/members'
 import { Route as LegalRouteImport } from './routes/legal'
@@ -24,24 +25,24 @@ import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
-import { Route as AccountRouteImport } from './routes/account'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MembersIndexRouteImport } from './routes/members.index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
-import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
+import { Route as MyAccountRouteImport } from './routes/my.account'
 import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
 import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
-import { Route as AccountWaiverRouteImport } from './routes/account.waiver'
-import { Route as AccountSecurityRouteImport } from './routes/account.security'
-import { Route as AccountPreferencesRouteImport } from './routes/account.preferences'
-import { Route as AccountDetailsRouteImport } from './routes/account.details'
+import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
+import { Route as MyAccountWaiverRouteImport } from './routes/my.account.waiver'
+import { Route as MyAccountSecurityRouteImport } from './routes/my.account.security'
+import { Route as MyAccountPreferencesRouteImport } from './routes/my.account.preferences'
+import { Route as MyAccountDetailsRouteImport } from './routes/my.account.details'
 import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
@@ -80,6 +81,11 @@ const OpenSourceRoute = OpenSourceRouteImport.update({
 const NondiscriminationRoute = NondiscriminationRouteImport.update({
   id: '/nondiscrimination',
   path: '/nondiscrimination',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyRoute = MyRouteImport.update({
+  id: '/my',
+  path: '/my',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MembershipRoute = MembershipRouteImport.update({
@@ -122,11 +128,6 @@ const AntiHazingRoute = AntiHazingRouteImport.update({
   path: '/anti-hazing',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountRoute = AccountRouteImport.update({
-  id: '/account',
-  path: '/account',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -152,11 +153,6 @@ const AnnouncementsIndexRoute = AnnouncementsIndexRouteImport.update({
   path: '/announcements/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountIndexRoute = AccountIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AccountRoute,
-} as any)
 const RegisterProfileRoute = RegisterProfileRouteImport.update({
   id: '/register/profile',
   path: '/register/profile',
@@ -166,6 +162,11 @@ const RegisterPendingRoute = RegisterPendingRouteImport.update({
   id: '/register/pending',
   path: '/register/pending',
   getParentRoute: () => rootRouteImport,
+} as any)
+const MyAccountRoute = MyAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => MyRoute,
 } as any)
 const MembersWaiversRoute = MembersWaiversRouteImport.update({
   id: '/waivers',
@@ -192,25 +193,30 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountWaiverRoute = AccountWaiverRouteImport.update({
+const MyAccountIndexRoute = MyAccountIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MyAccountRoute,
+} as any)
+const MyAccountWaiverRoute = MyAccountWaiverRouteImport.update({
   id: '/waiver',
   path: '/waiver',
-  getParentRoute: () => AccountRoute,
+  getParentRoute: () => MyAccountRoute,
 } as any)
-const AccountSecurityRoute = AccountSecurityRouteImport.update({
+const MyAccountSecurityRoute = MyAccountSecurityRouteImport.update({
   id: '/security',
   path: '/security',
-  getParentRoute: () => AccountRoute,
+  getParentRoute: () => MyAccountRoute,
 } as any)
-const AccountPreferencesRoute = AccountPreferencesRouteImport.update({
+const MyAccountPreferencesRoute = MyAccountPreferencesRouteImport.update({
   id: '/preferences',
   path: '/preferences',
-  getParentRoute: () => AccountRoute,
+  getParentRoute: () => MyAccountRoute,
 } as any)
-const AccountDetailsRoute = AccountDetailsRouteImport.update({
+const MyAccountDetailsRoute = MyAccountDetailsRouteImport.update({
   id: '/details',
   path: '/details',
-  getParentRoute: () => AccountRoute,
+  getParentRoute: () => MyAccountRoute,
 } as any)
 const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
   id: '/roles_/$roleId',
@@ -236,7 +242,6 @@ const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/account': typeof AccountRouteWithChildren
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
@@ -245,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/legal': typeof LegalRoute
   '/members': typeof MembersRouteWithChildren
   '/membership': typeof MembershipRoute
+  '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
@@ -252,18 +258,14 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
-  '/account/details': typeof AccountDetailsRoute
-  '/account/preferences': typeof AccountPreferencesRoute
-  '/account/security': typeof AccountSecurityRoute
-  '/account/waiver': typeof AccountWaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
+  '/my/account': typeof MyAccountRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
-  '/account/': typeof AccountIndexRoute
   '/announcements/': typeof AnnouncementsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/members/': typeof MembersIndexRoute
@@ -271,6 +273,11 @@ export interface FileRoutesByFullPath {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
+  '/my/account/details': typeof MyAccountDetailsRoute
+  '/my/account/preferences': typeof MyAccountPreferencesRoute
+  '/my/account/security': typeof MyAccountSecurityRoute
+  '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/my/account/': typeof MyAccountIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByTo {
   '/health': typeof HealthRoute
   '/legal': typeof LegalRoute
   '/membership': typeof MembershipRoute
+  '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
@@ -289,10 +297,6 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
-  '/account/details': typeof AccountDetailsRoute
-  '/account/preferences': typeof AccountPreferencesRoute
-  '/account/security': typeof AccountSecurityRoute
-  '/account/waiver': typeof AccountWaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -300,7 +304,6 @@ export interface FileRoutesByTo {
   '/members/waivers': typeof MembersWaiversRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
-  '/account': typeof AccountIndexRoute
   '/announcements': typeof AnnouncementsIndexRoute
   '/feedback': typeof FeedbackIndexRoute
   '/members': typeof MembersIndexRoute
@@ -308,12 +311,16 @@ export interface FileRoutesByTo {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
+  '/my/account/details': typeof MyAccountDetailsRoute
+  '/my/account/preferences': typeof MyAccountPreferencesRoute
+  '/my/account/security': typeof MyAccountSecurityRoute
+  '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/my/account': typeof MyAccountIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/account': typeof AccountRouteWithChildren
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
@@ -322,6 +329,7 @@ export interface FileRoutesById {
   '/legal': typeof LegalRoute
   '/members': typeof MembersRouteWithChildren
   '/membership': typeof MembershipRoute
+  '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
@@ -329,18 +337,14 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/waiver': typeof WaiverRoute
-  '/account/details': typeof AccountDetailsRoute
-  '/account/preferences': typeof AccountPreferencesRoute
-  '/account/security': typeof AccountSecurityRoute
-  '/account/waiver': typeof AccountWaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
+  '/my/account': typeof MyAccountRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
-  '/account/': typeof AccountIndexRoute
   '/announcements/': typeof AnnouncementsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/members/': typeof MembersIndexRoute
@@ -348,13 +352,17 @@ export interface FileRoutesById {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
+  '/my/account/details': typeof MyAccountDetailsRoute
+  '/my/account/preferences': typeof MyAccountPreferencesRoute
+  '/my/account/security': typeof MyAccountSecurityRoute
+  '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/my/account/': typeof MyAccountIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/about'
-    | '/account'
     | '/anti-hazing'
     | '/audit'
     | '/deactivated'
@@ -363,6 +371,7 @@ export interface FileRouteTypes {
     | '/legal'
     | '/members'
     | '/membership'
+    | '/my'
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
@@ -370,18 +379,14 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/waiver'
-    | '/account/details'
-    | '/account/preferences'
-    | '/account/security'
-    | '/account/waiver'
     | '/auth/callback'
     | '/members/$publicId'
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
+    | '/my/account'
     | '/register/pending'
     | '/register/profile'
-    | '/account/'
     | '/announcements/'
     | '/feedback/'
     | '/members/'
@@ -389,6 +394,11 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/landing/$'
     | '/members/roles/$roleId'
+    | '/my/account/details'
+    | '/my/account/preferences'
+    | '/my/account/security'
+    | '/my/account/waiver'
+    | '/my/account/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -400,6 +410,7 @@ export interface FileRouteTypes {
     | '/health'
     | '/legal'
     | '/membership'
+    | '/my'
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
@@ -407,10 +418,6 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/waiver'
-    | '/account/details'
-    | '/account/preferences'
-    | '/account/security'
-    | '/account/waiver'
     | '/auth/callback'
     | '/members/$publicId'
     | '/members/registrations'
@@ -418,7 +425,6 @@ export interface FileRouteTypes {
     | '/members/waivers'
     | '/register/pending'
     | '/register/profile'
-    | '/account'
     | '/announcements'
     | '/feedback'
     | '/members'
@@ -426,11 +432,15 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/landing/$'
     | '/members/roles/$roleId'
+    | '/my/account/details'
+    | '/my/account/preferences'
+    | '/my/account/security'
+    | '/my/account/waiver'
+    | '/my/account'
   id:
     | '__root__'
     | '/'
     | '/about'
-    | '/account'
     | '/anti-hazing'
     | '/audit'
     | '/deactivated'
@@ -439,6 +449,7 @@ export interface FileRouteTypes {
     | '/legal'
     | '/members'
     | '/membership'
+    | '/my'
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
@@ -446,18 +457,14 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/waiver'
-    | '/account/details'
-    | '/account/preferences'
-    | '/account/security'
-    | '/account/waiver'
     | '/auth/callback'
     | '/members/$publicId'
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
+    | '/my/account'
     | '/register/pending'
     | '/register/profile'
-    | '/account/'
     | '/announcements/'
     | '/feedback/'
     | '/members/'
@@ -465,12 +472,16 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/landing/$'
     | '/members/roles_/$roleId'
+    | '/my/account/details'
+    | '/my/account/preferences'
+    | '/my/account/security'
+    | '/my/account/waiver'
+    | '/my/account/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
-  AccountRoute: typeof AccountRouteWithChildren
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
   DeactivatedRoute: typeof DeactivatedRoute
@@ -479,6 +490,7 @@ export interface RootRouteChildren {
   LegalRoute: typeof LegalRoute
   MembersRoute: typeof MembersRouteWithChildren
   MembershipRoute: typeof MembershipRoute
+  MyRoute: typeof MyRouteWithChildren
   NondiscriminationRoute: typeof NondiscriminationRoute
   OpenSourceRoute: typeof OpenSourceRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -547,6 +559,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NondiscriminationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/my': {
+      id: '/my'
+      path: '/my'
+      fullPath: '/my'
+      preLoaderRoute: typeof MyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/membership': {
       id: '/membership'
       path: '/membership'
@@ -603,13 +622,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AntiHazingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account': {
-      id: '/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof AccountRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/about': {
       id: '/about'
       path: '/about'
@@ -645,13 +657,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AnnouncementsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account/': {
-      id: '/account/'
-      path: '/'
-      fullPath: '/account/'
-      preLoaderRoute: typeof AccountIndexRouteImport
-      parentRoute: typeof AccountRoute
-    }
     '/register/profile': {
       id: '/register/profile'
       path: '/register/profile'
@@ -665,6 +670,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/register/pending'
       preLoaderRoute: typeof RegisterPendingRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/my/account': {
+      id: '/my/account'
+      path: '/account'
+      fullPath: '/my/account'
+      preLoaderRoute: typeof MyAccountRouteImport
+      parentRoute: typeof MyRoute
     }
     '/members/waivers': {
       id: '/members/waivers'
@@ -701,33 +713,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account/waiver': {
-      id: '/account/waiver'
+    '/my/account/': {
+      id: '/my/account/'
+      path: '/'
+      fullPath: '/my/account/'
+      preLoaderRoute: typeof MyAccountIndexRouteImport
+      parentRoute: typeof MyAccountRoute
+    }
+    '/my/account/waiver': {
+      id: '/my/account/waiver'
       path: '/waiver'
-      fullPath: '/account/waiver'
-      preLoaderRoute: typeof AccountWaiverRouteImport
-      parentRoute: typeof AccountRoute
+      fullPath: '/my/account/waiver'
+      preLoaderRoute: typeof MyAccountWaiverRouteImport
+      parentRoute: typeof MyAccountRoute
     }
-    '/account/security': {
-      id: '/account/security'
+    '/my/account/security': {
+      id: '/my/account/security'
       path: '/security'
-      fullPath: '/account/security'
-      preLoaderRoute: typeof AccountSecurityRouteImport
-      parentRoute: typeof AccountRoute
+      fullPath: '/my/account/security'
+      preLoaderRoute: typeof MyAccountSecurityRouteImport
+      parentRoute: typeof MyAccountRoute
     }
-    '/account/preferences': {
-      id: '/account/preferences'
+    '/my/account/preferences': {
+      id: '/my/account/preferences'
       path: '/preferences'
-      fullPath: '/account/preferences'
-      preLoaderRoute: typeof AccountPreferencesRouteImport
-      parentRoute: typeof AccountRoute
+      fullPath: '/my/account/preferences'
+      preLoaderRoute: typeof MyAccountPreferencesRouteImport
+      parentRoute: typeof MyAccountRoute
     }
-    '/account/details': {
-      id: '/account/details'
+    '/my/account/details': {
+      id: '/my/account/details'
       path: '/details'
-      fullPath: '/account/details'
-      preLoaderRoute: typeof AccountDetailsRouteImport
-      parentRoute: typeof AccountRoute
+      fullPath: '/my/account/details'
+      preLoaderRoute: typeof MyAccountDetailsRouteImport
+      parentRoute: typeof MyAccountRoute
     }
     '/members/roles_/$roleId': {
       id: '/members/roles_/$roleId'
@@ -760,25 +779,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AccountRouteChildren {
-  AccountDetailsRoute: typeof AccountDetailsRoute
-  AccountPreferencesRoute: typeof AccountPreferencesRoute
-  AccountSecurityRoute: typeof AccountSecurityRoute
-  AccountWaiverRoute: typeof AccountWaiverRoute
-  AccountIndexRoute: typeof AccountIndexRoute
-}
-
-const AccountRouteChildren: AccountRouteChildren = {
-  AccountDetailsRoute: AccountDetailsRoute,
-  AccountPreferencesRoute: AccountPreferencesRoute,
-  AccountSecurityRoute: AccountSecurityRoute,
-  AccountWaiverRoute: AccountWaiverRoute,
-  AccountIndexRoute: AccountIndexRoute,
-}
-
-const AccountRouteWithChildren =
-  AccountRoute._addFileChildren(AccountRouteChildren)
-
 interface MembersRouteChildren {
   MembersPublicIdRoute: typeof MembersPublicIdRoute
   MembersRegistrationsRoute: typeof MembersRegistrationsRoute
@@ -800,10 +800,39 @@ const MembersRouteChildren: MembersRouteChildren = {
 const MembersRouteWithChildren =
   MembersRoute._addFileChildren(MembersRouteChildren)
 
+interface MyAccountRouteChildren {
+  MyAccountDetailsRoute: typeof MyAccountDetailsRoute
+  MyAccountPreferencesRoute: typeof MyAccountPreferencesRoute
+  MyAccountSecurityRoute: typeof MyAccountSecurityRoute
+  MyAccountWaiverRoute: typeof MyAccountWaiverRoute
+  MyAccountIndexRoute: typeof MyAccountIndexRoute
+}
+
+const MyAccountRouteChildren: MyAccountRouteChildren = {
+  MyAccountDetailsRoute: MyAccountDetailsRoute,
+  MyAccountPreferencesRoute: MyAccountPreferencesRoute,
+  MyAccountSecurityRoute: MyAccountSecurityRoute,
+  MyAccountWaiverRoute: MyAccountWaiverRoute,
+  MyAccountIndexRoute: MyAccountIndexRoute,
+}
+
+const MyAccountRouteWithChildren = MyAccountRoute._addFileChildren(
+  MyAccountRouteChildren,
+)
+
+interface MyRouteChildren {
+  MyAccountRoute: typeof MyAccountRouteWithChildren
+}
+
+const MyRouteChildren: MyRouteChildren = {
+  MyAccountRoute: MyAccountRouteWithChildren,
+}
+
+const MyRouteWithChildren = MyRoute._addFileChildren(MyRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
-  AccountRoute: AccountRouteWithChildren,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
   DeactivatedRoute: DeactivatedRoute,
@@ -812,6 +841,7 @@ const rootRouteChildren: RootRouteChildren = {
   LegalRoute: LegalRoute,
   MembersRoute: MembersRouteWithChildren,
   MembershipRoute: MembershipRoute,
+  MyRoute: MyRouteWithChildren,
   NondiscriminationRoute: NondiscriminationRoute,
   OpenSourceRoute: OpenSourceRoute,
   PrivacyRoute: PrivacyRoute,

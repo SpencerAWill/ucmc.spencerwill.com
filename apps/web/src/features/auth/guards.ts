@@ -136,7 +136,7 @@ export async function requireCurrentWaiver(
   const principal = await requireApproved(queryClient, redirectFrom);
   const waiver = await getCurrentWaiverStatus(queryClient);
   if (!waiver.current) {
-    throw redirect({ to: "/account/waiver" });
+    throw redirect({ to: "/my/account/waiver" });
   }
   return { principal, waiver };
 }
@@ -155,7 +155,7 @@ export async function requireRegistrationContext(
     throw redirect({ to: "/sign-in", search: { register: true } });
   }
   if (principal.hasProfile) {
-    throw redirect({ to: "/account" });
+    throw redirect({ to: "/my/account" });
   }
   return { source: "session", email: principal.email };
 }

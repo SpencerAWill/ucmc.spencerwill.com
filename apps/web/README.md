@@ -68,8 +68,8 @@ The footer also shows the registration disclaimer text **on every page** (not ju
 
 ### Auth-gated routes
 
-- `/account` + `/account/details` + `/account/security` — member's own profile, sessions, passkeys, data export, hard delete
-- `/account/waiver` — read-only view of the member's paper-waiver attestation status
+- `/my/account` + `/my/account/details` + `/my/account/security` — member's own profile, sessions, passkeys, data export, hard delete
+- `/my/account/waiver` — read-only view of the member's paper-waiver attestation status
 - `/members` — directory (auth-gated, robots-disallowed)
 - `/members/registrations` — approval queue (`registrations:approve`)
 - `/members/waivers` — officer attestation queue (`waivers:verify`; held by Treasurer + President)

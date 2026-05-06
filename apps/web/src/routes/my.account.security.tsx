@@ -29,7 +29,7 @@ import { requireAuth } from "#/features/auth/guards";
  * "Add this device" affordance and a per-row "Remove" button. Auth-gated
  * via the same `requireAuth` guard /register/pending uses.
  */
-export const Route = createFileRoute("/account/security")({
+export const Route = createFileRoute("/my/account/security")({
   beforeLoad: async ({ context }) => {
     const principal = await requireAuth(context.queryClient);
     return { principal };
