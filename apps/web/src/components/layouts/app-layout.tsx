@@ -3,24 +3,34 @@ import type { CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Boxes,
+  Briefcase,
+  CalendarClock,
   CalendarDays,
   ChevronRight,
   Compass,
+  Crown,
   Eye,
+  Gavel,
   GraduationCap,
   HandCoins,
+  HandHeart,
+  Handshake,
   HelpCircle,
   History,
   Images,
   Landmark,
+  ListChecks,
   Mail,
+  Wallet,
   Megaphone,
   MessageSquare,
   Newspaper,
   Package,
   ScrollText,
+  Settings,
   Shield,
   Star,
+  Target,
   UserPlus,
   Users,
   Vote,
@@ -253,6 +263,16 @@ function SidebarNav() {
             <SidebarMenuButton
               aria-disabled
               tabIndex={-1}
+              tooltip="Trip Gallery (coming soon)"
+            >
+              <Images />
+              <span>Trip Gallery</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
               tooltip="Goosedown Gazette (coming soon)"
             >
               <Newspaper />
@@ -263,10 +283,10 @@ function SidebarNav() {
             <SidebarMenuButton
               aria-disabled
               tabIndex={-1}
-              tooltip="Trip Gallery (coming soon)"
+              tooltip="Volunteer (coming soon)"
             >
-              <Images />
-              <span>Trip Gallery</span>
+              <HandHeart />
+              <span>Volunteer</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
@@ -404,6 +424,79 @@ function SidebarNav() {
                     <span>Elections</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  {/*
+                   * Executive: workflow tools for the exec board
+                   * (meeting agendas + minutes, quarterly goals,
+                   * accountability tasks). Currently gated on
+                   * `isApproved` like the other placeholder items;
+                   * when these features ship, swap to a proper
+                   * `executive:read`-style permission so non-officer
+                   * members don't see the section.
+                   */}
+                  <Collapsible className="group/collapsible">
+                    <SidebarMenuButton
+                      aria-disabled
+                      tabIndex={-1}
+                      tooltip="Executive (coming soon)"
+                    >
+                      <Briefcase />
+                      <span>Executive</span>
+                    </SidebarMenuButton>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuAction className="data-[state=open]:rotate-90">
+                        <ChevronRight />
+                        <span className="sr-only">Toggle sub-menu</span>
+                      </SidebarMenuAction>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Crown />
+                            <span>Board</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <CalendarClock />
+                            <span>Meetings</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Gavel />
+                            <span>Decisions</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Target />
+                            <span>Goals</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <ListChecks />
+                            <span>Tasks</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Wallet />
+                            <span>Budget</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                            <Handshake />
+                            <span>Handoff</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarMenuItem>
               </>
             ) : null}
           </SidebarMenu>
@@ -417,11 +510,20 @@ function SidebarFooterNav() {
   const { isApproved, hasPermission } = useAuth();
   const canSubmitFeedback = isApproved && hasPermission("feedback:submit");
   const canViewAudit = hasPermission("audit:view");
-  if (!canSubmitFeedback && !canViewAudit) {
-    return null;
-  }
+  // Settings is always rendered (disabled placeholder), so the footer is
+  // never empty and the wrapper always renders.
   return (
     <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          aria-disabled
+          tabIndex={-1}
+          tooltip="Settings (coming soon)"
+        >
+          <Settings />
+          <span>Settings</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
       {canSubmitFeedback ? (
         <SidebarMenuItem>
           <SidebarMenuButton asChild tooltip="Feedback">
