@@ -59,6 +59,11 @@ function normalizeEmail(email: string): string {
 export async function requestMagicLink(args: {
   email: string;
   intent: schema.MagicLinkIntent;
+  // Optional post-sign-in destination round-tripped through the email
+  // URL. Caller is expected to have already validated this starts with
+  // "/" — server-fns.ts's zod refinement is the canonical gatekeeper.
+  // /auth/callback re-validates `startsWith("/")` before navigating.
+  redirect?: string;
 }): Promise<void> {
   const email = normalizeEmail(args.email);
   const token = generateToken();
@@ -74,7 +79,11 @@ export async function requestMagicLink(args: {
     expiresAt,
   });
 
-  const url = `${env.APP_BASE_URL}/auth/callback?token=${encodeURIComponent(token)}`;
+  const params = new URLSearchParams({ token });
+  if (args.redirect && args.redirect.startsWith("/")) {
+    params.set("redirect", args.redirect);
+  }
+  const url = `${env.APP_BASE_URL}/auth/callback?${params.toString()}`;
   await sendEmail(magicLinkEmail({ to: email, url, intent: args.intent }));
 }
 

@@ -18,7 +18,14 @@ import { usePasskeyAuthenticate } from "#/features/auth/api/use-passkey-authenti
  * deterministic affordance for e2e tests). Hides itself entirely when
  * WebAuthn isn't supported by the browser.
  */
-export function SignInWithPasskeyButton() {
+export function SignInWithPasskeyButton({
+  redirectTo,
+}: {
+  // Optional post-sign-in destination forwarded by the sign-in page when
+  // a route guard bounced an anonymous user here. Caller validates
+  // leading-"/" before passing.
+  redirectTo?: string;
+} = {}) {
   const navigate = useNavigate();
   const mutation = usePasskeyAuthenticate();
   const [isSupported, setIsSupported] = useState(false);
@@ -51,7 +58,9 @@ export function SignInWithPasskeyButton() {
             await navigate({ to: "/register/pending" });
             return;
           }
-          await navigate({ to: "/" });
+          const target =
+            redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
+          await navigate({ to: target });
         },
         onError: (e: unknown) => {
           // User cancellation throws a DOMException with name

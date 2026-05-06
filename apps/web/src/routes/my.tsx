@@ -10,7 +10,14 @@ import { requireApproved } from "#/features/auth/guards";
  * `location.href` (path + search + hash, no origin) as the redirectFrom
  * so an anonymous user deep-linking into something like
  * `/my/account/security?foo=1#bar` lands back at the exact same URL
- * after sign-in, not just on the bare pathname.
+ * after sign-in.
+ *
+ * Round-trip path: `requireAuth` writes the captured URL into
+ * `/sign-in?redirect=...`; the sign-in page forwards it to
+ * `MagicLinkForm` and `SignInWithPasskeyButton`; the magic-link form
+ * passes it to `requestMagicLinkFn` which embeds it in the emailed
+ * `/auth/callback?token=...&redirect=...` URL; both the callback and
+ * the passkey paths re-validate `startsWith("/")` before navigating.
  */
 export const Route = createFileRoute("/my")({
   beforeLoad: async ({ context, location }) => {

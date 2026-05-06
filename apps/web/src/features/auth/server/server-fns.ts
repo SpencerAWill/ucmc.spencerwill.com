@@ -63,6 +63,17 @@ export const requestMagicLinkFn = createServerFn({ method: "POST" })
       // rendered (local dev without VITE_TURNSTILE_SITE_KEY). The
       // server skips verification when TURNSTILE_SECRET_KEY is unset.
       turnstileToken: z.string().default(""),
+      // Optional post-sign-in redirect target captured from
+      // /sign-in?redirect=... and round-tripped through the emailed
+      // callback URL. Must start with "/" — anything else is silently
+      // dropped so a malicious caller can't smuggle an external URL into
+      // the magic-link email. The /auth/callback route also re-validates
+      // before navigating, so this is defense in depth.
+      redirect: z
+        .string()
+        .max(2048)
+        .refine((v) => v.startsWith("/"), "must be a relative path")
+        .optional(),
     }),
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
@@ -71,6 +82,7 @@ export const requestMagicLinkFn = createServerFn({ method: "POST" })
     return requestMagicLinkAction({
       email: data.email,
       turnstileToken: data.turnstileToken,
+      redirect: data.redirect,
     });
   });
 
