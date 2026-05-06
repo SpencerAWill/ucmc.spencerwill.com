@@ -14,6 +14,7 @@
  */
 import { and, eq, isNull } from "drizzle-orm";
 
+import { normalizeEmail } from "#/server/auth/email-normalize";
 import { getDb, schema } from "#/server/db";
 import { magicLinkEmail, sendEmail } from "#/server/email/resend";
 
@@ -24,6 +25,11 @@ export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15; // 15 minutes
 export interface MagicLinkProof {
   email: string;
   intent: schema.MagicLinkIntent;
+  // Only populated for `intent = "add_email"`. The consume caller
+  // asserts `session.userId === targetUserId` before attaching the
+  // email to the user; cross-account or logged-out clicks are
+  // refused.
+  targetUserId: string | null;
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
@@ -46,15 +52,15 @@ function generateToken(): string {
   return bytesToBase64Url(bytes);
 }
 
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
 /**
  * Issue a magic link and send it by email. Always resolves successfully
  * from the caller's perspective (even for unknown emails) to avoid
  * leaking which addresses are registered — timing jitter is added in the
  * Phase 10 hardening pass.
+ *
+ * For `intent = "add_email"`, the caller provides `targetUserId` so the
+ * consume handler can assert that the clicker's session matches. The
+ * link URL points at `/verify-email` instead of `/auth/callback`.
  */
 export async function requestMagicLink(args: {
   email: string;
@@ -64,6 +70,8 @@ export async function requestMagicLink(args: {
   // "/" — server-fns.ts's zod refinement is the canonical gatekeeper.
   // /auth/callback re-validates `startsWith("/")` before navigating.
   redirect?: string;
+  // Required for `intent = "add_email"`; ignored for register/login.
+  targetUserId?: string;
 }): Promise<void> {
   const email = normalizeEmail(args.email);
   const token = generateToken();
@@ -71,19 +79,25 @@ export async function requestMagicLink(args: {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + MAGIC_LINK_TTL_MS);
 
-  await getDb().insert(schema.magicLinks).values({
-    tokenHash,
-    email,
-    intent: args.intent,
-    createdAt: now,
-    expiresAt,
-  });
+  await getDb()
+    .insert(schema.magicLinks)
+    .values({
+      tokenHash,
+      email,
+      intent: args.intent,
+      targetUserId:
+        args.intent === "add_email" ? (args.targetUserId ?? null) : null,
+      createdAt: now,
+      expiresAt,
+    });
 
   const params = new URLSearchParams({ token });
   if (args.redirect && args.redirect.startsWith("/")) {
     params.set("redirect", args.redirect);
   }
-  const url = `${env.APP_BASE_URL}/auth/callback?${params.toString()}`;
+  const callbackPath =
+    args.intent === "add_email" ? "/verify-email" : "/auth/callback";
+  const url = `${env.APP_BASE_URL}${callbackPath}?${params.toString()}`;
   await sendEmail(magicLinkEmail({ to: email, url, intent: args.intent }));
 }
 
@@ -117,5 +131,9 @@ export async function consumeMagicLink(
   if (row.expiresAt.getTime() <= Date.now()) {
     return null;
   }
-  return { email: row.email, intent: row.intent };
+  return {
+    email: row.email,
+    intent: row.intent,
+    targetUserId: row.targetUserId,
+  };
 }

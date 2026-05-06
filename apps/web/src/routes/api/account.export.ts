@@ -29,8 +29,17 @@ export const Route = createFileRoute("/api/account/export")({
           throw err;
         }
 
+        // Prefer the primary email for the file name; fall back to the
+        // first verified email, and finally to "account" if (somehow)
+        // the export contains no emails. `.at(0)?.email` keeps the
+        // empty-array branch in the type so the `?? "account"` fallback
+        // is reachable per TS — `payload.emails[0]` would otherwise
+        // narrow to non-undefined under the project's tsconfig.
+        const primaryEmail =
+          payload.emails.find((e) => e.isPrimary)?.email ??
+          payload.emails.at(0)?.email;
         const safeIdentifier = sanitizeFilenameSegment(
-          payload.user?.email ?? "account",
+          primaryEmail ?? "account",
         );
         const date = new Date().toISOString().slice(0, 10);
         const filename = `ucmc-export-${safeIdentifier}-${date}.json`;

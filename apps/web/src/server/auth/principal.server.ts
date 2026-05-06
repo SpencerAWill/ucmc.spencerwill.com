@@ -11,7 +11,19 @@ import { getKv } from "#/server/kv";
 
 export interface Principal {
   userId: string;
-  email: string;
+  /**
+   * The user's primary email — the address used for outbound mail,
+   * the WebAuthn RP `userName`, audit snapshots, and member-directory
+   * listings. Always present; an account without a primary email is
+   * a data-model violation.
+   */
+  primaryEmail: string;
+  /**
+   * Every verified email attached to the account, primary first then
+   * the rest in insertion order. Sign-in works against any address in
+   * this list. Always non-empty (length ≥ 1).
+   */
+  emails: string[];
   status: schema.UserStatus;
   hasProfile: boolean;
   avatarKey: string | null;
@@ -36,6 +48,26 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     where: eq(schema.profiles.userId, userId),
     columns: { userId: true, avatarKey: true },
   });
+
+  const emailRows = await db
+    .select({
+      email: schema.userEmails.email,
+      isPrimary: schema.userEmails.isPrimary,
+    })
+    .from(schema.userEmails)
+    .where(eq(schema.userEmails.userId, userId));
+
+  const primaryRow = emailRows.find((r) => r.isPrimary);
+  if (!primaryRow) {
+    // Hard invariant violation: a user row exists with no primary
+    // email row. Surface loudly so the bug is caught instead of
+    // silently producing a Principal with `primaryEmail = ""`.
+    throw new Error(`User ${userId} has no primary email row`);
+  }
+  const emails = [
+    primaryRow.email,
+    ...emailRows.filter((r) => !r.isPrimary).map((r) => r.email),
+  ];
 
   const userRoleRows = await db
     .select({ roleId: schema.userRoles.roleId, name: schema.roles.name })
@@ -101,7 +133,8 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
 
   return {
     userId: user.id,
-    email: user.email,
+    primaryEmail: primaryRow.email,
+    emails,
     status: user.status,
     hasProfile: Boolean(profile),
     avatarKey: profile?.avatarKey ?? null,

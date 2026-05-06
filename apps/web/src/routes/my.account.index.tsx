@@ -52,7 +52,7 @@ function AccountProfilePage() {
       </header>
       <AvatarEditor
         avatarKey={avatarKey}
-        name={preferredName || principal.email}
+        name={preferredName || principal.primaryEmail}
         onChanged={async () => {
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY }),

@@ -21,7 +21,7 @@ function PendingPage() {
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Thanks for registering!</h1>
         <p className="text-sm text-muted-foreground">
-          An exec will review <strong>{principal.email}</strong> and
+          An exec will review <strong>{principal.primaryEmail}</strong> and
           you&rsquo;ll get an email when you&rsquo;re approved. You can close
           this tab — we won&rsquo;t hold anything up.
         </p>

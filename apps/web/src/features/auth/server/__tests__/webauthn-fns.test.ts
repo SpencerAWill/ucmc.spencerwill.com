@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Principal } from "#/server/auth/principal.server";
 import type * as WebauthnModule from "#/features/auth/server/webauthn.server";
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── shared mocks ─────────────────────────────────────────────────────────
 
@@ -108,7 +109,8 @@ const { insertCredential, listCredentialsForUser } =
 function makePrincipal(overrides: Partial<Principal> = {}): Principal {
   return {
     userId: "user_abc",
-    email: "member@example.com",
+    primaryEmail: "member@example.com",
+    emails: ["member@example.com"],
     status: "approved",
     hasProfile: true,
     avatarKey: null,
@@ -130,9 +132,9 @@ async function seedUser(args: {
     .values({
       id: args.id,
       publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-      email: args.email,
       status: args.status ?? "approved",
     });
+  await attachPrimaryEmail(args.id, args.email);
   if (args.withProfile) {
     await getDb().insert(schema.profiles).values({
       userId: args.id,
@@ -251,7 +253,7 @@ describe("webauthnRegisterFinishAction", () => {
     currentPrincipal = makePrincipal();
     await seedUser({
       id: currentPrincipal.userId,
-      email: currentPrincipal.email,
+      email: currentPrincipal.primaryEmail,
       status: "approved",
       withProfile: true,
     });
@@ -447,7 +449,8 @@ describe("removePasskeyAction", () => {
 
     currentPrincipal = makePrincipal({
       userId: thiefId,
-      email: "thief@example.com",
+      primaryEmail: "thief@example.com",
+      emails: ["thief@example.com"],
     });
     const result = await removePasskeyAction({ credentialId: "cred-id-1" });
     expect(result).toEqual({ ok: false, reason: "not_found" });
@@ -467,7 +470,11 @@ describe("removePasskeyAction", () => {
       counter: 0,
     });
 
-    currentPrincipal = makePrincipal({ userId, email: "rm@example.com" });
+    currentPrincipal = makePrincipal({
+      userId,
+      primaryEmail: "rm@example.com",
+      emails: ["rm@example.com"],
+    });
     const result = await removePasskeyAction({ credentialId: "cred-id-1" });
     expect(result).toEqual({ ok: true });
 
@@ -500,7 +507,11 @@ describe("listPasskeysAction", () => {
       counter: 0,
     });
 
-    currentPrincipal = makePrincipal({ userId: meId, email: "me@example.com" });
+    currentPrincipal = makePrincipal({
+      userId: meId,
+      primaryEmail: "me@example.com",
+      emails: ["me@example.com"],
+    });
     const result = await listPasskeysAction();
     expect(result.ok).toBe(true);
     expect(result.passkeys.map((p) => p.credentialId)).toEqual(["mine"]);

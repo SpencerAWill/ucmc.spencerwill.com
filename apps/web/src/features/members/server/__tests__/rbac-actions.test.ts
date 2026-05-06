@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -51,9 +52,9 @@ async function seedUser(
   await db.insert(schema.users).values({
     id,
     publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-    email,
     status: opts?.status ?? "approved",
   });
+  await attachPrimaryEmail(id, email);
   await db.insert(schema.profiles).values({
     userId: id,
     fullName: "Test User",

@@ -55,7 +55,7 @@ export function UserMenu() {
     );
   }
 
-  const display = principal.email;
+  const display = principal.primaryEmail;
   const statusLabel =
     principal.status === "approved"
       ? emulatedRole

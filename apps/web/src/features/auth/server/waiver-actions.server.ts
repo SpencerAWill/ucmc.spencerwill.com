@@ -151,13 +151,20 @@ export async function listMembersNeedingAttestationAction(): Promise<
     .select({
       userId: schema.users.id,
       publicId: schema.users.publicId,
-      email: schema.users.email,
+      email: schema.userEmails.email,
       approvedAt: schema.users.approvedAt,
       preferredName: schema.profiles.preferredName,
       fullName: schema.profiles.fullName,
       ucAffiliation: schema.profiles.ucAffiliation,
     })
     .from(schema.users)
+    .innerJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.users.id),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
     .where(
       and(
@@ -165,7 +172,7 @@ export async function listMembersNeedingAttestationAction(): Promise<
         sql`${schema.users.id} NOT IN ${attestedSubquery}`,
       ),
     )
-    .orderBy(asc(schema.users.approvedAt), asc(schema.users.email));
+    .orderBy(asc(schema.users.approvedAt), asc(schema.userEmails.email));
 
   return rows;
 }
@@ -378,7 +385,7 @@ async function loadAttestationHistory(
       version: att.version,
       attestedAt: att.attestedAt,
       attestedByUserId: att.attestedBy,
-      attestedByEmail: attestor.email,
+      attestedByEmail: schema.userEmails.email,
       attestedByPreferredName: profile.preferredName,
       revokedAt: att.revokedAt,
       revokedByUserId: att.revokedBy,
@@ -386,11 +393,19 @@ async function loadAttestationHistory(
       notes: att.notes,
     })
     .from(att)
-    // Both joins are LEFT — when attestedBy is NULL (officer was
+    // All three joins are LEFT — when attestedBy is NULL (officer was
     // deleted), the attestation row still surfaces and the
     // attestor-side fields come back as null, which the UI renders
-    // as "(deleted user)".
+    // as "(deleted user)". The userEmails join is filtered to the
+    // attestor's primary email.
     .leftJoin(attestor, eq(attestor.id, att.attestedBy))
+    .leftJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, att.attestedBy),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(profile, eq(profile.userId, att.attestedBy))
     .where(eq(att.userId, userId))
     .orderBy(desc(att.attestedAt));
@@ -414,7 +429,7 @@ async function loadCurrentAttestation(
       version: att.version,
       attestedAt: att.attestedAt,
       attestedByUserId: att.attestedBy,
-      attestedByEmail: attestor.email,
+      attestedByEmail: schema.userEmails.email,
       attestedByPreferredName: profile.preferredName,
       revokedAt: att.revokedAt,
       revokedByUserId: att.revokedBy,
@@ -422,11 +437,18 @@ async function loadCurrentAttestation(
       notes: att.notes,
     })
     .from(att)
-    // Both joins are LEFT — when attestedBy is NULL (officer was
+    // All three joins are LEFT — when attestedBy is NULL (officer was
     // deleted), the attestation row still surfaces and the
     // attestor-side fields come back as null, which the UI renders
     // as "(deleted user)".
     .leftJoin(attestor, eq(attestor.id, att.attestedBy))
+    .leftJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, att.attestedBy),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(profile, eq(profile.userId, att.attestedBy))
     .where(
       and(

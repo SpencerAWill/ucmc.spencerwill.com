@@ -3,7 +3,7 @@
  * the shell + .server.ts split — the shell in `./rbac-fns.ts` loads
  * this via dynamic imports inside its createServerFn handlers.
  */
-import { count, eq, inArray, max } from "drizzle-orm";
+import { and, count, eq, inArray, max } from "drizzle-orm";
 
 import {
   buildAuditEventStatement,
@@ -153,11 +153,18 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
   const memberRows = await db
     .select({
       userId: schema.users.id,
-      email: schema.users.email,
+      email: schema.userEmails.email,
       preferredName: schema.profiles.preferredName,
     })
     .from(schema.userRoles)
     .innerJoin(schema.users, eq(schema.users.id, schema.userRoles.userId))
+    .innerJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.users.id),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
     .where(eq(schema.userRoles.roleId, roleId));
 

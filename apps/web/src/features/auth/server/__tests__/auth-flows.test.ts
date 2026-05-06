@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as Resend from "#/server/email/resend";
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks (declared before action imports) ──────────────────────────────
 
@@ -95,9 +96,9 @@ async function seedUser(args: {
     .values({
       id,
       publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-      email: args.email,
       status: args.status ?? "pending",
     });
+  await attachPrimaryEmail(id, args.email);
   if (args.withProfile) {
     await getDb().insert(schema.profiles).values({
       userId: id,
@@ -237,8 +238,12 @@ describe("magic-link registration flow", () => {
 
     // 4. Verify: user row exists with status=pending, profile exists,
     //    session cookie set (proof cookie cleared).
+    const userEmailRow = await getDb().query.userEmails.findFirst({
+      where: (ue, { eq }) => eq(ue.email, TEST_EMAIL),
+    });
+    expect(userEmailRow).toBeDefined();
     const user = await getDb().query.users.findFirst({
-      where: (u, { eq }) => eq(u.email, TEST_EMAIL),
+      where: (u, { eq }) => eq(u.id, userEmailRow!.userId),
     });
     expect(user).toBeDefined();
     expect(user!.status).toBe("pending");
@@ -256,7 +261,7 @@ describe("magic-link registration flow", () => {
     // getSession should return the principal.
     const { principal } = await getSessionAction();
     expect(principal).not.toBeNull();
-    expect(principal!.email).toBe(TEST_EMAIL);
+    expect(principal!.primaryEmail).toBe(TEST_EMAIL);
     expect(principal!.status).toBe("pending");
     expect(principal!.hasProfile).toBe(true);
   });
@@ -547,13 +552,15 @@ describe("pre-seeded user registration", () => {
     // Submit profile using proof cookie.
     await submitProfileAction(validProfile);
 
-    // Verify: the SAME user ID was reused (not a new row).
-    const users = await getDb()
+    // Verify: the SAME user ID was reused (not a new row). Email
+    // ownership lives on user_emails; the recovered userId must equal
+    // the pre-seeded one.
+    const emailRows = await getDb()
       .select()
-      .from(schema.users)
-      .where(drizzleEq(schema.users.email, TEST_EMAIL));
-    expect(users).toHaveLength(1);
-    expect(users[0].id).toBe(preSeededId);
+      .from(schema.userEmails)
+      .where(drizzleEq(schema.userEmails.email, TEST_EMAIL));
+    expect(emailRows).toHaveLength(1);
+    expect(emailRows[0].userId).toBe(preSeededId);
 
     // Profile attached to the pre-seeded user.
     const profile = await getDb().query.profiles.findFirst({

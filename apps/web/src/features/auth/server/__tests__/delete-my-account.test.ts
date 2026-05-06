@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as AvatarsServer from "#/server/r2/avatars.server";
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -52,10 +53,10 @@ async function seedUser(
   await db.insert(schema.users).values({
     id,
     publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-    email,
     status: "approved",
     approvedAt: new Date(),
   });
+  await attachPrimaryEmail(id, email);
   await db.insert(schema.profiles).values({
     userId: id,
     fullName: "Test User",

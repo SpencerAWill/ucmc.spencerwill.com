@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type * as SessionServer from "#/server/auth/session.server";
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import {
   buildAuditEventStatement,
   buildBulkAuditEventStatement,
@@ -24,14 +25,12 @@ function uid(prefix: string): string {
 
 async function seedUser(): Promise<string> {
   const id = uid("u");
-  await getDb()
-    .insert(schema.users)
-    .values({
-      id,
-      publicId: id,
-      email: `${id}@example.com`,
-      status: "approved",
-    });
+  await getDb().insert(schema.users).values({
+    id,
+    publicId: id,
+    status: "approved",
+  });
+  await attachPrimaryEmail(id, `${id}@example.com`);
   return id;
 }
 
@@ -312,7 +311,8 @@ async function asViewer(
   const { loadCurrentPrincipal } = await import("#/server/auth/session.server");
   vi.mocked(loadCurrentPrincipal).mockResolvedValue({
     userId,
-    email: `${userId}@example.com`,
+    primaryEmail: `${userId}@example.com`,
+    emails: [`${userId}@example.com`],
     status: "approved",
     hasProfile: false,
     avatarKey: null,

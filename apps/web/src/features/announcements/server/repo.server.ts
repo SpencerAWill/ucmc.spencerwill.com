@@ -3,7 +3,7 @@
  * actions layer is responsible for authorization. Joins users + profiles
  * to project the author's display name and avatar key alongside each row.
  */
-import { count, desc, eq, gt } from "drizzle-orm";
+import { and, count, desc, eq, gt } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 
@@ -30,13 +30,20 @@ export async function listAnnouncements(): Promise<AnnouncementRow[]> {
       publishedAt: schema.announcements.publishedAt,
       updatedAt: schema.announcements.updatedAt,
       createdBy: schema.announcements.createdBy,
-      authorEmail: schema.users.email,
+      authorEmail: schema.userEmails.email,
       authorFullName: schema.profiles.fullName,
       authorPreferredName: schema.profiles.preferredName,
       authorAvatarKey: schema.profiles.avatarKey,
     })
     .from(schema.announcements)
     .leftJoin(schema.users, eq(schema.users.id, schema.announcements.createdBy))
+    .leftJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.announcements.createdBy),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(
       schema.profiles,
       eq(schema.profiles.userId, schema.announcements.createdBy),
@@ -57,13 +64,20 @@ export async function getAnnouncement(
       publishedAt: schema.announcements.publishedAt,
       updatedAt: schema.announcements.updatedAt,
       createdBy: schema.announcements.createdBy,
-      authorEmail: schema.users.email,
+      authorEmail: schema.userEmails.email,
       authorFullName: schema.profiles.fullName,
       authorPreferredName: schema.profiles.preferredName,
       authorAvatarKey: schema.profiles.avatarKey,
     })
     .from(schema.announcements)
     .leftJoin(schema.users, eq(schema.users.id, schema.announcements.createdBy))
+    .leftJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.announcements.createdBy),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(
       schema.profiles,
       eq(schema.profiles.userId, schema.announcements.createdBy),

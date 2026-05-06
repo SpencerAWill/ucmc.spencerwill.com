@@ -31,29 +31,77 @@ export const ucAffiliation = [
 ] as const;
 export type UcAffiliation = (typeof ucAffiliation)[number];
 
-export const users = sqliteTable(
-  "users",
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  publicId: text("public_id").notNull().unique(),
+  status: text("status", { enum: userStatus }).notNull().default("pending"),
+  createdAt: timestamp("created_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  approvedAt: timestamp("approved_at"),
+  approvedBy: text("approved_by"),
+  // Set when an approver clicks Reject. Drives the retention cron's
+  // 30-day rejected-registration purge. NULL on rows that pre-date
+  // this column — the cron skips NULL so historical rejections never
+  // auto-purge retroactively; an admin can clean those up by hand.
+  rejectedAt: timestamp("rejected_at"),
+  // Set when a member is deactivated. Drives the 12-month
+  // deactivated-account purge. Same NULL-skip rule.
+  deactivatedAt: timestamp("deactivated_at"),
+  lastReadAnnouncementsAt: timestamp("last_read_announcements_at"),
+});
+
+/**
+ * A user's verified email addresses. Every user has ≥1 row; exactly
+ * one row per user is `is_primary = 1` (enforced by the partial unique
+ * index below). The primary email is the "outbound + display" address
+ * used for transactional mail, the WebAuthn RP `userName`, audit
+ * snapshots, and member-directory listings.
+ *
+ * Email uniqueness is **global** across all users — an address can
+ * belong to at most one account at any time. Sign-in lookups join
+ * through this table, so any verified address can receive a magic
+ * link that lands in the owning user's account. Adding an additional
+ * email requires the user to be approved (`requireApproved`) and to
+ * complete a magic-link round-trip to the new address; the row is
+ * inserted with `verified_at = now` only after that round-trip
+ * succeeds.
+ *
+ * Removal is unrestricted *except* that (a) the primary cannot be
+ * removed without first promoting another row, and (b) the last
+ * remaining row cannot be removed (there must always be ≥1 email).
+ */
+export const userEmails = sqliteTable(
+  "user_emails",
   {
     id: text("id").primaryKey(),
-    publicId: text("public_id").notNull().unique(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Stored normalized: `trim().toLowerCase()`. The shared helper at
+    // `#/server/auth/email-normalize` is the single source of truth;
+    // every insert + lookup must go through it so the unique index
+    // matches.
     email: text("email").notNull(),
-    status: text("status", { enum: userStatus }).notNull().default("pending"),
+    isPrimary: integer("is_primary", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    verifiedAt: timestamp("verified_at").notNull(),
     createdAt: timestamp("created_at")
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
-    approvedAt: timestamp("approved_at"),
-    approvedBy: text("approved_by"),
-    // Set when an approver clicks Reject. Drives the retention cron's
-    // 30-day rejected-registration purge. NULL on rows that pre-date
-    // this column — the cron skips NULL so historical rejections never
-    // auto-purge retroactively; an admin can clean those up by hand.
-    rejectedAt: timestamp("rejected_at"),
-    // Set when a member is deactivated. Drives the 12-month
-    // deactivated-account purge. Same NULL-skip rule.
-    deactivatedAt: timestamp("deactivated_at"),
-    lastReadAnnouncementsAt: timestamp("last_read_announcements_at"),
   },
-  (t) => [uniqueIndex("users_email_unique").on(t.email)],
+  (t) => [
+    uniqueIndex("user_emails_email_unique").on(t.email),
+    // Partial unique enforces "exactly one primary per user" without
+    // blocking the many non-primary rows. SQLite/D1 supports partial
+    // indexes; if drizzle-kit ever drops the WHERE clause from a
+    // generated migration, hand-edit the .sql to restore it.
+    uniqueIndex("user_emails_one_primary_per_user")
+      .on(t.userId)
+      .where(sql`${t.isPrimary} = 1`),
+    index("user_emails_user_id_idx").on(t.userId),
+  ],
 );
 
 export const profiles = sqliteTable("profiles", {
@@ -238,7 +286,7 @@ export const sessions = sqliteTable("sessions", {
   expiresAt: timestamp("expires_at").notNull(),
 });
 
-export const magicLinkIntent = ["register", "login"] as const;
+export const magicLinkIntent = ["register", "login", "add_email"] as const;
 export type MagicLinkIntent = (typeof magicLinkIntent)[number];
 
 // Stores SHA-256 hash of the token (base64url), never the raw token.
@@ -247,6 +295,15 @@ export const magicLinks = sqliteTable("magic_links", {
   tokenHash: text("token_hash").primaryKey(),
   email: text("email").notNull(),
   intent: text("intent", { enum: magicLinkIntent }).notNull(),
+  // Populated only for `intent = "add_email"`. The consume handler
+  // asserts `session.userId === targetUserId` so an attacker can't
+  // request a link to a victim's address and then have the victim
+  // (signed in as themselves) attach the email to the attacker's
+  // account by clicking the link. SET NULL on user delete keeps the
+  // historical row.
+  targetUserId: text("target_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   consumedAt: timestamp("consumed_at"),
@@ -365,13 +422,15 @@ export const landingActivities = sqliteTable(
  * JSON blob.
  *
  * **One exception:** `member.self_deleted` deliberately captures the
- * deleting user's `email + userId` in `metadata` because the FK
+ * deleting user's `primaryEmail + userId` in `metadata` because the FK
  * cascade nulls both `actor_user_id` and `target_user_id` on the same
  * row. Without that exception the audit row would survive with no
  * way to identify the account, defeating the audit's whole purpose.
- * No other action type follows this pattern; the helper module
- * doc-comment in `src/server/audit/audit-log.server.ts` is the
- * canonical statement of the rule.
+ * Only the primary is captured (additional emails would balloon the
+ * audit row and are not needed for "who was this account"). No other
+ * action type follows this pattern; the helper module doc-comment in
+ * `src/server/audit/audit-log.server.ts` is the canonical statement
+ * of the rule.
  *
  * Adding a new action here requires it to actually be written by some
  * code path — empty enum entries pollute the viewer's filter UI.
@@ -390,6 +449,14 @@ export const auditAction = [
   // member approved.
   "member.sessions_revoked",
   "profile.force_edited",
+  // Email-address lifecycle. The user (or in rare cases an admin via
+  // future tooling) added a verified address, removed one, or promoted
+  // a non-primary to primary. `actor_user_id` and `target_user_id` are
+  // the same on user-self actions; metadata captures the email value
+  // so the row remains useful even after a future cascade.
+  "email.added",
+  "email.removed",
+  "email.primary_changed",
   // RBAC.
   "role.created",
   "role.deleted",
@@ -485,6 +552,7 @@ export const feedback = sqliteTable(
 );
 
 export type User = typeof users.$inferSelect;
+export type UserEmail = typeof userEmails.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
 export type Role = typeof roles.$inferSelect;

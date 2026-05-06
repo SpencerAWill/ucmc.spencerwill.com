@@ -11,6 +11,7 @@
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import { normalizeEmail } from "#/server/auth/email-normalize";
 import { generateUserPublicId } from "#/server/auth/ids";
 import {
   consumeMagicLink,
@@ -36,12 +37,26 @@ import type {
   PublicProfileInput,
   RegistrationInput,
 } from "#/server/profile/profile-schemas";
-import { getDb, schema } from "#/server/db";
+import { getDb, isUniqueViolation, schema } from "#/server/db";
 import {
   checkAuthRateLimitByEmail,
   checkAuthRateLimitByIp,
 } from "#/server/rate-limit.server";
 import { verifyTurnstile } from "#/features/auth/server/turnstile.server";
+
+/**
+ * Resolve a normalized email address to its owning userId via the
+ * user_emails table. Returns null when no verified row exists for
+ * that address. Used by the magic-link request + consume paths to
+ * decide login vs. register and to identify the returning user.
+ */
+async function findUserIdByEmail(email: string): Promise<string | null> {
+  const row = await getDb().query.userEmails.findFirst({
+    where: eq(schema.userEmails.email, normalizeEmail(email)),
+    columns: { userId: true },
+  });
+  return row?.userId ?? null;
+}
 
 // ── timing jitter ────────────────────────────────────────────────────────
 // All paths through requestMagicLinkAction must take roughly the same
@@ -85,14 +100,11 @@ export async function requestMagicLinkAction(args: {
       return { ok: true };
     }
 
-    const existing = await getDb().query.users.findFirst({
-      where: eq(schema.users.email, args.email),
-      columns: { id: true },
-    });
+    const existingUserId = await findUserIdByEmail(args.email);
 
     await requestMagicLink({
       email: args.email,
-      intent: existing ? "login" : "register",
+      intent: existingUserId ? "login" : "register",
       redirect: args.redirect,
     });
 
@@ -114,20 +126,27 @@ export async function consumeMagicLinkAction(
     return { ok: false, reason: "invalid" };
   }
 
-  // If a user row already exists for this email, the magic-link click is
-  // a returning-user sign-in: open a session directly and skip the proof
-  // cookie entirely. The caller sees `mode: "session"` and can route by
-  // status + hasProfile instead of bouncing through /register/profile.
+  // If a verified email row already points at a user, the magic-link
+  // click is a returning-user sign-in: open a session directly and
+  // skip the proof cookie entirely. The caller sees `mode: "session"`
+  // and can route by status + hasProfile instead of bouncing through
+  // /register/profile.
   //
-  // If no user row exists, this is a first-time registration click —
-  // write the short-lived proof cookie that /register/profile gates on,
-  // and return `mode: "proof"` so the caller redirects there.
-  const existing = await getDb().query.users.findFirst({
-    where: eq(schema.users.email, proof.email),
-    columns: { id: true, status: true },
-  });
-
-  if (existing) {
+  // If no user owns this email yet, this is a first-time registration
+  // click — write the short-lived proof cookie that /register/profile
+  // gates on, and return `mode: "proof"` so the caller redirects there.
+  const existingUserId = await findUserIdByEmail(proof.email);
+  if (existingUserId) {
+    const existing = await getDb().query.users.findFirst({
+      where: eq(schema.users.id, existingUserId),
+      columns: { id: true, status: true },
+    });
+    if (!existing) {
+      // user_emails references a userId that no longer exists — only
+      // possible mid-cascade or with a manual-SQL inconsistency. Treat
+      // as invalid rather than crash.
+      return { ok: false, reason: "invalid" };
+    }
     const profile = await getDb().query.profiles.findFirst({
       where: eq(schema.profiles.userId, existing.id),
       columns: { userId: true },
@@ -226,6 +245,12 @@ export async function exportMyDataAction(): Promise<{
   exportedAt: string;
   schemaVersion: 1;
   user: typeof schema.users.$inferSelect | null;
+  emails: Array<{
+    email: string;
+    isPrimary: boolean;
+    verifiedAt: Date;
+    createdAt: Date;
+  }>;
   profile: typeof schema.profiles.$inferSelect | null;
   emergencyContacts: Array<{
     name: string;
@@ -257,9 +282,18 @@ export async function exportMyDataAction(): Promise<{
   const db = getDb();
   const userId = principal.userId;
 
-  const [user, profile, emergencyContacts, userRoles, attestations] =
+  const [user, emails, profile, emergencyContacts, userRoles, attestations] =
     await Promise.all([
       db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
+      db
+        .select({
+          email: schema.userEmails.email,
+          isPrimary: schema.userEmails.isPrimary,
+          verifiedAt: schema.userEmails.verifiedAt,
+          createdAt: schema.userEmails.createdAt,
+        })
+        .from(schema.userEmails)
+        .where(eq(schema.userEmails.userId, userId)),
       db.query.profiles.findFirst({
         where: eq(schema.profiles.userId, userId),
       }),
@@ -295,6 +329,7 @@ export async function exportMyDataAction(): Promise<{
     exportedAt: new Date().toISOString(),
     schemaVersion: 1,
     user: user ?? null,
+    emails,
     profile: profile ?? null,
     emergencyContacts,
     roles: userRoles.map((r) => r.roleId),
@@ -354,7 +389,7 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
   // see `audit-log.server.ts`'s module doc-comment.
   const auditMetadata = {
     userId: principal.userId,
-    email: principal.email,
+    email: principal.primaryEmail,
   };
 
   // Delete the avatar object from R2 before the row goes away. The
@@ -402,7 +437,7 @@ export async function submitProfileAction(
     throw new Error("Not authorized to submit a profile");
   }
 
-  const email = principal?.email ?? proof!.email;
+  const email = normalizeEmail(principal?.primaryEmail ?? proof!.email);
 
   const { emergencyContacts, bio, policiesAck: _ack, ...rest } = data;
   // Empty/whitespace-only bio normalizes to NULL so the DB has a single
@@ -417,18 +452,61 @@ export async function submitProfileAction(
     policiesVersion: POLICIES_VERSION,
   };
 
-  // Find or create the user row. Pre-seeded rows (email-only, no profile)
-  // are reused by hitting the unique email index. We do this in three
-  // steps — insert-on-conflict-do-nothing, then select — to stay portable
-  // across D1's SQLite dialect without depending on `returning`.
+  // Find or create the user row. For session-based callers (returning
+  // user without a profile) we already know the userId. For proof-based
+  // callers (first-time registrants), we look the email up in
+  // user_emails first — covers the retry / parallel-tab race where
+  // another device already completed registration with the same
+  // verified email — and only insert when the address has never been
+  // claimed. The user_emails UNIQUE(email) constraint is the actual
+  // race boundary; the pre-lookup is just to avoid wasting an inserted
+  // users row on the loser of the race.
   const db = getDb();
-  const id = `user_${uuidv7()}`;
-  await db
-    .insert(schema.users)
-    .values({ id, publicId: generateUserPublicId(), email, status: "pending" })
-    .onConflictDoNothing({ target: schema.users.email });
+  let userId: string;
+  if (principal) {
+    userId = principal.userId;
+  } else {
+    const existingUserId = await findUserIdByEmail(email);
+    if (existingUserId) {
+      userId = existingUserId;
+    } else {
+      const newUserId = `user_${uuidv7()}`;
+      try {
+        await db.batch([
+          db.insert(schema.users).values({
+            id: newUserId,
+            publicId: generateUserPublicId(),
+            status: "pending",
+          }),
+          db.insert(schema.userEmails).values({
+            id: `uem_${uuidv7()}`,
+            userId: newUserId,
+            email,
+            isPrimary: true,
+            verifiedAt: new Date(),
+          }),
+        ]);
+        userId = newUserId;
+      } catch (err) {
+        if (isUniqueViolation(err, "user_emails.email")) {
+          // Lost the race; the email belongs to a user that another
+          // tab/device just created. Re-resolve and reuse.
+          const recovered = await findUserIdByEmail(email);
+          if (!recovered) {
+            throw new Error(
+              "user_emails missing after UNIQUE violation (impossible)",
+              { cause: err },
+            );
+          }
+          userId = recovered;
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
   const userRow = await db.query.users.findFirst({
-    where: eq(schema.users.email, email),
+    where: eq(schema.users.id, userId),
   });
   if (!userRow) {
     throw new Error("User row not found after upsert (unexpected)");

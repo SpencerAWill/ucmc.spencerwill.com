@@ -131,7 +131,7 @@ function DataAndDeletionSection() {
   const [open, setOpen] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
 
-  const expectedEmail = principal?.email ?? "";
+  const expectedEmail = principal?.primaryEmail ?? "";
   const matches = confirmEmail.trim().toLowerCase() === expectedEmail;
 
   const onConfirm = () => {
