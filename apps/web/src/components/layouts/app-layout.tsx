@@ -202,8 +202,15 @@ function SidebarNav() {
               <span>The Gear Cave</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <Collapsible className="group/collapsible">
-            <SidebarMenuItem>
+          <SidebarMenuItem>
+            {/*
+             * Collapsible sits inside SidebarMenuItem (not the other way
+             * around) so the <ul> only has <li> direct children — axe-core
+             * rule `list` rejects a <ul> with a <div> child, which is what
+             * Radix Collapsible renders as. Same pattern is used for
+             * Members below.
+             */}
+            <Collapsible className="group/collapsible">
               <SidebarMenuButton
                 aria-disabled
                 tabIndex={-1}
@@ -240,8 +247,8 @@ function SidebarNav() {
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </CollapsibleContent>
-            </SidebarMenuItem>
-          </Collapsible>
+            </Collapsible>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled
@@ -302,8 +309,15 @@ function SidebarNav() {
 
             {isApproved ? (
               <>
-                <Collapsible defaultOpen className="group/collapsible">
-                  <SidebarMenuItem>
+                <SidebarMenuItem>
+                  {/*
+                   * Collapsible sits inside SidebarMenuItem (not the
+                   * other way around) so the <ul> only has <li> direct
+                   * children — axe-core's `list` rule rejects a <ul>
+                   * with a <div> child, which is what Radix Collapsible
+                   * renders as.
+                   */}
+                  <Collapsible defaultOpen className="group/collapsible">
                     {/* Main button navigates to /members */}
                     <SidebarMenuButton asChild tooltip="Members">
                       <Link to="/members">
@@ -358,8 +372,8 @@ function SidebarNav() {
                         </SidebarMenuSub>
                       </CollapsibleContent>
                     ) : null}
-                  </SidebarMenuItem>
-                </Collapsible>
+                  </Collapsible>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     aria-disabled

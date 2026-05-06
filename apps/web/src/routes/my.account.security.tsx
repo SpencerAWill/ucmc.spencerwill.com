@@ -22,18 +22,16 @@ import {
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
-import { requireAuth } from "#/features/auth/guards";
 
 /**
  * Account → Security. Lists the user's registered passkeys with an
- * "Add this device" affordance and a per-row "Remove" button. Auth-gated
- * via the same `requireAuth` guard /register/pending uses.
+ * "Add this device" affordance and a per-row "Remove" button.
+ *
+ * Auth-gating is inherited from the parent `/my` layout (`my.tsx`),
+ * which runs `requireApproved` for the entire `/my/*` namespace —
+ * stricter than the `requireAuth` this route used to call directly.
  */
 export const Route = createFileRoute("/my/account/security")({
-  beforeLoad: async ({ context }) => {
-    const principal = await requireAuth(context.queryClient);
-    return { principal };
-  },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(passkeyListQueryOptions());
   },
