@@ -189,40 +189,43 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
   const db = getDb();
   const live = new Set<string>();
 
-  const avatars = await db
-    .select({ key: schema.profiles.avatarKey })
-    .from(schema.profiles)
-    .where(isNotNull(schema.profiles.avatarKey));
+  // Four independent reads against four separate tables — bundle into
+  // one `db.batch` so the cron's D1 wait is a single HTTP request.
+  // Order doesn't matter; everything funnels into the same Set.
+  const [avatars, heroes, activities, settings] = await db.batch([
+    db
+      .select({ key: schema.profiles.avatarKey })
+      .from(schema.profiles)
+      .where(isNotNull(schema.profiles.avatarKey)),
+    db
+      .select({ key: schema.landingHeroSlides.imageKey })
+      .from(schema.landingHeroSlides),
+    db
+      .select({ key: schema.landingActivities.imageKey })
+      .from(schema.landingActivities)
+      .where(isNotNull(schema.landingActivities.imageKey)),
+    db
+      .select({
+        key: schema.landingSettings.key,
+        valueJson: schema.landingSettings.valueJson,
+      })
+      .from(schema.landingSettings)
+      .where(inArray(schema.landingSettings.key, SETTINGS_IMAGE_KEYS)),
+  ]);
+
   for (const row of avatars) {
     if (row.key) {
       live.add(row.key);
     }
   }
-
-  const heroes = await db
-    .select({ key: schema.landingHeroSlides.imageKey })
-    .from(schema.landingHeroSlides);
   for (const row of heroes) {
     live.add(row.key);
   }
-
-  const activities = await db
-    .select({ key: schema.landingActivities.imageKey })
-    .from(schema.landingActivities)
-    .where(isNotNull(schema.landingActivities.imageKey));
   for (const row of activities) {
     if (row.key) {
       live.add(row.key);
     }
   }
-
-  const settings = await db
-    .select({
-      key: schema.landingSettings.key,
-      valueJson: schema.landingSettings.valueJson,
-    })
-    .from(schema.landingSettings)
-    .where(inArray(schema.landingSettings.key, SETTINGS_IMAGE_KEYS));
   for (const row of settings) {
     // valueJson is the JSON-encoded image key (`"landing/about/abc.webp"`)
     // or the JSON-encoded null for "no image set". Tolerate both shapes

@@ -647,6 +647,48 @@ describe("listMembersAction status filtering", () => {
   });
 });
 
+// ── role filtering in listMembersAction ────────────────────────────────
+
+describe("listMembersAction role filter", () => {
+  it("returns only members holding any of the requested roles, with a matching total", async () => {
+    await signInWithPermission("manager@example.com", "members:manage");
+
+    const officerId = await seedUser("officer@example.com");
+    await assignRole(officerId, "role_member");
+    await assignRole(officerId, "role_president");
+
+    const plainId = await seedUser("plain@example.com");
+    await assignRole(plainId, "role_member");
+
+    const filtered = await listMembersAction({ roles: "president" });
+    const emails = filtered.rows.map((r) => r.email);
+    expect(emails).toContain("officer@example.com");
+    expect(emails).not.toContain("plain@example.com");
+    // total must reflect the filtered set, not the unfiltered page count.
+    expect(filtered.total).toBe(filtered.rows.length);
+  });
+
+  it("paginates correctly under a role filter", async () => {
+    await signInWithPermission("manager@example.com", "members:manage");
+
+    for (let i = 0; i < 3; i++) {
+      const id = await seedUser(`officer${i}@example.com`);
+      await assignRole(id, "role_member");
+      await assignRole(id, "role_president");
+    }
+    // Decoy that should not appear in the role-filtered total.
+    const decoy = await seedUser("decoy@example.com");
+    await assignRole(decoy, "role_member");
+
+    const page = await listMembersAction({ roles: "president", limit: 2 });
+    expect(page.rows.length).toBe(2);
+    expect(page.total).toBe(3);
+    for (const row of page.rows) {
+      expect(row.roles).toContain("president");
+    }
+  });
+});
+
 // ── getMemberDetailAction ───────────────────────────────────────────────
 
 describe("getMemberDetailAction", () => {

@@ -26,9 +26,6 @@ import {
   listFaqItems,
   listHeroSlides,
   listSettings,
-  nextActivitySortOrder,
-  nextFaqSortOrder,
-  nextHeroSlideSortOrder,
   reorderActivities,
   reorderFaqItems,
   reorderHeroSlides,
@@ -197,8 +194,7 @@ export async function createHeroSlideAction(
   await putLandingImage(imageKey, bytes, contentType);
 
   const id = `hslide_${uuidv7()}`;
-  const sortOrder = await nextHeroSlideSortOrder();
-  await insertHeroSlide({ id, imageKey, alt: input.alt, sortOrder });
+  await insertHeroSlide({ id, imageKey, alt: input.alt });
 
   await recordAuditEvent({
     actorUserId: principal.userId,
@@ -296,12 +292,10 @@ export async function createFaqItemAction(
     );
   }
   const id = `faq_${uuidv7()}`;
-  const sortOrder = await nextFaqSortOrder();
   await insertFaqItem({
     id,
     question: input.question,
     answer: input.answer,
-    sortOrder,
   });
   await recordAuditEvent({
     actorUserId: principal.userId,
@@ -392,14 +386,12 @@ export async function createActivityAction(
     ? await uploadActivityImage(input.dataUrl)
     : null;
   const id = `act_${uuidv7()}`;
-  const sortOrder = await nextActivitySortOrder();
   await insertActivity({
     id,
     icon: input.icon,
     title: input.title,
     blurb: input.blurb,
     imageKey,
-    sortOrder,
   });
   await recordAuditEvent({
     actorUserId: principal.userId,

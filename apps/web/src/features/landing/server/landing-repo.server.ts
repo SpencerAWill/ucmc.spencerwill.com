@@ -75,11 +75,23 @@ export async function getHeroSlide(
   return rows.length > 0 ? rows[0] : null;
 }
 
+// Computes `sort_order = COALESCE(MAX(sort_order), -1) + 1` inside
+// the INSERT statement so the read+insert is one round-trip and the
+// MAX→INSERT TOCTOU window goes away (concurrent inserts no longer
+// collide on the same sort_order).
+//
+// Race-safety here assumes Cloudflare D1's single-primary write model:
+// SQLite serializes writes, so two parallel inserts can't see the
+// same MAX. If D1 ever moves to a multi-primary / active-active
+// topology, this subquery could see a stale local MAX and two regions
+// could pick the same next value — at that point sort_order needs a
+// different generator (e.g. a counter row in `landing_settings` or a
+// monotonic uuidv7-derived ordinal). All three landing tables
+// (hero slides / FAQ items / activities) share this assumption.
 export async function insertHeroSlide(input: {
   id: string;
   imageKey: string;
   alt: string;
-  sortOrder: number;
 }): Promise<void> {
   const db = getDb();
   const now = new Date();
@@ -87,7 +99,7 @@ export async function insertHeroSlide(input: {
     id: input.id,
     imageKey: input.imageKey,
     alt: input.alt,
-    sortOrder: input.sortOrder,
+    sortOrder: sql<number>`COALESCE((SELECT MAX(${schema.landingHeroSlides.sortOrder}) FROM ${schema.landingHeroSlides}), -1) + 1`,
     createdAt: now,
     updatedAt: now,
   });
@@ -117,16 +129,6 @@ export async function deleteHeroSlide(id: string): Promise<void> {
   await db
     .delete(schema.landingHeroSlides)
     .where(eq(schema.landingHeroSlides.id, id));
-}
-
-export async function nextHeroSlideSortOrder(): Promise<number> {
-  const db = getDb();
-  const rows = await db
-    .select({
-      max: sql<number>`COALESCE(MAX(${schema.landingHeroSlides.sortOrder}), -1)`,
-    })
-    .from(schema.landingHeroSlides);
-  return (rows[0]?.max ?? -1) + 1;
 }
 
 // Atomically reorder a contiguous batch of rows. Caller passes the new
@@ -177,7 +179,6 @@ export async function insertFaqItem(input: {
   id: string;
   question: string;
   answer: string;
-  sortOrder: number;
 }): Promise<void> {
   const db = getDb();
   const now = new Date();
@@ -185,7 +186,7 @@ export async function insertFaqItem(input: {
     id: input.id,
     question: input.question,
     answer: input.answer,
-    sortOrder: input.sortOrder,
+    sortOrder: sql<number>`COALESCE((SELECT MAX(${schema.landingFaqItems.sortOrder}) FROM ${schema.landingFaqItems}), -1) + 1`,
     createdAt: now,
     updatedAt: now,
   });
@@ -212,16 +213,6 @@ export async function deleteFaqItem(id: string): Promise<void> {
   await db
     .delete(schema.landingFaqItems)
     .where(eq(schema.landingFaqItems.id, id));
-}
-
-export async function nextFaqSortOrder(): Promise<number> {
-  const db = getDb();
-  const rows = await db
-    .select({
-      max: sql<number>`COALESCE(MAX(${schema.landingFaqItems.sortOrder}), -1)`,
-    })
-    .from(schema.landingFaqItems);
-  return (rows[0]?.max ?? -1) + 1;
 }
 
 export async function countFaqItems(): Promise<number> {
@@ -278,7 +269,6 @@ export async function insertActivity(input: {
   title: string;
   blurb: string;
   imageKey: string | null;
-  sortOrder: number;
 }): Promise<void> {
   const db = getDb();
   const now = new Date();
@@ -288,7 +278,7 @@ export async function insertActivity(input: {
     title: input.title,
     blurb: input.blurb,
     imageKey: input.imageKey,
-    sortOrder: input.sortOrder,
+    sortOrder: sql<number>`COALESCE((SELECT MAX(${schema.landingActivities.sortOrder}) FROM ${schema.landingActivities}), -1) + 1`,
     createdAt: now,
     updatedAt: now,
   });
@@ -341,16 +331,6 @@ export async function deleteActivity(id: string): Promise<void> {
   await db
     .delete(schema.landingActivities)
     .where(eq(schema.landingActivities.id, id));
-}
-
-export async function nextActivitySortOrder(): Promise<number> {
-  const db = getDb();
-  const rows = await db
-    .select({
-      max: sql<number>`COALESCE(MAX(${schema.landingActivities.sortOrder}), -1)`,
-    })
-    .from(schema.landingActivities);
-  return (rows[0]?.max ?? -1) + 1;
 }
 
 export async function reorderActivities(idsInOrder: string[]): Promise<void> {

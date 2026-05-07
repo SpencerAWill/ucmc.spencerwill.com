@@ -3,7 +3,7 @@
  * actions layer is responsible for authorization. Joins users + profiles
  * to project the author's display name and avatar key alongside each row.
  */
-import { and, count, desc, eq, gt } from "drizzle-orm";
+import { and, count, desc, eq, gt, sql } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 
@@ -130,22 +130,29 @@ export async function deleteAnnouncement(id: string): Promise<void> {
 /**
  * Count announcements published after the user's last-read marker. A null
  * marker means they have never opened the page, so every announcement is
- * unread.
+ * unread. A subquery keeps this to one D1 round-trip instead of two
+ * (user lookup + count).
+ *
+ * COALESCE falls back to `-1` (not `0`) for the null marker / missing-
+ * user case so that a hypothetical `published_at = 0` row still
+ * satisfies the strict `>` comparison and counts as unread. The
+ * timestamp column stores `unixepoch() * 1000` and never legitimately
+ * lands on 0, but the `-1` sentinel keeps the "every announcement is
+ * unread" semantics literal regardless of stored values. The missing-
+ * user case isn't reachable from caller code today (only signed-in
+ * users hit this), but the sentinel makes the contract explicit.
  */
 export async function getUnreadCount(userId: string): Promise<number> {
   const db = getDb();
-  const user = await db.query.users.findFirst({
-    where: eq(schema.users.id, userId),
-    columns: { lastReadAnnouncementsAt: true },
-  });
-  if (!user) {
-    return 0;
-  }
-  const marker = user.lastReadAnnouncementsAt;
-  const query = db.select({ value: count() }).from(schema.announcements);
-  const rows = marker
-    ? await query.where(gt(schema.announcements.publishedAt, marker))
-    : await query;
+  const rows = await db
+    .select({ value: count() })
+    .from(schema.announcements)
+    .where(
+      gt(
+        schema.announcements.publishedAt,
+        sql`COALESCE((SELECT ${schema.users.lastReadAnnouncementsAt} FROM ${schema.users} WHERE ${schema.users.id} = ${userId}), -1)`,
+      ),
+    );
   return rows[0]?.value ?? 0;
 }
 

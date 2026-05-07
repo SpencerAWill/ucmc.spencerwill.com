@@ -8,7 +8,7 @@
  * Each function has a matching `*Fn` wrapper in `server-fns.ts`; tests
  * exercise the actions here directly.
  */
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { normalizeEmail } from "#/server/auth/email-normalize";
@@ -56,6 +56,61 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
     columns: { userId: true },
   });
   return row?.userId ?? null;
+}
+
+/** Sentinel returned by `resolveUserByEmail` when `user_emails`
+ *  references a `userId` that no longer exists in `users`. Only
+ *  reachable mid-cascade or with manual SQL inconsistencies; callers
+ *  should treat this as "invalid" rather than registering a new user. */
+const BROKEN_USER_FK = Symbol("broken_user_fk");
+
+/**
+ * Consume-time lookup: given a verified email, return the owning user
+ * along with whether they have a profile. One join replaces the prior
+ * three-query sequence (userEmails → users → profiles).
+ *
+ * Returns:
+ *   - `null` if the address has no row in `user_emails` (fresh
+ *     registration click).
+ *   - `BROKEN_USER_FK` when `user_emails` references a userId that
+ *     no longer exists in `users` — only possible mid-cascade or with
+ *     manual-SQL inconsistency. Caller treats this as invalid rather
+ *     than as a fresh registrant, matching the prior explicit guard.
+ *   - The resolved `{ userId, status, hasProfile }` otherwise.
+ *
+ * The LEFT JOIN against `users` is what makes the broken-FK case
+ * distinguishable from "no row in user_emails": the outer row exists,
+ * but its joined `users.id` comes back NULL.
+ */
+async function resolveUserByEmail(
+  email: string,
+): Promise<
+  | { userId: string; status: schema.UserStatus; hasProfile: boolean }
+  | typeof BROKEN_USER_FK
+  | null
+> {
+  const row = await getDb()
+    .select({
+      userId: schema.users.id,
+      status: schema.users.status,
+      profileUserId: schema.profiles.userId,
+    })
+    .from(schema.userEmails)
+    .leftJoin(schema.users, eq(schema.users.id, schema.userEmails.userId))
+    .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+    .where(eq(schema.userEmails.email, normalizeEmail(email)))
+    .get();
+  if (!row) {
+    return null;
+  }
+  if (row.userId === null || row.status === null) {
+    return BROKEN_USER_FK;
+  }
+  return {
+    userId: row.userId,
+    status: row.status,
+    hasProfile: row.profileUserId !== null,
+  };
 }
 
 // ── timing jitter ────────────────────────────────────────────────────────
@@ -132,34 +187,27 @@ export async function consumeMagicLinkAction(
   // and can route by status + hasProfile instead of bouncing through
   // /register/profile.
   //
+  // If `user_emails` references a userId that no longer exists,
+  // surface as invalid rather than registering a new account — same
+  // outcome as the prior explicit guard.
+  //
   // If no user owns this email yet, this is a first-time registration
   // click — write the short-lived proof cookie that /register/profile
   // gates on, and return `mode: "proof"` so the caller redirects there.
-  const existingUserId = await findUserIdByEmail(proof.email);
-  if (existingUserId) {
-    const existing = await getDb().query.users.findFirst({
-      where: eq(schema.users.id, existingUserId),
-      columns: { id: true, status: true },
-    });
-    if (!existing) {
-      // user_emails references a userId that no longer exists — only
-      // possible mid-cascade or with a manual-SQL inconsistency. Treat
-      // as invalid rather than crash.
-      return { ok: false, reason: "invalid" };
-    }
-    const profile = await getDb().query.profiles.findFirst({
-      where: eq(schema.profiles.userId, existing.id),
-      columns: { userId: true },
-    });
+  const existing = await resolveUserByEmail(proof.email);
+  if (existing === BROKEN_USER_FK) {
+    return { ok: false, reason: "invalid" };
+  }
+  if (existing) {
     // rotateSession (not openSession) so any stale session cookie on the
     // device gets replaced — same privilege-boundary discipline the
     // other auth transitions follow.
-    await rotateSession(existing.id);
+    await rotateSession(existing.userId);
     return {
       ok: true,
       mode: "session",
       status: existing.status,
-      hasProfile: Boolean(profile),
+      hasProfile: existing.hasProfile,
     };
   }
 
@@ -463,6 +511,7 @@ export async function submitProfileAction(
   // users row on the loser of the race.
   const db = getDb();
   let userId: string;
+  let isNewUser = false;
   if (principal) {
     userId = principal.userId;
   } else {
@@ -487,6 +536,7 @@ export async function submitProfileAction(
           }),
         ]);
         userId = newUserId;
+        isNewUser = true;
       } catch (err) {
         if (isUniqueViolation(err, "user_emails.email")) {
           // Lost the race; the email belongs to a user that another
@@ -505,48 +555,56 @@ export async function submitProfileAction(
       }
     }
   }
-  const userRow = await db.query.users.findFirst({
-    where: eq(schema.users.id, userId),
-  });
-  if (!userRow) {
-    throw new Error("User row not found after upsert (unexpected)");
-  }
 
+  // Status reset to "pending" only matters for the existing-user path:
+  // a returning user who lost their profile must re-enter the approval
+  // queue. Brand-new users were already inserted with status="pending"
+  // above, so we skip the UPDATE for them entirely. For everyone else
+  // we let SQL decide whether the row needs touching by guarding the
+  // UPDATE with `WHERE status != 'approved'` — the principal's status
+  // can be stale by the time the batch commits (an approver flipping
+  // the row mid-flight), and the WHERE keeps an unconditional revert
+  // from racing with that approval.
   const now = new Date();
-  await db
-    .insert(schema.profiles)
-    .values({ userId: userRow.id, ...profileData, updatedAt: now })
-    .onConflictDoUpdate({
-      target: schema.profiles.userId,
-      set: { ...profileData, updatedAt: now },
-    });
-
-  // Replace emergency contacts: delete existing, then insert new set.
-  await db
-    .delete(schema.emergencyContacts)
-    .where(eq(schema.emergencyContacts.userId, userRow.id));
-
+  const stmts: Parameters<typeof db.batch>[0][number][] = [
+    db
+      .insert(schema.profiles)
+      .values({ userId, ...profileData, updatedAt: now })
+      .onConflictDoUpdate({
+        target: schema.profiles.userId,
+        set: { ...profileData, updatedAt: now },
+      }),
+    db
+      .delete(schema.emergencyContacts)
+      .where(eq(schema.emergencyContacts.userId, userId)),
+  ];
   if (emergencyContacts.length > 0) {
-    await db.insert(schema.emergencyContacts).values(
-      emergencyContacts.map((ec) => ({
-        id: `ec_${uuidv7()}`,
-        userId: userRow.id,
-        name: ec.name,
-        phone: ec.phone,
-        relationship: ec.relationship,
-      })),
+    stmts.push(
+      db.insert(schema.emergencyContacts).values(
+        emergencyContacts.map((ec) => ({
+          id: `ec_${uuidv7()}`,
+          userId,
+          name: ec.name,
+          phone: ec.phone,
+          relationship: ec.relationship,
+        })),
+      ),
     );
   }
-
-  if (userRow.status !== "approved") {
-    await db
-      .update(schema.users)
-      .set({ status: "pending" })
-      .where(eq(schema.users.id, userRow.id));
+  if (!isNewUser) {
+    stmts.push(
+      db
+        .update(schema.users)
+        .set({ status: "pending" })
+        .where(
+          and(eq(schema.users.id, userId), ne(schema.users.status, "approved")),
+        ),
+    );
   }
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
   if (!principal) {
-    await openSession(userRow.id);
+    await openSession(userId);
     clearProofCookie();
   }
 
@@ -597,26 +655,33 @@ export async function submitDetailsAction(
   const { emergencyContacts, ...profileData } = data;
   const db = getDb();
 
-  await db
-    .update(schema.profiles)
-    .set({ ...profileData, updatedAt: new Date() })
-    .where(eq(schema.profiles.userId, principal.userId));
-
-  await db
-    .delete(schema.emergencyContacts)
-    .where(eq(schema.emergencyContacts.userId, principal.userId));
-
+  // Profile update + emergency-contact replace as one batch. Same
+  // shape as `submitProfileAction` and `adminUpdateProfileAction`:
+  // delete-then-insert + audit (no audit needed for self-edit) all
+  // committed together.
+  const stmts: Parameters<typeof db.batch>[0][number][] = [
+    db
+      .update(schema.profiles)
+      .set({ ...profileData, updatedAt: new Date() })
+      .where(eq(schema.profiles.userId, principal.userId)),
+    db
+      .delete(schema.emergencyContacts)
+      .where(eq(schema.emergencyContacts.userId, principal.userId)),
+  ];
   if (emergencyContacts.length > 0) {
-    await db.insert(schema.emergencyContacts).values(
-      emergencyContacts.map((ec) => ({
-        id: `ec_${uuidv7()}`,
-        userId: principal.userId,
-        name: ec.name,
-        phone: ec.phone,
-        relationship: ec.relationship,
-      })),
+    stmts.push(
+      db.insert(schema.emergencyContacts).values(
+        emergencyContacts.map((ec) => ({
+          id: `ec_${uuidv7()}`,
+          userId: principal.userId,
+          name: ec.name,
+          phone: ec.phone,
+          relationship: ec.relationship,
+        })),
+      ),
     );
   }
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
   return { ok: true };
 }

@@ -3,7 +3,7 @@
  * the shell + .server.ts split — the shell in `./rbac-fns.ts` loads
  * this via dynamic imports inside its createServerFn handlers.
  */
-import { and, count, eq, inArray, max } from "drizzle-orm";
+import { and, asc, count, eq, inArray, max } from "drizzle-orm";
 
 import {
   buildAuditEventStatement,
@@ -12,7 +12,7 @@ import {
 import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, schema } from "#/server/db";
+import { getDb, isUniqueViolation, schema } from "#/server/db";
 
 // ── constants ──────────────────────────────────────────────────────────
 
@@ -89,17 +89,28 @@ export async function listRolesDetailedAction(): Promise<
   await requireRolesManager();
   const db = getDb();
 
-  const roles = await db.query.roles.findMany({
-    orderBy: (roles, { asc }) => [asc(roles.position), asc(roles.name)],
-  });
-
-  // Batch-fetch permission grants for all roles.
-  const permGrants = await db
-    .select({
-      roleId: schema.rolePermissions.roleId,
-      permissionId: schema.rolePermissions.permissionId,
-    })
-    .from(schema.rolePermissions);
+  // Roles, all role-permission grants, and the per-role member count
+  // are independent — bundle into one `db.batch` so all three reads
+  // ride on a single D1 HTTP request.
+  const [roles, permGrants, memberCounts] = await db.batch([
+    db
+      .select()
+      .from(schema.roles)
+      .orderBy(asc(schema.roles.position), asc(schema.roles.name)),
+    db
+      .select({
+        roleId: schema.rolePermissions.roleId,
+        permissionId: schema.rolePermissions.permissionId,
+      })
+      .from(schema.rolePermissions),
+    db
+      .select({
+        roleId: schema.userRoles.roleId,
+        count: count(),
+      })
+      .from(schema.userRoles)
+      .groupBy(schema.userRoles.roleId),
+  ]);
 
   const permsByRole = new Map<string, string[]>();
   for (const g of permGrants) {
@@ -107,15 +118,6 @@ export async function listRolesDetailedAction(): Promise<
     list.push(g.permissionId);
     permsByRole.set(g.roleId, list);
   }
-
-  // Batch count members per role.
-  const memberCounts = await db
-    .select({
-      roleId: schema.userRoles.roleId,
-      count: count(),
-    })
-    .from(schema.userRoles)
-    .groupBy(schema.userRoles.roleId);
 
   const countByRole = new Map<string, number>();
   for (const mc of memberCounts) {
@@ -137,36 +139,38 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
   await requireRolesManager();
   const db = getDb();
 
-  const role = await db.query.roles.findFirst({
-    where: eq(schema.roles.id, roleId),
-  });
-  if (!role) {
+  // Role row, permission grants, and member list all key on `roleId`
+  // alone. Bundle into one `db.batch` so all three reads ride on a
+  // single D1 HTTP request; existence is validated below before
+  // returning.
+  const [roleRows, permGrants, memberRows] = await db.batch([
+    db.select().from(schema.roles).where(eq(schema.roles.id, roleId)).limit(1),
+    db
+      .select({ permissionId: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, roleId)),
+    db
+      .select({
+        userId: schema.users.id,
+        email: schema.userEmails.email,
+        preferredName: schema.profiles.preferredName,
+      })
+      .from(schema.userRoles)
+      .innerJoin(schema.users, eq(schema.users.id, schema.userRoles.userId))
+      .innerJoin(
+        schema.userEmails,
+        and(
+          eq(schema.userEmails.userId, schema.users.id),
+          eq(schema.userEmails.isPrimary, true),
+        ),
+      )
+      .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+      .where(eq(schema.userRoles.roleId, roleId)),
+  ]);
+  if (roleRows.length === 0) {
     throw new Error("Role not found");
   }
-
-  const permGrants = await db
-    .select({ permissionId: schema.rolePermissions.permissionId })
-    .from(schema.rolePermissions)
-    .where(eq(schema.rolePermissions.roleId, roleId));
-
-  // Load members with this role (join through user_roles → users → profiles).
-  const memberRows = await db
-    .select({
-      userId: schema.users.id,
-      email: schema.userEmails.email,
-      preferredName: schema.profiles.preferredName,
-    })
-    .from(schema.userRoles)
-    .innerJoin(schema.users, eq(schema.users.id, schema.userRoles.userId))
-    .innerJoin(
-      schema.userEmails,
-      and(
-        eq(schema.userEmails.userId, schema.users.id),
-        eq(schema.userEmails.isPrimary, true),
-      ),
-    )
-    .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
-    .where(eq(schema.userRoles.roleId, roleId));
+  const role = roleRows[0];
 
   return {
     id: role.id,
@@ -195,37 +199,41 @@ export async function createRoleAction(input: {
 
   const roleId = `role_${input.name}`;
 
-  // Check for duplicate name.
-  const existing = await db.query.roles.findFirst({
-    where: eq(schema.roles.name, input.name),
-    columns: { id: true },
-  });
-  if (existing) {
-    throw new Error(`Role "${input.name}" already exists`);
-  }
-
-  // New roles go after all existing ones.
+  // No pre-check on the name — `roles_name_unique` is the actual race
+  // boundary, so the pre-check was theatre (TOCTOU between the read
+  // and the insert). Compute `nextPos` and try the insert; translate
+  // the unique violation back to the user-facing error.
   const [{ maxPos }] = await db
     .select({ maxPos: max(schema.roles.position) })
     .from(schema.roles);
   const nextPos = (maxPos ?? -1) + 1;
 
-  // Atomic with the audit row.
-  await db.batch([
-    db.insert(schema.roles).values({
-      id: roleId,
-      name: input.name,
-      description: input.description ?? null,
-      position: nextPos,
-    }),
-    buildAuditEventStatement({
-      actorUserId: principal.userId,
-      action: "role.created",
-      targetType: "role",
-      targetId: roleId,
-      metadata: { name: input.name },
-    }),
-  ]);
+  try {
+    // Atomic with the audit row.
+    await db.batch([
+      db.insert(schema.roles).values({
+        id: roleId,
+        name: input.name,
+        description: input.description ?? null,
+        position: nextPos,
+      }),
+      buildAuditEventStatement({
+        actorUserId: principal.userId,
+        action: "role.created",
+        targetType: "role",
+        targetId: roleId,
+        metadata: { name: input.name },
+      }),
+    ]);
+  } catch (err) {
+    if (
+      isUniqueViolation(err, "roles.name") ||
+      isUniqueViolation(err, "roles.id")
+    ) {
+      throw new Error(`Role "${input.name}" already exists`, { cause: err });
+    }
+    throw err;
+  }
 
   return { roleId };
 }
@@ -292,7 +300,7 @@ export async function listPermissionsAction(): Promise<PermissionSummary[]> {
   const db = getDb();
 
   const rows = await db.query.permissions.findMany({
-    orderBy: (permissions, { asc }) => [asc(permissions.name)],
+    orderBy: (p, { asc: a }) => [a(p.name)],
   });
 
   return rows.map((r) => ({
