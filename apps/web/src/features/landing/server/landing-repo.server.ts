@@ -79,6 +79,15 @@ export async function getHeroSlide(
 // the INSERT statement so the read+insert is one round-trip and the
 // MAX→INSERT TOCTOU window goes away (concurrent inserts no longer
 // collide on the same sort_order).
+//
+// Race-safety here assumes Cloudflare D1's single-primary write model:
+// SQLite serializes writes, so two parallel inserts can't see the
+// same MAX. If D1 ever moves to a multi-primary / active-active
+// topology, this subquery could see a stale local MAX and two regions
+// could pick the same next value — at that point sort_order needs a
+// different generator (e.g. a counter row in `landing_settings` or a
+// monotonic uuidv7-derived ordinal). All three landing tables
+// (hero slides / FAQ items / activities) share this assumption.
 export async function insertHeroSlide(input: {
   id: string;
   imageKey: string;

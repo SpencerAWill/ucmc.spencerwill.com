@@ -40,8 +40,15 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
   // The user row, profile, email list, and role list all key on
   // `userId` only — no dependency between them. Bundle them in a
   // `db.batch` so all four reads ride on a single D1 HTTP request
-  // (`Promise.all` would still issue four separate calls). Primary
-  // first, then non-primary in insertion order, on the email
+  // (`Promise.all` would still issue four separate calls).
+  //
+  // Free correctness bonus: `db.batch` runs the four reads in one
+  // D1 transaction, so they see a consistent point-in-time snapshot.
+  // `Promise.all` would let a concurrent write (e.g. an admin
+  // assigning a role) split rows between the userRoles and
+  // rolePermissions reads.
+  //
+  // Primary first, then non-primary in insertion order, on the email
   // ordering at the DB layer keeps the resulting `emails` array
   // stable across requests so consumers can rely on the shape. `id`
   // is the final tiebreaker — `created_at` is millisecond-resolution
