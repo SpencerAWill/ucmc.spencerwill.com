@@ -21,10 +21,13 @@
  * The shell in `./email-fns.ts` dynamic-imports each action so server-
  * only code never reaches the client bundle.
  */
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
-import { recordAuditEvent } from "#/server/audit/audit-log.server";
+import {
+  buildAuditEventStatement,
+  recordAuditEvent,
+} from "#/server/audit/audit-log.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import {
   consumeMagicLink,
@@ -197,29 +200,35 @@ export async function consumeAddEmailAction(
   const email = normalizeEmail(proof.email);
   const db = getDb();
   try {
-    await db.insert(schema.userEmails).values({
-      id: `uem_${uuidv7()}`,
-      userId: principal.userId,
-      email,
-      isPrimary: false,
-      verifiedAt: new Date(),
-    });
+    // Insert + audit in one batch — the email is known up front, so
+    // the audit metadata doesn't need to be derived from `.returning()`.
+    // D1 commits both atomically.
+    await db.batch([
+      db.insert(schema.userEmails).values({
+        id: `uem_${uuidv7()}`,
+        userId: principal.userId,
+        email,
+        isPrimary: false,
+        verifiedAt: new Date(),
+      }),
+      buildAuditEventStatement({
+        actorUserId: principal.userId,
+        action: "email.added",
+        targetUserId: principal.userId,
+        metadata: { email },
+      }),
+    ]);
   } catch (err) {
     if (isUniqueViolation(err, "user_emails.email")) {
       // The address was claimed by another account between the
       // request and the consume. The pre-check at request time would
       // have caught the common case; this branch covers the race.
+      // The whole batch rolls back, so no orphan audit row.
       return { ok: false, reason: "email_taken" };
     }
     throw err;
   }
 
-  await recordAuditEvent({
-    actorUserId: principal.userId,
-    action: "email.added",
-    targetUserId: principal.userId,
-    metadata: { email },
-  });
   return { ok: true, email };
 }
 
@@ -237,12 +246,18 @@ export async function removeEmailAction(args: {
   }
 
   const db = getDb();
-  const row = await db.query.userEmails.findFirst({
-    where: and(
-      eq(schema.userEmails.id, args.emailId),
-      eq(schema.userEmails.userId, principal.userId),
-    ),
-  });
+  // One read fetches both the target row and the count of all rows
+  // for this user. The belt-and-suspenders row-count guard documented
+  // below stays active without a second round-trip.
+  const userRows = await db
+    .select({
+      id: schema.userEmails.id,
+      email: schema.userEmails.email,
+      isPrimary: schema.userEmails.isPrimary,
+    })
+    .from(schema.userEmails)
+    .where(eq(schema.userEmails.userId, principal.userId));
+  const row = userRows.find((r) => r.id === args.emailId);
   if (!row) {
     return { ok: false, reason: "not_found" };
   }
@@ -268,24 +283,21 @@ export async function removeEmailAction(args: {
   // first place; the action-level guard is purely defense-in-depth
   // for direct API callers (tests, future scripts) and the invariant-
   // breaking edge case described above.
-  const [{ count: total } = { count: 0 }] = await db
-    .select({ count: count() })
-    .from(schema.userEmails)
-    .where(eq(schema.userEmails.userId, principal.userId));
-  if (total <= 1) {
+  if (userRows.length <= 1) {
     return { ok: false, reason: "is_last" };
   }
 
-  await db
-    .delete(schema.userEmails)
-    .where(eq(schema.userEmails.id, args.emailId));
-
-  await recordAuditEvent({
-    actorUserId: principal.userId,
-    action: "email.removed",
-    targetUserId: principal.userId,
-    metadata: { email: row.email },
-  });
+  // Delete + audit in one batch so the audit row can't survive a
+  // delete that ultimately fails (or vice versa).
+  await db.batch([
+    db.delete(schema.userEmails).where(eq(schema.userEmails.id, args.emailId)),
+    buildAuditEventStatement({
+      actorUserId: principal.userId,
+      action: "email.removed",
+      targetUserId: principal.userId,
+      metadata: { email: row.email },
+    }),
+  ]);
   return { ok: true };
 }
 
@@ -328,6 +340,11 @@ export async function setPrimaryEmailAction(args: {
   // we surface `not_found` below. Without the gate, the demote would
   // succeed unconditionally and the promote's WHERE would match
   // nothing.
+  //
+  // Audit stays sequential (out of the batch) because the audit log
+  // is append-only — bundling here would either require a phantom
+  // row when the gated demote no-ops, or a compensating delete that
+  // violates the append-only invariant.
   const [, promoted] = await db.batch([
     db
       .update(schema.userEmails)
