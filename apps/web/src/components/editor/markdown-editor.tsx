@@ -1,4 +1,4 @@
-import CharacterCount from "@tiptap/extension-character-count";
+import { Toolbar as BaseToolbar } from "@base-ui/react";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
@@ -19,7 +19,7 @@ import {
   Quote,
   Strikethrough,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Markdown } from "tiptap-markdown";
 
 import { Toggle } from "#/components/ui/toggle";
@@ -37,17 +37,6 @@ function getMarkdownFromEditor(editor: Editor): string {
   return storage.markdown?.getMarkdown() ?? "";
 }
 
-// CharacterCount measures document text (not markdown syntax), so a
-// 1500-char `**…**`-padded post counts ~1500. Close enough as a hard
-// cap for UX — the schema's `.max()` on the markdown string is the
-// authoritative validation.
-function getCharacterCount(editor: Editor): number {
-  const storage = editor.storage as {
-    characterCount?: { characters: () => number };
-  };
-  return storage.characterCount?.characters() ?? 0;
-}
-
 const HEADING_LEVELS = [2, 3] as const;
 
 // Pass-through HTML attributes for the contenteditable element. Kept
@@ -62,6 +51,16 @@ export interface MarkdownEditorAttrs {
 
 export interface MarkdownEditorHandle {
   focus: () => void;
+}
+
+// Defense-in-depth on top of TipTap Link's own `isAllowedUri` filter:
+// reject anything that isn't an http(s), mailto, tel, or relative/anchor
+// URL before we hand it to `setLink`. Stops `javascript:` / `data:` /
+// `vbscript:` even if a future Link config widens its allowlist.
+const SAFE_PROTOCOL = /^(?:https?:|mailto:|tel:|\/|#|\?|[^:]+$)/i;
+
+export function isSafeLinkUrl(url: string): boolean {
+  return SAFE_PROTOCOL.test(url.trim());
 }
 
 export function MarkdownEditor({
@@ -95,7 +94,28 @@ export function MarkdownEditor({
   // that can't carry React's special `ref` prop directly.
   handleRef?: React.MutableRefObject<MarkdownEditorHandle | null>;
 }) {
+  // The editor is created once per mount, so anything captured directly
+  // in its config object freezes at first-mount. Route everything that
+  // can change through refs we update each render.
+  const onChangeRef = useRef(onChange);
+  const onBlurRef = useRef(onBlur);
+  const placeholderRef = useRef(placeholder);
+  const maxLengthRef = useRef(maxLength);
+  // Last markdown string that fit within `maxLength`. We revert to it
+  // when a transaction would push the editor over the cap (e.g. a paste).
+  const lastAcceptedRef = useRef(value);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+    onBlurRef.current = onBlur;
+    placeholderRef.current = placeholder;
+    maxLengthRef.current = maxLength;
+  });
+
   const extensions = useMemo(
+    // Built once. Dynamic values (`placeholder`, `maxLength`) are read
+    // through refs from inside the extensions / update callback, so
+    // changing those props doesn't re-create the editor and clobber
+    // the user's cursor mid-typing.
     () => [
       StarterKit.configure({
         heading: { levels: [...HEADING_LEVELS] },
@@ -111,19 +131,16 @@ export function MarkdownEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       Placeholder.configure({
-        placeholder: placeholder ?? "",
+        placeholder: () => placeholderRef.current ?? "",
         emptyEditorClass: "is-editor-empty",
       }),
-      ...(maxLength !== undefined
-        ? [CharacterCount.configure({ limit: maxLength })]
-        : []),
       Markdown.configure({
         html: false,
         transformPastedText: true,
         breaks: true,
       }),
     ],
-    [placeholder, maxLength],
+    [],
   );
 
   const editorAttributes = useMemo(
@@ -165,14 +182,23 @@ export function MarkdownEditor({
       editorProps: { attributes: editorAttributes },
       onUpdate: ({ editor: ed }) => {
         const md = getMarkdownFromEditor(ed);
-        onChange(md);
+        const cap = maxLengthRef.current;
+        // Cap on the markdown string length — the same value the zod
+        // schema's `.max()` validates against. Keeps the editor's
+        // hard-stop and the schema's accept-criteria in lockstep.
+        if (cap !== undefined && md.length > cap) {
+          ed.commands.setContent(lastAcceptedRef.current, {
+            emitUpdate: false,
+          });
+          return;
+        }
+        lastAcceptedRef.current = md;
+        onChangeRef.current(md);
       },
       onBlur: () => {
-        onBlur?.();
+        onBlurRef.current?.();
       },
     },
-    // Re-create the editor only when extension config changes; the
-    // attribute object is rebuilt every render and would thrash here.
     [extensions],
   );
 
@@ -198,6 +224,7 @@ export function MarkdownEditor({
     const current = getMarkdownFromEditor(editor);
     if (current !== value) {
       editor.commands.setContent(value, { emitUpdate: false });
+      lastAcceptedRef.current = value;
     }
   }, [editor, value]);
 
@@ -260,9 +287,9 @@ function CharacterCounter({
   editor: Editor;
   limit: number;
 }) {
-  // Reading from storage on every render is fine — the parent re-renders
-  // on every onUpdate (via onChange), so the counter stays in sync.
-  const count = getCharacterCount(editor);
+  // Counts the markdown string length so the displayed value matches
+  // what the zod `.max()` validator and the editor's hard-stop both use.
+  const count = getMarkdownFromEditor(editor).length;
   const remaining = limit - count;
   const warn = remaining <= Math.max(50, Math.floor(limit * 0.05));
   return (
@@ -289,6 +316,12 @@ function Toolbar({ editor }: { editor: Editor }) {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
+    if (!isSafeLinkUrl(next)) {
+      window.alert(
+        "That link can't be inserted. Use an http(s), mailto, tel, or relative URL.",
+      );
+      return;
+    }
     editor
       .chain()
       .focus()
@@ -298,103 +331,104 @@ function Toolbar({ editor }: { editor: Editor }) {
   }, [editor]);
 
   return (
-    <div
-      role="toolbar"
+    // base-ui Toolbar gives a single tab-stop with arrow-key roving
+    // focus across the buttons (per ARIA Authoring Practices).
+    <BaseToolbar.Root
       aria-label="Formatting"
       className="flex flex-wrap gap-0.5 rounded-md border bg-muted/30 p-1"
     >
-      <ToolbarButton
+      <ToolbarToggle
         label="Bold"
         active={editor.isActive("bold")}
         onClick={() => editor.chain().focus().toggleBold().run()}
       >
         <Bold className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarButton
+      </ToolbarToggle>
+      <ToolbarToggle
         label="Italic"
         active={editor.isActive("italic")}
         onClick={() => editor.chain().focus().toggleItalic().run()}
       >
         <Italic className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarButton
+      </ToolbarToggle>
+      <ToolbarToggle
         label="Strikethrough"
         active={editor.isActive("strike")}
         onClick={() => editor.chain().focus().toggleStrike().run()}
       >
         <Strikethrough className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarButton
+      </ToolbarToggle>
+      <ToolbarToggle
         label="Inline code"
         active={editor.isActive("code")}
         onClick={() => editor.chain().focus().toggleCode().run()}
       >
         <Code className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarButton
+      </ToolbarToggle>
+      <ToolbarToggle
         label="Link"
         active={editor.isActive("link")}
         onClick={setLink}
       >
         <LinkIcon className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarSeparator />
-      <ToolbarButton
+      </ToolbarToggle>
+      <BaseToolbar.Separator className="mx-0.5 w-px self-stretch bg-border" />
+      <ToolbarToggle
         label="Heading 2"
         active={editor.isActive("heading", { level: 2 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
       >
         <Heading2 className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarButton
+      </ToolbarToggle>
+      <ToolbarToggle
         label="Heading 3"
         active={editor.isActive("heading", { level: 3 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
       >
         <Heading3 className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarSeparator />
-      <ToolbarButton
+      </ToolbarToggle>
+      <BaseToolbar.Separator className="mx-0.5 w-px self-stretch bg-border" />
+      <ToolbarToggle
         label="Bullet list"
         active={editor.isActive("bulletList")}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
       >
         <List className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarButton
+      </ToolbarToggle>
+      <ToolbarToggle
         label="Numbered list"
         active={editor.isActive("orderedList")}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
       >
         <ListOrdered className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarButton
+      </ToolbarToggle>
+      <ToolbarToggle
         label="Task list"
         active={editor.isActive("taskList")}
         onClick={() => editor.chain().focus().toggleTaskList().run()}
       >
         <ListChecks className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarSeparator />
-      <ToolbarButton
+      </ToolbarToggle>
+      <BaseToolbar.Separator className="mx-0.5 w-px self-stretch bg-border" />
+      <ToolbarToggle
         label="Blockquote"
         active={editor.isActive("blockquote")}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
       >
         <Quote className="size-3.5" />
-      </ToolbarButton>
-      <ToolbarButton
+      </ToolbarToggle>
+      <ToolbarToggle
         label="Code block"
         active={editor.isActive("codeBlock")}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
       >
         <Code2 className="size-3.5" />
-      </ToolbarButton>
-    </div>
+      </ToolbarToggle>
+    </BaseToolbar.Root>
   );
 }
 
-function ToolbarButton({
+function ToolbarToggle({
   label,
   active,
   onClick,
@@ -405,22 +439,25 @@ function ToolbarButton({
   onClick: () => void;
   children: React.ReactNode;
 }) {
+  // base-ui's Toolbar.Button owns the roving-tabindex behavior; we
+  // render shadcn's Toggle inside it so the `data-state="on"` styling
+  // (pressed-state visuals) keeps working.
   return (
-    <Toggle
-      type="button"
-      size="sm"
-      variant="default"
-      pressed={active}
-      onPressedChange={onClick}
-      aria-label={label}
-      title={label}
-      className="size-7 p-0"
-    >
-      {children}
-    </Toggle>
+    <BaseToolbar.Button
+      render={
+        <Toggle
+          type="button"
+          size="sm"
+          variant="default"
+          pressed={active}
+          onPressedChange={onClick}
+          aria-label={label}
+          title={label}
+          className="size-7 p-0"
+        >
+          {children}
+        </Toggle>
+      }
+    />
   );
-}
-
-function ToolbarSeparator() {
-  return <div aria-hidden className="mx-0.5 w-px self-stretch bg-border" />;
 }

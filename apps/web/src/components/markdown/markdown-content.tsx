@@ -29,7 +29,11 @@ const COMPONENTS: Parameters<typeof ReactMarkdown>[0]["components"] = {
   // tab). Relative, fragment, and `mailto:` links stay in-tab so
   // navigation feels native. The rel pair is required to prevent
   // tab-nabbing when target=_blank is set.
-  a: ({ href, children, ...rest }) => {
+  //
+  // `node` is destructured out and dropped — react-markdown v9 passes
+  // the mdast node to component overrides, and forwarding it onto
+  // `<a>` triggers React's "Unknown prop `node` on DOM element" warning.
+  a: ({ node: _node, href, children, ...rest }) => {
     if (isExternalHref(href)) {
       return (
         <a href={href} target="_blank" rel="noopener noreferrer" {...rest}>
@@ -53,8 +57,16 @@ export function MarkdownContent({
   className?: string;
 }) {
   return (
+    // First/last-child margin reset so the rendered prose slots into a
+    // Card / form layout cleanly — without it, the `<p>`/`<h2>` margins
+    // visibly leak above and below the wrapper and break the surrounding
+    // `space-y-*` rhythm.
     <div
-      className={cn("prose prose-sm dark:prose-invert max-w-none", className)}
+      className={cn(
+        "prose prose-sm dark:prose-invert max-w-none",
+        "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        className,
+      )}
     >
       <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
         {children}
