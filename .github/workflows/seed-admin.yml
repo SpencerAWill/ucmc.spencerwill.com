@@ -117,14 +117,22 @@ jobs:
           USER_EMAIL_ID="uem_$(uuidgen | tr '[:upper:]' '[:lower:]')"
           PUBLIC_ID="$(LC_ALL=C tr -dc '0-9a-z' </dev/urandom | head -c 12)"
           NOW_MS=$(($(date +%s%N) / 1000000))
-          # Email lives in `user_emails`, not `users`. Lookup is now via
-          # the JOIN on `user_emails.email`. Steps mirror the local
-          # `apps/web/drizzle/seed.ts`: ignore-conflict on the user
-          # row, ignore-conflict on the email attachment, gated approval
-          # promotion, ignore-conflict on the system_admin grant.
+          # Email lives in `user_emails`, not `users`. Mirrors the local
+          # `apps/web/drizzle/seed.ts` four-step idempotent shape:
+          #   1. INSERT INTO users …WHERE NOT EXISTS user_emails.email
+          #      — only create the user row when the email is unclaimed,
+          #      otherwise the random USER_ID would orphan a duplicate
+          #      account on every re-run.
+          #   2. INSERT OR IGNORE INTO user_emails — attach + mark
+          #      primary; no-op if the email already belongs to someone.
+          #   3. UPDATE users SET status='approved' …gated on status —
+          #      promote a prior pending/rejected registration.
+          #   4. INSERT OR IGNORE INTO user_roles — grant system_admin
+          #      to whoever owns the email.
           cat > /tmp/seed-admin.sql <<SQL
-          INSERT OR IGNORE INTO users (id, public_id, status, approved_at, created_at)
-          VALUES ('$USER_ID', '$PUBLIC_ID', 'approved', $NOW_MS, $NOW_MS);
+          INSERT INTO users (id, public_id, status, approved_at, created_at)
+          SELECT '$USER_ID', '$PUBLIC_ID', 'approved', $NOW_MS, $NOW_MS
+          WHERE NOT EXISTS (SELECT 1 FROM user_emails WHERE email = '$EMAIL_SQL');
           INSERT OR IGNORE INTO user_emails (id, user_id, email, is_primary, verified_at, created_at)
           VALUES ('$USER_EMAIL_ID', '$USER_ID', '$EMAIL_SQL', 1, $NOW_MS, $NOW_MS);
           UPDATE users

@@ -4,7 +4,7 @@
  * `users`, `profiles`, `user_roles`, and `role_permissions` once per
  * request and handed to loaders/guards/server-fns.
  */
-import { eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import { getKv } from "#/server/kv";
@@ -49,25 +49,29 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     columns: { userId: true, avatarKey: true },
   });
 
+  // Primary first, then non-primary in insertion order. Ordering at
+  // the DB layer (rather than in JS) keeps the resulting `emails`
+  // array stable across requests so consumers can rely on the shape.
   const emailRows = await db
     .select({
       email: schema.userEmails.email,
       isPrimary: schema.userEmails.isPrimary,
     })
     .from(schema.userEmails)
-    .where(eq(schema.userEmails.userId, userId));
+    .where(eq(schema.userEmails.userId, userId))
+    .orderBy(
+      desc(schema.userEmails.isPrimary),
+      asc(schema.userEmails.createdAt),
+    );
 
-  const primaryRow = emailRows.find((r) => r.isPrimary);
+  const primaryRow = emailRows[0]?.isPrimary ? emailRows[0] : undefined;
   if (!primaryRow) {
     // Hard invariant violation: a user row exists with no primary
     // email row. Surface loudly so the bug is caught instead of
     // silently producing a Principal with `primaryEmail = ""`.
     throw new Error(`User ${userId} has no primary email row`);
   }
-  const emails = [
-    primaryRow.email,
-    ...emailRows.filter((r) => !r.isPrimary).map((r) => r.email),
-  ];
+  const emails = emailRows.map((r) => r.email);
 
   const userRoleRows = await db
     .select({ roleId: schema.userRoles.roleId, name: schema.roles.name })

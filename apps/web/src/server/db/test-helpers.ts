@@ -8,6 +8,7 @@
  * Production code paths must not import from this module — keep it to
  * test files and seed scripts.
  */
+import { normalizeEmail } from "#/server/auth/email-normalize";
 import { getDb, schema } from "#/server/db";
 
 /**
@@ -15,6 +16,9 @@ import { getDb, schema } from "#/server/db";
  * inserts both `users` and `user_emails` atomically through the
  * magic-link consume path; tests that build user state directly need to
  * mirror that, otherwise `loadPrincipal` throws on "no primary email".
+ *
+ * Uses the shared `normalizeEmail` so tests stay aligned with
+ * production lookups if normalization rules ever change.
  */
 export async function attachPrimaryEmail(
   userId: string,
@@ -25,7 +29,7 @@ export async function attachPrimaryEmail(
     .values({
       id: `uem_${crypto.randomUUID()}`,
       userId,
-      email: email.trim().toLowerCase(),
+      email: normalizeEmail(email),
       isPrimary: true,
       verifiedAt: new Date(),
     });

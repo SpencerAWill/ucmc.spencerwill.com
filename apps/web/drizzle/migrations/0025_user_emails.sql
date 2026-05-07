@@ -20,4 +20,4 @@ SELECT 'uem_' || lower(hex(randomblob(16))), `id`, lower(`email`), 1, `created_a
 FROM `users`;--> statement-breakpoint
 DROP INDEX `users_email_unique`;--> statement-breakpoint
 ALTER TABLE `users` DROP COLUMN `email`;--> statement-breakpoint
-ALTER TABLE `magic_links` ADD `target_user_id` text REFERENCES users(id);
+ALTER TABLE `magic_links` ADD `target_user_id` text REFERENCES users(id) ON DELETE SET NULL;

@@ -53,26 +53,42 @@ function generateToken(): string {
 }
 
 /**
+ * Discriminated arg shape so the type system enforces "add_email
+ * requires targetUserId" and "register/login don't carry one."
+ * Without this split, an `add_email` caller that forgot the targetUserId
+ * would silently insert a link whose consume can never satisfy the
+ * cross-account guard.
+ *
+ * `redirect` is the optional post-sign-in destination round-tripped
+ * through the email URL. Caller validates leading-"/"; server-fns.ts's
+ * zod refinement is the canonical gatekeeper, and /auth/callback
+ * re-validates before navigating.
+ */
+export type RequestMagicLinkArgs =
+  | {
+      intent: "register" | "login";
+      email: string;
+      redirect?: string;
+    }
+  | {
+      intent: "add_email";
+      email: string;
+      targetUserId: string;
+    };
+
+/**
  * Issue a magic link and send it by email. Always resolves successfully
  * from the caller's perspective (even for unknown emails) to avoid
  * leaking which addresses are registered — timing jitter is added in the
  * Phase 10 hardening pass.
  *
- * For `intent = "add_email"`, the caller provides `targetUserId` so the
- * consume handler can assert that the clicker's session matches. The
- * link URL points at `/verify-email` instead of `/auth/callback`.
+ * For `intent = "add_email"`, the link URL points at `/verify-email`
+ * instead of `/auth/callback`, and the consume handler asserts
+ * `session.userId === targetUserId` before attaching.
  */
-export async function requestMagicLink(args: {
-  email: string;
-  intent: schema.MagicLinkIntent;
-  // Optional post-sign-in destination round-tripped through the email
-  // URL. Caller is expected to have already validated this starts with
-  // "/" — server-fns.ts's zod refinement is the canonical gatekeeper.
-  // /auth/callback re-validates `startsWith("/")` before navigating.
-  redirect?: string;
-  // Required for `intent = "add_email"`; ignored for register/login.
-  targetUserId?: string;
-}): Promise<void> {
+export async function requestMagicLink(
+  args: RequestMagicLinkArgs,
+): Promise<void> {
   const email = normalizeEmail(args.email);
   const token = generateToken();
   const tokenHash = await hashToken(token);
@@ -85,14 +101,17 @@ export async function requestMagicLink(args: {
       tokenHash,
       email,
       intent: args.intent,
-      targetUserId:
-        args.intent === "add_email" ? (args.targetUserId ?? null) : null,
+      targetUserId: args.intent === "add_email" ? args.targetUserId : null,
       createdAt: now,
       expiresAt,
     });
 
   const params = new URLSearchParams({ token });
-  if (args.redirect && args.redirect.startsWith("/")) {
+  if (
+    args.intent !== "add_email" &&
+    args.redirect &&
+    args.redirect.startsWith("/")
+  ) {
     params.set("redirect", args.redirect);
   }
   const callbackPath =

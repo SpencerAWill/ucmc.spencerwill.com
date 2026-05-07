@@ -11,10 +11,13 @@
  * requests link to victim's address; victim clicks while signed in as
  * themselves; address ends up on attacker's account" attack.
  *
- * Removal blocks the primary email and the last remaining row. Primary
- * promotion is a `db.batch` swap (clear-then-set) because SQLite
- * enforces partial-unique indexes at statement boundaries, not
- * transaction boundaries.
+ * Removal blocks the primary email. Combined with the partial-unique
+ * "exactly one primary per user" invariant, that also blocks removing
+ * the last remaining row — every user always has a primary, and the
+ * primary is unremovable until another row is promoted via the
+ * primary-swap path. Primary promotion is a `db.batch` swap
+ * (clear-then-set) because SQLite enforces partial-unique indexes at
+ * statement boundaries, not transaction boundaries.
  *
  * The shell in `./email-fns.ts` dynamic-imports each action so server-
  * only code never reaches the client bundle.
@@ -75,12 +78,7 @@ export type RemoveEmailResult =
   | { ok: true }
   | {
       ok: false;
-      reason:
-        | "unauthorized"
-        | "not_approved"
-        | "not_found"
-        | "is_primary"
-        | "is_last";
+      reason: "unauthorized" | "not_approved" | "not_found" | "is_primary";
     };
 
 export type SetPrimaryEmailResult =
