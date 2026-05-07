@@ -530,47 +530,52 @@ export async function submitProfileAction(
     }
   }
 
-  const now = new Date();
-  await db
-    .insert(schema.profiles)
-    .values({ userId, ...profileData, updatedAt: now })
-    .onConflictDoUpdate({
-      target: schema.profiles.userId,
-      set: { ...profileData, updatedAt: now },
-    });
-
-  // Replace emergency contacts: delete existing, then insert new set.
-  await db
-    .delete(schema.emergencyContacts)
-    .where(eq(schema.emergencyContacts.userId, userId));
-
-  if (emergencyContacts.length > 0) {
-    await db.insert(schema.emergencyContacts).values(
-      emergencyContacts.map((ec) => ({
-        id: `ec_${uuidv7()}`,
-        userId,
-        name: ec.name,
-        phone: ec.phone,
-        relationship: ec.relationship,
-      })),
-    );
-  }
-
   // Status reset to "pending" only matters for the existing-user path:
   // a returning user who lost their profile must re-enter the approval
   // queue. Brand-new users were already inserted with status="pending"
   // above, so the UPDATE is a no-op for them; skip it. For session-
   // based callers, the principal's status drives the decision without
   // an extra read.
-  if (!isNewUser) {
-    const currentStatus = principal?.status;
-    if (currentStatus !== "approved") {
-      await db
+  const needsStatusReset = !isNewUser && principal?.status !== "approved";
+
+  // Profile upsert + emergency-contact replace + (optional) status
+  // reset, committed as one D1 batch so all the writes for a single
+  // profile submission either land together or roll back together.
+  const now = new Date();
+  const stmts: Parameters<typeof db.batch>[0][number][] = [
+    db
+      .insert(schema.profiles)
+      .values({ userId, ...profileData, updatedAt: now })
+      .onConflictDoUpdate({
+        target: schema.profiles.userId,
+        set: { ...profileData, updatedAt: now },
+      }),
+    db
+      .delete(schema.emergencyContacts)
+      .where(eq(schema.emergencyContacts.userId, userId)),
+  ];
+  if (emergencyContacts.length > 0) {
+    stmts.push(
+      db.insert(schema.emergencyContacts).values(
+        emergencyContacts.map((ec) => ({
+          id: `ec_${uuidv7()}`,
+          userId,
+          name: ec.name,
+          phone: ec.phone,
+          relationship: ec.relationship,
+        })),
+      ),
+    );
+  }
+  if (needsStatusReset) {
+    stmts.push(
+      db
         .update(schema.users)
         .set({ status: "pending" })
-        .where(eq(schema.users.id, userId));
-    }
+        .where(eq(schema.users.id, userId)),
+    );
   }
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
   if (!principal) {
     await openSession(userId);
@@ -624,26 +629,33 @@ export async function submitDetailsAction(
   const { emergencyContacts, ...profileData } = data;
   const db = getDb();
 
-  await db
-    .update(schema.profiles)
-    .set({ ...profileData, updatedAt: new Date() })
-    .where(eq(schema.profiles.userId, principal.userId));
-
-  await db
-    .delete(schema.emergencyContacts)
-    .where(eq(schema.emergencyContacts.userId, principal.userId));
-
+  // Profile update + emergency-contact replace as one batch. Same
+  // shape as `submitProfileAction` and `adminUpdateProfileAction`:
+  // delete-then-insert + audit (no audit needed for self-edit) all
+  // committed together.
+  const stmts: Parameters<typeof db.batch>[0][number][] = [
+    db
+      .update(schema.profiles)
+      .set({ ...profileData, updatedAt: new Date() })
+      .where(eq(schema.profiles.userId, principal.userId)),
+    db
+      .delete(schema.emergencyContacts)
+      .where(eq(schema.emergencyContacts.userId, principal.userId)),
+  ];
   if (emergencyContacts.length > 0) {
-    await db.insert(schema.emergencyContacts).values(
-      emergencyContacts.map((ec) => ({
-        id: `ec_${uuidv7()}`,
-        userId: principal.userId,
-        name: ec.name,
-        phone: ec.phone,
-        relationship: ec.relationship,
-      })),
+    stmts.push(
+      db.insert(schema.emergencyContacts).values(
+        emergencyContacts.map((ec) => ({
+          id: `ec_${uuidv7()}`,
+          userId: principal.userId,
+          name: ec.name,
+          phone: ec.phone,
+          relationship: ec.relationship,
+        })),
+      ),
     );
   }
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 
   return { ok: true };
 }
