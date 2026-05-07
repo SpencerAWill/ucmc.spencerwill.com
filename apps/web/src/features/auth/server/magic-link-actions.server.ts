@@ -17,6 +17,7 @@ import {
   consumeMagicLink,
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
+import { UnauthorizedError } from "#/server/auth/errors.server";
 import type { Principal } from "#/server/auth/principal.server";
 import {
   clearProofCookie,
@@ -285,9 +286,11 @@ export async function signOutAction(): Promise<{ ok: true }> {
  *     stolen-account scenario, not a recovery aid),
  *   - magic-link token hashes (one-shot auth state, never user-facing).
  *
- * Caller-auth is the responsibility of the route handler — it knows
- * how to return a 401 Response. Throwing here would force the
- * handler to translate, which adds a layer for no reason.
+ * Throws `UnauthorizedError` when no principal is present. The
+ * `/api/account/export` route handler `instanceof`-checks the
+ * sentinel and translates it to a 401 Response — string-matching
+ * the message would couple the route's correctness to specific
+ * error wording, which is what #25 set out to fix.
  */
 export async function exportMyDataAction(): Promise<{
   exportedAt: string;
@@ -324,7 +327,7 @@ export async function exportMyDataAction(): Promise<{
 }> {
   const principal = await loadCurrentPrincipal();
   if (!principal) {
-    throw new Error("Not signed in");
+    throw new UnauthorizedError();
   }
 
   const db = getDb();
