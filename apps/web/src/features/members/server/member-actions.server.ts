@@ -423,34 +423,37 @@ export async function getMemberDetailAction(
 
   const userId = row.userId;
 
-  // Fetch roles.
-  const roleRows = await db
-    .select({ roleName: schema.roles.name })
-    .from(schema.userRoles)
-    .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
-    .where(eq(schema.userRoles.userId, userId));
+  // Roles, emergency contacts, and the active-session count all key on
+  // `userId` only — run them in parallel. Permission gates above
+  // already decided whether to fetch private contacts and the session
+  // count; the parallel block just collapses the remaining round-trips.
+  const [roleRows, contacts, sessionCountRows] = await Promise.all([
+    db
+      .select({ roleName: schema.roles.name })
+      .from(schema.userRoles)
+      .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
+      .where(eq(schema.userRoles.userId, userId)),
+    canViewPrivate
+      ? db
+          .select({
+            name: schema.emergencyContacts.name,
+            phone: schema.emergencyContacts.phone,
+            relationship: schema.emergencyContacts.relationship,
+          })
+          .from(schema.emergencyContacts)
+          .where(eq(schema.emergencyContacts.userId, userId))
+      : Promise.resolve<EmergencyContactSummary[]>([]),
+    canRevokeSessions
+      ? db
+          .select({ value: count() })
+          .from(schema.sessions)
+          .where(eq(schema.sessions.userId, userId))
+      : Promise.resolve<{ value: number }[]>([]),
+  ]);
 
-  // Fetch emergency contacts (private data).
-  const contacts: EmergencyContactSummary[] = canViewPrivate
-    ? await db
-        .select({
-          name: schema.emergencyContacts.name,
-          phone: schema.emergencyContacts.phone,
-          relationship: schema.emergencyContacts.relationship,
-        })
-        .from(schema.emergencyContacts)
-        .where(eq(schema.emergencyContacts.userId, userId))
-    : [];
-
-  // Optionally count active sessions.
-  let activeSessions: number | null = null;
-  if (canRevokeSessions) {
-    const sessionCount = await db
-      .select({ value: count() })
-      .from(schema.sessions)
-      .where(eq(schema.sessions.userId, userId));
-    activeSessions = sessionCount[0]?.value ?? 0;
-  }
+  const activeSessions = canRevokeSessions
+    ? (sessionCountRows[0]?.value ?? 0)
+    : null;
 
   return {
     userId: row.userId,
