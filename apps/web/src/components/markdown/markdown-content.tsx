@@ -4,10 +4,15 @@ import remarkGfm from "remark-gfm";
 
 import { cn } from "#/lib/utils";
 
-// `remark-breaks` turns single newlines into hard line breaks, matching
-// the old `whitespace-pre-wrap` rendering for legacy plain-text bodies
-// (older feedback rows authored before the editor existed). `remark-gfm`
-// adds task lists, tables, strikethrough, and autolinks.
+// `remark-breaks` turns single newlines into hard line breaks. This is
+// a partial fix for legacy plain-text bodies (older feedback rows
+// authored before the editor existed) — only single newlines are
+// preserved; runs of spaces still collapse and any markdown syntax
+// in the body still parses, neither of which the old
+// `whitespace-pre-wrap` rendering did. Acceptable trade-off because
+// the structured templates emit `**Bold**` separators that already
+// rely on markdown parsing. `remark-gfm` adds task lists, tables,
+// strikethrough, and autolinks.
 const REMARK_PLUGINS = [remarkGfm, remarkBreaks];
 
 function isExternalHref(href: string | undefined): boolean {
@@ -18,9 +23,12 @@ function isExternalHref(href: string | undefined): boolean {
 }
 
 const COMPONENTS: Parameters<typeof ReactMarkdown>[0]["components"] = {
-  // External links open in a new tab; internal/relative links stay
-  // in-tab so navigation feels native. The rel pair is required to
-  // prevent tab-nabbing when target=_blank is set.
+  // Absolute http(s) links open in a new tab (treated as external —
+  // we don't try to detect same-origin absolute URLs because authors
+  // rarely paste them and the false-positive cost is just an extra
+  // tab). Relative, fragment, and `mailto:` links stay in-tab so
+  // navigation feels native. The rel pair is required to prevent
+  // tab-nabbing when target=_blank is set.
   a: ({ href, children, ...rest }) => {
     if (isExternalHref(href)) {
       return (

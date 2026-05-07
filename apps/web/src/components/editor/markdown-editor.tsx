@@ -60,6 +60,10 @@ export interface MarkdownEditorAttrs {
   "data-valid"?: "true";
 }
 
+export interface MarkdownEditorHandle {
+  focus: () => void;
+}
+
 export function MarkdownEditor({
   value,
   onChange,
@@ -71,6 +75,7 @@ export function MarkdownEditor({
   ariaLabel,
   ariaDescribedBy,
   attrs,
+  handleRef,
 }: {
   value: string;
   onChange: (markdown: string) => void;
@@ -84,6 +89,11 @@ export function MarkdownEditor({
   // Pass-through HTML attributes for the contenteditable element —
   // e.g. `aria-invalid` / `data-valid` from `fieldValidationAttrs`.
   attrs?: MarkdownEditorAttrs;
+  // Imperative handle so the parent's label can focus the editor on
+  // click. Plain ref instead of forwardRef because the field is lazy-
+  // loaded through Suspense, which routes ref through a wrapper layer
+  // that can't carry React's special `ref` prop directly.
+  handleRef?: React.MutableRefObject<MarkdownEditorHandle | null>;
 }) {
   const extensions = useMemo(
     () => [
@@ -173,6 +183,21 @@ export function MarkdownEditor({
       editor.commands.setContent(value, { emitUpdate: false });
     }
   }, [editor, value]);
+
+  // Expose imperative focus to the parent (so the field label can focus
+  // the editor on click). Cleared on unmount so a stale handle doesn't
+  // outlive the editor instance.
+  useEffect(() => {
+    if (!handleRef) {
+      return;
+    }
+    handleRef.current = editor
+      ? { focus: () => editor.commands.focus() }
+      : null;
+    return () => {
+      handleRef.current = null;
+    };
+  }, [editor, handleRef]);
 
   if (!editor) {
     return (

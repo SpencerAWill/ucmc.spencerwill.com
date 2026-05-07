@@ -23,6 +23,8 @@ import { Textarea as ShadcnTextarea } from "#/components/ui/textarea";
 import { useFieldContext, useFormContext } from "#/lib/form/context";
 import { fieldValidationAttrs } from "#/lib/form/field-state";
 
+import type { MarkdownEditorHandle } from "#/components/editor/markdown-editor";
+
 // Matches the `@keyframes form-autofill-detect` rule in `styles.css`.
 const AUTOFILL_ANIMATION_NAME = "form-autofill-detect";
 
@@ -290,14 +292,21 @@ export function MarkdownField({
     hasError,
   });
   // The editor renders a contenteditable `<div>`, which `<label htmlFor>`
-  // doesn't focus. Wire the label via aria-labelledby + an explicit id,
-  // and let clicks on the label focus the editor through the underlying
-  // ProseMirror input by registering an onClick on the label.
+  // doesn't focus. Wire screen-reader association via aria-labelledby
+  // and route mouse clicks on the label through an imperative focus
+  // handle the editor populates on mount.
   const labelId = `${field.name}-label`;
+  const handleRef = useRef<MarkdownEditorHandle | null>(null);
 
   return (
     <Field className="gap-1.5">
-      <FieldLabel id={labelId}>{label}</FieldLabel>
+      <FieldLabel
+        id={labelId}
+        onClick={() => handleRef.current?.focus()}
+        className="cursor-text"
+      >
+        {label}
+      </FieldLabel>
       <Suspense fallback={<MarkdownEditorFallback rows={rows} />}>
         <MarkdownEditorLazy
           value={field.state.value}
@@ -309,6 +318,7 @@ export function MarkdownField({
           ariaLabelledBy={labelId}
           ariaDescribedBy={ariaDescribedBy}
           attrs={validation}
+          handleRef={handleRef}
         />
       </Suspense>
       {description ? (
