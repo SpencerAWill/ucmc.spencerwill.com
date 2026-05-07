@@ -12,7 +12,7 @@ import {
 import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, schema } from "#/server/db";
+import { getDb, isUniqueViolation, schema } from "#/server/db";
 
 // ── constants ──────────────────────────────────────────────────────────
 
@@ -94,7 +94,7 @@ export async function listRolesDetailedAction(): Promise<
   // one D1 round-trip.
   const [roles, permGrants, memberCounts] = await Promise.all([
     db.query.roles.findMany({
-      orderBy: (roles, { asc }) => [asc(roles.position), asc(roles.name)],
+      orderBy: (r, { asc }) => [asc(r.position), asc(r.name)],
     }),
     db
       .select({
@@ -198,37 +198,41 @@ export async function createRoleAction(input: {
 
   const roleId = `role_${input.name}`;
 
-  // Check for duplicate name.
-  const existing = await db.query.roles.findFirst({
-    where: eq(schema.roles.name, input.name),
-    columns: { id: true },
-  });
-  if (existing) {
-    throw new Error(`Role "${input.name}" already exists`);
-  }
-
-  // New roles go after all existing ones.
+  // No pre-check on the name — `roles_name_unique` is the actual race
+  // boundary, so the pre-check was theatre (TOCTOU between the read
+  // and the insert). Compute `nextPos` and try the insert; translate
+  // the unique violation back to the user-facing error.
   const [{ maxPos }] = await db
     .select({ maxPos: max(schema.roles.position) })
     .from(schema.roles);
   const nextPos = (maxPos ?? -1) + 1;
 
-  // Atomic with the audit row.
-  await db.batch([
-    db.insert(schema.roles).values({
-      id: roleId,
-      name: input.name,
-      description: input.description ?? null,
-      position: nextPos,
-    }),
-    buildAuditEventStatement({
-      actorUserId: principal.userId,
-      action: "role.created",
-      targetType: "role",
-      targetId: roleId,
-      metadata: { name: input.name },
-    }),
-  ]);
+  try {
+    // Atomic with the audit row.
+    await db.batch([
+      db.insert(schema.roles).values({
+        id: roleId,
+        name: input.name,
+        description: input.description ?? null,
+        position: nextPos,
+      }),
+      buildAuditEventStatement({
+        actorUserId: principal.userId,
+        action: "role.created",
+        targetType: "role",
+        targetId: roleId,
+        metadata: { name: input.name },
+      }),
+    ]);
+  } catch (err) {
+    if (
+      isUniqueViolation(err, "roles.name") ||
+      isUniqueViolation(err, "roles.id")
+    ) {
+      throw new Error(`Role "${input.name}" already exists`, { cause: err });
+    }
+    throw err;
+  }
 
   return { roleId };
 }
