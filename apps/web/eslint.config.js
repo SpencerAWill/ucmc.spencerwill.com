@@ -164,6 +164,42 @@ export default [
               target: "./src/features/feedback",
               from: "./src/features/members",
             },
+            // features/audit (audit-log viewer) is a fully-isolated
+            // admin-only feature: no other feature reads from it, and
+            // it doesn't depend on any other feature (the recorder
+            // it pairs with lives in src/server/audit/ — shared).
+            {
+              target: "./src/features/announcements",
+              from: "./src/features/audit",
+            },
+            {
+              target: "./src/features/auth",
+              from: "./src/features/audit",
+            },
+            {
+              target: "./src/features/feedback",
+              from: "./src/features/audit",
+            },
+            {
+              target: "./src/features/members",
+              from: "./src/features/audit",
+            },
+            {
+              target: "./src/features/audit",
+              from: "./src/features/announcements",
+            },
+            {
+              target: "./src/features/audit",
+              from: "./src/features/auth",
+            },
+            {
+              target: "./src/features/audit",
+              from: "./src/features/feedback",
+            },
+            {
+              target: "./src/features/audit",
+              from: "./src/features/members",
+            },
             // 2. Shared can't import features
             { target: "./src/components/ui", from: "./src/features" },
             { target: "./src/components/profile", from: "./src/features" },

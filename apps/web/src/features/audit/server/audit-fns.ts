@@ -9,14 +9,16 @@ import { z } from "zod";
 import type {
   AuditEntrySummary,
   ListAuditEventsResult,
-} from "#/server/audit/audit-actions.server";
+} from "#/features/audit/server/audit-actions.server";
 
 export type { AuditEntrySummary, ListAuditEventsResult };
 
 // Mirror of the `auditAction` enum in `drizzle/schema.ts`. Re-declaring
 // the values here keeps the client bundle from pulling in the entire
-// schema file just to validate a string filter.
-const auditActionEnum = z.enum([
+// schema file just to validate a string filter. Exposed as
+// `AUDIT_ACTIONS` for the route's filter `Select` and `AuditAction` for
+// type-safe filter shapes; the zod enum stays internal.
+export const AUDIT_ACTIONS = [
   "registration.approved",
   "registration.rejected",
   "registration.unrejected",
@@ -39,7 +41,9 @@ const auditActionEnum = z.enum([
   "landing.hero_slide_edited",
   "landing.activity_edited",
   "landing.faq_edited",
-]);
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+const auditActionEnum = z.enum(AUDIT_ACTIONS);
 
 export const listAuditEventsInputSchema = z.object({
   page: z.number().int().min(1).optional(),
