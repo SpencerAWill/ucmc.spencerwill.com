@@ -415,6 +415,13 @@ export async function setUserRolesAction(input: {
   if (!user) {
     throw new Error("User not found");
   }
+  // Unclaimed (officer-pre-added) stubs must claim their account
+  // before they can hold any roles. Pre-assigning would let us grant
+  // the `member` role to a row that may never become a real member,
+  // which inflates the role-permission picture downstream.
+  if (user.status === "unclaimed") {
+    throw new Error("Cannot assign roles to an unclaimed member");
+  }
 
   // Anonymous role cannot be assigned to users.
   const roleIds = input.roleIds.filter((id) => id !== ANONYMOUS_ROLE_ID);

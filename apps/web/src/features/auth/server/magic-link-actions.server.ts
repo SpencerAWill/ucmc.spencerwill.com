@@ -200,6 +200,28 @@ export async function consumeMagicLinkAction(
     return { ok: false, reason: "invalid" };
   }
   if (existing) {
+    // First time an officer-pre-added (unclaimed) user clicks a magic
+    // link to their on-file address: the round-trip IS the verification
+    // proof, so stamp `verifiedAt` on the matching primary user_emails
+    // row before opening the session. Idempotent: the WHERE filter on
+    // `verified_at IS NULL` makes a re-consume a no-op. Status stays
+    // "unclaimed" until profile submission flips it to "approved" (see
+    // `submitProfileAction`).
+    if (existing.status === "unclaimed") {
+      await getDb()
+        .update(schema.userEmails)
+        .set({ verifiedAt: new Date() })
+        .where(
+          and(
+            eq(schema.userEmails.userId, existing.userId),
+            eq(schema.userEmails.email, normalizeEmail(proof.email)),
+            // Guard so we never overwrite a real verification timestamp
+            // — important if a future code path stamps verifiedAt
+            // outside this branch.
+            eq(schema.userEmails.isPrimary, true),
+          ),
+        );
+    }
     // rotateSession (not openSession) so any stale session cookie on the
     // device gets replaced — same privilege-boundary discipline the
     // other auth transitions follow.
@@ -299,7 +321,13 @@ export async function exportMyDataAction(): Promise<{
   emails: Array<{
     email: string;
     isPrimary: boolean;
-    verifiedAt: Date;
+    // Nullable to support the officer pre-add path: an unclaimed user
+    // whose row has not yet been claimed has `verifiedAt = NULL`. Real
+    // members exporting their data always have a non-null timestamp;
+    // the type widening is for completeness, not because anyone in the
+    // claim path can call /api/account/export without first round-
+    // tripping a magic link (which stamps verifiedAt).
+    verifiedAt: Date | null;
     createdAt: Date;
   }>;
   profile: typeof schema.profiles.$inferSelect | null;
@@ -609,7 +637,33 @@ export async function submitProfileAction(
       ),
     );
   }
-  if (!isNewUser) {
+  // Officer-pre-added (unclaimed) users land here with `principal.status
+  // === "unclaimed"` and no profile. The pre-add itself was the
+  // approval signal, so flip them straight to "approved" and NULL the
+  // placeholder columns — they skip the normal pending queue. The
+  // `WHERE status = 'unclaimed'` guard makes the UPDATE safe against a
+  // stale principal: if an officer concurrently deleted or reactivated
+  // the row, no rows match and the UPDATE is a no-op.
+  const isClaimingFromUnclaimed =
+    !!principal && principal.status === "unclaimed";
+  if (isClaimingFromUnclaimed) {
+    stmts.push(
+      db
+        .update(schema.users)
+        .set({
+          status: "approved",
+          approvedAt: new Date(),
+          placeholderName: null,
+          unclaimedAt: null,
+        })
+        .where(
+          and(
+            eq(schema.users.id, userId),
+            eq(schema.users.status, "unclaimed"),
+          ),
+        ),
+    );
+  } else if (!isNewUser) {
     stmts.push(
       db
         .update(schema.users)
@@ -620,6 +674,17 @@ export async function submitProfileAction(
     );
   }
   await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+
+  if (isClaimingFromUnclaimed) {
+    const { recordAuditEvent } =
+      await import("#/server/audit/audit-log.server");
+    await recordAuditEvent({
+      actorUserId: userId,
+      action: "member.claimed",
+      targetUserId: userId,
+      metadata: { priorStatus: "unclaimed" },
+    });
+  }
 
   if (!principal) {
     await openSession(userId);

@@ -102,12 +102,12 @@ function ApprovedEmailAddressesSection() {
                   ) : null}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Verified{" "}
-                  {new Date(row.verifiedAt).toLocaleDateString(undefined, {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
+                  {row.verifiedAt
+                    ? `Verified ${new Date(row.verifiedAt).toLocaleDateString(
+                        undefined,
+                        { year: "numeric", month: "short", day: "numeric" },
+                      )}`
+                    : "Pending verification"}
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">

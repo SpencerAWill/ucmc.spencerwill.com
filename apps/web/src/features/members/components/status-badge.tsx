@@ -10,6 +10,7 @@ const STATUS_VARIANTS: Record<UserStatus, BadgeVariant> = {
   pending: "warning",
   rejected: "destructive",
   deactivated: "secondary",
+  unclaimed: "secondary",
 };
 
 const STATUS_LABELS: Record<UserStatus, string> = {
@@ -17,6 +18,7 @@ const STATUS_LABELS: Record<UserStatus, string> = {
   pending: "Pending",
   rejected: "Rejected",
   deactivated: "Deactivated",
+  unclaimed: "Unclaimed",
 };
 
 export function StatusBadge({ status }: { status: UserStatus }) {

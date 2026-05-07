@@ -610,6 +610,122 @@ describe("submit-profile status reset", () => {
   });
 });
 
+describe("unclaimed claim flow", () => {
+  // Officer-pre-added users have status="unclaimed", a populated
+  // placeholderName + unclaimedAt, and a primary email row with
+  // verifiedAt=NULL. When the real person clicks their first magic
+  // link, the consume handler should stamp verifiedAt and open a
+  // session — and on profile submit, the row should auto-approve and
+  // NULL the placeholder columns. The audit log must record
+  // member.claimed.
+
+  async function seedUnclaimed(args: {
+    email: string;
+    name: string;
+  }): Promise<string> {
+    const id = `user_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.users)
+      .values({
+        id,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        status: "unclaimed",
+        placeholderName: args.name,
+        unclaimedAt: new Date(),
+      });
+    await getDb()
+      .insert(schema.userEmails)
+      .values({
+        id: `uem_${crypto.randomUUID()}`,
+        userId: id,
+        email: args.email,
+        isPrimary: true,
+        verifiedAt: null,
+      });
+    return id;
+  }
+
+  it("consume → submit profile auto-approves and clears placeholder columns", async () => {
+    const preAddedId = await seedUnclaimed({
+      email: TEST_EMAIL,
+      name: "Officer Picked Name",
+    });
+
+    // Consume the magic link — this is the user's first round-trip to
+    // the on-file address, so the consume handler stamps verifiedAt
+    // and opens a session.
+    const token = await seedMagicLink({
+      email: TEST_EMAIL,
+      intent: "register",
+    });
+    const consumeResult = await consumeMagicLinkAction(token);
+    expect(consumeResult).toMatchObject({
+      ok: true,
+      mode: "session",
+      status: "unclaimed",
+      hasProfile: false,
+    });
+
+    // verifiedAt should now be stamped on the primary email.
+    const emailAfterConsume = await getDb().query.userEmails.findFirst({
+      where: drizzleEq(schema.userEmails.userId, preAddedId),
+    });
+    expect(emailAfterConsume?.verifiedAt).toBeInstanceOf(Date);
+
+    // Status hasn't flipped yet — that happens at profile submit.
+    const userBeforeSubmit = await getDb().query.users.findFirst({
+      where: drizzleEq(schema.users.id, preAddedId),
+    });
+    expect(userBeforeSubmit?.status).toBe("unclaimed");
+
+    // Submit the profile.
+    await submitProfileAction(validProfile);
+
+    // Status flips to approved, placeholder columns cleared, profile
+    // row created, audit recorded.
+    const userAfterSubmit = await getDb().query.users.findFirst({
+      where: drizzleEq(schema.users.id, preAddedId),
+    });
+    expect(userAfterSubmit?.status).toBe("approved");
+    expect(userAfterSubmit?.placeholderName).toBeNull();
+    expect(userAfterSubmit?.unclaimedAt).toBeNull();
+    expect(userAfterSubmit?.approvedAt).toBeInstanceOf(Date);
+
+    const profile = await getDb().query.profiles.findFirst({
+      where: (p, { eq }) => eq(p.userId, preAddedId),
+    });
+    expect(profile?.fullName).toBe("Alice Smith");
+
+    const claimEvents = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(drizzleEq(schema.auditLog.action, "member.claimed"));
+    const ourClaim = claimEvents.find((e) => e.targetUserId === preAddedId);
+    expect(ourClaim).toBeDefined();
+    expect(ourClaim?.actorUserId).toBe(preAddedId);
+  });
+
+  it("the same email cannot be hijacked by a stranger pre-add (UNIQUE blocks duplicate)", async () => {
+    await seedUnclaimed({
+      email: TEST_EMAIL,
+      name: "First",
+    });
+    // Another insert against the same address must fail at the
+    // user_emails UNIQUE boundary.
+    await expect(
+      getDb()
+        .insert(schema.userEmails)
+        .values({
+          id: `uem_${crypto.randomUUID()}`,
+          userId: `user_${crypto.randomUUID()}`,
+          email: TEST_EMAIL,
+          isPrimary: true,
+          verifiedAt: null,
+        }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("pre-seeded user registration", () => {
   it("reuses a pre-seeded email-only row instead of creating a duplicate", async () => {
     // Pre-seed a user with just an email (no profile).

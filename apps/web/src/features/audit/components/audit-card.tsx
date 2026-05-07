@@ -24,6 +24,13 @@ const USER_TARGETED_ACTIONS = new Set<AuditAction>([
   "registration.approved",
   "registration.rejected",
   "registration.unrejected",
+  "member.pre_added",
+  "member.unclaimed_edited",
+  // member.unclaimed_deleted intentionally absent — that action's
+  // FK cascade already removes the user, so the metadata snapshot
+  // (email + placeholderName) carries the identity. The "Target:
+  // (deleted user)" generic-fallback path is too vague for it.
+  "member.claimed",
   "member.deactivated",
   "member.reactivated",
   "member.self_deleted",

@@ -44,7 +44,13 @@ export interface EmailRow {
   id: string;
   email: string;
   isPrimary: boolean;
-  verifiedAt: Date;
+  // Nullable to track the schema (NULL = "officer pre-added, not yet
+  // claimed"). This action is only callable by an authenticated user;
+  // approved users always have non-null `verifiedAt` on every row,
+  // because the only path that inserts NULL is officer pre-add and
+  // those users can't reach the /my/account/details page that consumes
+  // this. The type widening keeps the contract honest.
+  verifiedAt: Date | null;
   createdAt: Date;
 }
 

@@ -14,6 +14,12 @@ import type {
   PendingRegistration,
   RoleOption,
 } from "#/features/members/server/member-actions.server";
+import type {
+  EditUnclaimedResult,
+  PreAddResult,
+  UnclaimedMember,
+  UnclaimedMembersPage,
+} from "#/features/members/server/unclaimed-actions.server";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
 
 export type {
@@ -22,6 +28,10 @@ export type {
   MemberSummary,
   PendingRegistration,
   RoleOption,
+  EditUnclaimedResult,
+  PreAddResult,
+  UnclaimedMember,
+  UnclaimedMembersPage,
 };
 
 export const listPendingRegistrationsInputSchema = z.object({
@@ -160,6 +170,68 @@ export const revokeUserSessionsFn = createServerFn({ method: "POST" })
     const { revokeUserSessionsAction } =
       await import("#/features/members/server/member-actions.server");
     return revokeUserSessionsAction(data.userId);
+  });
+
+// ── unclaimed members (officer pre-add for gear association) ───────────
+
+export const listUnclaimedInputSchema = z.object({
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+
+export type ListUnclaimedInput = z.infer<typeof listUnclaimedInputSchema>;
+
+export const listUnclaimedFn = createServerFn({ method: "GET" })
+  .inputValidator(listUnclaimedInputSchema)
+  .handler(async ({ data }): Promise<UnclaimedMembersPage> => {
+    const { listUnclaimedAction } =
+      await import("#/features/members/server/unclaimed-actions.server");
+    return listUnclaimedAction(data);
+  });
+
+const preAddEntrySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  email: z.string().trim().toLowerCase().email().max(254),
+});
+
+export const preAddUnclaimedInputSchema = z.object({
+  entries: z.array(preAddEntrySchema).min(1).max(200),
+});
+
+export type PreAddUnclaimedInput = z.infer<typeof preAddUnclaimedInputSchema>;
+
+export const preAddUnclaimedFn = createServerFn({ method: "POST" })
+  .inputValidator(preAddUnclaimedInputSchema)
+  .handler(async ({ data }): Promise<PreAddResult> => {
+    const { preAddUnclaimedMembersAction } =
+      await import("#/features/members/server/unclaimed-actions.server");
+    return preAddUnclaimedMembersAction({ entries: data.entries });
+  });
+
+export const editUnclaimedInputSchema = z.object({
+  userId: z.string().min(1),
+  name: z.string().trim().min(1).max(200),
+  email: z.string().trim().toLowerCase().email().max(254),
+});
+
+export type EditUnclaimedInput = z.infer<typeof editUnclaimedInputSchema>;
+
+export const editUnclaimedFn = createServerFn({ method: "POST" })
+  .inputValidator(editUnclaimedInputSchema)
+  .handler(async ({ data }): Promise<EditUnclaimedResult> => {
+    const { editUnclaimedMemberAction } =
+      await import("#/features/members/server/unclaimed-actions.server");
+    return editUnclaimedMemberAction(data);
+  });
+
+export const deleteUnclaimedFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
+  .handler(async ({ data }): Promise<{ deletedIds: string[] }> => {
+    const { deleteUnclaimedMembersAction } =
+      await import("#/features/members/server/unclaimed-actions.server");
+    return deleteUnclaimedMembersAction({ userIds: data.userIds });
   });
 
 // ── admin profile edit ──────────────────────────────────────────────────

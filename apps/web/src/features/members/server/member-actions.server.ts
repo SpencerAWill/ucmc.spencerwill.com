@@ -34,8 +34,12 @@ import { getDb, schema } from "#/server/db";
  * `registrations:approve` permission. Throws if unsigned-in or missing
  * the permission — callers in this file treat the thrown error as a
  * hard stop (the shell maps it to a 403-style response shape).
+ *
+ * Exported so sibling action modules in `features/members/server/`
+ * (e.g. `unclaimed-actions.server.ts`) can share the same gate without
+ * duplicating the helper.
  */
-async function requireApprover(): Promise<Principal> {
+export async function requireApprover(): Promise<Principal> {
   const principal = await loadCurrentPrincipal();
   if (!principal) {
     throw new Error("Not signed in");
@@ -194,10 +198,21 @@ export async function listMembersAction(opts: {
   const canViewPrivate = principal.permissions.includes("members:view_private");
 
   // Status filter: members:manage holders can filter by any status;
-  // everyone else is locked to "approved".
-  const statusList = canManage
+  // everyone else is locked to "approved". `unclaimed` is *always*
+  // excluded — these are officer-pre-added stubs with no profile, no
+  // verified email, and no avatar; they have their own tab on
+  // /members/registrations and do not belong in the directory.
+  const requested = canManage
     ? (opts.statuses?.split(",").filter(Boolean) ?? ["approved"])
     : ["approved"];
+  const statusList = requested.filter((s) => s !== "unclaimed");
+  // If the caller passed *only* "unclaimed" we'd end up with an empty
+  // status list, which would silently match every status. Fall back to
+  // the safe default so the empty-input case returns no rows rather
+  // than the entire user table.
+  if (statusList.length === 0) {
+    statusList.push("approved");
+  }
 
   const conditions =
     statusList.length === 1

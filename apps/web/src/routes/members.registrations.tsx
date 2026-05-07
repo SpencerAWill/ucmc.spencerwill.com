@@ -32,6 +32,7 @@ import {
 import { useApproveRegistrations } from "#/features/members/api/use-approve-registrations";
 import { useRejectRegistrations } from "#/features/members/api/use-reject-registrations";
 import { useUnrejectMembers } from "#/features/members/api/use-unreject-members";
+import { UnclaimedTab } from "#/features/members/components/unclaimed-tab";
 import type {
   MemberSummary,
   PendingRegistration,
@@ -40,7 +41,7 @@ import type {
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
 const registrationsSearchSchema = z.object({
-  tab: z.enum(["pending", "rejected"]).optional(),
+  tab: z.enum(["pending", "rejected", "unclaimed"]).optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
@@ -109,11 +110,57 @@ function RegistrationsPage() {
   const canManage = hasPermission("members:manage");
   const activeTab = tab ?? "pending";
 
+  if (activeTab === "unclaimed") {
+    return <UnclaimedView canManage={canManage} />;
+  }
   if (activeTab === "rejected" && canManage) {
     return <RejectedView />;
   }
 
   return <PendingView canManage={canManage} />;
+}
+
+// ── Unclaimed view ──────────────────────────────────────────────────────
+
+function UnclaimedView({ canManage }: { canManage: boolean }) {
+  const { limit: searchLimit, page: searchPage } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+
+  const perPage = searchLimit ?? 50;
+  const page = searchPage ?? 1;
+
+  const setLimit = (value: string) => {
+    void navigate({
+      search: (prev) => ({ ...prev, limit: Number(value), page: undefined }),
+    });
+  };
+
+  const setPage = (p: number) => {
+    void navigate({
+      search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
+    });
+  };
+
+  return (
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold">Registrations</h1>
+        <p className="text-sm text-muted-foreground">
+          Pre-add real-world members so gear and other records can reference
+          them. They&apos;ll claim the row by clicking their first magic link.
+        </p>
+      </header>
+
+      <TabToggle active="unclaimed" canManage={canManage} />
+
+      <UnclaimedTab
+        perPage={perPage}
+        page={page}
+        onPerPageChange={setLimit}
+        onPageChange={setPage}
+      />
+    </div>
+  );
 }
 
 function PendingView({ canManage }: { canManage: boolean }) {
@@ -224,7 +271,7 @@ function PendingView({ canManage }: { canManage: boolean }) {
       </header>
 
       {/* Tab toggle */}
-      {canManage ? <TabToggle active="pending" /> : null}
+      <TabToggle active="pending" canManage={canManage} />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -441,10 +488,18 @@ function RegistrationRow({
 
 // ── Tab toggle ──────────────────────────────────────────────────────────
 
-function TabToggle({ active }: { active: "pending" | "rejected" }) {
+type RegistrationsTab = "pending" | "rejected" | "unclaimed";
+
+function TabToggle({
+  active,
+  canManage,
+}: {
+  active: RegistrationsTab;
+  canManage: boolean;
+}) {
   const navigate = useNavigate({ from: Route.fullPath });
 
-  const setTab = (tab: "pending" | "rejected") => {
+  const setTab = (tab: RegistrationsTab) => {
     void navigate({
       search: {
         tab: tab === "pending" ? undefined : tab,
@@ -467,13 +522,23 @@ function TabToggle({ active }: { active: "pending" | "rejected" }) {
         Pending
       </Button>
       <Button
-        variant={active === "rejected" ? "secondary" : "ghost"}
+        variant={active === "unclaimed" ? "secondary" : "ghost"}
         size="sm"
         className="flex-1"
-        onClick={() => setTab("rejected")}
+        onClick={() => setTab("unclaimed")}
       >
-        Rejected
+        Unclaimed
       </Button>
+      {canManage ? (
+        <Button
+          variant={active === "rejected" ? "secondary" : "ghost"}
+          size="sm"
+          className="flex-1"
+          onClick={() => setTab("rejected")}
+        >
+          Rejected
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -556,7 +621,7 @@ function RejectedView() {
         </p>
       </header>
 
-      <TabToggle active="rejected" />
+      <TabToggle active="rejected" canManage />
 
       {isLoading ? (
         <div className="py-8 text-center text-sm text-muted-foreground">
