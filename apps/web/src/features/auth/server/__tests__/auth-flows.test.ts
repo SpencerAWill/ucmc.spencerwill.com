@@ -534,6 +534,46 @@ describe("list pending registrations", () => {
   });
 });
 
+describe("submit-profile status race", () => {
+  it("does not clobber an approved status when a returning approved user re-submits without a profile", async () => {
+    // Returning user: signed in via session (principal-based call site),
+    // approved by an officer, but somehow has no profiles row — this is
+    // the path that re-runs `submitProfileAction` with the principal
+    // path. The status reset's WHERE clause must not flip them back to
+    // pending.
+    const userId = await seedUser({
+      email: TEST_EMAIL,
+      status: "approved",
+    });
+    await signInAs(userId);
+
+    await submitProfileAction(validProfile);
+
+    const after = await getDb().query.users.findFirst({
+      where: (u, { eq }) => eq(u.id, userId),
+    });
+    expect(after!.status).toBe("approved");
+  });
+
+  it("still resets a pending user back to pending after profile re-submit", async () => {
+    // Sanity check that the WHERE-guarded UPDATE still fires when the
+    // user is genuinely not-approved. Status stays pending (already its
+    // value), but the path is the one that mattered before the race fix.
+    const userId = await seedUser({
+      email: TEST_EMAIL,
+      status: "pending",
+    });
+    await signInAs(userId);
+
+    await submitProfileAction(validProfile);
+
+    const after = await getDb().query.users.findFirst({
+      where: (u, { eq }) => eq(u.id, userId),
+    });
+    expect(after!.status).toBe("pending");
+  });
+});
+
 describe("pre-seeded user registration", () => {
   it("reuses a pre-seeded email-only row instead of creating a duplicate", async () => {
     // Pre-seed a user with just an email (no profile).

@@ -8,7 +8,7 @@
  * Each function has a matching `*Fn` wrapper in `server-fns.ts`; tests
  * exercise the actions here directly.
  */
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { normalizeEmail } from "#/server/auth/email-normalize";
@@ -58,21 +58,37 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
   return row?.userId ?? null;
 }
 
+/** Sentinel returned by `resolveUserByEmail` when `user_emails`
+ *  references a `userId` that no longer exists in `users`. Only
+ *  reachable mid-cascade or with manual SQL inconsistencies; callers
+ *  should treat this as "invalid" rather than registering a new user. */
+const BROKEN_USER_FK = Symbol("broken_user_fk");
+
 /**
  * Consume-time lookup: given a verified email, return the owning user
  * along with whether they have a profile. One join replaces the prior
  * three-query sequence (userEmails → users → profiles).
  *
- * Returns `null` if the address has no row in `user_emails`. Returns
- * `{ userId: null }` shape when `user_emails` references a userId that
- * no longer exists — only possible mid-cascade or with manual SQL — so
- * callers can distinguish "fresh registrant" from "broken FK".
+ * Returns:
+ *   - `null` if the address has no row in `user_emails` (fresh
+ *     registration click).
+ *   - `BROKEN_USER_FK` when `user_emails` references a userId that
+ *     no longer exists in `users` — only possible mid-cascade or with
+ *     manual-SQL inconsistency. Caller treats this as invalid rather
+ *     than as a fresh registrant, matching the prior explicit guard.
+ *   - The resolved `{ userId, status, hasProfile }` otherwise.
+ *
+ * The LEFT JOIN against `users` is what makes the broken-FK case
+ * distinguishable from "no row in user_emails": the outer row exists,
+ * but its joined `users.id` comes back NULL.
  */
-async function resolveUserByEmail(email: string): Promise<{
-  userId: string;
-  status: schema.UserStatus;
-  hasProfile: boolean;
-} | null> {
+async function resolveUserByEmail(
+  email: string,
+): Promise<
+  | { userId: string; status: schema.UserStatus; hasProfile: boolean }
+  | typeof BROKEN_USER_FK
+  | null
+> {
   const row = await getDb()
     .select({
       userId: schema.users.id,
@@ -80,12 +96,15 @@ async function resolveUserByEmail(email: string): Promise<{
       profileUserId: schema.profiles.userId,
     })
     .from(schema.userEmails)
-    .innerJoin(schema.users, eq(schema.users.id, schema.userEmails.userId))
+    .leftJoin(schema.users, eq(schema.users.id, schema.userEmails.userId))
     .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
     .where(eq(schema.userEmails.email, normalizeEmail(email)))
     .get();
   if (!row) {
     return null;
+  }
+  if (row.userId === null || row.status === null) {
+    return BROKEN_USER_FK;
   }
   return {
     userId: row.userId,
@@ -168,10 +187,17 @@ export async function consumeMagicLinkAction(
   // and can route by status + hasProfile instead of bouncing through
   // /register/profile.
   //
+  // If `user_emails` references a userId that no longer exists,
+  // surface as invalid rather than registering a new account — same
+  // outcome as the prior explicit guard.
+  //
   // If no user owns this email yet, this is a first-time registration
   // click — write the short-lived proof cookie that /register/profile
   // gates on, and return `mode: "proof"` so the caller redirects there.
   const existing = await resolveUserByEmail(proof.email);
+  if (existing === BROKEN_USER_FK) {
+    return { ok: false, reason: "invalid" };
+  }
   if (existing) {
     // rotateSession (not openSession) so any stale session cookie on the
     // device gets replaced — same privilege-boundary discipline the
@@ -533,14 +559,12 @@ export async function submitProfileAction(
   // Status reset to "pending" only matters for the existing-user path:
   // a returning user who lost their profile must re-enter the approval
   // queue. Brand-new users were already inserted with status="pending"
-  // above, so the UPDATE is a no-op for them; skip it. For session-
-  // based callers, the principal's status drives the decision without
-  // an extra read.
-  const needsStatusReset = !isNewUser && principal?.status !== "approved";
-
-  // Profile upsert + emergency-contact replace + (optional) status
-  // reset, committed as one D1 batch so all the writes for a single
-  // profile submission either land together or roll back together.
+  // above, so we skip the UPDATE for them entirely. For everyone else
+  // we let SQL decide whether the row needs touching by guarding the
+  // UPDATE with `WHERE status != 'approved'` — the principal's status
+  // can be stale by the time the batch commits (an approver flipping
+  // the row mid-flight), and the WHERE keeps an unconditional revert
+  // from racing with that approval.
   const now = new Date();
   const stmts: Parameters<typeof db.batch>[0][number][] = [
     db
@@ -567,12 +591,14 @@ export async function submitProfileAction(
       ),
     );
   }
-  if (needsStatusReset) {
+  if (!isNewUser) {
     stmts.push(
       db
         .update(schema.users)
         .set({ status: "pending" })
-        .where(eq(schema.users.id, userId)),
+        .where(
+          and(eq(schema.users.id, userId), ne(schema.users.status, "approved")),
+        ),
     );
   }
   await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
