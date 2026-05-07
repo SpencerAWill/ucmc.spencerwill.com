@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
+import { MarkdownContent } from "#/components/markdown/markdown-content";
 import { UserAvatar } from "#/components/user-avatar";
 import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
@@ -146,9 +147,7 @@ export function FeedbackCard({
             </div>
           </div>
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">
-          {entry.body}
-        </p>
+        <MarkdownContent>{entry.body}</MarkdownContent>
       </CardContent>
     </Card>
   );

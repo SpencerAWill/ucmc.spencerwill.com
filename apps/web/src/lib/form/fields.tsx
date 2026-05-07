@@ -5,7 +5,7 @@
 // useStore call would create a competing subscription that only
 // triggers on meta changes — missing value changes needed for
 // validation-attribute computation (e.g. isDirty + hasValue → green).
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import PhoneInputBase from "react-phone-number-input/input";
 
 import { Button } from "#/components/ui/button";
@@ -233,6 +233,75 @@ export function TextArea({
         onChange={(e) => field.handleChange(e.target.value)}
         {...validation}
       />
+      {description ? (
+        <FieldDescription id={`${field.name}-description`}>
+          {description}
+        </FieldDescription>
+      ) : null}
+      {hasError ? (
+        <FieldError
+          id={`${field.name}-error`}
+          errors={toFieldErrors(meta.errors)}
+        />
+      ) : null}
+    </Field>
+  );
+}
+
+// Lazy-loaded so the TipTap + ProseMirror bundle (~240 KB gz) only ships
+// to routes that actually mount a MarkdownField. Without this, every
+// form in the app — sign-in, profile, RBAC — would pull it in.
+const MarkdownEditorLazy = lazy(() =>
+  import("#/components/editor/markdown-editor").then((m) => ({
+    default: m.MarkdownEditor,
+  })),
+);
+
+function MarkdownEditorFallback({ rows }: { rows: number }) {
+  return (
+    <div
+      aria-hidden
+      className="bg-muted/30 w-full animate-pulse rounded-md border"
+      style={{ minHeight: `${rows * 1.5 + 3}rem` }}
+    />
+  );
+}
+
+export function MarkdownField({
+  label,
+  description,
+  rows = 4,
+  placeholder,
+}: {
+  label: string;
+  description?: string;
+  rows?: number;
+  placeholder?: string;
+}) {
+  const field = useFieldContext<string>();
+  const { meta } = field.state;
+  const hasError = meta.isTouched && meta.errors.length > 0;
+  const ariaDescribedBy = describedById({
+    fieldName: field.name,
+    hasDescription: Boolean(description),
+    hasError,
+  });
+
+  return (
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+      <Suspense fallback={<MarkdownEditorFallback rows={rows} />}>
+        <MarkdownEditorLazy
+          id={field.name}
+          value={field.state.value}
+          onChange={field.handleChange}
+          onBlur={field.handleBlur}
+          rows={rows}
+          placeholder={placeholder}
+          ariaLabel={label}
+          ariaDescribedBy={ariaDescribedBy}
+        />
+      </Suspense>
       {description ? (
         <FieldDescription id={`${field.name}-description`}>
           {description}
