@@ -58,6 +58,42 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
   return row?.userId ?? null;
 }
 
+/**
+ * Consume-time lookup: given a verified email, return the owning user
+ * along with whether they have a profile. One join replaces the prior
+ * three-query sequence (userEmails → users → profiles).
+ *
+ * Returns `null` if the address has no row in `user_emails`. Returns
+ * `{ userId: null }` shape when `user_emails` references a userId that
+ * no longer exists — only possible mid-cascade or with manual SQL — so
+ * callers can distinguish "fresh registrant" from "broken FK".
+ */
+async function resolveUserByEmail(email: string): Promise<{
+  userId: string;
+  status: schema.UserStatus;
+  hasProfile: boolean;
+} | null> {
+  const row = await getDb()
+    .select({
+      userId: schema.users.id,
+      status: schema.users.status,
+      profileUserId: schema.profiles.userId,
+    })
+    .from(schema.userEmails)
+    .innerJoin(schema.users, eq(schema.users.id, schema.userEmails.userId))
+    .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+    .where(eq(schema.userEmails.email, normalizeEmail(email)))
+    .get();
+  if (!row) {
+    return null;
+  }
+  return {
+    userId: row.userId,
+    status: row.status,
+    hasProfile: row.profileUserId !== null,
+  };
+}
+
 // ── timing jitter ────────────────────────────────────────────────────────
 // All paths through requestMagicLinkAction must take roughly the same
 // wall-clock time so an attacker can't distinguish "known email" (DB hit +
@@ -135,31 +171,17 @@ export async function consumeMagicLinkAction(
   // If no user owns this email yet, this is a first-time registration
   // click — write the short-lived proof cookie that /register/profile
   // gates on, and return `mode: "proof"` so the caller redirects there.
-  const existingUserId = await findUserIdByEmail(proof.email);
-  if (existingUserId) {
-    const existing = await getDb().query.users.findFirst({
-      where: eq(schema.users.id, existingUserId),
-      columns: { id: true, status: true },
-    });
-    if (!existing) {
-      // user_emails references a userId that no longer exists — only
-      // possible mid-cascade or with a manual-SQL inconsistency. Treat
-      // as invalid rather than crash.
-      return { ok: false, reason: "invalid" };
-    }
-    const profile = await getDb().query.profiles.findFirst({
-      where: eq(schema.profiles.userId, existing.id),
-      columns: { userId: true },
-    });
+  const existing = await resolveUserByEmail(proof.email);
+  if (existing) {
     // rotateSession (not openSession) so any stale session cookie on the
     // device gets replaced — same privilege-boundary discipline the
     // other auth transitions follow.
-    await rotateSession(existing.id);
+    await rotateSession(existing.userId);
     return {
       ok: true,
       mode: "session",
       status: existing.status,
-      hasProfile: Boolean(profile),
+      hasProfile: existing.hasProfile,
     };
   }
 
@@ -463,6 +485,7 @@ export async function submitProfileAction(
   // users row on the loser of the race.
   const db = getDb();
   let userId: string;
+  let isNewUser = false;
   if (principal) {
     userId = principal.userId;
   } else {
@@ -487,6 +510,7 @@ export async function submitProfileAction(
           }),
         ]);
         userId = newUserId;
+        isNewUser = true;
       } catch (err) {
         if (isUniqueViolation(err, "user_emails.email")) {
           // Lost the race; the email belongs to a user that another
@@ -505,17 +529,11 @@ export async function submitProfileAction(
       }
     }
   }
-  const userRow = await db.query.users.findFirst({
-    where: eq(schema.users.id, userId),
-  });
-  if (!userRow) {
-    throw new Error("User row not found after upsert (unexpected)");
-  }
 
   const now = new Date();
   await db
     .insert(schema.profiles)
-    .values({ userId: userRow.id, ...profileData, updatedAt: now })
+    .values({ userId, ...profileData, updatedAt: now })
     .onConflictDoUpdate({
       target: schema.profiles.userId,
       set: { ...profileData, updatedAt: now },
@@ -524,13 +542,13 @@ export async function submitProfileAction(
   // Replace emergency contacts: delete existing, then insert new set.
   await db
     .delete(schema.emergencyContacts)
-    .where(eq(schema.emergencyContacts.userId, userRow.id));
+    .where(eq(schema.emergencyContacts.userId, userId));
 
   if (emergencyContacts.length > 0) {
     await db.insert(schema.emergencyContacts).values(
       emergencyContacts.map((ec) => ({
         id: `ec_${uuidv7()}`,
-        userId: userRow.id,
+        userId,
         name: ec.name,
         phone: ec.phone,
         relationship: ec.relationship,
@@ -538,15 +556,24 @@ export async function submitProfileAction(
     );
   }
 
-  if (userRow.status !== "approved") {
-    await db
-      .update(schema.users)
-      .set({ status: "pending" })
-      .where(eq(schema.users.id, userRow.id));
+  // Status reset to "pending" only matters for the existing-user path:
+  // a returning user who lost their profile must re-enter the approval
+  // queue. Brand-new users were already inserted with status="pending"
+  // above, so the UPDATE is a no-op for them; skip it. For session-
+  // based callers, the principal's status drives the decision without
+  // an extra read.
+  if (!isNewUser) {
+    const currentStatus = principal?.status;
+    if (currentStatus !== "approved") {
+      await db
+        .update(schema.users)
+        .set({ status: "pending" })
+        .where(eq(schema.users.id, userId));
+    }
   }
 
   if (!principal) {
-    await openSession(userRow.id);
+    await openSession(userId);
     clearProofCookie();
   }
 
