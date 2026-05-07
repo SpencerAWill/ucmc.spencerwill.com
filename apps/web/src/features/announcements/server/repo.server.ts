@@ -133,12 +133,14 @@ export async function deleteAnnouncement(id: string): Promise<void> {
  * unread. A subquery keeps this to one D1 round-trip instead of two
  * (user lookup + count).
  *
- * If the userId doesn't exist, the COALESCE makes the marker `0`, so
- * every announcement counts as unread. That matches the prior contract
- * for never-seen-before users; the only behavior change is the missing-
- * user case (previously returned 0), which isn't reachable from caller
- * code today (only signed-in users hit this, and a missing row would
- * already have failed at the principal layer).
+ * COALESCE falls back to `-1` (not `0`) for the null marker / missing-
+ * user case so that a hypothetical `published_at = 0` row still
+ * satisfies the strict `>` comparison and counts as unread. The
+ * timestamp column stores `unixepoch() * 1000` and never legitimately
+ * lands on 0, but the `-1` sentinel keeps the "every announcement is
+ * unread" semantics literal regardless of stored values. The missing-
+ * user case isn't reachable from caller code today (only signed-in
+ * users hit this), but the sentinel makes the contract explicit.
  */
 export async function getUnreadCount(userId: string): Promise<number> {
   const db = getDb();
@@ -148,7 +150,7 @@ export async function getUnreadCount(userId: string): Promise<number> {
     .where(
       gt(
         schema.announcements.publishedAt,
-        sql`COALESCE((SELECT ${schema.users.lastReadAnnouncementsAt} FROM ${schema.users} WHERE ${schema.users.id} = ${userId}), 0)`,
+        sql`COALESCE((SELECT ${schema.users.lastReadAnnouncementsAt} FROM ${schema.users} WHERE ${schema.users.id} = ${userId}), -1)`,
       ),
     );
   return rows[0]?.value ?? 0;

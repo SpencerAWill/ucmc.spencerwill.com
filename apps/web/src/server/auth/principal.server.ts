@@ -43,10 +43,15 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
   // (`Promise.all` would still issue four separate calls).
   //
   // Free correctness bonus: `db.batch` runs the four reads in one
-  // D1 transaction, so they see a consistent point-in-time snapshot.
-  // `Promise.all` would let a concurrent write (e.g. an admin
-  // assigning a role) split rows between the userRoles and
-  // rolePermissions reads.
+  // D1 transaction, so users / profiles / user_emails / user_roles
+  // are all observed at a single point-in-time. `Promise.all` could
+  // otherwise see a row mid-write — e.g. an admin assigning a role
+  // could land between the users and user_roles reads. The downstream
+  // `rolePermissions` read happens *after* this batch (it depends on
+  // `roleIds` from the userRoles result), so it isn't covered by the
+  // snapshot — a role's permission grants could shift between this
+  // batch and that follow-up read. That window is small and
+  // permissions changes are rare, so we accept it.
   //
   // Primary first, then non-primary in insertion order, on the email
   // ordering at the DB layer keeps the resulting `emails` array
