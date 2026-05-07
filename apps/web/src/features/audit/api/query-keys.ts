@@ -1,9 +1,13 @@
 /**
- * TanStack Query keys for the audit-log viewer. Centralized so the
- * filter-aware key shape never drifts between the route's loader and
- * its `useQuery` call. Keys are reactive to every server-side filter:
- * action type, date range, and pagination — so flipping a filter
- * cache-misses cleanly instead of returning a stale page.
+ * TanStack Query keys for the audit-log viewer. The audit log is
+ * read-only with one caller today (the `/audit` route's `useQuery`),
+ * so this helper isn't aligning with an invalidator yet — it exists to
+ * keep the filter shape colocated with the key so any future caller
+ * (banner badge, prefetch on hover, write that needs to invalidate)
+ * can reuse the same construction without rederiving it. Keys are
+ * reactive to every server-side filter: action type, date range, and
+ * pagination — so flipping a filter cache-misses cleanly instead of
+ * returning a stale page.
  */
 import type { AuditAction } from "#/features/audit/server/audit-fns";
 
