@@ -31,6 +31,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@faker-js/faker": "^10.3.0",
+    "@fontsource/manrope": "^5.2.8",
     "@marsidev/react-turnstile": "^1.5.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",
