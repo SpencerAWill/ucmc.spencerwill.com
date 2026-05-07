@@ -24,7 +24,7 @@ import {
 import { cn } from "#/lib/utils";
 import { requirePermission } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { MEMBERS_REGISTRATIONS_QUERY_KEY } from "#/features/members/api/query-keys";
+import { MEMBERS_DIRECTORY_QUERY_KEY } from "#/features/members/api/query-keys";
 import {
   pendingRegistrationsQueryOptions,
   rejectedMembersQueryOptions,
@@ -120,7 +120,6 @@ function PendingView({ canManage }: { canManage: boolean }) {
   const { from, to, limit: searchLimit, page: searchPage } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const queryClient = useQueryClient();
 
   const perPage = searchLimit ?? 50;
   const page = searchPage ?? 1;
@@ -172,11 +171,13 @@ function PendingView({ canManage }: { canManage: boolean }) {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-  const invalidate = async () => {
+  // Bulk-mutation cache invalidation is owned by the hooks
+  // (useApproveRegistrations/useRejectRegistrations); the call-site
+  // callback only needs to clear the local selection. Calling
+  // invalidateQueries(MEMBERS_REGISTRATIONS_QUERY_KEY) here too would
+  // duplicate the work the hooks already did.
+  const onMutationSuccess = () => {
     setSelected(new Set());
-    await queryClient.invalidateQueries({
-      queryKey: MEMBERS_REGISTRATIONS_QUERY_KEY,
-    });
   };
 
   const bulkApprove = useApproveRegistrations();
@@ -295,7 +296,7 @@ function PendingView({ canManage }: { canManage: boolean }) {
                 disabled={isBulkPending || selected.size === 0}
                 onClick={() =>
                   bulkReject.mutate([...selected], {
-                    onSuccess: invalidate,
+                    onSuccess: onMutationSuccess,
                   })
                 }
               >
@@ -308,7 +309,7 @@ function PendingView({ canManage }: { canManage: boolean }) {
                 disabled={isBulkPending || selected.size === 0}
                 onClick={() =>
                   bulkApprove.mutate([...selected], {
-                    onSuccess: invalidate,
+                    onSuccess: onMutationSuccess,
                   })
                 }
               >
@@ -509,19 +510,16 @@ function RejectedView() {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-  const invalidate = async () => {
+  // useUnrejectMembers already invalidates MEMBERS_REGISTRATIONS_QUERY_KEY
+  // (which prefix-matches both the rejected list and the pending feed),
+  // so the call site only adds the directory invalidation — the
+  // unrejected user becomes visible there too, and that's the one cache
+  // the hook doesn't touch.
+  const onMutationSuccess = async () => {
     setSelected(new Set());
-    // Bare prefix invalidation: hits this rejected list AND the
-    // pending feed (both keyed under MEMBERS_REGISTRATIONS_QUERY_KEY)
-    // so an unreject reflects in both tabs without picking the page-
-    // specific key apart. The directory invalidation is separate
-    // because the unrejected user becomes visible there.
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: MEMBERS_REGISTRATIONS_QUERY_KEY,
-      }),
-      queryClient.invalidateQueries({ queryKey: ["members", "directory"] }),
-    ]);
+    await queryClient.invalidateQueries({
+      queryKey: MEMBERS_DIRECTORY_QUERY_KEY,
+    });
   };
 
   const bulkUnreject = useUnrejectMembers();
@@ -592,7 +590,9 @@ function RejectedView() {
               variant="outline"
               disabled={bulkUnreject.isPending || selected.size === 0}
               onClick={() =>
-                bulkUnreject.mutate([...selected], { onSuccess: invalidate })
+                bulkUnreject.mutate([...selected], {
+                  onSuccess: onMutationSuccess,
+                })
               }
             >
               <Undo2 className="mr-1 size-3.5" />
@@ -611,7 +611,7 @@ function RejectedView() {
                 isSelected={selected.has(member.userId)}
                 onToggle={() => toggle(member.userId)}
                 disabled={bulkUnreject.isPending}
-                onSuccess={invalidate}
+                onSuccess={onMutationSuccess}
               />
             ))}
           </ul>
