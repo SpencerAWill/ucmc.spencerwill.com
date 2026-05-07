@@ -37,36 +37,42 @@ export interface Principal {
 export async function loadPrincipal(userId: string): Promise<Principal | null> {
   const db = getDb();
 
-  const user = await db.query.users.findFirst({
-    where: eq(schema.users.id, userId),
-  });
+  // The user row, profile, email list, and role list all key on
+  // `userId` only — no dependency between them. Run them in parallel
+  // so the principal load is one D1 round-trip instead of four.
+  // Primary first, then non-primary in insertion order, on the email
+  // ordering at the DB layer keeps the resulting `emails` array
+  // stable across requests so consumers can rely on the shape. `id`
+  // is the final tiebreaker — `created_at` is millisecond-resolution
+  // and can collide on `db.batch`-inserted rows or fast back-to-back
+  // inserts; the PK gives a deterministic total order.
+  const [user, profile, emailRows, userRoleRows] = await Promise.all([
+    db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
+    db.query.profiles.findFirst({
+      where: eq(schema.profiles.userId, userId),
+      columns: { userId: true, avatarKey: true },
+    }),
+    db
+      .select({
+        email: schema.userEmails.email,
+        isPrimary: schema.userEmails.isPrimary,
+      })
+      .from(schema.userEmails)
+      .where(eq(schema.userEmails.userId, userId))
+      .orderBy(
+        desc(schema.userEmails.isPrimary),
+        asc(schema.userEmails.createdAt),
+        asc(schema.userEmails.id),
+      ),
+    db
+      .select({ roleId: schema.userRoles.roleId, name: schema.roles.name })
+      .from(schema.userRoles)
+      .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
+      .where(eq(schema.userRoles.userId, userId)),
+  ]);
   if (!user) {
     return null;
   }
-
-  const profile = await db.query.profiles.findFirst({
-    where: eq(schema.profiles.userId, userId),
-    columns: { userId: true, avatarKey: true },
-  });
-
-  // Primary first, then non-primary in insertion order. Ordering at
-  // the DB layer (rather than in JS) keeps the resulting `emails`
-  // array stable across requests so consumers can rely on the shape.
-  // `id` is the final tiebreaker — `created_at` is millisecond-
-  // resolution and can collide on `db.batch`-inserted rows or fast
-  // back-to-back inserts; the PK gives a deterministic total order.
-  const emailRows = await db
-    .select({
-      email: schema.userEmails.email,
-      isPrimary: schema.userEmails.isPrimary,
-    })
-    .from(schema.userEmails)
-    .where(eq(schema.userEmails.userId, userId))
-    .orderBy(
-      desc(schema.userEmails.isPrimary),
-      asc(schema.userEmails.createdAt),
-      asc(schema.userEmails.id),
-    );
 
   const primaryRow = emailRows[0]?.isPrimary ? emailRows[0] : undefined;
   if (!primaryRow) {
@@ -76,12 +82,6 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     throw new Error(`User ${userId} has no primary email row`);
   }
   const emails = emailRows.map((r) => r.email);
-
-  const userRoleRows = await db
-    .select({ roleId: schema.userRoles.roleId, name: schema.roles.name })
-    .from(schema.userRoles)
-    .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
-    .where(eq(schema.userRoles.userId, userId));
 
   const roleIds = userRoleRows.map((r) => r.roleId);
   const isSystemAdmin = userRoleRows.some((r) => r.name === "system_admin");
