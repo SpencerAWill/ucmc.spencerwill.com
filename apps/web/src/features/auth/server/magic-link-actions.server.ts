@@ -17,6 +17,7 @@ import {
   consumeMagicLink,
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
+import { UnauthorizedError } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import {
   clearProofCookie,
@@ -324,7 +325,7 @@ export async function exportMyDataAction(): Promise<{
 }> {
   const principal = await loadCurrentPrincipal();
   if (!principal) {
-    throw new Error("Not signed in");
+    throw new UnauthorizedError();
   }
 
   const db = getDb();

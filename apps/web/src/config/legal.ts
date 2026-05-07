@@ -259,7 +259,7 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
       "UC student/staff IDs (M-numbers). The Treasurer maintains the canonical roster — including IDs — on UC's official CampusLINK platform per Bylaw 1.3.",
       "Medical information, insurance information, and signed waivers. These exist only on the paper waiver, which lives off-platform with the Treasurer.",
       "Payment information. UCMC dues are collected off-platform.",
-      "Browser fingerprinting, third-party analytics, ad-tech identifiers, or any tracking beyond essential session cookies.",
+      "Third-party analytics, ad-tech identifiers, or any tracking beyond essential session cookies and the bot-screening signals collected by Cloudflare Turnstile on the magic-link form (see processors below).",
     ],
   },
   {
@@ -279,7 +279,8 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
       "The site runs on Cloudflare Workers; member data lives in Cloudflare's managed services in the United States. We do not sell, rent, or share member data with third parties beyond the technical processors listed below.",
     ],
     bullets: [
-      "Cloudflare — hosting, edge TLS, D1 (database), R2 (avatars), KV (short-lived auth state), Turnstile (anti-bot challenge on the magic-link form), rate limiting, observability logs (~7 day retention).",
+      "Cloudflare — hosting, edge TLS, D1 (database), R2 (avatars), KV (short-lived auth state), rate limiting, observability logs (~7 day retention).",
+      "Cloudflare Turnstile — anti-bot challenge on the magic-link form. Turnstile passively scores bot-likeness from request signals (user-agent, headers, behavioral cues) on that one page; the resulting token is sent to Cloudflare for verification and is not retained server-side.",
       "Resend — outbound email delivery (the magic-link emails). Recipient address and email body are sent to Resend; Resend does not retain message content beyond the sending window.",
     ],
   },

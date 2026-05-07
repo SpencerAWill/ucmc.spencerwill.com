@@ -9,6 +9,19 @@ import { asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "#/server/db";
 import { getKv } from "#/server/kv";
 
+/**
+ * Thrown by server actions and route handlers when the caller is not
+ * signed in. Routes should `instanceof`-check this and translate to a
+ * 401 — string-matching the message couples the route's correctness
+ * to specific error wording.
+ */
+export class UnauthorizedError extends Error {
+  constructor(message = "Not signed in") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
+
 export interface Principal {
   userId: string;
   /**

@@ -11,6 +11,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { sanitizeFilenameSegment } from "#/lib/sanitize-filename";
+import { UnauthorizedError } from "#/server/auth/principal.server";
 
 export const Route = createFileRoute("/api/account/export")({
   server: {
@@ -23,7 +24,7 @@ export const Route = createFileRoute("/api/account/export")({
         try {
           payload = await exportMyDataAction();
         } catch (err) {
-          if (err instanceof Error && err.message === "Not signed in") {
+          if (err instanceof UnauthorizedError) {
             return new Response("Unauthorized", { status: 401 });
           }
           throw err;
