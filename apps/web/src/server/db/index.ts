@@ -4,6 +4,22 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { env } from "#/server/cloudflare-env";
 import * as schema from "../../../drizzle/schema.ts";
 
+/**
+ * D1 driver semantics worth knowing when reading callers of this module.
+ *
+ * `drizzle-orm/d1`'s `db.batch([...])` collapses to one
+ * `D1Database#batch` HTTP request — `Promise.all([q1, q2, ...])` would
+ * issue N separate calls. The batched call also runs as a single
+ * SQLite transaction, so writes are atomic and reads observe a single
+ * point-in-time snapshot.
+ *
+ * Both properties are specific to the D1 driver and are NOT part of
+ * drizzle's cross-dialect contract. If this codebase ever swaps D1 for
+ * another backend (libSQL, Turso, raw SQLite, Postgres), the new
+ * `drizzle-orm/<driver>`'s `batch` implementation must be re-verified
+ * to preserve the one-request + atomic-tx contract before the existing
+ * call sites can be considered correct on the new backend.
+ */
 // Lazy singleton so the D1 binding is only touched when a server-fn handler
 // actually runs. Module-level evaluation stays pure — important because this
 // file can end up in the client bundle (TanStack Start's RPC compiler

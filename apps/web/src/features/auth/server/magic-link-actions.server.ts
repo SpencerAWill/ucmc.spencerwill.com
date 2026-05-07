@@ -330,55 +330,70 @@ export async function exportMyDataAction(): Promise<{
   const db = getDb();
   const userId = principal.userId;
 
-  const [user, emails, profile, emergencyContacts, userRoles, attestations] =
-    await Promise.all([
-      db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
-      db
-        .select({
-          email: schema.userEmails.email,
-          isPrimary: schema.userEmails.isPrimary,
-          verifiedAt: schema.userEmails.verifiedAt,
-          createdAt: schema.userEmails.createdAt,
-        })
-        .from(schema.userEmails)
-        .where(eq(schema.userEmails.userId, userId)),
-      db.query.profiles.findFirst({
-        where: eq(schema.profiles.userId, userId),
-      }),
-      db
-        .select({
-          name: schema.emergencyContacts.name,
-          phone: schema.emergencyContacts.phone,
-          relationship: schema.emergencyContacts.relationship,
-          createdAt: schema.emergencyContacts.createdAt,
-        })
-        .from(schema.emergencyContacts)
-        .where(eq(schema.emergencyContacts.userId, userId)),
-      db
-        .select({ roleId: schema.userRoles.roleId })
-        .from(schema.userRoles)
-        .where(eq(schema.userRoles.userId, userId)),
-      db
-        .select({
-          cycle: schema.waiverAttestations.cycle,
-          version: schema.waiverAttestations.version,
-          attestedAt: schema.waiverAttestations.attestedAt,
-          attestedBy: schema.waiverAttestations.attestedBy,
-          revokedAt: schema.waiverAttestations.revokedAt,
-          revokedBy: schema.waiverAttestations.revokedBy,
-          revocationReason: schema.waiverAttestations.revocationReason,
-          notes: schema.waiverAttestations.notes,
-        })
-        .from(schema.waiverAttestations)
-        .where(eq(schema.waiverAttestations.userId, userId)),
-    ]);
+  // The six reads all key on `userId` only — no dependency between
+  // them. Bundle them in a `db.batch` so they ride on a single D1
+  // HTTP request (`Promise.all` would still issue six separate
+  // calls) and observe a single point-in-time snapshot of the user's
+  // data. The export endpoint isn't on a hot path, but the
+  // consistency win (the bundle can't see a profile mid-write while
+  // missing the matching emergency-contact row) is free here.
+  const [
+    userRows,
+    emails,
+    profileRows,
+    emergencyContacts,
+    userRoles,
+    attestations,
+  ] = await db.batch([
+    db.select().from(schema.users).where(eq(schema.users.id, userId)).limit(1),
+    db
+      .select({
+        email: schema.userEmails.email,
+        isPrimary: schema.userEmails.isPrimary,
+        verifiedAt: schema.userEmails.verifiedAt,
+        createdAt: schema.userEmails.createdAt,
+      })
+      .from(schema.userEmails)
+      .where(eq(schema.userEmails.userId, userId)),
+    db
+      .select()
+      .from(schema.profiles)
+      .where(eq(schema.profiles.userId, userId))
+      .limit(1),
+    db
+      .select({
+        name: schema.emergencyContacts.name,
+        phone: schema.emergencyContacts.phone,
+        relationship: schema.emergencyContacts.relationship,
+        createdAt: schema.emergencyContacts.createdAt,
+      })
+      .from(schema.emergencyContacts)
+      .where(eq(schema.emergencyContacts.userId, userId)),
+    db
+      .select({ roleId: schema.userRoles.roleId })
+      .from(schema.userRoles)
+      .where(eq(schema.userRoles.userId, userId)),
+    db
+      .select({
+        cycle: schema.waiverAttestations.cycle,
+        version: schema.waiverAttestations.version,
+        attestedAt: schema.waiverAttestations.attestedAt,
+        attestedBy: schema.waiverAttestations.attestedBy,
+        revokedAt: schema.waiverAttestations.revokedAt,
+        revokedBy: schema.waiverAttestations.revokedBy,
+        revocationReason: schema.waiverAttestations.revocationReason,
+        notes: schema.waiverAttestations.notes,
+      })
+      .from(schema.waiverAttestations)
+      .where(eq(schema.waiverAttestations.userId, userId)),
+  ]);
 
   return {
     exportedAt: new Date().toISOString(),
     schemaVersion: 1,
-    user: user ?? null,
+    user: userRows[0] ?? null,
     emails,
-    profile: profile ?? null,
+    profile: profileRows[0] ?? null,
     emergencyContacts,
     roles: userRoles.map((r) => r.roleId),
     waiverAttestations: attestations,

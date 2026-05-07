@@ -1,3 +1,5 @@
+import type { FileRoutesByTo } from "../routeTree.gen";
+
 /**
  * Legal text + version constants. Single source of truth for:
  *   - The UC-mandated registration disclaimer (Rule 40-03-01) shown
@@ -446,7 +448,7 @@ export const MEMBERSHIP_BODY: readonly LegalSection[] = [
  * useful as a "what's the official line on X" landing pad.
  */
 export const LEGAL_INDEX_LINKS: readonly {
-  href: string;
+  href: keyof FileRoutesByTo;
   label: string;
   description: string;
 }[] = [
