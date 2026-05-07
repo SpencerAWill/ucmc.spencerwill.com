@@ -521,9 +521,21 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+export interface SubmitProfileResult {
+  ok: true;
+  /**
+   * The user's status AFTER the submit lands. Almost always `"pending"`
+   * (first-time registrant, or returning user without a profile), but
+   * the unclaimed-claim path flips straight to `"approved"`. The form
+   * uses this to pick the post-submit destination — pending users see
+   * `/register/pending`, approved users go to `/my/account`.
+   */
+  status: schema.UserStatus;
+}
+
 export async function submitProfileAction(
   data: RegistrationInput,
-): Promise<{ ok: true }> {
+): Promise<SubmitProfileResult> {
   const principal = await loadCurrentPrincipal();
   const proof = principal ? null : await readProofCookie();
 
@@ -644,6 +656,17 @@ export async function submitProfileAction(
   // `WHERE status = 'unclaimed'` guard makes the UPDATE safe against a
   // stale principal: if an officer concurrently deleted or reactivated
   // the row, no rows match and the UPDATE is a no-op.
+  //
+  // **`approvedBy` is intentionally left at NULL on this path.** The
+  // normal approval flow stamps `approvedBy = approver.userId`, but no
+  // officer is *currently* approving — the approval already happened
+  // (semantically) at officer pre-add time. Attribution lives in the
+  // audit log: `member.pre_added` (officer actor) → `member.claimed`
+  // (self actor) is the canonical chain. Any UI that displays an
+  // "Approved by X" line on a member must handle the `approvedBy IS
+  // NULL` case (treat as "auto-approved via pre-add claim"); the shape
+  // `status = 'approved' AND approved_at IS NOT NULL AND approved_by
+  // IS NULL` is unambiguous.
   const isClaimingFromUnclaimed =
     !!principal && principal.status === "unclaimed";
   if (isClaimingFromUnclaimed) {
@@ -691,7 +714,22 @@ export async function submitProfileAction(
     clearProofCookie();
   }
 
-  return { ok: true };
+  // Compute the post-submit status without an extra DB read: the only
+  // ways the user lands here are
+  //   - claim-from-unclaimed → "approved" (set above)
+  //   - new user             → "pending" (insert default)
+  //   - returning user, was not "approved" → reset to "pending"
+  //   - returning user, was "approved" → still "approved" (the WHERE
+  //     guard above keeps the revert from firing)
+  const status: schema.UserStatus = isClaimingFromUnclaimed
+    ? "approved"
+    : isNewUser
+      ? "pending"
+      : principal!.status === "approved"
+        ? "approved"
+        : "pending";
+
+  return { ok: true, status };
 }
 
 /**

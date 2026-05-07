@@ -83,6 +83,12 @@ export function PreAddUnclaimedSheet({
     null,
   );
   const [submitResult, setSubmitResult] = useState<PreAddResult | null>(null);
+  // Two distinct error slots so the message in each alert can be
+  // accurate to its cause: import errors come from CSV / clipboard
+  // parsing (file picker, paste), submit errors come from the
+  // `preAddUnclaimedFn` mutation. Using one slot would mean a clipboard
+  // failure displayed under the submit-error heading and vice-versa.
+  const [importError, setImportError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const csvInputId = useId();
@@ -100,6 +106,7 @@ export function PreAddUnclaimedSheet({
     setRows([makeRow()]);
     setImportSummary(null);
     setSubmitResult(null);
+    setImportError(null);
     setSubmitError(null);
   }
 
@@ -154,8 +161,15 @@ export function PreAddUnclaimedSheet({
   }
 
   async function handleFileImport(file: File) {
-    const result = await parseUnclaimedCsv(file);
-    applyParsed(result);
+    setImportError(null);
+    try {
+      const result = await parseUnclaimedCsv(file);
+      applyParsed(result);
+    } catch {
+      setImportError(
+        "Couldn't read that file. Make sure it's a CSV and try again.",
+      );
+    }
     // Allow re-importing the same file (browsers ignore unchanged value).
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -163,7 +177,7 @@ export function PreAddUnclaimedSheet({
   }
 
   async function handleClipboardImport() {
-    setSubmitError(null);
+    setImportError(null);
     try {
       // Most modern browsers gate `navigator.clipboard.readText()`
       // behind a permission prompt the first time per origin. The user
@@ -173,13 +187,13 @@ export function PreAddUnclaimedSheet({
       // without the experimental flag, etc.) with a clear message.
       const text = await navigator.clipboard.readText();
       if (text.trim().length === 0) {
-        setSubmitError("Clipboard is empty.");
+        setImportError("Clipboard is empty.");
         return;
       }
       const result = await parseUnclaimedCsv(text);
       applyParsed(result);
     } catch {
-      setSubmitError(
+      setImportError(
         "Couldn't read from clipboard. Copy your CSV again and try once more, or use the file picker.",
       );
     }
@@ -300,6 +314,11 @@ export function PreAddUnclaimedSheet({
                 ) : null}
               </div>
             ) : null}
+            {importError ? (
+              <p className="mt-2 text-xs text-destructive" role="alert">
+                {importError}
+              </p>
+            ) : null}
           </div>
 
           {/* Submit feedback */}
@@ -323,9 +342,7 @@ export function PreAddUnclaimedSheet({
                         {s.name} &lt;{s.email}&gt;:{" "}
                         {s.reason === "email_taken"
                           ? "email already in use"
-                          : s.reason === "duplicate_in_batch"
-                            ? "duplicate within this batch"
-                            : "invalid"}
+                          : "duplicate within this batch"}
                       </li>
                     ))}
                   </ul>

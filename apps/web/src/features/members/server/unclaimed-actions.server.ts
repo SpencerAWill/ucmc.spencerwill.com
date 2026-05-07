@@ -20,11 +20,12 @@
  * via a separate `members:preadd` permission if granular RBAC is
  * needed.
  */
-import { and, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, count, desc, eq, exists, gte, inArray, lte } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { requireApprover } from "#/features/members/server/member-actions.server";
 import {
+  buildBulkAuditEventStatement,
   recordAuditEvent,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
@@ -128,7 +129,7 @@ export interface PreAddEntry {
   email: string;
 }
 
-export type PreAddSkipReason = "email_taken" | "duplicate_in_batch" | "invalid";
+export type PreAddSkipReason = "email_taken" | "duplicate_in_batch";
 
 export interface PreAddCreated {
   userId: string;
@@ -166,45 +167,152 @@ export async function preAddUnclaimedMembersAction(args: {
   // submit would fail the second insert with a confusing error; pre-
   // catching it lets us return a clean per-row "duplicate_in_batch"
   // skip reason.
+  type OkEntry = { name: string; email: string };
   const seen = new Set<string>();
-  const normalized: Array<
-    | { kind: "ok"; name: string; email: string }
-    | { kind: "skip"; name: string; email: string; reason: PreAddSkipReason }
-  > = [];
+  const okEntries: OkEntry[] = [];
+  const skipped: PreAddSkipped[] = [];
   for (const entry of args.entries) {
     const name = entry.name.trim();
     const email = normalizeEmail(entry.email);
     if (seen.has(email)) {
-      normalized.push({
-        kind: "skip",
-        name,
-        email,
-        reason: "duplicate_in_batch",
-      });
+      skipped.push({ name, email, reason: "duplicate_in_batch" });
       continue;
     }
     seen.add(email);
-    normalized.push({ kind: "ok", name, email });
+    okEntries.push({ name, email });
   }
 
-  const created: PreAddCreated[] = [];
-  const skipped: PreAddSkipped[] = [];
-  for (const entry of normalized) {
-    if (entry.kind === "skip") {
+  if (okEntries.length === 0) {
+    return { created: [], skipped };
+  }
+
+  // Pre-check existing addresses in one SELECT so the common case turns
+  // into "1 read + 1 atomic batch insert" instead of N round-trips.
+  // The actual race-safety boundary is still the user_emails
+  // UNIQUE(email) constraint — we fall back to per-row inserts on the
+  // (rare) collision that slips between the pre-check and the bulk
+  // INSERT (concurrent officer pre-add).
+  const candidateEmails = okEntries.map((e) => e.email);
+  const taken = await db
+    .select({ email: schema.userEmails.email })
+    .from(schema.userEmails)
+    .where(inArray(schema.userEmails.email, candidateEmails));
+  const takenSet = new Set(taken.map((row) => row.email));
+
+  const toCreate: OkEntry[] = [];
+  for (const entry of okEntries) {
+    if (takenSet.has(entry.email)) {
       skipped.push({
-        email: entry.email,
         name: entry.name,
-        reason: entry.reason,
+        email: entry.email,
+        reason: "email_taken",
       });
+    } else {
+      toCreate.push(entry);
+    }
+  }
+
+  if (toCreate.length === 0) {
+    return { created: [], skipped };
+  }
+
+  // Generate IDs upfront so the audit row's targetUserId can land in
+  // the same batch as the user/user_emails inserts.
+  const now = new Date();
+  const created: PreAddCreated[] = toCreate.map((entry) => ({
+    userId: `user_${uuidv7()}`,
+    publicId: generateUserPublicId(),
+    name: entry.name,
+    email: entry.email,
+  }));
+
+  const userInserts = db.insert(schema.users).values(
+    created.map((row) => ({
+      id: row.userId,
+      publicId: row.publicId,
+      status: "unclaimed" as const,
+      placeholderName: row.name,
+      unclaimedAt: now,
+    })),
+  );
+  const emailInserts = db.insert(schema.userEmails).values(
+    created.map((row) => ({
+      id: `uem_${uuidv7()}`,
+      userId: row.userId,
+      email: row.email,
+      isPrimary: true,
+      verifiedAt: null,
+    })),
+  );
+  // Audit metadata captures both name and email — see the documented
+  // exception in `apps/web/drizzle/schema.ts` audit-log doc-comment.
+  // Bundling into the same `db.batch` makes the pre-add atomic with
+  // its audit row(s), so a failed batch can't strand a created user
+  // without an audit trail.
+  const auditInsert = buildBulkAuditEventStatement(
+    created.map((row) => ({
+      actorUserId: approver.userId,
+      action: "member.pre_added",
+      targetUserId: row.userId,
+      metadata: { email: row.email, placeholderName: row.name },
+    })),
+  );
+
+  try {
+    // `auditInsert` is non-null whenever `created.length > 0`, which is
+    // guaranteed at this point (we returned early above when toCreate
+    // was empty). The narrow keeps drizzle's batch tuple type happy.
+    if (!auditInsert) {
+      throw new Error("audit insert missing for non-empty created list");
+    }
+    await db.batch([userInserts, emailInserts, auditInsert]);
+    return { created, skipped };
+  } catch (err) {
+    if (!isUniqueViolation(err, "user_emails.email")) {
+      throw err;
+    }
+    // Concurrent pre-add slipped an email in between our SELECT and
+    // INSERT. Fall back to per-row inserts so we can pinpoint which
+    // address(es) collided and isolate them as `email_taken` skips
+    // without rolling back the rest. Rare path; the bulk INSERT covers
+    // the common case.
+    return preAddPerRowFallback(approver.userId, okEntries, skipped, db);
+  }
+}
+
+/**
+ * Per-row fallback when the bulk pre-add INSERT hit a UNIQUE-violation
+ * race. Inserts each row in its own atomic batch so a single collision
+ * only skips that row; other rows still land. Audit rows are emitted
+ * after the inserts in a single bulk statement.
+ *
+ * Pre-existing `skipped` from the bulk path's pre-check (within-batch
+ * duplicates + emails detected as taken in the SELECT) are passed
+ * through and merged with any further `email_taken` skips this fallback
+ * uncovers.
+ */
+async function preAddPerRowFallback(
+  approverUserId: string,
+  okEntries: Array<{ name: string; email: string }>,
+  preExistingSkipped: PreAddSkipped[],
+  db: ReturnType<typeof getDb>,
+): Promise<PreAddResult> {
+  const created: PreAddCreated[] = [];
+  const skipped: PreAddSkipped[] = [...preExistingSkipped];
+  const now = new Date();
+
+  for (const entry of okEntries) {
+    // Skip entries the bulk-path pre-check already classified as
+    // `email_taken` — they're already in `preExistingSkipped`.
+    if (skipped.some((s) => s.email === entry.email)) {
       continue;
     }
-    const newUserId = `user_${uuidv7()}`;
+    const userId = `user_${uuidv7()}`;
     const publicId = generateUserPublicId();
-    const now = new Date();
     try {
       await db.batch([
         db.insert(schema.users).values({
-          id: newUserId,
+          id: userId,
           publicId,
           status: "unclaimed",
           placeholderName: entry.name,
@@ -212,14 +320,14 @@ export async function preAddUnclaimedMembersAction(args: {
         }),
         db.insert(schema.userEmails).values({
           id: `uem_${uuidv7()}`,
-          userId: newUserId,
+          userId,
           email: entry.email,
           isPrimary: true,
           verifiedAt: null,
         }),
       ]);
       created.push({
-        userId: newUserId,
+        userId,
         publicId,
         name: entry.name,
         email: entry.email,
@@ -237,17 +345,19 @@ export async function preAddUnclaimedMembersAction(args: {
     }
   }
 
-  // One audit event per successfully created row. Metadata captures
-  // both name and email — see the documented exception in
-  // `apps/web/drizzle/schema.ts` audit-log doc-comment.
-  await recordAuditEvents(
+  // Audit per created row. Use a single bulk statement so the fallback
+  // doesn't multiply HTTP round-trips beyond what it had to do.
+  const auditStmt = buildBulkAuditEventStatement(
     created.map((row) => ({
-      actorUserId: approver.userId,
+      actorUserId: approverUserId,
       action: "member.pre_added",
       targetUserId: row.userId,
       metadata: { email: row.email, placeholderName: row.name },
     })),
   );
+  if (auditStmt) {
+    await auditStmt;
+  }
 
   return { created, skipped };
 }
@@ -274,33 +384,37 @@ export async function editUnclaimedMemberAction(args: {
   const newName = args.name.trim();
   const newEmail = normalizeEmail(args.email);
 
-  // Load current state — both for the not-found / wrong-status guards
-  // and for the audit metadata's `before` snapshot.
-  const userRow = await db
-    .select({
-      status: schema.users.status,
-      placeholderName: schema.users.placeholderName,
-    })
-    .from(schema.users)
-    .where(eq(schema.users.id, args.userId))
-    .get();
+  // Load both source rows in parallel — one round-trip-equivalent on D1
+  // and we only need a snapshot for the not-found / not-unclaimed guards
+  // and the audit metadata's `before` value. The actual race-safety
+  // boundary is the `status = 'unclaimed'` filter on each UPDATE below
+  // (and the UNIQUE(email) constraint for the email change).
+  const [userRow, emailRow] = await Promise.all([
+    db
+      .select({
+        status: schema.users.status,
+        placeholderName: schema.users.placeholderName,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, args.userId))
+      .get(),
+    db
+      .select({ id: schema.userEmails.id, email: schema.userEmails.email })
+      .from(schema.userEmails)
+      .where(
+        and(
+          eq(schema.userEmails.userId, args.userId),
+          eq(schema.userEmails.isPrimary, true),
+        ),
+      )
+      .get(),
+  ]);
   if (!userRow) {
     return { ok: false, error: { kind: "not_found" } };
   }
   if (userRow.status !== "unclaimed") {
     return { ok: false, error: { kind: "not_unclaimed" } };
   }
-
-  const emailRow = await db
-    .select({ id: schema.userEmails.id, email: schema.userEmails.email })
-    .from(schema.userEmails)
-    .where(
-      and(
-        eq(schema.userEmails.userId, args.userId),
-        eq(schema.userEmails.isPrimary, true),
-      ),
-    )
-    .get();
   if (!emailRow) {
     // No primary email row for an unclaimed user violates the invariant
     // — a pre-added row always has its primary inserted in the same
@@ -318,13 +432,27 @@ export async function editUnclaimedMemberAction(args: {
     return { ok: true };
   }
 
-  const stmts: Parameters<typeof db.batch>[0][number][] = [];
+  // Guard every UPDATE with `status = 'unclaimed'` so a concurrent claim
+  // (status flips to "approved" mid-flight via `submitProfileAction`)
+  // or a delete can't slip an edit through against a now-real user. The
+  // user UPDATE filters directly; the email UPDATE filters via an
+  // EXISTS subquery on `users` (we can't filter `user_emails` on its
+  // joined `users.status` without one).
+  type Stmt = ReturnType<
+    ReturnType<ReturnType<typeof db.update>["set"]>["where"]
+  >;
+  const stmts: Stmt[] = [];
   if (before.name !== newName) {
     stmts.push(
       db
         .update(schema.users)
         .set({ placeholderName: newName })
-        .where(eq(schema.users.id, args.userId)),
+        .where(
+          and(
+            eq(schema.users.id, args.userId),
+            eq(schema.users.status, "unclaimed"),
+          ),
+        ),
     );
   }
   if (before.email !== newEmail) {
@@ -332,17 +460,47 @@ export async function editUnclaimedMemberAction(args: {
       db
         .update(schema.userEmails)
         .set({ email: newEmail })
-        .where(eq(schema.userEmails.id, emailRow.id)),
+        .where(
+          and(
+            eq(schema.userEmails.id, emailRow.id),
+            exists(
+              db
+                .select({ one: schema.users.id })
+                .from(schema.users)
+                .where(
+                  and(
+                    eq(schema.users.id, args.userId),
+                    eq(schema.users.status, "unclaimed"),
+                  ),
+                ),
+            ),
+          ),
+        ),
     );
   }
 
   try {
-    await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+    await db.batch(stmts as [Stmt, ...Stmt[]]);
   } catch (err) {
     if (isUniqueViolation(err, "user_emails.email")) {
       return { ok: false, error: { kind: "email_taken" } };
     }
     throw err;
+  }
+
+  // Re-read the user's status to confirm the WHERE-guarded UPDATEs
+  // actually landed. If a concurrent claim/delete raced in, the UPDATEs
+  // were silent no-ops and we'd otherwise emit a misleading audit row.
+  const after = await db
+    .select({ status: schema.users.status })
+    .from(schema.users)
+    .where(eq(schema.users.id, args.userId))
+    .get();
+  if (!after) {
+    return { ok: false, error: { kind: "not_found" } };
+  }
+  if (after.status !== "unclaimed") {
+    return { ok: false, error: { kind: "not_unclaimed" } };
   }
 
   await recordAuditEvent({
