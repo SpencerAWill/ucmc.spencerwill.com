@@ -4,10 +4,6 @@
  * to every page render and server-fn response.
  *
  * Notes on the directives:
- *   - `Content-Security-Policy-Report-Only` is shipped first so the
- *     browser only logs violations (no breakage). After a few weeks of
- *     production traffic with zero violations, flip the header name to
- *     `Content-Security-Policy` to enforce.
  *   - The script/frame/connect entries for `https://challenges.cloudflare.com`
  *     are required for the Turnstile widget on the magic-link form.
  *   - `'unsafe-inline'` in script-src and style-src is required by
@@ -23,11 +19,9 @@ const CSP_VALUE = [
   "img-src 'self' data: https:",
   // `'unsafe-inline'` is required for React's hydration scripts and
   // for the Tailwind-emitted style tags. We deliberately do *not*
-  // include `'unsafe-eval'` — the production build doesn't need it,
-  // and report-only mode should mirror the eventual enforced policy
-  // as closely as possible to surface real issues. If a dev-only
-  // tooling chunk ever needs eval, we'll inject it via a dev-mode
-  // branch rather than weakening the production policy.
+  // include `'unsafe-eval'` — the production build doesn't need it.
+  // If a dev-only tooling chunk ever needs eval, inject it via a
+  // dev-mode branch rather than weakening the production policy.
   //
   // `https://challenges.cloudflare.com` covers the Turnstile widget.
   // `https://static.cloudflareinsights.com` covers Cloudflare's Web
@@ -51,7 +45,7 @@ const CSP_VALUE = [
  * tanstack/router#5407).
  */
 export const SECURITY_HEADERS: ReadonlyArray<readonly [string, string]> = [
-  ["Content-Security-Policy-Report-Only", CSP_VALUE],
+  ["Content-Security-Policy", CSP_VALUE],
   // Pin TLS for one year, include subdomains, and signal eligibility
   // for the HSTS preload list. Cloudflare also enforces HTTPS at the
   // edge, so this is belt-and-suspenders against MITM downgrades.

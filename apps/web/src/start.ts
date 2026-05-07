@@ -5,7 +5,7 @@
  * into every page render and server-fn response.
  *
  * The single global middleware here injects the sitewide security
- * response headers (CSP report-only, HSTS, X-Frame-Options, etc.).
+ * response headers (CSP, HSTS, X-Frame-Options, etc.).
  * Header values live in `#/server/headers.server` so they're version-
  * controlled and auditable independent of the middleware mechanics.
  */

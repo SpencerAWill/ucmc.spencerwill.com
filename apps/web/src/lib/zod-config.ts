@@ -9,7 +9,7 @@
  * `new Function()`, which trips our `script-src` CSP (no `'unsafe-eval'`)
  * on every parse. zod 4.4.3 also short-circuits the `allowsEval` probe
  * under `jitless`, so the feature-detect itself stays silent — letting
- * us flip CSP from report-only to enforce later without surprises.
+ * the CSP enforce mode stay clean without surprises.
  */
 import { z } from "zod";
 
