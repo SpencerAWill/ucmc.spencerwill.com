@@ -24,22 +24,19 @@ import {
 import { cn } from "#/lib/utils";
 import { requirePermission } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { MEMBERS_REGISTRATIONS_QUERY_KEY } from "#/features/members/api/query-keys";
+import { MEMBERS_DIRECTORY_QUERY_KEY } from "#/features/members/api/query-keys";
+import {
+  pendingRegistrationsQueryOptions,
+  rejectedMembersQueryOptions,
+} from "#/features/members/api/queries";
 import { useApproveRegistrations } from "#/features/members/api/use-approve-registrations";
 import { useRejectRegistrations } from "#/features/members/api/use-reject-registrations";
 import { useUnrejectMembers } from "#/features/members/api/use-unreject-members";
-import {
-  listMembersFn,
-  listPendingRegistrationsFn,
-} from "#/features/members/server/member-fns";
 import type {
   MemberSummary,
   PendingRegistration,
 } from "#/features/members/server/member-fns";
 
-// Local alias for the centralized base key so the paginated queryKey
-// composition below stays narrative.
-const REGISTRATIONS_QUERY_KEY = MEMBERS_REGISTRATIONS_QUERY_KEY;
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
 const registrationsSearchSchema = z.object({
@@ -123,12 +120,10 @@ function PendingView({ canManage }: { canManage: boolean }) {
   const { from, to, limit: searchLimit, page: searchPage } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const queryClient = useQueryClient();
 
   const perPage = searchLimit ?? 50;
   const page = searchPage ?? 1;
   const offset = (page - 1) * perPage;
-  const limitStr = String(perPage);
 
   const dateRange: DateRange | undefined =
     (from ?? to)
@@ -168,23 +163,21 @@ function PendingView({ canManage }: { canManage: boolean }) {
     });
   };
 
-  const queryKey = [...REGISTRATIONS_QUERY_KEY, from, to, limitStr, page];
-
-  const { data, isLoading } = useQuery({
-    queryKey,
-    queryFn: () =>
-      listPendingRegistrationsFn({
-        data: { from, to, limit: perPage, offset },
-      }),
-  });
+  const { data, isLoading } = useQuery(
+    pendingRegistrationsQueryOptions({ from, to, limit: perPage, offset }),
+  );
 
   const registrations = data?.rows ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-  const invalidate = async () => {
+  // Bulk-mutation cache invalidation is owned by the hooks
+  // (useApproveRegistrations/useRejectRegistrations); the call-site
+  // callback only needs to clear the local selection. Calling
+  // invalidateQueries(MEMBERS_REGISTRATIONS_QUERY_KEY) here too would
+  // duplicate the work the hooks already did.
+  const onMutationSuccess = () => {
     setSelected(new Set());
-    await queryClient.invalidateQueries({ queryKey: REGISTRATIONS_QUERY_KEY });
   };
 
   const bulkApprove = useApproveRegistrations();
@@ -303,7 +296,7 @@ function PendingView({ canManage }: { canManage: boolean }) {
                 disabled={isBulkPending || selected.size === 0}
                 onClick={() =>
                   bulkReject.mutate([...selected], {
-                    onSuccess: invalidate,
+                    onSuccess: onMutationSuccess,
                   })
                 }
               >
@@ -316,7 +309,7 @@ function PendingView({ canManage }: { canManage: boolean }) {
                 disabled={isBulkPending || selected.size === 0}
                 onClick={() =>
                   bulkApprove.mutate([...selected], {
-                    onSuccess: invalidate,
+                    onSuccess: onMutationSuccess,
                   })
                 }
               >
@@ -496,7 +489,6 @@ function RejectedView() {
   const perPage = searchLimit ?? 50;
   const page = searchPage ?? 1;
   const offset = (page - 1) * perPage;
-  const limitStr = String(perPage);
 
   const setLimit = (value: string) => {
     void navigate({
@@ -510,32 +502,24 @@ function RejectedView() {
     });
   };
 
-  const queryKey = ["members", "registrations", "rejected", limitStr, page];
-
-  const { data, isLoading } = useQuery({
-    queryKey,
-    queryFn: () =>
-      listMembersFn({
-        data: {
-          statuses: "rejected",
-          sort: "newest",
-          limit: perPage,
-          offset,
-        },
-      }),
-  });
+  const { data, isLoading } = useQuery(
+    rejectedMembersQueryOptions({ limit: perPage, offset }),
+  );
 
   const members = data?.rows ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-  const invalidate = async () => {
+  // useUnrejectMembers already invalidates MEMBERS_REGISTRATIONS_QUERY_KEY
+  // (which prefix-matches both the rejected list and the pending feed),
+  // so the call site only adds the directory invalidation — the
+  // unrejected user becomes visible there too, and that's the one cache
+  // the hook doesn't touch.
+  const onMutationSuccess = async () => {
     setSelected(new Set());
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey }),
-      queryClient.invalidateQueries({ queryKey: REGISTRATIONS_QUERY_KEY }),
-      queryClient.invalidateQueries({ queryKey: ["members", "directory"] }),
-    ]);
+    await queryClient.invalidateQueries({
+      queryKey: MEMBERS_DIRECTORY_QUERY_KEY,
+    });
   };
 
   const bulkUnreject = useUnrejectMembers();
@@ -606,7 +590,9 @@ function RejectedView() {
               variant="outline"
               disabled={bulkUnreject.isPending || selected.size === 0}
               onClick={() =>
-                bulkUnreject.mutate([...selected], { onSuccess: invalidate })
+                bulkUnreject.mutate([...selected], {
+                  onSuccess: onMutationSuccess,
+                })
               }
             >
               <Undo2 className="mr-1 size-3.5" />
@@ -625,7 +611,7 @@ function RejectedView() {
                 isSelected={selected.has(member.userId)}
                 onToggle={() => toggle(member.userId)}
                 disabled={bulkUnreject.isPending}
-                onSuccess={invalidate}
+                onSuccess={onMutationSuccess}
               />
             ))}
           </ul>
