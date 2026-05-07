@@ -11,18 +11,17 @@
  * requests link to victim's address; victim clicks while signed in as
  * themselves; address ends up on attacker's account" attack.
  *
- * Removal blocks the primary email. Combined with the partial-unique
- * "exactly one primary per user" invariant, that also blocks removing
- * the last remaining row — every user always has a primary, and the
- * primary is unremovable until another row is promoted via the
- * primary-swap path. Primary promotion is a `db.batch` swap
- * (clear-then-set) because SQLite enforces partial-unique indexes at
- * statement boundaries, not transaction boundaries.
+ * Removal blocks the primary email outright (`is_primary`) and refuses
+ * to leave the row count at zero (`is_last`, belt-and-suspenders
+ * against the partial-unique invariant ever breaking). Primary
+ * promotion is a `db.batch` swap (clear-then-set) because SQLite
+ * enforces partial-unique indexes at statement boundaries, not
+ * transaction boundaries.
  *
  * The shell in `./email-fns.ts` dynamic-imports each action so server-
  * only code never reaches the client bundle.
  */
-import { and, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
@@ -78,7 +77,12 @@ export type RemoveEmailResult =
   | { ok: true }
   | {
       ok: false;
-      reason: "unauthorized" | "not_approved" | "not_found" | "is_primary";
+      reason:
+        | "unauthorized"
+        | "not_approved"
+        | "not_found"
+        | "is_primary"
+        | "is_last";
     };
 
 export type SetPrimaryEmailResult =
@@ -95,6 +99,11 @@ export async function listMyEmailsAction(): Promise<ListMyEmailsResult> {
   if (!principal) {
     return { ok: false, reason: "unauthorized" };
   }
+  // Primary first, then by createdAt ascending, with `id` as the
+  // final tiebreaker so the order is stable even when two rows share
+  // the same millisecond `createdAt` (e.g. back-to-back inserts in a
+  // `db.batch`). Without the id tiebreaker, a refresh could reshuffle
+  // tied rows and the "Make primary"/"Remove" buttons would jump.
   const rows = await getDb()
     .select({
       id: schema.userEmails.id,
@@ -104,12 +113,12 @@ export async function listMyEmailsAction(): Promise<ListMyEmailsResult> {
       createdAt: schema.userEmails.createdAt,
     })
     .from(schema.userEmails)
-    .where(eq(schema.userEmails.userId, principal.userId));
-  // Primary first, then by createdAt ascending so the UI is stable.
-  rows.sort((a, b) => {
-    if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
-    return a.createdAt.getTime() - b.createdAt.getTime();
-  });
+    .where(eq(schema.userEmails.userId, principal.userId))
+    .orderBy(
+      desc(schema.userEmails.isPrimary),
+      asc(schema.userEmails.createdAt),
+      asc(schema.userEmails.id),
+    );
   return { ok: true, emails: rows };
 }
 
@@ -242,6 +251,22 @@ export async function removeEmailAction(args: {
     // the old primary. Allowing direct removal would leave the user
     // with no primary mid-transaction even with the safest ordering.
     return { ok: false, reason: "is_primary" };
+  }
+
+  // Belt-and-suspenders row-count guard. The partial-unique "exactly
+  // one primary per user" invariant means a non-primary row implies
+  // the user also has a primary (>=2 total) so this branch is
+  // unreachable under normal operation. But the invariant is enforced
+  // by the index, not by transaction-level state, so a future bug or
+  // manual SQL could reach a "no primary" state — without this check,
+  // `removeEmailAction` would happily delete the last row. Refuse and
+  // return `is_last` instead so the failure surfaces.
+  const [{ count: total } = { count: 0 }] = await db
+    .select({ count: count() })
+    .from(schema.userEmails)
+    .where(eq(schema.userEmails.userId, principal.userId));
+  if (total <= 1) {
+    return { ok: false, reason: "is_last" };
   }
 
   await db

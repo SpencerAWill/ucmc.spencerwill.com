@@ -52,6 +52,9 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
   // Primary first, then non-primary in insertion order. Ordering at
   // the DB layer (rather than in JS) keeps the resulting `emails`
   // array stable across requests so consumers can rely on the shape.
+  // `id` is the final tiebreaker — `created_at` is millisecond-
+  // resolution and can collide on `db.batch`-inserted rows or fast
+  // back-to-back inserts; the PK gives a deterministic total order.
   const emailRows = await db
     .select({
       email: schema.userEmails.email,
@@ -62,6 +65,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     .orderBy(
       desc(schema.userEmails.isPrimary),
       asc(schema.userEmails.createdAt),
+      asc(schema.userEmails.id),
     );
 
   const primaryRow = emailRows[0]?.isPrimary ? emailRows[0] : undefined;

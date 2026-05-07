@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as Resend from "#/server/email/resend";
+import { normalizeEmail } from "#/server/auth/email-normalize";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
@@ -148,21 +149,23 @@ describe("listMyEmailsAction", () => {
     const userId = await seedApprovedUser("primary@example.com");
     await signInAs(userId);
 
-    // Attach two more, both non-primary.
+    // Attach two more, both non-primary. Routed through `normalizeEmail`
+    // so direct test inserts match the canonical form the production
+    // code would write — same UNIQUE(email) collision behavior.
     await getDb()
       .insert(schema.userEmails)
       .values([
         {
           id: `uem_${crypto.randomUUID()}`,
           userId,
-          email: "second@example.com",
+          email: normalizeEmail("second@example.com"),
           isPrimary: false,
           verifiedAt: new Date(Date.now() - 1000),
         },
         {
           id: `uem_${crypto.randomUUID()}`,
           userId,
-          email: "third@example.com",
+          email: normalizeEmail("third@example.com"),
           isPrimary: false,
           verifiedAt: new Date(),
         },
@@ -390,17 +393,74 @@ describe("removeEmailAction", () => {
     expect(result).toEqual({ ok: false, reason: "is_primary" });
   });
 
+  it("refuses to delete the only remaining row even when is_primary=0 (is_last guard)", async () => {
+    // The partial-unique invariant prevents the "single non-primary
+    // row" state under normal flows, and `loadPrincipal` itself
+    // throws if no primary exists — so the action's row-count guard
+    // is unreachable through the public API. To exercise it directly
+    // (defense-in-depth coverage), mock the principal loader so the
+    // action sees a session for a user whose only row is non-primary.
+    const userId = `user_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.users)
+      .values({
+        id: userId,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        status: "approved",
+      });
+    const onlyRowId = `uem_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.userEmails)
+      .values({
+        id: onlyRowId,
+        userId,
+        email: normalizeEmail("solo@example.com"),
+        isPrimary: false,
+        verifiedAt: new Date(),
+      });
+
+    const sessionModule = await import("#/server/auth/session.server");
+    const spy = vi
+      .spyOn(sessionModule, "loadCurrentPrincipal")
+      .mockResolvedValue({
+        userId,
+        primaryEmail: "solo@example.com",
+        emails: ["solo@example.com"],
+        status: "approved",
+        hasProfile: false,
+        avatarKey: null,
+        roles: [],
+        permissions: [],
+        rolePermissionMap: {},
+      });
+
+    try {
+      const result = await removeEmailAction({ emailId: onlyRowId });
+      expect(result).toEqual({ ok: false, reason: "is_last" });
+
+      const remaining = await getDb()
+        .select()
+        .from(schema.userEmails)
+        .where(eq(schema.userEmails.userId, userId));
+      expect(remaining).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("removes a non-primary row and writes an audit entry", async () => {
     const userId = await seedApprovedUser("alice@example.com");
     await signInAs(userId);
     const secondaryId = `uem_${crypto.randomUUID()}`;
-    await getDb().insert(schema.userEmails).values({
-      id: secondaryId,
-      userId,
-      email: "second@example.com",
-      isPrimary: false,
-      verifiedAt: new Date(),
-    });
+    await getDb()
+      .insert(schema.userEmails)
+      .values({
+        id: secondaryId,
+        userId,
+        email: normalizeEmail("second@example.com"),
+        isPrimary: false,
+        verifiedAt: new Date(),
+      });
 
     const result = await removeEmailAction({ emailId: secondaryId });
     expect(result).toEqual({ ok: true });
@@ -452,13 +512,15 @@ describe("setPrimaryEmailAction", () => {
     const userId = await seedApprovedUser("alice@example.com");
     await signInAs(userId);
     const secondaryId = `uem_${crypto.randomUUID()}`;
-    await getDb().insert(schema.userEmails).values({
-      id: secondaryId,
-      userId,
-      email: "second@example.com",
-      isPrimary: false,
-      verifiedAt: new Date(),
-    });
+    await getDb()
+      .insert(schema.userEmails)
+      .values({
+        id: secondaryId,
+        userId,
+        email: normalizeEmail("second@example.com"),
+        isPrimary: false,
+        verifiedAt: new Date(),
+      });
 
     const result = await setPrimaryEmailAction({ emailId: secondaryId });
     expect(result).toEqual({ ok: true });
