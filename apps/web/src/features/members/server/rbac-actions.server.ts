@@ -89,17 +89,27 @@ export async function listRolesDetailedAction(): Promise<
   await requireRolesManager();
   const db = getDb();
 
-  const roles = await db.query.roles.findMany({
-    orderBy: (roles, { asc }) => [asc(roles.position), asc(roles.name)],
-  });
-
-  // Batch-fetch permission grants for all roles.
-  const permGrants = await db
-    .select({
-      roleId: schema.rolePermissions.roleId,
-      permissionId: schema.rolePermissions.permissionId,
-    })
-    .from(schema.rolePermissions);
+  // Roles, all role-permission grants, and the per-role member count
+  // are independent — `Promise.all` collapses three serial reads into
+  // one D1 round-trip.
+  const [roles, permGrants, memberCounts] = await Promise.all([
+    db.query.roles.findMany({
+      orderBy: (roles, { asc }) => [asc(roles.position), asc(roles.name)],
+    }),
+    db
+      .select({
+        roleId: schema.rolePermissions.roleId,
+        permissionId: schema.rolePermissions.permissionId,
+      })
+      .from(schema.rolePermissions),
+    db
+      .select({
+        roleId: schema.userRoles.roleId,
+        count: count(),
+      })
+      .from(schema.userRoles)
+      .groupBy(schema.userRoles.roleId),
+  ]);
 
   const permsByRole = new Map<string, string[]>();
   for (const g of permGrants) {
@@ -107,15 +117,6 @@ export async function listRolesDetailedAction(): Promise<
     list.push(g.permissionId);
     permsByRole.set(g.roleId, list);
   }
-
-  // Batch count members per role.
-  const memberCounts = await db
-    .select({
-      roleId: schema.userRoles.roleId,
-      count: count(),
-    })
-    .from(schema.userRoles)
-    .groupBy(schema.userRoles.roleId);
 
   const countByRole = new Map<string, number>();
   for (const mc of memberCounts) {
@@ -137,36 +138,38 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
   await requireRolesManager();
   const db = getDb();
 
-  const role = await db.query.roles.findFirst({
-    where: eq(schema.roles.id, roleId),
-  });
+  // Role row, permission grants, and member list all key on `roleId`
+  // alone. Run them under one `Promise.all`; we still validate role
+  // existence below before returning.
+  const [role, permGrants, memberRows] = await Promise.all([
+    db.query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    }),
+    db
+      .select({ permissionId: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, roleId)),
+    db
+      .select({
+        userId: schema.users.id,
+        email: schema.userEmails.email,
+        preferredName: schema.profiles.preferredName,
+      })
+      .from(schema.userRoles)
+      .innerJoin(schema.users, eq(schema.users.id, schema.userRoles.userId))
+      .innerJoin(
+        schema.userEmails,
+        and(
+          eq(schema.userEmails.userId, schema.users.id),
+          eq(schema.userEmails.isPrimary, true),
+        ),
+      )
+      .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+      .where(eq(schema.userRoles.roleId, roleId)),
+  ]);
   if (!role) {
     throw new Error("Role not found");
   }
-
-  const permGrants = await db
-    .select({ permissionId: schema.rolePermissions.permissionId })
-    .from(schema.rolePermissions)
-    .where(eq(schema.rolePermissions.roleId, roleId));
-
-  // Load members with this role (join through user_roles → users → profiles).
-  const memberRows = await db
-    .select({
-      userId: schema.users.id,
-      email: schema.userEmails.email,
-      preferredName: schema.profiles.preferredName,
-    })
-    .from(schema.userRoles)
-    .innerJoin(schema.users, eq(schema.users.id, schema.userRoles.userId))
-    .innerJoin(
-      schema.userEmails,
-      and(
-        eq(schema.userEmails.userId, schema.users.id),
-        eq(schema.userEmails.isPrimary, true),
-      ),
-    )
-    .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
-    .where(eq(schema.userRoles.roleId, roleId));
 
   return {
     id: role.id,
