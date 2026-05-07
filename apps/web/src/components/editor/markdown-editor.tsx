@@ -99,6 +99,9 @@ export function MarkdownEditor({
     () => [
       StarterKit.configure({
         heading: { levels: [...HEADING_LEVELS] },
+        // StarterKit v3 ships its own Link; disable it so our
+        // configured one (autolink + new-tab attrs) is the sole copy.
+        link: false,
       }),
       Link.configure({
         openOnClick: false,
