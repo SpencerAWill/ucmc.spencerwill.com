@@ -246,21 +246,29 @@ export async function removeEmailAction(args: {
   }
 
   const db = getDb();
-  // One read fetches both the target row and the count of all rows
-  // for this user. The belt-and-suspenders row-count guard documented
-  // below stays active without a second round-trip.
-  const userRows = await db
+  // One read fetches the target row plus the total count for the user
+  // via a correlated subquery. The result is bounded to one row even
+  // when the user has many addresses — `select all rows for user` was
+  // unbounded and could spike memory on a pathological email list.
+  const rows = await db
     .select({
       id: schema.userEmails.id,
       email: schema.userEmails.email,
       isPrimary: schema.userEmails.isPrimary,
+      totalForUser: sql<number>`(SELECT COUNT(*) FROM ${schema.userEmails} WHERE ${schema.userEmails.userId} = ${principal.userId})`,
     })
     .from(schema.userEmails)
-    .where(eq(schema.userEmails.userId, principal.userId));
-  const row = userRows.find((r) => r.id === args.emailId);
-  if (!row) {
+    .where(
+      and(
+        eq(schema.userEmails.id, args.emailId),
+        eq(schema.userEmails.userId, principal.userId),
+      ),
+    )
+    .limit(1);
+  if (rows.length === 0) {
     return { ok: false, reason: "not_found" };
   }
+  const row = rows[0];
   if (row.isPrimary) {
     // Two-step UX: promote another row to primary first, then remove
     // the old primary. Allowing direct removal would leave the user
@@ -283,7 +291,7 @@ export async function removeEmailAction(args: {
   // first place; the action-level guard is purely defense-in-depth
   // for direct API callers (tests, future scripts) and the invariant-
   // breaking edge case described above.
-  if (userRows.length <= 1) {
+  if (row.totalForUser <= 1) {
     return { ok: false, reason: "is_last" };
   }
 
