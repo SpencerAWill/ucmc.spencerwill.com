@@ -115,10 +115,20 @@ async function sendViaMailpit(message: EmailMessage): Promise<void> {
 export function magicLinkEmail(args: {
   to: string;
   url: string;
-  intent: "register" | "login";
+  intent: "register" | "login" | "add_email";
 }): EmailMessage {
-  const action = args.intent === "register" ? "finish registering" : "sign in";
-  const subjectVerb = args.intent === "register" ? "registration" : "sign-in";
+  const action =
+    args.intent === "register"
+      ? "finish registering"
+      : args.intent === "login"
+        ? "sign in"
+        : "verify this email";
+  const subjectVerb =
+    args.intent === "register"
+      ? "registration"
+      : args.intent === "login"
+        ? "sign-in"
+        : "email-verification";
   return {
     to: args.to,
     subject: `Your UCMC ${subjectVerb} link`,

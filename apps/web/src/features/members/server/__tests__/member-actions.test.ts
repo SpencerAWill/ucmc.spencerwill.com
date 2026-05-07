@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -48,9 +49,9 @@ async function seedUser(
   await db.insert(schema.users).values({
     id,
     publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-    email,
     status: opts?.status ?? "approved",
   });
+  await attachPrimaryEmail(id, email);
   if (opts?.withProfile !== false) {
     await db.insert(schema.profiles).values({
       userId: id,
@@ -635,9 +636,9 @@ describe("listMembersAction status filtering", () => {
     await seedUser("deactivated@example.com", { status: "deactivated" });
     await seedUser("approved@example.com");
     await assignRole(
-      (await getDb().query.users.findFirst({
-        where: eq(schema.users.email, "approved@example.com"),
-      }))!.id,
+      (await getDb().query.userEmails.findFirst({
+        where: eq(schema.userEmails.email, "approved@example.com"),
+      }))!.userId,
       "role_member",
     );
 
@@ -723,7 +724,7 @@ describe("loadCurrentPrincipal deactivated check", () => {
     // Verify session works initially.
     const before = await loadCurrentPrincipal();
     expect(before).not.toBeNull();
-    expect(before!.email).toBe("target@example.com");
+    expect(before!.primaryEmail).toBe("target@example.com");
 
     // Deactivate the user directly in the database.
     await getDb()

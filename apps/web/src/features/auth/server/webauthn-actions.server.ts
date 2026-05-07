@@ -65,7 +65,7 @@ export async function webauthnRegisterBeginAction(): Promise<RegisterBeginResult
 
   const existing = await listCredentialsForUser(principal.userId);
   const options = await buildRegistrationOptions(
-    { id: principal.userId, email: principal.email },
+    { id: principal.userId, email: principal.primaryEmail },
     existing.map((c) => c.credentialId),
   );
 

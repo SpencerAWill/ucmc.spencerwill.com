@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import { getBucket } from "#/server/r2";
 import {
   runRetentionSweeps,
@@ -30,11 +31,11 @@ async function seedUser(opts: {
     .values({
       id,
       publicId: id,
-      email: `${id}@example.com`,
       status: opts.status,
       rejectedAt: opts.rejectedAt ?? null,
       deactivatedAt: opts.deactivatedAt ?? null,
     });
+  await attachPrimaryEmail(id, `${id}@example.com`);
   return id;
 }
 

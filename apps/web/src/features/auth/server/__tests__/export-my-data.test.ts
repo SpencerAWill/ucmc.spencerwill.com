@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -33,10 +34,10 @@ async function seedUser(email: string): Promise<string> {
   await db.insert(schema.users).values({
     id,
     publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-    email,
     status: "approved",
     approvedAt: new Date(),
   });
+  await attachPrimaryEmail(id, email);
   await db.insert(schema.profiles).values({
     userId: id,
     fullName: "Test User",
@@ -91,8 +92,10 @@ describe("exportMyDataAction", () => {
 
     const payload = await exportMyDataAction();
 
-    expect(payload.user?.email).toBe("export@example.com");
     expect(payload.user?.id).toBe(userId);
+    expect(payload.emails).toHaveLength(1);
+    expect(payload.emails[0]?.email).toBe("export@example.com");
+    expect(payload.emails[0]?.isPrimary).toBe(true);
     expect(payload.profile?.preferredName).toBe("Test");
     expect(payload.emergencyContacts).toHaveLength(1);
     expect(payload.emergencyContacts[0]?.name).toBe("Bob");
@@ -190,7 +193,8 @@ describe("exportMyDataAction", () => {
     const payload = await exportMyDataAction();
 
     expect(payload.user?.id).toBe(meId);
-    expect(payload.user?.email).toBe("me@example.com");
+    expect(payload.emails).toHaveLength(1);
+    expect(payload.emails[0]?.email).toBe("me@example.com");
     expect(payload.emergencyContacts).toHaveLength(0);
     expect(JSON.stringify(payload)).not.toContain("Other's Mom");
   });

@@ -84,8 +84,10 @@ export async function listAuditEventsAction(input: {
 
   const db = getDb();
   const actorUsers = aliasedTable(schema.users, "actor_users");
+  const actorEmails = aliasedTable(schema.userEmails, "actor_emails");
   const actorProfiles = aliasedTable(schema.profiles, "actor_profiles");
   const targetUsers = aliasedTable(schema.users, "target_users");
+  const targetEmails = aliasedTable(schema.userEmails, "target_emails");
   const targetProfiles = aliasedTable(schema.profiles, "target_profiles");
 
   const filters = [
@@ -114,11 +116,11 @@ export async function listAuditEventsAction(input: {
         createdAt: schema.auditLog.createdAt,
         actorUserId: schema.auditLog.actorUserId,
         actorPublicId: actorUsers.publicId,
-        actorEmail: actorUsers.email,
+        actorEmail: actorEmails.email,
         actorPreferredName: actorProfiles.preferredName,
         targetUserId: schema.auditLog.targetUserId,
         targetPublicId: targetUsers.publicId,
-        targetEmail: targetUsers.email,
+        targetEmail: targetEmails.email,
         targetPreferredName: targetProfiles.preferredName,
         targetType: schema.auditLog.targetType,
         targetId: schema.auditLog.targetId,
@@ -126,8 +128,22 @@ export async function listAuditEventsAction(input: {
       })
       .from(schema.auditLog)
       .leftJoin(actorUsers, eq(actorUsers.id, schema.auditLog.actorUserId))
+      .leftJoin(
+        actorEmails,
+        and(
+          eq(actorEmails.userId, schema.auditLog.actorUserId),
+          eq(actorEmails.isPrimary, true),
+        ),
+      )
       .leftJoin(actorProfiles, eq(actorProfiles.userId, actorUsers.id))
       .leftJoin(targetUsers, eq(targetUsers.id, schema.auditLog.targetUserId))
+      .leftJoin(
+        targetEmails,
+        and(
+          eq(targetEmails.userId, schema.auditLog.targetUserId),
+          eq(targetEmails.isPrimary, true),
+        ),
+      )
       .leftJoin(targetProfiles, eq(targetProfiles.userId, targetUsers.id))
       .where(whereClause)
       // Tiebreak on `id` so pagination stays stable across requests

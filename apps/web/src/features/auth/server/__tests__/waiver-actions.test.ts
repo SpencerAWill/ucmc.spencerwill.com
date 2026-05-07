@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WAIVER_VERSION } from "#/config/legal";
 import { currentWaiverCycle } from "#/config/waiver-cycle";
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -45,13 +46,13 @@ async function seedUser(
   await db.insert(schema.users).values({
     id,
     publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-    email,
     status: opts?.status ?? "approved",
     approvedAt:
       opts?.status === "approved" || opts?.status === undefined
         ? new Date()
         : null,
   });
+  await attachPrimaryEmail(id, email);
   await db.insert(schema.profiles).values({
     userId: id,
     fullName: "Test User",

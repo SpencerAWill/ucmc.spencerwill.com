@@ -157,5 +157,5 @@ export async function requireRegistrationContext(
   if (principal.hasProfile) {
     throw redirect({ to: "/my/account" });
   }
-  return { source: "session", email: principal.email };
+  return { source: "session", email: principal.primaryEmail };
 }

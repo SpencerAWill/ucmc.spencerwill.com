@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // Cookie and request-header helpers from @tanstack/react-start/server
 // normally need an active H3 event context (the SSR runtime sets one up
@@ -85,9 +86,9 @@ async function seedUser(args: {
     .values({
       id,
       publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-      email: args.email,
       status: args.status ?? "pending",
     });
+  await attachPrimaryEmail(id, args.email);
   if (args.withProfile) {
     await getDb().insert(schema.profiles).values({
       userId: id,

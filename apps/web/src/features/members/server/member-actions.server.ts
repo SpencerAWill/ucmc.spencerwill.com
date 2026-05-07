@@ -110,13 +110,20 @@ export async function listPendingRegistrationsAction(opts: {
     db
       .select({
         userId: schema.users.id,
-        email: schema.users.email,
+        email: schema.userEmails.email,
         createdAt: schema.users.createdAt,
         fullName: schema.profiles.fullName,
         preferredName: schema.profiles.preferredName,
         ucAffiliation: schema.profiles.ucAffiliation,
       })
       .from(schema.users)
+      .innerJoin(
+        schema.userEmails,
+        and(
+          eq(schema.userEmails.userId, schema.users.id),
+          eq(schema.userEmails.isPrimary, true),
+        ),
+      )
       .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
       .where(where)
       .orderBy(schema.users.createdAt)
@@ -233,7 +240,7 @@ export async function listMembersAction(opts: {
   const selectFields = {
     userId: schema.users.id,
     publicId: schema.users.publicId,
-    email: schema.users.email,
+    email: schema.userEmails.email,
     status: schema.users.status,
     fullName: schema.profiles.fullName,
     preferredName: schema.profiles.preferredName,
@@ -251,6 +258,13 @@ export async function listMembersAction(opts: {
     db
       .select(selectFields)
       .from(schema.users)
+      .innerJoin(
+        schema.userEmails,
+        and(
+          eq(schema.userEmails.userId, schema.users.id),
+          eq(schema.userEmails.isPrimary, true),
+        ),
+      )
       .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
       .where(where)
       .orderBy(orderBy)
@@ -365,7 +379,7 @@ export async function getMemberDetailAction(
     .select({
       userId: schema.users.id,
       publicId: schema.users.publicId,
-      email: schema.users.email,
+      email: schema.userEmails.email,
       status: schema.users.status,
       createdAt: schema.users.createdAt,
       approvedAt: schema.users.approvedAt,
@@ -378,6 +392,13 @@ export async function getMemberDetailAction(
       phone: schema.profiles.phone,
     })
     .from(schema.users)
+    .innerJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.users.id),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
     .where(eq(schema.users.publicId, publicId))
     .get();

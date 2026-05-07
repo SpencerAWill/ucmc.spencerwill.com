@@ -10,6 +10,8 @@ export const PROFILE_QUERY_KEY = ["account", "profile"] as const;
 
 export const PASSKEY_LIST_QUERY_KEY = ["account", "passkeys"] as const;
 
+export const MY_EMAILS_QUERY_KEY = ["account", "emails"] as const;
+
 // Waiver attestation — the member's own status + history land under
 // "account", the officer queue under "members" so the cache trees mirror
 // the route trees that consume them.

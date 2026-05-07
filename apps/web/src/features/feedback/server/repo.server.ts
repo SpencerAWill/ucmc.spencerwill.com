@@ -3,7 +3,7 @@
  * layer is responsible for authorization. Joins users + profiles to project
  * the submitter's display name and avatar key alongside each row.
  */
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import type {
@@ -45,7 +45,7 @@ const baseSelect = {
   githubIssueUrl: schema.feedback.githubIssueUrl,
   createdAt: schema.feedback.createdAt,
   updatedAt: schema.feedback.updatedAt,
-  authorEmail: schema.users.email,
+  authorEmail: schema.userEmails.email,
   authorFullName: schema.profiles.fullName,
   authorPreferredName: schema.profiles.preferredName,
   authorAvatarKey: schema.profiles.avatarKey,
@@ -57,6 +57,13 @@ export async function listAllFeedback(): Promise<FeedbackRow[]> {
     .select(baseSelect)
     .from(schema.feedback)
     .leftJoin(schema.users, eq(schema.users.id, schema.feedback.createdBy))
+    .leftJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.feedback.createdBy),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(
       schema.profiles,
       eq(schema.profiles.userId, schema.feedback.createdBy),
@@ -72,6 +79,13 @@ export async function listFeedbackByUser(
     .select(baseSelect)
     .from(schema.feedback)
     .leftJoin(schema.users, eq(schema.users.id, schema.feedback.createdBy))
+    .leftJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.feedback.createdBy),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .leftJoin(
       schema.profiles,
       eq(schema.profiles.userId, schema.feedback.createdBy),

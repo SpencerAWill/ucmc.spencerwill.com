@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
+import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // Cookie helpers need an active H3 event context — stub them out since
 // loadPrincipal doesn't touch cookies directly but some transitive
@@ -31,9 +32,9 @@ async function seedUser(email: string): Promise<string> {
     .values({
       id,
       publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-      email,
       status: "approved",
     });
+  await attachPrimaryEmail(id, email);
   await getDb().insert(schema.profiles).values({
     userId: id,
     fullName: "Test User",
@@ -92,7 +93,8 @@ describe("loadPrincipal", () => {
     const principal = await loadPrincipal(userId);
 
     expect(principal).not.toBeNull();
-    expect(principal!.email).toBe("member@example.com");
+    expect(principal!.primaryEmail).toBe("member@example.com");
+    expect(principal!.emails).toEqual(["member@example.com"]);
     expect(principal!.roles).toEqual(["member"]);
     expect(principal!.permissions).toEqual([]);
     expect(principal!.hasProfile).toBe(true);

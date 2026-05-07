@@ -14,6 +14,7 @@
  */
 import { and, eq, isNull } from "drizzle-orm";
 
+import { normalizeEmail } from "#/server/auth/email-normalize";
 import { getDb, schema } from "#/server/db";
 import { magicLinkEmail, sendEmail } from "#/server/email/resend";
 
@@ -24,6 +25,11 @@ export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15; // 15 minutes
 export interface MagicLinkProof {
   email: string;
   intent: schema.MagicLinkIntent;
+  // Only populated for `intent = "add_email"`. The consume caller
+  // asserts `session.userId === targetUserId` before attaching the
+  // email to the user; cross-account or logged-out clicks are
+  // refused.
+  targetUserId: string | null;
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
@@ -46,44 +52,71 @@ function generateToken(): string {
   return bytesToBase64Url(bytes);
 }
 
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
+/**
+ * Discriminated arg shape so the type system enforces "add_email
+ * requires targetUserId" and "register/login don't carry one."
+ * Without this split, an `add_email` caller that forgot the targetUserId
+ * would silently insert a link whose consume can never satisfy the
+ * cross-account guard.
+ *
+ * `redirect` is the optional post-sign-in destination round-tripped
+ * through the email URL. Caller validates leading-"/"; server-fns.ts's
+ * zod refinement is the canonical gatekeeper, and /auth/callback
+ * re-validates before navigating.
+ */
+export type RequestMagicLinkArgs =
+  | {
+      intent: "register" | "login";
+      email: string;
+      redirect?: string;
+    }
+  | {
+      intent: "add_email";
+      email: string;
+      targetUserId: string;
+    };
 
 /**
  * Issue a magic link and send it by email. Always resolves successfully
  * from the caller's perspective (even for unknown emails) to avoid
  * leaking which addresses are registered — timing jitter is added in the
  * Phase 10 hardening pass.
+ *
+ * For `intent = "add_email"`, the link URL points at `/verify-email`
+ * instead of `/auth/callback`, and the consume handler asserts
+ * `session.userId === targetUserId` before attaching.
  */
-export async function requestMagicLink(args: {
-  email: string;
-  intent: schema.MagicLinkIntent;
-  // Optional post-sign-in destination round-tripped through the email
-  // URL. Caller is expected to have already validated this starts with
-  // "/" — server-fns.ts's zod refinement is the canonical gatekeeper.
-  // /auth/callback re-validates `startsWith("/")` before navigating.
-  redirect?: string;
-}): Promise<void> {
+export async function requestMagicLink(
+  args: RequestMagicLinkArgs,
+): Promise<void> {
   const email = normalizeEmail(args.email);
   const token = generateToken();
   const tokenHash = await hashToken(token);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + MAGIC_LINK_TTL_MS);
 
-  await getDb().insert(schema.magicLinks).values({
-    tokenHash,
-    email,
-    intent: args.intent,
-    createdAt: now,
-    expiresAt,
-  });
+  await getDb()
+    .insert(schema.magicLinks)
+    .values({
+      tokenHash,
+      email,
+      intent: args.intent,
+      targetUserId: args.intent === "add_email" ? args.targetUserId : null,
+      createdAt: now,
+      expiresAt,
+    });
 
   const params = new URLSearchParams({ token });
-  if (args.redirect && args.redirect.startsWith("/")) {
+  if (
+    args.intent !== "add_email" &&
+    args.redirect &&
+    args.redirect.startsWith("/")
+  ) {
     params.set("redirect", args.redirect);
   }
-  const url = `${env.APP_BASE_URL}/auth/callback?${params.toString()}`;
+  const callbackPath =
+    args.intent === "add_email" ? "/verify-email" : "/auth/callback";
+  const url = `${env.APP_BASE_URL}${callbackPath}?${params.toString()}`;
   await sendEmail(magicLinkEmail({ to: email, url, intent: args.intent }));
 }
 
@@ -117,5 +150,9 @@ export async function consumeMagicLink(
   if (row.expiresAt.getTime() <= Date.now()) {
     return null;
   }
-  return { email: row.email, intent: row.intent };
+  return {
+    email: row.email,
+    intent: row.intent,
+    targetUserId: row.targetUserId,
+  };
 }

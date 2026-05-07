@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WaiverRouteImport } from './routes/waiver'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SignInRouteImport } from './routes/sign-in'
@@ -51,6 +52,11 @@ import { Route as ApiAccountExportRouteImport } from './routes/api/account.expor
 const WaiverRoute = WaiverRouteImport.update({
   id: '/waiver',
   path: '/waiver',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -257,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -296,6 +303,7 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -336,6 +344,7 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -378,6 +387,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sitemap.xml'
     | '/terms'
+    | '/verify-email'
     | '/waiver'
     | '/auth/callback'
     | '/members/$publicId'
@@ -417,6 +427,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sitemap.xml'
     | '/terms'
+    | '/verify-email'
     | '/waiver'
     | '/auth/callback'
     | '/members/$publicId'
@@ -456,6 +467,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sitemap.xml'
     | '/terms'
+    | '/verify-email'
     | '/waiver'
     | '/auth/callback'
     | '/members/$publicId'
@@ -497,6 +509,7 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
   WaiverRoute: typeof WaiverRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
@@ -515,6 +528,13 @@ declare module '@tanstack/react-router' {
       path: '/waiver'
       fullPath: '/waiver'
       preLoaderRoute: typeof WaiverRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -848,6 +868,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   WaiverRoute: WaiverRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   RegisterPendingRoute: RegisterPendingRoute,

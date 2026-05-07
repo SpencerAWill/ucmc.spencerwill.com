@@ -6,10 +6,12 @@ import { EmergencyContactFields } from "#/components/profile/emergency-contact-f
 import { PrivateDetailFields } from "#/components/profile/private-detail-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
-import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
-import { profileQueryOptions } from "#/features/auth/api/queries";
+import {
+  myEmailsQueryOptions,
+  profileQueryOptions,
+} from "#/features/auth/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { EmailAddressesSection } from "#/features/auth/components/email-addresses-section";
 import { useSubmitDetails } from "#/features/auth/api/use-submit-details";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
@@ -23,6 +25,12 @@ import type { DetailsInput } from "#/server/profile/profile-schemas";
  * admins ever see these values.
  */
 export const Route = createFileRoute("/my/account/details")({
+  loader: async ({ context }) => {
+    // Pre-warm the email-addresses list so the section paints with
+    // data on first render. Other tabs in this layout follow the same
+    // ensureQueryData pattern.
+    await context.queryClient.ensureQueryData(myEmailsQueryOptions());
+  },
   component: AccountDetailsPage,
 });
 
@@ -44,22 +52,10 @@ function AccountDetailsPage() {
         </p>
       </header>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="details-email" className="text-sm font-medium">
-          Email
-        </Label>
-        <Input
-          id="details-email"
-          type="email"
-          value={principal.email}
-          readOnly
-          aria-describedby="details-email-hint"
-          className="bg-muted/40"
-        />
-        <p id="details-email-hint" className="text-xs text-muted-foreground">
-          To change your email, sign out and re-register with the new address.
-        </p>
-      </div>
+      <EmailAddressesSection
+        approved={principal.status === "approved"}
+        primaryEmail={principal.primaryEmail}
+      />
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>

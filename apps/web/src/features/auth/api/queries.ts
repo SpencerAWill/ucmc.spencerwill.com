@@ -1,8 +1,10 @@
 import {
+  MY_EMAILS_QUERY_KEY,
   PASSKEY_LIST_QUERY_KEY,
   PROFILE_QUERY_KEY,
   SESSION_QUERY_KEY,
 } from "#/features/auth/api/query-keys";
+import { listMyEmailsFn } from "#/features/auth/server/email-fns";
 import { getProfileFn, getSessionFn } from "#/features/auth/server/server-fns";
 import { listPasskeysFn } from "#/features/auth/server/webauthn-fns";
 
@@ -45,6 +47,22 @@ export function passkeyListQueryOptions() {
     queryFn: async () => {
       const result = await listPasskeysFn();
       return result.ok ? result.passkeys : [];
+    },
+  } as const;
+}
+
+/**
+ * Verified email addresses attached to the signed-in user. Server
+ * returns `{ ok: true, emails }` on success or `{ ok: false }` when
+ * there's no session; we collapse to `[]` so the consuming list always
+ * has a stable shape.
+ */
+export function myEmailsQueryOptions() {
+  return {
+    queryKey: MY_EMAILS_QUERY_KEY,
+    queryFn: async () => {
+      const result = await listMyEmailsFn();
+      return result.ok ? result.emails : [];
     },
   } as const;
 }
