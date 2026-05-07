@@ -101,11 +101,16 @@ export default [
             //    features/auth's public API (use-auth, view-mode,
             //    guards) is exempted because it's the foundational
             //    "who is the user" surface every feature needs.
-            //    features/waivers' public API (api/queries.ts +
-            //    server/waiver-fns.ts shell for type imports) is
+            //    features/waivers' public API (api/queries.ts) is
             //    exempted only for features/auth, because the
             //    `requireCurrentWaiver` route guard composes auth +
             //    waiver state and lives in features/auth/guards.ts.
+            //    The server-fn shell is intentionally NOT on the
+            //    allowlist: `import/no-restricted-paths` can't tell
+            //    `import type` from value imports, so allowlisting it
+            //    would silently permit value-imports of runtime
+            //    exports. Types ride along through api/queries.ts
+            //    re-exports instead.
             {
               target: "./src/features/announcements",
               from: "./src/features/auth",
@@ -134,7 +139,7 @@ export default [
             {
               target: "./src/features/auth",
               from: "./src/features/waivers",
-              except: ["./api/queries.ts", "./server/waiver-fns.ts"],
+              except: ["./api/queries.ts"],
             },
             {
               target: "./src/features/members",

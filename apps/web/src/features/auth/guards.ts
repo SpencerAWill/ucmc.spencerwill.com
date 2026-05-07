@@ -14,7 +14,7 @@ import {
 import { getProofFn } from "#/features/auth/server/server-fns";
 import type { Principal } from "#/server/auth/principal.server";
 import { myWaiverStatusQueryOptions } from "#/features/waivers/api/queries";
-import type { WaiverStatus } from "#/features/waivers/server/waiver-fns";
+import type { WaiverStatus } from "#/features/waivers/api/queries";
 
 async function getPrincipal(
   queryClient: QueryClient,
