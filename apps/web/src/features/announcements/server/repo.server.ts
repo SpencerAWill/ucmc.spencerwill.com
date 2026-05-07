@@ -3,7 +3,7 @@
  * actions layer is responsible for authorization. Joins users + profiles
  * to project the author's display name and avatar key alongside each row.
  */
-import { and, count, desc, eq, gt } from "drizzle-orm";
+import { and, count, desc, eq, gt, sql } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 
@@ -130,22 +130,27 @@ export async function deleteAnnouncement(id: string): Promise<void> {
 /**
  * Count announcements published after the user's last-read marker. A null
  * marker means they have never opened the page, so every announcement is
- * unread.
+ * unread. A subquery keeps this to one D1 round-trip instead of two
+ * (user lookup + count).
+ *
+ * If the userId doesn't exist, the COALESCE makes the marker `0`, so
+ * every announcement counts as unread. That matches the prior contract
+ * for never-seen-before users; the only behavior change is the missing-
+ * user case (previously returned 0), which isn't reachable from caller
+ * code today (only signed-in users hit this, and a missing row would
+ * already have failed at the principal layer).
  */
 export async function getUnreadCount(userId: string): Promise<number> {
   const db = getDb();
-  const user = await db.query.users.findFirst({
-    where: eq(schema.users.id, userId),
-    columns: { lastReadAnnouncementsAt: true },
-  });
-  if (!user) {
-    return 0;
-  }
-  const marker = user.lastReadAnnouncementsAt;
-  const query = db.select({ value: count() }).from(schema.announcements);
-  const rows = marker
-    ? await query.where(gt(schema.announcements.publishedAt, marker))
-    : await query;
+  const rows = await db
+    .select({ value: count() })
+    .from(schema.announcements)
+    .where(
+      gt(
+        schema.announcements.publishedAt,
+        sql`COALESCE((SELECT ${schema.users.lastReadAnnouncementsAt} FROM ${schema.users} WHERE ${schema.users.id} = ${userId}), 0)`,
+      ),
+    );
   return rows[0]?.value ?? 0;
 }
 
