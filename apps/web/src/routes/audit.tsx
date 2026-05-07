@@ -418,9 +418,11 @@ function ActorLabel({ entry }: { entry: AuditEntrySummary }) {
       </Link>
     );
   }
-  // Actor FK has been cascade-NULLed (user hard-deleted). For
-  // self-delete events the original email is captured in metadata as
-  // a documented exception; surface it so the row remains useful.
+  // Actor FK has been cascade-NULLed (user hard-deleted). The
+  // documented metadata exceptions (`member.self_deleted`, plus the
+  // `email.*` lifecycle events) capture the email value so the row
+  // remains useful — surface it. See the audit-log.server.ts
+  // doc-comment for the full list.
   const meta = entry.metadata;
   if (typeof meta?.email === "string" && meta.email.length > 0) {
     return (
@@ -449,9 +451,9 @@ function TargetLabel({ entry }: { entry: AuditEntrySummary }) {
   }
   // User target whose FK has cascaded to NULL — fall back to the
   // metadata-captured email if the action documented one (today
-  // that's only `member.self_deleted`). Without this fallback, most
-  // historical member-targeted events lose their target label
-  // entirely after retention runs.
+  // that's `member.self_deleted` and the `email.*` lifecycle
+  // events). Without this fallback, most historical member-targeted
+  // events lose their target label entirely after retention runs.
   const meta = entry.metadata;
   if (typeof meta?.email === "string" && meta.email.length > 0) {
     return (

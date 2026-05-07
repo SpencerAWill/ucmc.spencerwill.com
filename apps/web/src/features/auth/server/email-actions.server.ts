@@ -261,6 +261,13 @@ export async function removeEmailAction(args: {
   // manual SQL could reach a "no primary" state — without this check,
   // `removeEmailAction` would happily delete the last row. Refuse and
   // return `is_last` instead so the failure surfaces.
+  //
+  // The UI side (`email-addresses-section.tsx`) doesn't render a
+  // distinct toast for `is_last` because the disabled-button gate
+  // (`onlyOne`) prevents the user from triggering this branch in the
+  // first place; the action-level guard is purely defense-in-depth
+  // for direct API callers (tests, future scripts) and the invariant-
+  // breaking edge case described above.
   const [{ count: total } = { count: 0 }] = await db
     .select({ count: count() })
     .from(schema.userEmails)
@@ -354,7 +361,11 @@ export async function setPrimaryEmailAction(args: {
     actorUserId: principal.userId,
     action: "email.primary_changed",
     targetUserId: principal.userId,
-    metadata: { newPrimaryEmail: target.email },
+    // Use the same `email` key as `email.added` / `email.removed` so
+    // audit consumers can read the affected address from one place
+    // across all three lifecycle events. The semantic ("the email
+    // that became primary") is implied by the action name.
+    metadata: { email: target.email },
   });
   return { ok: true };
 }

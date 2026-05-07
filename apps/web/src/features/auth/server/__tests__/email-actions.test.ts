@@ -243,6 +243,23 @@ describe("requestAddEmailAction", () => {
 // ── consumeAddEmailAction ──────────────────────────────────────────────
 
 describe("consumeAddEmailAction", () => {
+  it("rejects when rate-limited (IP)", async () => {
+    const userId = await seedApprovedUser("alice@example.com");
+    const token = await seedAddEmailLink({
+      email: "fresh@example.com",
+      targetUserId: userId,
+    });
+    await signInAs(userId);
+    rateLimitAllowed = false;
+    const result = await consumeAddEmailAction(token);
+    expect(result).toEqual({ ok: false, reason: "rate_limited" });
+
+    // The token must remain unconsumed so the user can retry once
+    // the limiter window clears.
+    const link = await getDb().query.magicLinks.findFirst();
+    expect(link?.consumedAt).toBeNull();
+  });
+
   it("rejects when no session", async () => {
     const userId = await seedApprovedUser("alice@example.com");
     const token = await seedAddEmailLink({
@@ -313,6 +330,10 @@ describe("consumeAddEmailAction", () => {
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, "email.added"));
     expect(audit).toHaveLength(1);
+    const meta = JSON.parse(audit[0]?.metadataJson ?? "null") as {
+      email?: string;
+    };
+    expect(meta.email).toBe("fresh@example.com");
   });
 
   it("returns email_taken on the loser of a race (UNIQUE constraint)", async () => {
@@ -477,6 +498,14 @@ describe("removeEmailAction", () => {
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, "email.removed"));
     expect(audit).toHaveLength(1);
+    // The audit metadata is a documented PII exception for the
+    // email.* lifecycle events — assert the address is captured so a
+    // future schema change can't quietly drop it without breaking
+    // this test.
+    const meta = JSON.parse(audit[0]?.metadataJson ?? "null") as {
+      email?: string;
+    };
+    expect(meta.email).toBe("second@example.com");
   });
 });
 
@@ -532,6 +561,18 @@ describe("setPrimaryEmailAction", () => {
     const primary = rows.find((r) => r.isPrimary);
     expect(primary?.email).toBe("second@example.com");
     expect(rows.filter((r) => r.isPrimary)).toHaveLength(1);
+
+    // Audit row shape — uses the same `email` metadata key as
+    // email.added/email.removed for cross-event consistency.
+    const audit = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "email.primary_changed"));
+    expect(audit).toHaveLength(1);
+    const meta = JSON.parse(audit[0]?.metadataJson ?? "null") as {
+      email?: string;
+    };
+    expect(meta.email).toBe("second@example.com");
 
     // Now the old primary is removable (it's no longer primary).
     const oldPrimary = rows.find((r) => r.email === "alice@example.com");

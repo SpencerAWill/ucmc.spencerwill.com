@@ -421,16 +421,30 @@ export const landingActivities = sqliteTable(
  * leaking PII through this surface. Never put email/phone/name in the
  * JSON blob.
  *
- * **One exception:** `member.self_deleted` deliberately captures the
- * deleting user's `primaryEmail + userId` in `metadata` because the FK
- * cascade nulls both `actor_user_id` and `target_user_id` on the same
- * row. Without that exception the audit row would survive with no
- * way to identify the account, defeating the audit's whole purpose.
- * Only the primary is captured (additional emails would balloon the
- * audit row and are not needed for "who was this account"). No other
- * action type follows this pattern; the helper module doc-comment in
- * `src/server/audit/audit-log.server.ts` is the canonical statement
- * of the rule.
+ * **Documented exceptions** — actions that intentionally capture an
+ * email value in metadata, with rationale:
+ *
+ *   - `member.self_deleted` — captures `{ userId, email }` (primary
+ *     email at deletion time). The FK cascade nulls both
+ *     `actor_user_id` and `target_user_id` on the same row, so without
+ *     the metadata snapshot the audit row would survive with no way
+ *     to identify whose account was deleted. Only the primary is
+ *     captured (additional emails would balloon the row and aren't
+ *     needed for "who was this account").
+ *   - `email.added`, `email.removed`, `email.primary_changed` —
+ *     capture `{ email }`, which IS the load-bearing detail of the
+ *     action. The actor and target FKs both point at the same user
+ *     (the user managing their own email list), so the FK alone tells
+ *     you "user X did something to their emails" without revealing
+ *     *which* address. Including the address keeps these rows
+ *     useful for incident review (e.g. correlating a hijacked alt
+ *     email back to the user) without expanding the surface beyond
+ *     what was already exposed when the event happened.
+ *
+ * No other action type follows this pattern; the helper module
+ * doc-comment in `src/server/audit/audit-log.server.ts` is the
+ * canonical statement of the rule. The audit-page UI must not render
+ * `metadata.email` for any other action.
  *
  * Adding a new action here requires it to actually be written by some
  * code path — empty enum entries pollute the viewer's filter UI.

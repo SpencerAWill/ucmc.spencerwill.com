@@ -53,16 +53,23 @@
  * phone, full name, or anything reversible to a specific person; that
  * comes from the FK relationships if the row still exists.
  *
- * **One exception:** `member.self_deleted` cascade-NULLs both
- * `actorUserId` and `targetUserId` immediately on the user-row
- * delete, leaving the audit row with no attribution at all. For that
- * event specifically, capture `email` (and the original `userId` as
- * a text value) in `metadata` so the row stays meaningful — that's
- * the whole point of preserving an audit trail across deletions. No
- * other event type follows this pattern; if you find yourself adding
- * one, the audit story for that flow is probably wrong.
+ * **Documented exceptions** — events that intentionally capture an
+ * email value in metadata:
  *
- * The schema doc-comment in `drizzle/schema.ts` is the canonical
+ *   - `member.self_deleted`: cascade-NULLs both `actorUserId` and
+ *     `targetUserId`, so without the metadata snapshot the row has
+ *     no attribution at all. Capture `{ userId, email }` (primary
+ *     email at deletion time) so the row stays meaningful.
+ *   - `email.added` / `email.removed` / `email.primary_changed`:
+ *     capture `{ email }`, which IS the load-bearing detail. Both
+ *     FKs point at the same self-managing user, so the FK alone
+ *     would only tell you "user X changed their emails" without
+ *     identifying which address. Including the address keeps these
+ *     rows useful for incident review.
+ *
+ * No other event type follows this pattern; if you find yourself
+ * adding one, the audit story for that flow is probably wrong. The
+ * schema doc-comment in `drizzle/schema.ts` is the canonical
  * statement of this rule.
  */
 import { uuidv7 } from "uuidv7";

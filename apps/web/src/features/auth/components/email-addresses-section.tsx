@@ -37,6 +37,9 @@ export function EmailAddressesSection({
   primaryEmail: string;
 }) {
   if (!approved) {
+    // Pending-user read-only view. Mirrors the approved row shape
+    // (badge + dim helper line) so the visual treatment is consistent
+    // across pre/post-approval — only the controls differ.
     return (
       <section className="space-y-3">
         <header>
@@ -47,10 +50,15 @@ export function EmailAddressesSection({
           </p>
         </header>
         <ul className="flex flex-col gap-2">
-          <li className="flex items-center justify-between gap-4 rounded-md border p-3">
+          <li className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{primaryEmail}</p>
-              <p className="text-xs text-muted-foreground">Primary</p>
+              <p className="flex items-center gap-2 truncate text-sm font-medium">
+                <span className="truncate">{primaryEmail}</span>
+                <Badge variant="secondary">Primary</Badge>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Verified at registration
+              </p>
             </div>
           </li>
         </ul>
@@ -108,7 +116,12 @@ function ApprovedEmailAddressesSection() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={promote.isPending}
+                    // `variables` holds the input of the in-flight
+                    // mutation, so we only disable the row whose
+                    // promotion is actually pending — clicking "Make
+                    // primary" on row A doesn't grey out row B's
+                    // button while A is mid-request.
+                    disabled={promote.isPending && promote.variables === row.id}
                     onClick={() => {
                       promote.mutate(row.id, {
                         onSuccess: () => toast.success("Primary email updated"),
@@ -124,7 +137,11 @@ function ApprovedEmailAddressesSection() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={removal.isPending || row.isPrimary || onlyOne}
+                  disabled={
+                    (removal.isPending && removal.variables === row.id) ||
+                    row.isPrimary ||
+                    onlyOne
+                  }
                   title={
                     row.isPrimary
                       ? "Promote another email to primary first"
