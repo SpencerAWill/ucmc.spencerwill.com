@@ -36,8 +36,12 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@pulumi/command",
       "esbuild",
       "lightningcss",
+      "protobufjs",
+      "sharp",
+      "unrs-resolver",
       "workerd"
     ],
     "overrides": {
@@ -48,6 +52,7 @@
     },
     "peerDependencyRules": {
       "allowedVersions": {
+        "eslint-plugin-jsx-a11y>eslint": "10",
         "tiptap-markdown>@tiptap/core": "3"
       }
     }

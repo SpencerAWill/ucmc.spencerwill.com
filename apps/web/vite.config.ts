@@ -51,6 +51,13 @@ const config = defineConfig({
     port: 3000,
     strictPort: true,
   },
+  // The feedback route loads a Tiptap-based markdown editor that legitimately
+  // splits to ~1.1 MB; the rest of the app sits well under 500 kB. Lifting
+  // the warning limit just above the editor chunk keeps the signal: any *other*
+  // chunk that creeps past this number will still trip the warning.
+  build: {
+    chunkSizeWarningLimit: 1200,
+  },
   plugins: [
     devtools(),
     stubCloudflareWorkersForClient(),
