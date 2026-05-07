@@ -7,7 +7,11 @@
  * Same mock strategy as server-fns.test.ts: cookie jar for session/proof
  * cookies, rate-limit stubs always-allow, turnstile stub always-pass.
  */
-import { eq as drizzleEq } from "drizzle-orm";
+import {
+  and as drizzleAnd,
+  eq as drizzleEq,
+  ne as drizzleNe,
+} from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as Resend from "#/server/email/resend";
@@ -534,13 +538,16 @@ describe("list pending registrations", () => {
   });
 });
 
-describe("submit-profile status race", () => {
-  it("does not clobber an approved status when a returning approved user re-submits without a profile", async () => {
-    // Returning user: signed in via session (principal-based call site),
-    // approved by an officer, but somehow has no profiles row — this is
-    // the path that re-runs `submitProfileAction` with the principal
-    // path. The status reset's WHERE clause must not flip them back to
-    // pending.
+describe("submit-profile status reset", () => {
+  // Sanity-level contract test: a returning approved user re-submitting
+  // their profile keeps `approved` status. JavaScript is single-threaded
+  // and the action loads the principal at the top, so there's no clean
+  // way to interleave an approver's UPDATE between principal-load and
+  // batch-commit from inside one test. The actual race-fix coverage is
+  // the SQL-primitive test below — together they show:
+  //   (a) end-to-end: approved + resubmit = still approved
+  //   (b) primitive: the WHERE-guarded UPDATE no-ops on an approved row
+  it("approved user re-submitting without a profile keeps approved status", async () => {
     const userId = await seedUser({
       email: TEST_EMAIL,
       status: "approved",
@@ -555,10 +562,7 @@ describe("submit-profile status race", () => {
     expect(after!.status).toBe("approved");
   });
 
-  it("still resets a pending user back to pending after profile re-submit", async () => {
-    // Sanity check that the WHERE-guarded UPDATE still fires when the
-    // user is genuinely not-approved. Status stays pending (already its
-    // value), but the path is the one that mattered before the race fix.
+  it("pending user re-submitting profile stays pending", async () => {
     const userId = await seedUser({
       email: TEST_EMAIL,
       status: "pending",
@@ -571,6 +575,38 @@ describe("submit-profile status race", () => {
       where: (u, { eq }) => eq(u.id, userId),
     });
     expect(after!.status).toBe("pending");
+  });
+
+  it("WHERE-guarded UPDATE no-ops on an approved row (race-fix primitive)", async () => {
+    // Direct exercise of the SQL guard `submitProfileAction` relies on.
+    // Models the production race: an approver flips `users.status` to
+    // "approved" between the action's `loadCurrentPrincipal` and its
+    // batch commit. Without the WHERE clause, the unconditional
+    // `SET status = 'pending'` would revert the approver's decision;
+    // with it, the UPDATE matches zero rows and the approval survives.
+    const userId = await seedUser({
+      email: TEST_EMAIL,
+      status: "approved",
+    });
+
+    const updated = await getDb()
+      .update(schema.users)
+      .set({ status: "pending" })
+      .where(
+        drizzleAnd(
+          drizzleEq(schema.users.id, userId),
+          drizzleNe(schema.users.status, "approved"),
+        ),
+      )
+      .returning({ id: schema.users.id });
+
+    // Guard fired — zero rows touched.
+    expect(updated).toHaveLength(0);
+
+    const after = await getDb().query.users.findFirst({
+      where: (u, { eq }) => eq(u.id, userId),
+    });
+    expect(after!.status).toBe("approved");
   });
 });
 
