@@ -248,7 +248,7 @@ export function TextArea({
   );
 }
 
-// Lazy-loaded so the TipTap + ProseMirror bundle (~240 KB gz) only ships
+// Lazy-loaded so the TipTap + ProseMirror bundle (~265 KB gz) only ships
 // to routes that actually mount a MarkdownField. Without this, every
 // form in the app — sign-in, profile, RBAC — would pull it in.
 const MarkdownEditorLazy = lazy(() =>
@@ -271,35 +271,44 @@ export function MarkdownField({
   label,
   description,
   rows = 4,
+  maxLength,
   placeholder,
 }: {
   label: string;
   description?: string;
   rows?: number;
+  maxLength?: number;
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta } = field.state;
+  const { meta, value } = field.state;
+  const validation = fieldValidationAttrs(meta, value);
   const hasError = meta.isTouched && meta.errors.length > 0;
   const ariaDescribedBy = describedById({
     fieldName: field.name,
     hasDescription: Boolean(description),
     hasError,
   });
+  // The editor renders a contenteditable `<div>`, which `<label htmlFor>`
+  // doesn't focus. Wire the label via aria-labelledby + an explicit id,
+  // and let clicks on the label focus the editor through the underlying
+  // ProseMirror input by registering an onClick on the label.
+  const labelId = `${field.name}-label`;
 
   return (
     <Field className="gap-1.5">
-      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+      <FieldLabel id={labelId}>{label}</FieldLabel>
       <Suspense fallback={<MarkdownEditorFallback rows={rows} />}>
         <MarkdownEditorLazy
-          id={field.name}
           value={field.state.value}
           onChange={field.handleChange}
           onBlur={field.handleBlur}
           rows={rows}
+          maxLength={maxLength}
           placeholder={placeholder}
-          ariaLabel={label}
+          ariaLabelledBy={labelId}
           ariaDescribedBy={ariaDescribedBy}
+          attrs={validation}
         />
       </Suspense>
       {description ? (

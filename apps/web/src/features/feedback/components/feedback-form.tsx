@@ -211,6 +211,7 @@ export function FeedbackForm() {
                       label="Describe the bug"
                       placeholder="A clear and concise description of what the bug is."
                       rows={4}
+                      maxLength={FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -220,6 +221,7 @@ export function FeedbackForm() {
                       label="Steps to reproduce"
                       placeholder={STEPS_PLACEHOLDER}
                       rows={5}
+                      maxLength={FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -229,6 +231,7 @@ export function FeedbackForm() {
                       label="Expected behavior"
                       placeholder="What did you expect to happen instead?"
                       rows={3}
+                      maxLength={FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -238,6 +241,7 @@ export function FeedbackForm() {
                       label="Additional context (optional)"
                       placeholder="Anything else useful — related issues, environment details, etc."
                       rows={3}
+                      maxLength={FEEDBACK_LIMITS.optionalSection.max}
                     />
                   )}
                 </form.AppField>
@@ -250,6 +254,7 @@ export function FeedbackForm() {
                       label="Is your feature request related to a problem?"
                       placeholder="Ex. I'm always frustrated when…"
                       rows={4}
+                      maxLength={FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -259,6 +264,7 @@ export function FeedbackForm() {
                       label="Describe the solution you'd like"
                       placeholder="A clear and concise description of what you want to happen."
                       rows={4}
+                      maxLength={FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -268,6 +274,7 @@ export function FeedbackForm() {
                       label="Alternatives considered (optional)"
                       placeholder="Other approaches you've thought about."
                       rows={3}
+                      maxLength={FEEDBACK_LIMITS.optionalSection.max}
                     />
                   )}
                 </form.AppField>
@@ -277,6 +284,7 @@ export function FeedbackForm() {
                       label="Additional context (optional)"
                       placeholder="Anything else useful — links, mockups, related discussions."
                       rows={3}
+                      maxLength={FEEDBACK_LIMITS.optionalSection.max}
                     />
                   )}
                 </form.AppField>
@@ -289,6 +297,7 @@ export function FeedbackForm() {
                       label="Details"
                       placeholder="What's on your mind?"
                       rows={8}
+                      maxLength={FEEDBACK_LIMITS.body.max}
                     />
                   )}
                 </form.AppField>

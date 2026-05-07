@@ -40,6 +40,22 @@ describe("MarkdownContent", () => {
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
   });
 
+  it("does not set target=_blank on internal/relative links", () => {
+    render(<MarkdownContent>{"[home](/home)"}</MarkdownContent>);
+    const link = screen.getByRole("link", { name: "home" });
+    expect(link).not.toHaveAttribute("target");
+    expect(link).not.toHaveAttribute("rel");
+  });
+
+  it("preserves single newlines as soft line breaks", () => {
+    const { container } = render(
+      <MarkdownContent>{"line one\nline two"}</MarkdownContent>,
+    );
+    // remark-breaks emits a <br> for a single newline; without it,
+    // markdown would collapse the newline to a space.
+    expect(container.querySelector("br")).not.toBeNull();
+  });
+
   it("does not render raw HTML (XSS-safe)", () => {
     render(
       <MarkdownContent>{"<script>alert(1)</script>safe"}</MarkdownContent>,

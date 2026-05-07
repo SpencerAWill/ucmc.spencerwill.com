@@ -1,4 +1,6 @@
+import CharacterCount from "@tiptap/extension-character-count";
 import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -17,7 +19,7 @@ import {
   Quote,
   Strikethrough,
 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Markdown } from "tiptap-markdown";
 
 import { Toggle } from "#/components/ui/toggle";
@@ -35,25 +37,28 @@ function getMarkdownFromEditor(editor: Editor): string {
   return storage.markdown?.getMarkdown() ?? "";
 }
 
+// CharacterCount measures document text (not markdown syntax), so a
+// 1500-char `**…**`-padded post counts ~1500. Close enough as a hard
+// cap for UX — the schema's `.max()` on the markdown string is the
+// authoritative validation.
+function getCharacterCount(editor: Editor): number {
+  const storage = editor.storage as {
+    characterCount?: { characters: () => number };
+  };
+  return storage.characterCount?.characters() ?? 0;
+}
+
 const HEADING_LEVELS = [2, 3] as const;
 
-const EXTENSIONS = [
-  StarterKit.configure({
-    heading: { levels: [...HEADING_LEVELS] },
-  }),
-  Link.configure({
-    openOnClick: false,
-    autolink: true,
-    HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
-  }),
-  TaskList,
-  TaskItem.configure({ nested: true }),
-  Markdown.configure({
-    html: false,
-    transformPastedText: true,
-    breaks: true,
-  }),
-];
+// Pass-through HTML attributes for the contenteditable element. Kept
+// narrow on purpose: today's only consumer is `fieldValidationAttrs`,
+// which emits `aria-invalid` / `data-valid`. Widen this type instead
+// of taking a free-form `Record<string, unknown>` so call sites can't
+// accidentally inject id/class/style and clobber the editor's own.
+export interface MarkdownEditorAttrs {
+  "aria-invalid"?: boolean;
+  "data-valid"?: "true";
+}
 
 export function MarkdownEditor({
   value,
@@ -61,51 +66,99 @@ export function MarkdownEditor({
   onBlur,
   placeholder,
   rows = 4,
+  maxLength,
+  ariaLabelledBy,
   ariaLabel,
   ariaDescribedBy,
-  id,
+  attrs,
 }: {
   value: string;
   onChange: (markdown: string) => void;
   onBlur?: () => void;
   placeholder?: string;
   rows?: number;
+  maxLength?: number;
+  ariaLabelledBy?: string;
   ariaLabel?: string;
   ariaDescribedBy?: string;
-  id?: string;
+  // Pass-through HTML attributes for the contenteditable element —
+  // e.g. `aria-invalid` / `data-valid` from `fieldValidationAttrs`.
+  attrs?: MarkdownEditorAttrs;
 }) {
-  const editor = useEditor({
-    // TanStack Start SSRs the form, but ProseMirror needs `window` to
-    // build its DOM — defer to client mount to avoid a hydration mismatch.
-    immediatelyRender: false,
-    extensions: EXTENSIONS,
-    content: value,
-    editorProps: {
-      attributes: {
-        class: cn(
-          "prose prose-sm dark:prose-invert max-w-none w-full",
-          "rounded-md border border-input bg-transparent",
-          "px-3 py-2 text-sm shadow-xs outline-none",
-          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0",
-          "[&_.ProseMirror-focused]:outline-none",
-          "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        ),
-        role: "textbox",
-        "aria-multiline": "true",
-        ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
-        ...(ariaDescribedBy ? { "aria-describedby": ariaDescribedBy } : {}),
-        ...(id ? { id } : {}),
-        style: `min-height: ${rows * 1.5 + 1}rem;`,
+  const extensions = useMemo(
+    () => [
+      StarterKit.configure({
+        heading: { levels: [...HEADING_LEVELS] },
+      }),
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
+      }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Placeholder.configure({
+        placeholder: placeholder ?? "",
+        emptyEditorClass: "is-editor-empty",
+      }),
+      ...(maxLength !== undefined
+        ? [CharacterCount.configure({ limit: maxLength })]
+        : []),
+      Markdown.configure({
+        html: false,
+        transformPastedText: true,
+        breaks: true,
+      }),
+    ],
+    [placeholder, maxLength],
+  );
+
+  const editor = useEditor(
+    {
+      // TanStack Start SSRs the form, but ProseMirror needs `window` to
+      // build its DOM — defer to client mount to avoid a hydration mismatch.
+      immediatelyRender: false,
+      extensions,
+      content: value,
+      editorProps: {
+        attributes: {
+          class: cn(
+            "prose prose-sm dark:prose-invert max-w-none w-full",
+            "rounded-md border border-input bg-transparent",
+            "px-3 py-2 text-sm shadow-xs outline-none",
+            "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0",
+            "[&_.ProseMirror-focused]:outline-none",
+            "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+            // Placeholder visual: the extension adds `is-editor-empty`
+            // to the first empty paragraph; render the placeholder via
+            // a CSS pseudo-element so it doesn't pollute the doc.
+            "[&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]",
+            "[&_p.is-editor-empty:first-child]:before:text-muted-foreground",
+            "[&_p.is-editor-empty:first-child]:before:pointer-events-none",
+            "[&_p.is-editor-empty:first-child]:before:float-left",
+            "[&_p.is-editor-empty:first-child]:before:h-0",
+          ),
+          role: "textbox",
+          "aria-multiline": "true",
+          ...(ariaLabelledBy ? { "aria-labelledby": ariaLabelledBy } : {}),
+          ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
+          ...(ariaDescribedBy ? { "aria-describedby": ariaDescribedBy } : {}),
+          ...filterDefined(attrs),
+          style: `min-height: ${rows * 1.5 + 1}rem;`,
+        },
+      },
+      onUpdate: ({ editor: ed }) => {
+        const md = getMarkdownFromEditor(ed);
+        onChange(md);
+      },
+      onBlur: () => {
+        onBlur?.();
       },
     },
-    onUpdate: ({ editor: ed }) => {
-      const md = getMarkdownFromEditor(ed);
-      onChange(md);
-    },
-    onBlur: () => {
-      onBlur?.();
-    },
-  });
+    // Re-create the editor only when extension config changes; the
+    // attribute object is rebuilt every render and would thrash here.
+    [extensions],
+  );
 
   // Keep the editor's content in sync when the parent resets the form
   // (e.g. after a successful submit). We compare against the serialized
@@ -124,16 +177,61 @@ export function MarkdownEditor({
   if (!editor) {
     return (
       <div
-        className="bg-muted/30 h-[6rem] w-full animate-pulse rounded-md border"
+        className="bg-muted/30 w-full animate-pulse rounded-md border"
+        style={{ minHeight: `${rows * 1.5 + 3}rem` }}
         aria-hidden
       />
     );
   }
 
   return (
-    <div className="space-y-1.5" data-placeholder={placeholder}>
+    <div className="space-y-1.5">
       <Toolbar editor={editor} />
       <EditorContent editor={editor} />
+      {maxLength !== undefined ? (
+        <CharacterCounter editor={editor} limit={maxLength} />
+      ) : null}
+    </div>
+  );
+}
+
+function filterDefined(
+  attrs: MarkdownEditorAttrs | undefined,
+): Record<string, string> {
+  if (!attrs) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined) {
+      continue;
+    }
+    out[k] = typeof v === "boolean" ? String(v) : v;
+  }
+  return out;
+}
+
+function CharacterCounter({
+  editor,
+  limit,
+}: {
+  editor: Editor;
+  limit: number;
+}) {
+  // Reading from storage on every render is fine — the parent re-renders
+  // on every onUpdate (via onChange), so the counter stays in sync.
+  const count = getCharacterCount(editor);
+  const remaining = limit - count;
+  const warn = remaining <= Math.max(50, Math.floor(limit * 0.05));
+  return (
+    <div
+      aria-live="polite"
+      className={cn(
+        "text-muted-foreground text-right text-xs",
+        warn && "text-destructive",
+      )}
+    >
+      {count} / {limit}
     </div>
   );
 }
