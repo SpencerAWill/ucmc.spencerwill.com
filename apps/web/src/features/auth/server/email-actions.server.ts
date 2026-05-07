@@ -21,7 +21,7 @@
  * The shell in `./email-fns.ts` dynamic-imports each action so server-
  * only code never reaches the client bundle.
  */
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
@@ -313,7 +313,15 @@ export async function setPrimaryEmailAction(args: {
   // index at statement boundaries, so the existing primary must be
   // demoted before the new one is promoted; otherwise the index would
   // see two `is_primary = 1` rows for the same user mid-batch.
-  await db.batch([
+  //
+  // The demote is gated on an EXISTS check against the target row so
+  // a concurrent delete between the findFirst above and this batch
+  // can't strand the user with no primary: if the target has gone
+  // missing, the demote no-ops, the promote affects zero rows, and
+  // we surface `not_found` below. Without the gate, the demote would
+  // succeed unconditionally and the promote's WHERE would match
+  // nothing.
+  const [, promoted] = await db.batch([
     db
       .update(schema.userEmails)
       .set({ isPrimary: false })
@@ -321,13 +329,26 @@ export async function setPrimaryEmailAction(args: {
         and(
           eq(schema.userEmails.userId, principal.userId),
           eq(schema.userEmails.isPrimary, true),
+          sql`EXISTS (SELECT 1 FROM ${schema.userEmails} WHERE ${schema.userEmails.id} = ${args.emailId} AND ${schema.userEmails.userId} = ${principal.userId})`,
         ),
       ),
     db
       .update(schema.userEmails)
       .set({ isPrimary: true })
-      .where(eq(schema.userEmails.id, args.emailId)),
+      .where(
+        and(
+          eq(schema.userEmails.id, args.emailId),
+          eq(schema.userEmails.userId, principal.userId),
+        ),
+      )
+      .returning({ id: schema.userEmails.id }),
   ]);
+  if (promoted.length === 0) {
+    // Target row was deleted between findFirst and the batch. The
+    // gated demote no-oped, so the user's previous primary is still
+    // primary. Tell the caller the target is gone.
+    return { ok: false, reason: "not_found" };
+  }
 
   await recordAuditEvent({
     actorUserId: principal.userId,

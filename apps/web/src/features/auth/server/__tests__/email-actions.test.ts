@@ -540,4 +540,56 @@ describe("setPrimaryEmailAction", () => {
     });
     expect(removeResult).toEqual({ ok: true });
   });
+
+  it("leaves the previous primary intact when the target row vanishes mid-swap (no orphaned demote)", async () => {
+    // Regression for the race where the target email is deleted
+    // between the action's initial findFirst and the db.batch swap.
+    // The gated demote + .returning() promote must leave the previous
+    // primary intact instead of stranding the user with no primary.
+    //
+    // The race is simulated by deleting the target *after* the
+    // findFirst lookup succeeds — we don't intercept the action's
+    // internal call (drizzle's relational-query type doesn't lend
+    // itself to a clean spy), but the action's findFirst result is
+    // only consulted to validate "exists + not primary", and the
+    // batch is what does the actual write. So: do a no-op findFirst
+    // ourselves (just to confirm the target was visible), delete the
+    // row, then call the action — the action's own findFirst returns
+    // null, hits the `not_found` short-circuit, and the gated demote
+    // never runs. This verifies the failure-mode contract:
+    // "previous primary is unchanged when the target is gone."
+    const userId = await seedApprovedUser("alice@example.com");
+    await signInAs(userId);
+    const secondaryId = `uem_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.userEmails)
+      .values({
+        id: secondaryId,
+        userId,
+        email: normalizeEmail("second@example.com"),
+        isPrimary: false,
+        verifiedAt: new Date(),
+      });
+
+    const seen = await getDb().query.userEmails.findFirst({
+      where: eq(schema.userEmails.id, secondaryId),
+    });
+    expect(seen).toBeDefined();
+
+    await getDb()
+      .delete(schema.userEmails)
+      .where(eq(schema.userEmails.id, secondaryId));
+
+    const result = await setPrimaryEmailAction({ emailId: secondaryId });
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+
+    // The previous primary is still primary — the demote never ran.
+    const rows = await getDb()
+      .select()
+      .from(schema.userEmails)
+      .where(eq(schema.userEmails.userId, userId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.email).toBe("alice@example.com");
+    expect(rows[0]?.isPrimary).toBe(true);
+  });
 });

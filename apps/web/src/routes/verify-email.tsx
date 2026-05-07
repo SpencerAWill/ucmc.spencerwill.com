@@ -4,7 +4,10 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "#/components/ui/button";
-import { MY_EMAILS_QUERY_KEY } from "#/features/auth/api/query-keys";
+import {
+  MY_EMAILS_QUERY_KEY,
+  SESSION_QUERY_KEY,
+} from "#/features/auth/api/query-keys";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { consumeAddEmailFn } from "#/features/auth/server/email-fns";
 
@@ -43,7 +46,14 @@ function VerifyEmailPage() {
     mutationFn: () => consumeAddEmailFn({ data: { token } }),
     onSuccess: async (result) => {
       if (result.ok) {
-        await queryClient.invalidateQueries({ queryKey: MY_EMAILS_QUERY_KEY });
+        // Invalidate both caches: the email list (so the new row
+        // shows on /my/account/details) and the session (so
+        // `principal.emails` reflects the addition without waiting
+        // for the next navigation).
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: MY_EMAILS_QUERY_KEY }),
+          queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
+        ]);
         setOutcome({ kind: "success", email: result.email });
       } else {
         setOutcome({ kind: "error", reason: result.reason });
