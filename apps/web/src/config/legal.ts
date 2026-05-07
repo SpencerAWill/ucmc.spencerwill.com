@@ -259,7 +259,7 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
       "UC student/staff IDs (M-numbers). The Treasurer maintains the canonical roster — including IDs — on UC's official CampusLINK platform per Bylaw 1.3.",
       "Medical information, insurance information, and signed waivers. These exist only on the paper waiver, which lives off-platform with the Treasurer.",
       "Payment information. UCMC dues are collected off-platform.",
-      "Third-party analytics, ad-tech identifiers, or any tracking beyond essential session cookies and the bot-screening signals collected by Cloudflare Turnstile on the magic-link form (see processors below).",
+      "Third-party analytics, ad-tech identifiers, or any cross-site tracking beyond essential session cookies.",
     ],
   },
   {

@@ -11,7 +11,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { sanitizeFilenameSegment } from "#/lib/sanitize-filename";
-import { UnauthorizedError } from "#/server/auth/principal.server";
+import { UnauthorizedError } from "#/server/auth/errors.server";
 
 export const Route = createFileRoute("/api/account/export")({
   server: {

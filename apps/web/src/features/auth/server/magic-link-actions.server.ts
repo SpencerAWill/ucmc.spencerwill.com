@@ -17,7 +17,7 @@ import {
   consumeMagicLink,
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
-import { UnauthorizedError } from "#/server/auth/principal.server";
+import { UnauthorizedError } from "#/server/auth/errors.server";
 import type { Principal } from "#/server/auth/principal.server";
 import {
   clearProofCookie,
