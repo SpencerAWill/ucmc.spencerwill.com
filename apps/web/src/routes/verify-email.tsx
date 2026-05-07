@@ -1,15 +1,10 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "#/components/ui/button";
-import {
-  MY_EMAILS_QUERY_KEY,
-  SESSION_QUERY_KEY,
-} from "#/features/auth/api/query-keys";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { consumeAddEmailFn } from "#/features/auth/server/email-fns";
+import { useConsumeAddEmail } from "#/features/auth/api/use-consume-add-email";
 
 const verifyEmailSearchSchema = z.object({
   token: z.string().min(1),
@@ -35,32 +30,28 @@ function VerifyEmailPage() {
   const { token } = Route.useSearch();
   const { principal } = useAuth();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const consume = useConsumeAddEmail();
   const [outcome, setOutcome] = useState<
     | { kind: "success"; email: string }
     | { kind: "error"; reason: string }
     | null
   >(null);
 
-  const mutation = useMutation({
-    mutationFn: () => consumeAddEmailFn({ data: { token } }),
-    onSuccess: async (result) => {
-      if (result.ok) {
-        // Invalidate both caches: the email list (so the new row
-        // shows on /my/account/details) and the session (so
-        // `principal.emails` reflects the addition without waiting
-        // for the next navigation).
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: MY_EMAILS_QUERY_KEY }),
-          queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
-        ]);
-        setOutcome({ kind: "success", email: result.email });
-      } else {
-        setOutcome({ kind: "error", reason: result.reason });
-      }
-    },
-    onError: () => setOutcome({ kind: "error", reason: "invalid" }),
-  });
+  const onVerify = () => {
+    consume.mutate(
+      { token },
+      {
+        onSuccess: (result) => {
+          if (result.ok) {
+            setOutcome({ kind: "success", email: result.email });
+          } else {
+            setOutcome({ kind: "error", reason: result.reason });
+          }
+        },
+        onError: () => setOutcome({ kind: "error", reason: "invalid" }),
+      },
+    );
+  };
 
   if (!principal) {
     // Unauthenticated click. Tell the user what to do; do NOT consume
@@ -134,12 +125,8 @@ function VerifyEmailPage() {
           extra step keeps the link safe from automated email scanners.
         </p>
       </header>
-      <Button
-        size="lg"
-        disabled={mutation.isPending}
-        onClick={() => mutation.mutate()}
-      >
-        {mutation.isPending ? "Verifying…" : "Verify email"}
+      <Button size="lg" disabled={consume.isPending} onClick={onVerify}>
+        {consume.isPending ? "Verifying…" : "Verify email"}
       </Button>
     </div>
   );

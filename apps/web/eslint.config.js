@@ -251,6 +251,63 @@ export default [
               target: "./src/features/waivers",
               from: "./src/features/members",
             },
+            // features/landing (homepage CMS) is fully isolated from
+            // every other feature except for read-access to auth's
+            // public API (the inline `<EditAffordance>` admin widget
+            // gates on `useAuth()`).
+            {
+              target: "./src/features/announcements",
+              from: "./src/features/landing",
+            },
+            {
+              target: "./src/features/audit",
+              from: "./src/features/landing",
+            },
+            {
+              target: "./src/features/auth",
+              from: "./src/features/landing",
+            },
+            {
+              target: "./src/features/feedback",
+              from: "./src/features/landing",
+            },
+            {
+              target: "./src/features/members",
+              from: "./src/features/landing",
+            },
+            {
+              target: "./src/features/waivers",
+              from: "./src/features/landing",
+            },
+            {
+              target: "./src/features/landing",
+              from: "./src/features/announcements",
+            },
+            {
+              target: "./src/features/landing",
+              from: "./src/features/audit",
+            },
+            {
+              target: "./src/features/landing",
+              from: "./src/features/auth",
+              except: [
+                "./api/use-auth.ts",
+                "./api/view-mode.tsx",
+                "./guards.ts",
+              ],
+            },
+            {
+              target: "./src/features/landing",
+              from: "./src/features/feedback",
+            },
+            {
+              target: "./src/features/landing",
+              from: "./src/features/members",
+            },
+            {
+              target: "./src/features/landing",
+              from: "./src/features/waivers",
+            },
             // 2. Shared can't import features
             { target: "./src/components/ui", from: "./src/features" },
             { target: "./src/components/profile", from: "./src/features" },

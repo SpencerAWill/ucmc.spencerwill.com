@@ -8,7 +8,10 @@ import {
   roleQueryKey,
   userRolesQueryKey,
 } from "#/features/members/api/query-keys";
-import type { ListMembersInput } from "#/features/members/server/member-fns";
+import type {
+  ListMembersInput,
+  ListPendingRegistrationsInput,
+} from "#/features/members/server/member-fns";
 import {
   getMemberDetailFn,
   listMembersFn,
@@ -32,11 +35,44 @@ export function membersDirectoryQueryOptions(input?: ListMembersInput) {
   } as const;
 }
 
-/** Pending registrations awaiting approval — admin queue. */
-export function membersRegistrationsQueryOptions() {
+/**
+ * Pending registrations awaiting approval — admin queue. Filter +
+ * pagination inputs are part of the cache key so flipping any of them
+ * cache-misses cleanly. Both the approve and reject mutation hooks
+ * invalidate by the bare `MEMBERS_REGISTRATIONS_QUERY_KEY` prefix, so
+ * any input shape under this key is invalidated together.
+ */
+export function pendingRegistrationsQueryOptions(
+  input: ListPendingRegistrationsInput,
+) {
   return {
-    queryKey: MEMBERS_REGISTRATIONS_QUERY_KEY,
-    queryFn: () => listPendingRegistrationsFn({ data: {} }),
+    queryKey: [...MEMBERS_REGISTRATIONS_QUERY_KEY, input] as const,
+    queryFn: () => listPendingRegistrationsFn({ data: input }),
+  } as const;
+}
+
+/**
+ * Rejected members — the "rejected" tab on /members/registrations.
+ * Lives under the registrations key so the unreject mutation's prefix
+ * invalidation hits both the pending feed and this rejected list.
+ * `listMembersFn` is called with `statuses: "rejected"` baked in so
+ * the call site only owns pagination.
+ */
+export function rejectedMembersQueryOptions(input: {
+  limit: number;
+  offset: number;
+}) {
+  return {
+    queryKey: [...MEMBERS_REGISTRATIONS_QUERY_KEY, "rejected", input] as const,
+    queryFn: () =>
+      listMembersFn({
+        data: {
+          statuses: "rejected",
+          sort: "newest",
+          limit: input.limit,
+          offset: input.offset,
+        },
+      }),
   } as const;
 }
 

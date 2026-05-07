@@ -25,21 +25,18 @@ import { cn } from "#/lib/utils";
 import { requirePermission } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { MEMBERS_REGISTRATIONS_QUERY_KEY } from "#/features/members/api/query-keys";
+import {
+  pendingRegistrationsQueryOptions,
+  rejectedMembersQueryOptions,
+} from "#/features/members/api/queries";
 import { useApproveRegistrations } from "#/features/members/api/use-approve-registrations";
 import { useRejectRegistrations } from "#/features/members/api/use-reject-registrations";
 import { useUnrejectMembers } from "#/features/members/api/use-unreject-members";
-import {
-  listMembersFn,
-  listPendingRegistrationsFn,
-} from "#/features/members/server/member-fns";
 import type {
   MemberSummary,
   PendingRegistration,
 } from "#/features/members/server/member-fns";
 
-// Local alias for the centralized base key so the paginated queryKey
-// composition below stays narrative.
-const REGISTRATIONS_QUERY_KEY = MEMBERS_REGISTRATIONS_QUERY_KEY;
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
 const registrationsSearchSchema = z.object({
@@ -128,7 +125,6 @@ function PendingView({ canManage }: { canManage: boolean }) {
   const perPage = searchLimit ?? 50;
   const page = searchPage ?? 1;
   const offset = (page - 1) * perPage;
-  const limitStr = String(perPage);
 
   const dateRange: DateRange | undefined =
     (from ?? to)
@@ -168,15 +164,9 @@ function PendingView({ canManage }: { canManage: boolean }) {
     });
   };
 
-  const queryKey = [...REGISTRATIONS_QUERY_KEY, from, to, limitStr, page];
-
-  const { data, isLoading } = useQuery({
-    queryKey,
-    queryFn: () =>
-      listPendingRegistrationsFn({
-        data: { from, to, limit: perPage, offset },
-      }),
-  });
+  const { data, isLoading } = useQuery(
+    pendingRegistrationsQueryOptions({ from, to, limit: perPage, offset }),
+  );
 
   const registrations = data?.rows ?? [];
   const total = data?.total ?? 0;
@@ -184,7 +174,9 @@ function PendingView({ canManage }: { canManage: boolean }) {
 
   const invalidate = async () => {
     setSelected(new Set());
-    await queryClient.invalidateQueries({ queryKey: REGISTRATIONS_QUERY_KEY });
+    await queryClient.invalidateQueries({
+      queryKey: MEMBERS_REGISTRATIONS_QUERY_KEY,
+    });
   };
 
   const bulkApprove = useApproveRegistrations();
@@ -496,7 +488,6 @@ function RejectedView() {
   const perPage = searchLimit ?? 50;
   const page = searchPage ?? 1;
   const offset = (page - 1) * perPage;
-  const limitStr = String(perPage);
 
   const setLimit = (value: string) => {
     void navigate({
@@ -510,20 +501,9 @@ function RejectedView() {
     });
   };
 
-  const queryKey = ["members", "registrations", "rejected", limitStr, page];
-
-  const { data, isLoading } = useQuery({
-    queryKey,
-    queryFn: () =>
-      listMembersFn({
-        data: {
-          statuses: "rejected",
-          sort: "newest",
-          limit: perPage,
-          offset,
-        },
-      }),
-  });
+  const { data, isLoading } = useQuery(
+    rejectedMembersQueryOptions({ limit: perPage, offset }),
+  );
 
   const members = data?.rows ?? [];
   const total = data?.total ?? 0;
@@ -531,9 +511,15 @@ function RejectedView() {
 
   const invalidate = async () => {
     setSelected(new Set());
+    // Bare prefix invalidation: hits this rejected list AND the
+    // pending feed (both keyed under MEMBERS_REGISTRATIONS_QUERY_KEY)
+    // so an unreject reflects in both tabs without picking the page-
+    // specific key apart. The directory invalidation is separate
+    // because the unrejected user becomes visible there.
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey }),
-      queryClient.invalidateQueries({ queryKey: REGISTRATIONS_QUERY_KEY }),
+      queryClient.invalidateQueries({
+        queryKey: MEMBERS_REGISTRATIONS_QUERY_KEY,
+      }),
       queryClient.invalidateQueries({ queryKey: ["members", "directory"] }),
     ]);
   };
