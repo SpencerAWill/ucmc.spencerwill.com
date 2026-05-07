@@ -16,10 +16,10 @@ import { requirePermission } from "#/features/auth/guards";
 import {
   useAttestWaiver,
   useBulkAttestWaivers,
-} from "#/features/auth/api/use-attest-waiver";
-import { waiverPendingQueueQueryOptions } from "#/features/auth/api/waiver-queries";
-import { BULK_ATTEST_MAX } from "#/features/auth/server/waiver-fns";
-import type { MemberNeedingAttestation } from "#/features/auth/server/waiver-fns";
+} from "#/features/waivers/api/use-attest-waiver";
+import { waiverPendingQueueQueryOptions } from "#/features/waivers/api/queries";
+import { BULK_ATTEST_MAX } from "#/features/waivers/server/waiver-fns";
+import type { MemberNeedingAttestation } from "#/features/waivers/server/waiver-fns";
 
 /**
  * Officer queue of approved members without a current-cycle paper-waiver

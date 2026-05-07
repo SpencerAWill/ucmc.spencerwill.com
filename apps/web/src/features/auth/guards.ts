@@ -11,10 +11,10 @@ import {
   SESSION_QUERY_KEY,
   sessionQueryOptions,
 } from "#/features/auth/api/use-auth";
-import { myWaiverStatusQueryOptions } from "#/features/auth/api/waiver-queries";
-import type { Principal } from "#/server/auth/principal.server";
 import { getProofFn } from "#/features/auth/server/server-fns";
-import type { WaiverStatus } from "#/features/auth/server/waiver-fns";
+import type { Principal } from "#/server/auth/principal.server";
+import { myWaiverStatusQueryOptions } from "#/features/waivers/api/queries";
+import type { WaiverStatus } from "#/features/waivers/api/queries";
 
 async function getPrincipal(
   queryClient: QueryClient,

@@ -13,7 +13,7 @@ import type {
   MemberNeedingAttestation,
   WaiverAttestationSummary,
   WaiverStatus,
-} from "#/features/auth/server/waiver-actions.server";
+} from "#/features/waivers/server/waiver-actions.server";
 
 export type {
   MemberNeedingAttestation,
@@ -36,14 +36,14 @@ export const getMyCurrentWaiverStatusFn = createServerFn({
   method: "GET",
 }).handler(async (): Promise<WaiverStatus> => {
   const { getMyCurrentWaiverStatusAction } =
-    await import("#/features/auth/server/waiver-actions.server");
+    await import("#/features/waivers/server/waiver-actions.server");
   return getMyCurrentWaiverStatusAction();
 });
 
 export const listMyWaiverHistoryFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<WaiverAttestationSummary[]> => {
     const { listMyWaiverHistoryAction } =
-      await import("#/features/auth/server/waiver-actions.server");
+      await import("#/features/waivers/server/waiver-actions.server");
     return listMyWaiverHistoryAction();
   },
 );
@@ -54,7 +54,7 @@ export const listMembersNeedingAttestationFn = createServerFn({
   method: "GET",
 }).handler(async (): Promise<MemberNeedingAttestation[]> => {
   const { listMembersNeedingAttestationAction } =
-    await import("#/features/auth/server/waiver-actions.server");
+    await import("#/features/waivers/server/waiver-actions.server");
   return listMembersNeedingAttestationAction();
 });
 
@@ -62,7 +62,7 @@ export const listWaiverHistoryForUserFn = createServerFn({ method: "GET" })
   .inputValidator(z.object({ userId: z.string().min(1) }))
   .handler(async ({ data }): Promise<WaiverAttestationSummary[]> => {
     const { listWaiverHistoryForUserAction } =
-      await import("#/features/auth/server/waiver-actions.server");
+      await import("#/features/waivers/server/waiver-actions.server");
     return listWaiverHistoryForUserAction(data);
   });
 
@@ -77,7 +77,7 @@ export const attestWaiverFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<{ id: string }> => {
     const { attestWaiverAction } =
-      await import("#/features/auth/server/waiver-actions.server");
+      await import("#/features/waivers/server/waiver-actions.server");
     return attestWaiverAction(data);
   });
 
@@ -90,7 +90,7 @@ export const bulkAttestWaiversFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<{ count: number }> => {
     const { bulkAttestWaiversAction } =
-      await import("#/features/auth/server/waiver-actions.server");
+      await import("#/features/waivers/server/waiver-actions.server");
     return bulkAttestWaiversAction(data);
   });
 
@@ -103,6 +103,6 @@ export const revokeWaiverAttestationFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { revokeWaiverAttestationAction } =
-      await import("#/features/auth/server/waiver-actions.server");
+      await import("#/features/waivers/server/waiver-actions.server");
     return revokeWaiverAttestationAction(data);
   });
