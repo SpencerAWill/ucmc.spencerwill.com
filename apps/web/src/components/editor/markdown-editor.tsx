@@ -123,6 +123,35 @@ export function MarkdownEditor({
     [placeholder, maxLength],
   );
 
+  const editorAttributes = useMemo(
+    () => ({
+      class: cn(
+        "prose prose-sm dark:prose-invert max-w-none w-full",
+        "rounded-md border border-input bg-transparent",
+        "px-3 py-2 text-sm shadow-xs outline-none",
+        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0",
+        "[&_.ProseMirror-focused]:outline-none",
+        "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        // Placeholder visual: the extension adds `is-editor-empty`
+        // to the first empty paragraph; render the placeholder via
+        // a CSS pseudo-element so it doesn't pollute the doc.
+        "[&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]",
+        "[&_p.is-editor-empty:first-child]:before:text-muted-foreground",
+        "[&_p.is-editor-empty:first-child]:before:pointer-events-none",
+        "[&_p.is-editor-empty:first-child]:before:float-left",
+        "[&_p.is-editor-empty:first-child]:before:h-0",
+      ),
+      role: "textbox",
+      "aria-multiline": "true",
+      ...(ariaLabelledBy ? { "aria-labelledby": ariaLabelledBy } : {}),
+      ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
+      ...(ariaDescribedBy ? { "aria-describedby": ariaDescribedBy } : {}),
+      ...filterDefined(attrs),
+      style: `min-height: ${rows * 1.5 + 1}rem;`,
+    }),
+    [ariaLabelledBy, ariaLabel, ariaDescribedBy, attrs, rows],
+  );
+
   const editor = useEditor(
     {
       // TanStack Start SSRs the form, but ProseMirror needs `window` to
@@ -130,33 +159,7 @@ export function MarkdownEditor({
       immediatelyRender: false,
       extensions,
       content: value,
-      editorProps: {
-        attributes: {
-          class: cn(
-            "prose prose-sm dark:prose-invert max-w-none w-full",
-            "rounded-md border border-input bg-transparent",
-            "px-3 py-2 text-sm shadow-xs outline-none",
-            "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0",
-            "[&_.ProseMirror-focused]:outline-none",
-            "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-            // Placeholder visual: the extension adds `is-editor-empty`
-            // to the first empty paragraph; render the placeholder via
-            // a CSS pseudo-element so it doesn't pollute the doc.
-            "[&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]",
-            "[&_p.is-editor-empty:first-child]:before:text-muted-foreground",
-            "[&_p.is-editor-empty:first-child]:before:pointer-events-none",
-            "[&_p.is-editor-empty:first-child]:before:float-left",
-            "[&_p.is-editor-empty:first-child]:before:h-0",
-          ),
-          role: "textbox",
-          "aria-multiline": "true",
-          ...(ariaLabelledBy ? { "aria-labelledby": ariaLabelledBy } : {}),
-          ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
-          ...(ariaDescribedBy ? { "aria-describedby": ariaDescribedBy } : {}),
-          ...filterDefined(attrs),
-          style: `min-height: ${rows * 1.5 + 1}rem;`,
-        },
-      },
+      editorProps: { attributes: editorAttributes },
       onUpdate: ({ editor: ed }) => {
         const md = getMarkdownFromEditor(ed);
         onChange(md);
@@ -169,6 +172,17 @@ export function MarkdownEditor({
     // attribute object is rebuilt every render and would thrash here.
     [extensions],
   );
+
+  // `editorProps.attributes` is read once at init, so prop-derived bits
+  // (`aria-invalid`, `data-valid`, `aria-labelledby`, etc.) would never
+  // update when field meta flips. Push them through `setOptions` on
+  // every change so the contenteditable DOM stays in sync.
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    editor.setOptions({ editorProps: { attributes: editorAttributes } });
+  }, [editor, editorAttributes]);
 
   // Keep the editor's content in sync when the parent resets the form
   // (e.g. after a successful submit). We compare against the serialized
