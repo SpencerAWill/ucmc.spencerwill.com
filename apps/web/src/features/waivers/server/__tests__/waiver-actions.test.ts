@@ -32,7 +32,7 @@ const {
   listMyWaiverHistoryAction,
   listMembersNeedingAttestationAction,
   getMyCurrentWaiverStatusAction,
-} = await import("#/features/auth/server/waiver-actions.server");
+} = await import("#/features/waivers/server/waiver-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────

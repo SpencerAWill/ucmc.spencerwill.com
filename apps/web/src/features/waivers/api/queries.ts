@@ -3,13 +3,13 @@ import {
   MY_WAIVER_STATUS_QUERY_KEY,
   WAIVER_PENDING_QUEUE_QUERY_KEY,
   waiverHistoryForUserQueryKey,
-} from "#/features/auth/api/query-keys";
+} from "#/features/waivers/api/query-keys";
 import {
   getMyCurrentWaiverStatusFn,
   listMembersNeedingAttestationFn,
   listMyWaiverHistoryFn,
   listWaiverHistoryForUserFn,
-} from "#/features/auth/server/waiver-fns";
+} from "#/features/waivers/server/waiver-fns";
 
 /**
  * Caller's current-cycle waiver status (`null` if not attested).

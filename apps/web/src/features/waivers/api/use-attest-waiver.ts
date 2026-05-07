@@ -5,12 +5,12 @@ import {
   MY_WAIVER_STATUS_QUERY_KEY,
   WAIVER_PENDING_QUEUE_QUERY_KEY,
   waiverHistoryForUserQueryKey,
-} from "#/features/auth/api/query-keys";
+} from "#/features/waivers/api/query-keys";
 import {
   attestWaiverFn,
   bulkAttestWaiversFn,
   revokeWaiverAttestationFn,
-} from "#/features/auth/server/waiver-fns";
+} from "#/features/waivers/server/waiver-fns";
 
 /**
  * Officer attests one member's paper waiver for the current cycle.

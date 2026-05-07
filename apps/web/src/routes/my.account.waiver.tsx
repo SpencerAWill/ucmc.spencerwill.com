@@ -8,8 +8,8 @@ import { WAIVER_PDF_PATH, WAIVER_VERSION } from "#/config/legal";
 import {
   myWaiverHistoryQueryOptions,
   myWaiverStatusQueryOptions,
-} from "#/features/auth/api/waiver-queries";
-import type { WaiverAttestationSummary } from "#/features/auth/server/waiver-fns";
+} from "#/features/waivers/api/queries";
+import type { WaiverAttestationSummary } from "#/features/waivers/server/waiver-fns";
 
 /**
  * Member's view of their paper-waiver attestation status. Read-only
