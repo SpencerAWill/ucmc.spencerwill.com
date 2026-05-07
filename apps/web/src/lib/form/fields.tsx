@@ -5,7 +5,7 @@
 // useStore call would create a competing subscription that only
 // triggers on meta changes — missing value changes needed for
 // validation-attribute computation (e.g. isDirty + hasValue → green).
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import PhoneInputBase from "react-phone-number-input/input";
 
 import { Button } from "#/components/ui/button";
@@ -22,6 +22,8 @@ import { Switch as ShadcnSwitch } from "#/components/ui/switch";
 import { Textarea as ShadcnTextarea } from "#/components/ui/textarea";
 import { useFieldContext, useFormContext } from "#/lib/form/context";
 import { fieldValidationAttrs } from "#/lib/form/field-state";
+
+import type { MarkdownEditorHandle } from "#/components/editor/markdown-editor";
 
 // Matches the `@keyframes form-autofill-detect` rule in `styles.css`.
 const AUTOFILL_ANIMATION_NAME = "form-autofill-detect";
@@ -233,6 +235,92 @@ export function TextArea({
         onChange={(e) => field.handleChange(e.target.value)}
         {...validation}
       />
+      {description ? (
+        <FieldDescription id={`${field.name}-description`}>
+          {description}
+        </FieldDescription>
+      ) : null}
+      {hasError ? (
+        <FieldError
+          id={`${field.name}-error`}
+          errors={toFieldErrors(meta.errors)}
+        />
+      ) : null}
+    </Field>
+  );
+}
+
+// Lazy-loaded so the TipTap + ProseMirror bundle (~265 KB gz) only ships
+// to routes that actually mount a MarkdownField. Without this, every
+// form in the app — sign-in, profile, RBAC — would pull it in.
+const MarkdownEditorLazy = lazy(() =>
+  import("#/components/editor/markdown-editor").then((m) => ({
+    default: m.MarkdownEditor,
+  })),
+);
+
+function MarkdownEditorFallback({ rows }: { rows: number }) {
+  return (
+    <div
+      aria-hidden
+      className="bg-muted/30 w-full animate-pulse rounded-md border"
+      style={{ minHeight: `${rows * 1.5 + 3}rem` }}
+    />
+  );
+}
+
+export function MarkdownField({
+  label,
+  description,
+  rows = 4,
+  maxLength,
+  placeholder,
+}: {
+  label: string;
+  description?: string;
+  rows?: number;
+  maxLength?: number;
+  placeholder?: string;
+}) {
+  const field = useFieldContext<string>();
+  const { meta, value } = field.state;
+  const validation = fieldValidationAttrs(meta, value);
+  const hasError = meta.isTouched && meta.errors.length > 0;
+  const ariaDescribedBy = describedById({
+    fieldName: field.name,
+    hasDescription: Boolean(description),
+    hasError,
+  });
+  // The editor renders a contenteditable `<div>`, which `<label htmlFor>`
+  // doesn't focus. Wire screen-reader association via aria-labelledby
+  // and route mouse clicks on the label through an imperative focus
+  // handle the editor populates on mount.
+  const labelId = `${field.name}-label`;
+  const handleRef = useRef<MarkdownEditorHandle | null>(null);
+
+  return (
+    <Field className="gap-1.5">
+      <FieldLabel
+        id={labelId}
+        onClick={() => handleRef.current?.focus()}
+        className="cursor-text"
+      >
+        {label}
+      </FieldLabel>
+      <Suspense fallback={<MarkdownEditorFallback rows={rows} />}>
+        <MarkdownEditorLazy
+          value={field.state.value}
+          onChange={field.handleChange}
+          onBlur={field.handleBlur}
+          rows={rows}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          ariaLabelledBy={labelId}
+          ariaDescribedBy={ariaDescribedBy}
+          attrs={validation}
+          handleRef={handleRef}
+        />
+      </Suspense>
       {description ? (
         <FieldDescription id={`${field.name}-description`}>
           {description}

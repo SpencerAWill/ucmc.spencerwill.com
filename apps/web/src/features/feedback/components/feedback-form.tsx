@@ -207,7 +207,7 @@ export function FeedbackForm() {
               <TabsContent value="bug" className="space-y-4">
                 <form.AppField name="bugDescription">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Describe the bug"
                       placeholder="A clear and concise description of what the bug is."
                       rows={4}
@@ -217,7 +217,7 @@ export function FeedbackForm() {
                 </form.AppField>
                 <form.AppField name="stepsToReproduce">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Steps to reproduce"
                       placeholder={STEPS_PLACEHOLDER}
                       rows={5}
@@ -227,7 +227,7 @@ export function FeedbackForm() {
                 </form.AppField>
                 <form.AppField name="expectedBehavior">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Expected behavior"
                       placeholder="What did you expect to happen instead?"
                       rows={3}
@@ -237,7 +237,7 @@ export function FeedbackForm() {
                 </form.AppField>
                 <form.AppField name="additionalContext">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Additional context (optional)"
                       placeholder="Anything else useful — related issues, environment details, etc."
                       rows={3}
@@ -250,7 +250,7 @@ export function FeedbackForm() {
               <TabsContent value="feature" className="space-y-4">
                 <form.AppField name="problem">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Is your feature request related to a problem?"
                       placeholder="Ex. I'm always frustrated when…"
                       rows={4}
@@ -260,7 +260,7 @@ export function FeedbackForm() {
                 </form.AppField>
                 <form.AppField name="proposedSolution">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Describe the solution you'd like"
                       placeholder="A clear and concise description of what you want to happen."
                       rows={4}
@@ -270,7 +270,7 @@ export function FeedbackForm() {
                 </form.AppField>
                 <form.AppField name="alternatives">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Alternatives considered (optional)"
                       placeholder="Other approaches you've thought about."
                       rows={3}
@@ -280,7 +280,7 @@ export function FeedbackForm() {
                 </form.AppField>
                 <form.AppField name="additionalContext">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Additional context (optional)"
                       placeholder="Anything else useful — links, mockups, related discussions."
                       rows={3}
@@ -293,7 +293,7 @@ export function FeedbackForm() {
               <TabsContent value="general" className="space-y-4">
                 <form.AppField name="body">
                   {(field) => (
-                    <field.TextArea
+                    <field.MarkdownField
                       label="Details"
                       placeholder="What's on your mind?"
                       rows={8}
