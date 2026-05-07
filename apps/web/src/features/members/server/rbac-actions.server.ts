@@ -3,7 +3,7 @@
  * the shell + .server.ts split — the shell in `./rbac-fns.ts` loads
  * this via dynamic imports inside its createServerFn handlers.
  */
-import { and, count, eq, inArray, max } from "drizzle-orm";
+import { and, asc, count, eq, inArray, max } from "drizzle-orm";
 
 import {
   buildAuditEventStatement,
@@ -90,12 +90,13 @@ export async function listRolesDetailedAction(): Promise<
   const db = getDb();
 
   // Roles, all role-permission grants, and the per-role member count
-  // are independent — `Promise.all` collapses three serial reads into
-  // one D1 round-trip.
-  const [roles, permGrants, memberCounts] = await Promise.all([
-    db.query.roles.findMany({
-      orderBy: (r, { asc }) => [asc(r.position), asc(r.name)],
-    }),
+  // are independent — bundle into one `db.batch` so all three reads
+  // ride on a single D1 HTTP request.
+  const [roles, permGrants, memberCounts] = await db.batch([
+    db
+      .select()
+      .from(schema.roles)
+      .orderBy(asc(schema.roles.position), asc(schema.roles.name)),
     db
       .select({
         roleId: schema.rolePermissions.roleId,
@@ -139,12 +140,11 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
   const db = getDb();
 
   // Role row, permission grants, and member list all key on `roleId`
-  // alone. Run them under one `Promise.all`; we still validate role
-  // existence below before returning.
-  const [role, permGrants, memberRows] = await Promise.all([
-    db.query.roles.findFirst({
-      where: eq(schema.roles.id, roleId),
-    }),
+  // alone. Bundle into one `db.batch` so all three reads ride on a
+  // single D1 HTTP request; existence is validated below before
+  // returning.
+  const [roleRows, permGrants, memberRows] = await db.batch([
+    db.select().from(schema.roles).where(eq(schema.roles.id, roleId)).limit(1),
     db
       .select({ permissionId: schema.rolePermissions.permissionId })
       .from(schema.rolePermissions)
@@ -167,9 +167,10 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
       .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
       .where(eq(schema.userRoles.roleId, roleId)),
   ]);
-  if (!role) {
+  if (roleRows.length === 0) {
     throw new Error("Role not found");
   }
+  const role = roleRows[0];
 
   return {
     id: role.id,
@@ -299,7 +300,7 @@ export async function listPermissionsAction(): Promise<PermissionSummary[]> {
   const db = getDb();
 
   const rows = await db.query.permissions.findMany({
-    orderBy: (permissions, { asc }) => [asc(permissions.name)],
+    orderBy: (p, { asc: a }) => [a(p.name)],
   });
 
   return rows.map((r) => ({

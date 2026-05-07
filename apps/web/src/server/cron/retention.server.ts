@@ -189,10 +189,10 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
   const db = getDb();
   const live = new Set<string>();
 
-  // Four independent reads against four separate tables — issue them
-  // in parallel so the cron's D1 wait is one round-trip instead of
-  // four. Order doesn't matter; everything funnels into the same Set.
-  const [avatars, heroes, activities, settings] = await Promise.all([
+  // Four independent reads against four separate tables — bundle into
+  // one `db.batch` so the cron's D1 wait is a single HTTP request.
+  // Order doesn't matter; everything funnels into the same Set.
+  const [avatars, heroes, activities, settings] = await db.batch([
     db
       .select({ key: schema.profiles.avatarKey })
       .from(schema.profiles)

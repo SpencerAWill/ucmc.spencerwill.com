@@ -229,7 +229,7 @@ export async function listMembersAction(opts: {
     const roleNames = roleList as [string, ...string[]];
     conditions.push(
       exists(
-        getDb()
+        db
           .select({ one: schema.userRoles.userId })
           .from(schema.userRoles)
           .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
@@ -423,10 +423,14 @@ export async function getMemberDetailAction(
 
   const userId = row.userId;
 
-  // Roles, emergency contacts, and the active-session count all key on
-  // `userId` only — run them in parallel. Permission gates above
-  // already decided whether to fetch private contacts and the session
-  // count; the parallel block just collapses the remaining round-trips.
+  // Roles, emergency contacts, and the active-session count all key
+  // on `userId` only — issue them in parallel via `Promise.all` so
+  // their wall-clock latencies overlap (D1 still receives one HTTP
+  // request per query — `db.batch` would collapse to one request but
+  // would also force us to run the privileged contacts + sessions
+  // queries unconditionally, which is wasted work for the common
+  // regular-member caller). Permission gates above decide whether to
+  // fetch private contacts and the session count.
   const [roleRows, contacts, sessionCountRows] = await Promise.all([
     db
       .select({ roleName: schema.roles.name })

@@ -38,20 +38,26 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
   const db = getDb();
 
   // The user row, profile, email list, and role list all key on
-  // `userId` only — no dependency between them. Run them in parallel
-  // so the principal load is one D1 round-trip instead of four.
-  // Primary first, then non-primary in insertion order, on the email
+  // `userId` only — no dependency between them. Bundle them in a
+  // `db.batch` so all four reads ride on a single D1 HTTP request
+  // (`Promise.all` would still issue four separate calls). Primary
+  // first, then non-primary in insertion order, on the email
   // ordering at the DB layer keeps the resulting `emails` array
   // stable across requests so consumers can rely on the shape. `id`
   // is the final tiebreaker — `created_at` is millisecond-resolution
   // and can collide on `db.batch`-inserted rows or fast back-to-back
   // inserts; the PK gives a deterministic total order.
-  const [user, profile, emailRows, userRoleRows] = await Promise.all([
-    db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
-    db.query.profiles.findFirst({
-      where: eq(schema.profiles.userId, userId),
-      columns: { userId: true, avatarKey: true },
-    }),
+  const [userRows, profileRows, emailRows, userRoleRows] = await db.batch([
+    db
+      .select({ id: schema.users.id, status: schema.users.status })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1),
+    db
+      .select({ avatarKey: schema.profiles.avatarKey })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.userId, userId))
+      .limit(1),
     db
       .select({
         email: schema.userEmails.email,
@@ -70,9 +76,11 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
       .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
       .where(eq(schema.userRoles.userId, userId)),
   ]);
-  if (!user) {
+  if (userRows.length === 0) {
     return null;
   }
+  const user = userRows[0];
+  const profile = profileRows[0] as (typeof profileRows)[number] | undefined;
 
   const primaryRow = emailRows[0]?.isPrimary ? emailRows[0] : undefined;
   if (!primaryRow) {
