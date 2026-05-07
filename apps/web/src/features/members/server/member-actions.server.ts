@@ -5,7 +5,17 @@
  * shell in `./member-fns.ts` loads this via a dynamic import inside its
  * createServerFn handlers.
  */
-import { and, asc, count, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  lte,
+} from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import {
@@ -210,16 +220,31 @@ export async function listMembersAction(opts: {
     );
   }
 
-  // Role filter (comma-separated list). Requires a subquery-style
-  // approach — we join userRoles and filter by role name.
+  // Role filter (comma-separated list). Pushed into SQL via an EXISTS
+  // subquery so the count + page query agree on the same filtered set.
+  // A direct join to userRoles+roles would multiply page rows for users
+  // with multiple roles; EXISTS keeps the row count to one per user.
   const roleList = opts.roles?.split(",").filter(Boolean) ?? [];
+  if (roleList.length > 0) {
+    const roleNames = roleList as [string, ...string[]];
+    conditions.push(
+      exists(
+        getDb()
+          .select({ one: schema.userRoles.userId })
+          .from(schema.userRoles)
+          .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
+          .where(
+            and(
+              eq(schema.userRoles.userId, schema.users.id),
+              inArray(schema.roles.name, roleNames),
+            ),
+          ),
+      ),
+    );
+  }
 
   // TODO: wire opts.search to LIKE on name/email.
 
-  // Build the base query with the profile join (needed for affiliation
-  // filter and display columns). Role filtering is done post-query
-  // because a join to userRoles+roles would multiply rows for users
-  // with multiple roles; for a small dataset this is fine.
   const where = and(...conditions);
 
   // Sort order.
@@ -314,7 +339,7 @@ export async function listMembersAction(opts: {
     contactsByUser.set(c.userId, list);
   }
 
-  let mappedRows: MemberSummary[] = rows.map((r) => ({
+  const mappedRows: MemberSummary[] = rows.map((r) => ({
     userId: r.userId,
     publicId: r.publicId,
     email: r.email,
@@ -330,18 +355,7 @@ export async function listMembersAction(opts: {
       : [],
   }));
 
-  let total = countResult[0]?.value ?? 0;
-
-  // Role filter — applied in JS after the batch role fetch. For a small
-  // dataset this is simpler than a correlated subquery.
-  if (roleList.length > 0) {
-    mappedRows = mappedRows.filter((m) =>
-      roleList.some((r) => m.roles.includes(r)),
-    );
-    total = mappedRows.length;
-  }
-
-  return { total, rows: mappedRows };
+  return { total: countResult[0]?.value ?? 0, rows: mappedRows };
 }
 
 // ── get member detail ───────────────────────────────────────────────────
