@@ -28,10 +28,16 @@ const CSP_VALUE = [
   // as closely as possible to surface real issues. If a dev-only
   // tooling chunk ever needs eval, we'll inject it via a dev-mode
   // branch rather than weakening the production policy.
-  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+  //
+  // `https://challenges.cloudflare.com` covers the Turnstile widget.
+  // `https://static.cloudflareinsights.com` covers Cloudflare's Web
+  // Analytics beacon, which the zone auto-injects at the edge — no
+  // worker-side opt-in. The matching connect-src entry below allows
+  // the beacon's POSTs to `https://cloudflareinsights.com/cdn-cgi/rum`.
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   "frame-src https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self' https://challenges.cloudflare.com",
+  "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
