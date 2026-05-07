@@ -18,14 +18,14 @@ export type { AuditEntrySummary, ListAuditEventsResult };
 // schema file just to validate a string filter. Exposed as
 // `AUDIT_ACTIONS` for the route's filter `Select` and `AuditAction` for
 // type-safe filter shapes; the zod enum stays internal.
+// Order is intentional — drives the audit page's filter dropdown.
+// Existing entries keep their slots so officers' muscle memory survives
+// the unclaimed-members feature; the four new entries land at the end
+// so they're additive, not disruptive.
 export const AUDIT_ACTIONS = [
   "registration.approved",
   "registration.rejected",
   "registration.unrejected",
-  "member.pre_added",
-  "member.unclaimed_edited",
-  "member.unclaimed_deleted",
-  "member.claimed",
   "member.deactivated",
   "member.reactivated",
   "member.self_deleted",
@@ -45,6 +45,10 @@ export const AUDIT_ACTIONS = [
   "landing.hero_slide_edited",
   "landing.activity_edited",
   "landing.faq_edited",
+  "member.pre_added",
+  "member.unclaimed_edited",
+  "member.unclaimed_deleted",
+  "member.claimed",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

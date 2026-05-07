@@ -491,17 +491,6 @@ export const auditAction = [
   "registration.approved",
   "registration.rejected",
   "registration.unrejected",
-  // Officer pre-adds a stub user (name + email) so off-platform
-  // associations like gear holdings can FK to a stable users.id before
-  // the person ever signs in. Metadata: { email, placeholderName }.
-  "member.pre_added",
-  "member.unclaimed_edited",
-  "member.unclaimed_deleted",
-  // The unclaimed user clicked their first magic link and submitted a
-  // profile, claiming the row. Status flips from "unclaimed" to
-  // "approved" in the same step (officer pre-add was the approval
-  // signal). Actor + target are the same user.
-  "member.claimed",
   "member.deactivated",
   "member.reactivated",
   "member.self_deleted",
@@ -533,6 +522,21 @@ export const auditAction = [
   "landing.hero_slide_edited",
   "landing.activity_edited",
   "landing.faq_edited",
+  // Officer pre-adds a stub user (name + email) so off-platform
+  // associations like gear holdings can FK to a stable users.id before
+  // the person ever signs in. Metadata: { email, placeholderName }.
+  // Listed at the end (rather than grouped with the other membership-
+  // lifecycle entries above) so the audit page's filter dropdown order
+  // mirrors `AUDIT_ACTIONS` in `features/audit/server/audit-fns.ts` —
+  // existing officers' muscle memory survives the new feature.
+  "member.pre_added",
+  "member.unclaimed_edited",
+  "member.unclaimed_deleted",
+  // The unclaimed user clicked their first magic link and submitted a
+  // profile, claiming the row. Status flips from "unclaimed" to
+  // "approved" in the same step (officer pre-add was the approval
+  // signal). Actor + target are the same user.
+  "member.claimed",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 

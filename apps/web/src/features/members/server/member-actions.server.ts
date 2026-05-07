@@ -167,6 +167,12 @@ export interface EmergencyContactSummary {
   relationship: schema.ContactRelationship;
 }
 
+// Directory + detail surfaces both filter `status = 'unclaimed'` out at
+// the SQL layer (officer-pre-added stubs aren't directory members),
+// so the projection types narrow accordingly. Callers that render
+// `<StatusBadge>` get the same narrowing for free.
+export type DirectoryStatus = Exclude<schema.UserStatus, "unclaimed">;
+
 export interface MemberSummary {
   userId: string;
   publicId: string;
@@ -176,7 +182,7 @@ export interface MemberSummary {
   ucAffiliation: string | null;
   avatarKey: string | null;
   roles: string[];
-  status: schema.UserStatus;
+  status: DirectoryStatus;
   // Private fields — null/empty when the caller lacks members:view_private.
   phone: string | null;
   emergencyContacts: EmergencyContactSummary[];
@@ -363,7 +369,12 @@ export async function listMembersAction(opts: {
     ucAffiliation: r.ucAffiliation,
     avatarKey: r.avatarKey,
     roles: rolesByUser.get(r.userId) ?? [],
-    status: r.status,
+    // Cast: the WHERE clause above filters `status='unclaimed'` out
+    // of the result set unconditionally (see the `statusList.filter`
+    // in the conditions builder), so `r.status` is guaranteed not to
+    // be "unclaimed" at runtime — the cast just lets the type system
+    // see what the SQL already enforces.
+    status: r.status as DirectoryStatus,
     phone: canViewPrivate ? r.phone : null,
     emergencyContacts: canViewPrivate
       ? (contactsByUser.get(r.userId) ?? [])
@@ -379,7 +390,7 @@ export interface MemberDetail {
   userId: string;
   publicId: string;
   email: string;
-  status: schema.UserStatus;
+  status: DirectoryStatus;
   createdAt: Date;
   approvedAt: Date | null;
   approvedBy: string | null;
@@ -433,6 +444,15 @@ export async function getMemberDetailAction(
     .get();
 
   if (!row) {
+    throw new Error("User not found");
+  }
+  // Unclaimed (officer-pre-added) stubs aren't directory members — they
+  // have no profile, no verified email, and no avatar. The list query
+  // already excludes them; mirror that here so a manually-typed
+  // /members/<publicId> URL can't surface a stub on the detail page.
+  // Treat as 404 so the route renders the same not-found state any
+  // unknown publicId would.
+  if (row.status === "unclaimed") {
     throw new Error("User not found");
   }
 
