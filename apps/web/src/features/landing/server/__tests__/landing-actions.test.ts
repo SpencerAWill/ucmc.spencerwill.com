@@ -43,7 +43,7 @@ const {
   updateSettingAction,
 } = await import("#/features/landing/server/landing-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
-const { getBucket } = await import("#/server/r2");
+const { getPublicBucket } = await import("#/server/r2");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -238,7 +238,7 @@ describe("hero slides", () => {
     });
     expect(result.id).toMatch(/^hslide_/);
     expect(result.imageKey).toMatch(/^landing\/hero\/[a-f0-9]{16}\.webp$/);
-    const stored = await getBucket().head(result.imageKey);
+    const stored = await getPublicBucket().head(result.imageKey);
     expect(stored).not.toBeNull();
   });
 
@@ -248,10 +248,10 @@ describe("hero slides", () => {
       alt: "Trip",
       dataUrl: makeWebpDataUrl(),
     });
-    expect(await getBucket().head(imageKey)).not.toBeNull();
+    expect(await getPublicBucket().head(imageKey)).not.toBeNull();
 
     await deleteHeroSlideAction({ id });
-    expect(await getBucket().head(imageKey)).toBeNull();
+    expect(await getPublicBucket().head(imageKey)).toBeNull();
   });
 
   it("update replaces the image and deletes the old R2 object", async () => {
@@ -266,11 +266,11 @@ describe("hero slides", () => {
       dataUrl: makeWebpDataUrl(0x09),
     });
     // Old image gone, new one present
-    expect(await getBucket().head(created.imageKey)).toBeNull();
+    expect(await getPublicBucket().head(created.imageKey)).toBeNull();
     const content = await getLandingContentAction();
     expect(content.heroSlides[0].alt).toBe("v2");
     expect(
-      await getBucket().head(content.heroSlides[0].imageKey),
+      await getPublicBucket().head(content.heroSlides[0].imageKey),
     ).not.toBeNull();
   });
 
@@ -380,7 +380,7 @@ describe("activities", () => {
     expect(result.imageKey).toMatch(
       /^landing\/activities\/[a-f0-9]{16}\.webp$/,
     );
-    expect(await getBucket().head(result.imageKey!)).not.toBeNull();
+    expect(await getPublicBucket().head(result.imageKey!)).not.toBeNull();
     const content = await getLandingContentAction();
     expect(content.activities[0].imageKey).toBe(result.imageKey);
   });
@@ -400,11 +400,11 @@ describe("activities", () => {
       blurb: "Sport climbing",
       dataUrl: makeWebpDataUrl(0x09),
     });
-    expect(await getBucket().head(created.imageKey!)).toBeNull();
+    expect(await getPublicBucket().head(created.imageKey!)).toBeNull();
     const content = await getLandingContentAction();
     expect(content.activities[0].imageKey).not.toBe(created.imageKey);
     expect(
-      await getBucket().head(content.activities[0].imageKey!),
+      await getPublicBucket().head(content.activities[0].imageKey!),
     ).not.toBeNull();
   });
 
@@ -423,7 +423,7 @@ describe("activities", () => {
       blurb: "Sport climbing",
       removeImage: true,
     });
-    expect(await getBucket().head(created.imageKey!)).toBeNull();
+    expect(await getPublicBucket().head(created.imageKey!)).toBeNull();
     const content = await getLandingContentAction();
     expect(content.activities[0].imageKey).toBeNull();
   });
@@ -445,7 +445,7 @@ describe("activities", () => {
     const content = await getLandingContentAction();
     expect(content.activities[0].blurb).toBe("v2");
     expect(content.activities[0].imageKey).toBe(created.imageKey);
-    expect(await getBucket().head(created.imageKey!)).not.toBeNull();
+    expect(await getPublicBucket().head(created.imageKey!)).not.toBeNull();
   });
 
   it("delete cleans up R2 image", async () => {
@@ -457,7 +457,7 @@ describe("activities", () => {
       dataUrl: makeWebpDataUrl(),
     });
     await deleteActivityAction({ id: created.id });
-    expect(await getBucket().head(created.imageKey!)).toBeNull();
+    expect(await getPublicBucket().head(created.imageKey!)).toBeNull();
   });
 });
 
@@ -468,7 +468,7 @@ describe("about image", () => {
       dataUrl: makeWebpDataUrl(),
     });
     expect(result.imageKey).toMatch(/^landing\/about\/[a-f0-9]{16}\.webp$/);
-    expect(await getBucket().head(result.imageKey)).not.toBeNull();
+    expect(await getPublicBucket().head(result.imageKey)).not.toBeNull();
     const content = await getLandingContentAction();
     expect(content.settings["about.image_key"]).toBe(result.imageKey);
   });
@@ -481,8 +481,8 @@ describe("about image", () => {
     const second = await setAboutImageAction({
       dataUrl: makeWebpDataUrl(0x09),
     });
-    expect(await getBucket().head(first.imageKey)).toBeNull();
-    expect(await getBucket().head(second.imageKey)).not.toBeNull();
+    expect(await getPublicBucket().head(first.imageKey)).toBeNull();
+    expect(await getPublicBucket().head(second.imageKey)).not.toBeNull();
   });
 
   it("removeAboutImageAction clears the setting and deletes the object", async () => {
@@ -491,7 +491,7 @@ describe("about image", () => {
       dataUrl: makeWebpDataUrl(),
     });
     await removeAboutImageAction();
-    expect(await getBucket().head(first.imageKey)).toBeNull();
+    expect(await getPublicBucket().head(first.imageKey)).toBeNull();
     const content = await getLandingContentAction();
     expect(content.settings["about.image_key"]).toBe("");
   });
@@ -504,7 +504,7 @@ describe("meeting image", () => {
       dataUrl: makeWebpDataUrl(),
     });
     expect(result.imageKey).toMatch(/^landing\/meeting\/[a-f0-9]{16}\.webp$/);
-    expect(await getBucket().head(result.imageKey)).not.toBeNull();
+    expect(await getPublicBucket().head(result.imageKey)).not.toBeNull();
     const content = await getLandingContentAction();
     expect(content.settings["meeting.image_key"]).toBe(result.imageKey);
   });
@@ -517,8 +517,8 @@ describe("meeting image", () => {
     const second = await setMeetingImageAction({
       dataUrl: makeWebpDataUrl(0x09),
     });
-    expect(await getBucket().head(first.imageKey)).toBeNull();
-    expect(await getBucket().head(second.imageKey)).not.toBeNull();
+    expect(await getPublicBucket().head(first.imageKey)).toBeNull();
+    expect(await getPublicBucket().head(second.imageKey)).not.toBeNull();
   });
 
   it("removeMeetingImageAction clears + deletes R2", async () => {
@@ -527,7 +527,7 @@ describe("meeting image", () => {
       dataUrl: makeWebpDataUrl(),
     });
     await removeMeetingImageAction();
-    expect(await getBucket().head(first.imageKey)).toBeNull();
+    expect(await getPublicBucket().head(first.imageKey)).toBeNull();
     const content = await getLandingContentAction();
     expect(content.settings["meeting.image_key"]).toBe("");
   });
@@ -543,7 +543,7 @@ describe("meeting image", () => {
     expect(aboutResult.imageKey).toMatch(/^landing\/about\//);
     expect(meetingResult.imageKey).toMatch(/^landing\/meeting\//);
     // Both still present — sets are independent
-    expect(await getBucket().head(aboutResult.imageKey)).not.toBeNull();
-    expect(await getBucket().head(meetingResult.imageKey)).not.toBeNull();
+    expect(await getPublicBucket().head(aboutResult.imageKey)).not.toBeNull();
+    expect(await getPublicBucket().head(meetingResult.imageKey)).not.toBeNull();
   });
 });

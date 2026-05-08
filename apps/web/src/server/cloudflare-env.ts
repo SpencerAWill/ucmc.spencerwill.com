@@ -11,7 +11,15 @@ import { env as workerEnv } from "cloudflare:workers";
 export interface WorkerEnv {
   // Bindings (wrangler.jsonc)
   DB: D1Database;
-  BUCKET: R2Bucket;
+  // Private bucket — worker-mediated reads only. Default for any new
+  // media. See `apps/web/wrangler.jsonc` for the per-env bucket names.
+  BUCKET_PRIVATE: R2Bucket;
+  // Public bucket — bound to the `cdn.{dev.,}ucmc.spencerwill.com`
+  // R2 custom domain, so reads bypass the worker entirely. Avatars
+  // and landing images live here. URLs are publicly readable; the
+  // app relies on content-hashed keys + opaque public IDs for
+  // unguessability.
+  BUCKET_PUBLIC: R2Bucket;
   KV: KVNamespace;
   HEALTH_RATE_LIMITER: RateLimit;
   AUTH_RATE_LIMITER: RateLimit;

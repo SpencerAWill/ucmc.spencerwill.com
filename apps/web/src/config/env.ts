@@ -18,6 +18,14 @@ export const env = createEnv({
     // Use Cloudflare's always-pass test key for local dev:
     //   1x00000000000000000000AA
     VITE_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
+    // Cloudflare R2 custom-domain hostname that fronts the public bucket
+    // (avatars, landing photos). When set, image-URL helpers emit
+    // https://${VITE_R2_PUBLIC_HOST}/<key> so reads bypass the worker.
+    // When unset (local dev / Miniflare), the helpers fall back to the
+    // worker-mediated /api/* paths. Hostname only — no scheme, no
+    // trailing slash. Sourced from the Pulumi `r2PublicHost` stack
+    // output via web-deploy.yml at build time (Vite bakes it in).
+    VITE_R2_PUBLIC_HOST: z.string().min(1).optional(),
   },
 
   /**

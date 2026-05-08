@@ -7,7 +7,7 @@
  * upload immutable, so the public route can serve `Cache-Control:
  * immutable` without revalidation.
  */
-import { getBucket } from "#/server/r2";
+import { getPublicBucket } from "#/server/r2";
 
 import { HERO_IMAGE_MAX_BYTES } from "#/features/landing/server/landing-schemas";
 
@@ -36,19 +36,29 @@ export async function putLandingImage(
       `Landing image exceeds ${HERO_IMAGE_MAX_BYTES} bytes (got ${bytes.byteLength})`,
     );
   }
-  await getBucket().put(key, bytes, {
-    httpMetadata: { contentType },
+  await getPublicBucket().put(key, bytes, {
+    // Cache-Control is set at upload time (not on the read response)
+    // because the public bucket is served via a Cloudflare R2 custom
+    // domain that bypasses the worker. The custom domain passes through
+    // the stored httpMetadata.cacheControl on every GET.
+    //
+    // Landing keys are content-hashed; new uploads always produce a
+    // fresh URL, so `immutable` is safe forever.
+    httpMetadata: {
+      contentType,
+      cacheControl: "public, max-age=31536000, immutable",
+    },
   });
 }
 
 export async function getLandingImage(
   key: string,
 ): Promise<R2ObjectBody | null> {
-  return getBucket().get(key);
+  return getPublicBucket().get(key);
 }
 
 export async function deleteLandingImage(key: string): Promise<void> {
-  await getBucket().delete(key);
+  await getPublicBucket().delete(key);
 }
 
 const DATA_URL_RE =

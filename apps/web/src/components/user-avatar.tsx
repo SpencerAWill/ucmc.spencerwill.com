@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
+import { env } from "#/config/env";
+
+const AVATAR_PREFIX = "avatars/";
 
 export interface UserAvatarProps {
   avatarKey: string | null | undefined;
@@ -39,7 +42,28 @@ export function UserAvatar({
   );
 }
 
+/**
+ * Build a browser-facing URL for an R2-stored avatar.
+ *
+ * With `VITE_R2_PUBLIC_HOST` set (deployed envs), emits
+ * `https://${cdnHost}/avatars/<userId>/<hash>.<ext>` so bytes come
+ * straight from the R2 custom domain, bypassing the worker.
+ *
+ * Without it (local dev / Miniflare), falls back to the worker-mediated
+ * `/api/avatars/<key>` route. The two shapes resolve to the same R2
+ * object.
+ *
+ * `avatarKey` is the full storage key (e.g. `avatars/<userId>/<hash>.webp`),
+ * built by `avatarKey()` in `apps/web/src/server/r2/avatars.server.ts`.
+ */
 export function avatarUrlFor(avatarKey: string): string {
+  const cdnHost = env.VITE_R2_PUBLIC_HOST;
+  if (cdnHost) {
+    const key = avatarKey.startsWith(AVATAR_PREFIX)
+      ? avatarKey
+      : `${AVATAR_PREFIX}${avatarKey}`;
+    return `https://${cdnHost}/${key}`;
+  }
   return `/api/avatars/${avatarKey}`;
 }
 

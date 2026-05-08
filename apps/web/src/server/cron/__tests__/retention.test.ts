@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
-import { getBucket } from "#/server/r2";
+import { getPublicBucket } from "#/server/r2";
 import {
   runRetentionSweeps,
   sweepDeactivatedAccounts,
@@ -71,7 +71,7 @@ afterEach(async () => {
 
   // R2 cleanup — list everything and delete. Bounded by what tests
   // put in.
-  const bucket = getBucket();
+  const bucket = getPublicBucket();
   for (const prefix of ["avatars/", "landing/"] as const) {
     let cursor: string | undefined;
     let truncated = true;
@@ -238,7 +238,7 @@ describe("sweepOrphanR2Keys", () => {
     const userId = await seedUser({ status: "approved" });
     const liveKey = `avatars/${userId}/live123.webp`;
     const orphanKey = `avatars/${userId}/orphan456.webp`;
-    const bucket = getBucket();
+    const bucket = getPublicBucket();
     await bucket.put(liveKey, new Uint8Array([1, 2, 3]));
     await bucket.put(orphanKey, new Uint8Array([4, 5, 6]));
 
@@ -261,7 +261,7 @@ describe("sweepOrphanR2Keys", () => {
   it("treats landing hero slide image keys as live", async () => {
     const liveKey = "landing/hero/live789.webp";
     const orphanKey = "landing/hero/orphanabc.webp";
-    const bucket = getBucket();
+    const bucket = getPublicBucket();
     await bucket.put(liveKey, new Uint8Array([1]));
     await bucket.put(orphanKey, new Uint8Array([2]));
 
@@ -285,7 +285,7 @@ describe("sweepOrphanR2Keys", () => {
     const aboutKey = "landing/about/aboutdef.webp";
     const meetingKey = "landing/meeting/meetghi.webp";
     const orphanKey = "landing/about/orphanjkl.webp";
-    const bucket = getBucket();
+    const bucket = getPublicBucket();
     await bucket.put(aboutKey, new Uint8Array([1]));
     await bucket.put(meetingKey, new Uint8Array([2]));
     await bucket.put(orphanKey, new Uint8Array([3]));
@@ -307,7 +307,7 @@ describe("sweepOrphanR2Keys", () => {
 
   it("tolerates malformed JSON in landing_settings without failing the sweep", async () => {
     const orphanKey = "landing/about/orphan.webp";
-    const bucket = getBucket();
+    const bucket = getPublicBucket();
     await bucket.put(orphanKey, new Uint8Array([1]));
 
     await getDb()
@@ -328,7 +328,7 @@ describe("sweepOrphanR2Keys", () => {
     // the cron sees the key as unreferenced. The age guard must keep
     // it for the next sweep instead of clipping a real upload.
     const orphanKey = "avatars/inflight/upload.webp";
-    const bucket = getBucket();
+    const bucket = getPublicBucket();
     await bucket.put(orphanKey, new Uint8Array([7]));
 
     // 5-minute guard, run "now" — the just-uploaded object is well
@@ -356,7 +356,7 @@ describe("runRetentionSweeps", () => {
       userId: userForWaiver,
       revokedAt: new Date(NOW.getTime() - 91 * DAY_MS),
     });
-    await getBucket().put("avatars/orphan/x.webp", new Uint8Array([0]));
+    await getPublicBucket().put("avatars/orphan/x.webp", new Uint8Array([0]));
 
     // minOrphanAgeMs: 0 — bypass the orphan-GC upload-race guard so
     // the just-`put`-ed fixture object isn't held back; the guard

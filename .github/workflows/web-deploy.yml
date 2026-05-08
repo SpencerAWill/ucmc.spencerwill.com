@@ -66,6 +66,7 @@ jobs:
             echo "resend_from=$(pulumi stack output resendFromEmail)"
             echo "resend_from_name=$(pulumi stack output resendFromName)"
             echo "turnstile_site_key=$(pulumi stack output turnstileSiteKey)"
+            echo "r2_public_host=$(pulumi stack output r2PublicHost)"
           } >> "$GITHUB_OUTPUT"
           # Secret outputs: masked in job logs, used only as env vars for
           # the deploy step. `--show-secrets` is required to get plaintext.
@@ -89,6 +90,10 @@ jobs:
         run: pnpm --filter ucmc-web build
         env:
           VITE_TURNSTILE_SITE_KEY: ${{ steps.pulumi.outputs.turnstile_site_key }}
+          # CDN hostname for the public R2 bucket. Vite bakes this into
+          # the client bundle so avatar/landing image URLs point at
+          # cdn.dev.ucmc.spencerwill.com directly, bypassing the worker.
+          VITE_R2_PUBLIC_HOST: ${{ steps.pulumi.outputs.r2_public_host }}
 
       - name: Apply D1 migrations (dev)
         uses: cloudflare/wrangler-action@v3
@@ -172,6 +177,7 @@ jobs:
             echo "resend_from=$(pulumi stack output resendFromEmail)"
             echo "resend_from_name=$(pulumi stack output resendFromName)"
             echo "turnstile_site_key=$(pulumi stack output turnstileSiteKey)"
+            echo "r2_public_host=$(pulumi stack output r2PublicHost)"
           } >> "$GITHUB_OUTPUT"
           echo "::add-mask::$(pulumi stack output resendApiKey --show-secrets)"
           echo "resend_api_key=$(pulumi stack output resendApiKey --show-secrets)" >> "$GITHUB_OUTPUT"
@@ -191,6 +197,10 @@ jobs:
         env:
           CLOUDFLARE_ENV: production
           VITE_TURNSTILE_SITE_KEY: ${{ steps.pulumi.outputs.turnstile_site_key }}
+          # CDN hostname for the public R2 bucket — baked into the client
+          # bundle at build time so avatar/landing URLs hit
+          # cdn.ucmc.spencerwill.com directly.
+          VITE_R2_PUBLIC_HOST: ${{ steps.pulumi.outputs.r2_public_host }}
 
       - name: Apply D1 migrations (prod)
         uses: cloudflare/wrangler-action@v3
