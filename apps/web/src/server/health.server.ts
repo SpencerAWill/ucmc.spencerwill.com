@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 import { env } from "#/server/cloudflare-env";
 import { getDb } from "#/server/db";
 import { getKv } from "#/server/kv";
-import { getBucket } from "#/server/r2";
+import { getPrivateBucket } from "#/server/r2";
 import { checkHealthRateLimit } from "#/server/rate-limit.server";
 
 import type { HealthCheck, HealthReport } from "#/server/health";
@@ -38,7 +38,7 @@ async function checkD1(): Promise<HealthCheck> {
 async function checkR2(): Promise<HealthCheck> {
   const time = new Date().toISOString();
   try {
-    const bucket = getBucket();
+    const bucket = getPrivateBucket();
     // `head` on a missing key returns null (not an error), so this succeeds
     // on an empty bucket. It only throws when the binding itself is broken
     // or credentials can't reach R2. O(1), no seed object required.

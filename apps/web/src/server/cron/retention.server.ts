@@ -23,7 +23,7 @@
 import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
-import { getBucket } from "#/server/r2";
+import { getPublicBucket } from "#/server/r2";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -137,7 +137,7 @@ export async function sweepOrphanR2Keys(
   now: Date = new Date(),
   minOrphanAgeMs: number = DEFAULT_MIN_ORPHAN_AGE_MS,
 ): Promise<number> {
-  const bucket = getBucket();
+  const bucket = getPublicBucket();
 
   // 1. List every key under the GC prefixes BEFORE reading the DB.
   const r2Objects: R2Object[] = [];

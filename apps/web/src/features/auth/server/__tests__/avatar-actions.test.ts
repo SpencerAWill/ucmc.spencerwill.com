@@ -27,7 +27,7 @@ vi.mock("#/server/rate-limit.server", () => ({
 const { uploadAvatarAction, removeAvatarAction } =
   await import("#/features/auth/server/avatar-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
-const { getBucket } = await import("#/server/r2");
+const { getPublicBucket } = await import("#/server/r2");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ describe("uploadAvatarAction", () => {
       new RegExp(`^avatars/${userId}/[a-f0-9]{16}\\.webp$`),
     );
 
-    const stored = await getBucket().head(result.avatarKey);
+    const stored = await getPublicBucket().head(result.avatarKey);
     expect(stored).not.toBeNull();
 
     const profile = await getDb().query.profiles.findFirst({
@@ -132,8 +132,8 @@ describe("uploadAvatarAction", () => {
     });
 
     expect(second.avatarKey).not.toBe(first.avatarKey);
-    expect(await getBucket().head(first.avatarKey)).toBeNull();
-    expect(await getBucket().head(second.avatarKey)).not.toBeNull();
+    expect(await getPublicBucket().head(first.avatarKey)).toBeNull();
+    expect(await getPublicBucket().head(second.avatarKey)).not.toBeNull();
   });
 
   it("rejects payloads where the bytes don't match the declared content type", async () => {
@@ -179,7 +179,7 @@ describe("removeAvatarAction", () => {
     const { avatarKey } = await uploadAvatarAction({
       dataUrl: makeWebpDataUrl(),
     });
-    expect(await getBucket().head(avatarKey)).not.toBeNull();
+    expect(await getPublicBucket().head(avatarKey)).not.toBeNull();
 
     const result = await removeAvatarAction();
     expect(result.ok).toBe(true);
@@ -189,7 +189,7 @@ describe("removeAvatarAction", () => {
       columns: { avatarKey: true },
     });
     expect(profile?.avatarKey).toBeNull();
-    expect(await getBucket().head(avatarKey)).toBeNull();
+    expect(await getPublicBucket().head(avatarKey)).toBeNull();
   });
 
   it("is a no-op when no avatar is set", async () => {

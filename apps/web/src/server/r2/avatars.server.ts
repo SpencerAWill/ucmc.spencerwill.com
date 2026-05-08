@@ -1,4 +1,4 @@
-import { getBucket } from "#/server/r2";
+import { getPublicBucket } from "#/server/r2";
 
 /**
  * Hard upper bound on R2 object size for avatars. The client compresses
@@ -36,15 +36,26 @@ export async function putAvatar(
       `Avatar exceeds ${AVATAR_MAX_BYTES} bytes (got ${bytes.byteLength})`,
     );
   }
-  await getBucket().put(key, bytes, {
-    httpMetadata: { contentType },
+  await getPublicBucket().put(key, bytes, {
+    // Cache-Control is set at upload time (not on the read response)
+    // because the public bucket is served via a Cloudflare R2 custom
+    // domain that bypasses the worker — there's no place to inject a
+    // header on read. R2 custom domains pass through the object's
+    // stored httpMetadata.cacheControl on every GET.
+    //
+    // Avatar keys are content-hashed, so the URL changes whenever the
+    // bytes change; `immutable` is safe forever.
+    httpMetadata: {
+      contentType,
+      cacheControl: "public, max-age=31536000, immutable",
+    },
   });
 }
 
 export async function getAvatar(key: string): Promise<R2ObjectBody | null> {
-  return getBucket().get(key);
+  return getPublicBucket().get(key);
 }
 
 export async function deleteAvatar(key: string): Promise<void> {
-  await getBucket().delete(key);
+  await getPublicBucket().delete(key);
 }

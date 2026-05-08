@@ -60,10 +60,24 @@
   // injection step at deploy time — the bucket_name below IS the real name,
   // managed by Pulumi. Miniflare also keys on bucket_name locally, so `pnpm
   // dev` uses a simulated namespace under apps/web/.wrangler/state/v3/r2/.
+  //
+  // Two buckets, by access policy:
+  //  - BUCKET_PRIVATE: worker-mediated reads only. Default for any new
+  //    media; future private uploads (waivers, internal trip reports,
+  //    gear inventory photos) land here.
+  //  - BUCKET_PUBLIC:  bound to a Cloudflare R2 custom domain
+  //    (cdn.{dev.,}ucmc.spencerwill.com), so reads bypass the worker
+  //    entirely. URL bytes are publicly readable; rely on
+  //    content-hashed keys + opaque public IDs for unguessability.
+  //    Avatars + landing images live here.
   "r2_buckets": [
     {
-      "binding": "BUCKET",
+      "binding": "BUCKET_PRIVATE",
       "bucket_name": "ucmc-web-dev-storage",
+    },
+    {
+      "binding": "BUCKET_PUBLIC",
+      "bucket_name": "ucmc-web-dev-public-storage",
     },
   ],
   "kv_namespaces": [
@@ -136,8 +150,12 @@
       ],
       "r2_buckets": [
         {
-          "binding": "BUCKET",
+          "binding": "BUCKET_PRIVATE",
           "bucket_name": "ucmc-web-storage",
+        },
+        {
+          "binding": "BUCKET_PUBLIC",
+          "bucket_name": "ucmc-web-public-storage",
         },
       ],
       "kv_namespaces": [
