@@ -13,6 +13,8 @@ const hostname = cfg.require("hostname");
 const workerName = cfg.require("workerName");
 const d1DatabaseName = cfg.require("d1DatabaseName");
 const r2BucketName = cfg.require("r2BucketName");
+const r2PublicBucketName = cfg.require("r2PublicBucketName");
+const cdnHostname = cfg.require("cdnHostname");
 const kvNamespaceTitle = cfg.require("kvNamespaceTitle");
 const webauthnRpName = cfg.require("webauthnRpName");
 const resendFromName = cfg.require("resendFromName");
@@ -57,6 +59,44 @@ const bucket = new cloudflare.R2Bucket(
     location: "enam",
   },
   { protect: true },
+);
+
+// Public R2 bucket for content that's safe to serve directly from a
+// Cloudflare CDN custom domain — avatars, landing photos, future public
+// media. URL bytes bypass the worker entirely, so reads don't pay any
+// CPU. Anything held here is implicitly readable by anyone who has the
+// URL; the private bucket above is the default for everything else.
+//
+// `protect: true` — same data-loss reasoning as the private bucket.
+const publicBucket = new cloudflare.R2Bucket(
+  `ucmc-web-${stack}-public-bucket`,
+  {
+    accountId,
+    name: r2PublicBucketName,
+    location: "enam",
+  },
+  { protect: true },
+);
+
+// Binds the CDN hostname to the public bucket. Cloudflare provisions
+// the proxied DNS record + edge cert automatically. Setting `enabled`
+// explicitly even though it's the default — the resource argument is
+// required and Cloudflare's API treats undefined as enabled, so we
+// state intent rather than rely on the default.
+//
+// `minTls: "1.2"` — refuse TLS 1.0/1.1 connections, matching modern
+// Cloudflare zone defaults. Avatars are loaded by every modern browser
+// over HTTPS; there's no legitimate downstream that can't do 1.2+.
+const publicBucketDomain = new cloudflare.R2CustomDomain(
+  `ucmc-web-${stack}-cdn`,
+  {
+    accountId,
+    zoneId,
+    bucketName: publicBucket.name,
+    domain: cdnHostname,
+    enabled: true,
+    minTls: "1.2",
+  },
 );
 
 // Workers KV namespace for the web app. Wrangler binds by namespace UUID
@@ -104,6 +144,16 @@ export const d1DatabaseNameOutput = database.name;
 // already static in `apps/web/wrangler.jsonc`, so this export is for drift
 // detection / reference rather than being consumed by any workflow today.
 export const r2BucketNameOutput = bucket.name;
+
+// Public R2 bucket name — same drift-detection role as the private
+// bucket above. Wrangler will bind to it by name once the public binding
+// lands in `apps/web/wrangler.jsonc`.
+export const r2PublicBucketNameOutput = publicBucket.name;
+
+// CDN hostname for the public bucket. Consumed by `web-deploy.yml` and
+// passed to the worker as `R2_PUBLIC_HOST` so the app can construct
+// `https://${R2_PUBLIC_HOST}/<key>` URLs that bypass the worker.
+export const r2PublicHost = publicBucketDomain.domain;
 
 // KV namespace UUID — wrangler needs this for `kv_namespaces[].id`. The
 // web-deploy workflow injects it into `apps/web/wrangler.jsonc` before
