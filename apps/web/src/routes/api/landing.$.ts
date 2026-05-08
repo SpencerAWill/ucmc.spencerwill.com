@@ -1,7 +1,17 @@
 /**
- * Public landing-image serving route. Streams R2 objects under the
- * `landing/` prefix straight to the browser. No auth — the home page is
- * public and these images are part of it.
+ * Landing-image serving route — local-dev fallback only.
+ *
+ * In deployed envs, `landingImageUrlFor` (in
+ * `apps/web/src/features/landing/lib/image-url.ts`) emits
+ * `https://${VITE_R2_PUBLIC_HOST}/<key>` and the R2 custom domain
+ * serves bytes directly — this worker route never sees production
+ * traffic. It exists so that local dev (`pnpm --filter ucmc-web dev`,
+ * `VITE_R2_PUBLIC_HOST` unset) can still read landing images out of
+ * Miniflare's `BUCKET_PUBLIC` namespace.
+ *
+ * Streams R2 objects under the `landing/` prefix straight to the
+ * browser. No auth — the home page is public and these images are
+ * part of it.
  *
  * Keys are content-hashed (`landing/hero/<hash>.<ext>`) so each upload
  * produces a new URL — `Cache-Control: immutable` is safe.
