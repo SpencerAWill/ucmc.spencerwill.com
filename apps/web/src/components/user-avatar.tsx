@@ -3,8 +3,6 @@ import type { ReactNode } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { env } from "#/config/env";
 
-const AVATAR_PREFIX = "avatars/";
-
 export interface UserAvatarProps {
   avatarKey: string | null | undefined;
   /**
@@ -54,15 +52,13 @@ export function UserAvatar({
  * object.
  *
  * `avatarKey` is the full storage key (e.g. `avatars/<userId>/<hash>.webp`),
- * built by `avatarKey()` in `apps/web/src/server/r2/avatars.server.ts`.
+ * built by `avatarKey()` in `apps/web/src/server/r2/avatars.server.ts`,
+ * and always starts with `avatars/`.
  */
 export function avatarUrlFor(avatarKey: string): string {
   const cdnHost = env.VITE_R2_PUBLIC_HOST;
   if (cdnHost) {
-    const key = avatarKey.startsWith(AVATAR_PREFIX)
-      ? avatarKey
-      : `${AVATAR_PREFIX}${avatarKey}`;
-    return `https://${cdnHost}/${key}`;
+    return `https://${cdnHost}/${avatarKey}`;
   }
   return `/api/avatars/${avatarKey}`;
 }
