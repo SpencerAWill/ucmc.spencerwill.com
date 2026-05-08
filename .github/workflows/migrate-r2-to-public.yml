@@ -1,0 +1,91 @@
+name: Migrate R2 to Public Bucket
+
+# Manual-trigger workflow that copies every avatar + landing-image R2
+# object referenced from D1 from the private bucket
+# (`ucmc-web-{dev-,}storage`) to the public bucket
+# (`ucmc-web-{dev-,}public-storage`). Used once per env immediately
+# after `feat/r2-public-binding` deploys, so existing keys resolve under
+# the new CDN custom domain (`cdn.{dev.,}ucmc.spencerwill.com`) instead
+# of 404'ing.
+#
+# Idempotent: each `wrangler r2 object put` rewrites the same
+# content-hashed bytes to the same key, so reruns are safe.
+#
+# Source of truth for the migration is
+# `apps/web/scripts/migrate-r2-to-public.ts` — this workflow is just a
+# gated invocation surface around it. Same shape as `seed-admin.yml`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+
+jobs:
+  migrate:
+    name: Migrate R2 on ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    # Triggers GitHub environment protection rules — `prod` requires the
+    # approver configured in the prod environment, matching
+    # web-deploy.yml and seed-admin.yml.
+    environment: ${{ github.event.inputs.environment }}
+    concurrency:
+      group: migrate-r2-to-public-${{ github.event.inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: pulumi/setup-pulumi@v2
+
+      # The script does `wrangler d1 execute --remote` to enumerate the
+      # live R2 keys; wrangler resolves the D1 database by name from
+      # wrangler.jsonc, which has the per-env placeholder UUID. Same
+      # injection step as seed-admin.yml + web-deploy.yml.
+      - name: Fetch D1 UUID from Pulumi
+        id: pulumi
+        working-directory: infra
+        run: |
+          pulumi stack select ${{ github.event.inputs.environment }}
+          echo "database_id=$(pulumi stack output d1DatabaseId)" >> "$GITHUB_OUTPUT"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Resolve placeholder for env
+        id: env
+        run: |
+          case "${{ github.event.inputs.environment }}" in
+            dev)  echo "placeholder=00000000-0000-0000-0000-000000000000" >> "$GITHUB_OUTPUT" ;;
+            prod) echo "placeholder=11111111-1111-1111-1111-111111111111" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Unexpected environment input" && exit 1 ;;
+          esac
+
+      - name: Inject D1 UUID into wrangler.jsonc
+        run: sed -i "s/${{ steps.env.outputs.placeholder }}/${{ steps.pulumi.outputs.database_id }}/" apps/web/wrangler.jsonc
+
+      # Script reads CLOUDFLARE_API_TOKEN from env (standard wrangler
+      # auth chain). Both R2 buckets are accessed by name from
+      # wrangler.jsonc, so no per-env wrangler secret plumbing needed.
+      - name: Run migration
+        working-directory: apps/web
+        run: pnpm exec tsx scripts/migrate-r2-to-public.ts --env ${{ github.event.inputs.environment }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
