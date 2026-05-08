@@ -103,31 +103,6 @@ jobs:
           workingDirectory: apps/web
           command: d1 migrations apply ucmc-web-dev --remote
 
-      # TODO(remove): one-shot — drop this step + the script after the
-      # first successful dev deploy. After the initial run every
-      # already-uploaded avatar/landing object lives in the public
-      # bucket; subsequent uploads write directly to public via
-      # putAvatar/putLandingImage, so re-running is dead weight.
-      #
-      # Mirror referenced avatar + landing-image objects from the
-      # private bucket to the public bucket BEFORE the worker deploys.
-      # The new client bundle (about to ship in the deploy step below)
-      # has VITE_R2_PUBLIC_HOST baked in, so its avatar/landing image
-      # URLs resolve against the public bucket via the CDN custom
-      # domain. Running this AFTER the deploy would leave a window of
-      # broken images for any browser that loads the new HTML before
-      # the migration finished.
-      #
-      # Idempotent: each `wrangler r2 object put` rewrites the same
-      # content-hashed bytes, so re-running is cheap if it sticks
-      # around longer than expected.
-      - name: Migrate R2 to public bucket (dev)
-        working-directory: apps/web
-        run: pnpm exec tsx scripts/migrate-r2-to-public.ts --env dev
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
       # Secrets are uploaded via `wrangler secret put` (one call per name)
       # immediately before `wrangler deploy`. SESSION_SECRET,
       # TURNSTILE_SECRET_KEY, FEEDBACK_GITHUB_TOKEN, and
@@ -234,16 +209,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
           command: d1 migrations apply ucmc-web --env production --remote
-
-      # TODO(remove): one-shot — drop this step + the script after the
-      # first successful prod deploy. See dev job for the rationale and
-      # the same idempotency contract.
-      - name: Migrate R2 to public bucket (prod)
-        working-directory: apps/web
-        run: pnpm exec tsx scripts/migrate-r2-to-public.ts --env prod
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       # SESSION_SECRET, FEEDBACK_GITHUB_TOKEN, and FEEDBACK_GITHUB_REPO
       # come from the GitHub `prod` environment; RESEND_API_KEY and
