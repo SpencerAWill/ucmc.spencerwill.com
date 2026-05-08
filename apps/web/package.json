@@ -6,8 +6,9 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "vite dev --port 3000",
-    "build": "vite build",
+    "generate:sitemap": "tsx scripts/generate-sitemap.ts",
+    "dev": "pnpm run generate:sitemap && vite dev --port 3000",
+    "build": "pnpm run generate:sitemap && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",

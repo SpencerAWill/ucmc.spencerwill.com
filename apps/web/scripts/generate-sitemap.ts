@@ -1,18 +1,28 @@
+#!/usr/bin/env tsx
 /**
- * Generated `/sitemap.xml`. Enumerates ONLY public routes —
- * member-data surfaces are auth-gated and don't belong in a
- * crawler-discoverable index. `robots.txt` mirrors this list as a
- * `Disallow:` set so the two stay consistent.
+ * Build-time sitemap generator. Writes `public/sitemap.xml` so the
+ * file ships as a static asset (served directly by
+ * `@cloudflare/vite-plugin`'s auto-injected `assets` block, no worker
+ * invocation).
  *
- * Static and small enough that we generate inline rather than
- * persisting a file: the route list almost never changes, the bytes
- * are trivial, and CI deploys are the trigger anyway.
+ * Wired into `dev` + `build` in `apps/web/package.json` rather than as
+ * a `prebuild` lifecycle hook because pnpm v10 disables those by
+ * default. The output is gitignored (single source of truth: this
+ * script); CI regenerates on every deploy, so the `lastmod` date in
+ * the published file matches the deploy date.
+ *
+ * `SITE_ORIGIN` is hardcoded to the prod URL on purpose. Sitemaps
+ * point at the canonical surface — dev's sitemap (if a crawler ever
+ * fetched it, which `robots.txt` should prevent) would still emit
+ * prod URLs because that's what we'd want indexed.
  */
-import { createFileRoute } from "@tanstack/react-router";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const SITE_ORIGIN = "https://ucmc.spencerwill.com";
 
-// One entry per public route. `lastmod` is the deploy date — close
+// One entry per public route. `lastmod` is the build date — close
 // enough for crawl prioritization without us having to track per-page
 // content changes. `changefreq` is advisory (most modern crawlers
 // ignore it) but conventionally accurate.
@@ -61,18 +71,9 @@ ${urls}
 `;
 }
 
-export const Route = createFileRoute("/sitemap.xml")({
-  server: {
-    handlers: {
-      GET: () =>
-        new Response(buildSitemapXml(), {
-          headers: {
-            "Content-Type": "application/xml; charset=utf-8",
-            // Sitemaps don't need to be fresh-on-every-request; an
-            // hour of edge cache amortizes a deploy bump.
-            "Cache-Control": "public, max-age=3600",
-          },
-        }),
-    },
-  },
-});
+const __filename = fileURLToPath(import.meta.url);
+const outPath = join(dirname(__filename), "..", "public", "sitemap.xml");
+
+mkdirSync(dirname(outPath), { recursive: true });
+writeFileSync(outPath, buildSitemapXml(), "utf8");
+console.log(`[generate-sitemap] wrote ${outPath}`);
