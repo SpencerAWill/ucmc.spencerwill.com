@@ -528,13 +528,17 @@ function TabToggle({ active }: { active: TabId }) {
   };
 
   return (
-    <div className="flex gap-1 rounded-md border p-1">
+    // On phones the four tabs don't fit on one row without the labels
+    // truncating ("Deactivated" alone needs ~90 px); a 2×2 grid keeps
+    // every label legible. From `sm` (640 px) on, fall back to a single
+    // flex row.
+    <div className="grid grid-cols-2 gap-1 rounded-md border p-1 sm:flex">
       {tabIdSchema.options.map((tab) => (
         <Button
           key={tab}
           variant={active === tab ? "secondary" : "ghost"}
           size="sm"
-          className="flex-1"
+          className="sm:flex-1"
           onClick={() => setTab(tab)}
         >
           {TAB_LABELS[tab]}
