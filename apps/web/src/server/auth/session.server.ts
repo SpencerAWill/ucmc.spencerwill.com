@@ -158,3 +158,41 @@ export async function loadCurrentPrincipal(): Promise<Principal | null> {
 
   return principal;
 }
+
+/**
+ * Lightweight "is there a valid session?" check for hot paths that don't
+ * need the full principal — e.g. asset routes serving R2-backed bytes.
+ * Returns `{ userId } | null` after at most two D1 statements: one SELECT
+ * on the happy path, plus a DELETE if the cookie points at an expired row.
+ *
+ * Naming mirrors {@link loadCurrentPrincipal}: both return `null` for
+ * anonymous/invalid; neither throws. This is NOT a `require*` guard — the
+ * `require*` helpers in `features/auth/guards.ts` throw `redirect()`.
+ *
+ * Skipped vs. {@link loadCurrentPrincipal}:
+ *   - principal load (users + profiles + emails + roles + permissions joins)
+ *   - deactivated-user check
+ *   - sliding-window refresh write
+ *
+ * Each of those would force more D1 RTTs, and per-page asset bursts can hit
+ * this 10+ times in a single request fan-out. Use ONLY when the caller
+ * genuinely doesn't need anything past `userId`. If you need permissions,
+ * roles, profile, deactivation status, or sliding refresh, use
+ * {@link loadCurrentPrincipal} and pay the cost.
+ */
+export async function loadCurrentSession(): Promise<{
+  userId: string;
+} | null> {
+  const sid = readSessionCookie();
+  if (!sid) {
+    return null;
+  }
+
+  const session = await getSessionRow(sid);
+  if (!session) {
+    clearSessionCookie();
+    return null;
+  }
+
+  return { userId: session.userId };
+}

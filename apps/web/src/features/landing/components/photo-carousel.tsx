@@ -8,16 +8,16 @@ import {
   CarouselPrevious,
 } from "#/components/ui/carousel";
 
-// TODO(content): drop trip photos into apps/web/public/landing/ and update
-// the src + alt for each entry. The carousel will render placeholders until
-// real images exist at these paths.
+// TODO(content): replace these solid-color SVG placeholders with real
+// trip photos at apps/web/public/landing/trip-{1..6}.{jpg,webp} and
+// update the src + alt for each entry.
 const photos = [
-  { src: "/landing/trip-1.jpg", alt: "TODO(content): describe photo 1" },
-  { src: "/landing/trip-2.jpg", alt: "TODO(content): describe photo 2" },
-  { src: "/landing/trip-3.jpg", alt: "TODO(content): describe photo 3" },
-  { src: "/landing/trip-4.jpg", alt: "TODO(content): describe photo 4" },
-  { src: "/landing/trip-5.jpg", alt: "TODO(content): describe photo 5" },
-  { src: "/landing/trip-6.jpg", alt: "TODO(content): describe photo 6" },
+  { src: "/landing/trip-1.svg", alt: "" },
+  { src: "/landing/trip-2.svg", alt: "" },
+  { src: "/landing/trip-3.svg", alt: "" },
+  { src: "/landing/trip-4.svg", alt: "" },
+  { src: "/landing/trip-5.svg", alt: "" },
+  { src: "/landing/trip-6.svg", alt: "" },
 ];
 
 // embla-carousel-react's internal hooks crash under TanStack Start's SSR
