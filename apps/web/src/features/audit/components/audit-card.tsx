@@ -33,6 +33,8 @@ const USER_TARGETED_ACTIONS = new Set<AuditAction>([
   "member.claimed",
   "member.deactivated",
   "member.reactivated",
+  "member.banned",
+  "member.unbanned",
   "member.self_deleted",
   "member.sessions_revoked",
   "profile.force_edited",

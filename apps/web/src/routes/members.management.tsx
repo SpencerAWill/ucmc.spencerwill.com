@@ -35,7 +35,9 @@ import {
 import { useApproveRegistrations } from "#/features/members/api/use-approve-registrations";
 import { useReactivateMembers } from "#/features/members/api/use-reactivate-members";
 import { useRejectRegistrations } from "#/features/members/api/use-reject-registrations";
+import { useUnbanMembers } from "#/features/members/api/use-unban-members";
 import { useUnrejectMembers } from "#/features/members/api/use-unreject-members";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { UnclaimedTab } from "#/features/members/components/unclaimed-tab";
 import type {
   MemberSummary,
@@ -47,7 +49,13 @@ const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 // Single source of truth for the tab id union — `validateSearch` and
 // every helper that switches on the active tab read from here so adding
 // or renaming a tab is a one-line change.
-const tabIdSchema = z.enum(["pending", "unclaimed", "rejected", "deactivated"]);
+const tabIdSchema = z.enum([
+  "pending",
+  "unclaimed",
+  "rejected",
+  "deactivated",
+  "banned",
+]);
 type TabId = z.infer<typeof tabIdSchema>;
 
 const managementSearchSchema = z.object({
@@ -126,11 +134,22 @@ const TAB_DESCRIPTIONS: Record<TabId, string> = {
     "Real-world members an officer pre-added so off-platform records (gear, attendance) can reference a stable account before the person ever signs in. They claim the row by clicking their first magic link.",
   rejected: `Registrations an officer declined. Un-rejecting moves users back to the pending queue. ${RETENTION_REJECTED_COPY}`,
   deactivated: `Approved members an officer turned off — sessions revoked, role removed, hidden from the directory. Reactivating restores the member role. ${RETENTION_DEACTIVATED_COPY}`,
+  banned:
+    "Members banned for policy violations. Their email addresses are blocklisted independently of the user row, so a self-delete or future purge does not free up the address. Unbanning moves the user back to the pending queue and clears their blocklist entries.",
 };
 
 function ManagementPage() {
   const { tab } = Route.useSearch();
-  const activeTab: TabId = tab ?? "pending";
+  const { hasPermission } = useAuth();
+  const canBan = hasPermission("members:ban");
+  // The "banned" tab is the only surface that requires `members:ban`;
+  // everything else stays on `members:manage` (the route's gate).
+  // Resolve the active tab against the visible-tab set so a deep-link
+  // like `?tab=banned` from a non-permitted user falls back to the
+  // default rather than rendering an empty hidden tab.
+  const requestedTab: TabId = tab ?? "pending";
+  const activeTab: TabId =
+    requestedTab === "banned" && !canBan ? "pending" : requestedTab;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
@@ -138,7 +157,7 @@ function ManagementPage() {
         <h1 className="text-2xl font-semibold">Member management</h1>
       </header>
 
-      <TabToggle active={activeTab} />
+      <TabToggle active={activeTab} canBan={canBan} />
 
       <p className="text-sm text-muted-foreground">
         {TAB_DESCRIPTIONS[activeTab]}
@@ -147,12 +166,14 @@ function ManagementPage() {
       {activeTab === "pending" ? <PendingView /> : null}
       {activeTab === "unclaimed" ? <UnclaimedView /> : null}
       {/* `key={activeTab}` forces React to unmount + remount when the
-          user toggles between rejected and deactivated. Same component
+          user toggles between any two LifecycleView tabs. Same component
           type at the same tree position would otherwise reuse the
           instance and carry the previous tab's `selected` Set across —
           stale userIds would render in the toolbar count and seed the
           bulk button. */}
-      {activeTab === "rejected" || activeTab === "deactivated" ? (
+      {activeTab === "rejected" ||
+      activeTab === "deactivated" ||
+      activeTab === "banned" ? (
         <LifecycleView key={activeTab} status={activeTab} />
       ) : null}
     </div>
@@ -510,9 +531,10 @@ const TAB_LABELS: Record<TabId, string> = {
   unclaimed: "Unclaimed",
   rejected: "Rejected",
   deactivated: "Deactivated",
+  banned: "Banned",
 };
 
-function TabToggle({ active }: { active: TabId }) {
+function TabToggle({ active, canBan }: { active: TabId; canBan: boolean }) {
   const navigate = useNavigate({ from: Route.fullPath });
 
   const setTab = (tab: TabId) => {
@@ -527,13 +549,22 @@ function TabToggle({ active }: { active: TabId }) {
     });
   };
 
+  // Filter out the Banned tab when the caller lacks `members:ban` —
+  // the route's `members:manage` gate alone would let them see (but
+  // not act on) banned members, and a tab they can't act on is just
+  // noise. system_admin holds both permissions today, so the filter
+  // is a forward-looking gate for the eventual officer-tier split.
+  const visibleTabs = tabIdSchema.options.filter(
+    (t) => t !== "banned" || canBan,
+  );
+
   return (
     // On phones the four tabs don't fit on one row without the labels
-    // truncating ("Deactivated" alone needs ~90 px); a 2×2 grid keeps
-    // every label legible. From `sm` (640 px) on, fall back to a single
-    // flex row.
+    // truncating ("Deactivated" alone needs ~90 px); a 2-column grid
+    // keeps every label legible. From `sm` (640 px) on, fall back to a
+    // single flex row.
     <div className="grid grid-cols-2 gap-1 rounded-md border p-1 sm:flex">
-      {tabIdSchema.options.map((tab) => (
+      {visibleTabs.map((tab) => (
         <Button
           key={tab}
           variant={active === tab ? "secondary" : "ghost"}
@@ -561,7 +592,7 @@ interface LifecycleConfig {
 }
 
 const LIFECYCLE_CONFIG: Record<
-  Extract<TabId, "rejected" | "deactivated">,
+  Extract<TabId, "rejected" | "deactivated" | "banned">,
   LifecycleConfig
 > = {
   rejected: {
@@ -582,12 +613,21 @@ const LIFECYCLE_CONFIG: Record<
     rowSrLabel: "Reactivate",
     icon: RotateCcw,
   },
+  banned: {
+    emptyTitle: "No banned members.",
+    countNoun: "banned",
+    bulkLabel: "Unban",
+    bulkPendingLabel: "Unbanning...",
+    rowTooltip: "Unban (clears email blocklist; user returns to pending queue)",
+    rowSrLabel: "Unban",
+    icon: Undo2,
+  },
 };
 
 function LifecycleView({
   status,
 }: {
-  status: Extract<TabId, "rejected" | "deactivated">;
+  status: Extract<TabId, "rejected" | "deactivated" | "banned">;
 }) {
   const config = LIFECYCLE_CONFIG[status];
   const { limit: searchLimit, page: searchPage } = Route.useSearch();
@@ -630,11 +670,17 @@ function LifecycleView({
     });
   };
 
-  // Both lifecycle hooks must be called unconditionally to satisfy the
-  // rules of hooks. Pick the right one for the active tab.
+  // All three lifecycle hooks must be called unconditionally to satisfy
+  // the rules of hooks. Pick the right one for the active tab.
   const unreject = useUnrejectMembers();
   const reactivate = useReactivateMembers();
-  const bulkMutation = status === "rejected" ? unreject : reactivate;
+  const unban = useUnbanMembers();
+  const bulkMutation =
+    status === "rejected"
+      ? unreject
+      : status === "deactivated"
+        ? reactivate
+        : unban;
 
   const allSelected = members.length > 0 && selected.size === members.length;
   const someSelected = selected.size > 0 && !allSelected;
@@ -747,7 +793,7 @@ function LifecycleRow({
   config,
   onSuccess,
 }: {
-  status: Extract<TabId, "rejected" | "deactivated">;
+  status: Extract<TabId, "rejected" | "deactivated" | "banned">;
   member: MemberSummary;
   isSelected: boolean;
   onToggle: () => void;
@@ -757,7 +803,13 @@ function LifecycleRow({
 }) {
   const unreject = useUnrejectMembers();
   const reactivate = useReactivateMembers();
-  const mutation = status === "rejected" ? unreject : reactivate;
+  const unban = useUnbanMembers();
+  const mutation =
+    status === "rejected"
+      ? unreject
+      : status === "deactivated"
+        ? reactivate
+        : unban;
   const Icon = config.icon;
   const name = member.preferredName ?? member.fullName;
 

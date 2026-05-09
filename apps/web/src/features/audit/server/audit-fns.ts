@@ -49,6 +49,8 @@ export const AUDIT_ACTIONS = [
   "member.unclaimed_edited",
   "member.unclaimed_deleted",
   "member.claimed",
+  "member.banned",
+  "member.unbanned",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

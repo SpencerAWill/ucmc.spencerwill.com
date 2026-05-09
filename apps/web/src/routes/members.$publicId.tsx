@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  Ban,
   LogOut,
   Pencil,
   Shield,
@@ -12,9 +13,11 @@ import {
 import { Fragment, useState } from "react";
 
 import { memberDetailQueryOptions } from "#/features/members/api/queries";
+import { useBanMembers } from "#/features/members/api/use-ban-members";
 import { useDeactivateMembers } from "#/features/members/api/use-deactivate-members";
 import { useReactivateMembers } from "#/features/members/api/use-reactivate-members";
 import { useRevokeUserSessions } from "#/features/members/api/use-revoke-user-sessions";
+import { useUnbanMembers } from "#/features/members/api/use-unban-members";
 import { useUnrejectMembers } from "#/features/members/api/use-unreject-members";
 import { AdminProfileSheet } from "#/features/members/components/admin-profile-sheet";
 import type { AdminProfileDefaults } from "#/features/members/components/admin-profile-sheet";
@@ -33,7 +36,9 @@ import {
 import { UserAvatar } from "#/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
+import { Label } from "#/components/ui/label";
 import { Separator } from "#/components/ui/separator";
+import { Textarea } from "#/components/ui/textarea";
 import { RouteErrorFallback } from "#/components/error-page";
 import { requireApproved } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
@@ -56,6 +61,7 @@ function MemberDetailPage() {
   );
 
   const canManage = hasPermission("members:manage");
+  const canBan = hasPermission("members:ban");
   const canViewPrivate = hasPermission("members:view_private");
   const canRevokeSessions = hasPermission("sessions:revoke");
   const canAssignRoles = hasPermission("roles:assign");
@@ -198,13 +204,17 @@ function MemberDetailPage() {
       ) : null}
 
       {/* Admin actions */}
-      {!isSelf && (canManage || canRevokeSessions || canAssignRoles) ? (
+      {!isSelf &&
+      (canManage || canBan || canRevokeSessions || canAssignRoles) ? (
         <Card>
           <CardContent className="space-y-4">
             <h2 className="text-sm font-semibold">Actions</h2>
             <div className="flex flex-wrap gap-2">
               {canManage ? (
                 <MemberManageActions member={member} publicId={publicId} />
+              ) : null}
+              {canBan ? (
+                <MemberBanActions member={member} publicId={publicId} />
               ) : null}
               {canRevokeSessions &&
               member.activeSessions !== null &&
@@ -346,6 +356,126 @@ function MemberManageActions({
         }}
         detailPublicId={publicId}
       />
+    </>
+  );
+}
+
+// ── Ban / Unban ─────────────────────────────────────────────────────────
+
+const BAN_REASON_MIN = 10;
+const BAN_REASON_MAX = 2000;
+
+function MemberBanActions({
+  member,
+  publicId,
+}: {
+  member: MemberDetail;
+  publicId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const ban = useBanMembers(publicId);
+  const unban = useUnbanMembers(publicId);
+  const name = member.preferredName ?? member.email;
+
+  // Mirror the server-side trim+min-length floor so the disabled state
+  // matches what the action will accept. Whitespace-only input must
+  // not satisfy the gate.
+  const trimmedReason = reason.trim();
+  const reasonValid =
+    trimmedReason.length >= BAN_REASON_MIN &&
+    trimmedReason.length <= BAN_REASON_MAX;
+
+  if (member.status === "banned") {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => unban.mutate([member.userId])}
+        disabled={unban.isPending}
+      >
+        <UserPlus className="mr-1 size-3.5" />
+        {unban.isPending ? "Unbanning..." : "Unban"}
+      </Button>
+    );
+  }
+
+  // The detail page narrows status to `DirectoryStatus`
+  // (`unclaimed` is filtered out at the action layer), so every
+  // remaining state — pending, approved, rejected, deactivated — is
+  // a valid ban target. The bulk action has the same allowlist on
+  // the server side.
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="text-destructive hover:bg-destructive/10"
+        onClick={() => setOpen(true)}
+      >
+        <Ban className="mr-1 size-3.5" />
+        Ban
+      </Button>
+
+      <AlertDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) {
+            // Clear the reason on close so re-opening doesn't carry
+            // a draft from a prior cancel into a different action.
+            setReason("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ban {name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All of their email addresses are added to the blocklist
+              independently of the user row, so the addresses stay blocked even
+              if the account is later deleted. You can unban from the Banned tab
+              in member management.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="ban-reason">Reason</Label>
+            <Textarea
+              id="ban-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={BAN_REASON_MAX}
+              placeholder="What policy violation prompted this ban? Captured on the audit row."
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">
+              Minimum {BAN_REASON_MIN} characters. Recorded on the audit event
+              metadata; do not include third-party PII.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() =>
+                ban.mutate(
+                  { userIds: [member.userId], reason: trimmedReason },
+                  {
+                    onSuccess: () => {
+                      setOpen(false);
+                      setReason("");
+                    },
+                  },
+                )
+              }
+              disabled={ban.isPending || !reasonValid}
+            >
+              {ban.isPending ? "Banning..." : "Ban"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
