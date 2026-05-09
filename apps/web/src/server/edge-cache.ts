@@ -1,42 +1,45 @@
 /**
- * Worker-level edge cache for the anonymous home-page SSR. Wraps the
+ * Worker-level edge cache for anonymous public-page SSR. Wraps the
  * TanStack Start fetch handler in `apps/web/src/server-entry.ts` so
- * GET `/` requests with no auth cookies are served from
+ * GET requests to a known set of public pages are served from
  * `caches.default` (per-PoP Workers Cache API) instead of paying the
- * ~180 ms React SSR cost on every request.
+ * full React SSR cost on every request.
  *
- * Why only `/` for now: it's the heaviest single path in the worker
- * telemetry tail (P95 ~180 ms CPU). Other public pages
- * (/about, /membership, the legal routes) are even more static and
- * can be folded in once this validates; deferred to a follow-up so
- * the first cut has the smallest blast radius.
+ * Why bypass-by-cookie instead of stub-the-auth-aware-UI: most public
+ * traffic is anonymous (recruitment + legal-policy surfaces), and
+ * anonymous SSR HTML on these pages is fully deterministic — UserMenu
+ * shows "Sign in", AnnouncementsBell hidden, the auth-gated sidebar
+ * branches collapsed, EditAffordance widgets render null. Signed-in
+ * visits bypass the cache and pay full SSR (rare on these surfaces).
  *
- * Why bypass-by-cookie instead of stub-the-auth-aware-UI: most
- * `/` traffic is anonymous (recruitment surface), and anonymous SSR
- * HTML for `/` is already deterministic — UserMenu, AnnouncementsBell,
- * the auth-gated sidebar branches, and EditAffordance widgets all
- * render their public-fallback shape when `useAuth()` is anonymous.
- * Signed-in visits bypass the cache and pay full SSR (rare on `/`).
+ * Why these paths only: every entry in `CACHEABLE_PATHS` either has
+ * no admin CMS surface at all (the legal/policy routes are constants
+ * in `apps/web/src/config/legal.ts`) or has one that's edited
+ * infrequently enough that the 60 s `s-maxage` window is invisible
+ * (`/`, `/about`, `/membership` read landing-CMS data via the
+ * `landingContentQueryOptions` query). Auth-mediated surfaces and
+ * the sign-in form (Turnstile widget, CSRF) are deliberately
+ * excluded.
  *
  * Why not active invalidation on admin write: editor population is
- * small, edits are infrequent, and the 60 s `s-maxage` window plus
- * `stale-while-revalidate=86400` means visitors never see a stalled
- * page — they get the stale copy instantly and the next request
- * triggers a background refresh. Revisit if landing edits become
- * high-frequency.
+ * small, edits are infrequent, and `stale-while-revalidate=86400`
+ * means visitors during the staleness window get an instant
+ * response with a background revalidation. Revisit if landing
+ * edits become high-frequency.
  */
 
 // Every cookie the project sets that signals "this is a user-specific
 // request" — sessions, registration proofs, and in-flight passkey
-// ceremonies. The session cookie is the only one that affects the `/`
-// SSR today; the proof + webauthn names are added defensively so the
-// cache key reads as "no auth state of any kind", which is easier to
-// reason about than "this auth state happens not to affect `/` right now".
+// ceremonies. Only the session cookie meaningfully affects SSR on the
+// cacheable pages today; the proof + webauthn names are added
+// defensively so the cache key reads as "no auth state of any kind",
+// which is easier to reason about than "this auth state happens not
+// to affect these pages right now".
 //
-// Both `__Host-`-prefixed names (HTTPS) and bare names (HTTP local dev)
-// listed because cookie helpers swap based on `APP_BASE_URL` scheme —
-// see `apps/web/src/server/auth/session-cookie.server.ts` and
-// `apps/web/src/features/auth/server/webauthn-ceremony.server.ts`.
+// Both `__Host-`-prefixed names (HTTPS) and bare names (HTTP local
+// dev) listed because cookie helpers swap based on `APP_BASE_URL`
+// scheme — see `apps/web/src/server/auth/session-cookie.server.ts`
+// and `apps/web/src/features/auth/server/webauthn-ceremony.server.ts`.
 const AUTH_COOKIE_NAMES: ReadonlySet<string> = new Set([
   "ucmc_session",
   "__Host-ucmc_session",
@@ -46,17 +49,44 @@ const AUTH_COOKIE_NAMES: ReadonlySet<string> = new Set([
   "__Host-ucmc_webauthn",
 ]);
 
+// Every path that should share the public-page cache. Each must:
+//   1. Render the same HTML for every anonymous visitor (no per-visitor
+//      randomness, locale-detection, A/B testing, etc.).
+//   2. Render no Set-Cookie response header in the anonymous case
+//      (the runtime gate enforces this defensively, but it's the
+//      pre-condition for inclusion).
+//   3. Be tolerant of a 60 s staleness window (admin edits land within
+//      a minute on the 4 routes that have CMS-edited content; the
+//      rest are constants in `apps/web/src/config/legal.ts`).
+//
+// `/sign-in` is intentionally excluded — it renders the Turnstile
+// widget, which polls Cloudflare's CDN and may render differently
+// per visitor, and posts a CSRF-sensitive form.
+const CACHEABLE_PATHS: ReadonlySet<string> = new Set([
+  "/",
+  "/about",
+  "/membership",
+  "/legal",
+  "/disclaimer",
+  "/anti-hazing",
+  "/nondiscrimination",
+  "/waiver",
+  "/privacy",
+  "/terms",
+  "/open-source",
+]);
+
 /**
- * True when the request is eligible to share the anonymous home-page
- * cache entry: GET method, exact path `/`, and no auth cookies set.
- * Pure function — exported for unit tests.
+ * True when the request is eligible to share a public-page cache
+ * entry: GET method, path is in `CACHEABLE_PATHS`, and no auth
+ * cookies set. Pure function — exported for unit tests.
  */
-export function isAnonymousHomePageRequest(request: Request): boolean {
+export function isCacheablePublicPageRequest(request: Request): boolean {
   if (request.method !== "GET") {
     return false;
   }
   const url = new URL(request.url);
-  if (url.pathname !== "/") {
+  if (!CACHEABLE_PATHS.has(url.pathname)) {
     return false;
   }
   return !hasAnyAuthCookie(request.headers.get("cookie"));
@@ -86,14 +116,14 @@ function hasAnyAuthCookie(cookieHeader: string | null): boolean {
 }
 
 /**
- * Cache key that ignores query strings. Without this, `?utm_source=x`,
- * `?utm_source=y`, and `/` would each get their own cache entry — same
- * SSR output, three times the storage. The original request keeps its
- * URL so the underlying handler still sees query params for analytics.
+ * Cache key that strips query strings so `?utm_source=x` and
+ * `?utm_source=y` share an entry — same SSR output, one cache slot.
+ * The original request keeps its URL so the underlying handler still
+ * sees query params for analytics.
  */
-export function homePageCacheKey(request: Request): Request {
+export function publicPageCacheKey(request: Request): Request {
   const url = new URL(request.url);
-  return new Request(`${url.origin}/`, { method: "GET" });
+  return new Request(`${url.origin}${url.pathname}`, { method: "GET" });
 }
 
 /**
@@ -111,15 +141,15 @@ export type WorkerFetchHandler = (
 ) => Response | Promise<Response>;
 
 /**
- * Wraps a Worker fetch handler with the home-page cache layer. All
- * requests that don't satisfy `isAnonymousHomePageRequest` pass
+ * Wraps a Worker fetch handler with the public-page cache layer. All
+ * requests that don't satisfy `isCacheablePublicPageRequest` pass
  * through to `inner` unchanged.
  */
-export function withAnonymousHomeCache(
+export function withPublicPageCache(
   inner: WorkerFetchHandler,
 ): WorkerFetchHandler {
   return async function cachedFetch(request, env, ctx) {
-    if (!isAnonymousHomePageRequest(request)) {
+    if (!isCacheablePublicPageRequest(request)) {
       return inner(request, env, ctx);
     }
 
@@ -128,7 +158,7 @@ export function withAnonymousHomeCache(
     // Cast through the Cloudflare-typed shape so TypeScript accepts
     // the access without losing type-safety on the resulting `Cache`.
     const cache = (caches as unknown as { default: Cache }).default;
-    const cacheKey = homePageCacheKey(request);
+    const cacheKey = publicPageCacheKey(request);
     const cached = await cache.match(cacheKey);
     if (cached) {
       return cached;
@@ -136,11 +166,11 @@ export function withAnonymousHomeCache(
 
     const response = await inner(request, env, ctx);
 
-    // Belt-and-suspenders gate. Today's anonymous `/` SSR satisfies
-    // all three; the checks defend against a future change silently
-    // making the cache leaky (e.g. someone adds a Set-Cookie to the
-    // root loader). On any miss we degrade to no-cache, not to
-    // caching-a-leak.
+    // Belt-and-suspenders gate. Today's anonymous SSR for every entry
+    // in CACHEABLE_PATHS satisfies all three; the checks defend
+    // against a future change silently making the cache leaky (e.g.
+    // someone adds a Set-Cookie to a route's loader). On any miss
+    // we degrade to no-cache, not to caching-a-leak.
     if (
       response.status === 200 &&
       !response.headers.has("Set-Cookie") &&

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  homePageCacheKey,
-  isAnonymousHomePageRequest,
+  isCacheablePublicPageRequest,
+  publicPageCacheKey,
 } from "#/server/edge-cache";
 
 const ORIGIN = "https://example.com";
@@ -21,21 +21,36 @@ function makeRequest(
   });
 }
 
-describe("isAnonymousHomePageRequest", () => {
+describe("isCacheablePublicPageRequest", () => {
   it("returns true for GET / with no cookies", () => {
-    expect(isAnonymousHomePageRequest(makeRequest("/"))).toBe(true);
+    expect(isCacheablePublicPageRequest(makeRequest("/"))).toBe(true);
   });
 
   it("returns true for GET / with a non-auth cookie", () => {
     expect(
-      isAnonymousHomePageRequest(makeRequest("/", { cookie: "_ga=GA1.2.x" })),
+      isCacheablePublicPageRequest(makeRequest("/", { cookie: "_ga=GA1.2.x" })),
     ).toBe(true);
   });
 
   it("returns true for GET / with a query string", () => {
-    expect(isAnonymousHomePageRequest(makeRequest("/?utm_source=insta"))).toBe(
-      true,
-    );
+    expect(
+      isCacheablePublicPageRequest(makeRequest("/?utm_source=insta")),
+    ).toBe(true);
+  });
+
+  it.each([
+    "/about",
+    "/membership",
+    "/legal",
+    "/disclaimer",
+    "/anti-hazing",
+    "/nondiscrimination",
+    "/waiver",
+    "/privacy",
+    "/terms",
+    "/open-source",
+  ])("returns true for GET %s with no cookies", (path) => {
+    expect(isCacheablePublicPageRequest(makeRequest(path))).toBe(true);
   });
 
   it.each([
@@ -46,14 +61,25 @@ describe("isAnonymousHomePageRequest", () => {
     ["ucmc_webauthn=qrs"],
     ["__Host-ucmc_webauthn=qrs"],
   ])("returns false for GET / with %s cookie", (cookie) => {
-    expect(isAnonymousHomePageRequest(makeRequest("/", { cookie }))).toBe(
+    expect(isCacheablePublicPageRequest(makeRequest("/", { cookie }))).toBe(
       false,
     );
   });
 
+  it("returns false for any cacheable path when an auth cookie is present", () => {
+    // The auth-cookie gate applies to every path uniformly. Spot-check
+    // one of the legal routes to make sure the bypass is on cookies,
+    // not just `/`.
+    expect(
+      isCacheablePublicPageRequest(
+        makeRequest("/privacy", { cookie: "ucmc_session=abc" }),
+      ),
+    ).toBe(false);
+  });
+
   it("returns false when an auth cookie is present alongside others", () => {
     expect(
-      isAnonymousHomePageRequest(
+      isCacheablePublicPageRequest(
         makeRequest("/", {
           cookie: "_ga=GA1.2.x; ucmc_session=abc; theme=dark",
         }),
@@ -66,7 +92,7 @@ describe("isAnonymousHomePageRequest", () => {
     // *value* (not a name) when it appears after '='. This guards a future
     // sloppy substring check from regressing.
     expect(
-      isAnonymousHomePageRequest(
+      isCacheablePublicPageRequest(
         makeRequest("/", { cookie: "_evil=ucmc_session=fake" }),
       ),
     ).toBe(true);
@@ -75,31 +101,48 @@ describe("isAnonymousHomePageRequest", () => {
   it.each(["POST", "HEAD", "OPTIONS", "DELETE"])(
     "returns false for %s /",
     (method) => {
-      expect(isAnonymousHomePageRequest(makeRequest("/", { method }))).toBe(
+      expect(isCacheablePublicPageRequest(makeRequest("/", { method }))).toBe(
         false,
       );
     },
   );
 
-  it.each(["/about", "/sign-in", "/announcements", "/foo"])(
-    "returns false for GET %s with no cookies",
-    (path) => {
-      expect(isAnonymousHomePageRequest(makeRequest(path))).toBe(false);
-    },
-  );
+  it.each([
+    "/sign-in",
+    "/announcements",
+    "/feedback",
+    "/my/account",
+    "/members",
+    "/foo",
+    "/about/extra",
+  ])("returns false for non-cacheable path %s", (path) => {
+    expect(isCacheablePublicPageRequest(makeRequest(path))).toBe(false);
+  });
 });
 
-describe("homePageCacheKey", () => {
+describe("publicPageCacheKey", () => {
   it("strips query strings so utm variants share an entry", () => {
-    const a = homePageCacheKey(makeRequest("/?utm_source=insta"));
-    const b = homePageCacheKey(makeRequest("/?utm_source=fb&ref=email"));
+    const a = publicPageCacheKey(makeRequest("/?utm_source=insta"));
+    const b = publicPageCacheKey(makeRequest("/?utm_source=fb&ref=email"));
     expect(a.url).toBe(`${ORIGIN}/`);
     expect(b.url).toBe(`${ORIGIN}/`);
     expect(a.method).toBe("GET");
   });
 
+  it("preserves the request path so different cacheable pages get different keys", () => {
+    expect(publicPageCacheKey(makeRequest("/")).url).toBe(`${ORIGIN}/`);
+    expect(publicPageCacheKey(makeRequest("/privacy")).url).toBe(
+      `${ORIGIN}/privacy`,
+    );
+    expect(publicPageCacheKey(makeRequest("/about?ref=x")).url).toBe(
+      `${ORIGIN}/about`,
+    );
+  });
+
   it("preserves the request origin", () => {
-    const request = new Request("https://other.example/", { method: "GET" });
-    expect(homePageCacheKey(request).url).toBe("https://other.example/");
+    const request = new Request("https://other.example/legal", {
+      method: "GET",
+    });
+    expect(publicPageCacheKey(request).url).toBe("https://other.example/legal");
   });
 });

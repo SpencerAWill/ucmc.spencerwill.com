@@ -3,15 +3,17 @@
  * entry (which provides `fetch`) with:
  *   - a `scheduled` handler so cron triggers declared in
  *     `wrangler.jsonc` reach our retention sweeps; and
- *   - an anonymous home-page cache layer that serves `/` from
- *     `caches.default` for cookie-less GETs (see `./server/edge-cache`).
+ *   - a public-page cache layer that serves cookie-less GETs to a
+ *     known set of public pages (`/`, `/about`, `/membership`, the
+ *     legal/policy routes) from `caches.default` (see
+ *     `./server/edge-cache`).
  *
  * `wrangler.jsonc` `main` points here instead of straight at the
  * TanStack package.
  */
 import startEntry from "@tanstack/react-start/server-entry";
 
-import { withAnonymousHomeCache } from "./server/edge-cache";
+import { withPublicPageCache } from "./server/edge-cache";
 import type { WorkerFetchHandler } from "./server/edge-cache";
 
 // `startEntry.fetch` is typed `(request, opts?)` even though the
@@ -21,7 +23,7 @@ import type { WorkerFetchHandler } from "./server/edge-cache";
 // losing the runtime invocation. (This same gap is why the original
 // `satisfies` line used `typeof startEntry.fetch` rather than
 // `ExportedHandlerFetchHandler` — keeping that to avoid further drift.)
-const cachedFetch = withAnonymousHomeCache(
+const cachedFetch = withPublicPageCache(
   startEntry.fetch as unknown as WorkerFetchHandler,
 );
 
