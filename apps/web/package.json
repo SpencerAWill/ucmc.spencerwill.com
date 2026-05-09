@@ -92,10 +92,10 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
-    "@cloudflare/vitest-pool-workers": "^0.12.21",
-    "@cloudflare/workers-types": "^4.20260430.1",
+    "@cloudflare/vitest-pool-workers": "^0.16.3",
+    "@cloudflare/workers-types": "^4.20260509.1",
     "@playwright/test": "^1.59.1",
-    "@storybook/react-vite": "^10.2.15",
+    "@storybook/react-vite": "^10.3.6",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/devtools-vite": "latest",
     "@tanstack/eslint-config": "latest",
@@ -112,12 +112,12 @@
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-check-file": "^3.3.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
-    "jsdom": "^29.0.2",
+    "jsdom": "^29.1.1",
     "storybook": "^10.3.6",
     "tsx": "^4.21.0",
     "typescript": "^5.7.2",
-    "vite": "^8.0.10",
+    "vite": "^8.0.11",
     "vitest": "^3.0.5",
-    "wrangler": "^4.87.0"
+    "wrangler": "^4.90.0"
   }
 }
