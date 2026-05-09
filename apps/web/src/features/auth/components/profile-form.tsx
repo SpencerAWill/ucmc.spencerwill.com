@@ -71,7 +71,7 @@ export function ProfileForm({
     },
     onSubmit: ({ value }) => {
       mutation.mutate(value as RegistrationInput, {
-        onSuccess: async () => {
+        onSuccess: async (result) => {
           toast.success("Profile submitted");
           // Mark the current values as the new defaults so the
           // unsaved-changes guard sees `isDefaultValue: true`
@@ -82,7 +82,14 @@ export function ProfileForm({
           // between this onSuccess and navigate (microtask awaits
           // don't flush React).
           form.reset(form.state.values);
-          await navigate({ to: redirectTo });
+          // Officer-pre-added users who claim land on this submit with
+          // status flipped straight to "approved" (no pending wait).
+          // Send them to /my/account instead of the registration
+          // funnel's pending page so they don't see a misleading
+          // "we're reviewing your account" interstitial.
+          const destination =
+            result.status === "approved" ? "/my/account" : redirectTo;
+          await navigate({ to: destination });
         },
         onError: () => {
           toast.error("Couldn’t save your profile. Please try again.");

@@ -26,25 +26,9 @@ import {
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
+import { requireApprover } from "#/features/members/server/permissions.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
-
-/**
- * Loads the current principal and asserts that they hold the
- * `registrations:approve` permission. Throws if unsigned-in or missing
- * the permission — callers in this file treat the thrown error as a
- * hard stop (the shell maps it to a 403-style response shape).
- */
-async function requireApprover(): Promise<Principal> {
-  const principal = await loadCurrentPrincipal();
-  if (!principal) {
-    throw new Error("Not signed in");
-  }
-  if (!principal.permissions.includes("registrations:approve")) {
-    throw new Error("Forbidden: missing registrations:approve");
-  }
-  return principal;
-}
 
 /** Requires the `members:manage` permission. */
 async function requireMembersManager(): Promise<Principal> {
@@ -163,6 +147,12 @@ export interface EmergencyContactSummary {
   relationship: schema.ContactRelationship;
 }
 
+// Directory + detail surfaces both filter `status = 'unclaimed'` out at
+// the SQL layer (officer-pre-added stubs aren't directory members),
+// so the projection types narrow accordingly. Callers that render
+// `<StatusBadge>` get the same narrowing for free.
+export type DirectoryStatus = Exclude<schema.UserStatus, "unclaimed">;
+
 export interface MemberSummary {
   userId: string;
   publicId: string;
@@ -172,7 +162,7 @@ export interface MemberSummary {
   ucAffiliation: string | null;
   avatarKey: string | null;
   roles: string[];
-  status: schema.UserStatus;
+  status: DirectoryStatus;
   // Private fields — null/empty when the caller lacks members:view_private.
   phone: string | null;
   emergencyContacts: EmergencyContactSummary[];
@@ -194,10 +184,21 @@ export async function listMembersAction(opts: {
   const canViewPrivate = principal.permissions.includes("members:view_private");
 
   // Status filter: members:manage holders can filter by any status;
-  // everyone else is locked to "approved".
-  const statusList = canManage
+  // everyone else is locked to "approved". `unclaimed` is *always*
+  // excluded — these are officer-pre-added stubs with no profile, no
+  // verified email, and no avatar; they have their own tab on
+  // /members/registrations and do not belong in the directory.
+  const requested = canManage
     ? (opts.statuses?.split(",").filter(Boolean) ?? ["approved"])
     : ["approved"];
+  const statusList = requested.filter((s) => s !== "unclaimed");
+  // If the caller passed *only* "unclaimed" we'd end up with an empty
+  // status list, which would silently match every status. Fall back to
+  // the safe default so the empty-input case returns no rows rather
+  // than the entire user table.
+  if (statusList.length === 0) {
+    statusList.push("approved");
+  }
 
   const conditions =
     statusList.length === 1
@@ -348,7 +349,12 @@ export async function listMembersAction(opts: {
     ucAffiliation: r.ucAffiliation,
     avatarKey: r.avatarKey,
     roles: rolesByUser.get(r.userId) ?? [],
-    status: r.status,
+    // Cast: the WHERE clause above filters `status='unclaimed'` out
+    // of the result set unconditionally (see the `statusList.filter`
+    // in the conditions builder), so `r.status` is guaranteed not to
+    // be "unclaimed" at runtime — the cast just lets the type system
+    // see what the SQL already enforces.
+    status: r.status as DirectoryStatus,
     phone: canViewPrivate ? r.phone : null,
     emergencyContacts: canViewPrivate
       ? (contactsByUser.get(r.userId) ?? [])
@@ -364,7 +370,7 @@ export interface MemberDetail {
   userId: string;
   publicId: string;
   email: string;
-  status: schema.UserStatus;
+  status: DirectoryStatus;
   createdAt: Date;
   approvedAt: Date | null;
   approvedBy: string | null;
@@ -418,6 +424,15 @@ export async function getMemberDetailAction(
     .get();
 
   if (!row) {
+    throw new Error("User not found");
+  }
+  // Unclaimed (officer-pre-added) stubs aren't directory members — they
+  // have no profile, no verified email, and no avatar. The list query
+  // already excludes them; mirror that here so a manually-typed
+  // /members/<publicId> URL can't surface a stub on the detail page.
+  // Treat as 404 so the route renders the same not-found state any
+  // unknown publicId would.
+  if (row.status === "unclaimed") {
     throw new Error("User not found");
   }
 

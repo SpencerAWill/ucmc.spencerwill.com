@@ -66,6 +66,14 @@
  *     would only tell you "user X changed their emails" without
  *     identifying which address. Including the address keeps these
  *     rows useful for incident review.
+ *   - `member.pre_added` / `member.unclaimed_edited` /
+ *     `member.unclaimed_deleted`: capture `{ email, placeholderName }`
+ *     (and `{ before, after }` for the edit case). These are
+ *     officer-initiated lifecycle events on stub user rows that may
+ *     never get a profile (if the person never claims). The audit row
+ *     IS the source of truth for "who pre-added whom and when"; if a
+ *     future retention sweep purges abandoned stubs, both FKs cascade
+ *     to NULL and the metadata is the only surviving identifier.
  *
  * No other event type follows this pattern; if you find yourself
  * adding one, the audit story for that flow is probably wrong. The

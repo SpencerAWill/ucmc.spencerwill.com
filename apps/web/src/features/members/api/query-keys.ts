@@ -16,6 +16,13 @@ export const MEMBERS_REGISTRATIONS_QUERY_KEY = [
   "registrations",
 ] as const;
 
+/**
+ * Officer-pre-added "unclaimed" stub members. Pre-add / edit / delete
+ * mutations all invalidate by this prefix; the list query options under
+ * it carry pagination input as the trailing key segment.
+ */
+export const MEMBERS_UNCLAIMED_QUERY_KEY = ["members", "unclaimed"] as const;
+
 export const memberDetailQueryKey = (publicId: string) =>
   ["members", "detail", publicId] as const;
 

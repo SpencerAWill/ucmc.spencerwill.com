@@ -200,6 +200,28 @@ export async function consumeMagicLinkAction(
     return { ok: false, reason: "invalid" };
   }
   if (existing) {
+    // First time an officer-pre-added (unclaimed) user clicks a magic
+    // link to their on-file address: the round-trip IS the verification
+    // proof, so stamp `verifiedAt` on the matching primary user_emails
+    // row before opening the session. Idempotent: the WHERE filter on
+    // `verified_at IS NULL` makes a re-consume a no-op. Status stays
+    // "unclaimed" until profile submission flips it to "approved" (see
+    // `submitProfileAction`).
+    if (existing.status === "unclaimed") {
+      await getDb()
+        .update(schema.userEmails)
+        .set({ verifiedAt: new Date() })
+        .where(
+          and(
+            eq(schema.userEmails.userId, existing.userId),
+            eq(schema.userEmails.email, normalizeEmail(proof.email)),
+            // Guard so we never overwrite a real verification timestamp
+            // — important if a future code path stamps verifiedAt
+            // outside this branch.
+            eq(schema.userEmails.isPrimary, true),
+          ),
+        );
+    }
     // rotateSession (not openSession) so any stale session cookie on the
     // device gets replaced — same privilege-boundary discipline the
     // other auth transitions follow.
@@ -299,7 +321,13 @@ export async function exportMyDataAction(): Promise<{
   emails: Array<{
     email: string;
     isPrimary: boolean;
-    verifiedAt: Date;
+    // Nullable to support the officer pre-add path: an unclaimed user
+    // whose row has not yet been claimed has `verifiedAt = NULL`. Real
+    // members exporting their data always have a non-null timestamp;
+    // the type widening is for completeness, not because anyone in the
+    // claim path can call /api/account/export without first round-
+    // tripping a magic link (which stamps verifiedAt).
+    verifiedAt: Date | null;
     createdAt: Date;
   }>;
   profile: typeof schema.profiles.$inferSelect | null;
@@ -493,9 +521,21 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+export interface SubmitProfileResult {
+  ok: true;
+  /**
+   * The user's status AFTER the submit lands. Almost always `"pending"`
+   * (first-time registrant, or returning user without a profile), but
+   * the unclaimed-claim path flips straight to `"approved"`. The form
+   * uses this to pick the post-submit destination — pending users see
+   * `/register/pending`, approved users go to `/my/account`.
+   */
+  status: schema.UserStatus;
+}
+
 export async function submitProfileAction(
   data: RegistrationInput,
-): Promise<{ ok: true }> {
+): Promise<SubmitProfileResult> {
   const principal = await loadCurrentPrincipal();
   const proof = principal ? null : await readProofCookie();
 
@@ -609,7 +649,61 @@ export async function submitProfileAction(
       ),
     );
   }
-  if (!isNewUser) {
+  // Officer-pre-added (unclaimed) users land here with `principal.status
+  // === "unclaimed"` and no profile. The pre-add itself was the
+  // approval signal, so flip them straight to "approved" and NULL the
+  // placeholder columns — they skip the normal pending queue. The
+  // `WHERE status = 'unclaimed'` guard makes the UPDATE safe against a
+  // stale principal: if an officer concurrently deleted or reactivated
+  // the row, no rows match and the UPDATE is a no-op.
+  //
+  // **`approvedBy` is intentionally left at NULL on this path.** The
+  // normal approval flow stamps `approvedBy = approver.userId`, but no
+  // officer is *currently* approving — the approval already happened
+  // (semantically) at officer pre-add time. Attribution lives in the
+  // audit log: `member.pre_added` (officer actor) → `member.claimed`
+  // (self actor) is the canonical chain. Any UI that displays an
+  // "Approved by X" line on a member must handle the `approvedBy IS
+  // NULL` case (treat as "auto-approved via pre-add claim"); the shape
+  // `status = 'approved' AND approved_at IS NOT NULL AND approved_by
+  // IS NULL` is unambiguous.
+  const isClaimingFromUnclaimed =
+    !!principal && principal.status === "unclaimed";
+  if (isClaimingFromUnclaimed) {
+    stmts.push(
+      db
+        .update(schema.users)
+        .set({
+          status: "approved",
+          approvedAt: new Date(),
+          placeholderName: null,
+          unclaimedAt: null,
+        })
+        .where(
+          and(
+            eq(schema.users.id, userId),
+            eq(schema.users.status, "unclaimed"),
+          ),
+        ),
+    );
+    // Bundle the `member.claimed` audit into the same batch as the
+    // status flip so the two are atomic — a worker death between the
+    // batch returning and a post-batch audit insert would otherwise
+    // strand a freshly-approved user with no claim event in the audit
+    // chain. The schema doc-comment names `member.pre_added` →
+    // `member.claimed` as the canonical attribution chain, so the
+    // audit row is load-bearing.
+    const { buildAuditEventStatement } =
+      await import("#/server/audit/audit-log.server");
+    stmts.push(
+      buildAuditEventStatement({
+        actorUserId: userId,
+        action: "member.claimed",
+        targetUserId: userId,
+        metadata: { priorStatus: "unclaimed" },
+      }),
+    );
+  } else if (!isNewUser) {
     stmts.push(
       db
         .update(schema.users)
@@ -626,7 +720,22 @@ export async function submitProfileAction(
     clearProofCookie();
   }
 
-  return { ok: true };
+  // Compute the post-submit status without an extra DB read: the only
+  // ways the user lands here are
+  //   - claim-from-unclaimed → "approved" (set above)
+  //   - new user             → "pending" (insert default)
+  //   - returning user, was not "approved" → reset to "pending"
+  //   - returning user, was "approved" → still "approved" (the WHERE
+  //     guard above keeps the revert from firing)
+  const status: schema.UserStatus = isClaimingFromUnclaimed
+    ? "approved"
+    : isNewUser
+      ? "pending"
+      : principal!.status === "approved"
+        ? "approved"
+        : "pending";
+
+  return { ok: true, status };
 }
 
 /**

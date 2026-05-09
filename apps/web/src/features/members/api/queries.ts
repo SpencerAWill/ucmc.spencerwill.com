@@ -1,6 +1,7 @@
 import {
   MEMBERS_DIRECTORY_QUERY_KEY,
   MEMBERS_REGISTRATIONS_QUERY_KEY,
+  MEMBERS_UNCLAIMED_QUERY_KEY,
   PERMISSIONS_QUERY_KEY,
   ROLES_DETAILED_QUERY_KEY,
   ROLES_QUERY_KEY,
@@ -11,12 +12,14 @@ import {
 import type {
   ListMembersInput,
   ListPendingRegistrationsInput,
+  ListUnclaimedInput,
 } from "#/features/members/server/member-fns";
 import {
   getMemberDetailFn,
   listMembersFn,
   listPendingRegistrationsFn,
   listRolesFn,
+  listUnclaimedFn,
 } from "#/features/members/server/member-fns";
 import {
   getRoleFn,
@@ -73,6 +76,20 @@ export function rejectedMembersQueryOptions(input: {
           offset: input.offset,
         },
       }),
+  } as const;
+}
+
+/**
+ * Officer-pre-added unclaimed members. Pagination + date-range inputs
+ * are part of the cache key so flipping any of them cache-misses
+ * cleanly. Pre-add / edit / delete mutations invalidate by the bare
+ * `MEMBERS_UNCLAIMED_QUERY_KEY` prefix, so any input shape under this
+ * key is invalidated together.
+ */
+export function unclaimedMembersQueryOptions(input: ListUnclaimedInput) {
+  return {
+    queryKey: [...MEMBERS_UNCLAIMED_QUERY_KEY, input] as const,
+    queryFn: () => listUnclaimedFn({ data: input }),
   } as const;
 }
 

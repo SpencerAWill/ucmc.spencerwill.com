@@ -201,9 +201,11 @@ export const getProfileFn = createServerFn({ method: "GET" }).handler(
  *   - status stays 'pending' unless already 'approved' (profile edits
  *     never downgrade; only an approver can promote).
  */
+export type { SubmitProfileResult } from "#/features/auth/server/magic-link-actions.server";
+
 export const submitProfileFn = createServerFn({ method: "POST" })
   .inputValidator(registrationInputSchema)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
+  .handler(async ({ data }) => {
     const { submitProfileAction } =
       await import("#/features/auth/server/magic-link-actions.server");
     return submitProfileAction(data);

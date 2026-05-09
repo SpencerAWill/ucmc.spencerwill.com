@@ -19,6 +19,16 @@ export const userStatus = [
   "approved",
   "rejected",
   "deactivated",
+  // Officer-pre-added stub: a real-world member who has gear out (or
+  // similar off-platform association) but has not yet claimed the
+  // account by completing a magic-link round-trip + profile submit.
+  // Excluded from member directory, RBAC role-assign, waiver queue,
+  // and registration approval queue. `placeholderName` + `unclaimedAt`
+  // below are populated for these rows; `user_emails.verifiedAt` is
+  // NULL until the person claims. On claim, status flips to "approved"
+  // (officer pre-add IS the approval signal) and the placeholder
+  // columns are NULLed; `profiles.fullName` then owns the display name.
+  "unclaimed",
 ] as const;
 export type UserStatus = (typeof userStatus)[number];
 
@@ -48,6 +58,15 @@ export const users = sqliteTable("users", {
   // Set when a member is deactivated. Drives the 12-month
   // deactivated-account purge. Same NULL-skip rule.
   deactivatedAt: timestamp("deactivated_at"),
+  // Display-name placeholder captured at officer pre-add time. NULL for
+  // every status other than `"unclaimed"`. NULLed on claim — the
+  // freshly-inserted `profiles.fullName` takes over.
+  placeholderName: text("placeholder_name"),
+  // Stamped when an officer pre-adds the user. NULL for all
+  // non-unclaimed rows. Mirrors the pattern of `rejectedAt` /
+  // `deactivatedAt`. A future retention cron can purge stale stubs by
+  // filtering `status = 'unclaimed' AND unclaimed_at < cutoff`.
+  unclaimedAt: timestamp("unclaimed_at"),
   lastReadAnnouncementsAt: timestamp("last_read_announcements_at"),
 });
 
@@ -86,7 +105,15 @@ export const userEmails = sqliteTable(
     isPrimary: integer("is_primary", { mode: "boolean" })
       .notNull()
       .default(false),
-    verifiedAt: timestamp("verified_at").notNull(),
+    // Nullable to support the officer pre-add path: an unclaimed user's
+    // primary email row is created with `verifiedAt = NULL` (we have
+    // the address on file but have not round-tripped a magic link to
+    // it yet). When the real person clicks their first magic link, the
+    // consume handler stamps `verifiedAt = now()`. Every other write
+    // site (self-registration, add-email round-trip) sets a non-null
+    // value at insert time, so any NULL in this column means
+    // "officer-pre-added, not yet claimed."
+    verifiedAt: timestamp("verified_at"),
     createdAt: timestamp("created_at")
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
@@ -440,6 +467,16 @@ export const landingActivities = sqliteTable(
  *     useful for incident review (e.g. correlating a hijacked alt
  *     email back to the user) without expanding the surface beyond
  *     what was already exposed when the event happened.
+ *   - `member.pre_added`, `member.unclaimed_edited`,
+ *     `member.unclaimed_deleted` — capture `{ email, placeholderName }`
+ *     (and `{ before, after }` for the edit case). These are
+ *     officer-initiated lifecycle events on stub user rows that may
+ *     never get a profile (if the person never claims). The audit row
+ *     IS the source of truth for "who did the officer add and when";
+ *     the FK to the unclaimed `users.id` is the only other handle on
+ *     the stub, and a future retention sweep that purges abandoned
+ *     stubs would null both FKs, leaving the metadata as the only
+ *     surviving identifier.
  *
  * No other action type follows this pattern; the helper module
  * doc-comment in `src/server/audit/audit-log.server.ts` is the
@@ -485,6 +522,21 @@ export const auditAction = [
   "landing.hero_slide_edited",
   "landing.activity_edited",
   "landing.faq_edited",
+  // Officer pre-adds a stub user (name + email) so off-platform
+  // associations like gear holdings can FK to a stable users.id before
+  // the person ever signs in. Metadata: { email, placeholderName }.
+  // Listed at the end (rather than grouped with the other membership-
+  // lifecycle entries above) so the audit page's filter dropdown order
+  // mirrors `AUDIT_ACTIONS` in `features/audit/server/audit-fns.ts` —
+  // existing officers' muscle memory survives the new feature.
+  "member.pre_added",
+  "member.unclaimed_edited",
+  "member.unclaimed_deleted",
+  // The unclaimed user clicked their first magic link and submitted a
+  // profile, claiming the row. Status flips from "unclaimed" to
+  // "approved" in the same step (officer pre-add was the approval
+  // signal). Actor + target are the same user.
+  "member.claimed",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
