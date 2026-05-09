@@ -161,7 +161,13 @@ export function withPublicPageCache(
     const cacheKey = publicPageCacheKey(request);
     const cached = await cache.match(cacheKey);
     if (cached) {
-      return cached;
+      // Cached `Response` headers are immutable; wrap to attach an
+      // observability marker. Cheap (no body read), and gives ops a
+      // single header to grep for in `wrangler tail` to verify the
+      // cache is working as expected.
+      const hit = new Response(cached.body, cached);
+      hit.headers.set("X-Edge-Cache", "HIT");
+      return hit;
     }
 
     const response = await inner(request, env, ctx);
@@ -171,11 +177,12 @@ export function withPublicPageCache(
     // against a future change silently making the cache leaky (e.g.
     // someone adds a Set-Cookie to a route's loader). On any miss
     // we degrade to no-cache, not to caching-a-leak.
-    if (
+    const isCacheable =
       response.status === 200 &&
       !response.headers.has("Set-Cookie") &&
-      (response.headers.get("Content-Type") ?? "").includes("text/html")
-    ) {
+      (response.headers.get("Content-Type") ?? "").includes("text/html");
+
+    if (isCacheable) {
       const toCache = response.clone();
       toCache.headers.set(
         "Cache-Control",
@@ -184,6 +191,13 @@ export function withPublicPageCache(
       ctx.waitUntil(cache.put(cacheKey, toCache));
     }
 
+    // Observability header is set on the user-facing response only;
+    // the cached copy (above) carries no marker, so a future HIT can
+    // be tagged HIT without colliding. `BYPASS` covers the case where
+    // we got here via cache miss but the response failed the cacheable
+    // gate — useful signal that something downstream is poisoning the
+    // cache eligibility.
+    response.headers.set("X-Edge-Cache", isCacheable ? "MISS" : "BYPASS");
     return response;
   };
 }
