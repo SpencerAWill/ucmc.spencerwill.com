@@ -219,6 +219,17 @@ export async function consumeMagicLinkAction(
   if (existing && existing.status === "banned") {
     return { ok: false, reason: "invalid" };
   }
+  // Orphaned-blocklist guard. If `user_emails` no longer owns this
+  // address (the original banned user self-deleted, or was purged by
+  // a future retention sweep), `resolveUserByEmail` returns null and
+  // the consume would otherwise fall through to first-time
+  // registration. The blocklist row survives the user delete via ON
+  // DELETE SET NULL — so re-check it here to keep the
+  // "address blocked indefinitely" promise from leaking on a
+  // pre-ban-minted token.
+  if (!existing && (await isEmailBanned(proof.email))) {
+    return { ok: false, reason: "invalid" };
+  }
   if (existing) {
     // First time an officer-pre-added (unclaimed) user clicks a magic
     // link to their on-file address: the round-trip IS the verification
@@ -564,6 +575,17 @@ export async function submitProfileAction(
   }
 
   const email = normalizeEmail(principal?.primaryEmail ?? proof!.email);
+
+  // Orphaned-blocklist guard for the proof-cookie path. The consume
+  // step already checks the blocklist before issuing a proof cookie,
+  // but a cookie minted in the narrow window between consume and
+  // submit must not slip through — re-check here so a banned address
+  // can't seed a fresh `users` row. The session-cookie path is
+  // already gated by the auth surface (`requireApproved` /
+  // `loadCurrentPrincipal`'s banned-status check).
+  if (!principal && (await isEmailBanned(email))) {
+    throw new Error("Not authorized to submit a profile");
+  }
 
   const { emergencyContacts, bio, policiesAck: _ack, ...rest } = data;
   // Empty/whitespace-only bio normalizes to NULL so the DB has a single

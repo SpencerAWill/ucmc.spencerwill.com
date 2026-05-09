@@ -366,6 +366,64 @@ describe("banned email blocklist", () => {
     expect(elapsed).toBeGreaterThanOrEqual(500);
   });
 
+  it("consumeMagicLinkAction refuses an outstanding token for an orphaned blocklist row", async () => {
+    // The "blocklist survives user-row delete" promise is meaningless
+    // if the registration path doesn't honor it. Set up: blocklist
+    // row exists with `userId = NULL` (the original banned user is
+    // gone), AND a pre-ban-minted token still resolves to the address.
+    // The consume must refuse rather than fall through to first-time
+    // registration.
+    await seedBlocklist(TEST_EMAIL);
+    // No `users` row for TEST_EMAIL — `resolveUserByEmail` will
+    // return null. Without the orphaned-blocklist guard, the consume
+    // would write a proof cookie and route to /register/profile.
+    const token = await seedMagicLink({
+      email: TEST_EMAIL,
+      intent: "register",
+    });
+
+    const result = await consumeMagicLinkAction(token);
+    expect(result).toEqual({ ok: false, reason: "invalid" });
+
+    // No proof cookie was set — the bypass would have left one.
+    const proofCookie = cookieJar.get("ucmc_proof");
+    expect(proofCookie).toBeUndefined();
+  });
+
+  it("submitProfileAction refuses a proof cookie for a blocklisted email", async () => {
+    // Defense-in-depth for a proof cookie minted in the narrow
+    // window between consume and submit (e.g. attacker has a stale
+    // cookie from a prior session). The consume guard above closes
+    // the common path; this test pins the second-layer check that
+    // `submitProfileAction` refuses to seed a fresh `users` row when
+    // the address became blocked between the cookie issue and
+    // submit.
+    await seedBlocklist(TEST_EMAIL);
+    // Manually plant a proof cookie as if the consume had succeeded
+    // at a moment when the email wasn't yet blocklisted.
+    const { writeProofCookie } =
+      await import("#/server/auth/proof-cookie.server");
+    await writeProofCookie({
+      email: TEST_EMAIL,
+      intent: "register",
+      issuedAt: Date.now(),
+    });
+
+    await expect(
+      submitProfileAction({
+        ...validProfile,
+        policiesAck: true as const,
+      }),
+    ).rejects.toThrow(/not authorized/i);
+
+    // No `users` row was created.
+    const rows = await getDb()
+      .select()
+      .from(schema.userEmails)
+      .where(drizzleEq(schema.userEmails.email, TEST_EMAIL));
+    expect(rows).toHaveLength(0);
+  });
+
   it("consumeMagicLinkAction refuses an outstanding token for a banned user", async () => {
     // Token minted before the ban (or seeded directly for the test) —
     // refuses with `invalid` rather than opening a session.
