@@ -35,6 +35,8 @@ const {
   getMemberDetailAction,
   rejectRegistrationsAction,
   approveRegistrationsAction,
+  banMembersAction,
+  unbanMembersAction,
 } = await import("#/features/members/server/member-actions.server");
 const { reorderRolesAction, getUserRolesAction } =
   await import("#/features/members/server/rbac-actions.server");
@@ -159,11 +161,17 @@ beforeEach(async () => {
   await db.delete(schema.emergencyContacts);
   await db.delete(schema.profiles);
   await db.delete(schema.users);
+  // Drop the blocklist alongside the user state — banMembersAction
+  // mirrors verified emails into `banned_emails`, and a residual row
+  // from a prior test would falsely pass the "blocklist gets seeded"
+  // assertion in the next one.
+  await db.delete(schema.bannedEmails);
   // Remove test-created roles (keep seeded ones).
   for (const id of [
     "role_test_members_manage",
     "role_test_members_view_private",
     "role_test_sessions_revoke",
+    "role_test_members_ban",
   ]) {
     await db.delete(schema.roles).where(eq(schema.roles.id, id));
   }
@@ -205,6 +213,31 @@ describe("authorization", () => {
     await expect(revokeUserSessionsAction("x")).rejects.toThrow(
       "Forbidden: missing sessions:revoke",
     );
+  });
+
+  it("banMembersAction rejects callers without members:ban", async () => {
+    await signInAsMember();
+    await expect(
+      banMembersAction({ userIds: ["x"], reason: "policy violation" }),
+    ).rejects.toThrow("Forbidden: missing members:ban");
+  });
+
+  it("unbanMembersAction rejects callers without members:ban", async () => {
+    await signInAsMember();
+    await expect(unbanMembersAction(["x"])).rejects.toThrow(
+      "Forbidden: missing members:ban",
+    );
+  });
+
+  it("members:manage alone is not enough to ban", async () => {
+    // Ban is gated by `members:ban` specifically — a user with
+    // `members:manage` (the rest of the lifecycle surface) should
+    // still be refused. This pins the permission split that the
+    // action layer enforces.
+    await signInWithPermission("manager@example.com", "members:manage");
+    await expect(
+      banMembersAction({ userIds: ["x"], reason: "policy violation" }),
+    ).rejects.toThrow("Forbidden: missing members:ban");
   });
 
   it("adminUpdateProfileAction rejects callers without members:manage", async () => {
@@ -426,6 +459,256 @@ describe("unrejectMembersAction", () => {
     });
     expect(u1!.status).toBe("pending");
     expect(u2!.status).toBe("pending");
+  });
+});
+
+// ── ban / unban ─────────────────────────────────────────────────────────
+
+describe("banMembersAction", () => {
+  it("flips status to banned and stamps the actor + reason", async () => {
+    const adminId = await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+    await assignRole(targetId, "role_member");
+
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    const user = await getDb().query.users.findFirst({
+      where: eq(schema.users.id, targetId),
+    });
+    expect(user!.status).toBe("banned");
+    expect(user!.bannedAt).not.toBeNull();
+    expect(user!.bannedBy).toBe(adminId);
+    expect(user!.bannedReason).toBe("policy violation");
+  });
+
+  it("mirrors every verified email of the user into banned_emails", async () => {
+    await signInAsAdmin();
+    const targetId = await seedUser("primary@example.com");
+    // Add a second verified email — banMembers should pick up both.
+    const db = getDb();
+    await db.insert(schema.userEmails).values({
+      id: `uem_${crypto.randomUUID()}`,
+      userId: targetId,
+      email: "alt@example.com",
+      isPrimary: false,
+      verifiedAt: new Date(),
+    });
+
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    const blocklist = await db
+      .select()
+      .from(schema.bannedEmails)
+      .where(eq(schema.bannedEmails.userId, targetId));
+    const emails = blocklist.map((r) => r.email).sort();
+    expect(emails).toEqual(["alt@example.com", "primary@example.com"]);
+    for (const row of blocklist) {
+      expect(row.reason).toBe("policy violation");
+    }
+  });
+
+  it("purges the target's active sessions", async () => {
+    await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+
+    const db = getDb();
+    await db.insert(schema.sessions).values({
+      id: "sess_ban_1",
+      userId: targetId,
+      createdAt: new Date(),
+      lastSeenAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    const after = await db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.userId, targetId));
+    expect(after).toHaveLength(0);
+  });
+
+  it("refuses to ban yourself", async () => {
+    const adminId = await signInAsAdmin();
+    await expect(
+      banMembersAction({ userIds: [adminId], reason: "policy violation" }),
+    ).rejects.toThrow("Cannot ban yourself");
+  });
+
+  it("is a no-op for unclaimed stubs (excluded by status filter)", async () => {
+    await signInAsAdmin();
+    const stubId = await seedUser("stub@example.com", {
+      status: "unclaimed",
+      withProfile: false,
+    });
+
+    await banMembersAction({ userIds: [stubId], reason: "policy violation" });
+
+    const user = await getDb().query.users.findFirst({
+      where: eq(schema.users.id, stubId),
+    });
+    expect(user!.status).toBe("unclaimed");
+    const blocklist = await getDb()
+      .select()
+      .from(schema.bannedEmails)
+      .where(eq(schema.bannedEmails.userId, stubId));
+    expect(blocklist).toHaveLength(0);
+  });
+
+  it("re-banning an already-banned user is idempotent", async () => {
+    await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+
+    await banMembersAction({ userIds: [targetId], reason: "first reason" });
+    // Second call: status filter excludes "banned", so neither status
+    // nor blocklist should churn. The ON CONFLICT DO NOTHING in the
+    // blocklist insert is also exercised here.
+    await banMembersAction({ userIds: [targetId], reason: "second reason" });
+
+    const user = await getDb().query.users.findFirst({
+      where: eq(schema.users.id, targetId),
+    });
+    expect(user!.bannedReason).toBe("first reason");
+    const blocklist = await getDb()
+      .select()
+      .from(schema.bannedEmails)
+      .where(eq(schema.bannedEmails.userId, targetId));
+    expect(blocklist).toHaveLength(1);
+    expect(blocklist[0].reason).toBe("first reason");
+  });
+
+  it("blocklist row survives user-row delete (ON DELETE SET NULL)", async () => {
+    // The independence-from-user-row invariant — a banned user who
+    // self-deletes (or is purged by a future retention sweep) must not
+    // free up the address. The blocklist row's `userId` becomes NULL
+    // but the email stays blocked.
+    await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    const db = getDb();
+    await db.delete(schema.users).where(eq(schema.users.id, targetId));
+
+    const blocklist = await db
+      .select()
+      .from(schema.bannedEmails)
+      .where(eq(schema.bannedEmails.email, "victim@example.com"));
+    expect(blocklist).toHaveLength(1);
+    expect(blocklist[0].userId).toBeNull();
+  });
+
+  it("writes a member.banned audit row with reason + count metadata", async () => {
+    const adminId = await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    const audit = await getDb().query.auditLog.findFirst({
+      where: eq(schema.auditLog.targetUserId, targetId),
+    });
+    expect(audit).toBeDefined();
+    expect(audit!.action).toBe("member.banned");
+    expect(audit!.actorUserId).toBe(adminId);
+    const meta = JSON.parse(audit!.metadataJson!) as {
+      reason: string;
+      emailsBlocked: number;
+    };
+    expect(meta.reason).toBe("policy violation");
+    expect(meta.emailsBlocked).toBe(1);
+  });
+});
+
+describe("unbanMembersAction", () => {
+  it("flips banned to pending and clears the user's ban columns", async () => {
+    await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    await unbanMembersAction([targetId]);
+
+    const user = await getDb().query.users.findFirst({
+      where: eq(schema.users.id, targetId),
+    });
+    expect(user!.status).toBe("pending");
+    expect(user!.bannedAt).toBeNull();
+    expect(user!.bannedBy).toBeNull();
+    expect(user!.bannedReason).toBeNull();
+  });
+
+  it("removes the user's blocklist rows", async () => {
+    await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    await unbanMembersAction([targetId]);
+
+    const blocklist = await getDb()
+      .select()
+      .from(schema.bannedEmails)
+      .where(eq(schema.bannedEmails.userId, targetId));
+    expect(blocklist).toHaveLength(0);
+  });
+
+  it("does not touch orphaned blocklist rows from a prior banned user", async () => {
+    // Orphaned (`userId` IS NULL) entries represent a previously-
+    // banned user whose row was deleted. Unbanning a different user
+    // must not coincidentally clear them.
+    const adminId = await signInAsAdmin();
+    const db = getDb();
+    await db.insert(schema.bannedEmails).values({
+      email: "ghost@example.com",
+      userId: null,
+      bannedAt: new Date(),
+      bannedBy: adminId,
+      reason: "old ban",
+      createdAt: new Date(),
+    });
+
+    const targetId = await seedUser("victim@example.com");
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+    await unbanMembersAction([targetId]);
+
+    const orphan = await db
+      .select()
+      .from(schema.bannedEmails)
+      .where(eq(schema.bannedEmails.email, "ghost@example.com"));
+    expect(orphan).toHaveLength(1);
+  });
+
+  it("is a no-op for non-banned users", async () => {
+    await signInAsAdmin();
+    const approvedId = await seedUser("approved@example.com");
+
+    await unbanMembersAction([approvedId]);
+
+    const user = await getDb().query.users.findFirst({
+      where: eq(schema.users.id, approvedId),
+    });
+    expect(user!.status).toBe("approved");
+  });
+
+  it("writes a member.unbanned audit row with emailsUnblocked count", async () => {
+    const adminId = await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+    // Clear the ban audit so the next read finds the unban row first.
+    const db = getDb();
+    await db.delete(schema.auditLog);
+
+    await unbanMembersAction([targetId]);
+
+    const audit = await db.query.auditLog.findFirst({
+      where: eq(schema.auditLog.targetUserId, targetId),
+    });
+    expect(audit).toBeDefined();
+    expect(audit!.action).toBe("member.unbanned");
+    expect(audit!.actorUserId).toBe(adminId);
+    const meta = JSON.parse(audit!.metadataJson!) as {
+      emailsUnblocked: number;
+    };
+    expect(meta.emailsUnblocked).toBe(1);
   });
 });
 

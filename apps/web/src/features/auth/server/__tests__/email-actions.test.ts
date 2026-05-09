@@ -134,6 +134,10 @@ beforeEach(async () => {
   await db.delete(schema.sessions);
   await db.delete(schema.magicLinks);
   await db.delete(schema.profiles);
+  // Drop the blocklist alongside other per-test state so a row from
+  // the email-blocklist tests doesn't bleed into the next describe
+  // block's add-email assertions.
+  await db.delete(schema.bannedEmails);
   await db.delete(schema.users);
 });
 
@@ -237,6 +241,30 @@ describe("requestAddEmailAction", () => {
     expect(links[0]?.email).toBe("fresh@example.com");
     expect(links[0]?.intent).toBe("add_email");
     expect(links[0]?.targetUserId).toBe(userId);
+  });
+
+  it("rejects emails on the blocklist with email_unavailable", async () => {
+    const userId = await seedApprovedUser("alice@example.com");
+    await signInAs(userId);
+
+    // Seed a blocklist row for the address a different user will try
+    // to add. The owning user may have been deleted (userId = NULL) —
+    // the blocklist's whole point is surviving that.
+    await getDb().insert(schema.bannedEmails).values({
+      email: "banned@example.com",
+      userId: null,
+      bannedAt: new Date(),
+      bannedBy: "actor",
+      reason: "policy violation",
+      createdAt: new Date(),
+    });
+
+    const result = await requestAddEmailAction({ email: "banned@example.com" });
+    expect(result).toEqual({ ok: false, reason: "email_unavailable" });
+
+    // No magic-link row should be created.
+    const links = await getDb().select().from(schema.magicLinks);
+    expect(links).toHaveLength(0);
   });
 });
 
@@ -372,6 +400,39 @@ describe("consumeAddEmailAction", () => {
     expect(first.ok).toBe(true);
     const second = await consumeAddEmailAction(token);
     expect(second).toEqual({ ok: false, reason: "invalid" });
+  });
+
+  it("rejects with email_unavailable when blocklisted between request and consume", async () => {
+    // The pre-check at request time would normally catch this, but
+    // a ban can land *between* request and consume — the magic-link
+    // is already minted and delivered, so the consume side has to
+    // re-check the blocklist to keep the address from attaching.
+    const userId = await seedApprovedUser("alice@example.com");
+    const token = await seedAddEmailLink({
+      email: "fresh@example.com",
+      targetUserId: userId,
+    });
+    await signInAs(userId);
+
+    // Ban lands after the link is minted.
+    await getDb().insert(schema.bannedEmails).values({
+      email: "fresh@example.com",
+      userId: null,
+      bannedAt: new Date(),
+      bannedBy: "actor",
+      reason: "policy violation",
+      createdAt: new Date(),
+    });
+
+    const result = await consumeAddEmailAction(token);
+    expect(result).toEqual({ ok: false, reason: "email_unavailable" });
+
+    // The address must NOT have attached to the user.
+    const rows = await getDb()
+      .select()
+      .from(schema.userEmails)
+      .where(eq(schema.userEmails.email, "fresh@example.com"));
+    expect(rows).toHaveLength(0);
   });
 });
 

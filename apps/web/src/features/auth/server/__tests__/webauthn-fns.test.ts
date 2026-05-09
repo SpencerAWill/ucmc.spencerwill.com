@@ -388,6 +388,38 @@ describe("webauthnAuthenticateFinishAction", () => {
     expect(openSessionSpy).not.toHaveBeenCalled();
   });
 
+  it("refuses banned users with a generic 'invalid' (no session opened)", async () => {
+    // A passkey enrolled before the ban must not authenticate the
+    // user. The magic-link request endpoint already silently drops
+    // banned addresses, but the WebAuthn ceremony has no email
+    // round-trip to gate on — this test pins the principal-status
+    // refusal that closes the gap.
+    const userId = "user_banned_via_passkey";
+    await seedUser({
+      id: userId,
+      email: "banned@example.com",
+      status: "banned",
+      withProfile: true,
+    });
+    await insertCredential({
+      userId,
+      credentialId: "cred-id-1",
+      publicKey: new Uint8Array([1, 2, 3]),
+      counter: 0,
+    });
+
+    const ceremonyId = "ceremony-auth-banned";
+    await putChallenge(ceremonyId, {
+      challenge: "auth-challenge",
+      type: "authenticate",
+    });
+    cookieJar.set("ucmc_webauthn", ceremonyId);
+
+    const result = await webauthnAuthenticateFinishAction({ response });
+    expect(result).toEqual({ ok: false, reason: "invalid" });
+    expect(openSessionSpy).not.toHaveBeenCalled();
+  });
+
   it("opens a session and reports principal state on success", async () => {
     const userId = "user_happy_path";
     await seedUser({

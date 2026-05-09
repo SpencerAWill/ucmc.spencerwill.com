@@ -201,6 +201,11 @@ beforeEach(async () => {
   await db.delete(schema.emergencyContacts);
   await db.delete(schema.profiles);
   await db.delete(schema.magicLinks);
+  // Drop the blocklist alongside other per-test state. Without this,
+  // a row seeded by the magic-link / add-email blocklist tests would
+  // bleed into the next test's `requestMagicLinkAction` and silently
+  // suppress its email.
+  await db.delete(schema.bannedEmails);
   await db.delete(schema.users);
   await db.delete(schema.permissions);
   await db.delete(schema.roles);
@@ -312,6 +317,74 @@ describe("magic-link sign-in (existing user)", () => {
       status: "pending",
       hasProfile: false,
     });
+  });
+});
+
+describe("banned email blocklist", () => {
+  // The blocklist is populated by `banMembersAction`, but for unit-
+  // level isolation we seed `bannedEmails` directly. The action-level
+  // tests live in `member-actions.test.ts`; these tests exercise the
+  // *consumer* paths.
+  async function seedBlocklist(email: string): Promise<void> {
+    await getDb().insert(schema.bannedEmails).values({
+      email,
+      userId: null,
+      bannedAt: new Date(),
+      bannedBy: "actor",
+      reason: "policy violation",
+      createdAt: new Date(),
+    });
+  }
+
+  it("requestMagicLinkAction silently drops banned emails — no row, no email", async () => {
+    await seedBlocklist(TEST_EMAIL);
+
+    await requestMagicLinkAction({
+      email: TEST_EMAIL,
+      turnstileToken: "",
+    });
+
+    // No magic-link row written. Same observable success shape as
+    // the unknown-email path — caller can't distinguish "banned" from
+    // "fresh address that never registered."
+    const links = await getDb().select().from(schema.magicLinks);
+    expect(links).toHaveLength(0);
+  });
+
+  it("requestMagicLinkAction still preserves the timing-pad floor", async () => {
+    // The blocklist branch must keep the ≥500ms pad so the response
+    // time can't distinguish banned from honored. Lower bound only —
+    // upper bound varies with system jitter and would flake.
+    await seedBlocklist(TEST_EMAIL);
+
+    const start = Date.now();
+    await requestMagicLinkAction({
+      email: TEST_EMAIL,
+      turnstileToken: "",
+    });
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(500);
+  });
+
+  it("consumeMagicLinkAction refuses an outstanding token for a banned user", async () => {
+    // Token minted before the ban (or seeded directly for the test) —
+    // refuses with `invalid` rather than opening a session.
+    await seedUser({
+      email: TEST_EMAIL,
+      status: "banned",
+      withProfile: true,
+    });
+    const token = await seedMagicLink({
+      email: TEST_EMAIL,
+      intent: "login",
+    });
+
+    const result = await consumeMagicLinkAction(token);
+    expect(result).toEqual({ ok: false, reason: "invalid" });
+
+    // No session opened.
+    const sessionCookie = cookieJar.get("ucmc_session");
+    expect(sessionCookie).toBeUndefined();
   });
 });
 
