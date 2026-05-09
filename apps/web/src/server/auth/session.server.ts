@@ -162,7 +162,12 @@ export async function loadCurrentPrincipal(): Promise<Principal | null> {
 /**
  * Lightweight "is there a valid session?" check for hot paths that don't
  * need the full principal — e.g. asset routes serving R2-backed bytes.
- * Returns `{ userId } | null` after a single D1 round trip.
+ * Returns `{ userId } | null` after at most two D1 statements: one SELECT
+ * on the happy path, plus a DELETE if the cookie points at an expired row.
+ *
+ * Naming mirrors {@link loadCurrentPrincipal}: both return `null` for
+ * anonymous/invalid; neither throws. This is NOT a `require*` guard — the
+ * `require*` helpers in `features/auth/guards.ts` throw `redirect()`.
  *
  * Skipped vs. {@link loadCurrentPrincipal}:
  *   - principal load (users + profiles + emails + roles + permissions joins)
@@ -175,7 +180,9 @@ export async function loadCurrentPrincipal(): Promise<Principal | null> {
  * roles, profile, deactivation status, or sliding refresh, use
  * {@link loadCurrentPrincipal} and pay the cost.
  */
-export async function requireSession(): Promise<{ userId: string } | null> {
+export async function loadCurrentSession(): Promise<{
+  userId: string;
+} | null> {
   const sid = readSessionCookie();
   if (!sid) {
     return null;

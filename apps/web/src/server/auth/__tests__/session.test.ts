@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, schema } from "#/server/db";
+import type { UserStatus } from "#/../drizzle/schema";
 import type * as PrincipalModule from "#/server/auth/principal.server";
 
 let cookieValue: string | undefined;
@@ -26,11 +27,12 @@ vi.mock("#/server/auth/principal.server", async () => {
   };
 });
 
-const { requireSession } = await import("#/server/auth/session.server");
+const { loadCurrentSession } = await import("#/server/auth/session.server");
 
 async function seedSession(
   opts: {
     expiresAt?: Date;
+    status?: UserStatus;
   } = {},
 ): Promise<{ sid: string; userId: string }> {
   const userId = `user_${crypto.randomUUID()}`;
@@ -39,7 +41,7 @@ async function seedSession(
     .values({
       id: userId,
       publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-      status: "approved",
+      status: opts.status ?? "approved",
     });
   const sid = crypto.randomUUID();
   const now = new Date();
@@ -64,14 +66,14 @@ beforeEach(async () => {
   loadPrincipalSpy.mockClear();
 });
 
-describe("requireSession", () => {
+describe("loadCurrentSession", () => {
   it("returns null when no session cookie is set", async () => {
-    expect(await requireSession()).toBeNull();
+    expect(await loadCurrentSession()).toBeNull();
   });
 
   it("returns null when the cookie points at no session row", async () => {
     cookieValue = "00000000-0000-0000-0000-000000000000";
-    expect(await requireSession()).toBeNull();
+    expect(await loadCurrentSession()).toBeNull();
     expect(cookieCleared).toBe(true);
   });
 
@@ -80,20 +82,28 @@ describe("requireSession", () => {
       expiresAt: new Date(Date.now() - 1000),
     });
     cookieValue = sid;
-    expect(await requireSession()).toBeNull();
+    expect(await loadCurrentSession()).toBeNull();
     expect(cookieCleared).toBe(true);
   });
 
   it("returns { userId } for a valid session", async () => {
     const { sid, userId } = await seedSession();
     cookieValue = sid;
-    expect(await requireSession()).toEqual({ userId });
+    expect(await loadCurrentSession()).toEqual({ userId });
   });
 
   it("does not call loadPrincipal", async () => {
     const { sid } = await seedSession();
     cookieValue = sid;
-    await requireSession();
+    await loadCurrentSession();
     expect(loadPrincipalSpy).not.toHaveBeenCalled();
+  });
+
+  // Locks in the documented behavior that deactivation is intentionally
+  // NOT checked here — callers that care must reach for loadCurrentPrincipal.
+  it("returns { userId } even when the user is deactivated", async () => {
+    const { sid, userId } = await seedSession({ status: "deactivated" });
+    cookieValue = sid;
+    expect(await loadCurrentSession()).toEqual({ userId });
   });
 });

@@ -12,12 +12,12 @@ import {
 // trip photos at apps/web/public/landing/trip-{1..6}.{jpg,webp} and
 // update the src + alt for each entry.
 const photos = [
-  { src: "/landing/trip-1.svg", alt: "Placeholder image" },
-  { src: "/landing/trip-2.svg", alt: "Placeholder image" },
-  { src: "/landing/trip-3.svg", alt: "Placeholder image" },
-  { src: "/landing/trip-4.svg", alt: "Placeholder image" },
-  { src: "/landing/trip-5.svg", alt: "Placeholder image" },
-  { src: "/landing/trip-6.svg", alt: "Placeholder image" },
+  { src: "/landing/trip-1.svg", alt: "" },
+  { src: "/landing/trip-2.svg", alt: "" },
+  { src: "/landing/trip-3.svg", alt: "" },
+  { src: "/landing/trip-4.svg", alt: "" },
+  { src: "/landing/trip-5.svg", alt: "" },
+  { src: "/landing/trip-6.svg", alt: "" },
 ];
 
 // embla-carousel-react's internal hooks crash under TanStack Start's SSR

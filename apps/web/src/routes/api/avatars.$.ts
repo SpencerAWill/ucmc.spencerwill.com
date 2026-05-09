@@ -33,14 +33,15 @@ export const Route = createFileRoute("/api/avatars/$")({
   server: {
     handlers: {
       GET: async ({ params }: { params: { _splat?: string } }) => {
-        const { requireSession } = await import("#/server/auth/session.server");
+        const { loadCurrentSession } =
+          await import("#/server/auth/session.server");
         const { getAvatar } = await import("#/server/r2/avatars.server");
 
         // Lightweight session check only — avatar bytes don't need the
         // full principal, so we skip the RBAC/profile/email joins +
         // sliding-refresh write that loadCurrentPrincipal pays for.
-        // See requireSession() in session.server.ts.
-        const session = await requireSession();
+        // See loadCurrentSession() in session.server.ts.
+        const session = await loadCurrentSession();
         if (!session) {
           return new Response("Unauthorized", { status: 401 });
         }
