@@ -62,6 +62,22 @@ export const WAIVER_VERSION = "v1";
 export const WAIVER_PDF_PATH = `/legal/ucmc-waiver-${WAIVER_VERSION}.pdf`;
 
 /**
+ * Retention copy for deactivated accounts. Shared between the privacy
+ * page (where it appears as a bullet under "Retention") and the
+ * `/members/management` deactivated tab so the policy text stays
+ * single-sourced — bumping the retention window is a one-line change.
+ */
+export const RETENTION_DEACTIVATED_COPY =
+  "Deactivated accounts are deleted 12 months after deactivation. Reactivation before then resets the clock.";
+
+/**
+ * Retention copy for rejected registrations. Same single-source
+ * rationale as `RETENTION_DEACTIVATED_COPY`.
+ */
+export const RETENTION_REJECTED_COPY =
+  "Rejected registrations are deleted 30 days after rejection. (If you re-register and are approved before then, the original row is reset and the clock starts over.)";
+
+/**
  * Section of legal prose with a heading and one or more paragraphs.
  * Paragraphs are plain strings; the renderer maps each to a `<p>`.
  * Optional `bullets` render as a `<ul>` after the paragraphs. Optional
@@ -288,8 +304,8 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
     heading: "Retention",
     bullets: [
       "Active member data is retained as long as your account is active.",
-      "Rejected registrations are deleted 30 days after rejection. (If you re-register and are approved before then, the original row is reset and the clock starts over.)",
-      "Deactivated accounts are deleted 12 months after deactivation. Reactivation before then resets the clock.",
+      RETENTION_REJECTED_COPY,
+      RETENTION_DEACTIVATED_COPY,
       "Waiver attestation records (metadata only — not the paper waiver) are retained while still in effect; revoked attestations are deleted 90 days after revocation.",
       "Avatar images and landing-page images stored in object storage are reconciled against the database daily; any object no longer referenced by an active row is deleted.",
       "You can delete your account immediately at any time via the controls on /my/account; this also removes your avatar from R2 and signs you out everywhere.",

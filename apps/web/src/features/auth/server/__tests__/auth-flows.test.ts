@@ -142,20 +142,21 @@ async function seedApprover(): Promise<string> {
     status: "approved",
     withProfile: true,
   });
-  // Grant system_admin role (has registrations:approve permission).
+  // The `beforeEach` hook wipes roles + permissions, so re-seed the
+  // bits this fixture needs. Grants `members:manage` to system_admin.
   await getDb().insert(schema.roles).values({
     id: "role_system_admin",
     name: "system_admin",
     description: "System administrator",
   });
   await getDb().insert(schema.permissions).values({
-    id: "perm_registrations_approve",
-    name: "registrations:approve",
-    description: "Approve registrations",
+    id: "perm_members_manage",
+    name: "members:manage",
+    description: "Manage members",
   });
   await getDb().insert(schema.rolePermissions).values({
     roleId: "role_system_admin",
-    permissionId: "perm_registrations_approve",
+    permissionId: "perm_members_manage",
   });
   await getDb()
     .insert(schema.userRoles)
@@ -421,7 +422,7 @@ describe("approval flow", () => {
     expect(user!.status).toBe("rejected");
   });
 
-  it("throws when caller lacks registrations:approve permission", async () => {
+  it("throws when caller lacks members:manage permission", async () => {
     const regularUser = await seedUser({
       email: "member@example.com",
       status: "approved",
@@ -430,7 +431,7 @@ describe("approval flow", () => {
     await signInAs(regularUser);
 
     await expect(approveRegistrationsAction(["some_user_id"])).rejects.toThrow(
-      "registrations:approve",
+      "members:manage",
     );
   });
 

@@ -193,14 +193,13 @@ function EmulationBanner() {
 function SidebarNav() {
   const { isApproved, hasPermission } = useAuth();
   const canReadAnnouncements = hasPermission("announcements:read");
-  const canApproveRegistrations = hasPermission("registrations:approve");
+  const canManageMembers = hasPermission("members:manage");
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
-  const hasSubItems =
-    canApproveRegistrations || canManageRoles || canVerifyWaivers;
+  const hasSubItems = canManageMembers || canManageRoles || canVerifyWaivers;
 
   return (
     <>
@@ -383,12 +382,12 @@ function SidebarNav() {
                     {hasSubItems ? (
                       <CollapsibleContent>
                         <SidebarMenuSub>
-                          {canApproveRegistrations ? (
+                          {canManageMembers ? (
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link to="/members/registrations">
+                                <Link to="/members/management">
                                   <UserPlus />
-                                  <span>Registrations</span>
+                                  <span>Management</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>

@@ -8,7 +8,7 @@ type BadgeVariant = ComponentProps<typeof Badge>["variant"];
 /**
  * Status values this component can render. Excludes `"unclaimed"` —
  * officer-pre-added stubs are surfaced via the dedicated
- * `/members/registrations` "Unclaimed" tab and never appear in the
+ * `/members/management` "Unclaimed" tab and never appear in the
  * directory listing or the per-member detail page (both server actions
  * filter `status = 'unclaimed'` out). Excluding it from the prop type
  * propagates the contract upstream: any caller that *would* hand us an

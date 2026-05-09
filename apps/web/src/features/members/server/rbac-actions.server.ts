@@ -397,7 +397,8 @@ export async function getUserRolesAction(
     .select({ roleId: schema.userRoles.roleId, name: schema.roles.name })
     .from(schema.userRoles)
     .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
-    .where(eq(schema.userRoles.userId, userId));
+    .where(eq(schema.userRoles.userId, userId))
+    .orderBy(asc(schema.roles.position), asc(schema.roles.name));
 }
 
 export async function setUserRolesAction(input: {

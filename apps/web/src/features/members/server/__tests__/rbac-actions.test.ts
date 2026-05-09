@@ -104,10 +104,7 @@ beforeEach(async () => {
     .values([
       { roleId: "role_system_admin", permissionId: "perm_roles_manage" },
       { roleId: "role_system_admin", permissionId: "perm_roles_assign" },
-      {
-        roleId: "role_system_admin",
-        permissionId: "perm_registrations_approve",
-      },
+      { roleId: "role_system_admin", permissionId: "perm_members_manage" },
     ])
     .onConflictDoNothing();
 });
@@ -276,7 +273,7 @@ describe("listPermissionsAction", () => {
     const names = perms.map((p) => p.name);
     expect(names).toContain("roles:manage");
     expect(names).toContain("roles:assign");
-    expect(names).toContain("registrations:approve");
+    expect(names).toContain("members:manage");
   });
 });
 
@@ -288,16 +285,14 @@ describe("setRolePermissionsAction", () => {
     // Grant one permission.
     await setRolePermissionsAction({
       roleId,
-      permissionIds: ["perm_registrations_approve"],
+      permissionIds: ["perm_members_manage"],
     });
 
     let grants = await getDb()
       .select({ permissionId: schema.rolePermissions.permissionId })
       .from(schema.rolePermissions)
       .where(eq(schema.rolePermissions.roleId, roleId));
-    expect(grants.map((g) => g.permissionId)).toEqual([
-      "perm_registrations_approve",
-    ]);
+    expect(grants.map((g) => g.permissionId)).toEqual(["perm_members_manage"]);
 
     // Replace with a different set.
     await setRolePermissionsAction({
@@ -480,7 +475,7 @@ describe("bulkSetRolePermissionsAction", () => {
       roles: [
         {
           roleId: a,
-          permissionIds: ["perm_registrations_approve", "perm_roles_assign"],
+          permissionIds: ["perm_members_manage", "perm_roles_assign"],
         },
         { roleId: b, permissionIds: ["perm_roles_manage"] },
       ],
@@ -496,7 +491,7 @@ describe("bulkSetRolePermissionsAction", () => {
       .where(eq(schema.rolePermissions.roleId, b));
 
     expect(grantsA.map((g) => g.permissionId).sort()).toEqual([
-      "perm_registrations_approve",
+      "perm_members_manage",
       "perm_roles_assign",
     ]);
     expect(grantsB.map((g) => g.permissionId)).toEqual(["perm_roles_manage"]);

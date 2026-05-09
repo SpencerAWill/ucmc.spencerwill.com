@@ -15,15 +15,15 @@
  * normal pending queue. See `magic-link-actions.server.ts` for the
  * claim path.
  *
- * Permission: `registrations:approve` (the same officers who handle
- * registration approval also pre-add gear holders). Tightened later
- * via a separate `members:preadd` permission if granular RBAC is
+ * Permission: `members:manage` (the same officers who run the rest of
+ * the member-management surface also pre-add gear holders). Tightened
+ * later via a separate `members:preadd` permission if granular RBAC is
  * needed.
  */
 import { and, count, desc, eq, exists, gte, inArray, lte } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
-import { requireApprover } from "#/features/members/server/permissions.server";
+import { requireMembersManager } from "#/features/members/server/permissions.server";
 import {
   buildAuditEventStatement,
   buildBulkAuditEventStatement,
@@ -61,7 +61,7 @@ export async function listUnclaimedAction(opts: {
   limit?: number;
   offset?: number;
 }): Promise<UnclaimedMembersPage> {
-  await requireApprover();
+  await requireMembersManager();
   const db = getDb();
 
   const conditions = [eq(schema.users.status, "unclaimed")];
@@ -162,7 +162,7 @@ export type PreAddResult =
 export async function preAddUnclaimedMembersAction(args: {
   entries: PreAddEntry[];
 }): Promise<PreAddResult> {
-  const approver = await requireApprover();
+  const approver = await requireMembersManager();
   const db = getDb();
 
   if (args.entries.length === 0) {
@@ -392,7 +392,7 @@ export async function editUnclaimedMemberAction(args: {
   name: string;
   email: string;
 }): Promise<EditUnclaimedResult> {
-  const approver = await requireApprover();
+  const approver = await requireMembersManager();
   const db = getDb();
 
   const newName = args.name.trim();
@@ -548,7 +548,7 @@ export interface DeleteUnclaimedResult {
 export async function deleteUnclaimedMembersAction(args: {
   userIds: string[];
 }): Promise<DeleteUnclaimedResult> {
-  const approver = await requireApprover();
+  const approver = await requireMembersManager();
   const db = getDb();
 
   if (args.userIds.length === 0) {

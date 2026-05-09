@@ -10,7 +10,7 @@ const WEB_DIR = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 export interface SeededUserOptions {
   /** Roles to assign. Defaults to `["role_member"]`. Pass
    *  `["role_system_admin"]` for an officer with the role-bypass that
-   *  grants every permission, including `registrations:approve`. */
+   *  grants every permission, including `members:manage`. */
   roles?: string[];
 }
 

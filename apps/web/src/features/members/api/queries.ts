@@ -9,6 +9,7 @@ import {
   roleQueryKey,
   userRolesQueryKey,
 } from "#/features/members/api/query-keys";
+import type { UserStatus } from "#/../drizzle/schema";
 import type {
   ListMembersInput,
   ListPendingRegistrationsInput,
@@ -55,22 +56,21 @@ export function pendingRegistrationsQueryOptions(
 }
 
 /**
- * Rejected members — the "rejected" tab on /members/registrations.
- * Lives under the registrations key so the unreject mutation's prefix
- * invalidation hits both the pending feed and this rejected list.
- * `listMembersFn` is called with `statuses: "rejected"` baked in so
- * the call site only owns pagination.
+ * Members in a non-active lifecycle state — the "rejected" and
+ * "deactivated" tabs on /members/management. Lives under the
+ * registrations key so lifecycle mutations (unreject, reactivate)
+ * invalidate by prefix and clear all sibling tabs at once.
  */
-export function rejectedMembersQueryOptions(input: {
-  limit: number;
-  offset: number;
-}) {
+export function lifecycleMembersQueryOptions(
+  status: Extract<UserStatus, "rejected" | "deactivated">,
+  input: { limit: number; offset: number },
+) {
   return {
-    queryKey: [...MEMBERS_REGISTRATIONS_QUERY_KEY, "rejected", input] as const,
+    queryKey: [...MEMBERS_REGISTRATIONS_QUERY_KEY, status, input] as const,
     queryFn: () =>
       listMembersFn({
         data: {
-          statuses: "rejected",
+          statuses: status,
           sort: "newest",
           limit: input.limit,
           offset: input.offset,

@@ -31,12 +31,16 @@ const {
   revokeUserSessionsAction,
   adminUpdateProfileAction,
   listMembersAction,
+  listRolesAction,
   getMemberDetailAction,
   rejectRegistrationsAction,
   approveRegistrationsAction,
 } = await import("#/features/members/server/member-actions.server");
+const { reorderRolesAction, getUserRolesAction } =
+  await import("#/features/members/server/rbac-actions.server");
 const { openSession, loadCurrentPrincipal } =
   await import("#/server/auth/session.server");
+const { loadPrincipal } = await import("#/server/auth/principal.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -942,5 +946,74 @@ describe("audit log: bulk lifecycle audits transitions, not requests", () => {
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, "member.sessions_revoked"));
     expect(auditRows).toHaveLength(0);
+  });
+});
+
+// ── role-display ordering ──────────────────────────────────────────────
+//
+// Every server query that loads a role list must order by
+// `(position, name)` so client renderers (role badges, role-filter
+// popover, user-menu emulation list) reflect the operator-controlled
+// ordering set in `/members/roles`. Regression: previously these
+// queries used `name`-only or no ordering, drifting from the RBAC
+// editor.
+
+describe("role list ordering matches reorderRolesAction", () => {
+  it("listRolesAction, getUserRolesAction, and loadPrincipal all respect role position", async () => {
+    const adminId = await signInAsAdmin();
+
+    // Seed two extra roles so reordering produces a deterministic,
+    // non-alphabetical sequence. Names chosen so alphabetical sort
+    // would NOT match position sort, surfacing the bug if a query
+    // forgot the position clause. Clean first so re-runs in the same
+    // vitest worker don't collide on the unique id constraint
+    // (`beforeEach` wipes user_roles but not the role rows themselves).
+    const db = getDb();
+    await db.delete(schema.roles).where(eq(schema.roles.id, "role_zeta"));
+    await db.delete(schema.roles).where(eq(schema.roles.id, "role_alpha"));
+    await db.insert(schema.roles).values([
+      { id: "role_zeta", name: "zeta", position: 0 },
+      { id: "role_alpha", name: "alpha", position: 1 },
+    ]);
+
+    // Assign both new roles + system_admin to the admin user so the
+    // per-user queries (`getUserRolesAction`, `loadPrincipal`) have
+    // multiple rows to order.
+    await assignRole(adminId, "role_zeta");
+    await assignRole(adminId, "role_alpha");
+
+    // Pull canonical order from the RBAC editor's source of truth, then
+    // reverse it via reorderRolesAction so position diverges from the
+    // alphabetical default.
+    const before = await listRolesAction();
+    const reversed = [...before].reverse().map((r) => r.id);
+    await reorderRolesAction({ orderedRoleIds: reversed });
+
+    // 1) Directory's role-filter popover query.
+    const afterListRoles = await listRolesAction();
+    expect(afterListRoles.map((r) => r.id)).toEqual(reversed);
+
+    // 2) Per-user role list (RoleAssignmentSheet).
+    const userRoles = await getUserRolesAction(adminId);
+    const userRoleIds = userRoles.map((r) => r.roleId);
+    // Filter the canonical reversed order down to the roles this user
+    // actually has — preserves position order, which is what the
+    // assignment UI displays.
+    const expectedUserRoles = reversed.filter((id) => userRoleIds.includes(id));
+    expect(userRoleIds).toEqual(expectedUserRoles);
+
+    // 3) Principal's `roles` array (drives `useAuth().roles`, the user
+    //    menu's emulation list, and any permission-derived UI).
+    const principal = await loadPrincipal(adminId);
+    expect(principal).not.toBeNull();
+    const principalRoleNames = principal!.roles;
+    // Map reversed role ids back to names via the listRolesAction
+    // result; filter to roles the user has.
+    const idToName = new Map(afterListRoles.map((r) => [r.id, r.name]));
+    const expectedPrincipalNames = reversed
+      .filter((id) => userRoleIds.includes(id))
+      .map((id) => idToName.get(id)!)
+      .filter(Boolean);
+    expect(principalRoleNames).toEqual(expectedPrincipalNames);
   });
 });

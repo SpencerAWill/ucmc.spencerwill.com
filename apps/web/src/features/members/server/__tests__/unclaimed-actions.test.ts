@@ -110,16 +110,16 @@ describe("authorization", () => {
     ).rejects.toThrow("Not signed in");
   });
 
-  it("rejects callers without registrations:approve", async () => {
+  it("rejects callers without members:manage", async () => {
     await signInAsRegularMember();
     await expect(
       preAddUnclaimedMembersAction({
         entries: [{ name: "Alice", email: "alice@uc.edu" }],
       }),
-    ).rejects.toThrow("Forbidden: missing registrations:approve");
+    ).rejects.toThrow("Forbidden: missing members:manage");
   });
 
-  it("editUnclaimedMemberAction rejects callers without registrations:approve", async () => {
+  it("editUnclaimedMemberAction rejects callers without members:manage", async () => {
     await signInAsRegularMember();
     await expect(
       editUnclaimedMemberAction({
@@ -127,20 +127,20 @@ describe("authorization", () => {
         name: "X",
         email: "x@uc.edu",
       }),
-    ).rejects.toThrow("Forbidden: missing registrations:approve");
+    ).rejects.toThrow("Forbidden: missing members:manage");
   });
 
-  it("deleteUnclaimedMembersAction rejects callers without registrations:approve", async () => {
+  it("deleteUnclaimedMembersAction rejects callers without members:manage", async () => {
     await signInAsRegularMember();
     await expect(
       deleteUnclaimedMembersAction({ userIds: ["user_x"] }),
-    ).rejects.toThrow("Forbidden: missing registrations:approve");
+    ).rejects.toThrow("Forbidden: missing members:manage");
   });
 
-  it("listUnclaimedAction rejects callers without registrations:approve", async () => {
+  it("listUnclaimedAction rejects callers without members:manage", async () => {
     await signInAsRegularMember();
     await expect(listUnclaimedAction({})).rejects.toThrow(
-      "Forbidden: missing registrations:approve",
+      "Forbidden: missing members:manage",
     );
   });
 });
