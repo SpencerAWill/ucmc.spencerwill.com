@@ -68,6 +68,20 @@ async function signInAsApprover(): Promise<string> {
   return userId;
 }
 
+/**
+ * Narrowing helper — the action's return type is a discriminated
+ * `{ ok: true | false }` union, but most success-path tests destructure
+ * `created` directly. Wrapping the call narrows the type and surfaces
+ * a useful failure message if the action unexpectedly errors.
+ */
+async function preAddOk(args: { entries: { name: string; email: string }[] }) {
+  const result = await preAddUnclaimedMembersAction(args);
+  if (!result.ok) {
+    throw new Error(`pre-add returned error: ${JSON.stringify(result.error)}`);
+  }
+  return result;
+}
+
 async function signInAsRegularMember(): Promise<string> {
   const userId = await seedUser("plain@example.com");
   await assignRole(userId, "role_member");
@@ -142,6 +156,7 @@ describe("preAddUnclaimedMembersAction", () => {
         { name: "Bob Jones", email: "Bob@UC.edu" },
       ],
     });
+    if (!result.ok) throw new Error("expected ok");
     expect(result.created).toHaveLength(2);
     expect(result.skipped).toEqual([]);
     expect(result.created[0]?.email).toBe("alice@uc.edu");
@@ -186,6 +201,7 @@ describe("preAddUnclaimedMembersAction", () => {
         { name: "Taken", email: "taken@uc.edu" },
       ],
     });
+    if (!result.ok) throw new Error("expected ok");
     expect(result.created.map((c) => c.email)).toEqual(["carol@uc.edu"]);
     expect(result.skipped).toEqual([
       { email: "taken@uc.edu", name: "Taken", reason: "email_taken" },
@@ -201,6 +217,7 @@ describe("preAddUnclaimedMembersAction", () => {
         { name: "Eli", email: "eli@uc.edu" },
       ],
     });
+    if (!result.ok) throw new Error("expected ok");
     expect(result.created.map((c) => c.email).sort()).toEqual([
       "dan@uc.edu",
       "eli@uc.edu",
@@ -210,22 +227,23 @@ describe("preAddUnclaimedMembersAction", () => {
     ]);
   });
 
-  it("rejects an empty entries list", async () => {
+  it("returns { ok: false, no_entries } for an empty entries list", async () => {
     await signInAsApprover();
-    await expect(preAddUnclaimedMembersAction({ entries: [] })).rejects.toThrow(
-      "No entries",
-    );
+    const result = await preAddUnclaimedMembersAction({ entries: [] });
+    expect(result).toEqual({ ok: false, error: { kind: "no_entries" } });
   });
 
-  it("rejects a batch over the per-submit cap", async () => {
+  it("returns { ok: false, too_many_entries } over the per-submit cap", async () => {
     await signInAsApprover();
     const entries = Array.from({ length: 201 }, (_, i) => ({
       name: `User ${i}`,
       email: `user${i}@uc.edu`,
     }));
-    await expect(preAddUnclaimedMembersAction({ entries })).rejects.toThrow(
-      "Too many entries",
-    );
+    const result = await preAddUnclaimedMembersAction({ entries });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "too_many_entries", cap: 200, received: 201 },
+    });
   });
 });
 
@@ -255,7 +273,7 @@ describe("listUnclaimedAction", () => {
 describe("editUnclaimedMemberAction", () => {
   it("renames an unclaimed user", async () => {
     const approverId = await signInAsApprover();
-    const { created } = await preAddUnclaimedMembersAction({
+    const { created } = await preAddOk({
       entries: [{ name: "Old Name", email: "old@uc.edu" }],
     });
     const target = created[0];
@@ -281,7 +299,7 @@ describe("editUnclaimedMemberAction", () => {
 
   it("changes the primary email", async () => {
     await signInAsApprover();
-    const { created } = await preAddUnclaimedMembersAction({
+    const { created } = await preAddOk({
       entries: [{ name: "Renamed", email: "first@uc.edu" }],
     });
     const target = created[0];
@@ -301,7 +319,7 @@ describe("editUnclaimedMemberAction", () => {
   it("returns email_taken when changing to an address owned by another user", async () => {
     await signInAsApprover();
     await seedUser("alreadyused@uc.edu");
-    const { created } = await preAddUnclaimedMembersAction({
+    const { created } = await preAddOk({
       entries: [{ name: "X", email: "freeaddr@uc.edu" }],
     });
     const result = await editUnclaimedMemberAction({
@@ -339,7 +357,7 @@ describe("editUnclaimedMemberAction", () => {
 describe("deleteUnclaimedMembersAction", () => {
   it("hard-deletes unclaimed users and cascades the user_emails row", async () => {
     const approverId = await signInAsApprover();
-    const { created } = await preAddUnclaimedMembersAction({
+    const { created } = await preAddOk({
       entries: [
         { name: "Trash One", email: "t1@uc.edu" },
         { name: "Trash Two", email: "t2@uc.edu" },
@@ -373,7 +391,7 @@ describe("deleteUnclaimedMembersAction", () => {
   it("ignores ids whose status is not unclaimed", async () => {
     await signInAsApprover();
     const approvedId = await seedUser("approved@uc.edu");
-    const { created } = await preAddUnclaimedMembersAction({
+    const { created } = await preAddOk({
       entries: [{ name: "U1", email: "u1@uc.edu" }],
     });
     const result = await deleteUnclaimedMembersAction({
@@ -404,7 +422,7 @@ describe("deleteUnclaimedMembersAction", () => {
 describe("claim integration (db-level invariants)", () => {
   it("placeholderName + unclaimedAt are nullable so a claim flip clears them", async () => {
     await signInAsApprover();
-    const { created } = await preAddUnclaimedMembersAction({
+    const { created } = await preAddOk({
       entries: [{ name: "Claimer", email: "claimer@uc.edu" }],
     });
     const target = created[0];
@@ -428,7 +446,7 @@ describe("claim integration (db-level invariants)", () => {
 
   it("a stamped verifiedAt sticks once the unclaimed primary email is claimed", async () => {
     await signInAsApprover();
-    const { created } = await preAddUnclaimedMembersAction({
+    const { created } = await preAddOk({
       entries: [{ name: "VA", email: "va@uc.edu" }],
     });
     const userId = created[0].userId;

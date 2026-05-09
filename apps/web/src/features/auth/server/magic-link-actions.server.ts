@@ -686,6 +686,23 @@ export async function submitProfileAction(
           ),
         ),
     );
+    // Bundle the `member.claimed` audit into the same batch as the
+    // status flip so the two are atomic — a worker death between the
+    // batch returning and a post-batch audit insert would otherwise
+    // strand a freshly-approved user with no claim event in the audit
+    // chain. The schema doc-comment names `member.pre_added` →
+    // `member.claimed` as the canonical attribution chain, so the
+    // audit row is load-bearing.
+    const { buildAuditEventStatement } =
+      await import("#/server/audit/audit-log.server");
+    stmts.push(
+      buildAuditEventStatement({
+        actorUserId: userId,
+        action: "member.claimed",
+        targetUserId: userId,
+        metadata: { priorStatus: "unclaimed" },
+      }),
+    );
   } else if (!isNewUser) {
     stmts.push(
       db
@@ -697,17 +714,6 @@ export async function submitProfileAction(
     );
   }
   await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
-
-  if (isClaimingFromUnclaimed) {
-    const { recordAuditEvent } =
-      await import("#/server/audit/audit-log.server");
-    await recordAuditEvent({
-      actorUserId: userId,
-      action: "member.claimed",
-      targetUserId: userId,
-      metadata: { priorStatus: "unclaimed" },
-    });
-  }
 
   if (!principal) {
     await openSession(userId);

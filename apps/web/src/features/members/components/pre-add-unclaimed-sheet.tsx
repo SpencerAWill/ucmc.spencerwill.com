@@ -36,6 +36,10 @@ import type {
 } from "#/features/members/lib/parse-unclaimed-csv";
 import type { PreAddResult } from "#/features/members/server/member-fns";
 
+// The component only stores the success branch — the discriminated
+// union's `{ ok: false }` arm is mapped into `submitError` immediately.
+type PreAddSuccess = Extract<PreAddResult, { ok: true }>;
+
 const MAX_ROWS = 200;
 
 interface RowState {
@@ -82,7 +86,7 @@ export function PreAddUnclaimedSheet({
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(
     null,
   );
-  const [submitResult, setSubmitResult] = useState<PreAddResult | null>(null);
+  const [submitResult, setSubmitResult] = useState<PreAddSuccess | null>(null);
   // Two distinct error slots so the message in each alert can be
   // accurate to its cause: import errors come from CSV / clipboard
   // parsing (file picker, paste), submit errors come from the
@@ -208,6 +212,22 @@ export function PreAddUnclaimedSheet({
     }));
     try {
       const result = await preAdd.mutateAsync({ entries });
+      if (!result.ok) {
+        // Structured failures (cap exceeded, empty batch). Map each
+        // discriminator to a user-readable message; the union shape
+        // means a future variant fails typecheck if we forget it.
+        switch (result.error.kind) {
+          case "no_entries":
+            setSubmitError("Add at least one row before submitting.");
+            break;
+          case "too_many_entries":
+            setSubmitError(
+              `Too many rows: ${result.error.received} given, max ${result.error.cap} per submit.`,
+            );
+            break;
+        }
+        return;
+      }
       setSubmitResult(result);
       // Drop successfully-created rows; keep skipped ones so the
       // officer can edit + retry, alongside any blanks.
@@ -360,6 +380,7 @@ export function PreAddUnclaimedSheet({
               return (
                 <div
                   key={row.key}
+                  data-testid="unclaimed-row"
                   className="flex items-start gap-2 rounded-md border p-2"
                 >
                   <div className="grid flex-1 gap-2 sm:grid-cols-2">

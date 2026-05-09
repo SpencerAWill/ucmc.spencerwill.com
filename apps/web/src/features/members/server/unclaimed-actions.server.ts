@@ -23,10 +23,10 @@
 import { and, count, desc, eq, exists, gte, inArray, lte } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
-import { requireApprover } from "#/features/members/server/member-actions.server";
+import { requireApprover } from "#/features/members/server/permissions.server";
 import {
+  buildAuditEventStatement,
   buildBulkAuditEventStatement,
-  recordAuditEvent,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
@@ -144,10 +144,20 @@ export interface PreAddSkipped {
   reason: PreAddSkipReason;
 }
 
-export interface PreAddResult {
-  created: PreAddCreated[];
-  skipped: PreAddSkipped[];
-}
+export type PreAddError =
+  | { kind: "no_entries" }
+  | { kind: "too_many_entries"; cap: number; received: number };
+
+/**
+ * Discriminated success/error union so cap and empty-batch failures
+ * arrive at the call site as structured data instead of as thrown
+ * `Error` strings the UI has to regex. Authorization errors still
+ * throw — those are infrastructural (caller is unauthenticated /
+ * unauthorized) rather than input-shape problems.
+ */
+export type PreAddResult =
+  | { ok: true; created: PreAddCreated[]; skipped: PreAddSkipped[] }
+  | { ok: false; error: PreAddError };
 
 export async function preAddUnclaimedMembersAction(args: {
   entries: PreAddEntry[];
@@ -156,10 +166,17 @@ export async function preAddUnclaimedMembersAction(args: {
   const db = getDb();
 
   if (args.entries.length === 0) {
-    throw new Error("No entries provided");
+    return { ok: false, error: { kind: "no_entries" } };
   }
   if (args.entries.length > PRE_ADD_BATCH_CAP) {
-    throw new Error(`Too many entries (max ${PRE_ADD_BATCH_CAP} per submit)`);
+    return {
+      ok: false,
+      error: {
+        kind: "too_many_entries",
+        cap: PRE_ADD_BATCH_CAP,
+        received: args.entries.length,
+      },
+    };
   }
 
   // First pass: normalize emails + dedupe within the batch. Hitting the
@@ -183,7 +200,7 @@ export async function preAddUnclaimedMembersAction(args: {
   }
 
   if (okEntries.length === 0) {
-    return { created: [], skipped };
+    return { ok: true, created: [], skipped };
   }
 
   // Pre-check existing addresses in one SELECT so the common case turns
@@ -213,7 +230,7 @@ export async function preAddUnclaimedMembersAction(args: {
   }
 
   if (toCreate.length === 0) {
-    return { created: [], skipped };
+    return { ok: true, created: [], skipped };
   }
 
   // Generate IDs upfront so the audit row's targetUserId can land in
@@ -266,7 +283,7 @@ export async function preAddUnclaimedMembersAction(args: {
       throw new Error("audit insert missing for non-empty created list");
     }
     await db.batch([userInserts, emailInserts, auditInsert]);
-    return { created, skipped };
+    return { ok: true, created, skipped };
   } catch (err) {
     if (!isUniqueViolation(err, "user_emails.email")) {
       throw err;
@@ -283,8 +300,13 @@ export async function preAddUnclaimedMembersAction(args: {
 /**
  * Per-row fallback when the bulk pre-add INSERT hit a UNIQUE-violation
  * race. Inserts each row in its own atomic batch so a single collision
- * only skips that row; other rows still land. Audit rows are emitted
- * after the inserts in a single bulk statement.
+ * only skips that row; other rows still land.
+ *
+ * The audit insert rides in the same `db.batch` as the user/email
+ * inserts so a worker death (or audit failure) can never strand a
+ * created stub without an audit row — same atomicity guarantee the
+ * bulk-path docstring relies on. The marginal cost is one extra
+ * statement per row in an already O(N) path.
  *
  * Pre-existing `skipped` from the bulk path's pre-check (within-batch
  * duplicates + emails detected as taken in the SELECT) are passed
@@ -325,6 +347,12 @@ async function preAddPerRowFallback(
           isPrimary: true,
           verifiedAt: null,
         }),
+        buildAuditEventStatement({
+          actorUserId: approverUserId,
+          action: "member.pre_added",
+          targetUserId: userId,
+          metadata: { email: entry.email, placeholderName: entry.name },
+        }),
       ]);
       created.push({
         userId,
@@ -345,21 +373,7 @@ async function preAddPerRowFallback(
     }
   }
 
-  // Audit per created row. Use a single bulk statement so the fallback
-  // doesn't multiply HTTP round-trips beyond what it had to do.
-  const auditStmt = buildBulkAuditEventStatement(
-    created.map((row) => ({
-      actorUserId: approverUserId,
-      action: "member.pre_added",
-      targetUserId: row.userId,
-      metadata: { email: row.email, placeholderName: row.name },
-    })),
-  );
-  if (auditStmt) {
-    await auditStmt;
-  }
-
-  return { created, skipped };
+  return { ok: true, created, skipped };
 }
 
 // ── edit ────────────────────────────────────────────────────────────────
@@ -432,29 +446,42 @@ export async function editUnclaimedMemberAction(args: {
     return { ok: true };
   }
 
-  // Guard every UPDATE with `status = 'unclaimed'` so a concurrent claim
-  // (status flips to "approved" mid-flight via `submitProfileAction`)
-  // or a delete can't slip an edit through against a now-real user. The
-  // user UPDATE filters directly; the email UPDATE filters via an
-  // EXISTS subquery on `users` (we can't filter `user_emails` on its
-  // joined `users.status` without one).
-  type Stmt = ReturnType<
-    ReturnType<ReturnType<typeof db.update>["set"]>["where"]
-  >;
+  // Always include the user UPDATE in the batch (even when only email
+  // changed, the SET is then a no-op self-assign). Two reasons:
+  //   1. `.returning({ id })` gives us atomic race-no-op detection —
+  //      if a concurrent claim flipped the status mid-flight, the
+  //      WHERE filters out and `.returning()` is empty.
+  //   2. The audit insert below rides in the same batch and is
+  //      atomic with the UPDATEs (a worker death between them is
+  //      impossible), which would not be true if we kept the audit
+  //      as a post-batch `recordAuditEvent` call.
+  //
+  // Trade-off: in the rare race-no-op case (concurrent claim flips
+  // status between our pre-SELECT and the batch), the audit row
+  // *does* land while the UPDATEs no-op. That's a phantom row
+  // recording an officer's edit *attempt* on a row that's no longer
+  // unclaimed. We accept this trade-off in exchange for atomicity:
+  // the alternatives are (a) post-batch audit (worker-death window)
+  // or (b) `INSERT ... SELECT WHERE EXISTS` via raw SQL, which the
+  // d1 batch driver doesn't accept (`db.run(sql\`…\`)` returns a
+  // non-batchable shape). A phantom audit recording attempted intent
+  // is a defensible audit-log entry; a freshly-edited row with no
+  // audit at all is not.
+  type Stmt = Parameters<typeof db.batch>[0][number];
   const stmts: Stmt[] = [];
-  if (before.name !== newName) {
-    stmts.push(
-      db
-        .update(schema.users)
-        .set({ placeholderName: newName })
-        .where(
-          and(
-            eq(schema.users.id, args.userId),
-            eq(schema.users.status, "unclaimed"),
-          ),
-        ),
-    );
-  }
+
+  const userUpdate = db
+    .update(schema.users)
+    .set({ placeholderName: newName })
+    .where(
+      and(
+        eq(schema.users.id, args.userId),
+        eq(schema.users.status, "unclaimed"),
+      ),
+    )
+    .returning({ id: schema.users.id });
+  stmts.push(userUpdate);
+
   if (before.email !== newEmail) {
     stmts.push(
       db
@@ -479,8 +506,22 @@ export async function editUnclaimedMemberAction(args: {
     );
   }
 
+  stmts.push(
+    buildAuditEventStatement({
+      actorUserId: approver.userId,
+      action: "member.unclaimed_edited",
+      targetUserId: args.userId,
+      metadata: {
+        before,
+        after: { name: newName, email: newEmail },
+      },
+    }),
+  );
+
+  let userUpdated: Array<{ id: string }>;
   try {
-    await db.batch(stmts as [Stmt, ...Stmt[]]);
+    const results = await db.batch(stmts as [Stmt, ...Stmt[]]);
+    userUpdated = results[0] as unknown as Array<{ id: string }>;
   } catch (err) {
     if (isUniqueViolation(err, "user_emails.email")) {
       return { ok: false, error: { kind: "email_taken" } };
@@ -488,30 +529,12 @@ export async function editUnclaimedMemberAction(args: {
     throw err;
   }
 
-  // Re-read the user's status to confirm the WHERE-guarded UPDATEs
-  // actually landed. If a concurrent claim/delete raced in, the UPDATEs
-  // were silent no-ops and we'd otherwise emit a misleading audit row.
-  const after = await db
-    .select({ status: schema.users.status })
-    .from(schema.users)
-    .where(eq(schema.users.id, args.userId))
-    .get();
-  if (!after) {
-    return { ok: false, error: { kind: "not_found" } };
-  }
-  if (after.status !== "unclaimed") {
+  // `.returning()` from the user UPDATE tells us atomically whether
+  // the row was still unclaimed at batch-execute time. Empty array
+  // means a concurrent claim/delete won the race.
+  if (userUpdated.length === 0) {
     return { ok: false, error: { kind: "not_unclaimed" } };
   }
-
-  await recordAuditEvent({
-    actorUserId: approver.userId,
-    action: "member.unclaimed_edited",
-    targetUserId: args.userId,
-    metadata: {
-      before,
-      after: { name: newName, email: newEmail },
-    },
-  });
 
   return { ok: true };
 }

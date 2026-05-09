@@ -26,29 +26,9 @@ import {
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
+import { requireApprover } from "#/features/members/server/permissions.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
-
-/**
- * Loads the current principal and asserts that they hold the
- * `registrations:approve` permission. Throws if unsigned-in or missing
- * the permission — callers in this file treat the thrown error as a
- * hard stop (the shell maps it to a 403-style response shape).
- *
- * Exported so sibling action modules in `features/members/server/`
- * (e.g. `unclaimed-actions.server.ts`) can share the same gate without
- * duplicating the helper.
- */
-export async function requireApprover(): Promise<Principal> {
-  const principal = await loadCurrentPrincipal();
-  if (!principal) {
-    throw new Error("Not signed in");
-  }
-  if (!principal.permissions.includes("registrations:approve")) {
-    throw new Error("Forbidden: missing registrations:approve");
-  }
-  return principal;
-}
 
 /** Requires the `members:manage` permission. */
 async function requireMembersManager(): Promise<Principal> {

@@ -6,8 +6,10 @@ import type { PreAddUnclaimedInput } from "#/features/members/server/member-fns"
 
 /**
  * Bulk pre-add of unclaimed (officer-imported) members. Returns a
- * per-row result so the call site can render created vs. skipped rows
- * inline. Invalidates the unclaimed list on any non-zero outcome.
+ * discriminated `{ ok: true | false }` result; the `ok: true` branch
+ * carries per-row created/skipped lists for the call site to render
+ * inline. Invalidates the unclaimed list when at least one row was
+ * actually created.
  */
 export function usePreAddUnclaimed() {
   const queryClient = useQueryClient();
@@ -15,7 +17,7 @@ export function usePreAddUnclaimed() {
     mutationFn: (input: PreAddUnclaimedInput) =>
       preAddUnclaimedFn({ data: input }),
     onSuccess: async (result) => {
-      if (result.created.length > 0) {
+      if (result.ok && result.created.length > 0) {
         await queryClient.invalidateQueries({
           queryKey: MEMBERS_UNCLAIMED_QUERY_KEY,
         });

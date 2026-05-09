@@ -64,6 +64,7 @@ describe("PreAddUnclaimedSheet", () => {
   it("submits valid rows and renders the per-row skipped result", async () => {
     const user = userEvent.setup();
     preAddUnclaimedFn.mockResolvedValue({
+      ok: true,
       created: [
         {
           userId: "user_1",
@@ -104,17 +105,20 @@ describe("PreAddUnclaimedSheet", () => {
     expect(await screen.findByText(/1 added, 1 skipped/i)).toBeInTheDocument();
 
     // The skipped row keeps its inputs and gets the destructive badge.
+    // Scope the badge query to the row containing "Bob" via the
+    // dedicated `data-testid` rather than coupling to a Tailwind class
+    // — class names are layout details and shouldn't be locator
+    // primitives.
     const remaining = screen.getByDisplayValue("Bob");
     expect(remaining).toBeInTheDocument();
-    const row = remaining.closest(".grid");
-    expect(row).not.toBeNull();
-    if (row) {
-      expect(
-        within(row.parentElement as HTMLElement).getByText(
-          /email already in use/i,
-        ),
-      ).toBeInTheDocument();
-    }
+    const rows = screen.getAllByTestId("unclaimed-row");
+    const bobRow = rows.find((r) =>
+      within(r).queryByDisplayValue("Bob") ? true : false,
+    );
+    expect(bobRow).toBeDefined();
+    expect(
+      within(bobRow as HTMLElement).getByText(/email already in use/i),
+    ).toBeInTheDocument();
 
     // The successfully created row was dropped (no Alice input remains).
     expect(screen.queryByDisplayValue("Alice")).toBeNull();

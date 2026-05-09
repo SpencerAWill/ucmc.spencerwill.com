@@ -95,10 +95,57 @@ ${roleInserts}
 }
 
 /**
+ * Insert a `users` row with `status='unclaimed'` plus a primary
+ * `user_emails` row with `verified_at = NULL` — the same shape that
+ * `preAddUnclaimedMembersAction` produces in production. Used by e2e
+ * specs that exercise the user-side claim flow without going through
+ * the officer pre-add UI first.
+ *
+ * The seed cleans up any prior `users` row owning `email` first
+ * (cascading through every child table) so re-runs against a reused
+ * dev server land in a deterministic state. Pass a unique-per-test
+ * email so tests in the same run don't collide on the global
+ * `user_emails.email` UNIQUE.
+ */
+export function seedUnclaimedUser(
+  email: string,
+  options: { placeholderName?: string } = {},
+): void {
+  const userId = `user_${randomUUID()}`;
+  const publicId = randomUUID().replace(/-/g, "").slice(0, 12);
+  const userEmailId = `uem_${randomUUID()}`;
+  const nowMs = Date.now();
+  const escapedEmail = `'${email.replace(/'/g, "''")}'`;
+  const placeholderName = options.placeholderName ?? "E2E Stub";
+  const escapedName = `'${placeholderName.replace(/'/g, "''")}'`;
+  const sql = `
+DELETE FROM users WHERE id IN (SELECT user_id FROM user_emails WHERE email = ${escapedEmail});
+INSERT INTO users (id, public_id, status, placeholder_name, unclaimed_at, created_at)
+VALUES ('${userId}', '${publicId}', 'unclaimed', ${escapedName}, ${nowMs}, ${nowMs});
+INSERT INTO user_emails (id, user_id, email, is_primary, verified_at, created_at)
+VALUES ('${userEmailId}', '${userId}', ${escapedEmail}, 1, NULL, ${nowMs});
+`;
+  const tempFile = join(tmpdir(), `e2e-unclaimed-${randomUUID()}.sql`);
+  writeFileSync(tempFile, sql, "utf8");
+  try {
+    execSync(
+      `pnpm exec wrangler d1 execute ucmc-web-dev --local --file ${tempFile}`,
+      { cwd: WEB_DIR, stdio: "pipe" },
+    );
+  } finally {
+    try {
+      unlinkSync(tempFile);
+    } catch {
+      // best-effort
+    }
+  }
+}
+
+/**
  * Run an arbitrary D1 SQL block on the local Miniflare DB. Used by
  * specs that need to assert post-action database state (e.g. that a
  * row really got inserted) or that need a custom seed beyond what
- * `ensureApprovedUser` supports.
+ * `ensureApprovedUser` / `seedUnclaimedUser` support.
  *
  * Returns stdout from `wrangler d1 execute --json` (typed loosely so
  * callers can JSON.parse and pluck what they need).

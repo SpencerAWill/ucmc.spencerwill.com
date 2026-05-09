@@ -1,14 +1,6 @@
-import { execSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
+import { seedUnclaimedUser } from "./fixtures/db";
 import { waitForHydration } from "./fixtures/hydration";
 import { expect, test } from "./fixtures/mailpit";
-
-const WEB_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
 /**
  * Officer pre-add → user claim flow (browser side).
@@ -36,31 +28,7 @@ test("officer-pre-added unclaimed member can claim their account", async ({
   mailpit,
 }) => {
   const email = `e2e-unclaimed-${Date.now()}@example.com`;
-  const userId = `user_${randomUUID()}`;
-  const publicId = randomUUID().replace(/-/g, "").slice(0, 12);
-  const userEmailId = `uem_${randomUUID()}`;
-  const nowMs = Date.now();
-  const escapedEmail = `'${email.replace(/'/g, "''")}'`;
-  const seed = `
-INSERT INTO users (id, public_id, status, placeholder_name, unclaimed_at, created_at)
-VALUES ('${userId}', '${publicId}', 'unclaimed', 'E2E Stub', ${nowMs}, ${nowMs});
-INSERT INTO user_emails (id, user_id, email, is_primary, verified_at, created_at)
-VALUES ('${userEmailId}', '${userId}', ${escapedEmail}, 1, NULL, ${nowMs});
-`;
-  const tempFile = join(tmpdir(), `e2e-unclaimed-${randomUUID()}.sql`);
-  writeFileSync(tempFile, seed, "utf8");
-  try {
-    execSync(
-      `pnpm exec wrangler d1 execute ucmc-web-dev --local --file ${tempFile}`,
-      { cwd: WEB_DIR, stdio: "pipe" },
-    );
-  } finally {
-    try {
-      unlinkSync(tempFile);
-    } catch {
-      // best-effort
-    }
-  }
+  seedUnclaimedUser(email);
 
   // Request a magic link for the on-file address. From the user's POV
   // this is just signing in — they don't know they're "claiming."
