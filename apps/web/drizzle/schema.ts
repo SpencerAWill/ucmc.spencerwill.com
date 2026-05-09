@@ -29,6 +29,19 @@ export const userStatus = [
   // (officer pre-add IS the approval signal) and the placeholder
   // columns are NULLed; `profiles.fullName` then owns the display name.
   "unclaimed",
+  // Hard ouster for policy violations. Distinct from `deactivated`
+  // (soft, friendly off-switch) on three axes: (1) magic-link request
+  // for any of the user's emails is silently dropped instead of
+  // delivered — the address is observationally non-existent at the
+  // request endpoint; (2) the email is mirrored into the
+  // `banned_emails` blocklist, which survives the user row being
+  // purged or self-deleted; (3) the action requires a captured written
+  // reason (`bannedReason` below) and a separate `members:ban`
+  // permission. Reversible via "Unban" in the management UI: status
+  // flips back to `pending` (re-enters approval queue), ban columns
+  // null, blocklist rows for that user are deleted in the same step.
+  // No auto-purge clock — banned rows are kept indefinitely.
+  "banned",
 ] as const;
 export type UserStatus = (typeof userStatus)[number];
 
@@ -67,6 +80,21 @@ export const users = sqliteTable("users", {
   // `deactivatedAt`. A future retention cron can purge stale stubs by
   // filtering `status = 'unclaimed' AND unclaimed_at < cutoff`.
   unclaimedAt: timestamp("unclaimed_at"),
+  // Set when an officer bans the user. Unlike `rejectedAt` /
+  // `deactivatedAt`, no auto-purge cron observes this column today —
+  // banned rows are kept indefinitely. Cleared on unban.
+  bannedAt: timestamp("banned_at"),
+  // Officer who issued the ban. Plain text (no FK) matching the
+  // `approvedBy` convention — a self-referencing FK on `users.id`
+  // doesn't survive the user-row delete cascade we'd want, and the
+  // audit log already carries the actor identity for full incident
+  // review. Cleared on unban.
+  bannedBy: text("banned_by"),
+  // Officer-authored free-text justification, captured at ban time.
+  // Required by the action layer (zod min length); the column itself
+  // stays nullable so historical rows that pre-date this column read
+  // back as null. Cleared on unban.
+  bannedReason: text("banned_reason"),
   lastReadAnnouncementsAt: timestamp("last_read_announcements_at"),
 });
 
@@ -129,6 +157,40 @@ export const userEmails = sqliteTable(
       .where(sql`${t.isPrimary} = 1`),
     index("user_emails_user_id_idx").on(t.userId),
   ],
+);
+
+/**
+ * Email-address blocklist seeded at ban time and consulted by the
+ * magic-link request endpoint, the add-email request endpoint, and
+ * the verify-email consumer. Entries persist *independently of the
+ * user row* — `userId` uses ON DELETE SET NULL so the block survives
+ * a self-delete or future retention purge of the offending account.
+ *
+ * Email values are stored normalized (`trim().toLowerCase()`) via
+ * `#/server/auth/email-normalize`. The PRIMARY KEY on `email` doubles
+ * as the lookup index — every check is a single-row equality probe.
+ *
+ * Cleared on `unbanMembersAction` for any rows still attached to the
+ * unbanned user. Rows whose `userId` has been NULLed survive unban
+ * (the user is gone — there's nothing to associate them to) and stay
+ * blocked indefinitely until manually removed.
+ */
+export const bannedEmails = sqliteTable(
+  "banned_emails",
+  {
+    email: text("email").primaryKey(),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    bannedAt: timestamp("banned_at").notNull(),
+    // Plain text (no FK) — same rationale as `users.bannedBy`.
+    bannedBy: text("banned_by").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("banned_emails_user_id_idx").on(t.userId)],
 );
 
 export const profiles = sqliteTable("profiles", {
@@ -493,6 +555,12 @@ export const auditAction = [
   "registration.unrejected",
   "member.deactivated",
   "member.reactivated",
+  // Hard ouster. Metadata: { reason: string, emailsBlocked: number }.
+  // Reason text is officer-authored (no PII concern); emailsBlocked
+  // is the count of rows inserted into `banned_emails` for this user.
+  "member.banned",
+  // Reverses `member.banned`. Metadata: { emailsUnblocked: number }.
+  "member.unbanned",
   "member.self_deleted",
   // Officer-initiated termination of another member's active
   // sessions. Distinct from deactivation (which terminates sessions
@@ -633,3 +701,4 @@ export type LandingFaqItem = typeof landingFaqItems.$inferSelect;
 export type LandingActivity = typeof landingActivities.$inferSelect;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type Feedback = typeof feedback.$inferSelect;
+export type BannedEmail = typeof bannedEmails.$inferSelect;
