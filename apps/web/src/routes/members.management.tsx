@@ -114,32 +114,48 @@ function toISODate(d: Date): string {
   return format(d, "yyyy-MM-dd");
 }
 
+// Per-tab subtitle text rendered below the tabs. Lives at the parent
+// level so the H1 + TabToggle stay anchored as the tab changes — only
+// the description + content below the tabs reflow. Each entry leads
+// with what the status *is* (so the tab is self-explanatory), then the
+// action that this tab affords.
+const TAB_DESCRIPTIONS: Record<TabId, string> = {
+  pending:
+    'New registrations awaiting an officer’s decision. Approving grants the "member" role automatically.',
+  unclaimed:
+    "Real-world members an officer pre-added so off-platform records (gear, attendance) can reference a stable account before the person ever signs in. They claim the row by clicking their first magic link.",
+  rejected: `Registrations an officer declined. Un-rejecting moves users back to the pending queue. ${RETENTION_REJECTED_COPY}`,
+  deactivated: `Approved members an officer turned off — sessions revoked, role removed, hidden from the directory. Reactivating restores the member role. ${RETENTION_DEACTIVATED_COPY}`,
+};
+
 function ManagementPage() {
   const { tab } = Route.useSearch();
   const activeTab: TabId = tab ?? "pending";
 
-  if (activeTab === "unclaimed") {
-    return <UnclaimedView />;
-  }
-  if (activeTab === "rejected" || activeTab === "deactivated") {
-    // `key={activeTab}` forces React to unmount + remount when the user
-    // toggles between rejected and deactivated. Same component type at
-    // the same tree position would otherwise reuse the instance and
-    // carry the previous tab's `selected` Set across — stale userIds
-    // would render in the toolbar count and seed the bulk button.
-    return <LifecycleView key={activeTab} status={activeTab} />;
-  }
-  return <PendingView />;
-}
-
-// ── Page header ─────────────────────────────────────────────────────────
-
-function ManagementHeader({ description }: { description: string }) {
   return (
-    <header className="space-y-1">
-      <h1 className="text-2xl font-semibold">Member management</h1>
-      <p className="text-sm text-muted-foreground">{description}</p>
-    </header>
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+      <header>
+        <h1 className="text-2xl font-semibold">Member management</h1>
+      </header>
+
+      <TabToggle active={activeTab} />
+
+      <p className="text-sm text-muted-foreground">
+        {TAB_DESCRIPTIONS[activeTab]}
+      </p>
+
+      {activeTab === "pending" ? <PendingView /> : null}
+      {activeTab === "unclaimed" ? <UnclaimedView /> : null}
+      {/* `key={activeTab}` forces React to unmount + remount when the
+          user toggles between rejected and deactivated. Same component
+          type at the same tree position would otherwise reuse the
+          instance and carry the previous tab's `selected` Set across —
+          stale userIds would render in the toolbar count and seed the
+          bulk button. */}
+      {activeTab === "rejected" || activeTab === "deactivated" ? (
+        <LifecycleView key={activeTab} status={activeTab} />
+      ) : null}
+    </div>
   );
 }
 
@@ -165,18 +181,12 @@ function UnclaimedView() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <ManagementHeader description="Pre-add real-world members so gear and other records can reference them. They'll claim the row by clicking their first magic link." />
-
-      <TabToggle active="unclaimed" />
-
-      <UnclaimedTab
-        perPage={perPage}
-        page={page}
-        onPerPageChange={setLimit}
-        onPageChange={setPage}
-      />
-    </div>
+    <UnclaimedTab
+      perPage={perPage}
+      page={page}
+      onPerPageChange={setLimit}
+      onPageChange={setPage}
+    />
   );
 }
 
@@ -279,11 +289,7 @@ function PendingView() {
     : "All time";
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <ManagementHeader description='Approving grants the "member" role automatically.' />
-
-      <TabToggle active="pending" />
-
+    <div className="flex flex-col gap-6">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <Popover>
@@ -541,7 +547,6 @@ function TabToggle({ active }: { active: TabId }) {
 // ── Lifecycle view (rejected + deactivated) ─────────────────────────────
 
 interface LifecycleConfig {
-  description: string;
   emptyTitle: string;
   countNoun: string;
   bulkLabel: string;
@@ -556,7 +561,6 @@ const LIFECYCLE_CONFIG: Record<
   LifecycleConfig
 > = {
   rejected: {
-    description: `Un-rejecting moves users back to the pending queue. ${RETENTION_REJECTED_COPY}`,
     emptyTitle: "No rejected registrations.",
     countNoun: "rejected",
     bulkLabel: "Un-reject",
@@ -566,7 +570,6 @@ const LIFECYCLE_CONFIG: Record<
     icon: Undo2,
   },
   deactivated: {
-    description: `Reactivating restores the member role. ${RETENTION_DEACTIVATED_COPY}`,
     emptyTitle: "No deactivated members.",
     countNoun: "deactivated",
     bulkLabel: "Reactivate",
@@ -655,11 +658,7 @@ function LifecycleView({
   const Icon = config.icon;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <ManagementHeader description={config.description} />
-
-      <TabToggle active={status} />
-
+    <div className="flex flex-col gap-6">
       {isLoading ? (
         <div className="py-8 text-center text-sm text-muted-foreground">
           Loading...
