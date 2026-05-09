@@ -12,7 +12,6 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
-import { StatusBadge } from "#/features/members/components/status-badge";
 import { UserAvatar } from "#/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
@@ -70,18 +69,10 @@ const SORT_OPTIONS = [
 
 type SortOption = (typeof SORT_OPTIONS)[number]["value"];
 
-const STATUS_OPTIONS = [
-  { value: "approved", label: "Approved" },
-  { value: "pending", label: "Pending" },
-  { value: "rejected", label: "Rejected" },
-  { value: "deactivated", label: "Deactivated" },
-] as const;
-
 const membersSearchSchema = z.object({
   q: z.string().optional(),
   affiliations: z.string().optional(), // comma-separated values
   roles: z.string().optional(), // comma-separated values
-  statuses: z.string().optional(), // single status value for admin filtering
   sort: z.enum(["name_asc", "name_desc", "newest", "oldest"]).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   page: z.coerce.number().int().min(1).optional(),
@@ -101,7 +92,6 @@ function MembersIndexPage() {
     q: search,
     affiliations: affiliationsParam,
     roles: rolesParam,
-    statuses: statusesParam,
     sort,
     limit: searchLimit,
     page: searchPage,
@@ -122,7 +112,6 @@ function MembersIndexPage() {
       q: string | undefined;
       affiliations: string | undefined;
       roles: string | undefined;
-      statuses: string | undefined;
       sort: SortOption | undefined;
       limit: number | undefined;
       page: number | undefined;
@@ -197,7 +186,6 @@ function MembersIndexPage() {
       search,
       affiliations: affiliationsParam,
       roles: rolesParam,
-      statuses: statusesParam,
       sort: sort ?? "name_asc",
       limit: perPage,
       offset,
@@ -206,9 +194,6 @@ function MembersIndexPage() {
 
   const { hasPermission } = useAuth();
   const canAssignRoles = hasPermission("roles:assign");
-  const canManage = hasPermission("members:manage");
-  const showingNonApproved =
-    statusesParam !== undefined && statusesParam !== "approved";
 
   const [roleTarget, setRoleTarget] = useState<MemberSummary | null>(null);
 
@@ -220,11 +205,7 @@ function MembersIndexPage() {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Members</h1>
-        <p className="text-sm text-muted-foreground">
-          {showingNonApproved
-            ? `Showing ${statusesParam} members.`
-            : "Approved club members."}
-        </p>
+        <p className="text-sm text-muted-foreground">Approved club members.</p>
       </header>
 
       {/* Row 1: Search + view toggle */}
@@ -350,30 +331,6 @@ function MembersIndexPage() {
             ))}
           </SelectContent>
         </Select>
-
-        {/* Status filter (members:manage only) */}
-        {canManage ? (
-          <Select
-            value={statusesParam ?? "approved"}
-            onValueChange={(value) =>
-              updateSearch({
-                statuses: value === "approved" ? undefined : value,
-                page: undefined,
-              })
-            }
-          >
-            <SelectTrigger className="w-[9rem]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
       </div>
 
       {isLoading ? (
@@ -397,14 +354,12 @@ function MembersIndexPage() {
               members={members}
               canAssignRoles={canAssignRoles}
               onManageRoles={setRoleTarget}
-              showStatus={showingNonApproved}
             />
           ) : (
             <MemberGridView
               members={members}
               canAssignRoles={canAssignRoles}
               onManageRoles={setRoleTarget}
-              showStatus={showingNonApproved}
             />
           )}
 
@@ -475,12 +430,10 @@ function MemberListView({
   members,
   canAssignRoles,
   onManageRoles,
-  showStatus,
 }: {
   members: MemberSummary[];
   canAssignRoles: boolean;
   onManageRoles: (member: MemberSummary) => void;
-  showStatus: boolean;
 }) {
   return (
     <ul className="divide-y rounded-lg border">
@@ -490,7 +443,6 @@ function MemberListView({
           member={member}
           canAssignRoles={canAssignRoles}
           onManageRoles={onManageRoles}
-          showStatus={showStatus}
         />
       ))}
     </ul>
@@ -501,12 +453,10 @@ function MemberRow({
   member,
   canAssignRoles,
   onManageRoles,
-  showStatus,
 }: {
   member: MemberSummary;
   canAssignRoles: boolean;
   onManageRoles: (member: MemberSummary) => void;
-  showStatus: boolean;
 }) {
   const name = member.preferredName ?? member.fullName;
   return (
@@ -532,7 +482,6 @@ function MemberRow({
             </span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {showStatus ? <StatusBadge status={member.status} /> : null}
             <AffiliationBadge affiliation={member.ucAffiliation} />
             <RoleBadges roles={member.roles} />
           </div>
@@ -559,12 +508,10 @@ function MemberGridView({
   members,
   canAssignRoles,
   onManageRoles,
-  showStatus,
 }: {
   members: MemberSummary[];
   canAssignRoles: boolean;
   onManageRoles: (member: MemberSummary) => void;
-  showStatus: boolean;
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -574,7 +521,6 @@ function MemberGridView({
           member={member}
           canAssignRoles={canAssignRoles}
           onManageRoles={onManageRoles}
-          showStatus={showStatus}
         />
       ))}
     </div>
@@ -585,12 +531,10 @@ function MemberCard({
   member,
   canAssignRoles,
   onManageRoles,
-  showStatus,
 }: {
   member: MemberSummary;
   canAssignRoles: boolean;
   onManageRoles: (member: MemberSummary) => void;
-  showStatus: boolean;
 }) {
   const name = member.preferredName ?? member.fullName;
   return (
@@ -609,7 +553,6 @@ function MemberCard({
             {member.email}
           </p>
           <div className="flex flex-wrap justify-center gap-1.5">
-            {showStatus ? <StatusBadge status={member.status} /> : null}
             <AffiliationBadge affiliation={member.ucAffiliation} />
             <RoleBadges roles={member.roles} />
           </div>

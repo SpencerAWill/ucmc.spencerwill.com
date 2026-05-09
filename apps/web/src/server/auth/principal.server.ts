@@ -86,7 +86,8 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
       .select({ roleId: schema.userRoles.roleId, name: schema.roles.name })
       .from(schema.userRoles)
       .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
-      .where(eq(schema.userRoles.userId, userId)),
+      .where(eq(schema.userRoles.userId, userId))
+      .orderBy(asc(schema.roles.position), asc(schema.roles.name)),
   ]);
   if (userRows.length === 0) {
     return null;

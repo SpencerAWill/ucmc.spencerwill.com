@@ -1,5 +1,5 @@
 /**
- * The "Unclaimed" tab on `/members/registrations`. Lists officer-pre-
+ * The "Unclaimed" tab on `/members/management`. Lists officer-pre-
  * added stub members, exposes the bulk pre-add sheet, and provides
  * per-row edit + bulk-delete affordances.
  */

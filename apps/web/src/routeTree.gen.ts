@@ -36,6 +36,7 @@ import { Route as MyAccountRouteImport } from './routes/my.account'
 import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
 import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
+import { Route as MembersManagementRouteImport } from './routes/members.management'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
@@ -183,6 +184,11 @@ const MembersRegistrationsRoute = MembersRegistrationsRouteImport.update({
   path: '/registrations',
   getParentRoute: () => MembersRoute,
 } as any)
+const MembersManagementRoute = MembersManagementRouteImport.update({
+  id: '/management',
+  path: '/management',
+  getParentRoute: () => MembersRoute,
+} as any)
 const MembersPublicIdRoute = MembersPublicIdRouteImport.update({
   id: '/$publicId',
   path: '/$publicId',
@@ -260,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
+  '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
@@ -299,6 +306,7 @@ export interface FileRoutesByTo {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
+  '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
@@ -339,6 +347,7 @@ export interface FileRoutesById {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/members/$publicId': typeof MembersPublicIdRoute
+  '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
@@ -381,6 +390,7 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/members/$publicId'
+    | '/members/management'
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
@@ -420,6 +430,7 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/members/$publicId'
+    | '/members/management'
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
@@ -459,6 +470,7 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/members/$publicId'
+    | '/members/management'
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
@@ -699,6 +711,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersRegistrationsRouteImport
       parentRoute: typeof MembersRoute
     }
+    '/members/management': {
+      id: '/members/management'
+      path: '/management'
+      fullPath: '/members/management'
+      preLoaderRoute: typeof MembersManagementRouteImport
+      parentRoute: typeof MembersRoute
+    }
     '/members/$publicId': {
       id: '/members/$publicId'
       path: '/$publicId'
@@ -781,6 +800,7 @@ declare module '@tanstack/react-router' {
 
 interface MembersRouteChildren {
   MembersPublicIdRoute: typeof MembersPublicIdRoute
+  MembersManagementRoute: typeof MembersManagementRoute
   MembersRegistrationsRoute: typeof MembersRegistrationsRoute
   MembersRolesRoute: typeof MembersRolesRoute
   MembersWaiversRoute: typeof MembersWaiversRoute
@@ -790,6 +810,7 @@ interface MembersRouteChildren {
 
 const MembersRouteChildren: MembersRouteChildren = {
   MembersPublicIdRoute: MembersPublicIdRoute,
+  MembersManagementRoute: MembersManagementRoute,
   MembersRegistrationsRoute: MembersRegistrationsRoute,
   MembersRolesRoute: MembersRolesRoute,
   MembersWaiversRoute: MembersWaiversRoute,

@@ -72,10 +72,7 @@ beforeEach(async () => {
     .values([
       { roleId: "role_system_admin", permissionId: "perm_roles_manage" },
       { roleId: "role_system_admin", permissionId: "perm_roles_assign" },
-      {
-        roleId: "role_system_admin",
-        permissionId: "perm_registrations_approve",
-      },
+      { roleId: "role_system_admin", permissionId: "perm_members_manage" },
     ])
     .onConflictDoNothing();
 });
@@ -123,7 +120,7 @@ describe("loadPrincipal", () => {
     // Should include the standard three AND the unlinked test permission.
     expect(principal!.permissions).toContain("roles:manage");
     expect(principal!.permissions).toContain("roles:assign");
-    expect(principal!.permissions).toContain("registrations:approve");
+    expect(principal!.permissions).toContain("members:manage");
     expect(principal!.permissions).toContain("test:only");
   });
 
@@ -160,18 +157,18 @@ describe("loadAnonymousPermissions", () => {
 
   it("returns permissions assigned to the anonymous role", async () => {
     const db = getDb();
-    // Grant registrations:approve to anonymous for this test.
+    // Grant members:manage to anonymous for this test.
     await db
       .insert(schema.rolePermissions)
       .values({
         roleId: "role_anonymous",
-        permissionId: "perm_registrations_approve",
+        permissionId: "perm_members_manage",
       })
       .onConflictDoNothing();
 
     await invalidateAnonymousPermissionsCache();
     const perms = await loadAnonymousPermissions();
-    expect(perms).toContain("registrations:approve");
+    expect(perms).toContain("members:manage");
   });
 
   it("caches results in KV so a second call skips DB", async () => {

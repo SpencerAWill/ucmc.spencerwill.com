@@ -26,21 +26,9 @@ import {
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
-import { requireApprover } from "#/features/members/server/permissions.server";
+import { requireMembersManager } from "#/features/members/server/permissions.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
-
-/** Requires the `members:manage` permission. */
-async function requireMembersManager(): Promise<Principal> {
-  const principal = await loadCurrentPrincipal();
-  if (!principal) {
-    throw new Error("Not signed in");
-  }
-  if (!principal.permissions.includes("members:manage")) {
-    throw new Error("Forbidden: missing members:manage");
-  }
-  return principal;
-}
 
 /** Requires the caller to be signed in and approved. */
 async function requireApprovedPrincipal(): Promise<Principal> {
@@ -79,7 +67,7 @@ export async function listPendingRegistrationsAction(opts: {
   limit?: number;
   offset?: number;
 }): Promise<PendingRegistrationsPage> {
-  await requireApprover();
+  await requireMembersManager();
   const db = getDb();
 
   const conditions = [eq(schema.users.status, "pending")];
@@ -187,7 +175,7 @@ export async function listMembersAction(opts: {
   // everyone else is locked to "approved". `unclaimed` is *always*
   // excluded — these are officer-pre-added stubs with no profile, no
   // verified email, and no avatar; they have their own tab on
-  // /members/registrations and do not belong in the directory.
+  // /members/management and do not belong in the directory.
   const requested = canManage
     ? (opts.statuses?.split(",").filter(Boolean) ?? ["approved"])
     : ["approved"];
@@ -298,7 +286,10 @@ export async function listMembersAction(opts: {
       .offset(opts.offset ?? 0),
   ]);
 
-  // Batch-fetch roles for all users on this page.
+  // Batch-fetch roles for all users on this page. Order by canonical
+  // role position so each user's badge list renders in the same order
+  // as the RBAC editor — the `rolesByUser` map below preserves the
+  // insertion order of this flat result.
   const userIds = rows.map((r) => r.userId);
   const roleRows =
     userIds.length > 0
@@ -310,6 +301,7 @@ export async function listMembersAction(opts: {
           .from(schema.userRoles)
           .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
           .where(inArray(schema.userRoles.userId, userIds))
+          .orderBy(asc(schema.roles.position), asc(schema.roles.name))
       : [];
 
   const rolesByUser = new Map<string, string[]>();
@@ -451,7 +443,8 @@ export async function getMemberDetailAction(
       .select({ roleName: schema.roles.name })
       .from(schema.userRoles)
       .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
-      .where(eq(schema.userRoles.userId, userId)),
+      .where(eq(schema.userRoles.userId, userId))
+      .orderBy(asc(schema.roles.position), asc(schema.roles.name)),
     canViewPrivate
       ? db
           .select({
@@ -509,7 +502,10 @@ export async function listRolesAction(): Promise<RoleOption[]> {
   }
   return getDb().query.roles.findMany({
     columns: { id: true, name: true, description: true },
-    orderBy: (roles, { asc: a }) => [a(roles.name)],
+    // Match the canonical role ordering used by the RBAC editor
+    // (`listRolesDetailedAction`) so the directory's role-filter
+    // popover reflects whatever the operator dragged in `/members/roles`.
+    orderBy: (roles, { asc: a }) => [a(roles.position), a(roles.name)],
   });
 }
 
@@ -518,7 +514,7 @@ export async function listRolesAction(): Promise<RoleOption[]> {
 export async function approveRegistrationsAction(
   userIds: string[],
 ): Promise<{ ok: true }> {
-  const approver = await requireApprover();
+  const approver = await requireMembersManager();
   const db = getDb();
 
   // `.returning({ id })` so the audit + role-grant operate on the
@@ -566,7 +562,7 @@ export async function approveRegistrationsAction(
 export async function rejectRegistrationsAction(
   userIds: string[],
 ): Promise<{ ok: true }> {
-  const approver = await requireApprover();
+  const approver = await requireMembersManager();
 
   // `.returning({ id })` gives us the rows the UPDATE actually
   // touched. Audit only those so a stale or malformed request that

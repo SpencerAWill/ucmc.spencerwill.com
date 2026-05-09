@@ -6,9 +6,9 @@ import { expect, test } from "./fixtures/mailpit";
  * Officer drives the bulk pre-add UI end-to-end.
  *
  * Covers what the unit tests + component tests can't see together:
- *   - Route guard (`requirePermission("registrations:approve")`) lets
- *     the officer in.
- *   - Unclaimed tab swap on the registrations page.
+ *   - Route guard (`requirePermission("members:manage")`) lets the
+ *     officer in.
+ *   - Unclaimed tab swap on the management page.
  *   - Sheet open → dynamic-rows form fill → submit.
  *   - Server fn round-trip (`preAddUnclaimedFn`) lands in D1.
  *   - The mutation hook's invalidation flushes the unclaimed-list query
@@ -24,8 +24,8 @@ test("officer pre-adds unclaimed members via the bulk-add sheet", async ({
   mailpit,
 }) => {
   // Seed an approved officer with the system_admin role (which carries
-  // `registrations:approve` via the role-bypass). Email is unique-per-
-  // run so retries don't collide on the user_emails UNIQUE constraint.
+  // `members:manage` via the role-bypass). Email is unique-per-run so
+  // retries don't collide on the user_emails UNIQUE constraint.
   const officerEmail = `e2e-officer-${Date.now()}@example.com`;
   ensureApprovedUser(officerEmail, { roles: ["role_system_admin"] });
 
@@ -48,8 +48,8 @@ test("officer pre-adds unclaimed members via the bulk-add sheet", async ({
     timeout: 15_000,
   });
 
-  // Navigate to the registrations page → switch to the Unclaimed tab.
-  await page.goto("/members/registrations");
+  // Navigate to the management page → switch to the Unclaimed tab.
+  await page.goto("/members/management");
   await waitForHydration(page);
   await page.getByRole("button", { name: /^unclaimed$/i }).click();
 

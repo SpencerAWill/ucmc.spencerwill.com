@@ -4,11 +4,12 @@ import { expect, test } from "./fixtures/mailpit";
 
 /**
  * Permission gating regression: an approved member without the
- * `registrations:approve` permission must not be able to reach
- * `/members/registrations` (which surfaces the pending-registrations
- * queue + the new "Unclaimed" pre-add tab). The route guard is
- * `requirePermission(queryClient, "registrations:approve")`, which
- * — per `requirePermission` in `apps/web/src/features/auth/guards.ts` —
+ * `members:manage` permission must not be able to reach
+ * `/members/management` (the member-lifecycle admin surface that
+ * houses pending registrations, the "Unclaimed" pre-add tab, and the
+ * un-reject / reactivate flows). The route guard is
+ * `requirePermission(queryClient, "members:manage")`, which — per
+ * `requirePermission` in `apps/web/src/features/auth/guards.ts` —
  * redirects approved-but-unauthorized users to `/`.
  *
  * Why an e2e and not a unit test: the redirect is wired via TanStack
@@ -19,12 +20,12 @@ import { expect, test } from "./fixtures/mailpit";
  * refactor that drops the guard or moves the unclaimed tab onto a
  * different route) is invisible to the unit-level boundary.
  */
-test("non-officer cannot reach /members/registrations", async ({
+test("non-officer cannot reach /members/management", async ({
   page,
   mailpit,
 }) => {
   // Seed an approved member with `role_member` only — no
-  // registrations:approve, no system_admin role-bypass.
+  // members:manage, no system_admin role-bypass.
   const memberEmail = `e2e-plain-member-${Date.now()}@example.com`;
   ensureApprovedUser(memberEmail, { roles: ["role_member"] });
 
@@ -44,16 +45,15 @@ test("non-officer cannot reach /members/registrations", async ({
     timeout: 15_000,
   });
 
-  // Try to reach the registrations page directly. The route guard
-  // should kick us to `/`. Land somewhere that's *not*
-  // `/members/registrations` — the home page is the documented
-  // destination, but waiting for "anywhere else" makes the assertion
-  // robust to future redirect-target tweaks.
-  await page.goto("/members/registrations");
-  await page.waitForURL(
-    (u) => !u.pathname.startsWith("/members/registrations"),
-    { timeout: 10_000 },
-  );
+  // Try to reach the management page directly. The route guard should
+  // kick us to `/`. Land somewhere that's *not* `/members/management`
+  // — the home page is the documented destination, but waiting for
+  // "anywhere else" makes the assertion robust to future redirect-
+  // target tweaks.
+  await page.goto("/members/management");
+  await page.waitForURL((u) => !u.pathname.startsWith("/members/management"), {
+    timeout: 10_000,
+  });
 
   // And the page we actually land on must not contain the unclaimed-
   // pre-add UI affordances (defense in depth — if a future regression
