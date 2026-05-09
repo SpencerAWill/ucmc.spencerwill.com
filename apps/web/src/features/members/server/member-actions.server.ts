@@ -742,6 +742,24 @@ export async function banMembersAction(input: {
   const db = getDb();
   const now = new Date();
 
+  // Last-system-admin guard — same loss-of-platform-control class as
+  // `deleteMyAccountAction`'s self-protection. If banning these users
+  // would leave zero `system_admin`s the platform has no way to grant
+  // the role to anyone else without a manual D1 intervention. Compute
+  // up-front so we refuse before any side effect lands.
+  const adminRoleRows = await db
+    .select({ userId: schema.userRoles.userId })
+    .from(schema.userRoles)
+    .where(eq(schema.userRoles.roleId, "role_system_admin"));
+  const targetSet = new Set(input.userIds);
+  const adminUserIds = adminRoleRows.map((r) => r.userId);
+  const remainingAdmins = adminUserIds.filter((id) => !targetSet.has(id));
+  if (adminUserIds.length > 0 && remainingAdmins.length === 0) {
+    throw new Error(
+      "Cannot ban the only remaining system_admin. Promote a successor via /members/roles first.",
+    );
+  }
+
   // Only flip rows that are currently NOT already banned. `.returning`
   // gives the IDs of rows the UPDATE actually touched so the audit
   // log + blocklist seed don't claim a ban for users in the wrong
@@ -782,6 +800,19 @@ export async function banMembersAction(input: {
   await db
     .delete(schema.sessions)
     .where(inArray(schema.sessions.userId, updatedIds));
+
+  // Strip every role from the banned users. Without this, an unban
+  // -> pending -> re-approve sequence would silently restore officer
+  // roles (`role_president`, `role_treasurer`, etc.) the moment the
+  // user is re-approved, because `approveRegistrationsAction` only
+  // grants `role_member` via `INSERT OR IGNORE` and never revokes
+  // anything else. Stripping at ban time enforces "ban resets
+  // privileges to zero" — a future re-approval grants `role_member`
+  // fresh; any officer roles must be explicitly re-granted by an
+  // operator with `roles:assign`.
+  await db
+    .delete(schema.userRoles)
+    .where(inArray(schema.userRoles.userId, updatedIds));
 
   // Mirror every verified-or-not email of the banned users into the
   // blocklist. Use the same `normalizeEmail()` the auth surface
@@ -843,9 +874,17 @@ export async function unbanMembersAction(
   const db = getDb();
 
   // Move banned users back to pending so they re-enter the approval
-  // queue. NULL the three ban columns so a future ban gets a fresh
-  // row state. `.returning` so the audit set + blocklist clear only
-  // operate on rows that actually transitioned.
+  // queue. NULL the ban columns + every other lifecycle timestamp so
+  // the row reflects fresh-pending state. Without clearing
+  // `approvedAt` / `approvedBy` / `deactivatedAt` / `rejectedAt`, the
+  // unbanned row would carry stale timestamps from a prior life
+  // (e.g., approvedBy pointing at the officer who originally approved
+  // them years ago); the retention crons that key on those timestamps
+  // would also misfire. Mirrors `unrejectMembersAction:709` (clears
+  // `rejectedAt`) and `reactivateMembersAction:664` (clears
+  // `deactivatedAt`).
+  // `.returning` so the audit set + blocklist clear only operate on
+  // rows that actually transitioned.
   const updated = await db
     .update(schema.users)
     .set({
@@ -853,6 +892,10 @@ export async function unbanMembersAction(
       bannedAt: null,
       bannedBy: null,
       bannedReason: null,
+      approvedAt: null,
+      approvedBy: null,
+      deactivatedAt: null,
+      rejectedAt: null,
     })
     .where(
       and(inArray(schema.users.id, userIds), eq(schema.users.status, "banned")),

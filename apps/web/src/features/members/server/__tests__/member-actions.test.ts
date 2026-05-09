@@ -536,6 +536,53 @@ describe("banMembersAction", () => {
     ).rejects.toThrow("Cannot ban yourself");
   });
 
+  it("refuses to ban the only remaining system_admin", async () => {
+    // Ban-the-last-admin lockout: parallel to deleteMyAccountAction's
+    // self-protection. With two admins (caller + target), banning the
+    // target leaves zero admins and must be refused before any side
+    // effect lands.
+    const adminId = await signInAsAdmin();
+    const otherAdminId = await seedUser("other-admin@example.com");
+    await assignRole(otherAdminId, "role_system_admin");
+
+    // Self-ban check fires first when caller is in the list — exclude
+    // the caller so the last-admin guard is what trips. Banning the
+    // *only other* admin while caller is still admin is fine (caller
+    // remains). To force the last-admin path we sign in as a fresh
+    // banner-with-no-admin-role and target the remaining admin.
+    await banMembersAction({
+      userIds: [otherAdminId],
+      reason: "policy violation",
+    });
+
+    // Now sign in as a non-admin holder of `members:ban` and try to
+    // ban the remaining admin (adminId). With only one admin left and
+    // that admin in the target set, the guard refuses.
+    await signInWithPermission("banner@example.com", "members:ban");
+    await expect(
+      banMembersAction({ userIds: [adminId], reason: "policy violation" }),
+    ).rejects.toThrow(/only remaining system_admin/i);
+  });
+
+  it("strips user_roles at ban time", async () => {
+    // Ban resets privileges to zero. Without this, an unban → pending
+    // → re-approve sequence would silently restore officer roles via
+    // `INSERT OR IGNORE role_member` (which would no-op against the
+    // surviving officer assignments).
+    await signInAsAdmin();
+    const targetId = await seedUser("officer-victim@example.com");
+    await assignRole(targetId, "role_member");
+    await assignRole(targetId, "role_president");
+
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    const remaining = await getDb()
+      .select()
+      .from(schema.userRoles)
+      .where(eq(schema.userRoles.userId, targetId));
+    expect(remaining).toHaveLength(0);
+  });
+
   it("is a no-op for unclaimed stubs (excluded by status filter)", async () => {
     await signInAsAdmin();
     const stubId = await seedUser("stub@example.com", {
@@ -635,6 +682,41 @@ describe("unbanMembersAction", () => {
     expect(user!.bannedAt).toBeNull();
     expect(user!.bannedBy).toBeNull();
     expect(user!.bannedReason).toBeNull();
+  });
+
+  it("clears stale lifecycle timestamps from a prior life", async () => {
+    // A user can land on `banned` from multiple prior states — they
+    // may have been approved/deactivated/rejected before. Without
+    // clearing those timestamps on unban, the row reads as "approved
+    // by X on date Y, also rejected on Z, also banned" simultaneously
+    // after unban. Mirrors `unrejectMembersAction` clearing
+    // `rejectedAt` and `reactivateMembersAction` clearing
+    // `deactivatedAt`.
+    const adminId = await signInAsAdmin();
+    const targetId = await seedUser("victim@example.com");
+    // Stamp prior-life timestamps directly so the test doesn't depend
+    // on the exact lifecycle path the user took to reach `banned`.
+    const db = getDb();
+    await db
+      .update(schema.users)
+      .set({
+        approvedAt: new Date("2024-01-01"),
+        approvedBy: adminId,
+        deactivatedAt: new Date("2024-06-01"),
+        rejectedAt: new Date("2024-09-01"),
+      })
+      .where(eq(schema.users.id, targetId));
+    await banMembersAction({ userIds: [targetId], reason: "policy violation" });
+
+    await unbanMembersAction([targetId]);
+
+    const user = await getDb().query.users.findFirst({
+      where: eq(schema.users.id, targetId),
+    });
+    expect(user!.approvedAt).toBeNull();
+    expect(user!.approvedBy).toBeNull();
+    expect(user!.deactivatedAt).toBeNull();
+    expect(user!.rejectedAt).toBeNull();
   });
 
   it("removes the user's blocklist rows", async () => {
