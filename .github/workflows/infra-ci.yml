@@ -55,7 +55,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - uses: pulumi/actions@v6
+      - uses: pulumi/actions@v7
         with:
           command: preview
           stack-name: dev
