@@ -57,6 +57,9 @@ export async function requireApproved(
   if (!principal.hasProfile) {
     throw redirect({ to: "/register/profile" });
   }
+  if (principal.status === "banned") {
+    throw redirect({ to: "/banned" });
+  }
   if (principal.status === "deactivated") {
     throw redirect({ to: "/deactivated" });
   }

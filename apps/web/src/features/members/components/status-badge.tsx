@@ -21,6 +21,7 @@ const STATUS_VARIANTS: Record<StatusBadgeStatus, BadgeVariant> = {
   pending: "warning",
   rejected: "destructive",
   deactivated: "secondary",
+  banned: "destructive",
 };
 
 const STATUS_LABELS: Record<StatusBadgeStatus, string> = {
@@ -28,6 +29,7 @@ const STATUS_LABELS: Record<StatusBadgeStatus, string> = {
   pending: "Pending",
   rejected: "Rejected",
   deactivated: "Deactivated",
+  banned: "Banned",
 };
 
 export function StatusBadge({ status }: { status: StatusBadgeStatus }) {

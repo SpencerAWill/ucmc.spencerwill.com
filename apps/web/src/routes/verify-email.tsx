@@ -138,6 +138,8 @@ function errorCopy(reason: string): string {
       return "This link belongs to a different account. Sign in to the account that requested it, then click the link again.";
     case "email_taken":
       return "Another account claimed this email before you could verify it.";
+    case "email_unavailable":
+      return "This email can't be attached to your account.";
     case "invalid":
       return "The link is expired, already used, or malformed. Request a new one from your account page.";
     case "rate_limited":

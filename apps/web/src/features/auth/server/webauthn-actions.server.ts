@@ -223,6 +223,19 @@ export async function webauthnAuthenticateFinishAction(args: {
     return { ok: false, reason: "invalid" };
   }
 
+  // Banned users must not authenticate through any channel. The
+  // magic-link request endpoint silently drops banned addresses, but
+  // a passkey ceremony bypasses that gate entirely — a banned user
+  // who enrolled a passkey before the ban could otherwise authenticate
+  // and briefly hold a session until `loadCurrentPrincipal` cleaned it
+  // up on the next request. Refuse here so no session is ever issued.
+  // Reason `invalid` (not a new banned-specific reason) so we don't
+  // leak ban state to a client that might be probing — same shape the
+  // verification-failure branches return.
+  if (principal.status === "banned") {
+    return { ok: false, reason: "invalid" };
+  }
+
   await openSession(principal.userId);
 
   return {

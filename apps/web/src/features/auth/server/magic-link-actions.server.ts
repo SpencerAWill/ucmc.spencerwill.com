@@ -11,6 +11,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import { isEmailBanned } from "#/server/auth/email-blocklist.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import { generateUserPublicId } from "#/server/auth/ids";
 import {
@@ -156,6 +157,16 @@ export async function requestMagicLinkAction(args: {
       return { ok: true };
     }
 
+    // Blocklist check — banned addresses are observationally
+    // non-existent at this endpoint. Same `{ ok: true }` shape as
+    // every other early-return branch so a caller can't time-side-
+    // channel "registered" vs "banned" vs "unknown". The timing-pad
+    // in the `finally` block keeps wall-clock parity with the path
+    // that issues the magic link.
+    if (await isEmailBanned(args.email)) {
+      return { ok: true };
+    }
+
     const existingUserId = await findUserIdByEmail(args.email);
 
     await requestMagicLink({
@@ -197,6 +208,15 @@ export async function consumeMagicLinkAction(
   // gates on, and return `mode: "proof"` so the caller redirects there.
   const existing = await resolveUserByEmail(proof.email);
   if (existing === BROKEN_USER_FK) {
+    return { ok: false, reason: "invalid" };
+  }
+  // A magic link minted *before* the ban can still be live — the
+  // request endpoint's blocklist gate doesn't retroactively invalidate
+  // outstanding tokens. Refuse at consume time so no session is opened.
+  // Reason `invalid` (not banned-specific) keeps observational parity
+  // with every other refusal branch — clients and audit consumers
+  // can't distinguish "banned" from "expired"/"replayed".
+  if (existing && existing.status === "banned") {
     return { ok: false, reason: "invalid" };
   }
   if (existing) {

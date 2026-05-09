@@ -28,6 +28,7 @@ import {
   buildAuditEventStatement,
   recordAuditEvent,
 } from "#/server/audit/audit-log.server";
+import { isEmailBanned } from "#/server/auth/email-blocklist.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import {
   consumeMagicLink,
@@ -67,7 +68,11 @@ export type RequestAddEmailResult =
         | "not_approved"
         | "rate_limited"
         | "email_taken"
-        | "already_yours";
+        | "already_yours"
+        // Address is on the `banned_emails` blocklist. UX renders this
+        // as a generic "this address can't be added" — surfacing the
+        // ban reason would leak details about another account.
+        | "email_unavailable";
     };
 
 export type ConsumeAddEmailResult =
@@ -79,7 +84,12 @@ export type ConsumeAddEmailResult =
         | "rate_limited"
         | "invalid"
         | "wrong_user"
-        | "email_taken";
+        | "email_taken"
+        // Address landed on the blocklist between request and consume.
+        // Folded into a separate reason rather than `invalid` so the
+        // user-facing toast can explain accurately and the audit /
+        // observability surface stays clean.
+        | "email_unavailable";
     };
 
 export type RemoveEmailResult =
@@ -154,6 +164,15 @@ export async function requestAddEmailAction(args: {
     return { ok: false, reason: "rate_limited" };
   }
 
+  // Blocklist check — refuse to send a magic link to a banned address
+  // even if the address has no `user_emails` row. Without this, the
+  // post-ban / post-purge case (banned user self-deleted, blocklist
+  // row survives, address looks "available") would let a different
+  // approved user attach the banned address to their own account.
+  if (await isEmailBanned(email)) {
+    return { ok: false, reason: "email_unavailable" };
+  }
+
   // Pre-check: surface a fast, helpful "email_taken" or "already_yours"
   // before sending a magic link the recipient can't act on. The actual
   // race-safety boundary is the UNIQUE(email) constraint at consume
@@ -204,6 +223,15 @@ export async function consumeAddEmailAction(
   }
 
   const email = normalizeEmail(proof.email);
+
+  // Re-check the blocklist at consume time. The pre-check at request
+  // time would have caught the common case, but a ban may have landed
+  // between request and consume — the magic-link is already minted and
+  // delivered, so this is the last gate before the address attaches.
+  if (await isEmailBanned(email)) {
+    return { ok: false, reason: "email_unavailable" };
+  }
+
   const db = getDb();
   try {
     // Insert + audit in one batch — the email is known up front, so

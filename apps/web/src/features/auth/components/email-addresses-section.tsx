@@ -197,6 +197,9 @@ function AddEmailForm() {
             case "already_yours":
               toast.error("That email is already on your account.");
               break;
+            case "email_unavailable":
+              toast.error("That email can't be added.");
+              break;
             case "rate_limited":
               toast.error("Too many attempts. Please wait a minute.");
               break;

@@ -144,9 +144,14 @@ export async function loadCurrentPrincipal(): Promise<Principal | null> {
     return null;
   }
 
-  if (principal.status === "deactivated") {
-    // Deactivated users must not retain active sessions. Clean up and
-    // return null so downstream code treats this as an anonymous request.
+  if (principal.status === "deactivated" || principal.status === "banned") {
+    // Deactivated and banned users must not retain active sessions.
+    // Clean up and return null so downstream code treats this as an
+    // anonymous request. The status-specific landing page (/deactivated
+    // or /banned) is reachable in the narrow window where the session
+    // was just opened by sign-in and the deactivation/ban flipped the
+    // user's status before this read; the cookie clear ensures the
+    // next request lands on /sign-in.
     await deleteSessionRow(sid);
     clearSessionCookie();
     return null;
