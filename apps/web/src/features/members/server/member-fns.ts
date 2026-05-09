@@ -162,6 +162,33 @@ export const unrejectMembersFn = createServerFn({ method: "POST" })
     return unrejectMembersAction(data.userIds);
   });
 
+// ── ban / unban ─────────────────────────────────────────────────────────
+
+// Reason is enforced ≥10 chars on both client and server. Trim first so
+// whitespace-only input doesn't satisfy the min-length floor.
+export const banMembersInputSchema = z.object({
+  userIds: z.array(z.string().min(1)).min(1),
+  reason: z.string().trim().min(10).max(2000),
+});
+
+export type BanMembersInput = z.infer<typeof banMembersInputSchema>;
+
+export const banMembersFn = createServerFn({ method: "POST" })
+  .inputValidator(banMembersInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { banMembersAction } =
+      await import("#/features/members/server/member-actions.server");
+    return banMembersAction({ userIds: data.userIds, reason: data.reason });
+  });
+
+export const unbanMembersFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { unbanMembersAction } =
+      await import("#/features/members/server/member-actions.server");
+    return unbanMembersAction(data.userIds);
+  });
+
 // ── session revocation ──────────────────────────────────────────────────
 
 export const revokeUserSessionsFn = createServerFn({ method: "POST" })

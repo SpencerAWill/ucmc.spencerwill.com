@@ -23,10 +23,14 @@ import {
   recordAuditEvent,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
+import { normalizeEmail } from "#/server/auth/email-normalize";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
-import { requireMembersManager } from "#/features/members/server/permissions.server";
+import {
+  requireMembersBanner,
+  requireMembersManager,
+} from "#/features/members/server/permissions.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
 
@@ -717,6 +721,179 @@ export async function unrejectMembersAction(
       actorUserId: principal.userId,
       action: "registration.unrejected",
       targetUserId: id,
+    })),
+  );
+
+  return { ok: true };
+}
+
+// ── ban (bulk) ──────────────────────────────────────────────────────────
+
+export async function banMembersAction(input: {
+  userIds: string[];
+  reason: string;
+}): Promise<{ ok: true }> {
+  const principal = await requireMembersBanner();
+
+  if (input.userIds.includes(principal.userId)) {
+    throw new Error("Cannot ban yourself");
+  }
+
+  const db = getDb();
+  const now = new Date();
+
+  // Only flip rows that are currently NOT already banned. `.returning`
+  // gives the IDs of rows the UPDATE actually touched so the audit
+  // log + blocklist seed don't claim a ban for users in the wrong
+  // status. Idempotent: re-banning an already-banned user is a no-op
+  // rather than an error.
+  const updated = await db
+    .update(schema.users)
+    .set({
+      status: "banned",
+      bannedAt: now,
+      bannedBy: principal.userId,
+      bannedReason: input.reason,
+    })
+    .where(
+      and(
+        inArray(schema.users.id, input.userIds),
+        // Exclude already-banned and unclaimed stubs. Unclaimed stubs
+        // are officer-managed lifecycle that goes through its own
+        // delete path; banning a stub doesn't make sense.
+        inArray(schema.users.status, [
+          "pending",
+          "approved",
+          "rejected",
+          "deactivated",
+        ]),
+      ),
+    )
+    .returning({ id: schema.users.id });
+  const updatedIds = updated.map(({ id }) => id);
+
+  if (updatedIds.length === 0) {
+    return { ok: true };
+  }
+
+  // Purge active sessions on the rows we actually flipped. Mirrors
+  // the deactivate path — a banned user must not retain a live
+  // browser session.
+  await db
+    .delete(schema.sessions)
+    .where(inArray(schema.sessions.userId, updatedIds));
+
+  // Mirror every verified-or-not email of the banned users into the
+  // blocklist. Use the same `normalizeEmail()` the auth surface
+  // writes with so the unique probe matches. `INSERT OR IGNORE` via
+  // `onConflictDoNothing` so an address that's already on the
+  // blocklist (perhaps from a prior ban that was unbanned with rows
+  // since orphaned by user-row delete) doesn't fail the whole batch.
+  const emailRows = await db
+    .select({
+      userId: schema.userEmails.userId,
+      email: schema.userEmails.email,
+    })
+    .from(schema.userEmails)
+    .where(inArray(schema.userEmails.userId, updatedIds));
+
+  const blocklistByUser = new Map<string, number>();
+  if (emailRows.length > 0) {
+    await db
+      .insert(schema.bannedEmails)
+      .values(
+        emailRows.map((r) => ({
+          email: normalizeEmail(r.email),
+          userId: r.userId,
+          bannedAt: now,
+          bannedBy: principal.userId,
+          reason: input.reason,
+          createdAt: now,
+        })),
+      )
+      .onConflictDoNothing();
+    for (const r of emailRows) {
+      blocklistByUser.set(r.userId, (blocklistByUser.get(r.userId) ?? 0) + 1);
+    }
+  }
+
+  // Sequential audit — see `audit-log.server.ts` residual case
+  // (`.returning()` result drives the audit set).
+  await recordAuditEvents(
+    updatedIds.map((userId) => ({
+      actorUserId: principal.userId,
+      action: "member.banned",
+      targetUserId: userId,
+      metadata: {
+        reason: input.reason,
+        emailsBlocked: blocklistByUser.get(userId) ?? 0,
+      },
+    })),
+  );
+
+  return { ok: true };
+}
+
+// ── unban (bulk) ────────────────────────────────────────────────────────
+
+export async function unbanMembersAction(
+  userIds: string[],
+): Promise<{ ok: true }> {
+  const principal = await requireMembersBanner();
+  const db = getDb();
+
+  // Move banned users back to pending so they re-enter the approval
+  // queue. NULL the three ban columns so a future ban gets a fresh
+  // row state. `.returning` so the audit set + blocklist clear only
+  // operate on rows that actually transitioned.
+  const updated = await db
+    .update(schema.users)
+    .set({
+      status: "pending",
+      bannedAt: null,
+      bannedBy: null,
+      bannedReason: null,
+    })
+    .where(
+      and(inArray(schema.users.id, userIds), eq(schema.users.status, "banned")),
+    )
+    .returning({ id: schema.users.id });
+  const updatedIds = updated.map(({ id }) => id);
+
+  if (updatedIds.length === 0) {
+    return { ok: true };
+  }
+
+  // Auto-remove the unbanned user's blocklist entries. Rows whose
+  // `userId` is NULL (orphaned by a prior user-row delete) are
+  // intentionally NOT cleared here — there's no user to associate
+  // them to, and the operator's intent ("let this person back in")
+  // doesn't apply to anonymous-block rows.
+  const removed = await db
+    .delete(schema.bannedEmails)
+    .where(inArray(schema.bannedEmails.userId, updatedIds))
+    .returning({
+      email: schema.bannedEmails.email,
+      userId: schema.bannedEmails.userId,
+    });
+
+  const removedCountByUser = new Map<string, number>();
+  for (const r of removed) {
+    if (r.userId) {
+      removedCountByUser.set(
+        r.userId,
+        (removedCountByUser.get(r.userId) ?? 0) + 1,
+      );
+    }
+  }
+
+  // Sequential audit — see `audit-log.server.ts` residual case.
+  await recordAuditEvents(
+    updatedIds.map((userId) => ({
+      actorUserId: principal.userId,
+      action: "member.unbanned",
+      targetUserId: userId,
+      metadata: { emailsUnblocked: removedCountByUser.get(userId) ?? 0 },
     })),
   );
 
