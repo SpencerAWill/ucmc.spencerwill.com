@@ -85,6 +85,7 @@ beforeEach(async () => {
   cookieJar.clear();
   deleteAvatarSpy.mockReset();
   const db = getDb();
+  await db.delete(schema.auditLog);
   await db.delete(schema.waiverAttestations);
   await db.delete(schema.userRoles);
   await db.delete(schema.passkeyCredentials);

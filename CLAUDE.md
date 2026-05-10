@@ -80,7 +80,7 @@ Email three-tier fallback (`src/server/email/resend.ts`): (1) Resend API if `RES
 
 ### Testing
 
-- **`workers` pool** (`vitest.workers.config.ts`) — `*.test.ts` in real workerd via `@cloudflare/vitest-pool-workers`. Migrations applied per file via `test/apply-migrations.ts`. Cookie helpers + rate-limit wrappers are `vi.mock`ed (no request context). **Pinned: vitest 3.2.x + pool 0.12.x**; vitest 4.x needs pool 0.13+.
+- **`workers` pool** (`vitest.workers.config.ts`) — `*.test.ts` in real workerd via `@cloudflare/vitest-pool-workers` (vitest 4.x + pool 0.16.x). Wired as a Vite plugin (`cloudflareTest()`) — there's no `defineWorkersConfig` / `poolOptions.workers` in this version. Migrations applied once per file via `test/apply-migrations.ts`; storage isolation is **per file, not per test**, so any test that writes to D1 must include the relevant tables in its own `beforeEach` cleanup (`auditLog` is a common one to forget). Cookie helpers + rate-limit wrappers are `vi.mock`ed (no request context).
 - **`dom` pool** (`vitest.dom.config.ts`) — `*.test.tsx` in jsdom + Testing Library + user-event. `cloudflare:workers` aliased to `test/cloudflare-workers-stub.ts`. `pnpm --filter ucmc-web test` runs both pools.
 - **E2E** — Playwright drives Chromium against a freshly-spawned dev server. `e2e/fixtures/mailpit.ts` polls Mailpit for magic links. `e2e/fixtures/hydration.ts` `waitForHydration(page)` polls `window.$_TSR.hydrated` (premature interaction is the source of every flake). `e2e/fixtures/db.ts` seeds via `wrangler d1 execute`. webServer config sets `E2E_BYPASS_RATE_LIMIT=1` and clears Turnstile keys (10/60s budget can't cover a suite from one IP; Turnstile blocks `networkidle` and steals focus). Only `a11y.spec.ts` runs in CI today.
 

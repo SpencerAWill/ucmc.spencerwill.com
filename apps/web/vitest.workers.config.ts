@@ -1,9 +1,10 @@
 import path from "node:path";
 
 import {
-  defineWorkersConfig,
+  cloudflareTest,
   readD1Migrations,
-} from "@cloudflare/vitest-pool-workers/config";
+} from "@cloudflare/vitest-pool-workers";
+import { defineConfig } from "vitest/config";
 
 // Server-side tests run inside a real workerd runtime provided by
 // @cloudflare/vitest-pool-workers — D1, KV, and the Rate Limiting binding
@@ -18,43 +19,45 @@ import {
 // This file is one of two Vitest projects orchestrated by `vitest.config.ts`
 // (the other is `vitest.dom.config.ts` for jsdom-based component tests).
 // It only matches `.test.ts` files — `.test.tsx` belongs to the dom pool.
-export default defineWorkersConfig(async () => {
-  const migrationsPath = path.join(import.meta.dirname, "drizzle/migrations");
-  const migrations = await readD1Migrations(migrationsPath);
+export default defineConfig({
+  plugins: [
+    cloudflareTest(async () => {
+      const migrationsPath = path.join(
+        import.meta.dirname,
+        "drizzle/migrations",
+      );
+      const migrations = await readD1Migrations(migrationsPath);
 
-  return {
-    test: {
-      name: "workers",
-      include: ["src/**/__tests__/**/*.test.ts"],
-      setupFiles: ["./test/apply-migrations.ts"],
-      poolOptions: {
-        workers: {
-          singleWorker: true,
-          main: "./test/worker.ts",
-          miniflare: {
-            bindings: {
-              TEST_MIGRATIONS: migrations,
-              // Fake Worker vars for server code that reads env.* —
-              // matches the shape of the production bindings but uses
-              // safe test values. Keeps tests deterministic and free of
-              // any dependence on .env.local.
-              APP_BASE_URL: "http://localhost:3000",
-              WEBAUTHN_RP_ID: "localhost",
-              WEBAUTHN_RP_NAME: "UCMC (test)",
-              RESEND_FROM: "test@localhost",
-              RESEND_FROM_NAME: "UCMC Test",
-              SESSION_SECRET: "test-session-secret-at-least-32-chars-long-xxx",
-            },
-            compatibilityFlags: ["nodejs_compat"],
+      return {
+        main: "./test/worker.ts",
+        miniflare: {
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            // Fake Worker vars for server code that reads env.* —
+            // matches the shape of the production bindings but uses
+            // safe test values. Keeps tests deterministic and free of
+            // any dependence on .env.local.
+            APP_BASE_URL: "http://localhost:3000",
+            WEBAUTHN_RP_ID: "localhost",
+            WEBAUTHN_RP_NAME: "UCMC (test)",
+            RESEND_FROM: "test@localhost",
+            RESEND_FROM_NAME: "UCMC Test",
+            SESSION_SECRET: "test-session-secret-at-least-32-chars-long-xxx",
           },
-          wrangler: { configPath: "./wrangler.jsonc" },
+          compatibilityFlags: ["nodejs_compat"],
         },
-      },
+        wrangler: { configPath: "./wrangler.jsonc" },
+      };
+    }),
+  ],
+  test: {
+    name: "workers",
+    include: ["src/**/__tests__/**/*.test.ts"],
+    setupFiles: ["./test/apply-migrations.ts"],
+  },
+  resolve: {
+    alias: {
+      "#": path.join(import.meta.dirname, "src"),
     },
-    resolve: {
-      alias: {
-        "#": path.join(import.meta.dirname, "src"),
-      },
-    },
-  };
+  },
 });
