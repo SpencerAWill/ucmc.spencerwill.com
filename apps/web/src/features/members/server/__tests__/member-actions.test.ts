@@ -153,6 +153,7 @@ async function signInWithPermission(
 beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
+  await db.delete(schema.auditLog);
   await db.delete(schema.userRoles);
   await db.delete(schema.rolePermissions);
   await db.delete(schema.sessions);

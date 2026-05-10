@@ -141,6 +141,7 @@ beforeEach(async () => {
   const db = getDb();
   // Wipe everything writable. Settings + activities + FAQ are seeded by
   // 0013_landing_seed_initial_content.sql but tests want a clean slate.
+  await db.delete(schema.auditLog);
   await db.delete(schema.landingHeroSlides);
   await db.delete(schema.landingFaqItems);
   await db.delete(schema.landingActivities);
