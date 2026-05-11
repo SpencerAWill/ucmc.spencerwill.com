@@ -14,10 +14,18 @@ import type {
 
 const PER_PAGE_OPTIONS = ["25", "50", "100", "250"] as const;
 
+export interface SelectionApi {
+  selected: Set<string>;
+  toggle: (publicId: string) => void;
+  setAll: (publicIds: string[]) => void;
+  clear: () => void;
+}
+
 export function GearList({
   input,
   view,
   canManage,
+  selection,
   onEdit,
   onRetire,
   onUnretire,
@@ -27,6 +35,9 @@ export function GearList({
   input: ListGearActionInput;
   view: GearView;
   canManage: boolean;
+  /** Selection plumbing. Only consumed when canManage is true — the
+   *  views render the checkbox column conditionally. */
+  selection: SelectionApi;
   onEdit: (gear: GearSummary) => void;
   onRetire: (gear: GearSummary) => void;
   onUnretire: (gear: GearSummary) => void;
@@ -52,6 +63,26 @@ export function GearList({
       </Empty>
     );
   }
+
+  const allSelected =
+    rows.length > 0 && rows.every((r) => selection.selected.has(r.publicId));
+  const someSelected =
+    !allSelected && rows.some((r) => selection.selected.has(r.publicId));
+  const toggleAllOnPage = () => {
+    if (allSelected) {
+      // Clear only this page's items, leave any others selected.
+      const onPage = new Set(rows.map((r) => r.publicId));
+      const next = new Set(
+        Array.from(selection.selected).filter((id) => !onPage.has(id)),
+      );
+      selection.setAll(Array.from(next));
+    } else {
+      const next = new Set(selection.selected);
+      rows.forEach((r) => next.add(r.publicId));
+      selection.setAll(Array.from(next));
+    }
+  };
+
   return (
     <div className="space-y-3">
       {view === "list" ? (
@@ -61,6 +92,8 @@ export function GearList({
               <GearCard
                 gear={g}
                 canManage={canManage}
+                selected={selection.selected.has(g.publicId)}
+                onToggleSelect={() => selection.toggle(g.publicId)}
                 onEdit={() => onEdit(g)}
                 onRetire={() => onRetire(g)}
                 onUnretire={() => onUnretire(g)}
@@ -75,6 +108,8 @@ export function GearList({
               key={g.publicId}
               gear={g}
               canManage={canManage}
+              selected={selection.selected.has(g.publicId)}
+              onToggleSelect={() => selection.toggle(g.publicId)}
               onEdit={() => onEdit(g)}
               onRetire={() => onRetire(g)}
               onUnretire={() => onUnretire(g)}
@@ -85,6 +120,11 @@ export function GearList({
         <GearTableView
           rows={rows}
           canManage={canManage}
+          selectedPublicIds={selection.selected}
+          onToggleSelect={selection.toggle}
+          onToggleAllOnPage={toggleAllOnPage}
+          allOnPageSelected={allSelected}
+          someOnPageSelected={someSelected}
           onEdit={onEdit}
           onRetire={onRetire}
           onUnretire={onUnretire}

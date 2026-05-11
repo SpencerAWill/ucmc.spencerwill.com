@@ -39,6 +39,10 @@ import type {
   EditGearTagResult,
 } from "#/features/gear/server/gear-tags-actions.server";
 
+// ── bulk multi-select handlers ─────────────────────────────────────────
+
+import type { BulkResult } from "#/features/gear/server/gear-bulk-actions.server";
+
 // Mirror of the gear enums in `drizzle/schema.ts`. Re-declared here so
 // route loaders and form components can validate filter / submit shapes
 // without pulling the whole schema file into the client bundle. Keep in
@@ -170,6 +174,29 @@ const editGearTagInputSchema = z.object({
 
 const deleteGearTagInputSchema = z.object({
   publicId: z.string().min(1),
+});
+
+// ── multi-select bulk-action input schemas ─────────────────────────────
+
+const publicIdArraySchema = z.array(z.string().min(1)).min(1).max(500);
+
+const bulkRetireInputSchema = z.object({
+  publicIds: publicIdArraySchema,
+  reason: z.string().max(500).nullable(),
+});
+
+const bulkUnretireInputSchema = z.object({
+  publicIds: publicIdArraySchema,
+});
+
+const bulkSetConditionInputSchema = z.object({
+  publicIds: publicIdArraySchema,
+  condition: z.enum(GEAR_CONDITION_VALUES),
+});
+
+const bulkAddTagsInputSchema = z.object({
+  publicIds: publicIdArraySchema,
+  tagPublicIds: z.array(z.string().min(1)).min(1).max(50),
 });
 
 const bulkImportInputSchema = z.object({
@@ -318,6 +345,40 @@ export const deleteGearTagFn = createServerFn({ method: "POST" })
     const { deleteGearTagAction } =
       await import("#/features/gear/server/gear-tags-actions.server");
     return deleteGearTagAction(data);
+  });
+
+export type { BulkResult };
+
+export const bulkRetireGearFn = createServerFn({ method: "POST" })
+  .inputValidator(bulkRetireInputSchema)
+  .handler(async ({ data }): Promise<BulkResult> => {
+    const { bulkRetireGearAction } =
+      await import("#/features/gear/server/gear-bulk-actions.server");
+    return bulkRetireGearAction(data);
+  });
+
+export const bulkUnretireGearFn = createServerFn({ method: "POST" })
+  .inputValidator(bulkUnretireInputSchema)
+  .handler(async ({ data }): Promise<BulkResult> => {
+    const { bulkUnretireGearAction } =
+      await import("#/features/gear/server/gear-bulk-actions.server");
+    return bulkUnretireGearAction(data);
+  });
+
+export const bulkSetGearConditionFn = createServerFn({ method: "POST" })
+  .inputValidator(bulkSetConditionInputSchema)
+  .handler(async ({ data }): Promise<BulkResult> => {
+    const { bulkSetGearConditionAction } =
+      await import("#/features/gear/server/gear-bulk-actions.server");
+    return bulkSetGearConditionAction(data);
+  });
+
+export const bulkAddGearTagsFn = createServerFn({ method: "POST" })
+  .inputValidator(bulkAddTagsInputSchema)
+  .handler(async ({ data }): Promise<BulkResult> => {
+    const { bulkAddGearTagsAction } =
+      await import("#/features/gear/server/gear-bulk-actions.server");
+    return bulkAddGearTagsAction(data);
   });
 
 export const bulkImportGearFn = createServerFn({ method: "POST" })

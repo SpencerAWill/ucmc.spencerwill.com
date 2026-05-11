@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card } from "#/components/ui/card";
+import { Checkbox } from "#/components/ui/checkbox";
+import { cn } from "#/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,12 +49,16 @@ const GEAR_PLACEHOLDER_SRC = "/gear-placeholder.svg";
 export function GearGridCard({
   gear,
   canManage,
+  selected,
+  onToggleSelect,
   onEdit,
   onRetire,
   onUnretire,
 }: {
   gear: GearSummary;
   canManage: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onEdit: () => void;
   onRetire: () => void;
   onUnretire: () => void;
@@ -63,23 +69,49 @@ export function GearGridCard({
   );
 
   return (
-    <Card className="flex flex-col gap-0 overflow-hidden p-0">
-      <Link
-        to="/gear/$publicId"
-        params={{ publicId: gear.publicId }}
-        className="block aspect-square bg-muted"
-        aria-label={`Open ${gear.description}`}
-      >
-        <img
-          src={
-            gear.thumbnailKey
-              ? gearThumbnailUrlFor(gear.thumbnailKey)
-              : GEAR_PLACEHOLDER_SRC
-          }
-          alt=""
-          className="h-full w-full object-cover"
-        />
-      </Link>
+    <Card
+      className={cn(
+        "flex flex-col gap-0 overflow-hidden p-0 transition-shadow",
+        selected ? "ring-2 ring-primary" : undefined,
+      )}
+    >
+      <div className="relative">
+        <Link
+          to="/gear/$publicId"
+          params={{ publicId: gear.publicId }}
+          className="block aspect-square bg-muted"
+          aria-label={`Open ${gear.description}`}
+        >
+          <img
+            src={
+              gear.thumbnailKey
+                ? gearThumbnailUrlFor(gear.thumbnailKey)
+                : GEAR_PLACEHOLDER_SRC
+            }
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        </Link>
+        {onToggleSelect && canManage ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect();
+            }}
+            className="absolute top-2 left-2 flex size-7 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
+            aria-label={`Select ${gear.code ?? gear.description}`}
+          >
+            <Checkbox
+              checked={selected}
+              className="pointer-events-none size-4"
+              tabIndex={-1}
+              aria-hidden
+            />
+          </button>
+        ) : null}
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-1 p-3">
         <h3 className="text-sm leading-snug font-medium">

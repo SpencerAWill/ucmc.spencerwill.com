@@ -86,9 +86,14 @@ export interface GearFilterState {
 export function GearFilterBar({
   state,
   onChange,
+  bulkActions,
 }: {
   state: GearFilterState;
   onChange: (next: GearFilterState) => void;
+  /** Slot for the bulk-actions trigger. Slotted into row 2 next to
+   *  the Filters button so multi-select operations live in the same
+   *  toolbar as the filter / sort controls. */
+  bulkActions?: React.ReactNode;
 }) {
   const { data: types } = useQuery(gearTypesQueryOptions());
   const { data: tags } = useQuery(gearTagsQueryOptions());
@@ -173,7 +178,7 @@ export function GearFilterBar({
         </div>
       </div>
 
-      {/* Row 2: filters popover + sort */}
+      {/* Row 2: filters popover + (optional) bulk-actions button + sort */}
       <div className="flex flex-wrap items-center gap-3">
         <Popover>
           <PopoverTrigger asChild>
@@ -296,6 +301,8 @@ export function GearFilterBar({
             ) : null}
           </PopoverContent>
         </Popover>
+
+        {bulkActions}
 
         {/* Sort sits to the far right — secondary control next to the
          * primary "Filters" affordance. Icon-led label keeps it short

@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Boxes, ChevronDown, Plus, Tags, Upload } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { Button } from "#/components/ui/button";
+import { GearBulkActionsButton } from "#/features/gear/components/gear-bulk-actions-bar";
 import {
   ButtonGroup,
   ButtonGroupSeparator,
@@ -107,6 +108,41 @@ function GearIndexPage() {
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
   const unretireMutation = useUnretireGear();
 
+  // Selection state lives at the route so it survives view-mode
+  // changes (list ↔ grid ↔ table). Reset whenever filters that change
+  // the result set move — keeping a publicId selected after it's been
+  // filtered out of the visible list would surface as confusing
+  // "X selected" with nothing checked.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const filterFingerprint = `${search.type ?? ""}|${(search.tag ?? []).join(",")}|${search.lifecycle ?? "active"}|${search.condition ?? ""}|${search.q ?? ""}`;
+  const lastFingerprintRef = useRef(filterFingerprint);
+  useEffect(() => {
+    if (lastFingerprintRef.current !== filterFingerprint) {
+      lastFingerprintRef.current = filterFingerprint;
+      setSelected(new Set());
+    }
+  }, [filterFingerprint]);
+  const selectionApi = useMemo(
+    () => ({
+      selected,
+      toggle: (publicId: string) => {
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (next.has(publicId)) {
+            next.delete(publicId);
+          } else {
+            next.add(publicId);
+          }
+          return next;
+        });
+      },
+      setAll: (publicIds: string[]) => setSelected(new Set(publicIds)),
+      clear: () => setSelected(new Set()),
+    }),
+    [selected],
+  );
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
   const listInput = {
     typePublicId: search.type,
     tagPublicIds: search.tag && search.tag.length > 0 ? search.tag : undefined,
@@ -182,11 +218,24 @@ function GearIndexPage() {
           </div>
         ) : null}
       </header>
-      <GearFilterBar state={filterState} onChange={onFilterChange} />
+      <GearFilterBar
+        state={filterState}
+        onChange={onFilterChange}
+        bulkActions={
+          canManage ? (
+            <GearBulkActionsButton
+              selectedPublicIds={Array.from(selected)}
+              lifecycleFilter={filterState.lifecycle}
+              onClear={clearSelection}
+            />
+          ) : null
+        }
+      />
       <GearList
         input={listInput}
         view={filterState.view}
         canManage={canManage}
+        selection={selectionApi}
         onEdit={(g) => {
           setFormIntent({ mode: "edit", gear: g });
           setFormOpen(true);

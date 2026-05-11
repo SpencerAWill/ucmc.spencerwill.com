@@ -319,6 +319,121 @@ export async function markGearUnretired(id: string): Promise<void> {
     .where(eq(schema.gear.id, id));
 }
 
+/**
+ * Bulk variants for the toolbar-driven multi-select operations.
+ * Drizzle's `where inArray(...)` translates to `WHERE id IN (...)`,
+ * which D1 happily plans as a single round-trip. The caller computes
+ * prior values (for audit metadata) BEFORE calling these — we don't
+ * .returning() because that doubles the planner cost.
+ */
+export async function bulkMarkGearRetired(input: {
+  ids: string[];
+  retiredBy: string;
+  reason: string | null;
+}): Promise<void> {
+  if (input.ids.length === 0) return;
+  const db = getDb();
+  const now = new Date();
+  await db
+    .update(schema.gear)
+    .set({
+      lifecycle: "retired",
+      code: null,
+      retiredAt: now,
+      retiredBy: input.retiredBy,
+      retiredReason: input.reason,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        inArray(schema.gear.id, input.ids),
+        eq(schema.gear.lifecycle, "active"),
+      ),
+    );
+}
+
+export async function bulkMarkGearUnretired(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = getDb();
+  await db
+    .update(schema.gear)
+    .set({
+      lifecycle: "active",
+      retiredAt: null,
+      retiredBy: null,
+      retiredReason: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(inArray(schema.gear.id, ids), eq(schema.gear.lifecycle, "retired")),
+    );
+}
+
+export async function bulkSetGearCondition(input: {
+  ids: string[];
+  condition: schema.GearCondition;
+}): Promise<void> {
+  if (input.ids.length === 0) return;
+  const db = getDb();
+  await db
+    .update(schema.gear)
+    .set({ condition: input.condition, updatedAt: new Date() })
+    .where(inArray(schema.gear.id, input.ids));
+}
+
+/**
+ * Add the given tags to every gear in `gearIds`, leaving existing tag
+ * assignments untouched. Uses `INSERT OR IGNORE` semantics via
+ * Drizzle's `onConflictDoNothing` so duplicate (gearId, tagId) pairs
+ * aren't an error — saves the caller from having to dedupe.
+ */
+export async function bulkAddGearTags(input: {
+  gearIds: string[];
+  tagIds: string[];
+  assignedBy: string;
+}): Promise<void> {
+  if (input.gearIds.length === 0 || input.tagIds.length === 0) return;
+  const now = new Date();
+  const rows = input.gearIds.flatMap((gearId) =>
+    input.tagIds.map((tagId) => ({
+      gearId,
+      tagId,
+      assignedAt: now,
+      assignedBy: input.assignedBy,
+    })),
+  );
+  await getDb()
+    .insert(schema.gearTagAssignments)
+    .values(rows)
+    .onConflictDoNothing();
+}
+
+/**
+ * Fetch the `id` and `code` for a set of gear publicIds. Used by bulk
+ * actions to translate the client-supplied publicIds into internal
+ * ids and to surface prior codes in the audit log.
+ */
+export async function getGearByPublicIds(publicIds: string[]): Promise<
+  Array<{
+    id: string;
+    publicId: string;
+    code: string | null;
+    lifecycle: schema.GearLifecycle;
+  }>
+> {
+  if (publicIds.length === 0) return [];
+  const db = getDb();
+  return db
+    .select({
+      id: schema.gear.id,
+      publicId: schema.gear.publicId,
+      code: schema.gear.code,
+      lifecycle: schema.gear.lifecycle,
+    })
+    .from(schema.gear)
+    .where(inArray(schema.gear.publicId, publicIds));
+}
+
 // ── gear types ──────────────────────────────────────────────────────────
 
 export async function listGearTypes(): Promise<schema.GearType[]> {

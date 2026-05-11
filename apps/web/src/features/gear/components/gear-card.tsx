@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card } from "#/components/ui/card";
+import { Checkbox } from "#/components/ui/checkbox";
+import { cn } from "#/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,46 +67,73 @@ const GEAR_PLACEHOLDER_SRC = "/gear-placeholder.svg";
 export function GearCard({
   gear,
   canManage,
+  selected,
+  onToggleSelect,
   onEdit,
   onRetire,
   onUnretire,
 }: {
   gear: GearSummary;
   canManage: boolean;
+  /** When provided, renders a checkbox overlay on the thumbnail. The
+   *  Card gains a `ring-primary` border in the selected state so the
+   *  whole row reads as picked even when the checkbox is offscreen. */
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onEdit: () => void;
   onRetire: () => void;
   onUnretire: () => void;
 }) {
   const isRetired = gear.lifecycle === "retired";
-  // Description is required so it's always the primary heading. Type +
-  // code sit on the subtitle line; if code is null (e.g. retired or
-  // unlabeled) only the type renders.
   const subtitleParts = [gear.type.name, gear.code].filter(
     (p): p is string => p !== null,
   );
 
   return (
-    <Card className="overflow-hidden p-0">
+    <Card
+      className={cn(
+        "overflow-hidden p-0 transition-shadow",
+        selected ? "ring-2 ring-primary" : undefined,
+      )}
+    >
       <div className="grid grid-cols-[5rem_1fr_auto] sm:grid-cols-[7rem_1fr_auto]">
-        {/* Image cell — grid auto-stretches it to row height, and
-         * h-full/w-full + object-cover fill the cell. The Link wrapper
-         * makes the thumbnail clickable like the title. */}
-        <Link
-          to="/gear/$publicId"
-          params={{ publicId: gear.publicId }}
-          className="block bg-muted"
-          aria-label={`Open ${gear.description}`}
-        >
-          <img
-            src={
-              gear.thumbnailKey
-                ? gearThumbnailUrlFor(gear.thumbnailKey)
-                : GEAR_PLACEHOLDER_SRC
-            }
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        </Link>
+        <div className="relative">
+          <Link
+            to="/gear/$publicId"
+            params={{ publicId: gear.publicId }}
+            className="block h-full w-full bg-muted"
+            aria-label={`Open ${gear.description}`}
+          >
+            <img
+              src={
+                gear.thumbnailKey
+                  ? gearThumbnailUrlFor(gear.thumbnailKey)
+                  : GEAR_PLACEHOLDER_SRC
+              }
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          </Link>
+          {onToggleSelect && canManage ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleSelect();
+              }}
+              className="absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
+              aria-label={`Select ${gear.code ?? gear.description}`}
+            >
+              <Checkbox
+                checked={selected}
+                className="pointer-events-none size-4"
+                tabIndex={-1}
+                aria-hidden
+              />
+            </button>
+          ) : null}
+        </div>
 
         {/* Content cell */}
         <div className="min-w-0 space-y-1 p-3 sm:p-4">

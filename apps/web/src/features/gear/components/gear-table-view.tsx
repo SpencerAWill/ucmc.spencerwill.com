@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
+import { Checkbox } from "#/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,12 +51,22 @@ const CONDITION_VARIANT: Record<
 export function GearTableView({
   rows,
   canManage,
+  selectedPublicIds,
+  onToggleSelect,
+  onToggleAllOnPage,
+  allOnPageSelected,
+  someOnPageSelected,
   onEdit,
   onRetire,
   onUnretire,
 }: {
   rows: GearSummary[];
   canManage: boolean;
+  selectedPublicIds: Set<string>;
+  onToggleSelect: (publicId: string) => void;
+  onToggleAllOnPage: () => void;
+  allOnPageSelected: boolean;
+  someOnPageSelected: boolean;
   onEdit: (gear: GearSummary) => void;
   onRetire: (gear: GearSummary) => void;
   onUnretire: (gear: GearSummary) => void;
@@ -65,7 +76,22 @@ export function GearTableView({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[5.5rem]">Code</TableHead>
+            {canManage ? (
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={
+                    allOnPageSelected
+                      ? true
+                      : someOnPageSelected
+                        ? "indeterminate"
+                        : false
+                  }
+                  onCheckedChange={onToggleAllOnPage}
+                  aria-label="Select all on this page"
+                />
+              </TableHead>
+            ) : null}
+            <TableHead className="w-22">Code</TableHead>
             <TableHead>Description</TableHead>
             <TableHead className="hidden sm:table-cell">Type</TableHead>
             <TableHead className="hidden sm:table-cell">Condition</TableHead>
@@ -78,7 +104,21 @@ export function GearTableView({
           {rows.map((g) => {
             const isRetired = g.lifecycle === "retired";
             return (
-              <TableRow key={g.publicId}>
+              <TableRow
+                key={g.publicId}
+                data-state={
+                  selectedPublicIds.has(g.publicId) ? "selected" : undefined
+                }
+              >
+                {canManage ? (
+                  <TableCell className="w-10">
+                    <Checkbox
+                      checked={selectedPublicIds.has(g.publicId)}
+                      onCheckedChange={() => onToggleSelect(g.publicId)}
+                      aria-label={`Select ${g.code ?? g.description}`}
+                    />
+                  </TableCell>
+                ) : null}
                 <TableCell className="font-mono text-xs">
                   {g.code ? (
                     <Link
