@@ -1,9 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Plus, Upload, Settings2 } from "lucide-react";
+import { ChevronDown, Plus, Settings2, Upload } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "#/components/ui/button";
+import { ButtonGroup } from "#/components/ui/button-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { GearBulkImportSheet } from "#/features/gear/components/gear-bulk-import-sheet";
 import { GearFilterBar } from "#/features/gear/components/gear-filter-bar";
@@ -91,31 +98,42 @@ function GearIndexPage() {
           </p>
         </div>
         {canManage ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
               <Link to="/gear/types">
                 <Settings2 className="size-4" />
                 Manage types
               </Link>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setImportOpen(true)}
-            >
-              <Upload className="size-4" />
-              Bulk import
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                setFormIntent({ mode: "create" });
-                setFormOpen(true);
-              }}
-            >
-              <Plus className="size-4" />
-              Add gear
-            </Button>
+            {/* Split button: primary is "Add gear" (the common case);
+             * secondary actions like "Bulk import" sit behind a chevron
+             * dropdown so the toolbar doesn't grow with every new
+             * variant we add later. */}
+            <ButtonGroup>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setFormIntent({ mode: "create" });
+                  setFormOpen(true);
+                }}
+              >
+                <Plus className="size-4" />
+                Add gear
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" aria-label="More add options">
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                    <Upload className="size-4" />
+                    Bulk import…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ButtonGroup>
           </div>
         ) : null}
       </header>
