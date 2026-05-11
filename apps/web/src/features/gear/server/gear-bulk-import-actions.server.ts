@@ -24,7 +24,8 @@ export interface BulkImportRow {
   typePublicId: string;
   code: string | null;
   description: string | null;
-  acquiredAt: Date | null;
+  /** Acquisition date as ms since epoch, or null. */
+  acquiredAt: number | null;
   acquisitionCostCents: number | null;
 }
 
@@ -106,7 +107,7 @@ export async function bulkImportGearAction(
         typeId,
         code,
         description: row.description?.trim() || null,
-        acquiredAt: row.acquiredAt,
+        acquiredAt: row.acquiredAt === null ? null : new Date(row.acquiredAt),
         acquisitionCostCents: row.acquisitionCostCents,
         notesMarkdown: null,
         condition: "serviceable",

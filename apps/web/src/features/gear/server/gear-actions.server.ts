@@ -207,11 +207,16 @@ export interface CreateGearInput {
   typePublicId: string;
   code: string | null;
   description: string | null;
-  acquiredAt: Date | null;
+  /** Acquisition date as ms since epoch, or null. */
+  acquiredAt: number | null;
   acquisitionCostCents: number | null;
   notesMarkdown: string | null;
   condition: schema.GearCondition;
   tagPublicIds: string[];
+}
+
+function msToDate(ms: number | null): Date | null {
+  return ms === null ? null : new Date(ms);
 }
 
 export type CreateGearResult =
@@ -234,7 +239,7 @@ export async function createGearAction(
       typeId,
       code,
       description: input.description,
-      acquiredAt: input.acquiredAt,
+      acquiredAt: msToDate(input.acquiredAt),
       acquisitionCostCents: input.acquisitionCostCents,
       notesMarkdown: input.notesMarkdown,
       condition: input.condition,
@@ -264,7 +269,8 @@ export interface EditGearInput {
   typePublicId: string;
   code: string | null;
   description: string | null;
-  acquiredAt: Date | null;
+  /** Acquisition date as ms since epoch, or null. */
+  acquiredAt: number | null;
   acquisitionCostCents: number | null;
   notesMarkdown: string | null;
   condition: schema.GearCondition;
@@ -300,10 +306,9 @@ export async function editGearAction(
     patch.description = input.description;
     changedFields.push("description");
   }
-  const acquiredAtMs = input.acquiredAt?.getTime() ?? null;
   const existingAcquiredAtMs = existing.acquiredAt?.getTime() ?? null;
-  if (acquiredAtMs !== existingAcquiredAtMs) {
-    patch.acquiredAt = input.acquiredAt;
+  if (input.acquiredAt !== existingAcquiredAtMs) {
+    patch.acquiredAt = msToDate(input.acquiredAt);
     changedFields.push("acquired_at");
   }
   if (input.acquisitionCostCents !== existing.acquisitionCostCents) {

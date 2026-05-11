@@ -76,11 +76,11 @@ export type {
 
 // ── input schemas ───────────────────────────────────────────────────────
 
-const dateFromMs = z
-  .number()
-  .int()
-  .nullable()
-  .transform((ms) => (ms === null ? null : new Date(ms)));
+// Dates ride the wire as ms-since-epoch numbers (or null) and the
+// action converts at the boundary. Keeping the schema input shape
+// JSON-native — no `.transform()` — means `createServerFn`'s `data`
+// type stays serializable, which is what client-side hooks consume.
+const acquiredAtSchema = z.number().int().nullable();
 
 export const listGearInputSchema = z.object({
   typePublicId: z.string().min(1).optional(),
@@ -97,7 +97,7 @@ const createGearInputSchema = z.object({
   typePublicId: z.string().min(1),
   code: z.string().max(64).nullable(),
   description: z.string().max(500).nullable(),
-  acquiredAt: dateFromMs,
+  acquiredAt: acquiredAtSchema,
   acquisitionCostCents: z.number().int().min(0).nullable(),
   notesMarkdown: z.string().max(10_000).nullable(),
   condition: z.enum(GEAR_CONDITION_VALUES),
@@ -146,7 +146,7 @@ const bulkImportInputSchema = z.object({
         typePublicId: z.string().min(1),
         code: z.string().max(64).nullable(),
         description: z.string().max(500).nullable(),
-        acquiredAt: dateFromMs,
+        acquiredAt: acquiredAtSchema,
         acquisitionCostCents: z.number().int().min(0).nullable(),
       }),
     )
