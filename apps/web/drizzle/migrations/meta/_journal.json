@@ -232,6 +232,13 @@
       "when": 1778536477938,
       "tag": "0032_gear_tag_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1778540286496,
+      "tag": "0033_gear_inspections",
+      "breakpoints": true
     }
   ]
 }

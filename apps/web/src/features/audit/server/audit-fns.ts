@@ -60,6 +60,7 @@ export const AUDIT_ACTIONS = [
   "gear_tag.created",
   "gear_tag.updated",
   "gear_tag.deleted",
+  "gear_inspection.recorded",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

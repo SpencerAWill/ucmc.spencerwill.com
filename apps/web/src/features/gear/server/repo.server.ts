@@ -434,6 +434,83 @@ export async function getGearByPublicIds(publicIds: string[]): Promise<
     .where(inArray(schema.gear.publicId, publicIds));
 }
 
+// ── gear inspections ────────────────────────────────────────────────────
+
+export interface GearInspectionRow {
+  id: string;
+  publicId: string;
+  gearId: string;
+  inspectorUserId: string | null;
+  inspectorNameSnapshot: string | null;
+  /** Profile.fullName joined at read time. Falls back to the snapshot
+   *  when the inspector's profile or user row no longer exists. */
+  inspectorDisplayName: string | null;
+  inspectedAt: Date;
+  result: schema.GearInspectionResult;
+  notes: string | null;
+  createdAt: Date;
+}
+
+export async function insertGearInspection(input: {
+  id: string;
+  publicId: string;
+  gearId: string;
+  inspectorUserId: string;
+  inspectorNameSnapshot: string;
+  inspectedAt: Date;
+  result: schema.GearInspectionResult;
+  notes: string | null;
+}): Promise<void> {
+  await getDb().insert(schema.gearInspections).values({
+    id: input.id,
+    publicId: input.publicId,
+    gearId: input.gearId,
+    inspectorUserId: input.inspectorUserId,
+    inspectorNameSnapshot: input.inspectorNameSnapshot,
+    inspectedAt: input.inspectedAt,
+    result: input.result,
+    notes: input.notes,
+  });
+}
+
+export async function listInspectionsForGear(
+  gearId: string,
+): Promise<GearInspectionRow[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.gearInspections.id,
+      publicId: schema.gearInspections.publicId,
+      gearId: schema.gearInspections.gearId,
+      inspectorUserId: schema.gearInspections.inspectorUserId,
+      inspectorNameSnapshot: schema.gearInspections.inspectorNameSnapshot,
+      profileName: schema.profiles.fullName,
+      inspectedAt: schema.gearInspections.inspectedAt,
+      result: schema.gearInspections.result,
+      notes: schema.gearInspections.notes,
+      createdAt: schema.gearInspections.createdAt,
+    })
+    .from(schema.gearInspections)
+    .leftJoin(
+      schema.profiles,
+      eq(schema.profiles.userId, schema.gearInspections.inspectorUserId),
+    )
+    .where(eq(schema.gearInspections.gearId, gearId))
+    .orderBy(desc(schema.gearInspections.inspectedAt));
+  return rows.map((r) => ({
+    id: r.id,
+    publicId: r.publicId,
+    gearId: r.gearId,
+    inspectorUserId: r.inspectorUserId,
+    inspectorNameSnapshot: r.inspectorNameSnapshot,
+    inspectorDisplayName: r.profileName ?? r.inspectorNameSnapshot,
+    inspectedAt: r.inspectedAt,
+    result: r.result,
+    notes: r.notes,
+    createdAt: r.createdAt,
+  }));
+}
+
 // ── gear types ──────────────────────────────────────────────────────────
 
 export async function listGearTypes(): Promise<schema.GearType[]> {

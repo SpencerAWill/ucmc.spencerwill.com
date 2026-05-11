@@ -38,6 +38,11 @@ import type {
   EditGearTagInput,
   EditGearTagResult,
 } from "#/features/gear/server/gear-tags-actions.server";
+import type {
+  GearInspectionSummary,
+  RecordGearInspectionInput,
+  RecordGearInspectionResult,
+} from "#/features/gear/server/gear-inspections-actions.server";
 
 // ── bulk multi-select handlers ─────────────────────────────────────────
 
@@ -59,6 +64,14 @@ export const GEAR_CONDITION_VALUES = [
 ] as const;
 export type GearCondition = (typeof GEAR_CONDITION_VALUES)[number];
 
+export const GEAR_INSPECTION_RESULT_VALUES = [
+  "pass",
+  "fail",
+  "advisory",
+] as const;
+export type GearInspectionResultValue =
+  (typeof GEAR_INSPECTION_RESULT_VALUES)[number];
+
 export type {
   BulkImportInput,
   BulkImportResult,
@@ -77,11 +90,14 @@ export type {
   EditGearTypeInput,
   EditGearTypeResult,
   GearDetail,
+  GearInspectionSummary,
   GearSummary,
   GearTagSummary,
   GearTypeSummary,
   ListGearActionInput,
   ListGearActionResult,
+  RecordGearInspectionInput,
+  RecordGearInspectionResult,
 };
 
 // ── input schemas ───────────────────────────────────────────────────────
@@ -223,6 +239,19 @@ const suggestCodeInputSchema = z.object({
 
 const gearDetailInputSchema = z.object({
   publicId: z.string().min(1),
+});
+
+// ── inspections ────────────────────────────────────────────────────────
+
+const listGearInspectionsInputSchema = z.object({
+  gearPublicId: z.string().min(1),
+});
+
+const recordGearInspectionInputSchema = z.object({
+  gearPublicId: z.string().min(1),
+  inspectedAt: z.number().int().nonnegative(),
+  result: z.enum(GEAR_INSPECTION_RESULT_VALUES),
+  notes: z.string().max(2_000).nullable(),
 });
 
 // ── server fn handlers ──────────────────────────────────────────────────
@@ -379,6 +408,22 @@ export const bulkAddGearTagsFn = createServerFn({ method: "POST" })
     const { bulkAddGearTagsAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
     return bulkAddGearTagsAction(data);
+  });
+
+export const listGearInspectionsFn = createServerFn({ method: "GET" })
+  .inputValidator(listGearInspectionsInputSchema)
+  .handler(async ({ data }): Promise<GearInspectionSummary[]> => {
+    const { listGearInspectionsAction } =
+      await import("#/features/gear/server/gear-inspections-actions.server");
+    return listGearInspectionsAction(data);
+  });
+
+export const recordGearInspectionFn = createServerFn({ method: "POST" })
+  .inputValidator(recordGearInspectionInputSchema)
+  .handler(async ({ data }): Promise<RecordGearInspectionResult> => {
+    const { recordGearInspectionAction } =
+      await import("#/features/gear/server/gear-inspections-actions.server");
+    return recordGearInspectionAction(data);
   });
 
 export const bulkImportGearFn = createServerFn({ method: "POST" })

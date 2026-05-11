@@ -16,3 +16,6 @@ export const GEAR_TAGS_QUERY_KEY = ["gear", "tags"] as const;
 
 export const gearSuggestedCodeQueryKey = (typePublicId: string) =>
   ["gear", "suggestedCode", typePublicId] as const;
+
+export const gearInspectionsQueryKey = (gearPublicId: string) =>
+  ["gear", "inspections", gearPublicId] as const;

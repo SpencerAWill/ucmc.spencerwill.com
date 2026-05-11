@@ -554,6 +554,7 @@ export const auditAction = [
   "gear_tag.created",
   "gear_tag.updated",
   "gear_tag.deleted",
+  "gear_inspection.recorded",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -790,6 +791,62 @@ export const gearTags = sqliteTable(
   (t) => [uniqueIndex("gear_tags_name_unique").on(t.name)],
 );
 
+/**
+ * Per-piece inspection log. Climbing gear (harnesses, ropes, helmets,
+ * draws) has real safety stakes and is typically inspected on a
+ * cadence; this table records each inspection event so the detail
+ * page can surface history and a future report can flag "due for
+ * inspection" pieces.
+ *
+ * Append-mostly. Officers can correct a mistaken entry by recording
+ * a superseding inspection, but the historical row stays. This
+ * mirrors the audit-log philosophy: the only safe way to reason
+ * about gear safety later is if the trail is intact.
+ *
+ * Cascade on gear delete: when a piece is hard-deleted, its
+ * inspection history goes with it. Retirement does NOT delete
+ * inspections — the row stays so a future "why did we retire this?"
+ * audit can pull the failing inspection alongside the gear.retired
+ * audit event.
+ */
+export const gearInspectionResult = ["pass", "fail", "advisory"] as const;
+export type GearInspectionResult = (typeof gearInspectionResult)[number];
+
+export const gearInspections = sqliteTable(
+  "gear_inspections",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    gearId: text("gear_id")
+      .notNull()
+      .references(() => gear.id, { onDelete: "cascade" }),
+    // Inspector keeps SET NULL on user delete so the inspection
+    // history survives an officer leaving the club. The
+    // `inspectorNameSnapshot` captures who it was at write time so
+    // the historical row still reads usefully after the FK nulls.
+    inspectorUserId: text("inspector_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    inspectorNameSnapshot: text("inspector_name_snapshot"),
+    // When the inspection physically happened. Distinct from
+    // `createdAt` because officers might log a past inspection (e.g.,
+    // entering paper records into the system after a season).
+    inspectedAt: timestamp("inspected_at").notNull(),
+    result: text("result", { enum: gearInspectionResult }).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index("gear_inspections_gear_idx").on(t.gearId),
+    // Compound index supports the "latest inspection per gear" query
+    // — the detail page's history list and any future per-gear
+    // latest-inspection summary both want gear_id, inspected_at DESC.
+    index("gear_inspections_gear_inspected_idx").on(t.gearId, t.inspectedAt),
+  ],
+);
+
 export const gearTagAssignments = sqliteTable(
   "gear_tag_assignments",
   {
@@ -832,3 +889,4 @@ export type GearType = typeof gearTypes.$inferSelect;
 export type Gear = typeof gear.$inferSelect;
 export type GearTag = typeof gearTags.$inferSelect;
 export type GearTagAssignment = typeof gearTagAssignments.$inferSelect;
+export type GearInspection = typeof gearInspections.$inferSelect;

@@ -10,6 +10,7 @@ import { gearDetailQueryOptions } from "#/features/gear/api/queries";
 import { useUnretireGear } from "#/features/gear/api/use-unretire-gear";
 import { GearDetailCard } from "#/features/gear/components/gear-detail-card";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
+import { GearInspectionsSection } from "#/features/gear/components/gear-inspections-section";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
 
 export const Route = createFileRoute("/gear/$publicId")({
@@ -92,6 +93,7 @@ function GearDetailPage() {
         ) : null}
       </div>
       <GearDetailCard gear={data} canManage={canManage} />
+      <GearInspectionsSection gear={data} canManage={canManage} />
       {canManage ? (
         <>
           <GearFormSheet
