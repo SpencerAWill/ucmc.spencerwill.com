@@ -21,6 +21,7 @@ import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MembersRouteImport } from './routes/members'
 import { Route as LegalRouteImport } from './routes/legal'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as GearRouteImport } from './routes/gear'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as AuditRouteImport } from './routes/audit'
@@ -28,6 +29,7 @@ import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MembersIndexRouteImport } from './routes/members.index'
+import { Route as GearIndexRouteImport } from './routes/gear.index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
@@ -38,6 +40,8 @@ import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
 import { Route as MembersManagementRouteImport } from './routes/members.management'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
+import { Route as GearTypesRouteImport } from './routes/gear.types'
+import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
 import { Route as MyAccountWaiverRouteImport } from './routes/my.account.waiver'
@@ -109,6 +113,11 @@ const HealthRoute = HealthRouteImport.update({
   path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GearRoute = GearRouteImport.update({
+  id: '/gear',
+  path: '/gear',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DisclaimerRoute = DisclaimerRouteImport.update({
   id: '/disclaimer',
   path: '/disclaimer',
@@ -143,6 +152,11 @@ const MembersIndexRoute = MembersIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MembersRoute,
+} as any)
+const GearIndexRoute = GearIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GearRoute,
 } as any)
 const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
   id: '/feedback/',
@@ -193,6 +207,16 @@ const MembersPublicIdRoute = MembersPublicIdRouteImport.update({
   id: '/$publicId',
   path: '/$publicId',
   getParentRoute: () => MembersRoute,
+} as any)
+const GearTypesRoute = GearTypesRouteImport.update({
+  id: '/types',
+  path: '/types',
+  getParentRoute: () => GearRoute,
+} as any)
+const GearPublicIdRoute = GearPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => GearRoute,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
@@ -252,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
+  '/gear': typeof GearRouteWithChildren
   '/health': typeof HealthRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersRouteWithChildren
@@ -265,6 +290,8 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gear/$publicId': typeof GearPublicIdRoute
+  '/gear/types': typeof GearTypesRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -275,6 +302,7 @@ export interface FileRoutesByFullPath {
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
+  '/gear/': typeof GearIndexRoute
   '/members/': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -305,6 +333,8 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gear/$publicId': typeof GearPublicIdRoute
+  '/gear/types': typeof GearTypesRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -314,6 +344,7 @@ export interface FileRoutesByTo {
   '/register/profile': typeof RegisterProfileRoute
   '/announcements': typeof AnnouncementsIndexRoute
   '/feedback': typeof FeedbackIndexRoute
+  '/gear': typeof GearIndexRoute
   '/members': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -333,6 +364,7 @@ export interface FileRoutesById {
   '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
+  '/gear': typeof GearRouteWithChildren
   '/health': typeof HealthRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersRouteWithChildren
@@ -346,6 +378,8 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gear/$publicId': typeof GearPublicIdRoute
+  '/gear/types': typeof GearTypesRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -356,6 +390,7 @@ export interface FileRoutesById {
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
+  '/gear/': typeof GearIndexRoute
   '/members/': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -376,6 +411,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/deactivated'
     | '/disclaimer'
+    | '/gear'
     | '/health'
     | '/legal'
     | '/members'
@@ -389,6 +425,8 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/waiver'
     | '/auth/callback'
+    | '/gear/$publicId'
+    | '/gear/types'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -399,6 +437,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/announcements/'
     | '/feedback/'
+    | '/gear/'
     | '/members/'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -429,6 +468,8 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/waiver'
     | '/auth/callback'
+    | '/gear/$publicId'
+    | '/gear/types'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -438,6 +479,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/announcements'
     | '/feedback'
+    | '/gear'
     | '/members'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -456,6 +498,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/deactivated'
     | '/disclaimer'
+    | '/gear'
     | '/health'
     | '/legal'
     | '/members'
@@ -469,6 +512,8 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/waiver'
     | '/auth/callback'
+    | '/gear/$publicId'
+    | '/gear/types'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -479,6 +524,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/announcements/'
     | '/feedback/'
+    | '/gear/'
     | '/members/'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -498,6 +544,7 @@ export interface RootRouteChildren {
   AuditRoute: typeof AuditRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
+  GearRoute: typeof GearRouteWithChildren
   HealthRoute: typeof HealthRoute
   LegalRoute: typeof LegalRoute
   MembersRoute: typeof MembersRouteWithChildren
@@ -606,6 +653,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gear': {
+      id: '/gear'
+      path: '/gear'
+      fullPath: '/gear'
+      preLoaderRoute: typeof GearRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/disclaimer': {
       id: '/disclaimer'
       path: '/disclaimer'
@@ -654,6 +708,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/members/'
       preLoaderRoute: typeof MembersIndexRouteImport
       parentRoute: typeof MembersRoute
+    }
+    '/gear/': {
+      id: '/gear/'
+      path: '/'
+      fullPath: '/gear/'
+      preLoaderRoute: typeof GearIndexRouteImport
+      parentRoute: typeof GearRoute
     }
     '/feedback/': {
       id: '/feedback/'
@@ -724,6 +785,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/members/$publicId'
       preLoaderRoute: typeof MembersPublicIdRouteImport
       parentRoute: typeof MembersRoute
+    }
+    '/gear/types': {
+      id: '/gear/types'
+      path: '/types'
+      fullPath: '/gear/types'
+      preLoaderRoute: typeof GearTypesRouteImport
+      parentRoute: typeof GearRoute
+    }
+    '/gear/$publicId': {
+      id: '/gear/$publicId'
+      path: '/$publicId'
+      fullPath: '/gear/$publicId'
+      preLoaderRoute: typeof GearPublicIdRouteImport
+      parentRoute: typeof GearRoute
     }
     '/auth/callback': {
       id: '/auth/callback'
@@ -798,6 +873,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface GearRouteChildren {
+  GearPublicIdRoute: typeof GearPublicIdRoute
+  GearTypesRoute: typeof GearTypesRoute
+  GearIndexRoute: typeof GearIndexRoute
+}
+
+const GearRouteChildren: GearRouteChildren = {
+  GearPublicIdRoute: GearPublicIdRoute,
+  GearTypesRoute: GearTypesRoute,
+  GearIndexRoute: GearIndexRoute,
+}
+
+const GearRouteWithChildren = GearRoute._addFileChildren(GearRouteChildren)
+
 interface MembersRouteChildren {
   MembersPublicIdRoute: typeof MembersPublicIdRoute
   MembersManagementRoute: typeof MembersManagementRoute
@@ -858,6 +947,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuditRoute: AuditRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
+  GearRoute: GearRouteWithChildren,
   HealthRoute: HealthRoute,
   LegalRoute: LegalRoute,
   MembersRoute: MembersRouteWithChildren,

@@ -11,6 +11,7 @@ import { z } from "zod";
 import type {
   BulkImportInput,
   BulkImportResult,
+  BulkImportSkipped,
 } from "#/features/gear/server/gear-bulk-import-actions.server";
 import type {
   CreateGearInput,
@@ -55,6 +56,7 @@ export type GearCondition = (typeof GEAR_CONDITION_VALUES)[number];
 export type {
   BulkImportInput,
   BulkImportResult,
+  BulkImportSkipped,
   CreateGearInput,
   CreateGearResult,
   CreateGearTagInput,
