@@ -431,6 +431,26 @@ describe("tags + list filters", () => {
     expect(detail.tags[0]?.name).toBe("outdoor-use");
   });
 
+  it("createGearAction attaches tags that survive list + detail reads", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const tagPublicId = await createTagOk("outdoor");
+    const gearPublicId = await createGearOk({
+      typePublicId,
+      code: "CH1",
+      tagPublicIds: [tagPublicId],
+    });
+
+    const list = await listGearAction({});
+    expect(list.rows).toHaveLength(1);
+    expect(list.rows[0]?.tags).toHaveLength(1);
+    expect(list.rows[0]?.tags[0]?.name).toBe("outdoor");
+
+    const detail = await getGearDetailAction({ publicId: gearPublicId });
+    expect(detail.tags).toHaveLength(1);
+    expect(detail.tags[0]?.name).toBe("outdoor");
+  });
+
   it("filters by tag (AND across multiple)", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });

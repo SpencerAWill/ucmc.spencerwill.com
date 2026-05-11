@@ -18,6 +18,11 @@ const CONDITION_LABEL: Record<GearDetail["condition"], string> = {
   lost: "Lost",
 };
 
+// Mirrors the placeholder used on the list page so the detail view
+// matches visually. Swap for a real per-gear thumbnail key when that
+// feature lands.
+const GEAR_PLACEHOLDER_SRC = "/gear-placeholder.svg";
+
 export function GearDetailCard({
   gear,
   canManage,
@@ -31,8 +36,15 @@ export function GearDetailCard({
   const isRetired = gear.lifecycle === "retired";
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="aspect-square w-32 shrink-0 overflow-hidden rounded-md border bg-muted sm:w-40">
+          <img
+            src={GEAR_PLACEHOLDER_SRC}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <div className="flex-1 space-y-2">
           <div className="flex items-center gap-3">
             {gear.code ? (
               <span className="inline-flex h-10 items-center justify-center rounded border border-primary/30 bg-primary/10 px-3 font-mono text-lg font-semibold text-primary">
@@ -55,12 +67,16 @@ export function GearDetailCard({
               {isRetired ? "Retired" : "Active"}
             </Badge>
             <Badge variant="outline">{CONDITION_LABEL[gear.condition]}</Badge>
-            {gear.tags.map((tag) => (
-              <Badge key={tag.publicId} variant="outline">
-                #{tag.name}
-              </Badge>
-            ))}
           </div>
+          {gear.tags.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              {gear.tags.map((tag) => (
+                <Badge key={tag.publicId} variant="outline">
+                  #{tag.name}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">

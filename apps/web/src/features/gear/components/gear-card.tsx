@@ -57,9 +57,22 @@ export function GearCard({
     gear.acquiredAt !== null ||
     (canManage && gear.acquisitionCostCents !== null);
   return (
-    <Item variant="outline" size="default">
-      <ItemMedia variant="image">
-        <img src={GEAR_PLACEHOLDER_SRC} alt="" />
+    <Item variant="outline" size="default" className="items-stretch">
+      {/* Fixed-width media slot that stretches to the item's full
+       * height. Override the default `size-10` square so the
+       * placeholder (and eventually real thumbnails) read as a proper
+       * preview rather than a tiny avatar. `aspect-square` on the
+       * inner img keeps the thumb from going wider than tall when the
+       * card is short. */}
+      <ItemMedia
+        variant="image"
+        className="size-auto h-auto w-24 self-stretch sm:w-28"
+      >
+        <img
+          src={GEAR_PLACEHOLDER_SRC}
+          alt=""
+          className="aspect-square h-full w-full object-cover"
+        />
       </ItemMedia>
       <ItemContent>
         <ItemTitle>
@@ -80,12 +93,16 @@ export function GearCard({
             {CONDITION_LABEL[gear.condition]}
           </Badge>
           {isRetired ? <Badge variant="outline">Retired</Badge> : null}
-          {gear.tags.map((tag) => (
-            <Badge key={tag.publicId} variant="outline">
-              #{tag.name}
-            </Badge>
-          ))}
         </div>
+        {gear.tags.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            {gear.tags.map((tag) => (
+              <Badge key={tag.publicId} variant="outline">
+                #{tag.name}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
       </ItemContent>
       {canManage ? (
         <ItemActions>
