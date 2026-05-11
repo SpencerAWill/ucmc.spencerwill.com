@@ -109,14 +109,14 @@ async function createTypeOk(input: {
 async function createGearOk(input: {
   typePublicId: string;
   code?: string | null;
-  description?: string | null;
+  description?: string;
   tagPublicIds?: string[];
   condition?: schema.GearCondition;
 }): Promise<string> {
   const result = await createGearAction({
     typePublicId: input.typePublicId,
     code: input.code ?? null,
-    description: input.description ?? null,
+    description: input.description ?? "Test gear",
     acquiredAt: null,
     acquisitionCostCents: null,
     notesMarkdown: null,
@@ -167,7 +167,7 @@ describe("authorization", () => {
       createGearAction({
         typePublicId: "nope",
         code: null,
-        description: null,
+        description: "Test gear",
         acquiredAt: null,
         acquisitionCostCents: null,
         notesMarkdown: null,
@@ -195,7 +195,7 @@ describe("authorization", () => {
     const created = await createGearAction({
       typePublicId,
       code: "CH1",
-      description: null,
+      description: "Test gear",
       acquiredAt: null,
       acquisitionCostCents: 6000,
       notesMarkdown: null,
@@ -240,7 +240,7 @@ describe("gear types", () => {
       publicId,
       name: "Climbing Harness",
       prefix: "HRN",
-      description: null,
+      description: "Test gear",
     });
     expect(edit.ok).toBe(true);
 
@@ -254,7 +254,7 @@ describe("gear types", () => {
     const dup = await createGearTypeAction({
       name: "Harness",
       prefix: "X",
-      description: null,
+      description: "Test gear",
     });
     expect(dup).toEqual({ ok: false, reason: "name_in_use" });
   });
@@ -302,7 +302,7 @@ describe("gear lifecycle", () => {
     const dup = await createGearAction({
       typePublicId,
       code: "CH1",
-      description: null,
+      description: "Test gear",
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,
@@ -376,7 +376,7 @@ describe("gear lifecycle", () => {
       publicId,
       typePublicId,
       code: "CH2",
-      description: null,
+      description: "Test gear",
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,
@@ -418,7 +418,7 @@ describe("tags + list filters", () => {
       publicId: gearPublicId,
       typePublicId,
       code: "CH1",
-      description: null,
+      description: "Test gear",
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,

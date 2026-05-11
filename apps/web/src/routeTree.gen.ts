@@ -40,8 +40,6 @@ import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
 import { Route as MembersManagementRouteImport } from './routes/members.management'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
-import { Route as GearTypesRouteImport } from './routes/gear.types'
-import { Route as GearTagsRouteImport } from './routes/gear.tags'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
@@ -209,16 +207,6 @@ const MembersPublicIdRoute = MembersPublicIdRouteImport.update({
   path: '/$publicId',
   getParentRoute: () => MembersRoute,
 } as any)
-const GearTypesRoute = GearTypesRouteImport.update({
-  id: '/types',
-  path: '/types',
-  getParentRoute: () => GearRoute,
-} as any)
-const GearTagsRoute = GearTagsRouteImport.update({
-  id: '/tags',
-  path: '/tags',
-  getParentRoute: () => GearRoute,
-} as any)
 const GearPublicIdRoute = GearPublicIdRouteImport.update({
   id: '/$publicId',
   path: '/$publicId',
@@ -297,8 +285,6 @@ export interface FileRoutesByFullPath {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
-  '/gear/tags': typeof GearTagsRoute
-  '/gear/types': typeof GearTypesRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -341,8 +327,6 @@ export interface FileRoutesByTo {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
-  '/gear/tags': typeof GearTagsRoute
-  '/gear/types': typeof GearTypesRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -387,8 +371,6 @@ export interface FileRoutesById {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
-  '/gear/tags': typeof GearTagsRoute
-  '/gear/types': typeof GearTypesRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -435,8 +417,6 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
-    | '/gear/tags'
-    | '/gear/types'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -479,8 +459,6 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
-    | '/gear/tags'
-    | '/gear/types'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -524,8 +502,6 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
-    | '/gear/tags'
-    | '/gear/types'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -798,20 +774,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersPublicIdRouteImport
       parentRoute: typeof MembersRoute
     }
-    '/gear/types': {
-      id: '/gear/types'
-      path: '/types'
-      fullPath: '/gear/types'
-      preLoaderRoute: typeof GearTypesRouteImport
-      parentRoute: typeof GearRoute
-    }
-    '/gear/tags': {
-      id: '/gear/tags'
-      path: '/tags'
-      fullPath: '/gear/tags'
-      preLoaderRoute: typeof GearTagsRouteImport
-      parentRoute: typeof GearRoute
-    }
     '/gear/$publicId': {
       id: '/gear/$publicId'
       path: '/$publicId'
@@ -894,15 +856,11 @@ declare module '@tanstack/react-router' {
 
 interface GearRouteChildren {
   GearPublicIdRoute: typeof GearPublicIdRoute
-  GearTagsRoute: typeof GearTagsRoute
-  GearTypesRoute: typeof GearTypesRoute
   GearIndexRoute: typeof GearIndexRoute
 }
 
 const GearRouteChildren: GearRouteChildren = {
   GearPublicIdRoute: GearPublicIdRoute,
-  GearTagsRoute: GearTagsRoute,
-  GearTypesRoute: GearTypesRoute,
   GearIndexRoute: GearIndexRoute,
 }
 

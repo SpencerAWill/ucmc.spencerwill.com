@@ -720,7 +720,7 @@ export const gear = sqliteTable(
     // yet labeled). The plain UNIQUE constraint relies on SQLite's
     // multiple-NULL-allowed semantics for the recycling story.
     code: text("code"),
-    description: text("description"),
+    description: text("description").notNull(),
     acquiredAt: timestamp("acquired_at"),
     acquisitionCostCents: integer("acquisition_cost_cents"),
     notesMarkdown: text("notes_markdown"),

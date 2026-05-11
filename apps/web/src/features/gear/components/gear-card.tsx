@@ -66,14 +66,12 @@ export function GearCard({
   onUnretire: () => void;
 }) {
   const isRetired = gear.lifecycle === "retired";
-  // Description is the primary heading. Falls back to the type's name
-  // when no description was entered (rare, but possible for fresh
-  // gear). Type + code always sit on the subtitle line.
-  const primaryText = gear.description ?? gear.type.name;
-  const subtitleParts = [
-    gear.description ? gear.type.name : null,
-    gear.code,
-  ].filter((p): p is string => p !== null);
+  // Description is required so it's always the primary heading. Type +
+  // code sit on the subtitle line; if code is null (e.g. retired or
+  // unlabeled) only the type renders.
+  const subtitleParts = [gear.type.name, gear.code].filter(
+    (p): p is string => p !== null,
+  );
 
   return (
     <Card className="overflow-hidden p-0">
@@ -85,7 +83,7 @@ export function GearCard({
           to="/gear/$publicId"
           params={{ publicId: gear.publicId }}
           className="block bg-muted"
-          aria-label={`Open ${primaryText}`}
+          aria-label={`Open ${gear.description}`}
         >
           <img
             src={GEAR_PLACEHOLDER_SRC}
@@ -102,7 +100,7 @@ export function GearCard({
               params={{ publicId: gear.publicId }}
               className="line-clamp-2 underline-offset-4 hover:underline"
             >
-              {primaryText}
+              {gear.description}
             </Link>
           </h3>
           {subtitleParts.length > 0 ? (
@@ -138,7 +136,7 @@ export function GearCard({
                   variant="ghost"
                   size="icon"
                   className="size-8"
-                  aria-label={`Actions for ${gear.code ?? primaryText}`}
+                  aria-label={`Actions for ${gear.code ?? gear.description}`}
                 >
                   <MoreVertical className="size-4" />
                 </Button>

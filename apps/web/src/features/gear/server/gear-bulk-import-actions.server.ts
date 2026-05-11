@@ -23,7 +23,9 @@ import { isUniqueViolation } from "#/server/db";
 export interface BulkImportRow {
   typePublicId: string;
   code: string | null;
-  description: string | null;
+  /** Required free-form description / model. Rows with empty
+   *  description are skipped with `missing_description`. */
+  description: string;
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
@@ -45,6 +47,7 @@ export interface BulkImportSkipped {
     | "type_not_found"
     | "code_in_use"
     | "code_duplicate_in_import"
+    | "missing_description"
     | "invalid";
   code: string | null;
 }
@@ -73,6 +76,12 @@ export async function bulkImportGearAction(
   for (let i = 0; i < input.rows.length; i++) {
     const row = input.rows[i];
     const code = normalizeCode(row.code);
+    const description = row.description.trim();
+
+    if (description.length === 0) {
+      skipped.push({ rowIndex: i, reason: "missing_description", code });
+      continue;
+    }
 
     if (code !== null) {
       const lower = code.toLowerCase();
@@ -106,7 +115,7 @@ export async function bulkImportGearAction(
         publicId,
         typeId,
         code,
-        description: row.description?.trim() || null,
+        description,
         acquiredAt: row.acquiredAt === null ? null : new Date(row.acquiredAt),
         acquisitionCostCents: row.acquisitionCostCents,
         notesMarkdown: null,

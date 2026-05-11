@@ -1,6 +1,11 @@
+/**
+ * Officer-facing tags-management dialog. Replaces the standalone
+ * `/gear/tags` route. Tag creation happens inline from the gear edit
+ * sheet's multiselect; this dialog is for renaming or pruning the
+ * existing label vocabulary.
+ */
 import { useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, Edit, Trash2 } from "lucide-react";
+import { Edit, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -16,7 +21,6 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { Item, ItemActions, ItemContent } from "#/components/ui/item";
 import {
   Dialog,
   DialogContent,
@@ -27,24 +31,20 @@ import {
 } from "#/components/ui/dialog";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
+import { Item, ItemActions, ItemContent } from "#/components/ui/item";
 import { Label } from "#/components/ui/label";
-import { useAuth } from "#/features/auth/api/use-auth";
-import { requirePermission } from "#/features/auth/guards";
 import { gearTagsQueryOptions } from "#/features/gear/api/queries";
 import { useDeleteGearTag } from "#/features/gear/api/use-delete-gear-tag";
 import { useEditGearTag } from "#/features/gear/api/use-edit-gear-tag";
 import type { GearTagSummary } from "#/features/gear/server/gear-fns";
 
-export const Route = createFileRoute("/gear/tags")({
-  beforeLoad: async ({ context }) => {
-    await requirePermission(context.queryClient, "gear:manage");
-  },
-  component: GearTagsPage,
-});
-
-function GearTagsPage() {
-  const { hasPermission } = useAuth();
-  const canManage = hasPermission("gear:manage");
+export function GearTagsManageDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { data, isLoading } = useQuery(gearTagsQueryOptions());
   const [renaming, setRenaming] = useState<GearTagSummary | null>(null);
   const [pendingDelete, setPendingDelete] = useState<GearTagSummary | null>(
@@ -66,76 +66,80 @@ function GearTagsPage() {
     );
   };
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      setRenaming(null);
+      setPendingDelete(null);
+    }
+    onOpenChange(next);
+  };
+
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
-      <div>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/gear">
-            <ArrowLeft className="size-4" />
-            Back to gear
-          </Link>
-        </Button>
-      </div>
-      <header>
-        <h1 className="text-xl font-semibold">Gear tags</h1>
-        <p className="text-sm text-muted-foreground">
-          Non-exclusive labels attached to gear (e.g. <code>#outdoor</code>,{" "}
-          <code>#winter</code>). Create tags inline from the gear edit sheet —
-          this page is for renaming or pruning existing labels. Deleting a tag
-          removes it from every piece that carries it.
-        </p>
-      </header>
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : (data ?? []).length === 0 ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyTitle>
-              No tags yet. Create one from the gear edit sheet.
-            </EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <ul className="space-y-2">
-          {(data ?? []).map((t) => (
-            <li key={t.publicId}>
-              <Item variant="outline" size="sm">
-                <ItemContent>
-                  <Badge variant="outline" className="w-fit">
-                    #{t.name}
-                  </Badge>
-                </ItemContent>
-                {canManage ? (
-                  <ItemActions>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setRenaming(t)}
-                    >
-                      <Edit className="size-4" />
-                      <span className="sr-only">Rename</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPendingDelete(t)}
-                    >
-                      <Trash2 className="size-4" />
-                      <span className="sr-only">Delete</span>
-                    </Button>
-                  </ItemActions>
-                ) : null}
-              </Item>
-            </li>
-          ))}
-        </ul>
-      )}
-      <RenameDialog
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gear tags</DialogTitle>
+            <DialogDescription>
+              Non-exclusive labels (e.g. <code>#outdoor</code>,{" "}
+              <code>#winter</code>). Create tags inline from the gear edit sheet
+              — this dialog is for renaming or pruning the existing label set.
+              Deleting a tag removes it from every piece that carries it.
+            </DialogDescription>
+          </DialogHeader>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (data ?? []).length === 0 ? (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyTitle>
+                  No tags yet. Create one from the gear edit sheet.
+                </EmptyTitle>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
+              {(data ?? []).map((t) => (
+                <li key={t.publicId}>
+                  <Item variant="outline" size="sm">
+                    <ItemContent>
+                      <Badge variant="outline" className="w-fit">
+                        #{t.name}
+                      </Badge>
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRenaming(t)}
+                      >
+                        <Edit className="size-4" />
+                        <span className="sr-only">Rename</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setPendingDelete(t)}
+                      >
+                        <Trash2 className="size-4" />
+                        <span className="sr-only">Delete</span>
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <RenameTagDialog
         tag={renaming}
         onOpenChange={(o) => {
           if (!o) setRenaming(null);
         }}
       />
+
       <AlertDialog
         open={pendingDelete !== null}
         onOpenChange={(o) => {
@@ -146,8 +150,8 @@ function GearTagsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete #{pendingDelete?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the tag from every gear row that carries it. Gear
-              itself is untouched.
+              Removes the tag from every gear row that carries it. Gear itself
+              is untouched.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -166,11 +170,11 @@ function GearTagsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
 
-function RenameDialog({
+function RenameTagDialog({
   tag,
   onOpenChange,
 }: {
@@ -180,10 +184,8 @@ function RenameDialog({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const editMutation = useEditGearTag();
-
-  // Sync the input value with the tag being renamed each time the dialog
-  // opens. The effect resets the field whenever the target tag changes.
   const open = tag !== null;
+
   useEffect(() => {
     if (tag) {
       setName(tag.name);
@@ -230,8 +232,8 @@ function RenameDialog({
         <DialogHeader>
           <DialogTitle>Rename #{tag?.name}</DialogTitle>
           <DialogDescription>
-            Names are normalized to lowercase-dash-case on save (e.g.
-            <code> Outdoor Use → outdoor-use</code>).
+            Names normalize to lowercase-dash-case on save (e.g.{" "}
+            <code>Outdoor Use → outdoor-use</code>).
           </DialogDescription>
         </DialogHeader>
         <form

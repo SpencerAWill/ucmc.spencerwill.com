@@ -1,5 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronDown, Plus, Settings2, Upload } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import {
+  Boxes,
+  ChevronDown,
+  Plus,
+  Settings2,
+  Tags,
+  Upload,
+} from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -22,6 +29,8 @@ import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
+import { GearTagsManageDialog } from "#/features/gear/components/gear-tags-manage-dialog";
+import { GearTypesManageDialog } from "#/features/gear/components/gear-types-manage-dialog";
 import { useUnretireGear } from "#/features/gear/api/use-unretire-gear";
 import {
   GEAR_CONDITION_VALUES,
@@ -77,6 +86,8 @@ function GearIndexPage() {
     mode: "create",
   });
   const [importOpen, setImportOpen] = useState(false);
+  const [typesOpen, setTypesOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
   const unretireMutation = useUnretireGear();
 
@@ -102,16 +113,34 @@ function GearIndexPage() {
         </div>
         {canManage ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link to="/gear/types">
-                <Settings2 className="size-4" />
-                Manage types
-              </Link>
-            </Button>
-            {/* Split button: primary is "Add gear" (the common case);
-             * secondary actions like "Bulk import" sit behind a chevron
-             * dropdown so the toolbar doesn't grow with every new
-             * variant we add later. */}
+            {/* Configuration dropdown: type/tag CRUD. Kept distinct
+             * from the additive split button so officers don't have to
+             * mentally separate "add a thing" from "edit the taxonomy"
+             * — different mental modes, different buttons. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings2 className="size-4" />
+                  Manage
+                  <ChevronDown className="size-4 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setTypesOpen(true)}>
+                  <Boxes className="size-4" />
+                  Types…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTagsOpen(true)}>
+                  <Tags className="size-4" />
+                  Tags…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Additive split button: primary is "Add gear" (the common
+             * case); the chevron only hosts other ways to add gear
+             * (today: bulk import). Keeps the toolbar narrow on mobile
+             * while leaving room for future additive variants. */}
             <ButtonGroup>
               <Button
                 size="sm"
@@ -166,6 +195,8 @@ function GearIndexPage() {
             intent={formIntent}
           />
           <GearBulkImportSheet open={importOpen} onOpenChange={setImportOpen} />
+          <GearTypesManageDialog open={typesOpen} onOpenChange={setTypesOpen} />
+          <GearTagsManageDialog open={tagsOpen} onOpenChange={setTagsOpen} />
           <GearRetireDialog
             gear={retiring}
             onOpenChange={(o) => {

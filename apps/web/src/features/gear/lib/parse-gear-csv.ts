@@ -10,7 +10,7 @@
  *                            its prefix, in that order; case-insensitive
  *   - code     (optional) — freeform short identifier; left blank for
  *                            unlabeled gear
- *   - description (optional)
+ *   - description (required) — primary heading on the gear card
  *   - acquired_at (optional) — ISO date (YYYY-MM-DD); parsed to ms
  *   - cost_cents (optional) — integer; non-numeric values flag the row
  *
@@ -25,7 +25,7 @@ import Papa from "papaparse";
 export interface ParsedGearRow {
   typePublicId: string;
   code: string | null;
-  description: string | null;
+  description: string;
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
 }
@@ -215,6 +215,10 @@ export async function parseGearCsv(
     const code = cols.code === -1 ? "" : normalize(row[cols.code]);
     const description =
       cols.description === -1 ? "" : normalize(row[cols.description]);
+    if (description.length === 0) {
+      errors.push({ line, message: "Missing description" });
+      continue;
+    }
     const acquiredAtCell =
       cols.acquiredAt === -1 ? "" : normalize(row[cols.acquiredAt]);
     const costCell = cols.cost === -1 ? "" : normalize(row[cols.cost]);
@@ -225,7 +229,7 @@ export async function parseGearCsv(
     rows.push({
       typePublicId,
       code: code.length === 0 ? null : code,
-      description: description.length === 0 ? null : description,
+      description,
       acquiredAt: acquired.value,
       acquisitionCostCents: cost.value,
     });

@@ -66,7 +66,7 @@ describe("bulkImportGearAction", () => {
     const t = await createGearTypeAction({
       name: "Harness",
       prefix: "CH",
-      description: null,
+      description: "Test gear",
     });
     if (!t.ok) throw new Error("type setup failed");
 
@@ -82,7 +82,7 @@ describe("bulkImportGearAction", () => {
         {
           typePublicId: t.publicId,
           code: "CH2",
-          description: null,
+          description: "Test gear",
           acquiredAt: null,
           acquisitionCostCents: null,
         },
@@ -110,7 +110,7 @@ describe("bulkImportGearAction", () => {
     const t = await createGearTypeAction({
       name: "Harness",
       prefix: "CH",
-      description: null,
+      description: "Test gear",
     });
     if (!t.ok) throw new Error("type setup failed");
     const result = await bulkImportGearAction({
@@ -118,14 +118,14 @@ describe("bulkImportGearAction", () => {
         {
           typePublicId: t.publicId,
           code: "CH1",
-          description: null,
+          description: "Test gear",
           acquiredAt: null,
           acquisitionCostCents: null,
         },
         {
           typePublicId: "nope-no-type-here",
           code: "X1",
-          description: null,
+          description: "Test gear",
           acquiredAt: null,
           acquisitionCostCents: null,
         },
@@ -146,14 +146,14 @@ describe("bulkImportGearAction", () => {
     const t = await createGearTypeAction({
       name: "Harness",
       prefix: "CH",
-      description: null,
+      description: "Test gear",
     });
     if (!t.ok) throw new Error("type setup failed");
     // Pre-populate CH1 outside the import.
     const preexisting = await createGearAction({
       typePublicId: t.publicId,
       code: "CH1",
-      description: null,
+      description: "Test gear",
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,
@@ -167,14 +167,14 @@ describe("bulkImportGearAction", () => {
         {
           typePublicId: t.publicId,
           code: "CH1",
-          description: null,
+          description: "Test gear",
           acquiredAt: null,
           acquisitionCostCents: null,
         },
         {
           typePublicId: t.publicId,
           code: "CH2",
-          description: null,
+          description: "Test gear",
           acquiredAt: null,
           acquisitionCostCents: null,
         },
@@ -192,7 +192,7 @@ describe("bulkImportGearAction", () => {
     const t = await createGearTypeAction({
       name: "Harness",
       prefix: "CH",
-      description: null,
+      description: "Test gear",
     });
     if (!t.ok) throw new Error("type setup failed");
     const result = await bulkImportGearAction({
@@ -200,14 +200,14 @@ describe("bulkImportGearAction", () => {
         {
           typePublicId: t.publicId,
           code: "CH1",
-          description: null,
+          description: "Test gear",
           acquiredAt: null,
           acquisitionCostCents: null,
         },
         {
           typePublicId: t.publicId,
           code: "CH1",
-          description: null,
+          description: "Test gear",
           acquiredAt: null,
           acquisitionCostCents: null,
         },

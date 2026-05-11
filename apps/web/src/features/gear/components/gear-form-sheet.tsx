@@ -114,7 +114,7 @@ function GearForm({
     isEdit ? (intent.gear.code ?? "") : "",
   );
   const [description, setDescription] = useState<string>(
-    isEdit ? (intent.gear.description ?? "") : "",
+    isEdit ? intent.gear.description : "",
   );
   const [acquiredAtIso, setAcquiredAtIso] = useState<string>(
     isEdit && intent.gear.acquiredAt ? toIsoDate(intent.gear.acquiredAt) : "",
@@ -158,6 +158,11 @@ function GearForm({
       setError("Pick a type first.");
       return;
     }
+    const trimmedDescription = description.trim();
+    if (trimmedDescription.length === 0) {
+      setError("Description is required.");
+      return;
+    }
     const acquiredAtMs =
       acquiredAtIso.length > 0
         ? Date.parse(`${acquiredAtIso}T00:00:00Z`)
@@ -177,7 +182,7 @@ function GearForm({
     const payload = {
       typePublicId,
       code: code.trim().length === 0 ? null : code.trim(),
-      description: description.trim().length === 0 ? null : description.trim(),
+      description: trimmedDescription,
       acquiredAt: acquiredAtMs,
       acquisitionCostCents: cents,
       notesMarkdown: notes.trim().length === 0 ? null : notes,
@@ -229,48 +234,64 @@ function GearForm({
         disabled={submitting}
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-0 px-4 pb-4"
       >
-        <div className="space-y-1.5">
-          <Label htmlFor="gear-type">Type</Label>
-          <Select value={typePublicId} onValueChange={setTypePublicId}>
-            <SelectTrigger id="gear-type">
-              <SelectValue placeholder="Select a type…" />
-            </SelectTrigger>
-            <SelectContent>
-              {(types ?? []).map((t) => (
-                <SelectItem key={t.publicId} value={t.publicId}>
-                  {t.name}
-                  {t.prefix ? (
-                    <span className="ml-2 font-mono text-xs text-muted-foreground">
-                      {t.prefix}
-                    </span>
-                  ) : null}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Type and Code sit on one row — type drives the suggested
+         * code prefix, so visually pairing them makes the cause-effect
+         * obvious. Stack on the narrowest viewports so the type-select
+         * trigger doesn't get squished. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_minmax(8rem,1fr)]">
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-type">Type</Label>
+            <Select value={typePublicId} onValueChange={setTypePublicId}>
+              <SelectTrigger id="gear-type" className="w-full">
+                <SelectValue placeholder="Select a type…" />
+              </SelectTrigger>
+              <SelectContent>
+                {(types ?? []).map((t) => (
+                  <SelectItem key={t.publicId} value={t.publicId}>
+                    {t.name}
+                    {t.prefix ? (
+                      <span className="ml-2 font-mono text-xs text-muted-foreground">
+                        {t.prefix}
+                      </span>
+                    ) : null}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-code">Code</Label>
+            <Input
+              id="gear-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder={suggested.data?.suggestion || "CH4"}
+              maxLength={64}
+            />
+            <p className="text-xs text-muted-foreground">
+              Laminated tag. Blank for unlabeled.
+            </p>
+          </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="gear-code">Code</Label>
-          <Input
-            id="gear-code"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder={suggested.data?.suggestion || "CH4"}
-            maxLength={64}
-          />
-          <p className="text-xs text-muted-foreground">
-            Printed on the laminated tag. Leave blank to add unlabeled.
-          </p>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="gear-description">Description / model</Label>
+          <Label htmlFor="gear-description">
+            Description / model
+            <span className="text-destructive" aria-hidden>
+              {" *"}
+            </span>
+          </Label>
           <Input
             id="gear-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Black Diamond Momentum, size M"
             maxLength={500}
+            required
+            aria-required
           />
+          <p className="text-xs text-muted-foreground">
+            Primary heading on the gear card.
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">

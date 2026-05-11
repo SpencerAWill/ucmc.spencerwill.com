@@ -16,7 +16,7 @@ export interface GearRow {
   publicId: string;
   typeId: string;
   code: string | null;
-  description: string | null;
+  description: string;
   acquiredAt: Date | null;
   acquisitionCostCents: number | null;
   notesMarkdown: string | null;
@@ -227,7 +227,7 @@ export async function insertGear(input: {
   publicId: string;
   typeId: string;
   code: string | null;
-  description: string | null;
+  description: string;
   acquiredAt: Date | null;
   acquisitionCostCents: number | null;
   notesMarkdown: string | null;
@@ -258,7 +258,7 @@ export async function updateGearById(
   patch: Partial<{
     typeId: string;
     code: string | null;
-    description: string | null;
+    description: string;
     acquiredAt: Date | null;
     acquisitionCostCents: number | null;
     notesMarkdown: string | null;

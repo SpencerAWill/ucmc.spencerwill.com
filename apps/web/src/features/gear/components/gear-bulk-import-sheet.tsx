@@ -84,9 +84,10 @@ function rowHasContent(row: RowState): boolean {
 }
 
 function rowIsValid(row: RowState): boolean {
-  // Type is the only hard requirement — code, description, acquired,
-  // and cost are all optional per row. Cost must parse if present.
+  // Type and description are required. Code, acquired, and cost are
+  // optional per row. Cost must parse if present.
   if (row.typePublicId.length === 0) return false;
+  if (row.description.trim().length === 0) return false;
   if (row.costDollars.trim().length > 0) {
     const n = Number(row.costDollars);
     if (!Number.isFinite(n) || n < 0) return false;
@@ -187,7 +188,7 @@ export function GearBulkImportSheet({
         makeRow({
           typePublicId: r.typePublicId,
           code: r.code ?? "",
-          description: r.description ?? "",
+          description: r.description,
           acquiredAt: r.acquiredAt !== null ? msToIso(r.acquiredAt) : "",
           costDollars:
             r.acquisitionCostCents !== null
@@ -246,8 +247,8 @@ export function GearBulkImportSheet({
     const payload = validRows.map((row) => ({
       typePublicId: row.typePublicId,
       code: row.code.trim().length === 0 ? null : row.code.trim(),
-      description:
-        row.description.trim().length === 0 ? null : row.description.trim(),
+      // rowIsValid guarantees a non-empty description here.
+      description: row.description.trim(),
       acquiredAt:
         row.acquiredAt.length === 0
           ? null
@@ -518,6 +519,9 @@ function GearImportRow({
         <div className="flex flex-col gap-1 sm:col-span-2">
           <Label className="text-xs" htmlFor={`description-${row.key}`}>
             Description
+            <span className="text-destructive" aria-hidden>
+              {" *"}
+            </span>
           </Label>
           <Input
             id={`description-${row.key}`}
@@ -525,6 +529,8 @@ function GearImportRow({
             onChange={(e) => onChange({ description: e.target.value })}
             placeholder="Black Diamond Momentum, size M"
             maxLength={500}
+            required
+            aria-required
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -575,6 +581,8 @@ function skippedLabel(s: BulkImportSkipped): string {
       return `code "${s.code ?? ""}" already in use`;
     case "code_duplicate_in_import":
       return `code "${s.code ?? ""}" appears twice in this import`;
+    case "missing_description":
+      return "description is required";
     case "invalid":
       return "invalid";
     default:

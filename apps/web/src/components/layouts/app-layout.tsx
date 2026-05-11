@@ -34,7 +34,6 @@ import {
   Settings,
   Shield,
   Star,
-  Tags,
   Target,
   UserPlus,
   Users,
@@ -198,7 +197,6 @@ function SidebarNav() {
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
   const canReadGear = hasPermission("gear:read");
-  const canManageGear = hasPermission("gear:manage");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -432,48 +430,12 @@ function SidebarNav() {
                 </SidebarMenuItem>
                 {canReadGear ? (
                   <SidebarMenuItem>
-                    {/* Collapsible-inside-MenuItem for the same axe-core
-                     * <ul>/<li> reason as the Members entry above. The
-                     * chevron toggles the type-management sub-item; it
-                     * only renders when the officer has gear:manage. */}
-                    <Collapsible defaultOpen className="group/collapsible">
-                      <SidebarMenuButton asChild tooltip="Gear">
-                        <Link to="/gear">
-                          <Package />
-                          <span>Gear</span>
-                        </Link>
-                      </SidebarMenuButton>
-                      {canManageGear ? (
-                        <CollapsibleTrigger asChild>
-                          <SidebarMenuAction className="data-[state=open]:rotate-90">
-                            <ChevronRight />
-                            <span className="sr-only">Toggle sub-menu</span>
-                          </SidebarMenuAction>
-                        </CollapsibleTrigger>
-                      ) : null}
-                      {canManageGear ? (
-                        <CollapsibleContent>
-                          <SidebarMenuSub>
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link to="/gear/types">
-                                  <Boxes />
-                                  <span>Types</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link to="/gear/tags">
-                                  <Tags />
-                                  <span>Tags</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
-                      ) : null}
-                    </Collapsible>
+                    <SidebarMenuButton asChild tooltip="Gear">
+                      <Link to="/gear">
+                        <Package />
+                        <span>Gear</span>
+                      </Link>
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
                 ) : null}
                 <SidebarMenuItem>

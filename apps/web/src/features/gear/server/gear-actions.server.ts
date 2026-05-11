@@ -54,7 +54,7 @@ export interface GearTypeSummary {
 export interface GearSummary {
   publicId: string;
   code: string | null;
-  description: string | null;
+  description: string;
   lifecycle: schema.GearLifecycle;
   condition: schema.GearCondition;
   acquiredAt: Date | null;
@@ -214,7 +214,10 @@ export async function getGearDetailAction(input: {
 export interface CreateGearInput {
   typePublicId: string;
   code: string | null;
-  description: string | null;
+  /** Required free-form description / model (the primary heading on
+   *  the gear card). zod enforces min-1 on the wire; this type
+   *  reflects that. */
+  description: string;
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
@@ -276,7 +279,7 @@ export interface EditGearInput {
   publicId: string;
   typePublicId: string;
   code: string | null;
-  description: string | null;
+  description: string;
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;

@@ -102,7 +102,9 @@ export const listGearInputSchema = z.object({
 const createGearInputSchema = z.object({
   typePublicId: z.string().min(1),
   code: z.string().max(64).nullable(),
-  description: z.string().max(500).nullable(),
+  // Description is the primary heading on the gear card — required end
+  // to end. `.trim()` before `.min(1)` so whitespace-only strings fail.
+  description: z.string().trim().min(1, "Description is required").max(500),
   acquiredAt: acquiredAtSchema,
   acquisitionCostCents: z.number().int().min(0).nullable(),
   notesMarkdown: z.string().max(10_000).nullable(),
@@ -156,7 +158,10 @@ const bulkImportInputSchema = z.object({
       z.object({
         typePublicId: z.string().min(1),
         code: z.string().max(64).nullable(),
-        description: z.string().max(500).nullable(),
+        // Required at the wire level. The action also re-checks and
+        // skips with `missing_description` for any row that slipped
+        // through the client validation.
+        description: z.string().max(500),
         acquiredAt: acquiredAtSchema,
         acquisitionCostCents: z.number().int().min(0).nullable(),
       }),
