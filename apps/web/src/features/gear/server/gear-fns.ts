@@ -155,13 +155,17 @@ const deleteGearTypeInputSchema = z.object({
   publicId: z.string().min(1),
 });
 
+const GEAR_TAG_VISIBILITY_VALUES = ["public", "internal"] as const;
+
 const gearTagInputSchema = z.object({
   name: z.string().min(1).max(40),
+  visibility: z.enum(GEAR_TAG_VISIBILITY_VALUES),
 });
 
 const editGearTagInputSchema = z.object({
   publicId: z.string().min(1),
   name: z.string().min(1).max(40),
+  visibility: z.enum(GEAR_TAG_VISIBILITY_VALUES),
 });
 
 const deleteGearTagInputSchema = z.object({

@@ -1,12 +1,16 @@
 /**
- * Officer-facing tags-management dialog. Replaces the standalone
- * `/gear/tags` route. Tag creation happens inline from the gear edit
- * sheet's multiselect; this dialog is for renaming or pruning the
- * existing label vocabulary.
+ * Officer-facing tags-management dialog. Single Dialog that swaps
+ * between a list pane and a form pane (matching the gear-types
+ * dialog's pattern) so create/edit never opens a second modal on top
+ * of the first.
+ *
+ * Delete still uses an AlertDialog because destructive confirmations
+ * are conventional as their own modal; the form pane is part of the
+ * primary workspace so it lives inside the same Dialog shell.
  */
 import { useQuery } from "@tanstack/react-query";
-import { Edit, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Edit, Lock, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -33,10 +37,17 @@ import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
 import { Item, ItemActions, ItemContent } from "#/components/ui/item";
 import { Label } from "#/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group";
 import { gearTagsQueryOptions } from "#/features/gear/api/queries";
+import { useCreateGearTag } from "#/features/gear/api/use-create-gear-tag";
 import { useDeleteGearTag } from "#/features/gear/api/use-delete-gear-tag";
 import { useEditGearTag } from "#/features/gear/api/use-edit-gear-tag";
 import type { GearTagSummary } from "#/features/gear/server/gear-fns";
+
+type Mode =
+  | { kind: "list" }
+  | { kind: "create" }
+  | { kind: "edit"; tag: GearTagSummary };
 
 export function GearTagsManageDialog({
   open,
@@ -45,11 +56,11 @@ export function GearTagsManageDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { data, isLoading } = useQuery(gearTagsQueryOptions());
-  const [renaming, setRenaming] = useState<GearTagSummary | null>(null);
+  const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [pendingDelete, setPendingDelete] = useState<GearTagSummary | null>(
     null,
   );
+  const { data, isLoading } = useQuery(gearTagsQueryOptions());
   const deleteMutation = useDeleteGearTag();
 
   const onConfirmDelete = () => {
@@ -66,9 +77,11 @@ export function GearTagsManageDialog({
     );
   };
 
+  // Reset back to the list pane on each dialog open/close cycle so
+  // re-entering doesn't drop the user into a stale edit form.
   const handleOpenChange = (next: boolean) => {
     if (!next) {
-      setRenaming(null);
+      setMode({ kind: "list" });
       setPendingDelete(null);
     }
     onOpenChange(next);
@@ -79,66 +92,46 @@ export function GearTagsManageDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Gear tags</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {mode.kind !== "list" ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => setMode({ kind: "list" })}
+                  aria-label="Back to tags"
+                >
+                  <ArrowLeft className="size-4" />
+                </Button>
+              ) : null}
+              {mode.kind === "list"
+                ? "Gear tags"
+                : mode.kind === "create"
+                  ? "New tag"
+                  : `Edit #${mode.tag.name}`}
+            </DialogTitle>
             <DialogDescription>
               Non-exclusive labels (e.g. <code>#outdoor</code>,{" "}
-              <code>#winter</code>). Create tags inline from the gear edit sheet
-              — this dialog is for renaming or pruning the existing label set.
-              Deleting a tag removes it from every piece that carries it.
+              <code>#winter</code>). Officers can mark a tag as
+              <strong> Internal</strong> to keep it hidden from non-manager
+              members.
             </DialogDescription>
           </DialogHeader>
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : (data ?? []).length === 0 ? (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyTitle>
-                  No tags yet. Create one from the gear edit sheet.
-                </EmptyTitle>
-              </EmptyHeader>
-            </Empty>
+
+          {mode.kind === "list" ? (
+            <ListPane
+              tags={data ?? []}
+              isLoading={isLoading}
+              onCreate={() => setMode({ kind: "create" })}
+              onEdit={(tag) => setMode({ kind: "edit", tag })}
+              onDelete={(tag) => setPendingDelete(tag)}
+            />
           ) : (
-            <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
-              {(data ?? []).map((t) => (
-                <li key={t.publicId}>
-                  <Item variant="outline" size="sm">
-                    <ItemContent>
-                      <Badge variant="outline" className="w-fit">
-                        #{t.name}
-                      </Badge>
-                    </ItemContent>
-                    <ItemActions>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRenaming(t)}
-                      >
-                        <Edit className="size-4" />
-                        <span className="sr-only">Rename</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPendingDelete(t)}
-                      >
-                        <Trash2 className="size-4" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </ItemActions>
-                  </Item>
-                </li>
-              ))}
-            </ul>
+            <FormPane mode={mode} onDone={() => setMode({ kind: "list" })} />
           )}
         </DialogContent>
       </Dialog>
-
-      <RenameTagDialog
-        tag={renaming}
-        onOpenChange={(o) => {
-          if (!o) setRenaming(null);
-        }}
-      />
 
       <AlertDialog
         open={pendingDelete !== null}
@@ -174,106 +167,198 @@ export function GearTagsManageDialog({
   );
 }
 
-function RenameTagDialog({
-  tag,
-  onOpenChange,
+function ListPane({
+  tags,
+  isLoading,
+  onCreate,
+  onEdit,
+  onDelete,
 }: {
-  tag: GearTagSummary | null;
-  onOpenChange: (open: boolean) => void;
+  tags: GearTagSummary[];
+  isLoading: boolean;
+  onCreate: () => void;
+  onEdit: (tag: GearTagSummary) => void;
+  onDelete: (tag: GearTagSummary) => void;
 }) {
-  const [name, setName] = useState("");
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button size="sm" onClick={onCreate}>
+          <Plus className="size-4" />
+          New tag
+        </Button>
+      </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : tags.length === 0 ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>
+              No tags yet. Create one with the button above.
+            </EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
+          {tags.map((t) => (
+            <li key={t.publicId}>
+              <Item variant="outline" size="sm">
+                <ItemContent>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="w-fit">
+                      #{t.name}
+                    </Badge>
+                    {t.visibility === "internal" ? (
+                      <Badge variant="secondary" className="gap-1">
+                        <Lock className="size-3" />
+                        Internal
+                      </Badge>
+                    ) : null}
+                  </div>
+                </ItemContent>
+                <ItemActions>
+                  <Button variant="ghost" size="sm" onClick={() => onEdit(t)}>
+                    <Edit className="size-4" />
+                    <span className="sr-only">Edit</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => onDelete(t)}>
+                    <Trash2 className="size-4" />
+                    <span className="sr-only">Delete</span>
+                  </Button>
+                </ItemActions>
+              </Item>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function FormPane({
+  mode,
+  onDone,
+}: {
+  mode: { kind: "create" } | { kind: "edit"; tag: GearTagSummary };
+  onDone: () => void;
+}) {
+  const isEdit = mode.kind === "edit";
+  const [name, setName] = useState(isEdit ? mode.tag.name : "");
+  const [visibility, setVisibility] = useState<"public" | "internal">(
+    isEdit ? mode.tag.visibility : "public",
+  );
   const [error, setError] = useState<string | null>(null);
+  const createMutation = useCreateGearTag();
   const editMutation = useEditGearTag();
-  const open = tag !== null;
+  const pending = createMutation.isPending || editMutation.isPending;
 
-  useEffect(() => {
-    if (tag) {
-      setName(tag.name);
-      setError(null);
-    }
-  }, [tag]);
-
-  const onSubmit = () => {
-    if (!tag) return;
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     setError(null);
-    editMutation.mutate(
-      { publicId: tag.publicId, name },
+    if (isEdit) {
+      editMutation.mutate(
+        { publicId: mode.tag.publicId, name, visibility },
+        {
+          onSuccess: (result) => {
+            if (result.ok) {
+              toast.success(`Saved #${result.name}`);
+              onDone();
+              return;
+            }
+            setError(
+              result.reason === "name_in_use"
+                ? "Another tag already uses that name."
+                : "Name can't be empty.",
+            );
+          },
+          onError: () => setError("Couldn't save the tag."),
+        },
+      );
+      return;
+    }
+    createMutation.mutate(
+      { name, visibility },
       {
         onSuccess: (result) => {
           if (result.ok) {
-            toast.success(`Renamed to #${result.name}`);
-            setName("");
-            onOpenChange(false);
+            toast.success(`Created #${result.name}`);
+            onDone();
             return;
           }
-          if (result.reason === "name_in_use") {
-            setError("Another tag already uses that name.");
-          } else {
-            setError("Name can't be empty.");
-          }
+          setError(
+            result.reason === "name_in_use"
+              ? "A tag with that name already exists."
+              : "Name can't be empty.",
+          );
         },
-        onError: () => setError("Couldn't rename the tag."),
+        onError: () => setError("Couldn't create the tag."),
       },
     );
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) {
-          setName("");
-          setError(null);
-        }
-        onOpenChange(o);
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Rename #{tag?.name}</DialogTitle>
-          <DialogDescription>
-            Names normalize to lowercase-dash-case on save (e.g.{" "}
-            <code>Outdoor Use → outdoor-use</code>).
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSubmit();
-          }}
-          className="space-y-3"
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="rename-tag">New name</Label>
-            <Input
-              id="rename-tag"
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={40}
-              disabled={editMutation.isPending}
-            />
-          </div>
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={editMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={editMutation.isPending}>
-              Rename
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <form onSubmit={onSubmit} className="space-y-4">
+      <fieldset disabled={pending} className="space-y-4 border-0">
+        <div className="space-y-1.5">
+          <Label htmlFor="tag-name">Name</Label>
+          <Input
+            id="tag-name"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={40}
+            placeholder="outdoor"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Visibility</Label>
+          <RadioGroup
+            value={visibility}
+            onValueChange={(v) => setVisibility(v as "public" | "internal")}
+          >
+            <div className="flex items-start gap-2 text-sm">
+              <RadioGroupItem
+                value="public"
+                id="tag-vis-public"
+                className="mt-0.5"
+              />
+              <Label htmlFor="tag-vis-public" className="font-normal">
+                <span className="font-medium">Public</span>
+                <span className="block text-xs text-muted-foreground">
+                  Visible to anyone with gear:read.
+                </span>
+              </Label>
+            </div>
+            <div className="flex items-start gap-2 text-sm">
+              <RadioGroupItem
+                value="internal"
+                id="tag-vis-internal"
+                className="mt-0.5"
+              />
+              <Label htmlFor="tag-vis-internal" className="font-normal">
+                <span className="font-medium">Internal</span>
+                <span className="block text-xs text-muted-foreground">
+                  Officers only. Hidden from gear card chips and the tag picker
+                  for non-managers.
+                </span>
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </fieldset>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending}>
+          {isEdit ? "Save" : "Create tag"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }

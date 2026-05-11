@@ -225,6 +225,13 @@
       "when": 1778533336571,
       "tag": "0031_gear_thumbnail_key",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1778536477938,
+      "tag": "0032_gear_tag_visibility",
+      "breakpoints": true
     }
   ]
 }

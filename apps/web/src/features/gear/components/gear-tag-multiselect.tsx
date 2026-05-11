@@ -54,8 +54,11 @@ export function GearTagMultiselect({
 
   const handleCreate = () => {
     if (normalizedQuery.length === 0) return;
+    // Inline-create defaults to public; officers can flip a tag's
+    // visibility later from /gear → Tags. Adding the toggle inline
+    // would clutter a picker that's mostly used during gear-create.
     createTag.mutate(
-      { name: normalizedQuery },
+      { name: normalizedQuery, visibility: "public" },
       {
         onSuccess: (result) => {
           if (result.ok) {

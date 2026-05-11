@@ -760,12 +760,26 @@ export const gear = sqliteTable(
   ],
 );
 
+/**
+ * Tag visibility scope. `public` tags are visible to anyone with
+ * `gear:read`; `internal` tags only render for `gear:manage` officers
+ * — both in the multiselect surfaces and on the gear card/detail
+ * read paths. Used for exec-only annotations like "needs-inspection"
+ * or "checked-out-to-treasurer" that shouldn't leak to general
+ * members.
+ */
+export const gearTagVisibility = ["public", "internal"] as const;
+export type GearTagVisibility = (typeof gearTagVisibility)[number];
+
 export const gearTags = sqliteTable(
   "gear_tags",
   {
     id: text("id").primaryKey(),
     publicId: text("public_id").notNull().unique(),
     name: text("name").notNull(),
+    visibility: text("visibility", { enum: gearTagVisibility })
+      .notNull()
+      .default("public"),
     createdAt: timestamp("created_at")
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

@@ -49,6 +49,7 @@ import { isUniqueViolation } from "#/server/db";
 export interface GearTagSummary {
   publicId: string;
   name: string;
+  visibility: schema.GearTagVisibility;
 }
 
 export interface GearTypeSummary {
@@ -184,7 +185,13 @@ export async function listGearAction(
     }
   }
   const result: ListGearResult = await listGear(repoOptions);
-  const tagsByGearId = await listTagsForGearIds(result.rows.map((r) => r.id));
+  // Officers (gear:manage) see internal tags; everyone else only gets
+  // public-visibility ones. Filtering at the repo layer means the
+  // internal tag publicIds never reach a non-officer client at all.
+  const tagsByGearId = await listTagsForGearIds(
+    result.rows.map((r) => r.id),
+    { includeInternal: canSeeCost },
+  );
   return {
     rows: result.rows.map((row) =>
       toSummary(
@@ -192,6 +199,7 @@ export async function listGearAction(
         (tagsByGearId.get(row.id) ?? []).map((t) => ({
           publicId: t.publicId,
           name: t.name,
+          visibility: t.visibility,
         })),
         canSeeCost,
       ),
@@ -211,12 +219,15 @@ export async function getGearDetailAction(input: {
   if (!row) {
     throw new Error("Gear not found");
   }
-  const tagsByGearId = await listTagsForGearIds([row.id]);
+  const tagsByGearId = await listTagsForGearIds([row.id], {
+    includeInternal: canSeeCost,
+  });
   const summary = toSummary(
     row,
     (tagsByGearId.get(row.id) ?? []).map((t) => ({
       publicId: t.publicId,
       name: t.name,
+      visibility: t.visibility,
     })),
     canSeeCost,
   );

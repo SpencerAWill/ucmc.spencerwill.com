@@ -201,10 +201,17 @@ export async function getGearById(id: string): Promise<schema.Gear | null> {
  */
 export async function listTagsForGearIds(
   gearIds: string[],
+  options: { includeInternal: boolean } = { includeInternal: true },
 ): Promise<Map<string, schema.GearTag[]>> {
   const map = new Map<string, schema.GearTag[]>();
   if (gearIds.length === 0) return map;
   const db = getDb();
+  const where = options.includeInternal
+    ? inArray(schema.gearTagAssignments.gearId, gearIds)
+    : and(
+        inArray(schema.gearTagAssignments.gearId, gearIds),
+        eq(schema.gearTags.visibility, "public"),
+      );
   const rows = await db
     .select({
       gearId: schema.gearTagAssignments.gearId,
@@ -215,7 +222,7 @@ export async function listTagsForGearIds(
       schema.gearTags,
       eq(schema.gearTags.id, schema.gearTagAssignments.tagId),
     )
-    .where(inArray(schema.gearTagAssignments.gearId, gearIds))
+    .where(where)
     .orderBy(asc(schema.gearTags.name));
   for (const row of rows) {
     const list = map.get(row.gearId) ?? [];
@@ -387,9 +394,17 @@ export async function deleteGearTypeById(id: string): Promise<void> {
 
 // ── gear tags ───────────────────────────────────────────────────────────
 
-export async function listGearTags(): Promise<schema.GearTag[]> {
+export async function listGearTags(
+  options: { includeInternal: boolean } = { includeInternal: true },
+): Promise<schema.GearTag[]> {
   const db = getDb();
-  return db.select().from(schema.gearTags).orderBy(asc(schema.gearTags.name));
+  const query = db.select().from(schema.gearTags);
+  if (!options.includeInternal) {
+    return query
+      .where(eq(schema.gearTags.visibility, "public"))
+      .orderBy(asc(schema.gearTags.name));
+  }
+  return query.orderBy(asc(schema.gearTags.name));
 }
 
 export async function getGearTagByPublicId(
@@ -419,6 +434,7 @@ export async function insertGearTag(input: {
   id: string;
   publicId: string;
   name: string;
+  visibility: schema.GearTagVisibility;
 }): Promise<void> {
   const db = getDb();
   const now = new Date();
@@ -426,6 +442,7 @@ export async function insertGearTag(input: {
     id: input.id,
     publicId: input.publicId,
     name: input.name,
+    visibility: input.visibility,
     createdAt: now,
     updatedAt: now,
   });
@@ -450,7 +467,7 @@ export async function getGearTagById(
 
 export async function updateGearTagById(
   id: string,
-  patch: { name: string },
+  patch: Partial<{ name: string; visibility: schema.GearTagVisibility }>,
 ): Promise<void> {
   const db = getDb();
   await db

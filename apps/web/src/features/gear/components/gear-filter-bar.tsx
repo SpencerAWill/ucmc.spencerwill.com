@@ -17,11 +17,10 @@ import {
   List,
   Rows3,
   Search,
-  X,
 } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
-import { Checkbox } from "#/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import {
@@ -117,24 +116,12 @@ export function GearFilterBar({
     <div className="flex flex-col gap-3">
       {/* Row 1: search + view toggle */}
       <div className="flex items-center gap-3">
+        {/* Search is wired through the server already but the relevance
+         * tuning isn't there yet — disabled with a placeholder until
+         * the LIKE/FTS strategy lands. */}
         <div className="relative flex-1">
           <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={state.q}
-            onChange={(e) => onChange({ ...state, q: e.target.value })}
-            placeholder="Search code, description, notes…"
-            className="pl-9"
-          />
-          {state.q.length > 0 ? (
-            <button
-              type="button"
-              className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-              onClick={() => onChange({ ...state, q: "" })}
-              aria-label="Clear search"
-            >
-              <X className="size-3.5" />
-            </button>
-          ) : null}
+          <Input placeholder="Search coming soon…" className="pl-9" disabled />
         </div>
         {/* Three-way view toggle: list (thumbnail + info card per row),
          * grid (square-thumbnail tiles, multi-column), table (dense
@@ -235,19 +222,27 @@ export function GearFilterBar({
               <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Lifecycle
               </Label>
-              <div className="flex flex-col gap-1.5 text-sm">
+              {/* Single-value pick → RadioGroup, not Checkbox. The
+               * filter is either "active" or "retired"; both isn't a
+               * valid state in this UI (the underlying server param
+               * is a single enum). */}
+              <RadioGroup
+                value={state.lifecycle}
+                onValueChange={(v) =>
+                  onChange({
+                    ...state,
+                    lifecycle: v as (typeof LIFECYCLE_VALUES)[number],
+                  })
+                }
+                className="flex flex-col gap-1.5 text-sm"
+              >
                 {LIFECYCLE_VALUES.map((v) => (
                   <label key={v} className="flex items-center gap-2">
-                    <Checkbox
-                      checked={state.lifecycle === v}
-                      onCheckedChange={() =>
-                        onChange({ ...state, lifecycle: v })
-                      }
-                    />
+                    <RadioGroupItem value={v} id={`lifecycle-${v}`} />
                     {LIFECYCLE_LABEL[v]}
                   </label>
                 ))}
-              </div>
+              </RadioGroup>
             </div>
 
             <div className="space-y-1.5">

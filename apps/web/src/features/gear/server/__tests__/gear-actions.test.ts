@@ -130,8 +130,11 @@ async function createGearOk(input: {
   return result.publicId;
 }
 
-async function createTagOk(name: string): Promise<string> {
-  const result = await createGearTagAction({ name });
+async function createTagOk(
+  name: string,
+  visibility: "public" | "internal" = "public",
+): Promise<string> {
+  const result = await createGearTagAction({ name, visibility });
   if (!result.ok) {
     throw new Error(`createGearTag failed: ${JSON.stringify(result)}`);
   }
@@ -414,7 +417,10 @@ describe("tags + list filters", () => {
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
     const gearPublicId = await createGearOk({ typePublicId, code: "CH1" });
 
-    const tagResult = await createGearTagAction({ name: "  Outdoor Use  " });
+    const tagResult = await createGearTagAction({
+      name: "  Outdoor Use  ",
+      visibility: "public",
+    });
     expect(tagResult.ok).toBe(true);
     if (!tagResult.ok) return;
     expect(tagResult.name).toBe("outdoor-use");
@@ -595,6 +601,7 @@ describe("gear tag CRUD", () => {
     const result = await editGearTagAction({
       publicId: tagPublicId,
       name: "Outdoor Use",
+      visibility: "public",
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -622,14 +629,16 @@ describe("gear tag CRUD", () => {
     const collision = await editGearTagAction({
       publicId: a,
       name: "winter",
+      visibility: "public",
     });
     expect(collision).toEqual({ ok: false, reason: "name_in_use" });
 
     const noop = await editGearTagAction({
       publicId: b,
       name: "winter",
+      visibility: "public",
     });
-    expect(noop).toEqual({ ok: true, name: "winter" });
+    expect(noop).toEqual({ ok: true, name: "winter", visibility: "public" });
     // No audit row emitted on the no-op path — only one gear_tag.updated
     // would exist if it had fired, and we haven't done any successful
     // rename yet.
@@ -643,8 +652,50 @@ describe("gear tag CRUD", () => {
   it("rejects empty-name renames", async () => {
     await signInAsManager();
     const tag = await createTagOk("outdoor");
-    const result = await editGearTagAction({ publicId: tag, name: "   " });
+    const result = await editGearTagAction({
+      publicId: tag,
+      name: "   ",
+      visibility: "public",
+    });
     expect(result).toEqual({ ok: false, reason: "empty" });
+  });
+
+  it("internal tags are hidden from non-manager readers", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const publicTag = await createTagOk("outdoor", "public");
+    const internalTag = await createTagOk("needs-inspection", "internal");
+    const gearPublicId = await createGearOk({
+      typePublicId,
+      code: "CH1",
+      tagPublicIds: [publicTag, internalTag],
+    });
+
+    // Manager: sees both tags on the gear and in the tag listing.
+    const managerDetail = await getGearDetailAction({
+      publicId: gearPublicId,
+    });
+    expect(managerDetail.tags.map((t) => t.name).sort()).toEqual([
+      "needs-inspection",
+      "outdoor",
+    ]);
+    const managerTags = await listGearTagsAction();
+    expect(managerTags.map((t) => t.name).sort()).toEqual([
+      "needs-inspection",
+      "outdoor",
+    ]);
+
+    // Regular member: internal tag is stripped from gear and from the
+    // listing.
+    await signInAsRegularMember();
+    const memberDetail = await getGearDetailAction({
+      publicId: gearPublicId,
+    });
+    expect(memberDetail.tags.map((t) => t.name)).toEqual(["outdoor"]);
+    const memberList = await listGearAction({});
+    expect(memberList.rows[0]?.tags.map((t) => t.name)).toEqual(["outdoor"]);
+    const memberTags = await listGearTagsAction();
+    expect(memberTags.map((t) => t.name)).toEqual(["outdoor"]);
   });
 
   it("delete cascades through gear_tag_assignments", async () => {

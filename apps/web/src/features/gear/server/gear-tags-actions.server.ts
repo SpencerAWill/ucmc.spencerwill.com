@@ -4,6 +4,12 @@
  * pieces via the gear_tag_assignments join table. Tag creation goes
  * through this action so the audit log captures who introduced a new
  * label vocabulary.
+ *
+ * Tags carry a visibility flag (`public` | `internal`). Internal tags
+ * are officer-only — they're filtered out of every read path for
+ * callers without `gear:manage`, including the multiselect, the gear
+ * card chips, and the manage-tags listing. The flag is set at create
+ * time and editable later (officer-only operation).
  */
 import { uuidv7 } from "uuidv7";
 
@@ -22,25 +28,39 @@ import type { GearTagSummary } from "#/features/gear/server/gear-actions.server"
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { isUniqueViolation } from "#/server/db";
+import type { schema } from "#/server/db";
 
 export type { GearTagSummary };
+
+export type GearTagVisibility = schema.GearTagVisibility;
 
 function normalizeTagName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
 export async function listGearTagsAction(): Promise<GearTagSummary[]> {
-  await requireGearReader();
-  const rows = await listGearTags();
-  return rows.map((r) => ({ publicId: r.publicId, name: r.name }));
+  const principal = await requireGearReader();
+  const canSeeInternal = principal.permissions.includes("gear:manage");
+  const rows = await listGearTags({ includeInternal: canSeeInternal });
+  return rows.map((r) => ({
+    publicId: r.publicId,
+    name: r.name,
+    visibility: r.visibility,
+  }));
 }
 
 export interface CreateGearTagInput {
   name: string;
+  visibility: GearTagVisibility;
 }
 
 export type CreateGearTagResult =
-  | { ok: true; publicId: string; name: string }
+  | {
+      ok: true;
+      publicId: string;
+      name: string;
+      visibility: GearTagVisibility;
+    }
   | { ok: false; reason: "empty" }
   | { ok: false; reason: "name_in_use" };
 
@@ -55,7 +75,7 @@ export async function createGearTagAction(
   const id = `gtag_${uuidv7()}`;
   const publicId = generatePublicId();
   try {
-    await insertGearTag({ id, publicId, name });
+    await insertGearTag({ id, publicId, name, visibility: input.visibility });
   } catch (err) {
     if (isUniqueViolation(err)) {
       return { ok: false, reason: "name_in_use" };
@@ -67,18 +87,19 @@ export async function createGearTagAction(
     action: "gear_tag.created",
     targetType: "gear_tag",
     targetId: id,
-    metadata: { name },
+    metadata: { name, visibility: input.visibility },
   });
-  return { ok: true, publicId, name };
+  return { ok: true, publicId, name, visibility: input.visibility };
 }
 
 export interface EditGearTagInput {
   publicId: string;
   name: string;
+  visibility: GearTagVisibility;
 }
 
 export type EditGearTagResult =
-  | { ok: true; name: string }
+  | { ok: true; name: string; visibility: GearTagVisibility }
   | { ok: false; reason: "empty" }
   | { ok: false; reason: "name_in_use" };
 
@@ -94,11 +115,21 @@ export async function editGearTagAction(
   if (nextName.length === 0) {
     return { ok: false, reason: "empty" };
   }
-  if (nextName === existing.name) {
-    return { ok: true, name: existing.name };
+  const patch: Parameters<typeof updateGearTagById>[1] = {};
+  const changedFields: string[] = [];
+  if (nextName !== existing.name) {
+    patch.name = nextName;
+    changedFields.push("name");
+  }
+  if (input.visibility !== existing.visibility) {
+    patch.visibility = input.visibility;
+    changedFields.push("visibility");
+  }
+  if (changedFields.length === 0) {
+    return { ok: true, name: existing.name, visibility: existing.visibility };
   }
   try {
-    await updateGearTagById(existing.id, { name: nextName });
+    await updateGearTagById(existing.id, patch);
   } catch (err) {
     if (isUniqueViolation(err)) {
       return { ok: false, reason: "name_in_use" };
@@ -110,9 +141,15 @@ export async function editGearTagAction(
     action: "gear_tag.updated",
     targetType: "gear_tag",
     targetId: existing.id,
-    metadata: { priorName: existing.name, name: nextName },
+    metadata: {
+      changedFields,
+      priorName: existing.name,
+      name: nextName,
+      priorVisibility: existing.visibility,
+      visibility: input.visibility,
+    },
   });
-  return { ok: true, name: nextName };
+  return { ok: true, name: nextName, visibility: input.visibility };
 }
 
 export async function deleteGearTagAction(input: {
@@ -132,7 +169,7 @@ export async function deleteGearTagAction(input: {
     action: "gear_tag.deleted",
     targetType: "gear_tag",
     targetId: tag.id,
-    metadata: { name: tag.name },
+    metadata: { name: tag.name, visibility: tag.visibility },
   });
   return { ok: true };
 }
