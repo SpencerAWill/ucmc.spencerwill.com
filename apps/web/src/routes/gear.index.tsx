@@ -4,7 +4,10 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "#/components/ui/button";
-import { ButtonGroup } from "#/components/ui/button-group";
+import {
+  ButtonGroup,
+  ButtonGroupSeparator,
+} from "#/components/ui/button-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -120,6 +123,7 @@ function GearIndexPage() {
                 <Plus className="size-4" />
                 Add gear
               </Button>
+              <ButtonGroupSeparator />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" aria-label="More add options">
