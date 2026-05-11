@@ -73,3 +73,18 @@ export function isUniqueViolation(
   }
   return false;
 }
+
+/**
+ * Detect a SQLite FOREIGN KEY constraint failure walking the same
+ * cause chain D1 wraps around the leaf error. Used by RESTRICT-on-delete
+ * code paths (e.g. deleting a gear type while gear rows still reference
+ * it) to convert the FK error into a typed user-facing result.
+ */
+export function isForeignKeyViolation(err: unknown): boolean {
+  let cur: unknown = err;
+  while (cur instanceof Error) {
+    if (cur.message.includes("FOREIGN KEY constraint failed")) return true;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return false;
+}
