@@ -16,6 +16,7 @@ import {
   getGearTagByPublicId,
   insertGearTag,
   listGearTags,
+  updateGearTagById,
 } from "#/features/gear/server/repo.server";
 import type { GearTagSummary } from "#/features/gear/server/gear-actions.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
@@ -69,6 +70,49 @@ export async function createGearTagAction(
     metadata: { name },
   });
   return { ok: true, publicId, name };
+}
+
+export interface EditGearTagInput {
+  publicId: string;
+  name: string;
+}
+
+export type EditGearTagResult =
+  | { ok: true; name: string }
+  | { ok: false; reason: "empty" }
+  | { ok: false; reason: "name_in_use" };
+
+export async function editGearTagAction(
+  input: EditGearTagInput,
+): Promise<EditGearTagResult> {
+  const principal = await requireGearManager();
+  const existing = await getGearTagByPublicId(input.publicId);
+  if (!existing) {
+    throw new Error("Gear tag not found");
+  }
+  const nextName = normalizeTagName(input.name);
+  if (nextName.length === 0) {
+    return { ok: false, reason: "empty" };
+  }
+  if (nextName === existing.name) {
+    return { ok: true, name: existing.name };
+  }
+  try {
+    await updateGearTagById(existing.id, { name: nextName });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return { ok: false, reason: "name_in_use" };
+    }
+    throw err;
+  }
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "gear_tag.updated",
+    targetType: "gear_tag",
+    targetId: existing.id,
+    metadata: { priorName: existing.name, name: nextName },
+  });
+  return { ok: true, name: nextName };
 }
 
 export async function deleteGearTagAction(input: {

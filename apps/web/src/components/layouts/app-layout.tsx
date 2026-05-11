@@ -34,6 +34,7 @@ import {
   Settings,
   Shield,
   Star,
+  Tags,
   Target,
   UserPlus,
   Users,
@@ -458,6 +459,14 @@ function SidebarNav() {
                                 <Link to="/gear/types">
                                   <Boxes />
                                   <span>Types</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link to="/gear/tags">
+                                  <Tags />
+                                  <span>Tags</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>

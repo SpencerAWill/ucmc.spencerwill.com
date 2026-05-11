@@ -430,6 +430,29 @@ export async function deleteGearTagById(id: string): Promise<void> {
   await db.delete(schema.gearTags).where(eq(schema.gearTags.id, id));
 }
 
+export async function getGearTagById(
+  id: string,
+): Promise<schema.GearTag | null> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(schema.gearTags)
+    .where(eq(schema.gearTags.id, id))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateGearTagById(
+  id: string,
+  patch: { name: string },
+): Promise<void> {
+  const db = getDb();
+  await db
+    .update(schema.gearTags)
+    .set({ name: patch.name, updatedAt: new Date() })
+    .where(eq(schema.gearTags.id, id));
+}
+
 /**
  * Replace the tag set for a single gear row. Computes the diff against
  * the current assignments so the caller can emit a focused

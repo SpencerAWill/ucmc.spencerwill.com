@@ -35,6 +35,8 @@ import type {
 import type {
   CreateGearTagInput,
   CreateGearTagResult,
+  EditGearTagInput,
+  EditGearTagResult,
 } from "#/features/gear/server/gear-tags-actions.server";
 
 // Mirror of the gear enums in `drizzle/schema.ts`. Re-declared here so
@@ -61,6 +63,8 @@ export type {
   CreateGearResult,
   CreateGearTagInput,
   CreateGearTagResult,
+  EditGearTagInput,
+  EditGearTagResult,
   CreateGearTypeInput,
   CreateGearTypeResult,
   DeleteGearTypeResult,
@@ -134,6 +138,11 @@ const deleteGearTypeInputSchema = z.object({
 });
 
 const gearTagInputSchema = z.object({
+  name: z.string().min(1).max(40),
+});
+
+const editGearTagInputSchema = z.object({
+  publicId: z.string().min(1),
   name: z.string().min(1).max(40),
 });
 
@@ -268,6 +277,14 @@ export const createGearTagFn = createServerFn({ method: "POST" })
     const { createGearTagAction } =
       await import("#/features/gear/server/gear-tags-actions.server");
     return createGearTagAction(data);
+  });
+
+export const editGearTagFn = createServerFn({ method: "POST" })
+  .inputValidator(editGearTagInputSchema)
+  .handler(async ({ data }): Promise<EditGearTagResult> => {
+    const { editGearTagAction } =
+      await import("#/features/gear/server/gear-tags-actions.server");
+    return editGearTagAction(data);
   });
 
 export const deleteGearTagFn = createServerFn({ method: "POST" })

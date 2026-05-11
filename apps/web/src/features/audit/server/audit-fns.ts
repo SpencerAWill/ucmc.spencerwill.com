@@ -58,6 +58,7 @@ export const AUDIT_ACTIONS = [
   "gear_type.updated",
   "gear_type.deleted",
   "gear_tag.created",
+  "gear_tag.updated",
   "gear_tag.deleted",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

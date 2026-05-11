@@ -38,8 +38,12 @@ const {
   editGearTypeAction,
   listGearTypesAction,
 } = await import("#/features/gear/server/gear-types-actions.server");
-const { createGearTagAction, listGearTagsAction } =
-  await import("#/features/gear/server/gear-tags-actions.server");
+const {
+  createGearTagAction,
+  deleteGearTagAction,
+  editGearTagAction,
+  listGearTagsAction,
+} = await import("#/features/gear/server/gear-tags-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -518,5 +522,85 @@ describe("suggestCodeForType", () => {
     expect(suggestion).toBe("CH2");
     // sanity: a is still active so we don't suggest CH1.
     expect(a).toBeTruthy();
+  });
+});
+
+// ── tag management actions ─────────────────────────────────────────────
+
+describe("gear tag CRUD", () => {
+  it("renames a tag and emits gear_tag.updated with priorName", async () => {
+    const actorId = await signInAsManager();
+    const tagPublicId = await createTagOk("outdoor");
+
+    const result = await editGearTagAction({
+      publicId: tagPublicId,
+      name: "Outdoor Use",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.name).toBe("outdoor-use");
+
+    const audit = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear_tag.updated"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.actorUserId).toBe(actorId);
+    const meta = JSON.parse(audit[0]?.metadataJson ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    expect(meta.priorName).toBe("outdoor");
+    expect(meta.name).toBe("outdoor-use");
+  });
+
+  it("rejects rename collisions and no-ops on same-name renames", async () => {
+    await signInAsManager();
+    const a = await createTagOk("outdoor");
+    const b = await createTagOk("winter");
+
+    const collision = await editGearTagAction({
+      publicId: a,
+      name: "winter",
+    });
+    expect(collision).toEqual({ ok: false, reason: "name_in_use" });
+
+    const noop = await editGearTagAction({
+      publicId: b,
+      name: "winter",
+    });
+    expect(noop).toEqual({ ok: true, name: "winter" });
+    // No audit row emitted on the no-op path — only one gear_tag.updated
+    // would exist if it had fired, and we haven't done any successful
+    // rename yet.
+    const audit = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear_tag.updated"));
+    expect(audit).toHaveLength(0);
+  });
+
+  it("rejects empty-name renames", async () => {
+    await signInAsManager();
+    const tag = await createTagOk("outdoor");
+    const result = await editGearTagAction({ publicId: tag, name: "   " });
+    expect(result).toEqual({ ok: false, reason: "empty" });
+  });
+
+  it("delete cascades through gear_tag_assignments", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const tag = await createTagOk("outdoor");
+    const gearPublicId = await createGearOk({
+      typePublicId,
+      code: "CH1",
+      tagPublicIds: [tag],
+    });
+
+    const result = await deleteGearTagAction({ publicId: tag });
+    expect(result.ok).toBe(true);
+
+    const detail = await getGearDetailAction({ publicId: gearPublicId });
+    expect(detail.tags).toEqual([]);
   });
 });
