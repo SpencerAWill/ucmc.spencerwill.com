@@ -49,6 +49,16 @@ export const AUDIT_ACTIONS = [
   "member.unclaimed_edited",
   "member.unclaimed_deleted",
   "member.claimed",
+  "gear.added",
+  "gear.updated",
+  "gear.retired",
+  "gear.unretired",
+  "gear.tags_changed",
+  "gear_type.created",
+  "gear_type.updated",
+  "gear_type.deleted",
+  "gear_tag.created",
+  "gear_tag.deleted",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

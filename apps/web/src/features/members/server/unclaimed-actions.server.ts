@@ -30,7 +30,7 @@ import {
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
-import { generateUserPublicId } from "#/server/auth/ids";
+import { generatePublicId } from "#/server/auth/ids";
 import { getDb, isUniqueViolation, schema } from "#/server/db";
 
 const DEFAULT_LIMIT = 50;
@@ -238,7 +238,7 @@ export async function preAddUnclaimedMembersAction(args: {
   const now = new Date();
   const created: PreAddCreated[] = toCreate.map((entry) => ({
     userId: `user_${uuidv7()}`,
-    publicId: generateUserPublicId(),
+    publicId: generatePublicId(),
     name: entry.name,
     email: entry.email,
   }));
@@ -330,7 +330,7 @@ async function preAddPerRowFallback(
       continue;
     }
     const userId = `user_${uuidv7()}`;
-    const publicId = generateUserPublicId();
+    const publicId = generatePublicId();
     try {
       await db.batch([
         db.insert(schema.users).values({

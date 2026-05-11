@@ -197,6 +197,20 @@
       "when": 1778280000000,
       "tag": "0027_collapse_registrations_approve",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1778525288921,
+      "tag": "0028_gear",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1778525288922,
+      "tag": "0029_gear_permissions_seed",
+      "breakpoints": true
     }
   ]
 }
