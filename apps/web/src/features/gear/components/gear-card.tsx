@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Edit, MoreVertical, RotateCcw, Trash2 } from "lucide-react";
+import { Edit, MoreVertical, RotateCcw, Tag, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -10,6 +11,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "#/components/ui/popover";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
@@ -39,20 +45,22 @@ const GEAR_PLACEHOLDER_SRC = "/gear-placeholder.svg";
 /**
  * List-card view of a single gear row. Layout:
  *
- *   ┌────┐  Description (primary heading)              [⋮]
+ *   ┌────┐  Description (primary heading)             [🏷 N] [⋮]
  *   │img │  Type · Code
  *   │img │  [Condition] [Retired?]
- *   └────┘  [#tag1] [#tag2] [+N]
+ *   └────┘
  *
- * Uses a CSS grid (not the `Item` primitive) because the grid layout
- * naturally stretches every cell to the row's height — the only
- * reliable way to make the thumbnail fill the card's full vertical
- * space regardless of how tall the content column gets.
+ * Card height is intentionally constant regardless of tag count — tags
+ * live behind a hover/tap popover in the actions column, not in the
+ * content body. The popover trigger doubles as a count badge.
+ *
+ * Uses a CSS grid (not the `Item` primitive) because grid naturally
+ * stretches every cell to row height — the only reliable way to make
+ * the thumbnail fill the card's full vertical space regardless of
+ * content-column height.
  *
  * Acquisition date and cost are intentionally absent here — they live
- * on the detail page so the list stays scannable. On mobile the
- * thumbnail shrinks; the overflow menu collapses edit / retire into a
- * single icon to keep the row tight.
+ * on the detail page so the list stays scannable.
  */
 export function GearCard({
   gear,
@@ -129,13 +137,17 @@ export function GearCard({
             </Badge>
             {isRetired ? <Badge variant="outline">Retired</Badge> : null}
           </div>
-          {gear.tags.length > 0 ? <TagsRow tags={gear.tags} /> : null}
         </div>
 
-        {/* Actions cell — top-aligned so the icon doesn't drift to the
-         * vertical centre on tall cards. */}
-        {canManage ? (
-          <div className="p-2 sm:p-3">
+        {/* Actions cell — top-aligned so icons don't drift to the
+         * vertical centre on tall cards. The tag-count popover sits
+         * next to the action overflow so card height stays constant
+         * regardless of how many tags this gear carries. The cell
+         * always renders so the grid columns stay stable even when
+         * neither tags nor manage affordances are visible. */}
+        <div className="flex items-start gap-0 p-2 sm:p-3">
+          {gear.tags.length > 0 ? <TagsPopover tags={gear.tags} /> : null}
+          {canManage ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -165,37 +177,79 @@ export function GearCard({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </Card>
   );
 }
 
-const TAG_DISPLAY_LIMIT = 3;
+/**
+ * Tag-count icon button that pops a list of every tag on this gear.
+ * Opens on hover (desktop) AND on click/tap (mobile) — Radix Popover
+ * provides the click path; we layer `onPointerEnter` / `onPointerLeave`
+ * timers for the hover behavior. A small close-delay lets the user
+ * move into the popover content without the panel snapping shut.
+ */
+function TagsPopover({ tags }: { tags: GearSummary["tags"] }) {
+  const [open, setOpen] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
 
-function TagsRow({ tags }: { tags: GearSummary["tags"] }) {
-  const visible = tags.slice(0, TAG_DISPLAY_LIMIT);
-  const overflow = tags.length - visible.length;
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
+
+  function openNow() {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setOpen(true);
+  }
+
+  function closeSoon() {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      setOpen(false);
+      closeTimerRef.current = null;
+    }, 150);
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      {visible.map((tag) => (
-        <Badge key={tag.publicId} variant="outline" className="max-w-[10rem]">
-          <span className="truncate">#{tag.name}</span>
-        </Badge>
-      ))}
-      {overflow > 0 ? (
-        <Badge
-          variant="outline"
-          className="text-muted-foreground"
-          title={tags
-            .slice(TAG_DISPLAY_LIMIT)
-            .map((t) => `#${t.name}`)
-            .join(", ")}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1 px-2"
+          aria-label={`${tags.length} ${tags.length === 1 ? "tag" : "tags"}`}
+          onPointerEnter={openNow}
+          onPointerLeave={closeSoon}
         >
-          +{overflow}
-        </Badge>
-      ) : null}
-    </div>
+          <Tag className="size-4" />
+          <span className="text-xs font-medium">{tags.length}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-auto max-w-xs p-2"
+        onPointerEnter={openNow}
+        onPointerLeave={closeSoon}
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((t) => (
+            <Badge key={t.publicId} variant="outline">
+              #{t.name}
+            </Badge>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
