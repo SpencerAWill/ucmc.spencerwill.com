@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
@@ -20,7 +20,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "#/components/ui/sheet";
-import { Textarea } from "#/components/ui/textarea";
 import {
   gearSuggestedCodeQueryOptions,
   gearTagsQueryOptions,
@@ -35,6 +34,25 @@ import type {
   GearDetail,
   GearSummary,
 } from "#/features/gear/server/gear-fns";
+
+// Lazy-load the TipTap editor the same way `field.MarkdownField` does
+// — keeps the ~265 KB-gz editor bundle off any route that doesn't
+// actually mount the gear form sheet.
+const MarkdownEditorLazy = lazy(() =>
+  import("#/components/editor/markdown-editor").then((m) => ({
+    default: m.MarkdownEditor,
+  })),
+);
+
+function MarkdownEditorFallback({ rows }: { rows: number }) {
+  return (
+    <div
+      aria-hidden
+      className="w-full animate-pulse rounded-md border bg-muted/30"
+      style={{ minHeight: `${rows * 1.5 + 3}rem` }}
+    />
+  );
+}
 
 const CONDITION_LABEL: Record<GearCondition, string> = {
   serviceable: "Serviceable",
@@ -305,15 +323,21 @@ function GearForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="gear-notes">Notes</Label>
-          <Textarea
-            id="gear-notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Free-form notes — visible to anyone with gear:read."
-            rows={4}
-            maxLength={10_000}
-          />
+          <Label htmlFor="gear-notes" id="gear-notes-label">
+            Notes
+          </Label>
+          {/* MarkdownEditor renders a contenteditable, so the label
+           * association is via aria-labelledby rather than htmlFor. */}
+          <Suspense fallback={<MarkdownEditorFallback rows={4} />}>
+            <MarkdownEditorLazy
+              value={notes}
+              onChange={setNotes}
+              placeholder="Free-form notes — visible to anyone with gear:read. Markdown supported."
+              rows={4}
+              maxLength={10_000}
+              ariaLabelledBy="gear-notes-label"
+            />
+          </Suspense>
         </div>
         {error ? (
           <p className="text-sm text-destructive" role="alert">
