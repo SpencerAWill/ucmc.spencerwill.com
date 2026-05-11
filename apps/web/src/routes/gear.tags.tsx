@@ -16,7 +16,7 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { Card, CardContent } from "#/components/ui/card";
+import { Item, ItemActions, ItemContent } from "#/components/ui/item";
 import {
   Dialog,
   DialogContent,
@@ -99,31 +99,33 @@ function GearTagsPage() {
         <ul className="space-y-2">
           {(data ?? []).map((t) => (
             <li key={t.publicId}>
-              <Card>
-                <CardContent className="flex items-center justify-between gap-2 py-3">
-                  <Badge variant="outline">#{t.name}</Badge>
-                  {canManage ? (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRenaming(t)}
-                      >
-                        <Edit className="size-4" />
-                        <span className="sr-only">Rename</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPendingDelete(t)}
-                      >
-                        <Trash2 className="size-4" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
+              <Item variant="outline" size="sm">
+                <ItemContent>
+                  <Badge variant="outline" className="w-fit">
+                    #{t.name}
+                  </Badge>
+                </ItemContent>
+                {canManage ? (
+                  <ItemActions>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRenaming(t)}
+                    >
+                      <Edit className="size-4" />
+                      <span className="sr-only">Rename</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPendingDelete(t)}
+                    >
+                      <Trash2 className="size-4" />
+                      <span className="sr-only">Delete</span>
+                    </Button>
+                  </ItemActions>
+                ) : null}
+              </Item>
             </li>
           ))}
         </ul>

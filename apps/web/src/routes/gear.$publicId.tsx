@@ -91,7 +91,7 @@ function GearDetailPage() {
           </div>
         ) : null}
       </div>
-      <GearDetailCard gear={data} />
+      <GearDetailCard gear={data} canManage={canManage} />
       {canManage ? (
         <>
           <GearFormSheet

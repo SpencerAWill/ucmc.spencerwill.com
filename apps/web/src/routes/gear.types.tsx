@@ -16,14 +16,14 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "#/components/ui/card";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "#/components/ui/item";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePermission } from "#/features/auth/guards";
 import { gearTypesQueryOptions } from "#/features/gear/api/queries";
@@ -115,47 +115,44 @@ function GearTypesPage() {
         <ul className="space-y-2">
           {(data ?? []).map((t) => (
             <li key={t.publicId}>
-              <Card>
-                <CardHeader className="flex flex-row items-start justify-between gap-2">
-                  <div className="space-y-1">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      {t.name}
-                      {t.prefix ? (
-                        <Badge variant="outline" className="font-mono">
-                          {t.prefix}
-                        </Badge>
-                      ) : null}
-                    </CardTitle>
-                    {t.description ? (
-                      <CardDescription>{t.description}</CardDescription>
+              <Item variant="outline">
+                <ItemContent>
+                  <ItemTitle>
+                    {t.name}
+                    {t.prefix ? (
+                      <Badge variant="outline" className="font-mono">
+                        {t.prefix}
+                      </Badge>
                     ) : null}
-                  </div>
-                  {canManage ? (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setFormIntent({ mode: "edit", type: t });
-                          setFormOpen(true);
-                        }}
-                      >
-                        <Edit className="size-4" />
-                        <span className="sr-only">Edit</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPendingDelete(t)}
-                      >
-                        <Trash2 className="size-4" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </div>
+                  </ItemTitle>
+                  {t.description ? (
+                    <ItemDescription>{t.description}</ItemDescription>
                   ) : null}
-                </CardHeader>
-                <CardContent className="pt-0" />
-              </Card>
+                </ItemContent>
+                {canManage ? (
+                  <ItemActions>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFormIntent({ mode: "edit", type: t });
+                        setFormOpen(true);
+                      }}
+                    >
+                      <Edit className="size-4" />
+                      <span className="sr-only">Edit</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPendingDelete(t)}
+                    >
+                      <Trash2 className="size-4" />
+                      <span className="sr-only">Delete</span>
+                    </Button>
+                  </ItemActions>
+                ) : null}
+              </Item>
             </li>
           ))}
         </ul>

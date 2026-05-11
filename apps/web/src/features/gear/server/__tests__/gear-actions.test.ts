@@ -187,6 +187,40 @@ describe("authorization", () => {
     expect(list.rows).toHaveLength(1);
     expect(list.rows[0]?.code).toBe("CH1");
   });
+
+  it("strips acquisitionCostCents for non-manager readers", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    // Seed gear with a non-null cost so the strip is observable.
+    const created = await createGearAction({
+      typePublicId,
+      code: "CH1",
+      description: null,
+      acquiredAt: null,
+      acquisitionCostCents: 6000,
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    if (!created.ok) throw new Error("seed failed");
+
+    // Manager view: cost is present.
+    const managerList = await listGearAction({});
+    expect(managerList.rows[0]?.acquisitionCostCents).toBe(6000);
+    const managerDetail = await getGearDetailAction({
+      publicId: created.publicId,
+    });
+    expect(managerDetail.acquisitionCostCents).toBe(6000);
+
+    // Regular member view: cost is null.
+    await signInAsRegularMember();
+    const memberList = await listGearAction({});
+    expect(memberList.rows[0]?.acquisitionCostCents).toBeNull();
+    const memberDetail = await getGearDetailAction({
+      publicId: created.publicId,
+    });
+    expect(memberDetail.acquisitionCostCents).toBeNull();
+  });
 });
 
 // ── types ──────────────────────────────────────────────────────────────

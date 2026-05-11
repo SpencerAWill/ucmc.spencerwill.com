@@ -18,7 +18,16 @@ const CONDITION_LABEL: Record<GearDetail["condition"], string> = {
   lost: "Lost",
 };
 
-export function GearDetailCard({ gear }: { gear: GearDetail }) {
+export function GearDetailCard({
+  gear,
+  canManage,
+}: {
+  gear: GearDetail;
+  /** When false, the acquisition cost is omitted. Approved members can
+   *  see everything else (notes, condition, dates), but cost is
+   *  officer-only since it leaks budget detail. */
+  canManage: boolean;
+}) {
   const isRetired = gear.lifecycle === "retired";
   return (
     <Card>
@@ -62,7 +71,7 @@ export function GearDetailCard({ gear }: { gear: GearDetail }) {
               <dd>{format(gear.acquiredAt, "MMM d, yyyy")}</dd>
             </div>
           ) : null}
-          {gear.acquisitionCostCents !== null ? (
+          {canManage && gear.acquisitionCostCents !== null ? (
             <div>
               <dt className="text-xs text-muted-foreground">Cost</dt>
               <dd>${(gear.acquisitionCostCents / 100).toFixed(2)}</dd>

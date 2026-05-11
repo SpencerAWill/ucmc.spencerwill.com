@@ -94,6 +94,7 @@ export interface ListGearActionResult {
 function toSummary(
   row: Awaited<ReturnType<typeof listGear>>["rows"][number],
   tags: GearTagSummary[],
+  canSeeCost: boolean,
 ): GearSummary {
   return {
     publicId: row.publicId,
@@ -102,7 +103,10 @@ function toSummary(
     lifecycle: row.lifecycle,
     condition: row.condition,
     acquiredAt: row.acquiredAt,
-    acquisitionCostCents: row.acquisitionCostCents,
+    // Cost is officer-only: budget detail shouldn't be readable by
+    // every approved member. The UI hides the field, but stripping it
+    // here keeps the JSON response honest even for a direct fetch.
+    acquisitionCostCents: canSeeCost ? row.acquisitionCostCents : null,
     retiredAt: row.retiredAt,
     retiredReason: row.retiredReason,
     createdAt: row.createdAt,
@@ -141,7 +145,8 @@ function normalizeCode(code: string | null | undefined): string | null {
 export async function listGearAction(
   input: ListGearActionInput,
 ): Promise<ListGearActionResult> {
-  await requireGearReader();
+  const principal = await requireGearReader();
+  const canSeeCost = principal.permissions.includes("gear:manage");
   const repoOptions: ListGearOptions = {
     lifecycle: input.lifecycle,
     condition: input.condition,
@@ -176,6 +181,7 @@ export async function listGearAction(
           publicId: t.publicId,
           name: t.name,
         })),
+        canSeeCost,
       ),
     ),
     total: result.total,
@@ -187,7 +193,8 @@ export async function listGearAction(
 export async function getGearDetailAction(input: {
   publicId: string;
 }): Promise<GearDetail> {
-  await requireGearReader();
+  const principal = await requireGearReader();
+  const canSeeCost = principal.permissions.includes("gear:manage");
   const row = await getGearByPublicId(input.publicId);
   if (!row) {
     throw new Error("Gear not found");
@@ -199,6 +206,7 @@ export async function getGearDetailAction(input: {
       publicId: t.publicId,
       name: t.name,
     })),
+    canSeeCost,
   );
   return { ...summary, notesMarkdown: row.notesMarkdown };
 }
