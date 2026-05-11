@@ -49,6 +49,7 @@ import { Route as MyAccountPreferencesRouteImport } from './routes/my.account.pr
 import { Route as MyAccountDetailsRouteImport } from './routes/my.account.details'
 import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
+import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
 
@@ -252,6 +253,11 @@ const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
   path: '/api/landing/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGearThumbnailsSplatRoute = ApiGearThumbnailsSplatRouteImport.update({
+  id: '/api/gear-thumbnails/$',
+  path: '/api/gear-thumbnails/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   id: '/api/avatars/$',
   path: '/api/avatars/$',
@@ -299,6 +305,7 @@ export interface FileRoutesByFullPath {
   '/members/': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
@@ -340,6 +347,7 @@ export interface FileRoutesByTo {
   '/members': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
@@ -385,6 +393,7 @@ export interface FileRoutesById {
   '/members/': typeof MembersIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
@@ -431,6 +440,7 @@ export interface FileRouteTypes {
     | '/members/'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/members/roles/$roleId'
     | '/my/account/details'
@@ -472,6 +482,7 @@ export interface FileRouteTypes {
     | '/members'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/members/roles/$roleId'
     | '/my/account/details'
@@ -516,6 +527,7 @@ export interface FileRouteTypes {
     | '/members/'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/members/roles_/$roleId'
     | '/my/account/details'
@@ -552,6 +564,7 @@ export interface RootRouteChildren {
   FeedbackIndexRoute: typeof FeedbackIndexRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
+  ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
 }
 
@@ -837,6 +850,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLandingSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/gear-thumbnails/$': {
+      id: '/api/gear-thumbnails/$'
+      path: '/api/gear-thumbnails/$'
+      fullPath: '/api/gear-thumbnails/$'
+      preLoaderRoute: typeof ApiGearThumbnailsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/avatars/$': {
       id: '/api/avatars/$'
       path: '/api/avatars/$'
@@ -946,6 +966,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedbackIndexRoute: FeedbackIndexRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
+  ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,
 }
 export const routeTree = rootRouteImport

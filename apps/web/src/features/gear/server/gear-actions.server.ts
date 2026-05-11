@@ -28,6 +28,13 @@ import {
   setGearTags,
   updateGearById,
 } from "#/features/gear/server/repo.server";
+import {
+  decodeGearThumbnailDataUrl,
+  deleteGearThumbnail,
+  gearShortContentHash,
+  gearThumbnailKey,
+  putGearThumbnail,
+} from "#/features/gear/server/gear-image.server";
 import type {
   ListGearOptions,
   ListGearResult,
@@ -55,6 +62,10 @@ export interface GearSummary {
   publicId: string;
   code: string | null;
   description: string;
+  /** R2 key under the `gear/` prefix, or null when no thumbnail has
+   *  been uploaded. The client resolves it to a public CDN URL via
+   *  `gearThumbnailUrlFor`. */
+  thumbnailKey: string | null;
   lifecycle: schema.GearLifecycle;
   condition: schema.GearCondition;
   acquiredAt: Date | null;
@@ -100,6 +111,7 @@ function toSummary(
     publicId: row.publicId,
     code: row.code,
     description: row.description,
+    thumbnailKey: row.thumbnailKey,
     lifecycle: row.lifecycle,
     condition: row.condition,
     acquiredAt: row.acquiredAt,
@@ -218,6 +230,9 @@ export interface CreateGearInput {
    *  the gear card). zod enforces min-1 on the wire; this type
    *  reflects that. */
   description: string;
+  /** Optional base64 `data:image/...` URL for the gear thumbnail. The
+   *  action decodes, content-hashes, and uploads to R2. Null on omit. */
+  thumbnailDataUrl: string | null;
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
@@ -228,6 +243,17 @@ export interface CreateGearInput {
 
 function msToDate(ms: number | null): Date | null {
   return ms === null ? null : new Date(ms);
+}
+
+async function uploadThumbnail(
+  gearId: string,
+  dataUrl: string,
+): Promise<string> {
+  const { contentType, bytes } = decodeGearThumbnailDataUrl(dataUrl);
+  const hash = await gearShortContentHash(bytes);
+  const key = gearThumbnailKey(gearId, hash, contentType);
+  await putGearThumbnail(key, bytes, contentType);
+  return key;
 }
 
 export type CreateGearResult =
@@ -243,6 +269,14 @@ export async function createGearAction(
   const code = normalizeCode(input.code);
   const id = `g_${uuidv7()}`;
   const publicId = generatePublicId();
+  // Upload thumbnail BEFORE the DB insert so a content-hash collision
+  // or oversized payload fails the whole create — we don't want a gear
+  // row to land in D1 without its thumbnail when the user expects one.
+  // The content-hashed key is idempotent, so a retry won't double-write.
+  const thumbnailKey =
+    input.thumbnailDataUrl !== null
+      ? await uploadThumbnail(id, input.thumbnailDataUrl)
+      : null;
   try {
     await insertGear({
       id,
@@ -250,6 +284,7 @@ export async function createGearAction(
       typeId,
       code,
       description: input.description,
+      thumbnailKey,
       acquiredAt: msToDate(input.acquiredAt),
       acquisitionCostCents: input.acquisitionCostCents,
       notesMarkdown: input.notesMarkdown,
@@ -280,6 +315,11 @@ export interface EditGearInput {
   typePublicId: string;
   code: string | null;
   description: string;
+  /** Three-state thumbnail control:
+   *   - omit / `undefined` → keep current key untouched
+   *   - a `data:image/...` URL → upload + replace
+   *   - `null` → remove existing thumbnail (deletes the R2 object) */
+  thumbnailDataUrl?: string | null;
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
@@ -334,6 +374,26 @@ export async function editGearAction(
     patch.condition = input.condition;
     changedFields.push("condition");
   }
+  // Thumbnail handling. Three-way:
+  //   - undefined: caller didn't touch it; keep existing key
+  //   - data URL:  upload, patch the key, delete the old one if any
+  //   - null:      clear the key, delete the old R2 object
+  let priorThumbnailKey: string | null = null;
+  if (input.thumbnailDataUrl !== undefined) {
+    priorThumbnailKey = existing.thumbnailKey;
+    if (input.thumbnailDataUrl === null) {
+      if (existing.thumbnailKey !== null) {
+        patch.thumbnailKey = null;
+        changedFields.push("thumbnail_key");
+      }
+    } else {
+      const newKey = await uploadThumbnail(existing.id, input.thumbnailDataUrl);
+      if (newKey !== existing.thumbnailKey) {
+        patch.thumbnailKey = newKey;
+        changedFields.push("thumbnail_key");
+      }
+    }
+  }
   if (Object.keys(patch).length > 0) {
     try {
       await updateGearById(existing.id, patch);
@@ -350,6 +410,18 @@ export async function editGearAction(
     tagIds,
     assignedBy: principal.userId,
   });
+
+  // Garbage-collect the prior thumbnail AFTER the DB lands the new
+  // key. Doing it before risks orphaning a still-referenced row if the
+  // update fails. Best-effort: R2 errors don't undo the patch (the
+  // worst case is a dangling object under `gear/<gearId>/`).
+  if (priorThumbnailKey !== null && priorThumbnailKey !== patch.thumbnailKey) {
+    try {
+      await deleteGearThumbnail(priorThumbnailKey);
+    } catch {
+      // Swallow: the patch already succeeded.
+    }
+  }
 
   if (changedFields.length > 0) {
     const metadata: Record<string, unknown> = { changedFields };

@@ -721,6 +721,12 @@ export const gear = sqliteTable(
     // multiple-NULL-allowed semantics for the recycling story.
     code: text("code"),
     description: text("description").notNull(),
+    // R2 key under `gear/<contentHash>.<ext>` for the per-gear
+    // thumbnail. NULL when the officer hasn't uploaded one — the card
+    // falls back to the generic placeholder SVG in that case.
+    // Content-hashed key means the URL is immutable across edits, so
+    // the public bucket can serve with `Cache-Control: immutable`.
+    thumbnailKey: text("thumbnail_key"),
     acquiredAt: timestamp("acquired_at"),
     acquisitionCostCents: integer("acquisition_cost_cents"),
     notesMarkdown: text("notes_markdown"),

@@ -117,6 +117,7 @@ async function createGearOk(input: {
     typePublicId: input.typePublicId,
     code: input.code ?? null,
     description: input.description ?? "Test gear",
+    thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,
     notesMarkdown: null,
@@ -168,6 +169,7 @@ describe("authorization", () => {
         typePublicId: "nope",
         code: null,
         description: "Test gear",
+        thumbnailDataUrl: null,
         acquiredAt: null,
         acquisitionCostCents: null,
         notesMarkdown: null,
@@ -196,6 +198,7 @@ describe("authorization", () => {
       typePublicId,
       code: "CH1",
       description: "Test gear",
+      thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: 6000,
       notesMarkdown: null,
@@ -240,7 +243,7 @@ describe("gear types", () => {
       publicId,
       name: "Climbing Harness",
       prefix: "HRN",
-      description: "Test gear",
+      description: null,
     });
     expect(edit.ok).toBe(true);
 
@@ -254,7 +257,7 @@ describe("gear types", () => {
     const dup = await createGearTypeAction({
       name: "Harness",
       prefix: "X",
-      description: "Test gear",
+      description: null,
     });
     expect(dup).toEqual({ ok: false, reason: "name_in_use" });
   });
@@ -303,6 +306,7 @@ describe("gear lifecycle", () => {
       typePublicId,
       code: "CH1",
       description: "Test gear",
+      thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,
@@ -377,6 +381,7 @@ describe("gear lifecycle", () => {
       typePublicId,
       code: "CH2",
       description: "Test gear",
+      thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,
@@ -419,6 +424,7 @@ describe("tags + list filters", () => {
       typePublicId,
       code: "CH1",
       description: "Test gear",
+      thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,

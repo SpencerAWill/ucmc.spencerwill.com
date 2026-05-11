@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "#/components/ui/card";
 import { MarkdownContent } from "#/components/markdown/markdown-content";
+import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearDetail } from "#/features/gear/server/gear-fns";
 
 const CONDITION_LABEL: Record<GearDetail["condition"], string> = {
@@ -39,7 +40,11 @@ export function GearDetailCard({
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <div className="aspect-square w-32 shrink-0 overflow-hidden rounded-md border bg-muted sm:w-40">
           <img
-            src={GEAR_PLACEHOLDER_SRC}
+            src={
+              gear.thumbnailKey
+                ? gearThumbnailUrlFor(gear.thumbnailKey)
+                : GEAR_PLACEHOLDER_SRC
+            }
             alt=""
             className="h-full w-full object-cover"
           />

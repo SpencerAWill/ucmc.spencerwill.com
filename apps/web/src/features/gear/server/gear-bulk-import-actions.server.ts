@@ -116,6 +116,9 @@ export async function bulkImportGearAction(
         typeId,
         code,
         description,
+        // Bulk import doesn't support thumbnails — officers can upload
+        // per-piece via the singular Add/Edit sheet after the fact.
+        thumbnailKey: null,
         acquiredAt: row.acquiredAt === null ? null : new Date(row.acquiredAt),
         acquisitionCostCents: row.acquisitionCostCents,
         notesMarkdown: null,

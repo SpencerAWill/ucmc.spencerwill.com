@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Suspense, lazy, useEffect, useState } from "react";
+import imageCompression from "browser-image-compression";
+import { ImagePlus, Trash2 } from "lucide-react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
@@ -28,6 +30,7 @@ import {
 import { useCreateGear } from "#/features/gear/api/use-create-gear";
 import { useEditGear } from "#/features/gear/api/use-edit-gear";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
+import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
 import type {
   GearCondition,
@@ -135,6 +138,18 @@ function GearForm({
   const [tagPublicIds, setTagPublicIds] = useState<string[]>(
     isEdit ? intent.gear.tags.map((t) => t.publicId) : [],
   );
+  // Thumbnail state is a tri-state at the form layer:
+  //   - newDataUrl !== null → user picked a new image; send it
+  //   - cleared === true    → user removed an existing thumbnail; send null
+  //   - both false/null     → no thumbnail change; send undefined on edit,
+  //                            or null on create (no thumbnail to start)
+  const existingThumbnailKey = isEdit ? intent.gear.thumbnailKey : null;
+  const [newThumbnailDataUrl, setNewThumbnailDataUrl] = useState<string | null>(
+    null,
+  );
+  const [thumbnailCleared, setThumbnailCleared] = useState(false);
+  const [thumbnailBusy, setThumbnailBusy] = useState(false);
+  const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const suggested = useQuery(
@@ -151,6 +166,48 @@ function GearForm({
   }, [isEdit, suggestion, typePublicId, code]);
 
   const submitting = createMutation.isPending || editMutation.isPending;
+
+  async function onThumbnailPicked(file: File) {
+    setThumbnailBusy(true);
+    try {
+      // Compress to ~600px max and re-encode as JPEG so the server-side
+      // size cap (400 KB) is comfortably met for nearly any input.
+      const normalized = await imageCompression(file, {
+        maxWidthOrHeight: 600,
+        useWebWorker: true,
+        fileType: "image/jpeg",
+        initialQuality: 0.82,
+      });
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(normalized);
+      });
+      setNewThumbnailDataUrl(dataUrl);
+      setThumbnailCleared(false);
+    } catch {
+      toast.error("Couldn't read that image. Try another file.");
+    } finally {
+      setThumbnailBusy(false);
+      if (thumbnailInputRef.current) {
+        thumbnailInputRef.current.value = "";
+      }
+    }
+  }
+
+  function removeThumbnail() {
+    setNewThumbnailDataUrl(null);
+    setThumbnailCleared(true);
+  }
+
+  // Preview source picks the newest pick, else the existing key (if not
+  // cleared), else nothing.
+  const thumbnailPreviewSrc =
+    newThumbnailDataUrl ??
+    (!thumbnailCleared && existingThumbnailKey
+      ? gearThumbnailUrlFor(existingThumbnailKey)
+      : null);
 
   const handleSubmit = () => {
     setError(null);
@@ -179,7 +236,7 @@ function GearForm({
       setError("Cost must be a non-negative number.");
       return;
     }
-    const payload = {
+    const basePayload = {
       typePublicId,
       code: code.trim().length === 0 ? null : code.trim(),
       description: trimmedDescription,
@@ -191,35 +248,51 @@ function GearForm({
     };
 
     if (isEdit) {
-      editMutation.mutate(
-        { publicId: intent.gear.publicId, ...payload },
-        {
-          onSuccess: (result) => {
-            if (result.ok) {
-              toast.success("Gear updated");
-              onClose();
-            } else {
-              setError(`Code "${result.code}" is already in use.`);
-            }
-          },
-          onError: () => setError("Couldn't save changes."),
+      // Three-way:
+      //   - new image picked → send the new data URL
+      //   - explicitly cleared → send null (server deletes the R2 object)
+      //   - neither → omit so the existing key stays untouched
+      const editPayload: Parameters<typeof editMutation.mutate>[0] = {
+        publicId: intent.gear.publicId,
+        ...basePayload,
+      };
+      if (newThumbnailDataUrl !== null) {
+        editPayload.thumbnailDataUrl = newThumbnailDataUrl;
+      } else if (thumbnailCleared) {
+        editPayload.thumbnailDataUrl = null;
+      }
+      editMutation.mutate(editPayload, {
+        onSuccess: (result) => {
+          if (result.ok) {
+            toast.success("Gear updated");
+            onClose();
+          } else {
+            setError(`Code "${result.code}" is already in use.`);
+          }
         },
-      );
+        onError: () => setError("Couldn't save changes."),
+      });
       return;
     }
-    createMutation.mutate(payload, {
-      onSuccess: (result) => {
-        if (result.ok) {
-          toast.success(
-            result.code ? `Added ${result.code}` : "Gear added (no code yet)",
-          );
-          onClose();
-        } else {
-          setError(`Code "${result.code}" is already in use.`);
-        }
+    createMutation.mutate(
+      {
+        ...basePayload,
+        thumbnailDataUrl: newThumbnailDataUrl,
       },
-      onError: () => setError("Couldn't add gear."),
-    });
+      {
+        onSuccess: (result) => {
+          if (result.ok) {
+            toast.success(
+              result.code ? `Added ${result.code}` : "Gear added (no code yet)",
+            );
+            onClose();
+          } else {
+            setError(`Code "${result.code}" is already in use.`);
+          }
+        },
+        onError: () => setError("Couldn't add gear."),
+      },
+    );
   };
 
   return (
@@ -234,6 +307,69 @@ function GearForm({
         disabled={submitting}
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-0 px-4 pb-4"
       >
+        {/* Thumbnail picker. The clickable preview IS the upload
+         * affordance — empty state shows an "Add" hint, populated state
+         * shows the image and clicking it re-opens the file picker
+         * (replace). Remove is a separate text button only when there's
+         * something to remove. */}
+        <div className="space-y-1.5">
+          <Label>Thumbnail</Label>
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => thumbnailInputRef.current?.click()}
+              className="relative size-24 shrink-0 overflow-hidden rounded-md border bg-muted transition-colors hover:border-foreground/40 disabled:opacity-50"
+              disabled={thumbnailBusy || submitting}
+              aria-label={
+                thumbnailPreviewSrc ? "Replace thumbnail" : "Add thumbnail"
+              }
+            >
+              {thumbnailPreviewSrc ? (
+                <img
+                  src={thumbnailPreviewSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
+                  <ImagePlus className="size-5" />
+                  <span className="text-xs">Add</span>
+                </div>
+              )}
+            </button>
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground">
+                {thumbnailPreviewSrc
+                  ? "Click the preview to replace."
+                  : "Click the box to upload. Square works best; auto-compressed to ~600px JPEG."}
+              </p>
+              {thumbnailPreviewSrc ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-fit"
+                  onClick={removeThumbnail}
+                  disabled={thumbnailBusy || submitting}
+                >
+                  <Trash2 className="size-4" />
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void onThumbnailPicked(file);
+              }}
+            />
+          </div>
+        </div>
+
         {/* Type and Code sit on one row — type drives the suggested
          * code prefix, so visually pairing them makes the cause-effect
          * obvious. Stack on the narrowest viewports so the type-select

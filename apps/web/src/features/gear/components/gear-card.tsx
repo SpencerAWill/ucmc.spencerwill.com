@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
 const CONDITION_LABEL: Record<GearSummary["condition"], string> = {
@@ -29,9 +30,10 @@ const CONDITION_VARIANT: Record<
   lost: "destructive",
 };
 
-// Static placeholder until per-gear thumbnails land. Swap in
-// `gear.thumbnailKey`-backed R2 URLs (or a private-bucket `<img>` via
-// the worker) when that feature ships — the slot is already here.
+// Falls back to the static placeholder SVG when the gear row has no
+// uploaded thumbnail. Per-gear keys live under `gear/<gearId>/...` and
+// resolve through `gearThumbnailUrlFor` (CDN domain in prod,
+// `/api/gear-thumbnails/...` in local dev).
 const GEAR_PLACEHOLDER_SRC = "/gear-placeholder.svg";
 
 /**
@@ -86,7 +88,11 @@ export function GearCard({
           aria-label={`Open ${gear.description}`}
         >
           <img
-            src={GEAR_PLACEHOLDER_SRC}
+            src={
+              gear.thumbnailKey
+                ? gearThumbnailUrlFor(gear.thumbnailKey)
+                : GEAR_PLACEHOLDER_SRC
+            }
             alt=""
             className="h-full w-full object-cover"
           />

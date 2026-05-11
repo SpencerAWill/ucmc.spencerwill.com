@@ -99,12 +99,21 @@ export const listGearInputSchema = z.object({
   perPage: z.number().int().min(1).max(250).optional(),
 });
 
+// Thumbnail data URL — capped at ~600 KB so the encoded base64 fits
+// inside the worker request budget (~1 MiB) even with overhead.
+const thumbnailDataUrlSchema = z
+  .string()
+  .max(600 * 1024)
+  .regex(/^data:image\/(webp|jpeg|png);base64,/, "Invalid image data URL");
+
 const createGearInputSchema = z.object({
   typePublicId: z.string().min(1),
   code: z.string().max(64).nullable(),
   // Description is the primary heading on the gear card — required end
   // to end. `.trim()` before `.min(1)` so whitespace-only strings fail.
   description: z.string().trim().min(1, "Description is required").max(500),
+  // null = no thumbnail (omit on create).
+  thumbnailDataUrl: thumbnailDataUrlSchema.nullable(),
   acquiredAt: acquiredAtSchema,
   acquisitionCostCents: z.number().int().min(0).nullable(),
   notesMarkdown: z.string().max(10_000).nullable(),
@@ -112,9 +121,16 @@ const createGearInputSchema = z.object({
   tagPublicIds: z.array(z.string().min(1)),
 });
 
-const editGearInputSchema = createGearInputSchema.extend({
-  publicId: z.string().min(1),
-});
+const editGearInputSchema = createGearInputSchema
+  .omit({ thumbnailDataUrl: true })
+  .extend({
+    publicId: z.string().min(1),
+    // Three-state on edit:
+    //   - omitted: keep existing thumbnail
+    //   - null:    remove the thumbnail
+    //   - data URL: replace with the new image
+    thumbnailDataUrl: thumbnailDataUrlSchema.nullable().optional(),
+  });
 
 const retireGearInputSchema = z.object({
   publicId: z.string().min(1),

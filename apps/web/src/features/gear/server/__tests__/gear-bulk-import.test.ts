@@ -154,6 +154,7 @@ describe("bulkImportGearAction", () => {
       typePublicId: t.publicId,
       code: "CH1",
       description: "Test gear",
+      thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,

@@ -17,6 +17,7 @@ export interface GearRow {
   typeId: string;
   code: string | null;
   description: string;
+  thumbnailKey: string | null;
   acquiredAt: Date | null;
   acquisitionCostCents: number | null;
   notesMarkdown: string | null;
@@ -122,6 +123,7 @@ export async function listGear(
       typeId: schema.gear.typeId,
       code: schema.gear.code,
       description: schema.gear.description,
+      thumbnailKey: schema.gear.thumbnailKey,
       acquiredAt: schema.gear.acquiredAt,
       acquisitionCostCents: schema.gear.acquisitionCostCents,
       notesMarkdown: schema.gear.notesMarkdown,
@@ -162,6 +164,7 @@ export async function getGearByPublicId(
       typeId: schema.gear.typeId,
       code: schema.gear.code,
       description: schema.gear.description,
+      thumbnailKey: schema.gear.thumbnailKey,
       acquiredAt: schema.gear.acquiredAt,
       acquisitionCostCents: schema.gear.acquisitionCostCents,
       notesMarkdown: schema.gear.notesMarkdown,
@@ -228,6 +231,7 @@ export async function insertGear(input: {
   typeId: string;
   code: string | null;
   description: string;
+  thumbnailKey: string | null;
   acquiredAt: Date | null;
   acquisitionCostCents: number | null;
   notesMarkdown: string | null;
@@ -242,6 +246,7 @@ export async function insertGear(input: {
     typeId: input.typeId,
     code: input.code,
     description: input.description,
+    thumbnailKey: input.thumbnailKey,
     acquiredAt: input.acquiredAt,
     acquisitionCostCents: input.acquisitionCostCents,
     notesMarkdown: input.notesMarkdown,
@@ -259,6 +264,7 @@ export async function updateGearById(
     typeId: string;
     code: string | null;
     description: string;
+    thumbnailKey: string | null;
     acquiredAt: Date | null;
     acquisitionCostCents: number | null;
     notesMarkdown: string | null;
