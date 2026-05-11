@@ -1,12 +1,32 @@
+/**
+ * Bulk pre-add sheet for officer-imported gear. Mirrors the structure
+ * of `pre-add-unclaimed-sheet.tsx`:
+ *
+ *   1. Type rows manually — pick a type, fill optional fields per row,
+ *      "Add row" appends.
+ *   2. Import a CSV file OR paste from the clipboard. The parser merges
+ *      results into the dynamic rows above any already-typed entries.
+ *
+ * Per-row validation is light (type required, cost is a non-negative
+ * number, acquired_at is a valid date if present). The server is the
+ * source of truth for code uniqueness — submitting returns
+ * `{ created, skipped }` so we can render which codes collided.
+ */
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardPaste, Upload } from "lucide-react";
-import { useRef, useState } from "react";
-import { toast } from "sonner";
+import { ClipboardPaste, Plus, Trash2, Upload } from "lucide-react";
+import { useId, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
-import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
+import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "#/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -15,197 +35,534 @@ import {
   SheetHeader,
   SheetTitle,
 } from "#/components/ui/sheet";
-import { Textarea } from "#/components/ui/textarea";
 import { gearTypesQueryOptions } from "#/features/gear/api/queries";
 import { useBulkImportGear } from "#/features/gear/api/use-bulk-import-gear";
 import { parseGearCsv } from "#/features/gear/lib/parse-gear-csv";
 import type {
+  ParseGearCsvError,
+  ParsedGearRow,
+} from "#/features/gear/lib/parse-gear-csv";
+import type {
   BulkImportResult,
   BulkImportSkipped,
+  GearTypeSummary,
 } from "#/features/gear/server/gear-fns";
 
-type ImportSuccess = BulkImportResult;
+const MAX_ROWS = 200;
 
-const SAMPLE_CSV = `type,code,description,acquired_at,cost
-Climbing Harness,CH1,Black Diamond Momentum size M,2024-08-20,60.00
-Climbing Harness,,size L spare,,
-LJ,LJ4,kids size,2024-09-01,45`;
+interface RowState {
+  /** Stable key so React doesn't remount inputs as the array shifts. */
+  key: string;
+  typePublicId: string;
+  code: string;
+  description: string;
+  /** YYYY-MM-DD string (matches `<input type="date">`). */
+  acquiredAt: string;
+  /** Dollar amount as typed, e.g. "60.00". Converted to cents at submit. */
+  costDollars: string;
+}
+
+function makeRow(initial: Partial<RowState> = {}): RowState {
+  return {
+    key: crypto.randomUUID(),
+    typePublicId: initial.typePublicId ?? "",
+    code: initial.code ?? "",
+    description: initial.description ?? "",
+    acquiredAt: initial.acquiredAt ?? "",
+    costDollars: initial.costDollars ?? "",
+  };
+}
+
+function rowHasContent(row: RowState): boolean {
+  return (
+    row.typePublicId.length > 0 ||
+    row.code.trim().length > 0 ||
+    row.description.trim().length > 0 ||
+    row.acquiredAt.length > 0 ||
+    row.costDollars.trim().length > 0
+  );
+}
+
+function rowIsValid(row: RowState): boolean {
+  // Type is the only hard requirement — code, description, acquired,
+  // and cost are all optional per row. Cost must parse if present.
+  if (row.typePublicId.length === 0) return false;
+  if (row.costDollars.trim().length > 0) {
+    const n = Number(row.costDollars);
+    if (!Number.isFinite(n) || n < 0) return false;
+  }
+  if (row.acquiredAt.length > 0) {
+    const ms = Date.parse(`${row.acquiredAt}T00:00:00Z`);
+    if (Number.isNaN(ms)) return false;
+  }
+  return true;
+}
+
+interface ImportSummary {
+  imported: number;
+  errors: ParseGearCsvError[];
+  truncated: boolean;
+}
+
+function msToIso(ms: number): string {
+  const d = new Date(ms);
+  const yr = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const da = String(d.getUTCDate()).padStart(2, "0");
+  return `${yr}-${mo}-${da}`;
+}
+
+export interface GearBulkImportSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
 
 export function GearBulkImportSheet({
   open,
   onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+}: GearBulkImportSheetProps) {
+  const { data: types } = useQuery(gearTypesQueryOptions());
+  const [rows, setRows] = useState<RowState[]>(() => [makeRow()]);
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(
+    null,
+  );
+  const [submitResult, setSubmitResult] = useState<BulkImportResult | null>(
+    null,
+  );
+  const [importError, setImportError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const csvInputId = useId();
+
+  const bulkImport = useBulkImportGear();
+
+  const validRows = rows.filter(rowIsValid);
+  const populatedRows = rows.filter(rowHasContent);
+  const canSubmit =
+    !bulkImport.isPending &&
+    validRows.length > 0 &&
+    validRows.length === populatedRows.length;
+
+  function reset() {
+    setRows([makeRow()]);
+    setImportSummary(null);
+    setSubmitResult(null);
+    setImportError(null);
+    setSubmitError(null);
+  }
+
+  function handleClose(next: boolean) {
+    onOpenChange(next);
+    if (!next) {
+      setTimeout(reset, 200);
+    }
+  }
+
+  function updateRow(index: number, patch: Partial<RowState>) {
+    setRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  }
+
+  function addRow() {
+    setRows((prev) => (prev.length >= MAX_ROWS ? prev : [...prev, makeRow()]));
+  }
+
+  function removeRow(index: number) {
+    setRows((prev) => {
+      if (prev.length === 1) {
+        return [makeRow()];
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  function applyParsed(parsed: {
+    rows: ParsedGearRow[];
+    errors: ParseGearCsvError[];
+  }) {
+    setRows((prev) => {
+      const existing = prev.filter(rowHasContent);
+      const incoming = parsed.rows.map((r) =>
+        makeRow({
+          typePublicId: r.typePublicId,
+          code: r.code ?? "",
+          description: r.description ?? "",
+          acquiredAt: r.acquiredAt !== null ? msToIso(r.acquiredAt) : "",
+          costDollars:
+            r.acquisitionCostCents !== null
+              ? (r.acquisitionCostCents / 100).toFixed(2)
+              : "",
+        }),
+      );
+      const merged = [...existing, ...incoming];
+      const truncated = merged.length > MAX_ROWS;
+      const limited = merged.slice(0, MAX_ROWS);
+      const final = limited.length > 0 ? limited : [makeRow()];
+      setImportSummary({
+        imported: Math.min(parsed.rows.length, MAX_ROWS - existing.length),
+        errors: parsed.errors,
+        truncated,
+      });
+      return final;
+    });
+  }
+
+  async function handleFileImport(file: File) {
+    setImportError(null);
+    try {
+      const result = await parseGearCsv(file, types ?? []);
+      applyParsed(result);
+    } catch {
+      setImportError(
+        "Couldn't read that file. Make sure it's a CSV and try again.",
+      );
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleClipboardImport() {
+    setImportError(null);
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text.trim().length === 0) {
+        setImportError("Clipboard is empty.");
+        return;
+      }
+      const result = await parseGearCsv(text, types ?? []);
+      applyParsed(result);
+    } catch {
+      setImportError(
+        "Couldn't read from clipboard. Copy your CSV again and try once more, or use the file picker.",
+      );
+    }
+  }
+
+  async function handleSubmit() {
+    setSubmitError(null);
+    setSubmitResult(null);
+    const payload = validRows.map((row) => ({
+      typePublicId: row.typePublicId,
+      code: row.code.trim().length === 0 ? null : row.code.trim(),
+      description:
+        row.description.trim().length === 0 ? null : row.description.trim(),
+      acquiredAt:
+        row.acquiredAt.length === 0
+          ? null
+          : Date.parse(`${row.acquiredAt}T00:00:00Z`),
+      acquisitionCostCents:
+        row.costDollars.trim().length === 0
+          ? null
+          : Math.round(Number(row.costDollars) * 100),
+    }));
+    try {
+      const result = await bulkImport.mutateAsync({ rows: payload });
+      setSubmitResult(result);
+      // Drop successfully-created rows; keep skipped ones (by rowIndex)
+      // so the officer can correct + retry, plus any blanks at the end.
+      const createdIndexes = new Set(result.created.map((c) => c.rowIndex));
+      setRows((prev) => {
+        const validKeyOrder = validRows.map((r) => r.key);
+        const remaining = prev.filter((row) => {
+          const vi = validKeyOrder.indexOf(row.key);
+          // Non-valid rows (blanks, half-filled) stay so the user can
+          // finish them. Valid rows survive only if their submit slot
+          // didn't land in `created`.
+          return vi === -1 || !createdIndexes.has(vi);
+        });
+        return remaining.length > 0 ? remaining : [makeRow()];
+      });
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Couldn't import gear",
+      );
+    }
+  }
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex flex-col gap-0 sm:max-w-xl">
+    <Sheet open={open} onOpenChange={handleClose}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 sm:max-w-2xl"
+      >
         <SheetHeader>
           <SheetTitle>Bulk import gear</SheetTitle>
           <SheetDescription>
-            Paste a CSV or upload a file. Columns: type (required, name or
-            prefix), code, description, acquired_at (YYYY-MM-DD), cost. Rows
-            with codes that collide are skipped — the server is the source of
-            truth.
+            Add many pieces in one go. Pick a type per row (the only required
+            field) and fill optional details. Import from a CSV or clipboard to
+            populate the rows quickly.
           </SheetDescription>
         </SheetHeader>
-        {open ? <BulkImportForm onClose={() => onOpenChange(false)} /> : null}
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+          {/* CSV import */}
+          <div className="rounded-md border bg-muted/30 px-3 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label htmlFor={csvInputId} className="text-sm font-medium">
+                Import from CSV
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleClipboardImport()}
+                >
+                  <ClipboardPaste className="size-4" />
+                  Paste
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="size-4" />
+                  Choose file
+                </Button>
+              </div>
+              <input
+                ref={fileInputRef}
+                id={csvInputId}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    void handleFileImport(file);
+                  }
+                }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Columns: type (name or prefix, required), code, description,
+              acquired_at (YYYY-MM-DD), cost. Header row optional.
+            </p>
+            {importSummary ? (
+              <div className="mt-2 text-xs">
+                <p>
+                  Imported <strong>{importSummary.imported}</strong> row
+                  {importSummary.imported === 1 ? "" : "s"}.{" "}
+                  {importSummary.errors.length > 0
+                    ? `${importSummary.errors.length} skipped.`
+                    : null}
+                </p>
+                {importSummary.truncated ? (
+                  <p className="text-amber-600">
+                    Capped at {MAX_ROWS} rows per submit.
+                  </p>
+                ) : null}
+                {importSummary.errors.length > 0 ? (
+                  <ul className="mt-1 list-disc pl-4 text-muted-foreground">
+                    {importSummary.errors.slice(0, 5).map((err) => (
+                      <li key={`${err.line}:${err.message}`}>
+                        Line {err.line}: {err.message}
+                      </li>
+                    ))}
+                    {importSummary.errors.length > 5 ? (
+                      <li>…and {importSummary.errors.length - 5} more</li>
+                    ) : null}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+            {importError ? (
+              <p className="mt-2 text-xs text-destructive" role="alert">
+                {importError}
+              </p>
+            ) : null}
+          </div>
+
+          {/* Submit feedback */}
+          {submitError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Couldn&apos;t import gear</AlertTitle>
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          ) : null}
+          {submitResult ? (
+            <Alert>
+              <AlertTitle>
+                {submitResult.created.length} created,{" "}
+                {submitResult.skipped.length} skipped
+              </AlertTitle>
+              {submitResult.skipped.length > 0 ? (
+                <AlertDescription>
+                  <ul className="mt-1 list-disc pl-4 text-xs">
+                    {submitResult.skipped.map((s) => (
+                      <li key={`${s.rowIndex}-${s.reason}`}>
+                        Row {s.rowIndex + 1}: {skippedLabel(s)}
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              ) : null}
+            </Alert>
+          ) : null}
+
+          {/* Dynamic rows */}
+          <div className="space-y-3">
+            {rows.map((row, index) => (
+              <GearImportRow
+                key={row.key}
+                row={row}
+                index={index}
+                types={types ?? []}
+                onChange={(patch) => updateRow(index, patch)}
+                onRemove={() => removeRow(index)}
+              />
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addRow}
+              disabled={rows.length >= MAX_ROWS}
+            >
+              <Plus className="size-4" />
+              Add row
+            </Button>
+            {rows.length >= MAX_ROWS ? (
+              <p className="text-xs text-muted-foreground">
+                Reached the {MAX_ROWS}-row limit.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <SheetFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => handleClose(false)}
+            disabled={bulkImport.isPending}
+          >
+            Close
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={!canSubmit}
+          >
+            {bulkImport.isPending
+              ? "Importing…"
+              : validRows.length > 0
+                ? `Import (${validRows.length})`
+                : "Import"}
+          </Button>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   );
 }
 
-function BulkImportForm({ onClose }: { onClose: () => void }) {
-  const { data: types } = useQuery(gearTypesQueryOptions());
-  const fileInput = useRef<HTMLInputElement | null>(null);
-  const [csv, setCsv] = useState("");
-  const [parseErrors, setParseErrors] = useState<string[]>([]);
-  const [success, setSuccess] = useState<ImportSuccess | null>(null);
-  const mutation = useBulkImportGear();
-
-  const onPaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      setCsv(text);
-    } catch {
-      toast.error("Couldn't read clipboard. Paste manually.");
-    }
-  };
-
-  const onFile = async (file: File) => {
-    setCsv(await file.text());
-  };
-
-  const onSubmit = async () => {
-    setSuccess(null);
-    setParseErrors([]);
-    const trimmed = csv.trim();
-    if (trimmed.length === 0) {
-      setParseErrors(["Paste a CSV or upload a file first."]);
-      return;
-    }
-    const parsed = await parseGearCsv(trimmed, types ?? []);
-    if (parsed.rows.length === 0) {
-      setParseErrors(
-        [
-          ...parsed.errors.map((e) => `Line ${e.line}: ${e.message}`),
-          parsed.errors.length === 0 ? "No valid rows found." : "",
-        ].filter(Boolean),
-      );
-      return;
-    }
-    mutation.mutate(
-      { rows: parsed.rows },
-      {
-        onSuccess: (result) => {
-          const clientErrors = parsed.errors.map(
-            (e) => `Line ${e.line}: ${e.message}`,
-          );
-          setParseErrors(clientErrors);
-          setSuccess(result);
-          if (result.created.length > 0) {
-            toast.success(
-              `Imported ${result.created.length} ${
-                result.created.length === 1 ? "row" : "rows"
-              }`,
-            );
-          }
-        },
-        onError: () => toast.error("Bulk import failed."),
-      },
-    );
-  };
-
+function GearImportRow({
+  row,
+  index,
+  types,
+  onChange,
+  onRemove,
+}: {
+  row: RowState;
+  index: number;
+  types: GearTypeSummary[];
+  onChange: (patch: Partial<RowState>) => void;
+  onRemove: () => void;
+}) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => fileInput.current?.click()}
-        >
-          <Upload className="size-4" />
-          Upload CSV
-        </Button>
-        <input
-          ref={fileInput}
-          type="file"
-          accept=".csv,text/csv"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void onFile(f);
-          }}
-        />
-        <Button type="button" variant="outline" size="sm" onClick={onPaste}>
-          <ClipboardPaste className="size-4" />
-          Paste from clipboard
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setCsv(SAMPLE_CSV)}
-        >
-          Insert example
-        </Button>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="csv-area">CSV</Label>
-        <Textarea
-          id="csv-area"
-          value={csv}
-          onChange={(e) => setCsv(e.target.value)}
-          rows={10}
-          className="font-mono text-xs"
-          placeholder="type,code,description,acquired_at,cost"
-        />
-      </div>
-      {parseErrors.length > 0 ? (
-        <Alert variant="destructive">
-          <AlertTitle>CSV warnings</AlertTitle>
-          <AlertDescription>
-            <ul className="list-disc space-y-1 pl-5 text-xs">
-              {parseErrors.map((e, i) => (
-                <li key={i}>{e}</li>
+    <div
+      data-testid="gear-import-row"
+      className="flex items-start gap-2 rounded-md border p-2"
+    >
+      <div className="grid flex-1 gap-2 sm:grid-cols-[1fr_1fr]">
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`type-${row.key}`}>
+            Type
+          </Label>
+          <Select
+            value={row.typePublicId}
+            onValueChange={(v) => onChange({ typePublicId: v })}
+          >
+            <SelectTrigger id={`type-${row.key}`} className="h-9">
+              <SelectValue placeholder="Select…" />
+            </SelectTrigger>
+            <SelectContent>
+              {types.map((t) => (
+                <SelectItem key={t.publicId} value={t.publicId}>
+                  {t.name}
+                  {t.prefix ? (
+                    <span className="ml-2 font-mono text-xs text-muted-foreground">
+                      {t.prefix}
+                    </span>
+                  ) : null}
+                </SelectItem>
               ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {success ? <ImportSummary result={success} /> : null}
-      <SheetFooter>
-        <Button onClick={onSubmit} disabled={mutation.isPending}>
-          {mutation.isPending ? "Importing…" : "Import"}
-        </Button>
-        <Button variant="outline" onClick={onClose}>
-          Close
-        </Button>
-      </SheetFooter>
-    </div>
-  );
-}
-
-function ImportSummary({ result }: { result: ImportSuccess }) {
-  return (
-    <div className="space-y-2 rounded-lg border bg-muted/20 p-3 text-sm">
-      <div className="flex items-center gap-2">
-        <Badge>{result.created.length} created</Badge>
-        {result.skipped.length > 0 ? (
-          <Badge variant="outline">{result.skipped.length} skipped</Badge>
-        ) : null}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`code-${row.key}`}>
+            Code
+          </Label>
+          <Input
+            id={`code-${row.key}`}
+            value={row.code}
+            onChange={(e) => onChange({ code: e.target.value })}
+            placeholder="CH93"
+            maxLength={64}
+          />
+        </div>
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <Label className="text-xs" htmlFor={`description-${row.key}`}>
+            Description
+          </Label>
+          <Input
+            id={`description-${row.key}`}
+            value={row.description}
+            onChange={(e) => onChange({ description: e.target.value })}
+            placeholder="Black Diamond Momentum, size M"
+            maxLength={500}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`acquired-${row.key}`}>
+            Acquired
+          </Label>
+          <Input
+            id={`acquired-${row.key}`}
+            type="date"
+            value={row.acquiredAt}
+            onChange={(e) => onChange({ acquiredAt: e.target.value })}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`cost-${row.key}`}>
+            Cost (USD)
+          </Label>
+          <Input
+            id={`cost-${row.key}`}
+            type="number"
+            step="0.01"
+            min="0"
+            value={row.costDollars}
+            onChange={(e) => onChange({ costDollars: e.target.value })}
+            placeholder="60.00"
+          />
+        </div>
       </div>
-      {result.skipped.length > 0 ? (
-        <ul className="space-y-1 text-xs text-muted-foreground">
-          {result.skipped.map((r) => (
-            <li key={`${r.rowIndex}-${r.reason}`}>
-              Row {r.rowIndex + 1}: {skippedLabel(r)}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="mt-5 size-8 text-muted-foreground"
+        onClick={onRemove}
+        aria-label={`Remove row ${index + 1}`}
+      >
+        <Trash2 className="size-4" />
+      </Button>
     </div>
   );
 }
