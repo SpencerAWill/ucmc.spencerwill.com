@@ -1,12 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  Boxes,
-  ChevronDown,
-  Plus,
-  Settings2,
-  Tags,
-  Upload,
-} from "lucide-react";
+import { Boxes, ChevronDown, Plus, Tags, Upload } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -24,7 +17,11 @@ import {
 import { useAuth } from "#/features/auth/api/use-auth";
 import { GearBulkImportSheet } from "#/features/gear/components/gear-bulk-import-sheet";
 import { GearFilterBar } from "#/features/gear/components/gear-filter-bar";
-import type { GearFilterState } from "#/features/gear/components/gear-filter-bar";
+import type {
+  GearFilterState,
+  GearSortMode,
+  GearView,
+} from "#/features/gear/components/gear-filter-bar";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
@@ -38,12 +35,17 @@ import {
 } from "#/features/gear/server/gear-fns";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
+const SORT_VALUES = ["code", "created_at", "updated_at"] as const;
+const VIEW_VALUES = ["list", "grid", "table"] as const;
+
 const searchSchema = z.object({
   type: z.string().optional(),
   tag: z.array(z.string()).optional(),
   lifecycle: z.enum(GEAR_LIFECYCLE_VALUES).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
   q: z.string().optional(),
+  sort: z.enum(SORT_VALUES).optional(),
+  view: z.enum(VIEW_VALUES).optional(),
   page: z.coerce.number().int().min(1).optional(),
   perPage: z.coerce.number().int().min(1).max(250).optional(),
 });
@@ -65,9 +67,21 @@ function GearIndexPage() {
     lifecycle: search.lifecycle ?? "active",
     condition: search.condition ?? null,
     q: search.q ?? "",
+    sort: (search.sort ?? "code") as GearSortMode,
+    view: (search.view ?? "list") as GearView,
   };
 
   const onFilterChange = (next: GearFilterState) => {
+    // Only changes that affect the result set reset pagination — sort
+    // and view changes preserve the current page.
+    const resultSetChanged =
+      next.typePublicId !== filterState.typePublicId ||
+      next.tagPublicIds.length !== filterState.tagPublicIds.length ||
+      next.tagPublicIds.some((id, i) => id !== filterState.tagPublicIds[i]) ||
+      next.lifecycle !== filterState.lifecycle ||
+      next.condition !== filterState.condition ||
+      next.q !== filterState.q ||
+      next.sort !== filterState.sort;
     void navigate({
       search: {
         type: next.typePublicId ?? undefined,
@@ -75,7 +89,9 @@ function GearIndexPage() {
         lifecycle: next.lifecycle === "active" ? undefined : next.lifecycle,
         condition: next.condition ?? undefined,
         q: next.q.length === 0 ? undefined : next.q,
-        page: undefined,
+        sort: next.sort === "code" ? undefined : next.sort,
+        view: next.view === "list" ? undefined : next.view,
+        page: resultSetChanged ? undefined : search.page,
         perPage: search.perPage,
       },
     });
@@ -97,6 +113,7 @@ function GearIndexPage() {
     lifecycle: search.lifecycle ?? "active",
     condition: search.condition,
     q: search.q,
+    sort: search.sort,
     page: search.page,
     perPage: search.perPage,
   } as const;
@@ -113,34 +130,29 @@ function GearIndexPage() {
         </div>
         {canManage ? (
           <div className="flex flex-wrap items-center gap-2">
-            {/* Configuration dropdown: type/tag CRUD. Kept distinct
-             * from the additive split button so officers don't have to
-             * mentally separate "add a thing" from "edit the taxonomy"
-             * — different mental modes, different buttons. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Settings2 className="size-4" />
-                  Manage
-                  <ChevronDown className="size-4 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setTypesOpen(true)}>
-                  <Boxes className="size-4" />
-                  Types…
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setTagsOpen(true)}>
-                  <Tags className="size-4" />
-                  Tags…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Taxonomy buttons — direct affordances, not behind a
+             * dropdown. Officers expect Types and Tags right where the
+             * other gear actions live. */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTypesOpen(true)}
+            >
+              <Boxes className="size-4" />
+              Types
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTagsOpen(true)}
+            >
+              <Tags className="size-4" />
+              Tags
+            </Button>
 
             {/* Additive split button: primary is "Add gear" (the common
              * case); the chevron only hosts other ways to add gear
-             * (today: bulk import). Keeps the toolbar narrow on mobile
-             * while leaving room for future additive variants. */}
+             * (today: bulk import). */}
             <ButtonGroup>
               <Button
                 size="sm"
@@ -173,6 +185,7 @@ function GearIndexPage() {
       <GearFilterBar state={filterState} onChange={onFilterChange} />
       <GearList
         input={listInput}
+        view={filterState.view}
         canManage={canManage}
         onEdit={(g) => {
           setFormIntent({ mode: "edit", gear: g });

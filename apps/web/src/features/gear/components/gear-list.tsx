@@ -4,6 +4,9 @@ import { DataPagination } from "#/components/data-pagination";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { gearListQueryOptions } from "#/features/gear/api/queries";
 import { GearCard } from "#/features/gear/components/gear-card";
+import type { GearView } from "#/features/gear/components/gear-filter-bar";
+import { GearGridCard } from "#/features/gear/components/gear-grid-card";
+import { GearTableView } from "#/features/gear/components/gear-table-view";
 import type {
   GearSummary,
   ListGearActionInput,
@@ -13,6 +16,7 @@ const PER_PAGE_OPTIONS = ["25", "50", "100", "250"] as const;
 
 export function GearList({
   input,
+  view,
   canManage,
   onEdit,
   onRetire,
@@ -21,6 +25,7 @@ export function GearList({
   onPerPageChange,
 }: {
   input: ListGearActionInput;
+  view: GearView;
   canManage: boolean;
   onEdit: (gear: GearSummary) => void;
   onRetire: (gear: GearSummary) => void;
@@ -49,19 +54,42 @@ export function GearList({
   }
   return (
     <div className="space-y-3">
-      <ul className="space-y-2">
-        {rows.map((g) => (
-          <li key={g.publicId}>
-            <GearCard
+      {view === "list" ? (
+        <ul className="space-y-2">
+          {rows.map((g) => (
+            <li key={g.publicId}>
+              <GearCard
+                gear={g}
+                canManage={canManage}
+                onEdit={() => onEdit(g)}
+                onRetire={() => onRetire(g)}
+                onUnretire={() => onUnretire(g)}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : view === "grid" ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {rows.map((g) => (
+            <GearGridCard
+              key={g.publicId}
               gear={g}
               canManage={canManage}
               onEdit={() => onEdit(g)}
               onRetire={() => onRetire(g)}
               onUnretire={() => onUnretire(g)}
             />
-          </li>
-        ))}
-      </ul>
+          ))}
+        </div>
+      ) : (
+        <GearTableView
+          rows={rows}
+          canManage={canManage}
+          onEdit={onEdit}
+          onRetire={onRetire}
+          onUnretire={onUnretire}
+        />
+      )}
       <DataPagination
         page={page}
         totalPages={totalPages}
