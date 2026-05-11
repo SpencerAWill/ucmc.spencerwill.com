@@ -10,12 +10,14 @@ import {
   GEAR_TYPES_QUERY_KEY,
   gearDetailQueryKey,
   gearInspectionsQueryKey,
+  gearLabelsQueryKey,
   gearSuggestedCodeQueryKey,
 } from "#/features/gear/api/query-keys";
 import {
   getGearDetailFn,
   listGearFn,
   listGearInspectionsFn,
+  listGearLabelsFn,
   listGearTagsFn,
   listGearTypesFn,
   suggestCodeForTypeFn,
@@ -47,6 +49,14 @@ export function gearTagsQueryOptions() {
   return {
     queryKey: GEAR_TAGS_QUERY_KEY,
     queryFn: () => listGearTagsFn(),
+  } as const;
+}
+
+export function gearLabelsQueryOptions(publicIds: readonly string[]) {
+  return {
+    queryKey: gearLabelsQueryKey(publicIds),
+    queryFn: () => listGearLabelsFn({ data: { publicIds: [...publicIds] } }),
+    enabled: publicIds.length > 0,
   } as const;
 }
 

@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   CheckSquare,
   ChevronDown,
+  Printer,
   RotateCcw,
   Tag,
   Trash2,
@@ -60,6 +61,7 @@ import {
   useBulkSetGearCondition,
   useBulkUnretireGear,
 } from "#/features/gear/api/use-bulk-gear";
+import { GearLabelsDialog } from "#/features/gear/components/gear-labels-dialog";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
 import type {
@@ -87,6 +89,7 @@ export function GearBulkActionsButton({
   const [retireOpen, setRetireOpen] = useState(false);
   const [retireReason, setRetireReason] = useState("");
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [labelsOpen, setLabelsOpen] = useState(false);
   const [pendingTagIds, setPendingTagIds] = useState<string[]>([]);
   const { data: tags } = useQuery(gearTagsQueryOptions());
 
@@ -178,6 +181,10 @@ export function GearBulkActionsButton({
             {count} {count === 1 ? "piece" : "pieces"} selected
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setLabelsOpen(true)}>
+            <Printer className="size-4" />
+            Print labels…
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setTagsOpen(true)}>
             <Tag className="size-4" />
             Add tags…
@@ -259,6 +266,12 @@ export function GearBulkActionsButton({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GearLabelsDialog
+        publicIds={selectedPublicIds}
+        open={labelsOpen}
+        onOpenChange={setLabelsOpen}
+      />
 
       <Dialog
         open={tagsOpen}

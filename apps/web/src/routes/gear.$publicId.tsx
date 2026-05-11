@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, Edit, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit, Printer, RotateCcw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -11,6 +11,7 @@ import { useUnretireGear } from "#/features/gear/api/use-unretire-gear";
 import { GearDetailCard } from "#/features/gear/components/gear-detail-card";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import { GearInspectionsSection } from "#/features/gear/components/gear-inspections-section";
+import { GearLabelsDialog } from "#/features/gear/components/gear-labels-dialog";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
 
 export const Route = createFileRoute("/gear/$publicId")({
@@ -24,6 +25,7 @@ function GearDetailPage() {
   const { data, isLoading, error } = useQuery(gearDetailQueryOptions(publicId));
   const [editOpen, setEditOpen] = useState(false);
   const [retiring, setRetiring] = useState(false);
+  const [labelsOpen, setLabelsOpen] = useState(false);
   const unretire = useUnretireGear();
 
   if (isLoading) {
@@ -54,6 +56,16 @@ function GearDetailPage() {
         </Button>
         {canManage ? (
           <div className="flex items-center gap-2">
+            {data.code ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLabelsOpen(true)}
+              >
+                <Printer className="size-4" />
+                Print label
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -96,6 +108,11 @@ function GearDetailPage() {
       <GearInspectionsSection gear={data} canManage={canManage} />
       {canManage ? (
         <>
+          <GearLabelsDialog
+            publicIds={[publicId]}
+            open={labelsOpen}
+            onOpenChange={setLabelsOpen}
+          />
           <GearFormSheet
             open={editOpen}
             onOpenChange={setEditOpen}

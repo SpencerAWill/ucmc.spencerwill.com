@@ -67,6 +67,7 @@
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
+    "jsbarcode": "^3.12.3",
     "lucide-react": "^1.8.0",
     "nanoid": "^5.1.6",
     "papaparse": "^5.5.3",

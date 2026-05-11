@@ -409,6 +409,49 @@ export async function bulkAddGearTags(input: {
 }
 
 /**
+ * Fetch label-ready rows for printing: gear with its type name joined.
+ * Returns rows whose `code` is non-null (codeless gear has nothing
+ * scannable to print) in the order the publicIds were supplied so the
+ * printed sheet matches the user's selection order.
+ */
+export interface GearLabelRow {
+  publicId: string;
+  code: string;
+  description: string;
+  typeName: string;
+}
+
+export async function getGearLabelsByPublicIds(
+  publicIds: string[],
+): Promise<GearLabelRow[]> {
+  if (publicIds.length === 0) return [];
+  const db = getDb();
+  const rows = await db
+    .select({
+      publicId: schema.gear.publicId,
+      code: schema.gear.code,
+      description: schema.gear.description,
+      typeName: schema.gearTypes.name,
+    })
+    .from(schema.gear)
+    .innerJoin(schema.gearTypes, eq(schema.gearTypes.id, schema.gear.typeId))
+    .where(inArray(schema.gear.publicId, publicIds));
+  const byPublicId = new Map(rows.map((r) => [r.publicId, r]));
+  return publicIds.flatMap((id) => {
+    const row = byPublicId.get(id);
+    if (!row || row.code === null) return [];
+    return [
+      {
+        publicId: row.publicId,
+        code: row.code,
+        description: row.description,
+        typeName: row.typeName,
+      },
+    ];
+  });
+}
+
+/**
  * Fetch the `id` and `code` for a set of gear publicIds. Used by bulk
  * actions to translate the client-supplied publicIds into internal
  * ids and to surface prior codes in the audit log.

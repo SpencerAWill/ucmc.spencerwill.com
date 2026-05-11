@@ -19,6 +19,7 @@ import type {
   EditGearInput,
   EditGearResult,
   GearDetail,
+  GearLabel,
   GearSummary,
   GearTagSummary,
   GearTypeSummary,
@@ -91,6 +92,7 @@ export type {
   EditGearTypeResult,
   GearDetail,
   GearInspectionSummary,
+  GearLabel,
   GearSummary,
   GearTagSummary,
   GearTypeSummary,
@@ -241,6 +243,13 @@ const gearDetailInputSchema = z.object({
   publicId: z.string().min(1),
 });
 
+// Labels: send N publicIds, get back the printable rows for them.
+// Capped at 500 so a runaway "print everything" can't time out the
+// worker; that's more than a single Avery sheet ever holds anyway.
+const listGearLabelsInputSchema = z.object({
+  publicIds: z.array(z.string().min(1)).min(1).max(500),
+});
+
 // ── inspections ────────────────────────────────────────────────────────
 
 const listGearInspectionsInputSchema = z.object({
@@ -262,6 +271,14 @@ export const listGearFn = createServerFn({ method: "GET" })
     const { listGearAction } =
       await import("#/features/gear/server/gear-actions.server");
     return listGearAction(data);
+  });
+
+export const listGearLabelsFn = createServerFn({ method: "GET" })
+  .inputValidator(listGearLabelsInputSchema)
+  .handler(async ({ data }): Promise<GearLabel[]> => {
+    const { listGearLabelsAction } =
+      await import("#/features/gear/server/gear-actions.server");
+    return listGearLabelsAction(data);
   });
 
 export const getGearDetailFn = createServerFn({ method: "GET" })

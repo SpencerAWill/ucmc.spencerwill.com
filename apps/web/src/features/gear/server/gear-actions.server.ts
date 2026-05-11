@@ -18,6 +18,7 @@ import {
 } from "#/features/gear/server/permissions.server";
 import {
   getGearByPublicId,
+  getGearLabelsByPublicIds,
   getGearTypeByPublicId,
   getGearTagsByPublicIds,
   insertGear,
@@ -81,6 +82,13 @@ export interface GearSummary {
 
 export interface GearDetail extends GearSummary {
   notesMarkdown: string | null;
+}
+
+export interface GearLabel {
+  publicId: string;
+  code: string;
+  description: string;
+  typeName: string;
 }
 
 export interface ListGearActionInput {
@@ -208,6 +216,17 @@ export async function listGearAction(
     page: result.page,
     perPage: result.perPage,
   };
+}
+
+export async function listGearLabelsAction(input: {
+  publicIds: string[];
+}): Promise<GearLabel[]> {
+  // Labels are an officer-managed concern (you're printing physical
+  // tags to stick on club property). Gating with `requireGearManager`
+  // also prevents members from probing publicIds via the labels
+  // endpoint to learn which codes exist.
+  await requireGearManager();
+  return getGearLabelsByPublicIds(input.publicIds);
 }
 
 export async function getGearDetailAction(input: {

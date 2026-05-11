@@ -19,3 +19,6 @@ export const gearSuggestedCodeQueryKey = (typePublicId: string) =>
 
 export const gearInspectionsQueryKey = (gearPublicId: string) =>
   ["gear", "inspections", gearPublicId] as const;
+
+export const gearLabelsQueryKey = (publicIds: readonly string[]) =>
+  ["gear", "labels", [...publicIds].sort().join(",")] as const;
