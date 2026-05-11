@@ -1,10 +1,11 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
-
-import { Button } from "#/components/ui/button";
 import {
   Pagination,
   PaginationContent,
+  PaginationEllipsis,
   PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
 } from "#/components/ui/pagination";
 import {
   Select,
@@ -24,6 +25,49 @@ type DataPaginationProps = {
   onPerPageChange: (perPage: string) => void;
 };
 
+/**
+ * Build the page-button list with at most 7 visible slots (including
+ * ellipsis markers). Strategy:
+ *
+ *   - ≤ 7 pages: render every page.
+ *   - Near the start (current ≤ 4): 1 2 3 4 5 … last
+ *   - Near the end  (current ≥ total−3): 1 … (last−4) (last−3) (last−2) (last−1) last
+ *   - Middle: 1 … (curr−1) curr (curr+1) … last
+ *
+ * Returns either a page number or the literal `"ellipsis"`.
+ */
+function buildPageList(
+  current: number,
+  totalPages: number,
+): Array<number | "ellipsis"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis", totalPages];
+  }
+  if (current >= totalPages - 3) {
+    return [
+      1,
+      "ellipsis",
+      totalPages - 4,
+      totalPages - 3,
+      totalPages - 2,
+      totalPages - 1,
+      totalPages,
+    ];
+  }
+  return [
+    1,
+    "ellipsis",
+    current - 1,
+    current,
+    current + 1,
+    "ellipsis",
+    totalPages,
+  ];
+}
+
 export function DataPagination({
   page,
   totalPages,
@@ -33,6 +77,9 @@ export function DataPagination({
   onPageChange,
   onPerPageChange,
 }: DataPaginationProps) {
+  const pageList = buildPageList(page, totalPages);
+  const prevDisabled = page <= 1;
+  const nextDisabled = page >= totalPages;
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
       <div className="flex items-center gap-3">
@@ -56,28 +103,55 @@ export function DataPagination({
       <Pagination className="mx-0 w-auto justify-end">
         <PaginationContent>
           <PaginationItem>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-8"
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-            >
-              <ChevronLeft className="size-4" />
-              <span className="sr-only">Previous page</span>
-            </Button>
+            <PaginationPrevious
+              href="#"
+              aria-disabled={prevDisabled}
+              tabIndex={prevDisabled ? -1 : 0}
+              className={
+                prevDisabled ? "pointer-events-none opacity-50" : undefined
+              }
+              onClick={(e) => {
+                e.preventDefault();
+                if (!prevDisabled) onPageChange(page - 1);
+              }}
+            />
           </PaginationItem>
+          {pageList.map((entry, i) =>
+            entry === "ellipsis" ? (
+              // Two ellipses can appear in the middle layout, so the
+              // key uses both the marker and its position so React
+              // doesn't collapse them.
+              <PaginationItem key={`ellipsis-${i}`}>
+                <PaginationEllipsis />
+              </PaginationItem>
+            ) : (
+              <PaginationItem key={entry}>
+                <PaginationLink
+                  href="#"
+                  isActive={entry === page}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (entry !== page) onPageChange(entry);
+                  }}
+                >
+                  {entry}
+                </PaginationLink>
+              </PaginationItem>
+            ),
+          )}
           <PaginationItem>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-8"
-              disabled={page >= totalPages}
-              onClick={() => onPageChange(page + 1)}
-            >
-              <ChevronRight className="size-4" />
-              <span className="sr-only">Next page</span>
-            </Button>
+            <PaginationNext
+              href="#"
+              aria-disabled={nextDisabled}
+              tabIndex={nextDisabled ? -1 : 0}
+              className={
+                nextDisabled ? "pointer-events-none opacity-50" : undefined
+              }
+              onClick={(e) => {
+                e.preventDefault();
+                if (!nextDisabled) onPageChange(page + 1);
+              }}
+            />
           </PaginationItem>
         </PaginationContent>
       </Pagination>
