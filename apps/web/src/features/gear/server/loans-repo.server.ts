@@ -38,6 +38,7 @@ export interface LoanListRow {
   memberUserId: string;
   memberPublicId: string;
   memberFullName: string;
+  memberAvatarKey: string | null;
   checkedOutAt: Date;
   dueAt: Date;
   returnedAt: Date | null;
@@ -131,6 +132,7 @@ export async function getLoanByPublicId(
       memberUserId: schema.gearLoans.memberUserId,
       memberPublicId: schema.users.publicId,
       memberFullName: schema.profiles.fullName,
+      memberAvatarKey: schema.profiles.avatarKey,
       checkedOutAt: schema.gearLoans.checkedOutAt,
       dueAt: schema.gearLoans.dueAt,
       returnedAt: schema.gearLoans.returnedAt,
@@ -235,6 +237,7 @@ export async function listLoans(
       memberUserId: schema.gearLoans.memberUserId,
       memberPublicId: schema.users.publicId,
       memberFullName: schema.profiles.fullName,
+      memberAvatarKey: schema.profiles.avatarKey,
       checkedOutAt: schema.gearLoans.checkedOutAt,
       dueAt: schema.gearLoans.dueAt,
       returnedAt: schema.gearLoans.returnedAt,
@@ -320,6 +323,7 @@ export async function listLoansForMember(
       memberUserId: schema.gearLoans.memberUserId,
       memberPublicId: schema.users.publicId,
       memberFullName: schema.profiles.fullName,
+      memberAvatarKey: schema.profiles.avatarKey,
       checkedOutAt: schema.gearLoans.checkedOutAt,
       dueAt: schema.gearLoans.dueAt,
       returnedAt: schema.gearLoans.returnedAt,

@@ -166,11 +166,10 @@ export function BarcodeScanner({
     }
     setError(null);
 
-    /* eslint-disable @typescript-eslint/no-unnecessary-condition --
-     *  `flags.cancelled` legitimately flips across async ticks (the
-     *  cleanup return assigns it after the async chain has already
-     *  resumed). ESLint can't see the closure mutation from the read
-     *  sites and concludes it's always its initial value — it's not. */
+    // `flags.cancelled` is mutated by the effect's cleanup return; the
+    // async closure below reads it across `await` boundaries. A couple
+    // of post-narrowing read sites are silenced with line-level
+    // disables — see those comments for context.
     const flags: { cancelled: boolean } = { cancelled: false };
 
     void (async () => {
@@ -197,11 +196,13 @@ export function BarcodeScanner({
         // once camera permission has been granted at least once for
         // this origin.
         const all = await navigator.mediaDevices.enumerateDevices();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- flags.cancelled flips in cleanup across async ticks; TS narrows it to false based on the earlier early-exit checks.
         if (!flags.cancelled) {
           setDevices(all.filter((d) => d.kind === "videoinput"));
         }
 
         const Ctor = await loadBarcodeDetector();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- see above; cleanup flip is invisible to the narrower.
         if (flags.cancelled) return;
         const detector = new Ctor({ formats: [...BARCODE_FORMATS] });
 
@@ -262,11 +263,19 @@ export function BarcodeScanner({
           err instanceof Error &&
           err.name === "OverconstrainedError"
         ) {
-          setSelectedDeviceId(null);
-          window.localStorage.removeItem(SELECTED_CAMERA_KEY);
-          setError(
-            "Selected camera isn't available. Pick a different one below.",
-          );
+          if (selectedDeviceId !== null) {
+            // Saved camera (e.g. an unplugged USB scanner) is no longer
+            // available. Clear the pin and let the effect re-run with
+            // the default `facingMode: "environment"` constraints —
+            // intentionally don't set an error so the user doesn't see
+            // a flash of failure before the retry lands.
+            setSelectedDeviceId(null);
+            window.localStorage.removeItem(SELECTED_CAMERA_KEY);
+          } else {
+            // Already on defaults and still overconstrained — nothing
+            // more to fall back to.
+            setError("No usable camera on this device.");
+          }
         } else {
           setError("Couldn't start the camera.");
         }
@@ -277,7 +286,6 @@ export function BarcodeScanner({
       flags.cancelled = true;
       stopStream();
     };
-    /* eslint-enable @typescript-eslint/no-unnecessary-condition */
     // `onResult` is intentionally NOT a dep — it lives in
     // `onResultRef`. Including it would tear down the camera every
     // time the parent re-renders.

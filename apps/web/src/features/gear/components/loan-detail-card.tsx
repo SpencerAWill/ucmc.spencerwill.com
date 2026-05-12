@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card";
+import { UserAvatar } from "#/components/user-avatar";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type {
   GearCondition,
@@ -85,7 +86,14 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
         <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <div>
             <dt className="text-xs text-muted-foreground">Borrower</dt>
-            <dd>{loan.memberFullName}</dd>
+            <dd className="flex items-center gap-2">
+              <UserAvatar
+                avatarKey={loan.memberAvatarKey}
+                name={loan.memberFullName}
+                className="size-6"
+              />
+              <span>{loan.memberFullName}</span>
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Checked out</dt>

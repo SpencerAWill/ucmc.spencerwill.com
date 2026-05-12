@@ -68,6 +68,7 @@ export interface LoanSummary {
   typeName: string;
   memberPublicId: string;
   memberFullName: string;
+  memberAvatarKey: string | null;
   checkedOutAt: Date;
   dueAt: Date;
   returnedAt: Date | null;
@@ -93,6 +94,7 @@ function toSummary(row: LoanListRow): LoanSummary {
     typeName: row.typeName,
     memberPublicId: row.memberPublicId,
     memberFullName: row.memberFullName,
+    memberAvatarKey: row.memberAvatarKey,
     checkedOutAt: row.checkedOutAt,
     dueAt: row.dueAt,
     returnedAt: row.returnedAt,

@@ -13,13 +13,17 @@
 import { requireGearManager } from "#/features/gear/server/permissions.server";
 import {
   bulkAddGearTags,
-  bulkMarkGearRetired,
   bulkMarkGearUnretired,
   bulkSetGearCondition,
+  buildBulkMarkGearRetiredStatement,
   getGearByPublicIds,
   getGearTagsByPublicIds,
 } from "#/features/gear/server/repo.server";
-import { recordAuditEvents } from "#/server/audit/audit-log.server";
+import {
+  buildBulkAuditEventStatement,
+  recordAuditEvents,
+} from "#/server/audit/audit-log.server";
+import { getDb } from "#/server/db";
 import type { schema } from "#/server/db";
 
 export interface BulkResult {
@@ -51,12 +55,15 @@ export async function bulkRetireGearAction(input: {
   if (eligible.length === 0) {
     return { affected: 0, skipped: input.publicIds.length };
   }
-  await bulkMarkGearRetired({
+  // Combine the UPDATE and the audit INSERT into a single D1 round-trip.
+  // Both writes target the same `eligible` set, so atomicity is a free
+  // upgrade on top of the latency win.
+  const retireStmt = buildBulkMarkGearRetiredStatement({
     ids: eligible.map((r) => r.id),
     retiredBy: principal.userId,
     reason: input.reason,
   });
-  await recordAuditEvents(
+  const auditStmt = buildBulkAuditEventStatement(
     eligible.map((r) => ({
       actorUserId: principal.userId,
       action: "gear.retired",
@@ -69,6 +76,10 @@ export async function bulkRetireGearAction(input: {
       },
     })),
   );
+  // Both statements are non-null here because `eligible.length > 0`.
+  if (retireStmt && auditStmt) {
+    await getDb().batch([retireStmt, auditStmt]);
+  }
   return {
     affected: eligible.length,
     skipped: input.publicIds.length - eligible.length,

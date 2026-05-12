@@ -1,5 +1,5 @@
 import { AlertTriangle, StickyNote, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import {
@@ -132,11 +132,18 @@ export function CheckinItemRow({
   // see at a glance which rows carry context.
   const [notesOpen, setNotesOpen] = useState(false);
   const [draft, setDraft] = useState(notes);
-  // Sync the draft to the prop whenever the dialog opens or the
-  // canonical value changes externally.
+  // Re-seed the draft only on the closed→open transition. Depending on
+  // `notes` here would overwrite the user's in-flight edits whenever the
+  // parent's `onNotesChange` (or any sibling state) re-rendered the row.
+  // The canonical value is captured by reading the latest `notes` via a
+  // ref so the effect itself stays single-dep.
+  const notesRef = useRef(notes);
   useEffect(() => {
-    if (notesOpen) setDraft(notes);
-  }, [notesOpen, notes]);
+    notesRef.current = notes;
+  }, [notes]);
+  useEffect(() => {
+    if (notesOpen) setDraft(notesRef.current);
+  }, [notesOpen]);
   const hasNotes = notes.trim().length > 0;
   const saveNotes = () => {
     onNotesChange(draft);

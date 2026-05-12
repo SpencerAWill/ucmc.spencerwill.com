@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as LoansRepoModule from "#/features/gear/server/loans-repo.server";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
@@ -23,6 +24,22 @@ vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByEmail: async () => true,
 }));
 
+// Shared mutable flag used by the loans-repo mock below to suppress the
+// pre-check inside `checkoutLoansAction` for the race-replay test only.
+// `vi.hoisted` is required because `vi.mock` is hoisted above all module-
+// scope statements; an ordinary `let` would still be in the TDZ when the
+// mock factory runs.
+const raceFlags = vi.hoisted(() => ({ skipPreCheck: false }));
+
+vi.mock("#/features/gear/server/loans-repo.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof LoansRepoModule>();
+  return {
+    ...actual,
+    getOpenLoanForGear: async (gearId: string) =>
+      raceFlags.skipPreCheck ? null : actual.getOpenLoanForGear(gearId),
+  };
+});
+
 const { createGearAction, retireGearAction } =
   await import("#/features/gear/server/gear-actions.server");
 const { createGearTypeAction } =
@@ -32,6 +49,7 @@ const {
   checkoutLoansAction,
   extendLoanAction,
   getLoanDetailAction,
+  getMemberForLoanAction,
   listLoansAction,
   listMyLoansAction,
 } = await import("#/features/gear/server/loans-actions.server");
@@ -257,6 +275,62 @@ describe("checkoutLoansAction", () => {
     expect(reasonsByGear[damaged]).toBe("not_serviceable");
     expect(reasonsByGear[onLoan]).toBe("already_on_loan");
     expect(result.results.filter((r) => r.ok)).toHaveLength(1);
+  });
+
+  it("race replay: surfaces already_on_loan for the loser, lets survivors land", async () => {
+    // Exercises the slow path inside checkoutLoansAction: pre-check
+    // passes for every row, but the bulk insert trips the partial
+    // unique index because a concurrent officer already opened a loan
+    // on one of the pieces. The action catches the bulk failure and
+    // replays row-by-row so winners still get loans.
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const a = await createGearOk({ typePublicId, code: "CH1" });
+    const b = await createGearOk({ typePublicId, code: "CH2" });
+    const other = await seedUser("other@example.com");
+    const member = await seedUser("borrower@example.com");
+
+    // Real concurrent loan on A — the partial unique index will trip
+    // when the racing checkout tries to insert a second open row.
+    await checkoutLoansAction({
+      memberPublicId: other.publicId,
+      items: [{ gearPublicId: a, durationDays: 7 }],
+      notes: null,
+    });
+
+    raceFlags.skipPreCheck = true;
+    try {
+      const result = await checkoutLoansAction({
+        memberPublicId: member.publicId,
+        items: [
+          { gearPublicId: a, durationDays: 7 },
+          { gearPublicId: b, durationDays: 7 },
+        ],
+        notes: null,
+      });
+      const byGear = Object.fromEntries(
+        result.results.map((r) => [r.gearPublicId, r] as const),
+      );
+      const aResult = byGear[a];
+      const bResult = byGear[b];
+      if (aResult.ok)
+        throw new Error("expected A to fail with already_on_loan");
+      expect(aResult.reason).toBe("already_on_loan");
+      expect(bResult.ok).toBe(true);
+    } finally {
+      raceFlags.skipPreCheck = false;
+    }
+
+    // Survivors emit audit rows; the failing replay doesn't. One from
+    // the seed loan on A + one from the replay survivor B = 2.
+    const audits = (await getDb().select().from(schema.auditLog)).filter(
+      (r) => r.action === "loan.checked_out",
+    );
+    expect(audits).toHaveLength(2);
+
+    // And the DB ended up with two open loans, one per gear — not three.
+    const openLoans = await getDb().select().from(schema.gearLoans);
+    expect(openLoans).toHaveLength(2);
   });
 });
 
@@ -521,5 +595,37 @@ describe("getLoanDetailAction", () => {
     const detail = await getLoanDetailAction({ publicId: loanPublicId });
     expect(detail.memberFullName).toBe("Borrower One");
     expect(detail.checkedOutByName).toBe("Officer One");
+  });
+});
+
+describe("getMemberForLoanAction", () => {
+  it("rejects unauthenticated callers", async () => {
+    cookieJar.clear();
+    await expect(getMemberForLoanAction({ publicId: "x" })).rejects.toThrow(
+      "Not signed in",
+    );
+  });
+
+  it("rejects regular members without gear:loan", async () => {
+    await signInAsMember();
+    await expect(getMemberForLoanAction({ publicId: "x" })).rejects.toThrow(
+      "Forbidden: missing gear:loan",
+    );
+  });
+
+  it("returns the approved member when called by an officer", async () => {
+    await signInAsLoanManager();
+    const member = await seedUser("borrower@example.com", "Jane Borrower");
+    const found = await getMemberForLoanAction({ publicId: member.publicId });
+    expect(found?.fullName).toBe("Jane Borrower");
+    expect(found?.publicId).toBe(member.publicId);
+  });
+
+  it("returns null for an unknown publicId", async () => {
+    await signInAsLoanManager();
+    const found = await getMemberForLoanAction({
+      publicId: "not-a-real-id",
+    });
+    expect(found).toBeNull();
   });
 });
