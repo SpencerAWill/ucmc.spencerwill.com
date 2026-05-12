@@ -196,6 +196,7 @@ function SidebarNav() {
   const canManageMembers = hasPermission("members:manage");
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
+  const canReadGear = hasPermission("gear:read");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -427,16 +428,16 @@ function SidebarNav() {
                     <span>Trips</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    aria-disabled
-                    tabIndex={-1}
-                    tooltip="Gear (coming soon)"
-                  >
-                    <Package />
-                    <span>Gear</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {canReadGear ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="Gear">
+                      <Link to="/gear">
+                        <Package />
+                        <span>Gear</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : null}
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     aria-disabled

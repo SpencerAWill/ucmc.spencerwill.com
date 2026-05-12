@@ -12,7 +12,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { normalizeEmail } from "#/server/auth/email-normalize";
-import { generateUserPublicId } from "#/server/auth/ids";
+import { generatePublicId } from "#/server/auth/ids";
 import {
   consumeMagicLink,
   requestMagicLink,
@@ -582,7 +582,7 @@ export async function submitProfileAction(
         await db.batch([
           db.insert(schema.users).values({
             id: newUserId,
-            publicId: generateUserPublicId(),
+            publicId: generatePublicId(),
             status: "pending",
           }),
           db.insert(schema.userEmails).values({

@@ -1,0 +1,1 @@
+ALTER TABLE `gear` ADD `thumbnail_key` text;

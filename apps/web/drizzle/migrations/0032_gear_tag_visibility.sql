@@ -1,0 +1,1 @@
+ALTER TABLE `gear_tags` ADD `visibility` text DEFAULT 'public' NOT NULL;

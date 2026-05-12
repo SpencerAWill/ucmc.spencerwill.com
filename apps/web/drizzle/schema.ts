@@ -537,6 +537,24 @@ export const auditAction = [
   // "approved" in the same step (officer pre-add was the approval
   // signal). Actor + target are the same user.
   "member.claimed",
+  // Gear inventory lifecycle. The `code` (CH93, LJ4 etc.) lives on the
+  // physical tag; on retirement we NULL the column so the string can be
+  // reissued to a new piece. `gear.retired` captures the priorCode so
+  // the audit row remains useful after recycling. `gear.updated` carries
+  // changedFields plus old/new code values when the rename was a code
+  // edit. Metadata is non-PII (typeId, code, changedFields, reason).
+  "gear.added",
+  "gear.updated",
+  "gear.retired",
+  "gear.unretired",
+  "gear.tags_changed",
+  "gear_type.created",
+  "gear_type.updated",
+  "gear_type.deleted",
+  "gear_tag.created",
+  "gear_tag.updated",
+  "gear_tag.deleted",
+  "gear_inspection.recorded",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -617,6 +635,240 @@ export const feedback = sqliteTable(
   ],
 );
 
+/**
+ * Gear inventory.
+ *
+ * Each piece of gear the club owns gets one row in `gear`. Pieces are
+ * **exclusively** partitioned by type (`gear_types`) — climbing harness,
+ * life jacket, etc. — and tagged with zero or more non-exclusive labels
+ * via `gear_tag_assignments`.
+ *
+ * The `code` column is the human-and-scanner-friendly identifier
+ * printed on the laminated tag stuck to the physical item (e.g. "CH93",
+ * "LJ4"). It is freeform text — conventions like "type-prefix + number"
+ * exist for officers' convenience but are not enforced by the schema.
+ *
+ * **Code recycling.** `code` is nullable and `UNIQUE` (SQLite allows
+ * multiple NULLs in a unique column). When a piece of gear is retired,
+ * the retire action NULLs `code`, freeing the string to be reissued to
+ * a newer piece. The historical value is captured in the `gear.retired`
+ * audit row's metadata (`{ priorCode, reason }`) so the lineage
+ * survives.
+ *
+ * **Lifecycle vs condition** are two orthogonal columns:
+ *
+ *   - `lifecycle` — `"active"` or `"retired"`. Terminal: retiring is
+ *     conceptually "this physical item is gone from inventory". A
+ *     follow-up `gear.unretired` exists for officer-correction of a
+ *     mistaken retirement (rare).
+ *   - `condition` — `"serviceable"`, `"needs_repair"`, `"missing"`, or
+ *     `"lost"`. Transient state, separate from lifecycle so a piece can
+ *     be `lifecycle=active, condition=missing` (we expect it back) vs
+ *     `lifecycle=retired` (gone for good).
+ *
+ * Future loan/checkout work will land as a separate `gear_loans` table
+ * keyed on `gear.id`; checkout state is intentionally **not** modeled
+ * on these columns.
+ */
+export const gearLifecycle = ["active", "retired"] as const;
+export type GearLifecycle = (typeof gearLifecycle)[number];
+
+export const gearCondition = [
+  "serviceable",
+  "needs_repair",
+  "missing",
+  "lost",
+] as const;
+export type GearCondition = (typeof gearCondition)[number];
+
+export const gearTypes = sqliteTable(
+  "gear_types",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    name: text("name").notNull(),
+    // Display-only convention hint (e.g. "CH" for Climbing Harness).
+    // NOT enforced against gear.code — officers may give a piece any
+    // code regardless of its type's prefix. The create-gear UI uses
+    // this only to seed a "Suggested: CH4" auto-fill.
+    prefix: text("prefix"),
+    description: text("description"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [uniqueIndex("gear_types_name_unique").on(t.name)],
+);
+
+export const gear = sqliteTable(
+  "gear",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    // RESTRICT delete: a type can't be removed while any gear (active
+    // or retired) references it. Officers must merge/relabel first.
+    typeId: text("type_id")
+      .notNull()
+      .references(() => gearTypes.id, { onDelete: "restrict" }),
+    // Freeform tag label e.g. "CH93". NULL on retired gear (NULLed by
+    // the retire action) and on un-coded active gear (fresh-in-box not
+    // yet labeled). The plain UNIQUE constraint relies on SQLite's
+    // multiple-NULL-allowed semantics for the recycling story.
+    code: text("code"),
+    description: text("description").notNull(),
+    // R2 key under `gear/<contentHash>.<ext>` for the per-gear
+    // thumbnail. NULL when the officer hasn't uploaded one — the card
+    // falls back to the generic placeholder SVG in that case.
+    // Content-hashed key means the URL is immutable across edits, so
+    // the public bucket can serve with `Cache-Control: immutable`.
+    thumbnailKey: text("thumbnail_key"),
+    acquiredAt: timestamp("acquired_at"),
+    acquisitionCostCents: integer("acquisition_cost_cents"),
+    notesMarkdown: text("notes_markdown"),
+    lifecycle: text("lifecycle", { enum: gearLifecycle })
+      .notNull()
+      .default("active"),
+    condition: text("condition", { enum: gearCondition })
+      .notNull()
+      .default("serviceable"),
+    retiredAt: timestamp("retired_at"),
+    retiredBy: text("retired_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    retiredReason: text("retired_reason"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("gear_code_unique").on(t.code),
+    index("gear_type_idx").on(t.typeId),
+    index("gear_lifecycle_idx").on(t.lifecycle),
+    index("gear_condition_idx").on(t.condition),
+    index("gear_created_at_idx").on(t.createdAt),
+  ],
+);
+
+/**
+ * Tag visibility scope. `public` tags are visible to anyone with
+ * `gear:read`; `internal` tags only render for `gear:manage` officers
+ * — both in the multiselect surfaces and on the gear card/detail
+ * read paths. Used for exec-only annotations like "needs-inspection"
+ * or "checked-out-to-treasurer" that shouldn't leak to general
+ * members.
+ */
+export const gearTagVisibility = ["public", "internal"] as const;
+export type GearTagVisibility = (typeof gearTagVisibility)[number];
+
+export const gearTags = sqliteTable(
+  "gear_tags",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    name: text("name").notNull(),
+    visibility: text("visibility", { enum: gearTagVisibility })
+      .notNull()
+      .default("public"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [uniqueIndex("gear_tags_name_unique").on(t.name)],
+);
+
+/**
+ * Per-piece inspection log. Climbing gear (harnesses, ropes, helmets,
+ * draws) has real safety stakes and is typically inspected on a
+ * cadence; this table records each inspection event so the detail
+ * page can surface history and a future report can flag "due for
+ * inspection" pieces.
+ *
+ * Append-mostly. Officers can correct a mistaken entry by recording
+ * a superseding inspection, but the historical row stays. This
+ * mirrors the audit-log philosophy: the only safe way to reason
+ * about gear safety later is if the trail is intact.
+ *
+ * Cascade on gear delete: when a piece is hard-deleted, its
+ * inspection history goes with it. Retirement does NOT delete
+ * inspections — the row stays so a future "why did we retire this?"
+ * audit can pull the failing inspection alongside the gear.retired
+ * audit event.
+ */
+export const gearInspectionResult = ["pass", "fail", "advisory"] as const;
+export type GearInspectionResult = (typeof gearInspectionResult)[number];
+
+export const gearInspections = sqliteTable(
+  "gear_inspections",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    gearId: text("gear_id")
+      .notNull()
+      .references(() => gear.id, { onDelete: "cascade" }),
+    // Inspector keeps SET NULL on user delete so the inspection
+    // history survives an officer leaving the club. The
+    // `inspectorNameSnapshot` captures who it was at write time so
+    // the historical row still reads usefully after the FK nulls.
+    inspectorUserId: text("inspector_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    inspectorNameSnapshot: text("inspector_name_snapshot"),
+    // When the inspection physically happened. Distinct from
+    // `createdAt` because officers might log a past inspection (e.g.,
+    // entering paper records into the system after a season).
+    inspectedAt: timestamp("inspected_at").notNull(),
+    result: text("result", { enum: gearInspectionResult }).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index("gear_inspections_gear_idx").on(t.gearId),
+    // Compound index supports the "latest inspection per gear" query
+    // — the detail page's history list and any future per-gear
+    // latest-inspection summary both want gear_id, inspected_at DESC.
+    index("gear_inspections_gear_inspected_idx").on(t.gearId, t.inspectedAt),
+  ],
+);
+
+export const gearTagAssignments = sqliteTable(
+  "gear_tag_assignments",
+  {
+    gearId: text("gear_id")
+      .notNull()
+      .references(() => gear.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => gearTags.id, { onDelete: "cascade" }),
+    assignedAt: timestamp("assigned_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    assignedBy: text("assigned_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.gearId, t.tagId] }),
+    index("gear_tag_assignments_tag_idx").on(t.tagId),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type UserEmail = typeof userEmails.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
@@ -633,3 +885,8 @@ export type LandingFaqItem = typeof landingFaqItems.$inferSelect;
 export type LandingActivity = typeof landingActivities.$inferSelect;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type Feedback = typeof feedback.$inferSelect;
+export type GearType = typeof gearTypes.$inferSelect;
+export type Gear = typeof gear.$inferSelect;
+export type GearTag = typeof gearTags.$inferSelect;
+export type GearTagAssignment = typeof gearTagAssignments.$inferSelect;
+export type GearInspection = typeof gearInspections.$inferSelect;

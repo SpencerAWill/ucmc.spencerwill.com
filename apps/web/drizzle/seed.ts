@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 import { uuidv7 } from "uuidv7";
 
-import { generateUserPublicId } from "../src/server/auth/ids.ts";
+import { generatePublicId } from "../src/server/auth/ids.ts";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = resolve(SCRIPT_DIR, "..");
@@ -85,7 +85,7 @@ function main(): void {
   }
 
   const userId = `user_${uuidv7()}`;
-  const publicId = generateUserPublicId();
+  const publicId = generatePublicId();
   const userEmailId = `uem_${uuidv7()}`;
   const nowMs = Date.now();
   const email = sqlQuote(rawEmail);
