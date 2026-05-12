@@ -555,6 +555,15 @@ export const auditAction = [
   "gear_tag.updated",
   "gear_tag.deleted",
   "gear_inspection.recorded",
+  // Gear loans / checkout. A "loan" is a per-piece row in `gear_loans`;
+  // a single officer-driven checkout flow generates N loans, one per
+  // gear piece — emit one event per row so the audit page filters
+  // remain per-target. Group by `actor_user_id + checked_out_at` to
+  // reconstruct a checkout batch. Check-in batches may span multiple
+  // borrowers; each row's event still keys on `target_id = gear.id`.
+  "loan.checked_out",
+  "loan.checked_in",
+  "loan.extended",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -869,6 +878,71 @@ export const gearTagAssignments = sqliteTable(
   ],
 );
 
+/**
+ * A loan is a per-piece checkout: exactly one gear row linked to one
+ * member, with its own due date and (eventually) returned timestamp.
+ *
+ * One officer-driven checkout batch generates N loan rows (one per
+ * piece). Check-in batches may span multiple borrowers — each row's
+ * member is derived from the open loan, not from a batch-level field.
+ *
+ * Concurrency: the partial unique on `(gear_id) WHERE returned_at IS
+ * NULL` enforces "at most one open loan per piece" at the DB layer.
+ * The action's per-row pre-check is a UX nicety; the index is what
+ * actually wins races between two officers checking out the same
+ * piece at the same instant.
+ *
+ * FK choices:
+ *   - gear / member: RESTRICT — can't retire on-loan gear or delete a
+ *     member account with open loans. The action layer surfaces this
+ *     as a typed error, the FK is defense-in-depth.
+ *   - checkedOutBy / returnedTo: SET NULL — officer accounts may come
+ *     and go; closed-loan history survives them.
+ */
+export const gearLoans = sqliteTable(
+  "gear_loans",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    gearId: text("gear_id")
+      .notNull()
+      .references(() => gear.id, { onDelete: "restrict" }),
+    memberUserId: text("member_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    checkedOutByUserId: text("checked_out_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    checkedOutAt: timestamp("checked_out_at").notNull(),
+    dueAt: timestamp("due_at").notNull(),
+    returnedAt: timestamp("returned_at"),
+    returnedToUserId: text("returned_to_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    checkoutNotes: text("checkout_notes"),
+    checkinNotes: text("checkin_notes"),
+    // Optional snapshot of the gear's condition AT the moment of return.
+    // The check-in flow may also update `gear.condition` directly when
+    // an officer flags damage; this column is a per-loan record so the
+    // history doesn't get rewritten by later condition changes.
+    conditionAtReturn: text("condition_at_return", { enum: gearCondition }),
+  },
+  (t) => [
+    // Race-protective: only one open loan per piece at any moment.
+    // SQLite partial unique. Mirrors `user_emails_one_primary_per_user`.
+    uniqueIndex("gear_loans_one_active_per_gear")
+      .on(t.gearId)
+      .where(sql`${t.returnedAt} IS NULL`),
+    // Drives /my/gear (active + history per member).
+    index("gear_loans_member_returned_idx").on(t.memberUserId, t.returnedAt),
+    // Drives the "open loan for this gear" lookup on /gear/$publicId.
+    index("gear_loans_gear_idx").on(t.gearId),
+    // Drives the overdue list + due-date sort on /gear/loans.
+    index("gear_loans_due_idx").on(t.dueAt),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type UserEmail = typeof userEmails.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
@@ -890,3 +964,4 @@ export type Gear = typeof gear.$inferSelect;
 export type GearTag = typeof gearTags.$inferSelect;
 export type GearTagAssignment = typeof gearTagAssignments.$inferSelect;
 export type GearInspection = typeof gearInspections.$inferSelect;
+export type GearLoan = typeof gearLoans.$inferSelect;

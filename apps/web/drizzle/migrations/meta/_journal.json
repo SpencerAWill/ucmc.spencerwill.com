@@ -239,6 +239,20 @@
       "when": 1778540286496,
       "tag": "0033_gear_inspections",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1778559511326,
+      "tag": "0034_gear_loans",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1778559511327,
+      "tag": "0035_gear_loan_permissions_seed",
+      "breakpoints": true
     }
   ]
 }
