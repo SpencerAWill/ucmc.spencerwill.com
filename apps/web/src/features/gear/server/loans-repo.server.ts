@@ -446,6 +446,78 @@ export async function getApprovedMemberByPublicId(
 }
 
 /**
+ * Resolve a member for backfill. Accepts both `approved` and
+ * `unclaimed` statuses (paper logbooks regularly involve members who
+ * never finished claiming an account) but rejects `pending`,
+ * `rejected`, and `deactivated` — those statuses shouldn't gain a
+ * historical loan record retroactively. Lookups by email go through
+ * the `user_emails` table so any verified or primary address on the
+ * account matches.
+ */
+export interface BackfillMemberLookup {
+  userId: string;
+  publicId: string;
+  status: "approved" | "unclaimed";
+}
+
+export async function lookupBackfillMemberByEmail(
+  normalizedEmail: string,
+): Promise<BackfillMemberLookup | null> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      userId: schema.users.id,
+      publicId: schema.users.publicId,
+      status: schema.users.status,
+    })
+    .from(schema.userEmails)
+    .innerJoin(schema.users, eq(schema.users.id, schema.userEmails.userId))
+    .where(eq(schema.userEmails.email, normalizedEmail))
+    .limit(1);
+  const row = rows.at(0);
+  if (!row) return null;
+  if (row.status !== "approved" && row.status !== "unclaimed") return null;
+  return {
+    userId: row.userId,
+    publicId: row.publicId,
+    status: row.status,
+  };
+}
+
+/**
+ * Lookup gear by exact `code` for backfill. Returns the internal `id`
+ * (needed for the FK on `gear_loans.gearId`) plus the publicId/code so
+ * the caller can include it in the per-row result. Lifecycle /
+ * condition are intentionally NOT filtered — a historical loan is
+ * valid against gear that's retired today.
+ */
+export interface BackfillGearLookup {
+  id: string;
+  publicId: string;
+  code: string;
+}
+
+export async function lookupBackfillGearByCode(
+  code: string,
+): Promise<BackfillGearLookup | null> {
+  const trimmed = code.trim();
+  if (trimmed.length === 0) return null;
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.gear.id,
+      publicId: schema.gear.publicId,
+      code: schema.gear.code,
+    })
+    .from(schema.gear)
+    .where(eq(schema.gear.code, trimmed))
+    .limit(1);
+  const row = rows.at(0);
+  if (!row || row.code === null) return null;
+  return { id: row.id, publicId: row.publicId, code: row.code };
+}
+
+/**
  * Gear search by code prefix. Returns rows shaped for the gear-desk
  * item picker — joined with gear_types for the type name and the open
  * loan (if any) so the picker can flag eligibility inline.

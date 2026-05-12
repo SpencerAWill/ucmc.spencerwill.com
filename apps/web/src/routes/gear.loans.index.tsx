@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { Upload } from "lucide-react";
+import { useState } from "react";
 import { z } from "zod";
 
 import { DataPagination } from "#/components/data-pagination";
+import { Button } from "#/components/ui/button";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePermission } from "#/features/auth/guards";
@@ -14,6 +17,7 @@ import { GearDeskTrigger } from "#/features/gear/components/gear-desk-trigger";
 import { LoanCard } from "#/features/gear/components/loan-card";
 import { LoanFilterBar } from "#/features/gear/components/loan-filter-bar";
 import type { LoanFilterState } from "#/features/gear/components/loan-filter-bar";
+import { LoansBulkImportSheet } from "#/features/gear/components/loans-bulk-import-sheet";
 
 // Matches the perPage choices on /gear and /audit so the muscle
 // memory carries between officer-facing list pages. Defaults to 50.
@@ -53,6 +57,7 @@ function GearLoansPage() {
   const navigate = Route.useNavigate();
   const { hasPermission } = useAuth();
   const canLoan = hasPermission("gear:loan");
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   // URL is the source of truth for the member filter — only the
   // publicId is shareable. The full member object (name, email) is
@@ -112,8 +117,26 @@ function GearLoansPage() {
             Checkouts and check-ins at the gear cave.
           </p>
         </div>
-        <GearDeskTrigger canLoan={canLoan} />
+        <div className="flex items-center gap-2">
+          {canLoan ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBulkImportOpen(true)}
+            >
+              <Upload className="size-4" />
+              <span className="hidden sm:inline">Backfill</span>
+            </Button>
+          ) : null}
+          <GearDeskTrigger canLoan={canLoan} />
+        </div>
       </header>
+      {canLoan ? (
+        <LoansBulkImportSheet
+          open={bulkImportOpen}
+          onOpenChange={setBulkImportOpen}
+        />
+      ) : null}
       <LoanFilterBar state={filterState} onChange={onFilterChange} />
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading loans…</p>

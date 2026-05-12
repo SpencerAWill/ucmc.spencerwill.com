@@ -14,6 +14,14 @@ import type {
   BulkImportSkipped,
 } from "#/features/gear/server/gear-bulk-import-actions.server";
 import type {
+  BulkImportLoanRow,
+  BulkImportLoansInput,
+  BulkImportLoansResult,
+  BulkImportLoanCreated,
+  BulkImportLoanSkipped,
+  BulkImportLoanSkipReason,
+} from "#/features/gear/server/loans-bulk-import-actions.server";
+import type {
   CreateGearInput,
   CreateGearResult,
   EditGearInput,
@@ -91,6 +99,12 @@ export type {
   BulkImportInput,
   BulkImportResult,
   BulkImportSkipped,
+  BulkImportLoanRow,
+  BulkImportLoansInput,
+  BulkImportLoansResult,
+  BulkImportLoanCreated,
+  BulkImportLoanSkipped,
+  BulkImportLoanSkipReason,
   CreateGearInput,
   CreateGearResult,
   CreateGearTagInput,
@@ -269,6 +283,37 @@ const bulkImportInputSchema = z.object({
       }),
     )
     .min(1)
+    .max(500),
+});
+
+const isoDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
+
+const conditionSchema = z.enum([
+  "serviceable",
+  "needs_repair",
+  "missing",
+  "lost",
+]);
+
+const bulkImportLoansInputSchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        memberEmail: z.string().email().max(254),
+        gearCode: z.string().min(1).max(64),
+        checkedOutAt: isoDateSchema,
+        dueAt: isoDateSchema.nullable(),
+        returnedAt: isoDateSchema.nullable(),
+        conditionAtReturn: conditionSchema.nullable(),
+        checkoutNotes: z.string().max(2000).nullable(),
+        checkinNotes: z.string().max(2000).nullable(),
+      }),
+    )
+    .min(1)
+    // Backfill is rare and tediously human-paced; 500 rows per submit
+    // is generous and mirrors the gear bulk-import ceiling.
     .max(500),
 });
 
@@ -580,6 +625,14 @@ export const checkinLoansFn = createServerFn({ method: "POST" })
     const { checkinLoansAction } =
       await import("#/features/gear/server/loans-actions.server");
     return checkinLoansAction(data);
+  });
+
+export const bulkImportLoansFn = createServerFn({ method: "POST" })
+  .inputValidator(bulkImportLoansInputSchema)
+  .handler(async ({ data }): Promise<BulkImportLoansResult> => {
+    const { bulkImportLoansAction } =
+      await import("#/features/gear/server/loans-bulk-import-actions.server");
+    return bulkImportLoansAction(data);
   });
 
 export const extendLoanFn = createServerFn({ method: "POST" })
