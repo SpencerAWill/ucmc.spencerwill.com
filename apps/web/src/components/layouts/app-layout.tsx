@@ -62,7 +62,6 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarInset,
   SidebarMenu,
@@ -154,10 +153,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         >
           <SidebarContent>
             <SidebarNav />
+            <SidebarUtilityNav />
           </SidebarContent>
-          <SidebarFooter>
-            <SidebarFooterNav />
-          </SidebarFooter>
           <SidebarRail />
         </Sidebar>
         <SidebarInset>
@@ -562,65 +559,65 @@ function SidebarNav() {
   );
 }
 
-function SidebarFooterNav() {
+function SidebarUtilityNav() {
   const { isApproved, hasPermission } = useAuth();
   const canSubmitFeedback = isApproved && hasPermission("feedback:submit");
   const canViewAudit = hasPermission("audit:view");
-  // Settings is always rendered (disabled placeholder), so the footer is
-  // never empty and the wrapper always renders.
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          aria-disabled
-          tabIndex={-1}
-          tooltip="Settings (coming soon)"
-        >
-          <Settings />
-          <span>Settings</span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-      {canSubmitFeedback ? (
+    <SidebarGroup>
+      <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton asChild tooltip="Feedback">
-            <Link to="/feedback">
-              <MessageSquare />
-              <span>Feedback</span>
-            </Link>
+          <SidebarMenuButton
+            aria-disabled
+            tabIndex={-1}
+            tooltip="Settings (coming soon)"
+          >
+            <Settings />
+            <span>Settings</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
-      ) : null}
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          aria-disabled
-          tabIndex={-1}
-          tooltip="Analytics (coming soon)"
-        >
-          <BarChart3 />
-          <span>Analytics</span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          aria-disabled
-          tabIndex={-1}
-          tooltip="Reports (coming soon)"
-        >
-          <FileText />
-          <span>Reports</span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-      {canViewAudit ? (
+        {canSubmitFeedback ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Feedback">
+              <Link to="/feedback">
+                <MessageSquare />
+                <span>Feedback</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
         <SidebarMenuItem>
-          <SidebarMenuButton asChild tooltip="Audit log">
-            <Link to="/audit">
-              <History />
-              <span>Audit log</span>
-            </Link>
+          <SidebarMenuButton
+            aria-disabled
+            tabIndex={-1}
+            tooltip="Analytics (coming soon)"
+          >
+            <BarChart3 />
+            <span>Analytics</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
-      ) : null}
-    </SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            aria-disabled
+            tabIndex={-1}
+            tooltip="Reports (coming soon)"
+          >
+            <FileText />
+            <span>Reports</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        {canViewAudit ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Audit log">
+              <Link to="/audit">
+                <History />
+                <span>Audit log</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
+      </SidebarMenu>
+    </SidebarGroup>
   );
 }
 
