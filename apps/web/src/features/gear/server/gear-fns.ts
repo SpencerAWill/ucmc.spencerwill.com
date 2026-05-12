@@ -108,7 +108,18 @@ export type {
 // action converts at the boundary. Keeping the schema input shape
 // JSON-native — no `.transform()` — means `createServerFn`'s `data`
 // type stays serializable, which is what client-side hooks consume.
-const acquiredAtSchema = z.number().int().nullable();
+//
+// Floored at 0 (Unix epoch) and capped at 2100-01-01 UTC to catch
+// obvious typos in the bulk-import CSV (e.g. `20240101` instead of
+// `2024-01-01`, which `Date.parse` happily turns into ms-since-epoch
+// well past year 2100). Not a security boundary — just a sanity net.
+const ACQUIRED_AT_MAX_MS = Date.UTC(2100, 0, 1);
+const acquiredAtSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(ACQUIRED_AT_MAX_MS)
+  .nullable();
 
 export const listGearInputSchema = z.object({
   typePublicId: z.string().min(1).optional(),

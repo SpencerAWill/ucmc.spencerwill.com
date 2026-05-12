@@ -15,6 +15,14 @@ import type { GearLabel } from "#/features/gear/server/gear-fns";
  * the print area live inside a Radix portal and still appear correctly
  * on the printed page: portal placement doesn't matter once everything
  * outside our subtree is invisible.
+ *
+ * ⚠️ **Global print hammer.** The `body * { visibility: hidden }` rule
+ * is intentionally site-wide while this component is mounted. Any
+ * future feature that wants its own custom print output must EITHER
+ * coexist with this rule (re-show its subtree with a similar
+ * visibility-visible rule keyed on its own class) OR ensure its print
+ * UI is never visible at the same time this dialog is open. Today only
+ * one print surface exists; revisit if a second one shows up.
  */
 export function GearLabelSheet({
   labels,

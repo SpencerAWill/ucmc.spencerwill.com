@@ -222,9 +222,13 @@ export async function listGearLabelsAction(input: {
   publicIds: string[];
 }): Promise<GearLabel[]> {
   // Labels are an officer-managed concern (you're printing physical
-  // tags to stick on club property). Gating with `requireGearManager`
-  // also prevents members from probing publicIds via the labels
-  // endpoint to learn which codes exist.
+  // tags to stick on club property). The gate is **intent-based, not
+  // data-protective** — every field returned here (code, description,
+  // typeName) is also reachable through `listGearAction` /
+  // `getGearDetailAction` for any approved member. Don't loosen the
+  // gate on the assumption that it's redundant; the value is making
+  // "print labels" an officer affordance, and preventing a non-officer
+  // from probing existence of a publicId via this endpoint.
   await requireGearManager();
   return getGearLabelsByPublicIds(input.publicIds);
 }
@@ -322,6 +326,19 @@ export async function createGearAction(
       createdBy: principal.userId,
     });
   } catch (err) {
+    // Roll the thumbnail back. We uploaded it before the insert (so a
+    // failed upload wouldn't leave a gear row pointing at a missing
+    // object), which means the inverse failure mode is now in play:
+    // insert blew up but the R2 object exists. Best-effort delete keeps
+    // us from accumulating orphans in `BUCKET_PUBLIC` across retries.
+    if (thumbnailKey !== null) {
+      try {
+        await deleteGearThumbnail(thumbnailKey);
+      } catch {
+        // Swallow: the gear insert already failed; surfacing a second
+        // error from cleanup obscures the real cause.
+      }
+    }
     if (isUniqueViolation(err) && code !== null) {
       return { ok: false, reason: "code_in_use", code };
     }

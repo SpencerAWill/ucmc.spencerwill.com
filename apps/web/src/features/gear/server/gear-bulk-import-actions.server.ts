@@ -8,6 +8,14 @@
  * `"code_in_use"`. A per-import collision check also catches duplicate
  * codes WITHIN the same payload, since the unique index can't tell us
  * which of two siblings won.
+ *
+ * **Audit emission is per-row and not in the same transaction as the
+ * gear insert.** A failure between an insert succeeding and its audit
+ * row landing would leave the gear row without its `gear.added`
+ * event. That's the same risk every action in this feature accepts
+ * (the audit log is observability, not load-bearing for any RBAC or
+ * billing path), so we live with it rather than batching D1 writes
+ * across an unbounded import.
  */
 import { uuidv7 } from "uuidv7";
 

@@ -87,7 +87,7 @@ pnpm exec prettier --write .
 
 The web app lives in `apps/web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Custom domains are provisioned by Pulumi (see Infrastructure below); dev auto-deploys on merge to main, prod is a manual dispatch with environment approval.
 
-Member-facing features include: registration + waiver workflow, announcements, feedback, paper-waiver attestation, member directory + management, and a **gear inventory** (`/gear`) with type/tag partitioning, freeform short codes that print to laminated tags and recycle on retirement, and CSV bulk import.
+Member-facing features include: registration + waiver workflow, announcements, feedback, paper-waiver attestation, member directory + management, and a **gear inventory** (`/gear`) with type/tag partitioning (tags can be public or officer-only-`internal`), freeform short codes that print to laminated tags and recycle on retirement, CSV bulk import, per-piece append-only inspection log (pass/fail/advisory), and officer-only barcode label printing (CODE128 via `jsbarcode`).
 
 Common commands (run from the repo root):
 

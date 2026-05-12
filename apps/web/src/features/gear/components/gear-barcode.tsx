@@ -1,5 +1,5 @@
 import JsBarcode from "jsbarcode";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 /** Supported barcode formats. Pruned to symbologies that actually make
  *  sense for the freeform alphanumeric codes UCMC uses (`CH93`, `LJ4`)
@@ -50,7 +50,11 @@ export function GearBarcode({
 }) {
   const ref = useRef<SVGSVGElement | null>(null);
   const [renderedOk, setRenderedOk] = useState(true);
-  useEffect(() => {
+  // `useLayoutEffect` (not `useEffect`) so the SVG is populated before
+  // the browser paints. A user mashing Cmd+P the moment the labels
+  // dialog opens would otherwise see a blank print preview while
+  // React's deferred effect was still pending.
+  useLayoutEffect(() => {
     const svg = ref.current;
     if (!svg || value.length === 0) {
       setRenderedOk(false);
