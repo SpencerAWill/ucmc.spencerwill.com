@@ -22,3 +22,21 @@ export const gearInspectionsQueryKey = (gearPublicId: string) =>
 
 export const gearLabelsQueryKey = (publicIds: readonly string[]) =>
   ["gear", "labels", [...publicIds].sort().join(",")] as const;
+
+// ── loans ──────────────────────────────────────────────────────────────
+
+export const LOANS_QUERY_KEY = ["gear", "loans", "list"] as const;
+
+export const loanDetailQueryKey = (publicId: string) =>
+  ["gear", "loans", "detail", publicId] as const;
+
+export const MY_LOANS_QUERY_KEY = ["gear", "loans", "mine"] as const;
+
+export const memberLoanSearchQueryKey = (q: string) =>
+  ["gear", "loans", "search-members", q] as const;
+
+export const memberForLoanByPublicIdQueryKey = (publicId: string) =>
+  ["gear", "loans", "member", publicId] as const;
+
+export const gearCodeSearchQueryKey = (q: string) =>
+  ["gear", "loans", "search-gear-code", q] as const;

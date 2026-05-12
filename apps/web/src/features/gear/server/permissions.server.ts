@@ -27,3 +27,20 @@ export async function requireGearManager(): Promise<Principal> {
   }
   return principal;
 }
+
+/**
+ * Authorize a gear-cave keeper running the checkout / check-in desk.
+ * Intentionally distinct from `gear:manage` so the desk authority can
+ * be delegated independently of full inventory CRUD. system_admin
+ * gets it via the role-bypass in `principal.server.ts`.
+ */
+export async function requireGearLoanManager(): Promise<Principal> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+  if (!principal.permissions.includes("gear:loan")) {
+    throw new Error("Forbidden: missing gear:loan");
+  }
+  return principal;
+}

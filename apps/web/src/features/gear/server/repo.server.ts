@@ -331,10 +331,23 @@ export async function bulkMarkGearRetired(input: {
   retiredBy: string;
   reason: string | null;
 }): Promise<void> {
-  if (input.ids.length === 0) return;
-  const db = getDb();
+  const stmt = buildBulkMarkGearRetiredStatement(input);
+  if (stmt) await stmt;
+}
+
+/**
+ * Statement-builder variant of `bulkMarkGearRetired`. Returns the
+ * drizzle UPDATE builder (or `null` when there's nothing to retire) so
+ * the caller can compose it with other writes in a single `db.batch`.
+ */
+export function buildBulkMarkGearRetiredStatement(input: {
+  ids: string[];
+  retiredBy: string;
+  reason: string | null;
+}) {
+  if (input.ids.length === 0) return null;
   const now = new Date();
-  await db
+  return getDb()
     .update(schema.gear)
     .set({
       lifecycle: "retired",

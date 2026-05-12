@@ -197,6 +197,7 @@ function SidebarNav() {
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
   const canReadGear = hasPermission("gear:read");
+  const canLoanGear = hasPermission("gear:loan");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -430,12 +431,43 @@ function SidebarNav() {
                 </SidebarMenuItem>
                 {canReadGear ? (
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Gear">
-                      <Link to="/gear">
-                        <Package />
-                        <span>Gear</span>
-                      </Link>
-                    </SidebarMenuButton>
+                    {/* Same Collapsible-inside-MenuItem pattern as the
+                     * Members entry so the <ul> only contains <li>
+                     * children (axe-core's list rule). Sub-item appears
+                     * only when the user has `gear:loan`. */}
+                    <Collapsible
+                      defaultOpen={canLoanGear}
+                      className="group/collapsible"
+                    >
+                      <SidebarMenuButton asChild tooltip="Gear">
+                        <Link to="/gear">
+                          <Package />
+                          <span>Gear</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      {canLoanGear ? (
+                        <>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuAction className="data-[state=open]:rotate-90">
+                              <ChevronRight />
+                              <span className="sr-only">Toggle sub-menu</span>
+                            </SidebarMenuAction>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub>
+                              <SidebarMenuSubItem>
+                                <SidebarMenuSubButton asChild>
+                                  <Link to="/gear/loans">
+                                    <Handshake />
+                                    <span>Loans</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </>
+                      ) : null}
+                    </Collapsible>
                   </SidebarMenuItem>
                 ) : null}
                 <SidebarMenuItem>

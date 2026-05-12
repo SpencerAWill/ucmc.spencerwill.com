@@ -34,6 +34,7 @@ import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
+import { Route as MyGearRouteImport } from './routes/my.gear'
 import { Route as MyAccountRouteImport } from './routes/my.account'
 import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
 import { Route as MembersRolesRouteImport } from './routes/members.roles'
@@ -43,11 +44,13 @@ import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
+import { Route as GearLoansIndexRouteImport } from './routes/gear.loans.index'
 import { Route as MyAccountWaiverRouteImport } from './routes/my.account.waiver'
 import { Route as MyAccountSecurityRouteImport } from './routes/my.account.security'
 import { Route as MyAccountPreferencesRouteImport } from './routes/my.account.preferences'
 import { Route as MyAccountDetailsRouteImport } from './routes/my.account.details'
 import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
+import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publicId'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
@@ -178,6 +181,11 @@ const RegisterPendingRoute = RegisterPendingRouteImport.update({
   path: '/register/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MyGearRoute = MyGearRouteImport.update({
+  id: '/gear',
+  path: '/gear',
+  getParentRoute: () => MyRoute,
+} as any)
 const MyAccountRoute = MyAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -223,6 +231,11 @@ const MyAccountIndexRoute = MyAccountIndexRouteImport.update({
   path: '/',
   getParentRoute: () => MyAccountRoute,
 } as any)
+const GearLoansIndexRoute = GearLoansIndexRouteImport.update({
+  id: '/loans/',
+  path: '/loans/',
+  getParentRoute: () => GearRoute,
+} as any)
 const MyAccountWaiverRoute = MyAccountWaiverRouteImport.update({
   id: '/waiver',
   path: '/waiver',
@@ -247,6 +260,11 @@ const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
   id: '/roles_/$roleId',
   path: '/roles/$roleId',
   getParentRoute: () => MembersRoute,
+} as any)
+const GearLoansPublicIdRoute = GearLoansPublicIdRouteImport.update({
+  id: '/loans/$publicId',
+  path: '/loans/$publicId',
+  getParentRoute: () => GearRoute,
 } as any)
 const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
   id: '/api/landing/$',
@@ -297,6 +315,7 @@ export interface FileRoutesByFullPath {
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my/account': typeof MyAccountRouteWithChildren
+  '/my/gear': typeof MyGearRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
@@ -307,11 +326,13 @@ export interface FileRoutesByFullPath {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/gear/loans/': typeof GearLoansIndexRoute
   '/my/account/': typeof MyAccountIndexRoute
 }
 export interface FileRoutesByTo {
@@ -339,6 +360,7 @@ export interface FileRoutesByTo {
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
+  '/my/gear': typeof MyGearRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements': typeof AnnouncementsIndexRoute
@@ -349,11 +371,13 @@ export interface FileRoutesByTo {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/gear/loans': typeof GearLoansIndexRoute
   '/my/account': typeof MyAccountIndexRoute
 }
 export interface FileRoutesById {
@@ -385,6 +409,7 @@ export interface FileRoutesById {
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my/account': typeof MyAccountRouteWithChildren
+  '/my/gear': typeof MyGearRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
@@ -395,11 +420,13 @@ export interface FileRoutesById {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/gear/loans/': typeof GearLoansIndexRoute
   '/my/account/': typeof MyAccountIndexRoute
 }
 export interface FileRouteTypes {
@@ -432,6 +459,7 @@ export interface FileRouteTypes {
     | '/members/roles'
     | '/members/waivers'
     | '/my/account'
+    | '/my/gear'
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
@@ -442,11 +470,13 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/gear/loans/$publicId'
     | '/members/roles/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/gear/loans/'
     | '/my/account/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -474,6 +504,7 @@ export interface FileRouteTypes {
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
+    | '/my/gear'
     | '/register/pending'
     | '/register/profile'
     | '/announcements'
@@ -484,11 +515,13 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/gear/loans/$publicId'
     | '/members/roles/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/gear/loans'
     | '/my/account'
   id:
     | '__root__'
@@ -519,6 +552,7 @@ export interface FileRouteTypes {
     | '/members/roles'
     | '/members/waivers'
     | '/my/account'
+    | '/my/gear'
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
@@ -529,11 +563,13 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/gear/loans/$publicId'
     | '/members/roles_/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/gear/loans/'
     | '/my/account/'
   fileRoutesById: FileRoutesById
 }
@@ -745,6 +781,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterPendingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/my/gear': {
+      id: '/my/gear'
+      path: '/gear'
+      fullPath: '/my/gear'
+      preLoaderRoute: typeof MyGearRouteImport
+      parentRoute: typeof MyRoute
+    }
     '/my/account': {
       id: '/my/account'
       path: '/account'
@@ -808,6 +851,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyAccountIndexRouteImport
       parentRoute: typeof MyAccountRoute
     }
+    '/gear/loans/': {
+      id: '/gear/loans/'
+      path: '/loans'
+      fullPath: '/gear/loans/'
+      preLoaderRoute: typeof GearLoansIndexRouteImport
+      parentRoute: typeof GearRoute
+    }
     '/my/account/waiver': {
       id: '/my/account/waiver'
       path: '/waiver'
@@ -843,6 +893,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersRolesRoleIdRouteImport
       parentRoute: typeof MembersRoute
     }
+    '/gear/loans/$publicId': {
+      id: '/gear/loans/$publicId'
+      path: '/loans/$publicId'
+      fullPath: '/gear/loans/$publicId'
+      preLoaderRoute: typeof GearLoansPublicIdRouteImport
+      parentRoute: typeof GearRoute
+    }
     '/api/landing/$': {
       id: '/api/landing/$'
       path: '/api/landing/$'
@@ -877,11 +934,15 @@ declare module '@tanstack/react-router' {
 interface GearRouteChildren {
   GearPublicIdRoute: typeof GearPublicIdRoute
   GearIndexRoute: typeof GearIndexRoute
+  GearLoansPublicIdRoute: typeof GearLoansPublicIdRoute
+  GearLoansIndexRoute: typeof GearLoansIndexRoute
 }
 
 const GearRouteChildren: GearRouteChildren = {
   GearPublicIdRoute: GearPublicIdRoute,
   GearIndexRoute: GearIndexRoute,
+  GearLoansPublicIdRoute: GearLoansPublicIdRoute,
+  GearLoansIndexRoute: GearLoansIndexRoute,
 }
 
 const GearRouteWithChildren = GearRoute._addFileChildren(GearRouteChildren)
@@ -931,10 +992,12 @@ const MyAccountRouteWithChildren = MyAccountRoute._addFileChildren(
 
 interface MyRouteChildren {
   MyAccountRoute: typeof MyAccountRouteWithChildren
+  MyGearRoute: typeof MyGearRoute
 }
 
 const MyRouteChildren: MyRouteChildren = {
   MyAccountRoute: MyAccountRouteWithChildren,
+  MyGearRoute: MyGearRoute,
 }
 
 const MyRouteWithChildren = MyRoute._addFileChildren(MyRouteChildren)

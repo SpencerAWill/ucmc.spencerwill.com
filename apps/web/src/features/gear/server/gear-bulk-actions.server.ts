@@ -13,13 +13,17 @@
 import { requireGearManager } from "#/features/gear/server/permissions.server";
 import {
   bulkAddGearTags,
-  bulkMarkGearRetired,
   bulkMarkGearUnretired,
   bulkSetGearCondition,
+  buildBulkMarkGearRetiredStatement,
   getGearByPublicIds,
   getGearTagsByPublicIds,
 } from "#/features/gear/server/repo.server";
-import { recordAuditEvents } from "#/server/audit/audit-log.server";
+import {
+  buildBulkAuditEventStatement,
+  recordAuditEvents,
+} from "#/server/audit/audit-log.server";
+import { getDb } from "#/server/db";
 import type { schema } from "#/server/db";
 
 export interface BulkResult {
@@ -40,16 +44,26 @@ export async function bulkRetireGearAction(input: {
   // a no-op (the bulk SQL also filters this; we filter client-side to
   // get accurate `affected`/`skipped` counts AND to know which codes
   // to capture in the audit metadata).
-  const eligible = rows.filter((r) => r.lifecycle === "active");
+  const active = rows.filter((r) => r.lifecycle === "active");
+  // Also block any piece that's currently on an open loan — retiring
+  // would NULL its code mid-loan and orphan the borrower's view.
+  // Matches the single-row retire action's `on_loan` short-circuit.
+  const { getOpenLoansForGearIds } =
+    await import("#/features/gear/server/loans-repo.server");
+  const openLoans = await getOpenLoansForGearIds(active.map((r) => r.id));
+  const eligible = active.filter((r) => !openLoans.has(r.id));
   if (eligible.length === 0) {
     return { affected: 0, skipped: input.publicIds.length };
   }
-  await bulkMarkGearRetired({
+  // Combine the UPDATE and the audit INSERT into a single D1 round-trip.
+  // Both writes target the same `eligible` set, so atomicity is a free
+  // upgrade on top of the latency win.
+  const retireStmt = buildBulkMarkGearRetiredStatement({
     ids: eligible.map((r) => r.id),
     retiredBy: principal.userId,
     reason: input.reason,
   });
-  await recordAuditEvents(
+  const auditStmt = buildBulkAuditEventStatement(
     eligible.map((r) => ({
       actorUserId: principal.userId,
       action: "gear.retired",
@@ -62,6 +76,10 @@ export async function bulkRetireGearAction(input: {
       },
     })),
   );
+  // Both statements are non-null here because `eligible.length > 0`.
+  if (retireStmt && auditStmt) {
+    await getDb().batch([retireStmt, auditStmt]);
+  }
   return {
     affected: eligible.length,
     skipped: input.publicIds.length - eligible.length,

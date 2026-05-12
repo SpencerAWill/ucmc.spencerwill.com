@@ -1,0 +1,132 @@
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { format, formatDistanceToNowStrict } from "date-fns";
+
+import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
+import { Badge } from "#/components/ui/badge";
+import { Card } from "#/components/ui/card";
+import { myLoansQueryOptions } from "#/features/gear/api/queries";
+import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
+import type { LoanSummary } from "#/features/gear/server/gear-fns";
+
+const PLACEHOLDER = "/gear-placeholder.svg";
+
+/**
+ * Member's own gear at `/my/gear`. Active loans get a card list at
+ * the top; history is collapsed below since it's reference info
+ * rather than something the member acts on.
+ */
+export function MyGearList() {
+  const { data, isLoading, isError, error } = useQuery(myLoansQueryOptions());
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading your gear…</p>;
+  }
+  // Surface query failures explicitly. Falling through to the empty
+  // state would mislead a member into thinking nothing is checked out
+  // when the request actually failed (auth lapse, transient 500, etc.).
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Couldn&apos;t load your gear</AlertTitle>
+        <AlertDescription>
+          {error instanceof Error && error.message
+            ? error.message
+            : "Something went wrong fetching your loans. Try refreshing the page."}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  const active = data?.active ?? [];
+  const history = data?.history ?? [];
+
+  return (
+    <div className="space-y-6">
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
+          Currently out
+        </h2>
+        {active.length === 0 ? (
+          <p className="rounded-md border border-dashed bg-muted/40 p-6 text-center text-sm text-muted-foreground">
+            You don't have any gear checked out right now.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {active.map((loan) => (
+              <MyLoanRow key={loan.publicId} loan={loan} />
+            ))}
+          </ul>
+        )}
+      </section>
+      {history.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
+            History
+          </h2>
+          <ul className="space-y-2">
+            {history.map((loan) => (
+              <MyLoanRow key={loan.publicId} loan={loan} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function MyLoanRow({ loan }: { loan: LoanSummary }) {
+  const overdue = loan.returnedAt === null && loan.dueAt.getTime() < Date.now();
+  return (
+    <li>
+      <Link
+        to="/gear/$publicId"
+        params={{ publicId: loan.gearPublicId }}
+        className="block"
+      >
+        <Card className="overflow-hidden p-0 transition-shadow hover:shadow-md">
+          <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[7rem_1fr]">
+            <div className="bg-muted">
+              <img
+                src={
+                  loan.thumbnailKey
+                    ? gearThumbnailUrlFor(loan.thumbnailKey)
+                    : PLACEHOLDER
+                }
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="min-w-0 space-y-1 p-3 sm:p-4">
+              <div className="flex items-center gap-2">
+                <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
+                  {loan.code ?? "—"}
+                </span>
+                <span className="truncate text-sm font-medium">
+                  {loan.gearDescription}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">{loan.typeName}</p>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                {loan.returnedAt ? (
+                  <Badge variant="outline">
+                    Returned {format(loan.returnedAt, "MMM d, yyyy")}
+                  </Badge>
+                ) : overdue ? (
+                  <Badge variant="destructive">
+                    Overdue · was due{" "}
+                    {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">
+                    Due {format(loan.dueAt, "MMM d, yyyy")} (
+                    {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
+                    )
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </Link>
+    </li>
+  );
+}

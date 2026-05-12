@@ -112,9 +112,11 @@ export function UserMenu() {
               <Map className="mr-2 size-4" />
               My Trips
             </DropdownMenuItem>
-            <DropdownMenuItem disabled>
-              <Backpack className="mr-2 size-4" />
-              My Gear
+            <DropdownMenuItem asChild>
+              <Link to="/my/gear">
+                <Backpack className="mr-2 size-4" />
+                My Gear
+              </Link>
             </DropdownMenuItem>
           </>
         )}

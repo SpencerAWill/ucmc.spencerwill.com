@@ -1,7 +1,10 @@
 /**
- * Sitewide security response headers. The values here are the source of
- * truth — applied via the global request middleware in `src/start.ts`
- * to every page render and server-fn response.
+ * Security response headers. Mostly sitewide constants, but
+ * Permissions-Policy is computed per-request so `camera` is only
+ * granted on the gear-desk scanner routes (see
+ * `permissionsPolicyForPath` below). The global request middleware in
+ * `src/start.ts` calls `securityHeadersForPath(url.pathname)` once per
+ * request and applies the returned headers via `setResponseHeader`.
  *
  * Notes on the directives:
  *   - The script/frame/connect entries for `https://challenges.cloudflare.com`
@@ -28,7 +31,15 @@ const CSP_VALUE = [
   // Analytics beacon, which the zone auto-injects at the edge — no
   // worker-side opt-in. The matching connect-src entry below allows
   // the beacon's POSTs to `https://cloudflareinsights.com/cdn-cgi/rum`.
-  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
+  // `'wasm-unsafe-eval'` is the surgical permission for executing
+  // WebAssembly without granting full `'unsafe-eval'` (no `new Function`,
+  // no `eval`). It's a hard browser requirement for the gear-scanner
+  // polyfill path (Firefox + pre-17 Safari, see
+  // `features/gear/components/barcode-scanner.tsx`). The native
+  // BarcodeDetector path on Chrome / Edge / Android Chrome / Safari
+  // 17+ doesn't actually execute any WASM, but the CSP directive
+  // applies uniformly so the polyfill fallback works when needed.
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   "frame-src https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
@@ -38,23 +49,51 @@ const CSP_VALUE = [
   "form-action 'self'",
 ].join("; ");
 
+// Routes that need camera access via getUserMedia. Only the gear-desk
+// checkout flow uses the rear camera (for barcode scanning), so the
+// Permissions-Policy header allows camera only on those pages — every
+// other route gets `camera=()`. Defense-in-depth: even if some other
+// route's JS were somehow compromised, the browser would refuse the
+// camera capture there.
+const CAMERA_PATH_PREFIXES = ["/gear/loans"] as const;
+
+function permissionsPolicyForPath(pathname: string): string {
+  const cameraAllowed = CAMERA_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  return [
+    `camera=${cameraAllowed ? "(self)" : "()"}`,
+    "microphone=()",
+    "geolocation=()",
+    "payment=()",
+  ].join(", ");
+}
+
 /**
- * Map of header name to header value. Iterated in `start.ts` and applied
- * one at a time via `setResponseHeader` (the singular form — the plural
- * `setResponseHeaders` is a known-broken in global middleware as of
+ * Compute the security headers for the current request. Pathname is
+ * inspected so the Permissions-Policy can scope camera access to just
+ * the gear-cave scanner routes. Everything else is static.
+ *
+ * Returns an array (not an object) because `start.ts` applies each
+ * header via `setResponseHeader` (the singular form — the plural
+ * `setResponseHeaders` is a known no-op in global middleware as of
  * tanstack/router#5407).
  */
-export const SECURITY_HEADERS: ReadonlyArray<readonly [string, string]> = [
-  ["Content-Security-Policy", CSP_VALUE],
-  // Pin TLS for one year, include subdomains, and signal eligibility
-  // for the HSTS preload list. Cloudflare also enforces HTTPS at the
-  // edge, so this is belt-and-suspenders against MITM downgrades.
-  ["Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload"],
-  ["X-Frame-Options", "DENY"],
-  ["Referrer-Policy", "strict-origin-when-cross-origin"],
-  [
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=()",
-  ],
-  ["X-Content-Type-Options", "nosniff"],
-];
+export function securityHeadersForPath(
+  pathname: string,
+): ReadonlyArray<readonly [string, string]> {
+  return [
+    ["Content-Security-Policy", CSP_VALUE],
+    // Pin TLS for one year, include subdomains, and signal eligibility
+    // for the HSTS preload list. Cloudflare also enforces HTTPS at the
+    // edge, so this is belt-and-suspenders against MITM downgrades.
+    [
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload",
+    ],
+    ["X-Frame-Options", "DENY"],
+    ["Referrer-Policy", "strict-origin-when-cross-origin"],
+    ["Permissions-Policy", permissionsPolicyForPath(pathname)],
+    ["X-Content-Type-Options", "nosniff"],
+  ];
+}

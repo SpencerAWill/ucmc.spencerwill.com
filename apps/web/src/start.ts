@@ -10,9 +10,9 @@
  * controlled and auditable independent of the middleware mechanics.
  */
 import { createMiddleware, createStart } from "@tanstack/react-start";
-import { setResponseHeader } from "@tanstack/react-start/server";
+import { getRequestUrl, setResponseHeader } from "@tanstack/react-start/server";
 
-import { SECURITY_HEADERS } from "#/server/headers.server";
+import { securityHeadersForPath } from "#/server/headers.server";
 
 const securityHeadersMiddleware = createMiddleware({
   type: "request",
@@ -21,7 +21,10 @@ const securityHeadersMiddleware = createMiddleware({
   // (plural) is a known no-op in global middleware
   // (tanstack/router#5407). One call per header is fine — there are
   // only a handful — and matches the per-header API exactly.
-  for (const [name, value] of SECURITY_HEADERS) {
+  // Pathname is passed in so Permissions-Policy can scope `camera`
+  // to the gear-cave scanner routes only.
+  const pathname = getRequestUrl().pathname;
+  for (const [name, value] of securityHeadersForPath(pathname)) {
     setResponseHeader(name, value);
   }
   return next();

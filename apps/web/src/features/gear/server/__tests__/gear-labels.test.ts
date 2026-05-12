@@ -99,6 +99,8 @@ beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
+  await db.delete(schema.gearInspections);
+  await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
   await db.delete(schema.gear);
   await db.delete(schema.gearTags);
