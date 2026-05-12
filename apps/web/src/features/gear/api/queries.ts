@@ -16,12 +16,14 @@ import {
   gearLabelsQueryKey,
   gearSuggestedCodeQueryKey,
   loanDetailQueryKey,
+  memberForLoanByPublicIdQueryKey,
   memberLoanSearchQueryKey,
 } from "#/features/gear/api/query-keys";
 import {
   getGearByCodeFn,
   getGearDetailFn,
   getLoanDetailFn,
+  getMemberForLoanFn,
   listGearFn,
   listGearInspectionsFn,
   listGearLabelsFn,
@@ -132,6 +134,24 @@ export function memberLoanSearchQueryOptions(q: string) {
     queryKey: memberLoanSearchQueryKey(trimmed),
     queryFn: () => searchMembersForLoanFn({ data: { q: trimmed } }),
     enabled: trimmed.length > 0,
+  } as const;
+}
+
+/**
+ * Resolve a member's display info from a publicId. Used to hydrate
+ * the loan-filter chip on page refresh — URL keeps only the publicId,
+ * this fetches the rest. `enabled: false` when no publicId so the
+ * query doesn't fire on routes without an active member filter.
+ */
+export function memberForLoanByPublicIdQueryOptions(publicId: string | null) {
+  return {
+    queryKey: publicId
+      ? memberForLoanByPublicIdQueryKey(publicId)
+      : (["gear", "loans", "member", "(none)"] as const),
+    queryFn: publicId
+      ? () => getMemberForLoanFn({ data: { publicId } })
+      : async () => null,
+    enabled: publicId !== null,
   } as const;
 }
 

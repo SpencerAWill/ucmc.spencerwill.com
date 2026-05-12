@@ -1,9 +1,16 @@
-import { Camera } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
 import { Label } from "#/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "#/components/ui/table";
 import { fetchGearByCode } from "#/features/gear/api/queries";
 import { useCheckinLoans } from "#/features/gear/api/use-checkin-loans";
 import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
@@ -32,7 +39,6 @@ const SKIP_LABEL: Record<
 
 export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
   const [items, setItems] = useState<CheckinItem[]>([]);
-  const [scannerOpen, setScannerOpen] = useState(false);
   const checkin = useCheckinLoans();
 
   const addRow = (row: GearLookupRow) => {
@@ -125,70 +131,95 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Returning
-        </Label>
-        {items.length === 0 ? (
-          <p className="rounded-md border border-dashed bg-muted/40 p-4 text-center text-sm text-muted-foreground">
-            Scan a barcode or search for a code to check gear back in. Multiple
-            borrowers in one batch is fine.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {[...groups.entries()].map(([name, group]) => (
-              <div key={name} className="space-y-2">
-                {groups.size > 1 ? (
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {name}
-                  </p>
-                ) : null}
-                {group.map((item) => {
-                  const idx = items.indexOf(item);
-                  return (
-                    <CheckinItemRow
-                      key={item.row.publicId}
-                      row={item.row}
-                      conditionAtReturn={item.conditionAtReturn}
-                      onConditionChange={(c) =>
-                        setItems((prev) =>
-                          prev.map((p, pi) =>
-                            pi === idx ? { ...p, conditionAtReturn: c } : p,
-                          ),
-                        )
-                      }
-                      notes={item.notes}
-                      onNotesChange={(notes) =>
-                        setItems((prev) =>
-                          prev.map((p, pi) =>
-                            pi === idx ? { ...p, notes } : p,
-                          ),
-                        )
-                      }
-                      error={item.error}
-                      onRemove={() =>
-                        setItems((prev) => prev.filter((_, pi) => pi !== idx))
-                      }
-                    />
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setScannerOpen(true)}
-            disabled={checkin.isPending}
-          >
-            <Camera className="size-4" />
-            Scan barcode
-          </Button>
+      {/* Side-by-side on md+: viewfinder + running returning list.
+          Sticky viewfinder + sticky-on-mobile header — same pattern
+          as the checkout pane; see that pane for the rationale. */}
+      {/* Sticky viewfinder — see checkout pane for the layout
+          rationale (sticky's containing block is the grid, not the
+          cell; `items-start` keeps the cell content-height). */}
+      <div className="grid items-start gap-4 md:grid-cols-[18rem_1fr]">
+        <div className="sticky top-0 z-10 space-y-1.5 bg-background pb-2 md:pb-0">
+          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Scan
+          </Label>
+          <BarcodeScanner onResult={handleScan} />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Returning ({items.length})
+          </Label>
+          {items.length === 0 ? (
+            <p className="rounded-md border border-dashed bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+              Scan a barcode or search for a code below to check gear back in.
+              Multiple borrowers in one batch is fine.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-20">Code</TableHead>
+                  <TableHead>Condition</TableHead>
+                  <TableHead className="w-10">Borrower</TableHead>
+                  <TableHead className="w-10" aria-label="Actions" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...groups.entries()].map(([name, group]) => (
+                  <Fragment key={name}>
+                    {groups.size > 1 ? (
+                      <TableRow className="bg-muted/40 hover:bg-muted/40">
+                        <TableCell
+                          colSpan={4}
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          {name}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                    {group.map((item) => {
+                      const idx = items.indexOf(item);
+                      return (
+                        <CheckinItemRow
+                          key={item.row.publicId}
+                          row={item.row}
+                          conditionAtReturn={item.conditionAtReturn}
+                          onConditionChange={(c) =>
+                            setItems((prev) =>
+                              prev.map((p, pi) =>
+                                pi === idx ? { ...p, conditionAtReturn: c } : p,
+                              ),
+                            )
+                          }
+                          notes={item.notes}
+                          onNotesChange={(notes) =>
+                            setItems((prev) =>
+                              prev.map((p, pi) =>
+                                pi === idx ? { ...p, notes } : p,
+                              ),
+                            )
+                          }
+                          error={item.error}
+                          onRemove={() =>
+                            setItems((prev) =>
+                              prev.filter((_, pi) => pi !== idx),
+                            )
+                          }
+                        />
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {/* Search anchored at the bottom — newly added rows append
+              to the table above, so the most recently picked piece
+              sits directly over the input. */}
           <GearCodeSearchCombobox
             mode="checkin"
             onPick={addRow}
             disabled={checkin.isPending}
+            excludePublicIds={items.map((i) => i.row.publicId)}
           />
         </div>
       </div>
@@ -203,12 +234,6 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
             : `Check in ${items.length || ""} ${items.length === 1 ? "item" : "items"}`.trim()}
         </Button>
       </div>
-
-      <BarcodeScanner
-        open={scannerOpen}
-        onOpenChange={setScannerOpen}
-        onResult={handleScan}
-      />
     </div>
   );
 }

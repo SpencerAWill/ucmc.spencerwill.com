@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 
-import { Button } from "#/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -10,40 +8,50 @@ import {
   CommandItem,
   CommandList,
 } from "#/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "#/components/ui/popover";
 import { gearCodeSearchQueryOptions } from "#/features/gear/api/queries";
 import type { GearLookupRow } from "#/features/gear/server/gear-fns";
 
 /**
- * Code-prefix search for adding gear to a checkout / check-in batch.
- * Stateless — it doesn't track selection; just fires `onPick` and the
- * caller routes the row into local state.
+ * Inline code-prefix search for the items pane. Designed to feel like
+ * a barcode scanner that takes keystrokes: officer types a code (or a
+ * prefix), Enter adds the first match to the list, the input clears,
+ * and they're ready for the next one. No button, no popover — the
+ * input is always there, and the suggestion list appears beneath
+ * it as the officer types.
  *
- * `mode` parameter controls the inline-eligibility hint shown next to
- * each row (checkout cares about availability; check-in cares about
- * whether there's an open loan). Server returns the same row shape
- * either way — the filter happens in the UI.
+ * The pane does NOT wrap this in a `<form>`, so Enter inside the
+ * input only fires `cmdk`'s `onSelect` on the highlighted item — it
+ * never triggers a stray form submission.
+ *
+ * `mode` controls the inline-eligibility filter:
+ *   - "checkout": only eligible gear (active + serviceable + no open
+ *     loan) — what you can hand out.
+ *   - "checkin": only gear with an open loan — what's eligible to
+ *     come back.
+ * The server returns the same row shape either way; the filter
+ * happens in the UI for snappier feedback. Server-side checks at
+ * submit time remain the source of truth.
  */
 export function GearCodeSearchCombobox({
   mode,
   onPick,
   disabled,
+  excludePublicIds = [],
 }: {
   mode: "checkout" | "checkin";
   onPick: (row: GearLookupRow) => void;
   disabled?: boolean;
+  /** Hide rows whose publicId is in this set — typically the gear
+   *  already added to the batch. Avoids the awkward "I already added
+   *  CH1, why is it still in the dropdown" moment. */
+  excludePublicIds?: readonly string[];
 }) {
-  const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const deferred = useDeferredValue(input);
   const { data } = useQuery(gearCodeSearchQueryOptions(deferred));
+  const excluded = new Set(excludePublicIds);
   const results = (data ?? []).filter((row) => {
-    // Inline filter for mode-specific eligibility. Server is the
-    // source of truth at submit; this just hides obvious nope rows.
+    if (excluded.has(row.publicId)) return false;
     if (mode === "checkout") {
       return (
         row.lifecycle === "active" &&
@@ -54,62 +62,56 @@ export function GearCodeSearchCombobox({
     return row.hasOpenLoan;
   });
 
+  const handleSelect = (row: GearLookupRow) => {
+    onPick(row);
+    setInput("");
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="secondary" disabled={disabled}>
-          <Search className="size-4" />
-          Search code
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-[min(28rem,calc(100vw-2rem))] p-0"
-        align="start"
-      >
-        <Command shouldFilter={false}>
-          <CommandInput
-            value={input}
-            onValueChange={setInput}
-            placeholder={
-              mode === "checkout"
-                ? "Enter code (CH1, LJ3…)"
-                : "Enter code to check in…"
-            }
-          />
-          <CommandList>
-            <CommandEmpty>
-              {input.trim().length === 0
-                ? "Start typing a code prefix…"
-                : mode === "checkout"
-                  ? "No eligible gear matches."
-                  : "No open loan matches that code."}
-            </CommandEmpty>
-            {results.map((row) => (
-              <CommandItem
-                key={row.publicId}
-                value={row.code}
-                onSelect={() => {
-                  onPick(row);
-                  setOpen(false);
-                  setInput("");
-                }}
-              >
-                <span className="flex flex-1 flex-col">
-                  <span className="font-mono font-medium">{row.code}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {row.typeName} · {row.description}
-                  </span>
+    <Command
+      shouldFilter={false}
+      className="overflow-visible rounded-md border bg-transparent"
+    >
+      <CommandInput
+        value={input}
+        onValueChange={(v) => {
+          if (!disabled) setInput(v);
+        }}
+        placeholder={
+          mode === "checkout"
+            ? "Enter code (CH1, LJ3…) and press Enter"
+            : "Enter code to check in…"
+        }
+        disabled={disabled}
+      />
+      {input.trim().length > 0 ? (
+        <CommandList>
+          <CommandEmpty>
+            {mode === "checkout"
+              ? "No eligible gear matches."
+              : "No open loan matches that code."}
+          </CommandEmpty>
+          {results.map((row) => (
+            <CommandItem
+              key={row.publicId}
+              value={row.code}
+              onSelect={() => handleSelect(row)}
+            >
+              <span className="flex flex-1 flex-col">
+                <span className="font-mono font-medium">{row.code}</span>
+                <span className="text-xs text-muted-foreground">
+                  {row.typeName} · {row.description}
                 </span>
-                {mode === "checkin" && row.openLoanMemberFullName ? (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {row.openLoanMemberFullName}
-                  </span>
-                ) : null}
-              </CommandItem>
-            ))}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+              </span>
+              {mode === "checkin" && row.openLoanMemberFullName ? (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {row.openLoanMemberFullName}
+                </span>
+              ) : null}
+            </CommandItem>
+          ))}
+        </CommandList>
+      ) : null}
+    </Command>
   );
 }

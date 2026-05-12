@@ -39,6 +39,7 @@ import {
   listLoans,
   listLoansForMember,
   markLoanReturned,
+  getApprovedMemberByPublicId,
   searchApprovedMembers,
   searchGearByCode,
 } from "#/features/gear/server/loans-repo.server";
@@ -599,6 +600,13 @@ export async function searchMembersForLoanAction(input: {
 }): Promise<MemberSearchResult[]> {
   await requireGearLoanManager();
   return searchApprovedMembers(input.q);
+}
+
+export async function getMemberForLoanAction(input: {
+  publicId: string;
+}): Promise<MemberSearchResult | null> {
+  await requireGearLoanManager();
+  return getApprovedMemberByPublicId(input.publicId);
 }
 
 export type GearLookupRow = GearCodeSearchRow;

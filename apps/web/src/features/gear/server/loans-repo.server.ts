@@ -405,6 +405,43 @@ export async function searchApprovedMembers(
 }
 
 /**
+ * Resolve a single approved member by publicId. Used to hydrate the
+ * loan-filter member chip on page refresh: the URL keeps only the
+ * member's publicId; this fetches the display info (name + email) so
+ * the filter combobox can render a populated chip without holding
+ * the full object in browser state.
+ */
+export async function getApprovedMemberByPublicId(
+  publicId: string,
+): Promise<MemberSearchResult | null> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      userId: schema.users.id,
+      publicId: schema.users.publicId,
+      fullName: schema.profiles.fullName,
+      primaryEmail: schema.userEmails.email,
+    })
+    .from(schema.users)
+    .innerJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+    .innerJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.users.id),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.users.publicId, publicId),
+        eq(schema.users.status, "approved"),
+      ),
+    )
+    .limit(1);
+  return rows.at(0) ?? null;
+}
+
+/**
  * Gear search by code prefix. Returns rows shaped for the gear-desk
  * item picker — joined with gear_types for the type name and the open
  * loan (if any) so the picker can flag eligibility inline.
@@ -419,6 +456,10 @@ export interface GearCodeSearchRow {
   condition: schema.GearCondition;
   hasOpenLoan: boolean;
   openLoanMemberFullName: string | null;
+  /** Borrower's R2 avatar key when an open loan exists — fuels the
+   *  member-avatar column in the check-in pane. Null when no loan or
+   *  the borrower hasn't uploaded a photo. */
+  openLoanMemberAvatarKey: string | null;
 }
 
 export async function searchGearByCode(
@@ -439,6 +480,7 @@ export async function searchGearByCode(
       condition: schema.gear.condition,
       loanReturnedAt: schema.gearLoans.returnedAt,
       loanMemberFullName: schema.profiles.fullName,
+      loanMemberAvatarKey: schema.profiles.avatarKey,
     })
     .from(schema.gear)
     .innerJoin(schema.gearTypes, eq(schema.gearTypes.id, schema.gear.typeId))
@@ -471,6 +513,7 @@ export async function searchGearByCode(
         condition: r.condition,
         hasOpenLoan: r.loanReturnedAt === null && r.loanMemberFullName !== null,
         openLoanMemberFullName: r.loanMemberFullName,
+        openLoanMemberAvatarKey: r.loanMemberAvatarKey,
       },
     ];
   });
@@ -498,6 +541,7 @@ export async function getGearByCode(
       condition: schema.gear.condition,
       loanReturnedAt: schema.gearLoans.returnedAt,
       loanMemberFullName: schema.profiles.fullName,
+      loanMemberAvatarKey: schema.profiles.avatarKey,
     })
     .from(schema.gear)
     .innerJoin(schema.gearTypes, eq(schema.gearTypes.id, schema.gear.typeId))
@@ -526,5 +570,6 @@ export async function getGearByCode(
     condition: r.condition,
     hasOpenLoan: r.loanReturnedAt === null && r.loanMemberFullName !== null,
     openLoanMemberFullName: r.loanMemberFullName,
+    openLoanMemberAvatarKey: r.loanMemberAvatarKey,
   };
 }

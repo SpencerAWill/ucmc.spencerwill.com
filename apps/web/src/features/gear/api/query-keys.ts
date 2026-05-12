@@ -35,5 +35,8 @@ export const MY_LOANS_QUERY_KEY = ["gear", "loans", "mine"] as const;
 export const memberLoanSearchQueryKey = (q: string) =>
   ["gear", "loans", "search-members", q] as const;
 
+export const memberForLoanByPublicIdQueryKey = (publicId: string) =>
+  ["gear", "loans", "member", publicId] as const;
+
 export const gearCodeSearchQueryKey = (q: string) =>
   ["gear", "loans", "search-gear-code", q] as const;

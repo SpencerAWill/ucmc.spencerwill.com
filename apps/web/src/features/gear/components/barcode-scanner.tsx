@@ -1,14 +1,6 @@
-import { Loader2, Search } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button } from "#/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "#/components/ui/dialog";
 import { Label } from "#/components/ui/label";
 import {
   Select,
@@ -17,9 +9,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select";
+import { Switch } from "#/components/ui/switch";
 
 /**
- * Camera-based barcode lookup dialog. Hybrid runtime:
+ * Inline camera-based barcode scanner. Designed to live directly in
+ * the gear-desk Sheet rather than behind another modal — officers
+ * rip through a batch with viewfinder and items-list visible at the
+ * same time. Hybrid runtime:
  *
  *   1. If the browser ships `BarcodeDetector` natively (Chrome / Edge /
  *      Android Chrome / Safari iOS 17+ / Safari macOS 17+), use it
@@ -34,17 +30,23 @@ import {
  * lives inside `useEffect`, so the component renders cleanly during
  * SSR. The polyfill import is a dynamic `import()` so its module
  * doesn't even resolve unless the native API is unavailable AND the
- * dialog is opened.
+ * scanner is toggled on.
  *
  * CSP: `Permissions-Policy: camera=(self)` is required. The polyfill
  * path additionally needs `script-src 'wasm-unsafe-eval'`. The native
  * path needs neither beyond `camera=(self)`. See
  * `apps/web/src/server/headers.server.ts`.
  *
- * Camera picker: laptops at the gear cave commonly attach a USB camera
- * for scanning while the built-in webcam stays for video calls. The
- * dialog enumerates video inputs and lets the officer pick; the choice
- * persists across sessions via localStorage.
+ * Enabled state persists in localStorage. New officers default to
+ * scanner OFF so the camera permission prompt doesn't fire as soon as
+ * they open the Sheet; once they've toggled it on and granted
+ * permission, the scanner auto-starts on subsequent Sheet opens.
+ *
+ * Camera picker: laptops at the gear cave commonly attach a USB
+ * camera for scanning while the built-in webcam stays for video
+ * calls. After permission is granted (which exposes labels) the
+ * `Select` lets the officer pick. The choice persists across sessions
+ * via localStorage.
  */
 
 /** Format whitelist matches what our label printer emits (CODE128) plus
@@ -53,6 +55,7 @@ import {
 const BARCODE_FORMATS = ["code_128", "qr_code"] as const;
 
 const SELECTED_CAMERA_KEY = "ucmc:gear-scanner:camera";
+const SCANNER_ENABLED_KEY = "ucmc:gear-scanner:enabled";
 
 // Minimal typings for the BarcodeDetector contract — same shape across
 // the native API and the ponyfill, so one set of types covers both.
@@ -90,36 +93,37 @@ async function loadBarcodeDetector(): Promise<BarcodeDetectorCtor> {
 }
 
 export function BarcodeScanner({
-  open,
-  onOpenChange,
   onResult,
-  onSearchInstead,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Fires ONCE per successful decode with the raw barcode string. The
-   *  component closes itself after firing; the caller resolves the
-   *  code via `fetchGearByCode` and routes the result into local
-   *  state. */
+  /** Fires for EACH detected scan while the scanner is enabled. The
+   *  scanner stays live until the officer toggles it off or closes
+   *  the Sheet. A 1.5 s per-code cooldown suppresses duplicate fires
+   *  while a single label sits in the camera's view. */
   onResult: (code: string) => void;
-  /** Optional escape hatch — renders a "Search instead" button that
-   *  closes the scanner and lets the parent open the manual
-   *  code-search combobox. */
-  onSearchInstead?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  // Enabled flag: persisted in localStorage so a returning officer
+  // auto-starts where they left off. SSR-safe initial-state callback.
+  const [enabled, setEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SCANNER_ENABLED_KEY) === "true";
+  });
   const [error, setError] = useState<string | null>(null);
+  const [streamReady, setStreamReady] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  // Remember the last-picked camera across sessions so a gear-cave
-  // officer doesn't have to switch USB → built-in every time.
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
     () => {
       if (typeof window === "undefined") return null;
       return window.localStorage.getItem(SELECTED_CAMERA_KEY);
     },
   );
+  const [recentScan, setRecentScan] = useState<{
+    code: string;
+    at: number;
+  } | null>(null);
 
   const stopStream = useCallback(() => {
     if (rafRef.current !== null) {
@@ -130,33 +134,47 @@ export function BarcodeScanner({
       for (const track of streamRef.current.getTracks()) track.stop();
       streamRef.current = null;
     }
+    setStreamReady(false);
   }, []);
 
+  // Capture `onResult` in a ref so the camera-startup effect doesn't
+  // restart every time the parent's handler changes identity. Parents
+  // typically declare `handleScan` inline (reading from local state
+  // like `defaultDurationDays`), so the function reference shifts on
+  // each render — without this ref, every items-list mutation tore
+  // down the stream and re-acquired the camera.
+  const onResultRef = useRef(onResult);
   useEffect(() => {
-    if (!open) return;
+    onResultRef.current = onResult;
+  }, [onResult]);
+
+  // Clear the "Just scanned" pill ~2 s after each scan so it doesn't
+  // hang around once the officer moves to the next piece.
+  useEffect(() => {
+    if (!recentScan) return;
+    const id = window.setTimeout(() => setRecentScan(null), 2000);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [recentScan]);
+
+  useEffect(() => {
+    if (!enabled) {
+      stopStream();
+      setError(null);
+      return;
+    }
     setError(null);
 
     /* eslint-disable @typescript-eslint/no-unnecessary-condition --
-     *  `flags.cancelled` and `flags.detected` legitimately flip across
-     *  async ticks (one written from the cleanup return, the other
-     *  written from a deferred animation-frame callback). ESLint can't
-     *  see those mutations from the read sites and concludes they're
-     *  always their initial value — they're not. */
-
-    // Closure-scoped flags across async ticks. Explicit `boolean`
-    // typing prevents ESLint's no-unnecessary-condition from narrowing
-    // them to their literal-`false` initial values — both fields can
-    // flip between resolved promise points.
-    const flags: { cancelled: boolean; detected: boolean } = {
-      cancelled: false,
-      detected: false,
-    };
+     *  `flags.cancelled` legitimately flips across async ticks (the
+     *  cleanup return assigns it after the async chain has already
+     *  resumed). ESLint can't see the closure mutation from the read
+     *  sites and concludes it's always its initial value — it's not. */
+    const flags: { cancelled: boolean } = { cancelled: false };
 
     void (async () => {
       try {
-        // Constraints: prefer the persisted deviceId; otherwise prefer
-        // the rear-facing camera on phones. On a laptop without
-        // `environment`, the browser picks any available camera.
         const constraints: MediaStreamConstraints = {
           video: selectedDeviceId
             ? { deviceId: { exact: selectedDeviceId } }
@@ -173,10 +191,11 @@ export function BarcodeScanner({
         if (!video) return;
         video.srcObject = stream;
         await video.play();
+        setStreamReady(true);
 
-        // Enumerate AFTER getting a stream — device labels are only
-        // exposed once camera permission has been granted at least
-        // once for this origin.
+        // Enumerate AFTER getting a stream — labels are only exposed
+        // once camera permission has been granted at least once for
+        // this origin.
         const all = await navigator.mediaDevices.enumerateDevices();
         if (!flags.cancelled) {
           setDevices(all.filter((d) => d.kind === "videoinput"));
@@ -186,20 +205,36 @@ export function BarcodeScanner({
         if (flags.cancelled) return;
         const detector = new Ctor({ formats: [...BARCODE_FORMATS] });
 
+        // Persistent-scan loop. Two layers of dedupe:
+        //   1. `lastFired` (this closure) — suppresses same-code
+        //      re-fire within `SAME_CODE_COOLDOWN_MS`, which keeps
+        //      holding-a-label-in-view from firing 30×.
+        //   2. The parent pane's items list already filters duplicate
+        //      publicIds at `addRow`, so a same-code re-fire outside
+        //      the cooldown is also a no-op there.
+        const SAME_CODE_COOLDOWN_MS = 1500;
+        let lastFired: { code: string; at: number } | null = null;
+
         const scan = async () => {
-          if (flags.cancelled || flags.detected) return;
-          // `readyState >= 2` means HAVE_CURRENT_DATA — frame data is
-          // available to draw / decode. Earlier states make detect()
-          // either fail or return empty.
+          if (flags.cancelled) return;
           if (video.readyState >= 2) {
             try {
               const results = await detector.detect(video);
               const first = results[0]?.rawValue;
-              if (first && !flags.detected) {
-                flags.detected = true;
-                onResult(first);
-                onOpenChange(false);
-                return;
+              if (first) {
+                const now = performance.now();
+                const isCooldownRepeat =
+                  lastFired !== null &&
+                  lastFired.code === first &&
+                  now - lastFired.at < SAME_CODE_COOLDOWN_MS;
+                if (!isCooldownRepeat) {
+                  lastFired = { code: first, at: now };
+                  // Read through the ref so this closure uses the
+                  // latest parent handler without forcing the effect
+                  // (and therefore the camera stream) to restart.
+                  onResultRef.current(first);
+                  setRecentScan({ code: first, at: now });
+                }
               }
             } catch {
               // Per-frame detect failures are transient (browser may
@@ -217,19 +252,20 @@ export function BarcodeScanner({
         if (flags.cancelled) return;
         if (err instanceof Error && err.name === "NotAllowedError") {
           setError("Camera permission denied.");
+          // If permission was denied, flip the toggle off so the next
+          // open doesn't auto-retry and re-trigger the same error.
+          setEnabled(false);
+          window.localStorage.setItem(SCANNER_ENABLED_KEY, "false");
         } else if (err instanceof Error && err.name === "NotFoundError") {
           setError("No camera found on this device.");
         } else if (
           err instanceof Error &&
           err.name === "OverconstrainedError"
         ) {
-          // The persisted deviceId no longer matches any attached
-          // camera (USB unplugged, etc.). Clear it and ask the user
-          // to reopen — simpler than auto-retrying with defaults.
           setSelectedDeviceId(null);
           window.localStorage.removeItem(SELECTED_CAMERA_KEY);
           setError(
-            "Selected camera isn't available. Reopen to pick a different one.",
+            "Selected camera isn't available. Pick a different one below.",
           );
         } else {
           setError("Couldn't start the camera.");
@@ -242,90 +278,98 @@ export function BarcodeScanner({
       stopStream();
     };
     /* eslint-enable @typescript-eslint/no-unnecessary-condition */
-  }, [open, onOpenChange, onResult, selectedDeviceId, stopStream]);
+    // `onResult` is intentionally NOT a dep — it lives in
+    // `onResultRef`. Including it would tear down the camera every
+    // time the parent re-renders.
+  }, [enabled, selectedDeviceId, stopStream]);
 
-  // When the user picks a different camera, persist + restart by
-  // updating state (the effect above re-runs on selectedDeviceId).
+  const onToggle = (next: boolean) => {
+    setEnabled(next);
+    window.localStorage.setItem(SCANNER_ENABLED_KEY, String(next));
+  };
+
   const onDeviceChange = (id: string) => {
     setSelectedDeviceId(id);
     window.localStorage.setItem(SELECTED_CAMERA_KEY, id);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Scan barcode</DialogTitle>
-          <DialogDescription>
-            Hold a gear label in the camera's view. The code reads
-            automatically.
-          </DialogDescription>
-        </DialogHeader>
-        {devices.length > 1 ? (
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="scanner-camera"
-              className="text-xs text-muted-foreground"
-            >
-              Camera
-            </Label>
-            <Select
-              value={selectedDeviceId ?? devices[0].deviceId}
-              onValueChange={onDeviceChange}
-            >
-              <SelectTrigger id="scanner-camera" className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {devices.map((d, i) => (
-                  <SelectItem key={d.deviceId} value={d.deviceId}>
-                    {d.label || `Camera ${i + 1}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <div className="space-y-2">
+      <div className="relative h-40 w-full overflow-hidden rounded-md border bg-black md:aspect-square md:h-auto">
+        {/* Mobile uses a fixed 160 px height — full width but compact
+            so it doesn't dominate the Sheet when the items list grows
+            beneath. On md+ it returns to a square (cell is fixed at
+            18 rem; aspect-square gives a 18 rem tall preview). */}
+        {!enabled ? (
+          <button
+            type="button"
+            onClick={() => onToggle(true)}
+            className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white/80 transition-colors hover:bg-neutral-900"
+          >
+            <Camera className="size-8 opacity-60" />
+            <p>Tap to start the scanner</p>
+            <p className="text-xs text-white/50">
+              Hold a gear label in view to capture
+            </p>
+          </button>
+        ) : error ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white">
+            <p>{error}</p>
           </div>
+        ) : (
+          <>
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className="h-full w-full object-cover"
+              aria-label="Camera viewfinder"
+            />
+            {!streamReady ? (
+              <div className="absolute inset-0 flex items-center justify-center text-white">
+                <Loader2 className="size-6 animate-spin" />
+              </div>
+            ) : null}
+            {recentScan ? (
+              <div
+                className="absolute inset-x-3 bottom-3 rounded-md bg-emerald-500/90 px-3 py-2 text-center font-mono text-sm font-semibold text-white shadow-md"
+                aria-live="polite"
+              >
+                Scanned {recentScan.code}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="scanner-toggle"
+            checked={enabled}
+            onCheckedChange={onToggle}
+          />
+          <Label htmlFor="scanner-toggle" className="text-sm">
+            Scanner
+          </Label>
+        </div>
+        {enabled && devices.length > 1 ? (
+          <Select
+            value={selectedDeviceId ?? devices[0].deviceId}
+            onValueChange={onDeviceChange}
+          >
+            <SelectTrigger className="ml-auto h-8 w-auto gap-1.5 px-2 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {devices.map((d, i) => (
+                <SelectItem key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Camera ${i + 1}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ) : null}
-        <div className="aspect-square overflow-hidden rounded-md border bg-black">
-          {error ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white">
-              <p>{error}</p>
-            </div>
-          ) : (
-            <>
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                className="h-full w-full object-cover"
-                aria-label="Camera viewfinder"
-              />
-              {streamRef.current === null ? (
-                <div className="-mt-[100%] flex h-full items-center justify-center text-white">
-                  <Loader2 className="size-6 animate-spin" />
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-        <div className="flex justify-between gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          {onSearchInstead ? (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                onOpenChange(false);
-                onSearchInstead();
-              }}
-            >
-              <Search className="size-4" />
-              Search code instead
-            </Button>
-          ) : null}
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

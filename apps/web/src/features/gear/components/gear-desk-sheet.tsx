@@ -44,7 +44,16 @@ export function GearDeskSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full overflow-y-auto px-4 pt-4 pb-6 sm:max-w-xl"
+        // Wider on desktop so the inline scanner viewfinder and items
+        // list can sit side-by-side. The panes stack to a single
+        // column on narrow viewports — see their grid breakpoints.
+        //
+        // No `pt-*`: `position: sticky; top: 0` pins to the inside of
+        // the scroll container's padding-top, so any value here would
+        // offset the sticky scanner away from the actual viewport top.
+        // SheetHeader has its own `p-4` so the title still gets the
+        // spacing it needs.
+        className="w-full overflow-y-auto px-4 pb-6 sm:max-w-3xl"
       >
         <SheetHeader className="px-0">
           <SheetTitle>Gear desk</SheetTitle>

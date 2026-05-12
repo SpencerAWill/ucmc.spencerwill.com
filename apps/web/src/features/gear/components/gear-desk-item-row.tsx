@@ -1,14 +1,15 @@
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, StickyNote, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Button } from "#/components/ui/button";
-import { Input } from "#/components/ui/input";
 import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-} from "#/components/ui/item";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "#/components/ui/dialog";
 import { Label } from "#/components/ui/label";
 import {
   Select,
@@ -17,86 +18,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select";
+import { TableCell, TableRow } from "#/components/ui/table";
 import { Textarea } from "#/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "#/components/ui/tooltip";
+import { UserAvatar } from "#/components/user-avatar";
+import { DueDatePicker } from "#/features/gear/components/due-date-picker";
+import { cn } from "#/lib/utils";
 import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
 import type {
   GearCondition,
   GearLookupRow,
 } from "#/features/gear/server/gear-fns";
 
-const CONDITION_LABEL: Record<GearCondition, string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
-
-function toIsoDate(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function startOfDay(d: Date): Date {
-  const out = new Date(d);
-  out.setHours(0, 0, 0, 0);
-  return out;
-}
-
 /**
- * Common chrome for a row in either pane — gear preview + remove
- * affordance, with mode-specific controls hung below as children. The
- * outer wrapper is the shadcn `Item` primitive so the row matches
- * the gear-list / type-management visual language elsewhere in this
- * feature.
+ * Row components for the gear-desk items table. The parent pane owns
+ * the surrounding `<Table>`/`<TableHeader>`; each row here renders one
+ * or two `<TableRow>`s — the second only when there's a per-row error,
+ * which sits beneath the controls so the column grid stays intact.
+ *
+ * Table (vs. the shadcn `Item` primitive) buys real column alignment
+ * for free: `<thead>` sets the column widths once and every `<tr>`
+ * inherits them.
  */
-function ItemFrame({
-  row,
-  error,
-  onRemove,
-  children,
-}: {
-  row: GearLookupRow;
-  error?: string | null;
-  onRemove: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Item variant="outline" className="flex-col items-stretch">
-      <div className="flex w-full items-start gap-3">
-        <ItemContent>
-          <ItemTitle>
-            <span className="font-mono">{row.code}</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              {row.typeName}
-            </span>
-          </ItemTitle>
-          <ItemDescription className="line-clamp-2">
-            {row.description}
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onRemove}
-            aria-label={`Remove ${row.code}`}
-          >
-            <X className="size-4" />
-          </Button>
-        </ItemActions>
-      </div>
-      {children}
-      {error ? (
-        <p className="flex items-center gap-1 text-xs text-destructive">
-          <AlertTriangle className="size-3" />
-          {error}
-        </p>
-      ) : null}
-    </Item>
-  );
-}
+
+const CODE_CELL_CLASS = "w-20 font-mono font-semibold align-middle";
 
 export function CheckoutItemRow({
   row,
@@ -111,62 +60,53 @@ export function CheckoutItemRow({
   error?: string | null;
   onRemove: () => void;
 }) {
-  // Anchor the date math at midnight local-time so the round-trip
-  // (date → days → date) stays stable through the day. The server
-  // re-derives the dueAt from `durationDays` relative to its own
-  // clock at submit time; a submission right at midnight could drift
-  // a day, which is fine for a desk that doesn't operate then.
-  const today = startOfDay(new Date());
-  const dueDate = new Date(today);
-  dueDate.setDate(dueDate.getDate() + durationDays);
-  const maxDate = new Date(today);
-  maxDate.setDate(maxDate.getDate() + 90);
   return (
-    <ItemFrame row={row} error={error} onRemove={onRemove}>
-      <div className="flex items-center gap-2">
-        <Label
-          htmlFor={`due-${row.publicId}`}
-          className="text-xs text-muted-foreground"
-        >
-          Due
-        </Label>
-        <Input
-          id={`due-${row.publicId}`}
-          type="date"
-          // `min = today` so exec can run a same-day loan (gear out
-          // for a meeting, returned that evening). Past dates are
-          // rejected by the input attribute AND the onChange filter
-          // below; the server caps at 0..90 days too.
-          min={toIsoDate(today)}
-          max={toIsoDate(maxDate)}
-          value={toIsoDate(dueDate)}
-          onChange={(e) => {
-            const [y, m, d] = e.target.value
-              .split("-")
-              .map((n) => Number.parseInt(n, 10));
-            if (
-              !Number.isFinite(y) ||
-              !Number.isFinite(m) ||
-              !Number.isFinite(d)
-            ) {
-              return;
-            }
-            const picked = startOfDay(new Date(y, m - 1, d));
-            const diffMs = picked.getTime() - today.getTime();
-            const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
-            if (days >= 0 && days <= 90) onDurationChange(days);
-          }}
-          className="h-8 w-auto"
-        />
-        <span className="text-xs text-muted-foreground">
-          {durationDays === 0
-            ? "(same day)"
-            : `(${durationDays} ${durationDays === 1 ? "day" : "days"})`}
-        </span>
-      </div>
-    </ItemFrame>
+    <>
+      <TableRow
+        title={`${row.typeName} · ${row.description}`}
+        className={error ? "border-destructive/40" : undefined}
+      >
+        <TableCell className={CODE_CELL_CLASS}>{row.code}</TableCell>
+        <TableCell className="align-middle">
+          <DueDatePicker
+            id={`due-${row.publicId}`}
+            label=""
+            durationDays={durationDays}
+            onDurationChange={onDurationChange}
+            compact
+          />
+        </TableCell>
+        <TableCell className="w-10 align-middle">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onRemove}
+            aria-label={`Remove ${row.code}`}
+          >
+            <X className="size-4" />
+          </Button>
+        </TableCell>
+      </TableRow>
+      {error ? (
+        <TableRow className="border-destructive/40">
+          <TableCell colSpan={3} className="pt-0 text-xs text-destructive">
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="size-3" />
+              {error}
+            </span>
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
   );
 }
+
+const CONDITION_LABEL: Record<GearCondition, string> = {
+  serviceable: "Serviceable",
+  needs_repair: "Needs repair",
+  missing: "Missing",
+  lost: "Lost",
+};
 
 export function CheckinItemRow({
   row,
@@ -185,16 +125,32 @@ export function CheckinItemRow({
   error?: string | null;
   onRemove: () => void;
 }) {
+  // Notes are an uncommon thing per item (most check-ins don't need
+  // them). Inlining a Textarea per row eats vertical space; instead
+  // we put a notes-icon button in the actions cell that opens a small
+  // dialog. The icon tints when notes are present so the officer can
+  // see at a glance which rows carry context.
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [draft, setDraft] = useState(notes);
+  // Sync the draft to the prop whenever the dialog opens or the
+  // canonical value changes externally.
+  useEffect(() => {
+    if (notesOpen) setDraft(notes);
+  }, [notesOpen, notes]);
+  const hasNotes = notes.trim().length > 0;
+  const saveNotes = () => {
+    onNotesChange(draft);
+    setNotesOpen(false);
+  };
+
   return (
-    <ItemFrame row={row} error={error} onRemove={onRemove}>
-      <div className="grid gap-2 sm:grid-cols-[12rem_1fr]">
-        <div className="space-y-1">
-          <Label
-            htmlFor={`condition-${row.publicId}`}
-            className="text-xs text-muted-foreground"
-          >
-            Condition at return
-          </Label>
+    <>
+      <TableRow
+        title={`${row.typeName} · ${row.description}`}
+        className={error ? "border-destructive/40" : undefined}
+      >
+        <TableCell className={CODE_CELL_CLASS}>{row.code}</TableCell>
+        <TableCell className="w-44 align-middle">
           <Select
             value={conditionAtReturn ?? "__unchanged__"}
             onValueChange={(v) =>
@@ -203,7 +159,11 @@ export function CheckinItemRow({
               )
             }
           >
-            <SelectTrigger id={`condition-${row.publicId}`} className="h-8">
+            <SelectTrigger
+              id={`condition-${row.publicId}`}
+              className="h-8"
+              aria-label="Condition at return"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -215,23 +175,93 @@ export function CheckinItemRow({
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1">
-          <Label
-            htmlFor={`notes-${row.publicId}`}
-            className="text-xs text-muted-foreground"
-          >
-            Notes (optional)
-          </Label>
-          <Textarea
-            id={`notes-${row.publicId}`}
-            value={notes}
-            onChange={(e) => onNotesChange(e.target.value)}
-            rows={1}
-            maxLength={2000}
-          />
-        </div>
-      </div>
-    </ItemFrame>
+        </TableCell>
+        <TableCell className="w-10 align-middle">
+          {/* Hover-popover with the borrower's full name. Tooltip
+              wraps the avatar so keyboard focus also surfaces the
+              name (Radix Tooltip handles both hover and focus). */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={0} className="inline-flex">
+                <UserAvatar
+                  avatarKey={row.openLoanMemberAvatarKey}
+                  name={row.openLoanMemberFullName ?? ""}
+                  className="size-7"
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {row.openLoanMemberFullName ?? "Unknown borrower"}
+            </TooltipContent>
+          </Tooltip>
+        </TableCell>
+        <TableCell className="align-middle">
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setNotesOpen(true)}
+              aria-label={`${hasNotes ? "Edit" : "Add"} notes for ${row.code}`}
+            >
+              <StickyNote
+                className={cn(
+                  "size-4",
+                  hasNotes ? "fill-primary/30 text-primary" : undefined,
+                )}
+              />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onRemove}
+              aria-label={`Remove ${row.code}`}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+      {error ? (
+        <TableRow className="border-destructive/40">
+          <TableCell colSpan={4} className="pt-0 text-xs text-destructive">
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="size-3" />
+              {error}
+            </span>
+          </TableCell>
+        </TableRow>
+      ) : null}
+
+      <Dialog open={notesOpen} onOpenChange={setNotesOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Notes — {row.code}</DialogTitle>
+            <DialogDescription>
+              Optional context for this check-in (damage observed, where the
+              member found a missing piece, etc.).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor={`notes-${row.publicId}`} className="sr-only">
+              Check-in notes
+            </Label>
+            <Textarea
+              id={`notes-${row.publicId}`}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={4}
+              maxLength={2000}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNotesOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveNotes}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

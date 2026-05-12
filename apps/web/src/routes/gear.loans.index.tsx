@@ -1,18 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
 import { z } from "zod";
 
 import { DataPagination } from "#/components/data-pagination";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePermission } from "#/features/auth/guards";
-import { loansListQueryOptions } from "#/features/gear/api/queries";
+import {
+  loansListQueryOptions,
+  memberForLoanByPublicIdQueryOptions,
+} from "#/features/gear/api/queries";
 import { GearDeskTrigger } from "#/features/gear/components/gear-desk-trigger";
 import { LoanCard } from "#/features/gear/components/loan-card";
 import { LoanFilterBar } from "#/features/gear/components/loan-filter-bar";
 import type { LoanFilterState } from "#/features/gear/components/loan-filter-bar";
-import type { MemberSearchResult } from "#/features/gear/server/gear-fns";
 
 const loansSearchSchema = z.object({
   tab: z.enum(["active", "history"]).optional(),
@@ -41,15 +42,14 @@ function GearLoansPage() {
   const { hasPermission } = useAuth();
   const canLoan = hasPermission("gear:loan");
 
-  // The MemberSearchCombobox is fully controlled — to keep its label
-  // populated, we mirror the picker's selected member into component
-  // state alongside the URL. URL holds the publicId for shareability;
-  // local state holds the full object for label rendering. Deep-link
-  // visitors arriving with `?member=...` see a filter applied but the
-  // picker shows blank until they re-pick (acceptable; primary use
-  // case is officer browsing-and-picking, not deep-linking).
-  const [selectedMember, setSelectedMember] =
-    useState<MemberSearchResult | null>(null);
+  // URL is the source of truth for the member filter — only the
+  // publicId is shareable. The full member object (name, email) is
+  // resolved through a query keyed on that publicId. This makes a
+  // refresh + deep-link rehydrate the filter chip correctly without
+  // any local-state mirror to keep in sync.
+  const { data: selectedMember = null } = useQuery(
+    memberForLoanByPublicIdQueryOptions(search.member ?? null),
+  );
 
   const filterState: LoanFilterState = {
     tab: search.tab ?? "active",
@@ -60,7 +60,6 @@ function GearLoansPage() {
   };
 
   const onFilterChange = (next: LoanFilterState) => {
-    setSelectedMember(next.selectedMember);
     void navigate({
       search: (prev) => ({
         ...prev,

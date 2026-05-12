@@ -364,6 +364,10 @@ const memberSearchInputSchema = z.object({
   q: z.string().min(1).max(200),
 });
 
+const memberByPublicIdInputSchema = z.object({
+  publicId: z.string().min(1),
+});
+
 const gearCodeSearchInputSchema = z.object({
   q: z.string().min(1).max(64),
 });
@@ -616,6 +620,14 @@ export const searchMembersForLoanFn = createServerFn({ method: "GET" })
     const { searchMembersForLoanAction } =
       await import("#/features/gear/server/loans-actions.server");
     return searchMembersForLoanAction(data);
+  });
+
+export const getMemberForLoanFn = createServerFn({ method: "GET" })
+  .inputValidator(memberByPublicIdInputSchema)
+  .handler(async ({ data }): Promise<MemberSearchResult | null> => {
+    const { getMemberForLoanAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return getMemberForLoanAction(data);
   });
 
 export const searchGearByCodeFn = createServerFn({ method: "GET" })

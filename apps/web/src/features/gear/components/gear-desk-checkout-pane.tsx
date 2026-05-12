@@ -1,13 +1,20 @@
-import { Camera } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
 import { Label } from "#/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "#/components/ui/table";
 import { Textarea } from "#/components/ui/textarea";
 import { fetchGearByCode } from "#/features/gear/api/queries";
 import { useCheckoutLoans } from "#/features/gear/api/use-checkout-loans";
 import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
+import { DueDatePicker } from "#/features/gear/components/due-date-picker";
 import { CheckoutItemRow } from "#/features/gear/components/gear-desk-item-row";
 import { GearCodeSearchCombobox } from "#/features/gear/components/gear-code-search-combobox";
 import { MemberSearchCombobox } from "#/features/gear/components/member-search-combobox";
@@ -38,7 +45,15 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   const [member, setMember] = useState<MemberSearchResult | null>(null);
   const [items, setItems] = useState<CheckoutItem[]>([]);
   const [notes, setNotes] = useState("");
-  const [scannerOpen, setScannerOpen] = useState(false);
+  // Default due date the officer picks up front. Every newly-added
+  // item adopts this value; the officer can still per-row override
+  // after the fact. Changing the default does NOT retroactively
+  // change items already in the list (predictability over
+  // cleverness — if we cascaded, "did I override CH7 yet?" becomes
+  // ambiguous fast).
+  const [defaultDurationDays, setDefaultDurationDays] = useState<number>(
+    DEFAULT_LOAN_DURATION_DAYS,
+  );
   const checkout = useCheckoutLoans();
 
   const addRow = (row: GearLookupRow) => {
@@ -47,7 +62,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
       // second one with `already_on_loan` after the first inserts,
       // but the UX is better if the row's just rejected up front.
       if (prev.some((i) => i.row.publicId === row.publicId)) return prev;
-      return [...prev, { row, durationDays: DEFAULT_LOAN_DURATION_DAYS }];
+      return [...prev, { row, durationDays: defaultDurationDays }];
     });
   };
 
@@ -132,60 +147,107 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Member
-        </Label>
-        <MemberSearchCombobox
-          selected={member}
-          onSelect={setMember}
-          disabled={checkout.isPending}
-        />
+      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Member
+          </Label>
+          <MemberSearchCombobox
+            selected={member}
+            onSelect={setMember}
+            disabled={checkout.isPending}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Default due
+          </Label>
+          {/* Up-front default for newly-added items. The picker doesn't
+              retroactively change items already in the list (see the
+              `defaultDurationDays` rationale in component state). */}
+          <DueDatePicker
+            id="checkout-default-due"
+            label=""
+            durationDays={defaultDurationDays}
+            onDurationChange={setDefaultDurationDays}
+            disabled={checkout.isPending}
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Items
-        </Label>
-        {items.length === 0 ? (
-          <p className="rounded-md border border-dashed bg-muted/40 p-4 text-center text-sm text-muted-foreground">
-            Scan a barcode or search for a code to add gear.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {items.map((item, idx) => (
-              <CheckoutItemRow
-                key={item.row.publicId}
-                row={item.row}
-                durationDays={item.durationDays}
-                onDurationChange={(d) =>
-                  setItems((prev) =>
-                    prev.map((p, pi) =>
-                      pi === idx ? { ...p, durationDays: d } : p,
-                    ),
-                  )
-                }
-                error={item.error}
-                onRemove={() =>
-                  setItems((prev) => prev.filter((_, pi) => pi !== idx))
-                }
-              />
-            ))}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setScannerOpen(true)}
-            disabled={checkout.isPending}
-          >
-            <Camera className="size-4" />
-            Scan barcode
-          </Button>
+      {/* Side-by-side on md+: viewfinder column on the left, running
+          items list on the right. Stacks vertically on narrow viewports.
+          The viewfinder column is sticky inside the Sheet's scroll
+          context — on desktop it pins to the top of its grid cell as
+          the items column grows; on mobile it pins to the top of the
+          Sheet as items scroll past. Either way the officer keeps
+          eyes on the scan target while the batch grows. */}
+      {/* Sticky viewfinder works on both breakpoints because the
+          containing block for `position: sticky` is the *grid*
+          container, not the grid cell. On desktop (2 columns) the
+          grid is one tall row (height = items column); on mobile
+          (1 column) the grid is two rows where row 2 (items) is tall.
+          Either way the grid extends below the sticky viewfinder,
+          giving it room to pin. `items-start` keeps the cell at its
+          natural content height instead of stretching to match the
+          row — without it, the cell would fill the row vertically and
+          the viewfinder would visually look stretched. */}
+      <div className="grid items-start gap-4 md:grid-cols-[18rem_1fr]">
+        <div className="sticky top-0 z-10 space-y-1.5 bg-background pb-2 md:pb-0">
+          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Scan
+          </Label>
+          <BarcodeScanner onResult={handleScan} />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Items ({items.length})
+          </Label>
+          {items.length === 0 ? (
+            <p className="rounded-md border border-dashed bg-muted/40 p-4 text-center text-sm text-muted-foreground">
+              Scan a barcode or search for a code below to add gear.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-20">Code</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead className="w-10" aria-label="Actions" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item, idx) => (
+                  <CheckoutItemRow
+                    key={item.row.publicId}
+                    row={item.row}
+                    durationDays={item.durationDays}
+                    onDurationChange={(d) =>
+                      setItems((prev) =>
+                        prev.map((p, pi) =>
+                          pi === idx ? { ...p, durationDays: d } : p,
+                        ),
+                      )
+                    }
+                    error={item.error}
+                    onRemove={() =>
+                      setItems((prev) => prev.filter((_, pi) => pi !== idx))
+                    }
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {/* Search anchored at the bottom — items added via the input
+              append to the table above, so the most recently picked
+              piece sits directly over the search. The pane has no
+              surrounding <form>, so Enter only fires cmdk's onSelect;
+              no stray form submission. */}
           <GearCodeSearchCombobox
             mode="checkout"
             onPick={addRow}
             disabled={checkout.isPending}
+            excludePublicIds={items.map((i) => i.row.publicId)}
           />
         </div>
       </div>
@@ -217,12 +279,6 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
             : `Check out ${items.length || ""} ${items.length === 1 ? "item" : "items"}`.trim()}
         </Button>
       </div>
-
-      <BarcodeScanner
-        open={scannerOpen}
-        onOpenChange={setScannerOpen}
-        onResult={handleScan}
-      />
     </div>
   );
 }
