@@ -34,12 +34,14 @@ import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
+import { Route as MyGearRouteImport } from './routes/my.gear'
 import { Route as MyAccountRouteImport } from './routes/my.account'
 import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
 import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
 import { Route as MembersManagementRouteImport } from './routes/members.management'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
+import { Route as GearLoansRouteImport } from './routes/gear.loans'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
@@ -48,6 +50,7 @@ import { Route as MyAccountSecurityRouteImport } from './routes/my.account.secur
 import { Route as MyAccountPreferencesRouteImport } from './routes/my.account.preferences'
 import { Route as MyAccountDetailsRouteImport } from './routes/my.account.details'
 import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
+import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publicId'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
@@ -178,6 +181,11 @@ const RegisterPendingRoute = RegisterPendingRouteImport.update({
   path: '/register/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MyGearRoute = MyGearRouteImport.update({
+  id: '/gear',
+  path: '/gear',
+  getParentRoute: () => MyRoute,
+} as any)
 const MyAccountRoute = MyAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -207,6 +215,11 @@ const MembersPublicIdRoute = MembersPublicIdRouteImport.update({
   id: '/$publicId',
   path: '/$publicId',
   getParentRoute: () => MembersRoute,
+} as any)
+const GearLoansRoute = GearLoansRouteImport.update({
+  id: '/loans',
+  path: '/loans',
+  getParentRoute: () => GearRoute,
 } as any)
 const GearPublicIdRoute = GearPublicIdRouteImport.update({
   id: '/$publicId',
@@ -247,6 +260,11 @@ const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
   id: '/roles_/$roleId',
   path: '/roles/$roleId',
   getParentRoute: () => MembersRoute,
+} as any)
+const GearLoansPublicIdRoute = GearLoansPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => GearLoansRoute,
 } as any)
 const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
   id: '/api/landing/$',
@@ -291,12 +309,14 @@ export interface FileRoutesByFullPath {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
+  '/gear/loans': typeof GearLoansRouteWithChildren
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my/account': typeof MyAccountRouteWithChildren
+  '/my/gear': typeof MyGearRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
@@ -307,6 +327,7 @@ export interface FileRoutesByFullPath {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
@@ -334,11 +355,13 @@ export interface FileRoutesByTo {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
+  '/gear/loans': typeof GearLoansRouteWithChildren
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
+  '/my/gear': typeof MyGearRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements': typeof AnnouncementsIndexRoute
@@ -349,6 +372,7 @@ export interface FileRoutesByTo {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
@@ -379,12 +403,14 @@ export interface FileRoutesById {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
+  '/gear/loans': typeof GearLoansRouteWithChildren
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my/account': typeof MyAccountRouteWithChildren
+  '/my/gear': typeof MyGearRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
@@ -395,6 +421,7 @@ export interface FileRoutesById {
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
@@ -426,12 +453,14 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
+    | '/gear/loans'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
     | '/my/account'
+    | '/my/gear'
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
@@ -442,6 +471,7 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/gear/loans/$publicId'
     | '/members/roles/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
@@ -469,11 +499,13 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
+    | '/gear/loans'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
+    | '/my/gear'
     | '/register/pending'
     | '/register/profile'
     | '/announcements'
@@ -484,6 +516,7 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/gear/loans/$publicId'
     | '/members/roles/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
@@ -513,12 +546,14 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
+    | '/gear/loans'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
     | '/members/roles'
     | '/members/waivers'
     | '/my/account'
+    | '/my/gear'
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
@@ -529,6 +564,7 @@ export interface FileRouteTypes {
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/gear/loans/$publicId'
     | '/members/roles_/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
@@ -745,6 +781,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterPendingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/my/gear': {
+      id: '/my/gear'
+      path: '/gear'
+      fullPath: '/my/gear'
+      preLoaderRoute: typeof MyGearRouteImport
+      parentRoute: typeof MyRoute
+    }
     '/my/account': {
       id: '/my/account'
       path: '/account'
@@ -786,6 +829,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/members/$publicId'
       preLoaderRoute: typeof MembersPublicIdRouteImport
       parentRoute: typeof MembersRoute
+    }
+    '/gear/loans': {
+      id: '/gear/loans'
+      path: '/loans'
+      fullPath: '/gear/loans'
+      preLoaderRoute: typeof GearLoansRouteImport
+      parentRoute: typeof GearRoute
     }
     '/gear/$publicId': {
       id: '/gear/$publicId'
@@ -843,6 +893,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersRolesRoleIdRouteImport
       parentRoute: typeof MembersRoute
     }
+    '/gear/loans/$publicId': {
+      id: '/gear/loans/$publicId'
+      path: '/$publicId'
+      fullPath: '/gear/loans/$publicId'
+      preLoaderRoute: typeof GearLoansPublicIdRouteImport
+      parentRoute: typeof GearLoansRoute
+    }
     '/api/landing/$': {
       id: '/api/landing/$'
       path: '/api/landing/$'
@@ -874,13 +931,27 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface GearLoansRouteChildren {
+  GearLoansPublicIdRoute: typeof GearLoansPublicIdRoute
+}
+
+const GearLoansRouteChildren: GearLoansRouteChildren = {
+  GearLoansPublicIdRoute: GearLoansPublicIdRoute,
+}
+
+const GearLoansRouteWithChildren = GearLoansRoute._addFileChildren(
+  GearLoansRouteChildren,
+)
+
 interface GearRouteChildren {
   GearPublicIdRoute: typeof GearPublicIdRoute
+  GearLoansRoute: typeof GearLoansRouteWithChildren
   GearIndexRoute: typeof GearIndexRoute
 }
 
 const GearRouteChildren: GearRouteChildren = {
   GearPublicIdRoute: GearPublicIdRoute,
+  GearLoansRoute: GearLoansRouteWithChildren,
   GearIndexRoute: GearIndexRoute,
 }
 
@@ -931,10 +1002,12 @@ const MyAccountRouteWithChildren = MyAccountRoute._addFileChildren(
 
 interface MyRouteChildren {
   MyAccountRoute: typeof MyAccountRouteWithChildren
+  MyGearRoute: typeof MyGearRoute
 }
 
 const MyRouteChildren: MyRouteChildren = {
   MyAccountRoute: MyAccountRouteWithChildren,
+  MyGearRoute: MyGearRoute,
 }
 
 const MyRouteWithChildren = MyRoute._addFileChildren(MyRouteChildren)
