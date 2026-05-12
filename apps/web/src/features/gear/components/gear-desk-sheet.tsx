@@ -16,8 +16,11 @@ type Mode = "checkout" | "checkin";
 /**
  * Gear-cave action surface — one Sheet that hosts both the checkout
  * and check-in flows, with a tab toggle at the top. Opens from a
- * "Gear desk" button in the page header (and a FAB on mobile —
- * `GearDeskTrigger` handles both placements).
+ * single always-visible "Gear desk" button in the page header
+ * (`GearDeskTrigger`) which adapts responsively — icon-only on narrow
+ * widths, icon + label on `sm` and up. An earlier mobile-FAB iteration
+ * was dropped because the FAB's fixed positioning fought with the
+ * sidebar's stacking context.
  *
  * Selection state lives inside each pane and resets when the Sheet
  * closes; switching modes within the same open session intentionally

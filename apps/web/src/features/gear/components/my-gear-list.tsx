@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, formatDistanceToNowStrict } from "date-fns";
 
+import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Badge } from "#/components/ui/badge";
 import { Card } from "#/components/ui/card";
 import { myLoansQueryOptions } from "#/features/gear/api/queries";
@@ -16,9 +17,24 @@ const PLACEHOLDER = "/gear-placeholder.svg";
  * rather than something the member acts on.
  */
 export function MyGearList() {
-  const { data, isLoading } = useQuery(myLoansQueryOptions());
+  const { data, isLoading, isError, error } = useQuery(myLoansQueryOptions());
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading your gear…</p>;
+  }
+  // Surface query failures explicitly. Falling through to the empty
+  // state would mislead a member into thinking nothing is checked out
+  // when the request actually failed (auth lapse, transient 500, etc.).
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Couldn&apos;t load your gear</AlertTitle>
+        <AlertDescription>
+          {error instanceof Error && error.message
+            ? error.message
+            : "Something went wrong fetching your loans. Try refreshing the page."}
+        </AlertDescription>
+      </Alert>
+    );
   }
   const active = data?.active ?? [];
   const history = data?.history ?? [];

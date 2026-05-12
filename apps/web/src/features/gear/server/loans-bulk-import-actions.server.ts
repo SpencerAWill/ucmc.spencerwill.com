@@ -19,8 +19,9 @@
  * Inserts run sequentially because audit emission is one event per
  * row and we want the same per-row skip surfacing as
  * `bulkImportGearAction` — a single batch failure on row 7 would
- * roll back the first 6 too. ≤200 rows is fine at one round-trip
- * each for a one-time backfill flow.
+ * roll back the first 6 too. The zod schema caps batches at 500 rows
+ * (mirrored by the sheet's `MAX_ROWS`); per-row round-trips are fine
+ * at that scale for a one-time backfill flow.
  *
  * **Audit emission is per-row and not in the same transaction as the
  * loan insert.** Same trade-off as the gear bulk import — accept the
