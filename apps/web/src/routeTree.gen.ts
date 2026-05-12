@@ -41,10 +41,10 @@ import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersRegistrationsRouteImport } from './routes/members.registrations'
 import { Route as MembersManagementRouteImport } from './routes/members.management'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
-import { Route as GearLoansRouteImport } from './routes/gear.loans'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
+import { Route as GearLoansIndexRouteImport } from './routes/gear.loans.index'
 import { Route as MyAccountWaiverRouteImport } from './routes/my.account.waiver'
 import { Route as MyAccountSecurityRouteImport } from './routes/my.account.security'
 import { Route as MyAccountPreferencesRouteImport } from './routes/my.account.preferences'
@@ -216,11 +216,6 @@ const MembersPublicIdRoute = MembersPublicIdRouteImport.update({
   path: '/$publicId',
   getParentRoute: () => MembersRoute,
 } as any)
-const GearLoansRoute = GearLoansRouteImport.update({
-  id: '/loans',
-  path: '/loans',
-  getParentRoute: () => GearRoute,
-} as any)
 const GearPublicIdRoute = GearPublicIdRouteImport.update({
   id: '/$publicId',
   path: '/$publicId',
@@ -235,6 +230,11 @@ const MyAccountIndexRoute = MyAccountIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => MyAccountRoute,
+} as any)
+const GearLoansIndexRoute = GearLoansIndexRouteImport.update({
+  id: '/loans/',
+  path: '/loans/',
+  getParentRoute: () => GearRoute,
 } as any)
 const MyAccountWaiverRoute = MyAccountWaiverRouteImport.update({
   id: '/waiver',
@@ -262,9 +262,9 @@ const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
   getParentRoute: () => MembersRoute,
 } as any)
 const GearLoansPublicIdRoute = GearLoansPublicIdRouteImport.update({
-  id: '/$publicId',
-  path: '/$publicId',
-  getParentRoute: () => GearLoansRoute,
+  id: '/loans/$publicId',
+  path: '/loans/$publicId',
+  getParentRoute: () => GearRoute,
 } as any)
 const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
   id: '/api/landing/$',
@@ -309,7 +309,6 @@ export interface FileRoutesByFullPath {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
-  '/gear/loans': typeof GearLoansRouteWithChildren
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -333,6 +332,7 @@ export interface FileRoutesByFullPath {
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/gear/loans/': typeof GearLoansIndexRoute
   '/my/account/': typeof MyAccountIndexRoute
 }
 export interface FileRoutesByTo {
@@ -355,7 +355,6 @@ export interface FileRoutesByTo {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
-  '/gear/loans': typeof GearLoansRouteWithChildren
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -378,6 +377,7 @@ export interface FileRoutesByTo {
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/gear/loans': typeof GearLoansIndexRoute
   '/my/account': typeof MyAccountIndexRoute
 }
 export interface FileRoutesById {
@@ -403,7 +403,6 @@ export interface FileRoutesById {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gear/$publicId': typeof GearPublicIdRoute
-  '/gear/loans': typeof GearLoansRouteWithChildren
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/management': typeof MembersManagementRoute
   '/members/registrations': typeof MembersRegistrationsRoute
@@ -427,6 +426,7 @@ export interface FileRoutesById {
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/gear/loans/': typeof GearLoansIndexRoute
   '/my/account/': typeof MyAccountIndexRoute
 }
 export interface FileRouteTypes {
@@ -453,7 +453,6 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
-    | '/gear/loans'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -477,6 +476,7 @@ export interface FileRouteTypes {
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/gear/loans/'
     | '/my/account/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -499,7 +499,6 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
-    | '/gear/loans'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -522,6 +521,7 @@ export interface FileRouteTypes {
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/gear/loans'
     | '/my/account'
   id:
     | '__root__'
@@ -546,7 +546,6 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/gear/$publicId'
-    | '/gear/loans'
     | '/members/$publicId'
     | '/members/management'
     | '/members/registrations'
@@ -570,6 +569,7 @@ export interface FileRouteTypes {
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/gear/loans/'
     | '/my/account/'
   fileRoutesById: FileRoutesById
 }
@@ -830,13 +830,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersPublicIdRouteImport
       parentRoute: typeof MembersRoute
     }
-    '/gear/loans': {
-      id: '/gear/loans'
-      path: '/loans'
-      fullPath: '/gear/loans'
-      preLoaderRoute: typeof GearLoansRouteImport
-      parentRoute: typeof GearRoute
-    }
     '/gear/$publicId': {
       id: '/gear/$publicId'
       path: '/$publicId'
@@ -857,6 +850,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/my/account/'
       preLoaderRoute: typeof MyAccountIndexRouteImport
       parentRoute: typeof MyAccountRoute
+    }
+    '/gear/loans/': {
+      id: '/gear/loans/'
+      path: '/loans'
+      fullPath: '/gear/loans/'
+      preLoaderRoute: typeof GearLoansIndexRouteImport
+      parentRoute: typeof GearRoute
     }
     '/my/account/waiver': {
       id: '/my/account/waiver'
@@ -895,10 +895,10 @@ declare module '@tanstack/react-router' {
     }
     '/gear/loans/$publicId': {
       id: '/gear/loans/$publicId'
-      path: '/$publicId'
+      path: '/loans/$publicId'
       fullPath: '/gear/loans/$publicId'
       preLoaderRoute: typeof GearLoansPublicIdRouteImport
-      parentRoute: typeof GearLoansRoute
+      parentRoute: typeof GearRoute
     }
     '/api/landing/$': {
       id: '/api/landing/$'
@@ -931,28 +931,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface GearLoansRouteChildren {
-  GearLoansPublicIdRoute: typeof GearLoansPublicIdRoute
-}
-
-const GearLoansRouteChildren: GearLoansRouteChildren = {
-  GearLoansPublicIdRoute: GearLoansPublicIdRoute,
-}
-
-const GearLoansRouteWithChildren = GearLoansRoute._addFileChildren(
-  GearLoansRouteChildren,
-)
-
 interface GearRouteChildren {
   GearPublicIdRoute: typeof GearPublicIdRoute
-  GearLoansRoute: typeof GearLoansRouteWithChildren
   GearIndexRoute: typeof GearIndexRoute
+  GearLoansPublicIdRoute: typeof GearLoansPublicIdRoute
+  GearLoansIndexRoute: typeof GearLoansIndexRoute
 }
 
 const GearRouteChildren: GearRouteChildren = {
   GearPublicIdRoute: GearPublicIdRoute,
-  GearLoansRoute: GearLoansRouteWithChildren,
   GearIndexRoute: GearIndexRoute,
+  GearLoansPublicIdRoute: GearLoansPublicIdRoute,
+  GearLoansIndexRoute: GearLoansIndexRoute,
 }
 
 const GearRouteWithChildren = GearRoute._addFileChildren(GearRouteChildren)

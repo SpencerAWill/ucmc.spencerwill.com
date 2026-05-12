@@ -2,6 +2,13 @@ import { AlertTriangle, X } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "#/components/ui/item";
 import { Label } from "#/components/ui/label";
 import {
   Select,
@@ -24,10 +31,27 @@ const CONDITION_LABEL: Record<GearCondition, string> = {
   lost: "Lost",
 };
 
-/** Common row chrome for both modes — gear preview + remove control.
- *  Mode-specific controls (duration vs condition/notes) are rendered
- *  as children. */
-function RowFrame({
+function toIsoDate(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function startOfDay(d: Date): Date {
+  const out = new Date(d);
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
+/**
+ * Common chrome for a row in either pane — gear preview + remove
+ * affordance, with mode-specific controls hung below as children. The
+ * outer wrapper is the shadcn `Item` primitive so the row matches
+ * the gear-list / type-management visual language elsewhere in this
+ * feature.
+ */
+function ItemFrame({
   row,
   error,
   onRemove,
@@ -39,36 +63,38 @@ function RowFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-md border bg-card p-3">
-      <div className="flex items-start gap-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-semibold">{row.code}</span>
-            <span className="text-xs text-muted-foreground">
+    <Item variant="outline" className="flex-col items-stretch">
+      <div className="flex w-full items-start gap-3">
+        <ItemContent>
+          <ItemTitle>
+            <span className="font-mono">{row.code}</span>
+            <span className="text-xs font-normal text-muted-foreground">
               {row.typeName}
             </span>
-          </div>
-          <p className="line-clamp-2 text-sm text-muted-foreground">
+          </ItemTitle>
+          <ItemDescription className="line-clamp-2">
             {row.description}
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onRemove}
-          aria-label={`Remove ${row.code}`}
-        >
-          <X className="size-4" />
-        </Button>
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onRemove}
+            aria-label={`Remove ${row.code}`}
+          >
+            <X className="size-4" />
+          </Button>
+        </ItemActions>
       </div>
       {children}
       {error ? (
-        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
+        <p className="flex items-center gap-1 text-xs text-destructive">
           <AlertTriangle className="size-3" />
           {error}
         </p>
       ) : null}
-    </div>
+    </Item>
   );
 }
 
@@ -85,30 +111,60 @@ export function CheckoutItemRow({
   error?: string | null;
   onRemove: () => void;
 }) {
+  // Anchor the date math at midnight local-time so the round-trip
+  // (date → days → date) stays stable through the day. The server
+  // re-derives the dueAt from `durationDays` relative to its own
+  // clock at submit time; a submission right at midnight could drift
+  // a day, which is fine for a desk that doesn't operate then.
+  const today = startOfDay(new Date());
+  const dueDate = new Date(today);
+  dueDate.setDate(dueDate.getDate() + durationDays);
+  const maxDate = new Date(today);
+  maxDate.setDate(maxDate.getDate() + 90);
   return (
-    <RowFrame row={row} error={error} onRemove={onRemove}>
-      <div className="mt-2 flex items-center gap-2">
+    <ItemFrame row={row} error={error} onRemove={onRemove}>
+      <div className="flex items-center gap-2">
         <Label
-          htmlFor={`duration-${row.publicId}`}
+          htmlFor={`due-${row.publicId}`}
           className="text-xs text-muted-foreground"
         >
-          Due in
+          Due
         </Label>
         <Input
-          id={`duration-${row.publicId}`}
-          type="number"
-          min={1}
-          max={90}
-          value={durationDays}
+          id={`due-${row.publicId}`}
+          type="date"
+          // `min = today` so exec can run a same-day loan (gear out
+          // for a meeting, returned that evening). Past dates are
+          // rejected by the input attribute AND the onChange filter
+          // below; the server caps at 0..90 days too.
+          min={toIsoDate(today)}
+          max={toIsoDate(maxDate)}
+          value={toIsoDate(dueDate)}
           onChange={(e) => {
-            const n = Number.parseInt(e.target.value, 10);
-            if (Number.isFinite(n)) onDurationChange(n);
+            const [y, m, d] = e.target.value
+              .split("-")
+              .map((n) => Number.parseInt(n, 10));
+            if (
+              !Number.isFinite(y) ||
+              !Number.isFinite(m) ||
+              !Number.isFinite(d)
+            ) {
+              return;
+            }
+            const picked = startOfDay(new Date(y, m - 1, d));
+            const diffMs = picked.getTime() - today.getTime();
+            const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+            if (days >= 0 && days <= 90) onDurationChange(days);
           }}
-          className="h-8 w-20"
+          className="h-8 w-auto"
         />
-        <span className="text-xs text-muted-foreground">days</span>
+        <span className="text-xs text-muted-foreground">
+          {durationDays === 0
+            ? "(same day)"
+            : `(${durationDays} ${durationDays === 1 ? "day" : "days"})`}
+        </span>
       </div>
-    </RowFrame>
+    </ItemFrame>
   );
 }
 
@@ -130,8 +186,8 @@ export function CheckinItemRow({
   onRemove: () => void;
 }) {
   return (
-    <RowFrame row={row} error={error} onRemove={onRemove}>
-      <div className="mt-3 grid gap-2 sm:grid-cols-[12rem_1fr]">
+    <ItemFrame row={row} error={error} onRemove={onRemove}>
+      <div className="grid gap-2 sm:grid-cols-[12rem_1fr]">
         <div className="space-y-1">
           <Label
             htmlFor={`condition-${row.publicId}`}
@@ -176,6 +232,6 @@ export function CheckinItemRow({
           />
         </div>
       </div>
-    </RowFrame>
+    </ItemFrame>
   );
 }

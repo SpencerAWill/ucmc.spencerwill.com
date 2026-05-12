@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { format, formatDistanceToNowStrict } from "date-fns";
 
 import { Badge } from "#/components/ui/badge";
+import { Card } from "#/components/ui/card";
 import { myLoansQueryOptions } from "#/features/gear/api/queries";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { LoanSummary } from "#/features/gear/server/gear-fns";
@@ -63,47 +64,52 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
       <Link
         to="/gear/$publicId"
         params={{ publicId: loan.gearPublicId }}
-        className="flex items-stretch gap-3 rounded-md border bg-card p-3 transition-colors hover:bg-accent/40"
+        className="block"
       >
-        <div className="aspect-square w-16 shrink-0 overflow-hidden rounded border bg-muted">
-          <img
-            src={
-              loan.thumbnailKey
-                ? gearThumbnailUrlFor(loan.thumbnailKey)
-                : PLACEHOLDER
-            }
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        </div>
-        <div className="flex flex-1 flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
-              {loan.code ?? "—"}
-            </span>
-            <span className="truncate text-sm font-medium">
-              {loan.gearDescription}
-            </span>
+        <Card className="overflow-hidden p-0 transition-shadow hover:shadow-md">
+          <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[7rem_1fr]">
+            <div className="bg-muted">
+              <img
+                src={
+                  loan.thumbnailKey
+                    ? gearThumbnailUrlFor(loan.thumbnailKey)
+                    : PLACEHOLDER
+                }
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="min-w-0 space-y-1 p-3 sm:p-4">
+              <div className="flex items-center gap-2">
+                <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
+                  {loan.code ?? "—"}
+                </span>
+                <span className="truncate text-sm font-medium">
+                  {loan.gearDescription}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">{loan.typeName}</p>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                {loan.returnedAt ? (
+                  <Badge variant="outline">
+                    Returned {format(loan.returnedAt, "MMM d, yyyy")}
+                  </Badge>
+                ) : overdue ? (
+                  <Badge variant="destructive">
+                    Overdue · was due{" "}
+                    {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">
+                    Due {format(loan.dueAt, "MMM d, yyyy")} (
+                    {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
+                    )
+                  </Badge>
+                )}
+              </div>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">{loan.typeName}</p>
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            {loan.returnedAt ? (
-              <Badge variant="outline">
-                Returned {format(loan.returnedAt, "MMM d, yyyy")}
-              </Badge>
-            ) : overdue ? (
-              <Badge variant="destructive">
-                Overdue · was due{" "}
-                {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
-              </Badge>
-            ) : (
-              <Badge variant="secondary">
-                Due {format(loan.dueAt, "MMM d, yyyy")} (
-                {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })})
-              </Badge>
-            )}
-          </div>
-        </div>
+        </Card>
       </Link>
     </li>
   );

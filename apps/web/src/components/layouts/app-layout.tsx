@@ -458,6 +458,7 @@ function SidebarNav() {
                               <SidebarMenuSubItem>
                                 <SidebarMenuSubButton asChild>
                                   <Link to="/gear/loans">
+                                    <Handshake />
                                     <span>Loans</span>
                                   </Link>
                                 </SidebarMenuSubButton>

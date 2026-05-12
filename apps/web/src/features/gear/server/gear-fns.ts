@@ -311,7 +311,11 @@ const checkoutLoansInputSchema = z.object({
     .array(
       z.object({
         gearPublicId: z.string().min(1),
-        durationDays: z.number().int().min(1).max(90),
+        // 0 is allowed for same-day checkouts (e.g. exec borrows gear
+        // for a meeting and returns it the same evening). The due-at
+        // computation snaps to end-of-day so a 0-day loan is still
+        // valid until 23:59:59.
+        durationDays: z.number().int().min(0).max(90),
       }),
     )
     .min(1)

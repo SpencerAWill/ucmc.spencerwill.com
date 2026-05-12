@@ -208,7 +208,7 @@ export async function checkoutLoansAction(
     }
     const duration = Math.min(
       MAX_LOAN_DURATION_DAYS,
-      Math.max(1, Math.floor(item.durationDays)),
+      Math.max(0, Math.floor(item.durationDays)),
     );
     const dueAt = computeDueAt(now, duration);
     const id = `gl_${uuidv7()}`;

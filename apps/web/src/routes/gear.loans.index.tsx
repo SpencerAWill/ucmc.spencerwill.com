@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { z } from "zod";
 
 import { DataPagination } from "#/components/data-pagination";
@@ -11,6 +12,7 @@ import { GearDeskTrigger } from "#/features/gear/components/gear-desk-trigger";
 import { LoanCard } from "#/features/gear/components/loan-card";
 import { LoanFilterBar } from "#/features/gear/components/loan-filter-bar";
 import type { LoanFilterState } from "#/features/gear/components/loan-filter-bar";
+import type { MemberSearchResult } from "#/features/gear/server/gear-fns";
 
 const loansSearchSchema = z.object({
   tab: z.enum(["active", "history"]).optional(),
@@ -22,7 +24,7 @@ const loansSearchSchema = z.object({
   perPage: z.coerce.number().int().min(1).max(250).optional(),
 });
 
-export const Route = createFileRoute("/gear/loans")({
+export const Route = createFileRoute("/gear/loans/")({
   validateSearch: loansSearchSchema,
   beforeLoad: async ({ context }) => {
     // Gate on `gear:loan` so non-officers don't even see the loader
@@ -39,14 +41,26 @@ function GearLoansPage() {
   const { hasPermission } = useAuth();
   const canLoan = hasPermission("gear:loan");
 
+  // The MemberSearchCombobox is fully controlled — to keep its label
+  // populated, we mirror the picker's selected member into component
+  // state alongside the URL. URL holds the publicId for shareability;
+  // local state holds the full object for label rendering. Deep-link
+  // visitors arriving with `?member=...` see a filter applied but the
+  // picker shows blank until they re-pick (acceptable; primary use
+  // case is officer browsing-and-picking, not deep-linking).
+  const [selectedMember, setSelectedMember] =
+    useState<MemberSearchResult | null>(null);
+
   const filterState: LoanFilterState = {
     tab: search.tab ?? "active",
     q: search.q ?? "",
     overdueOnly: search.overdue ?? false,
     sort: search.sort ?? "due_at",
+    selectedMember,
   };
 
   const onFilterChange = (next: LoanFilterState) => {
+    setSelectedMember(next.selectedMember);
     void navigate({
       search: (prev) => ({
         ...prev,
@@ -54,6 +68,7 @@ function GearLoansPage() {
         q: next.q.trim().length === 0 ? undefined : next.q.trim(),
         overdue: next.overdueOnly ? true : undefined,
         sort: next.sort === "due_at" ? undefined : next.sort,
+        member: next.selectedMember?.publicId ?? undefined,
         page: undefined,
       }),
     });
