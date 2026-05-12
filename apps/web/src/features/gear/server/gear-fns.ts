@@ -25,6 +25,7 @@ import type {
   GearTypeSummary,
   ListGearActionInput,
   ListGearActionResult,
+  RetireGearResult,
 } from "#/features/gear/server/gear-actions.server";
 import type {
   CreateGearTypeInput,
@@ -100,6 +101,7 @@ export type {
   ListGearActionResult,
   RecordGearInspectionInput,
   RecordGearInspectionResult,
+  RetireGearResult,
 };
 
 // ── input schemas ───────────────────────────────────────────────────────
@@ -318,7 +320,7 @@ export const editGearFn = createServerFn({ method: "POST" })
 
 export const retireGearFn = createServerFn({ method: "POST" })
   .inputValidator(retireGearInputSchema)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
+  .handler(async ({ data }): Promise<RetireGearResult> => {
     const { retireGearAction } =
       await import("#/features/gear/server/gear-actions.server");
     return retireGearAction(data);

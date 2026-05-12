@@ -42,8 +42,9 @@ import type {
 } from "#/features/gear/server/repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
-import type { schema } from "#/server/db";
-import { isUniqueViolation } from "#/server/db";
+import { eq } from "drizzle-orm";
+
+import { getDb, isUniqueViolation, schema } from "#/server/db";
 
 // ── public types ────────────────────────────────────────────────────────
 
@@ -82,6 +83,16 @@ export interface GearSummary {
 
 export interface GearDetail extends GearSummary {
   notesMarkdown: string | null;
+  /** Currently open loan, if any. The `memberFullName` field is
+   *  populated ONLY for officers (gear:loan) OR for the borrower
+   *  themselves — anyone else with `gear:read` sees the borrower's
+   *  identity stripped. The presence of `currentLoan` is itself not
+   *  sensitive; just that someone has it out. */
+  currentLoan: {
+    publicId: string;
+    dueAt: Date;
+    memberFullName: string | null;
+  } | null;
 }
 
 export interface GearLabel {
@@ -238,6 +249,7 @@ export async function getGearDetailAction(input: {
 }): Promise<GearDetail> {
   const principal = await requireGearReader();
   const canSeeCost = principal.permissions.includes("gear:manage");
+  const canSeeBorrower = principal.permissions.includes("gear:loan");
   const row = await getGearByPublicId(input.publicId);
   if (!row) {
     throw new Error("Gear not found");
@@ -254,7 +266,34 @@ export async function getGearDetailAction(input: {
     })),
     canSeeCost,
   );
-  return { ...summary, notesMarkdown: row.notesMarkdown };
+
+  // Optional "currently on loan" join. Stripped of the borrower's name
+  // for callers who don't have gear:loan AND aren't the borrower
+  // themselves — the existence of an open loan is fine to surface, but
+  // the identity of who has it leaks more than we want.
+  const { getOpenLoanForGear } =
+    await import("#/features/gear/server/loans-repo.server");
+  const openLoan = await getOpenLoanForGear(row.id);
+  let currentLoan: GearDetail["currentLoan"] = null;
+  if (openLoan) {
+    let memberFullName: string | null = null;
+    if (canSeeBorrower || openLoan.memberUserId === principal.userId) {
+      const db = getDb();
+      const profileRows = await db
+        .select({ fullName: schema.profiles.fullName })
+        .from(schema.profiles)
+        .where(eq(schema.profiles.userId, openLoan.memberUserId))
+        .limit(1);
+      memberFullName = profileRows.at(0)?.fullName ?? null;
+    }
+    currentLoan = {
+      publicId: openLoan.publicId,
+      dueAt: openLoan.dueAt,
+      memberFullName,
+    };
+  }
+
+  return { ...summary, notesMarkdown: row.notesMarkdown, currentLoan };
 }
 
 export interface CreateGearInput {
@@ -496,10 +535,12 @@ export async function editGearAction(
   return { ok: true };
 }
 
+export type RetireGearResult = { ok: true } | { ok: false; reason: "on_loan" };
+
 export async function retireGearAction(input: {
   publicId: string;
   reason: string | null;
-}): Promise<{ ok: true }> {
+}): Promise<RetireGearResult> {
   const principal = await requireGearManager();
   const existing = await getGearByPublicId(input.publicId);
   if (!existing) {
@@ -507,6 +548,16 @@ export async function retireGearAction(input: {
   }
   if (existing.lifecycle === "retired") {
     return { ok: true };
+  }
+  // Block retire while the piece is on an open loan — retiring NULLs
+  // the code, which would orphan the borrower's "see what I have out"
+  // view. The FK is also RESTRICT as a defense-in-depth measure, but
+  // we surface this as a typed result instead of letting the FK throw.
+  const { getOpenLoanForGear } =
+    await import("#/features/gear/server/loans-repo.server");
+  const openLoan = await getOpenLoanForGear(existing.id);
+  if (openLoan) {
+    return { ok: false, reason: "on_loan" };
   }
   await markGearRetired({
     id: existing.id,

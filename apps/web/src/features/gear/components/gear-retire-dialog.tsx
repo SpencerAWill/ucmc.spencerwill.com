@@ -32,10 +32,17 @@ export function GearRetireDialog({
     retire.mutate(
       { publicId: gear.publicId, reason: reason.trim() || null },
       {
-        onSuccess: () => {
-          toast.success(`${gear.code ?? "Gear"} retired`);
-          setReason("");
-          onOpenChange(false);
+        onSuccess: (result) => {
+          if (result.ok) {
+            toast.success(`${gear.code ?? "Gear"} retired`);
+            setReason("");
+            onOpenChange(false);
+          } else {
+            // Only failure reason today is `on_loan`.
+            toast.error(
+              `${gear.code ?? "This piece"} is currently on loan — check it in first.`,
+            );
+          }
         },
         onError: () => {
           toast.error("Couldn't retire the gear. Please try again.");

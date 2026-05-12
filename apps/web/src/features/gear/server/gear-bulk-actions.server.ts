@@ -40,7 +40,14 @@ export async function bulkRetireGearAction(input: {
   // a no-op (the bulk SQL also filters this; we filter client-side to
   // get accurate `affected`/`skipped` counts AND to know which codes
   // to capture in the audit metadata).
-  const eligible = rows.filter((r) => r.lifecycle === "active");
+  const active = rows.filter((r) => r.lifecycle === "active");
+  // Also block any piece that's currently on an open loan — retiring
+  // would NULL its code mid-loan and orphan the borrower's view.
+  // Matches the single-row retire action's `on_loan` short-circuit.
+  const { getOpenLoansForGearIds } =
+    await import("#/features/gear/server/loans-repo.server");
+  const openLoans = await getOpenLoansForGearIds(active.map((r) => r.id));
+  const eligible = active.filter((r) => !openLoans.has(r.id));
   if (eligible.length === 0) {
     return { affected: 0, skipped: input.publicIds.length };
   }
