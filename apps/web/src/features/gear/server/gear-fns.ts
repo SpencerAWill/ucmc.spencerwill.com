@@ -45,6 +45,19 @@ import type {
   RecordGearInspectionInput,
   RecordGearInspectionResult,
 } from "#/features/gear/server/gear-inspections-actions.server";
+import type {
+  CheckinLoansInput,
+  CheckinLoansResult,
+  CheckoutLoansInput,
+  CheckoutLoansResult,
+  ExtendLoanResult,
+  GearLookupRow,
+  ListLoansActionInput,
+  ListLoansActionResult,
+  LoanDetail,
+  LoanSummary,
+} from "#/features/gear/server/loans-actions.server";
+import type { MemberSearchResult } from "#/features/gear/server/loans-repo.server";
 
 // ── bulk multi-select handlers ─────────────────────────────────────────
 
@@ -99,6 +112,17 @@ export type {
   GearTypeSummary,
   ListGearActionInput,
   ListGearActionResult,
+  CheckinLoansInput,
+  CheckinLoansResult,
+  CheckoutLoansInput,
+  CheckoutLoansResult,
+  ExtendLoanResult,
+  GearLookupRow,
+  ListLoansActionInput,
+  ListLoansActionResult,
+  LoanDetail,
+  LoanSummary,
+  MemberSearchResult,
   RecordGearInspectionInput,
   RecordGearInspectionResult,
   RetireGearResult,
@@ -274,6 +298,74 @@ const recordGearInspectionInputSchema = z.object({
   inspectedAt: z.number().int().nonnegative(),
   result: z.enum(GEAR_INSPECTION_RESULT_VALUES),
   notes: z.string().max(2_000).nullable(),
+});
+
+// ── loans ──────────────────────────────────────────────────────────────
+
+const checkoutLoansInputSchema = z.object({
+  memberPublicId: z.string().min(1),
+  // Up to 50 items per checkout flow; large enough for any realistic
+  // gear-cave batch, small enough that audit-event fan-out + per-row
+  // pre-checks fit comfortably in a worker request.
+  items: z
+    .array(
+      z.object({
+        gearPublicId: z.string().min(1),
+        durationDays: z.number().int().min(1).max(90),
+      }),
+    )
+    .min(1)
+    .max(50),
+  notes: z.string().max(2_000).nullable(),
+});
+
+const checkinLoansInputSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        gearPublicId: z.string().min(1),
+        conditionAtReturn: z.enum(GEAR_CONDITION_VALUES).nullable(),
+        notes: z.string().max(2_000).nullable(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+
+const extendLoanInputSchema = z.object({
+  publicId: z.string().min(1),
+  // Tie the cap to the same year-2100 floor used by `acquiredAt`.
+  newDueAt: z
+    .number()
+    .int()
+    .min(0)
+    .max(Date.UTC(2100, 0, 1)),
+});
+
+const listLoansInputSchema = z.object({
+  tab: z.enum(["active", "history"]).optional(),
+  memberPublicId: z.string().min(1).optional(),
+  q: z.string().max(200).optional(),
+  overdueOnly: z.boolean().optional(),
+  sort: z.enum(["due_at", "checked_out_at"]).optional(),
+  page: z.number().int().min(1).optional(),
+  perPage: z.number().int().min(1).max(250).optional(),
+});
+
+const loanDetailInputSchema = z.object({
+  publicId: z.string().min(1),
+});
+
+const memberSearchInputSchema = z.object({
+  q: z.string().min(1).max(200),
+});
+
+const gearCodeSearchInputSchema = z.object({
+  q: z.string().min(1).max(64),
+});
+
+const gearByCodeInputSchema = z.object({
+  code: z.string().min(1).max(64),
 });
 
 // ── server fn handlers ──────────────────────────────────────────────────
@@ -462,4 +554,78 @@ export const bulkImportGearFn = createServerFn({ method: "POST" })
     const { bulkImportGearAction } =
       await import("#/features/gear/server/gear-bulk-import-actions.server");
     return bulkImportGearAction(data);
+  });
+
+// ── loan shells ────────────────────────────────────────────────────────
+
+export const checkoutLoansFn = createServerFn({ method: "POST" })
+  .inputValidator(checkoutLoansInputSchema)
+  .handler(async ({ data }): Promise<CheckoutLoansResult> => {
+    const { checkoutLoansAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return checkoutLoansAction(data);
+  });
+
+export const checkinLoansFn = createServerFn({ method: "POST" })
+  .inputValidator(checkinLoansInputSchema)
+  .handler(async ({ data }): Promise<CheckinLoansResult> => {
+    const { checkinLoansAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return checkinLoansAction(data);
+  });
+
+export const extendLoanFn = createServerFn({ method: "POST" })
+  .inputValidator(extendLoanInputSchema)
+  .handler(async ({ data }): Promise<ExtendLoanResult> => {
+    const { extendLoanAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return extendLoanAction(data);
+  });
+
+export const listLoansFn = createServerFn({ method: "GET" })
+  .inputValidator(listLoansInputSchema)
+  .handler(async ({ data }): Promise<ListLoansActionResult> => {
+    const { listLoansAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return listLoansAction(data);
+  });
+
+export const getLoanDetailFn = createServerFn({ method: "GET" })
+  .inputValidator(loanDetailInputSchema)
+  .handler(async ({ data }): Promise<LoanDetail> => {
+    const { getLoanDetailAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return getLoanDetailAction(data);
+  });
+
+export const listMyLoansFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ active: LoanSummary[]; history: LoanSummary[] }> => {
+    const { listMyLoansAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return listMyLoansAction();
+  },
+);
+
+export const searchMembersForLoanFn = createServerFn({ method: "GET" })
+  .inputValidator(memberSearchInputSchema)
+  .handler(async ({ data }): Promise<MemberSearchResult[]> => {
+    const { searchMembersForLoanAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return searchMembersForLoanAction(data);
+  });
+
+export const searchGearByCodeFn = createServerFn({ method: "GET" })
+  .inputValidator(gearCodeSearchInputSchema)
+  .handler(async ({ data }): Promise<GearLookupRow[]> => {
+    const { searchGearByCodeAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return searchGearByCodeAction(data);
+  });
+
+export const getGearByCodeFn = createServerFn({ method: "GET" })
+  .inputValidator(gearByCodeInputSchema)
+  .handler(async ({ data }): Promise<GearLookupRow | null> => {
+    const { getGearByCodeAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return getGearByCodeAction(data);
   });
