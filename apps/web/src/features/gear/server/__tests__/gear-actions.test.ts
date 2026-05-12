@@ -301,6 +301,57 @@ describe("gear lifecycle", () => {
     expect(meta.code).toBe("CH93");
   });
 
+  it("rolls back the R2 thumbnail when createGear fails on code_in_use", async () => {
+    // A 1×1 PNG, ~70 bytes, comfortably under the 600 KB wire cap and
+    // the 400 KB R2 cap. Any decodable image works; the test asserts
+    // R2 state, not pixels.
+    const thumbnailDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=";
+
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+
+    const first = await createGearAction({
+      typePublicId,
+      code: "CH7",
+      description: "Test gear",
+      thumbnailDataUrl,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    if (!first.ok) throw new Error("first create unexpectedly failed");
+
+    // Snapshot R2 state before the failing create so we can assert
+    // nothing extra landed.
+    const { getPublicBucket } = await import("#/server/r2");
+    const before = await getPublicBucket().list({ prefix: "gear/" });
+    const beforeKeys = before.objects.map((o) => o.key).sort();
+
+    const dup = await createGearAction({
+      typePublicId,
+      code: "CH7",
+      description: "Different gear, same code",
+      thumbnailDataUrl,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    expect(dup).toEqual({ ok: false, reason: "code_in_use", code: "CH7" });
+
+    // The failed create uploaded a thumbnail before the insert blew up
+    // (its key includes a fresh gear id), so without rollback there
+    // would be a new R2 object under `gear/<failedId>/`. After
+    // rollback, R2's object list should be unchanged.
+    const after = await getPublicBucket().list({ prefix: "gear/" });
+    const afterKeys = after.objects.map((o) => o.key).sort();
+    expect(afterKeys).toEqual(beforeKeys);
+  });
+
   it("rejects duplicate active codes", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
@@ -441,6 +492,54 @@ describe("tags + list filters", () => {
     const detail = await getGearDetailAction({ publicId: gearPublicId });
     expect(detail.tags).toHaveLength(1);
     expect(detail.tags[0]?.name).toBe("outdoor-use");
+  });
+
+  it("editGearAction emits gear.tags_changed with added/removed diff", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const t1 = await createTagOk("outdoor");
+    const t2 = await createTagOk("winter");
+    const t3 = await createTagOk("indoor");
+
+    // Start with two tags.
+    const gearPublicId = await createGearOk({
+      typePublicId,
+      code: "CH1",
+      tagPublicIds: [t1, t2],
+    });
+
+    // Resolve to internal tag IDs for the assertions below — the audit
+    // metadata carries `id`s, not publicIds.
+    const tagRows = await getDb()
+      .select({ id: schema.gearTags.id, publicId: schema.gearTags.publicId })
+      .from(schema.gearTags);
+    const idByPublicId = new Map(tagRows.map((r) => [r.publicId, r.id]));
+
+    // Edit: drop `winter`, add `indoor`. Net diff should be one add + one
+    // remove. `outdoor` is unchanged and must not appear in either array.
+    await editGearAction({
+      publicId: gearPublicId,
+      typePublicId,
+      code: "CH1",
+      description: "Test gear",
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [t1, t3],
+    });
+
+    const auditRows = await getDb().select().from(schema.auditLog);
+    const tagsChanged = auditRows.find((r) => r.action === "gear.tags_changed");
+    expect(tagsChanged).toBeDefined();
+    const md = tagsChanged?.metadataJson
+      ? (JSON.parse(tagsChanged.metadataJson) as {
+          added: string[];
+          removed: string[];
+        })
+      : { added: [], removed: [] };
+    expect(md.added).toEqual([idByPublicId.get(t3)]);
+    expect(md.removed).toEqual([idByPublicId.get(t2)]);
   });
 
   it("createGearAction attaches tags that survive list + detail reads", async () => {

@@ -139,7 +139,7 @@ const thumbnailDataUrlSchema = z
   .max(600 * 1024)
   .regex(/^data:image\/(webp|jpeg|png);base64,/, "Invalid image data URL");
 
-const createGearInputSchema = z.object({
+export const createGearInputSchema = z.object({
   typePublicId: z.string().min(1),
   code: z.string().max(64).nullable(),
   // Description is the primary heading on the gear card — required end
