@@ -53,6 +53,7 @@ const {
   listLoansAction,
   listMyLoansAction,
 } = await import("#/features/gear/server/loans-actions.server");
+const { listLoans } = await import("#/features/gear/server/loans-repo.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -595,6 +596,32 @@ describe("getLoanDetailAction", () => {
     const detail = await getLoanDetailAction({ publicId: loanPublicId });
     expect(detail.memberFullName).toBe("Borrower One");
     expect(detail.checkedOutByName).toBe("Officer One");
+  });
+});
+
+describe("listLoans search", () => {
+  it("matches the borrower's primary email in free-text search", async () => {
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const gear = await createGearOk({ typePublicId, code: "CH1" });
+    const member = await seedUser("findme@example.com", "Search Target");
+    await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [{ gearPublicId: gear, durationDays: 7 }],
+      notes: null,
+    });
+
+    const byFullEmail = await listLoans({ q: "findme@example.com" });
+    expect(byFullEmail.rows).toHaveLength(1);
+    expect(byFullEmail.total).toBe(1);
+
+    // Substring also matches — the LIKE wraps the needle with %…%.
+    const byLocalPart = await listLoans({ q: "findme" });
+    expect(byLocalPart.rows).toHaveLength(1);
+
+    const miss = await listLoans({ q: "nobody@nowhere.test" });
+    expect(miss.rows).toHaveLength(0);
+    expect(miss.total).toBe(0);
   });
 });
 

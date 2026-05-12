@@ -59,31 +59,38 @@ VALUES ('${g2Id}', '${g2PublicId}', '${typeId}', '${code2}', 'Piece two', 'activ
   });
 
   // Open /gear/loans and the gear-desk Sheet.
+  // The trigger button has `aria-label="Open gear desk"` (the visible
+  // "Gear desk" label is hidden on narrow widths via `sm:inline`), so
+  // match by aria-label for resilience to viewport.
   await page.goto("/gear/loans");
   await waitForHydration(page);
-  await page.getByRole("button", { name: /^gear desk$/i }).click();
+  await page.getByRole("button", { name: /open gear desk/i }).click();
   await expect(
     page.getByRole("heading", { name: /^gear desk$/i }),
   ).toBeVisible();
 
   // CHECKOUT: pick the member, add both pieces by search, submit.
-  // The member combobox is the only one labeled "Search by name or email…".
+  // The member combobox is a Popover-trigger Button with role="combobox"
+  // whose accessible name is the placeholder copy. Click opens the
+  // popover; the search input inside is reached by placeholder.
   await page
     .getByRole("combobox", { name: /search by name or email/i })
     .click();
-  await page
-    .getByRole("combobox", { name: /search by name or email/i })
-    .fill(memberEmail);
-  // The CommandItem renders the member name + email; wait for it to
-  // appear before clicking.
+  await page.getByPlaceholder(/search by name or email/i).fill(memberEmail);
   await page
     .getByRole("option", { name: /e2e tester/i })
     .first()
     .click();
 
+  // Code search is an always-visible inline CommandInput at the bottom
+  // of the items list — no "Search code" button trigger to click.
+  // Placeholder is `Enter code (CH1, LJ3…) and press Enter` in checkout
+  // mode and `Enter code to check in…` in check-in mode.
+  const checkoutCodeInput = page.getByPlaceholder(
+    /enter code \(.*press enter/i,
+  );
   for (const code of [code1, code2]) {
-    await page.getByRole("button", { name: /search code/i }).click();
-    await page.getByPlaceholder(/enter code/i).fill(code);
+    await checkoutCodeInput.fill(code);
     await page.getByRole("option", { name: new RegExp(code) }).click();
   }
   await page.getByRole("button", { name: /^check out 2 items$/i }).click();
@@ -92,11 +99,11 @@ VALUES ('${g2Id}', '${g2PublicId}', '${typeId}', '${code2}', 'Piece two', 'activ
   ).toBeVisible({ timeout: 5_000 });
 
   // CHECK IN: switch modes inside the same Sheet, scan both back in.
-  await page.getByRole("button", { name: /^gear desk$/i }).click();
+  await page.getByRole("button", { name: /open gear desk/i }).click();
   await page.getByRole("tab", { name: /check in/i }).click();
+  const checkinCodeInput = page.getByPlaceholder(/enter code to check in/i);
   for (const code of [code1, code2]) {
-    await page.getByRole("button", { name: /search code/i }).click();
-    await page.getByPlaceholder(/enter code to check in/i).fill(code);
+    await checkinCodeInput.fill(code);
     await page.getByRole("option", { name: new RegExp(code) }).click();
   }
   await page.getByRole("button", { name: /^check in 2 items$/i }).click();

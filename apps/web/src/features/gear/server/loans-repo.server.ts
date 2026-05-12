@@ -214,6 +214,7 @@ export async function listLoans(
         like(schema.gear.code, needle),
         like(schema.gear.description, needle),
         like(schema.profiles.fullName, needle),
+        like(schema.userEmails.email, needle),
       ),
     );
   }
@@ -253,6 +254,18 @@ export async function listLoans(
       schema.profiles,
       eq(schema.profiles.userId, schema.gearLoans.memberUserId),
     )
+    // Primary email join is INNER because every approved/unclaimed
+    // borrower has exactly one primary row enforced by the partial
+    // unique index `user_emails_one_primary_per_user`. Used by the
+    // q-search OR clause; the COUNT below mirrors the join to keep
+    // total + rows consistent.
+    .innerJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.gearLoans.memberUserId),
+        eq(schema.userEmails.isPrimary, true),
+      ),
+    )
     .where(where)
     .orderBy(...orderBy)
     .limit(perPage)
@@ -264,6 +277,13 @@ export async function listLoans(
     .innerJoin(
       schema.profiles,
       eq(schema.profiles.userId, schema.gearLoans.memberUserId),
+    )
+    .innerJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.gearLoans.memberUserId),
+        eq(schema.userEmails.isPrimary, true),
+      ),
     )
     .where(where);
   const total = totalRow[0]?.value ?? 0;
