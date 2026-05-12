@@ -159,7 +159,7 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
                 <TableRow>
                   <TableHead className="w-20">Code</TableHead>
                   <TableHead>Condition</TableHead>
-                  <TableHead className="w-10">Borrower</TableHead>
+                  <TableHead className="w-10">User</TableHead>
                   <TableHead className="w-10" aria-label="Actions" />
                 </TableRow>
               </TableHeader>
