@@ -15,6 +15,11 @@ import { LoanCard } from "#/features/gear/components/loan-card";
 import { LoanFilterBar } from "#/features/gear/components/loan-filter-bar";
 import type { LoanFilterState } from "#/features/gear/components/loan-filter-bar";
 
+// Matches the perPage choices on /gear and /audit so the muscle
+// memory carries between officer-facing list pages. Defaults to 50.
+const PER_PAGE_OPTIONS = ["25", "50", "100", "250"] as const;
+const DEFAULT_PER_PAGE = 50;
+
 const loansSearchSchema = z.object({
   tab: z.enum(["active", "history"]).optional(),
   q: z.string().optional(),
@@ -22,7 +27,14 @@ const loansSearchSchema = z.object({
   overdue: z.coerce.boolean().optional(),
   sort: z.enum(["due_at", "checked_out_at"]).optional(),
   page: z.coerce.number().int().min(1).optional(),
-  perPage: z.coerce.number().int().min(1).max(250).optional(),
+  // Pin to the offered choices so a URL with `?perPage=37` doesn't
+  // leave the Select trigger with an unmatched value. Out-of-range
+  // input falls back to the default at the consumer.
+  perPage: z.coerce
+    .number()
+    .int()
+    .refine((n) => (PER_PAGE_OPTIONS as readonly string[]).includes(String(n)))
+    .optional(),
 });
 
 export const Route = createFileRoute("/gear/loans/")({
@@ -74,7 +86,7 @@ function GearLoansPage() {
   };
 
   const page = search.page ?? 1;
-  const perPage = search.perPage ?? 50;
+  const perPage = search.perPage ?? DEFAULT_PER_PAGE;
 
   const { data, isLoading } = useQuery(
     loansListQueryOptions({
@@ -89,6 +101,7 @@ function GearLoansPage() {
   );
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4 p-4">
@@ -121,13 +134,18 @@ function GearLoansPage() {
           ))}
         </ul>
       )}
-      {total > perPage ? (
+      {/* Always rendered when there's at least one row — same
+          convention as /gear and /audit. The component handles the
+          single-page case itself (disabled prev/next, "Page 1 of 1")
+          rather than us hiding it; that way the perPage picker stays
+          available even before the list overflows one page. */}
+      {rows.length > 0 ? (
         <DataPagination
           page={page}
           perPage={perPage}
           total={total}
-          totalPages={Math.max(1, Math.ceil(total / perPage))}
-          perPageOptions={["25", "50", "100"] as const}
+          totalPages={totalPages}
+          perPageOptions={PER_PAGE_OPTIONS}
           onPageChange={(p) =>
             navigate({
               search: (prev) => ({
