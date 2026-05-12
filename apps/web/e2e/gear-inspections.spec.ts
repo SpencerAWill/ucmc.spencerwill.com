@@ -69,13 +69,18 @@ VALUES ('${gearId}', '${gearPublicId}', '${typeId}', '${code}', 'Inspection targ
   await page.getByRole("textbox", { name: /notes/i }).fill(notes);
   await page.getByRole("button", { name: /record inspection/i }).click();
 
-  // Success toast + row appears (cache invalidates the inspections
-  // list query for this gear). The notes string is unique per run so
-  // we can target it precisely.
+  // Success toast confirms the mutation landed.
   await expect(page.getByText(/inspection recorded/i)).toBeVisible({
     timeout: 5_000,
   });
+  // Wait for the dialog to close before asserting on the log row — the
+  // textarea inside the dialog ALSO carries the notes string until the
+  // dialog is gone, which would trip a strict-mode locator violation.
+  await expect(
+    page.getByRole("heading", { name: /log inspection/i }),
+  ).toBeHidden({ timeout: 5_000 });
+  // Now the log row is the only thing on the page with this text.
   await expect(page.getByText(notes)).toBeVisible({ timeout: 5_000 });
-  // The "no inspections" placeholder is gone now.
+  // The "no inspections" placeholder is gone.
   await expect(page.getByText(/no inspections recorded/i)).toBeHidden();
 });

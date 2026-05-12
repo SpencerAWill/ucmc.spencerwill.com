@@ -46,18 +46,25 @@ test("officer creates a type, adds gear, retires it, and reissues the code", asy
   const prefix = `EH${runTag.toString().slice(-3)}`; // 5 chars max
   const code = `${prefix}1`;
 
-  // ── 1. Create a gear type via /gear/types ────────────────────────────
-  await page.goto("/gear/types");
+  // ── 1. Create a gear type via the /gear "Types" dialog ───────────────
+  await page.goto("/gear");
   await waitForHydration(page);
+  await page.getByRole("button", { name: /^types$/i }).click();
   await page.getByRole("button", { name: /new type/i }).click();
   await page.getByRole("textbox", { name: /^name$/i }).fill(typeName);
   await page.getByRole("textbox", { name: /prefix.*optional/i }).fill(prefix);
   await page.getByRole("button", { name: /create type/i }).click();
-  await expect(page.getByText(typeName)).toBeVisible();
+  // Form returns to the list pane; the new type's name should appear
+  // inside the dialog. Scope to the dialog so the success toast (which
+  // also embeds the type name) doesn't double-match strict-mode.
+  await expect(page.getByRole("dialog").getByText(typeName)).toBeVisible();
+  // Close the dialog so subsequent UI clicks aren't intercepted by it.
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("heading", { name: /^gear types$/i }),
+  ).toBeHidden();
 
   // ── 2. Add a gear via /gear "Add gear" ───────────────────────────────
-  await page.goto("/gear");
-  await waitForHydration(page);
   await page.getByRole("button", { name: /^add gear$/i }).click();
   // Pick the freshly-created type.
   await page.getByRole("combobox", { name: /^type$/i }).click();
@@ -67,6 +74,14 @@ test("officer creates a type, adds gear, retires it, and reissues the code", asy
   // deterministic against the auto-fill effect's timing.
   const codeInput = page.getByRole("textbox", { name: /^code$/i });
   await codeInput.fill(code);
+  // Description is required end-to-end (data model + UI) since the
+  // description-required refactor.
+  await page
+    .getByRole("textbox", { name: /description/i })
+    .fill(`Test gear ${runTag}`);
+  // The sheet's submit button reuses the "Add gear" label; the toolbar
+  // button behind the sheet overlay is hidden, so the role lookup
+  // resolves to the visible submit.
   await page.getByRole("button", { name: /^add gear$/i }).click();
 
   // The success toast confirms the create; the list row appears once
@@ -77,9 +92,13 @@ test("officer creates a type, adds gear, retires it, and reissues the code", asy
   await expect(page.getByText(code).first()).toBeVisible();
 
   // ── 3. Retire the gear ───────────────────────────────────────────────
-  // Find the gear card and click its retire button.
-  const card = page.locator("li", { hasText: code }).first();
-  await card.getByRole("button", { name: /retire/i }).click();
+  // Open the gear card's per-row actions dropdown and pick Retire.
+  // (Actions live in a dropdown menu, not as a direct button on the
+  // card, so the layout stays compact regardless of tag count.)
+  await page
+    .getByRole("button", { name: new RegExp(`Actions for ${code}`, "i") })
+    .click();
+  await page.getByRole("menuitem", { name: /retire/i }).click();
   await expect(
     page.getByRole("heading", { name: new RegExp(`Retire ${code}`, "i") }),
   ).toBeVisible();
@@ -93,15 +112,18 @@ test("officer creates a type, adds gear, retires it, and reissues the code", asy
 
   // Toggling the lifecycle filter to "retired" reveals the row, with
   // its code now cleared from the database — so the card shows the
-  // "no code" placeholder. Verify the type name renders on a retired row.
-  await page.getByRole("combobox", { name: /active/i }).click();
-  await page.getByRole("option", { name: /^retired$/i }).click();
+  // "no code" placeholder. Lifecycle lives in the Filters popover as a
+  // radio group since the multi-view refactor.
+  await page.getByRole("button", { name: /^filters/i }).click();
+  await page.getByRole("radio", { name: /^retired$/i }).check();
+  await page.keyboard.press("Escape");
   await expect(page.getByText(typeName).first()).toBeVisible();
 
   // ── 4. Re-issue the freed code on a brand-new piece ──────────────────
   // Switch back to active filter so the new piece shows up immediately.
-  await page.getByRole("combobox", { name: /retired/i }).click();
-  await page.getByRole("option", { name: /^active$/i }).click();
+  await page.getByRole("button", { name: /^filters/i }).click();
+  await page.getByRole("radio", { name: /^active$/i }).check();
+  await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: /^add gear$/i }).click();
   await page.getByRole("combobox", { name: /^type$/i }).click();
@@ -110,6 +132,9 @@ test("officer creates a type, adds gear, retires it, and reissues the code", asy
   // code is NULL — type now has zero active codes again. Explicitly
   // refill to keep the assertion independent of the suggester.
   await page.getByRole("textbox", { name: /^code$/i }).fill(code);
+  await page
+    .getByRole("textbox", { name: /description/i })
+    .fill(`Reissued ${runTag}`);
   await page.getByRole("button", { name: /^add gear$/i }).click();
 
   await expect(page.getByText(new RegExp(`Added ${code}`, "i"))).toBeVisible({
