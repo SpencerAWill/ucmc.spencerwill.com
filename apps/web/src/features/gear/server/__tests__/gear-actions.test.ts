@@ -148,6 +148,8 @@ beforeEach(async () => {
   // on actor/target so it survives user deletes and must be cleared
   // explicitly.
   await db.delete(schema.auditLog);
+  await db.delete(schema.gearInspections);
+  await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
   await db.delete(schema.gear);
   await db.delete(schema.gearTags);
