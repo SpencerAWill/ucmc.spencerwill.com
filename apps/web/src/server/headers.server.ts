@@ -28,7 +28,15 @@ const CSP_VALUE = [
   // Analytics beacon, which the zone auto-injects at the edge — no
   // worker-side opt-in. The matching connect-src entry below allows
   // the beacon's POSTs to `https://cloudflareinsights.com/cdn-cgi/rum`.
-  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
+  // `'wasm-unsafe-eval'` is the surgical permission for executing
+  // WebAssembly without granting full `'unsafe-eval'` (no `new Function`,
+  // no `eval`). It's a hard browser requirement for the gear-scanner
+  // polyfill path (Firefox + pre-17 Safari, see
+  // `features/gear/components/barcode-scanner.tsx`). The native
+  // BarcodeDetector path on Chrome / Edge / Android Chrome / Safari
+  // 17+ doesn't actually execute any WASM, but the CSP directive
+  // applies uniformly so the polyfill fallback works when needed.
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   "frame-src https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
@@ -53,8 +61,12 @@ export const SECURITY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ["X-Frame-Options", "DENY"],
   ["Referrer-Policy", "strict-origin-when-cross-origin"],
   [
+    // Camera is allowed on the same origin only — the gear-cave
+    // checkout flow opens the rear camera via getUserMedia +
+    // BarcodeDetector to scan gear labels. Microphone / geolocation /
+    // payment stay disabled (no feature uses them).
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=()",
+    "camera=(self), microphone=(), geolocation=(), payment=()",
   ],
   ["X-Content-Type-Options", "nosniff"],
 ];
