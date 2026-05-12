@@ -55,6 +55,11 @@
         "eslint-plugin-jsx-a11y>eslint": "10",
         "tiptap-markdown>@tiptap/core": "3"
       }
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-rmmr-r34h-pfm5"
+      ]
     }
   }
 }

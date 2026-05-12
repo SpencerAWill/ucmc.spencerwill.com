@@ -26,6 +26,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Audit
+        run: pnpm audit --audit-level high --prod
+
       - name: Lint
         run: pnpm --filter @ucmc/infra lint
 
