@@ -57,6 +57,7 @@ const config = defineConfig({
   // chunk that creeps past this number will still trip the warning.
   build: {
     chunkSizeWarningLimit: 1200,
+    sourcemap: false,
   },
   plugins: [
     devtools(),
