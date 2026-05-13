@@ -15,7 +15,7 @@ import { consumeAddEmailFn } from "#/features/auth/server/email-fns";
  *
  * Cache invalidation is gated on the success branch — there's no
  * server-side state change to reflect when the consume fails.
- * Invalidates the email list (so `/my/account/details` shows the new
+ * Invalidates the email list (so `/my/account/security` shows the new
  * row) and the session (so `principal.emails` reflects the addition
  * without waiting for the next navigation).
  */

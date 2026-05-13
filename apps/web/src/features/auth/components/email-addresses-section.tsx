@@ -24,7 +24,8 @@ const addEmailSchema = z.object({
 });
 
 /**
- * "Email addresses" section on `/my/account/details`. Lists every
+ * "Email addresses" section on the Sign-in tab
+ * (`/my/account/security`). Lists every
  * verified address attached to the user, with a Primary badge, a
  * "Make primary" button on non-primary rows, and a "Remove" button
  * (disabled on the primary row and when only one row exists). Below

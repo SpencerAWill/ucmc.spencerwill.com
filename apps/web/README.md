@@ -68,7 +68,7 @@ The footer also shows the registration disclaimer text **on every page** (not ju
 
 ### Auth-gated routes
 
-- `/my/account` + `/my/account/details` + `/my/account/security` — member's own profile, sessions, passkeys, data export, hard delete
+- `/my/account` (public profile), `/my/account/details` (private PII + emergency contacts), `/my/account/security` (Sign-in tab: emails + passkeys), `/my/account/preferences` (theme + data export + hard delete) — the member's own account surface
 - `/my/account/waiver` — read-only view of the member's paper-waiver attestation status
 - `/members` — directory (auth-gated, robots-disallowed)
 - `/members/management` — member lifecycle admin: approve pending registrations, pre-add unclaimed members, un-reject rejected, reactivate deactivated (`members:manage`)
