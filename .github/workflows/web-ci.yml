@@ -3,6 +3,7 @@ name: Web CI
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "apps/web/**"
       - "libs/**"
@@ -13,6 +14,7 @@ on:
 jobs:
   lint-typecheck-test:
     name: Lint, Type Check, Test
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -43,6 +45,7 @@ jobs:
 
   a11y:
     name: Accessibility (axe-core)
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
