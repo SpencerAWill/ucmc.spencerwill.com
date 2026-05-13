@@ -1,17 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
 import { PrivateDetailFields } from "#/components/profile/private-detail-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
-import {
-  myEmailsQueryOptions,
-  profileQueryOptions,
-} from "#/features/auth/api/queries";
+import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { EmailAddressesSection } from "#/features/auth/components/email-addresses-section";
 import { useSubmitDetails } from "#/features/auth/api/use-submit-details";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
@@ -19,18 +15,16 @@ import { profileInputSchema } from "#/server/profile/profile-schemas";
 import type { DetailsInput } from "#/server/profile/profile-schemas";
 
 /**
- * `/my/account/details` — private profile fields (legal name, M-number,
- * phone) plus emergency contacts. Mirrors the server-side
+ * `/my/account/details` — private profile fields (legal name, phone)
+ * plus emergency contacts. Mirrors the server-side
  * `members:view_private` projection: only the user themselves and
  * admins ever see these values.
+ *
+ * Email addresses moved to the Sign-in tab because they're an
+ * authentication identifier (magic-link target) rather than personal
+ * contact info. Account deletion / data export moved to Preferences.
  */
 export const Route = createFileRoute("/my/account/details")({
-  loader: async ({ context }) => {
-    // Pre-warm the email-addresses list so the section paints with
-    // data on first render. Other tabs in this layout follow the same
-    // ensureQueryData pattern.
-    await context.queryClient.ensureQueryData(myEmailsQueryOptions());
-  },
   component: AccountDetailsPage,
 });
 
@@ -51,11 +45,6 @@ function AccountDetailsPage() {
           immediately.
         </p>
       </header>
-
-      <EmailAddressesSection
-        approved={principal.status === "approved"}
-        primaryEmail={principal.primaryEmail}
-      />
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -80,6 +69,14 @@ function AccountDetailsPage() {
           }
         />
       )}
+
+      <p className="text-xs text-muted-foreground">
+        Looking to manage your email addresses? Those live on the{" "}
+        <Link to="/my/account/security" className="underline">
+          Sign-in
+        </Link>{" "}
+        tab.
+      </p>
     </div>
   );
 }

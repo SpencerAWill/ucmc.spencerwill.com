@@ -5,6 +5,14 @@ import { z } from "zod";
 
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "#/components/ui/item";
 import { myEmailsQueryOptions } from "#/features/auth/api/queries";
 import { useAddEmail } from "#/features/auth/api/use-add-email";
 import { useRemoveEmail } from "#/features/auth/api/use-remove-email";
@@ -49,19 +57,17 @@ export function EmailAddressesSection({
             approved.
           </p>
         </header>
-        <ul className="flex flex-col gap-2">
-          <li className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 truncate text-sm font-medium">
+        <ItemGroup className="gap-2">
+          <Item variant="outline" size="sm">
+            <ItemContent>
+              <ItemTitle>
                 <span className="truncate">{primaryEmail}</span>
                 <Badge variant="secondary">Primary</Badge>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Verified at registration
-              </p>
-            </div>
-          </li>
-        </ul>
+              </ItemTitle>
+              <ItemDescription>Verified at registration</ItemDescription>
+            </ItemContent>
+          </Item>
+        </ItemGroup>
       </section>
     );
   }
@@ -88,29 +94,26 @@ function ApprovedEmailAddressesSection() {
       {query.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ItemGroup className="gap-2">
           {emails.map((row) => (
-            <li
-              key={row.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-2 truncate text-sm font-medium">
+            <Item key={row.id} variant="outline" size="sm">
+              <ItemContent>
+                <ItemTitle>
                   <span className="truncate">{row.email}</span>
                   {row.isPrimary ? (
                     <Badge variant="secondary">Primary</Badge>
                   ) : null}
-                </p>
-                <p className="text-xs text-muted-foreground">
+                </ItemTitle>
+                <ItemDescription>
                   {row.verifiedAt
                     ? `Verified ${new Date(row.verifiedAt).toLocaleDateString(
                         undefined,
                         { year: "numeric", month: "short", day: "numeric" },
                       )}`
                     : "Pending verification"}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-2">
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
                 {row.isPrimary ? null : (
                   <Button
                     type="button"
@@ -158,10 +161,10 @@ function ApprovedEmailAddressesSection() {
                 >
                   Remove
                 </Button>
-              </div>
-            </li>
+              </ItemActions>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       )}
 
       <AddEmailForm />
