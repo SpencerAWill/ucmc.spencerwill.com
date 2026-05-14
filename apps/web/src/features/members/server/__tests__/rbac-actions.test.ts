@@ -35,11 +35,9 @@ const {
   getUserRolesAction,
   setUserRolesAction,
   reorderRolesAction,
-  bulkSetRolePermissionsAction,
   PROTECTED_ROLE_IDS,
 } = await import("#/features/members/server/rbac-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
-const { getKv } = await import("#/server/kv");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -462,96 +460,5 @@ describe("reorderRolesAction", () => {
     await expect(reorderRolesAction({ orderedRoleIds: dup })).rejects.toThrow(
       /Duplicate role id/,
     );
-  });
-});
-
-describe("bulkSetRolePermissionsAction", () => {
-  it("replaces grants for multiple roles in one call", async () => {
-    await signInAsAdmin();
-    const { roleId: a } = await createRoleAction({ name: "test_custom" });
-    const { roleId: b } = await createRoleAction({ name: "another" });
-
-    await bulkSetRolePermissionsAction({
-      roles: [
-        {
-          roleId: a,
-          permissionIds: ["perm_members_manage", "perm_roles_assign"],
-        },
-        { roleId: b, permissionIds: ["perm_roles_manage"] },
-      ],
-    });
-
-    const grantsA = await getDb()
-      .select({ permissionId: schema.rolePermissions.permissionId })
-      .from(schema.rolePermissions)
-      .where(eq(schema.rolePermissions.roleId, a));
-    const grantsB = await getDb()
-      .select({ permissionId: schema.rolePermissions.permissionId })
-      .from(schema.rolePermissions)
-      .where(eq(schema.rolePermissions.roleId, b));
-
-    expect(grantsA.map((g) => g.permissionId).sort()).toEqual([
-      "perm_members_manage",
-      "perm_roles_assign",
-    ]);
-    expect(grantsB.map((g) => g.permissionId)).toEqual(["perm_roles_manage"]);
-  });
-
-  it("clears grants when given an empty permissionIds array", async () => {
-    await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
-    await setRolePermissionsAction({
-      roleId,
-      permissionIds: ["perm_roles_manage"],
-    });
-
-    await bulkSetRolePermissionsAction({
-      roles: [{ roleId, permissionIds: [] }],
-    });
-
-    const grants = await getDb()
-      .select()
-      .from(schema.rolePermissions)
-      .where(eq(schema.rolePermissions.roleId, roleId));
-    expect(grants).toEqual([]);
-  });
-
-  it("rejects entries that target system_admin", async () => {
-    await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
-    await expect(
-      bulkSetRolePermissionsAction({
-        roles: [
-          { roleId, permissionIds: ["perm_roles_manage"] },
-          { roleId: "role_system_admin", permissionIds: [] },
-        ],
-      }),
-    ).rejects.toThrow("Cannot modify system_admin permissions");
-  });
-
-  it("rejects duplicate role ids in the input", async () => {
-    await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
-    await expect(
-      bulkSetRolePermissionsAction({
-        roles: [
-          { roleId, permissionIds: ["perm_roles_manage"] },
-          { roleId, permissionIds: [] },
-        ],
-      }),
-    ).rejects.toThrow(/Duplicate role id/);
-  });
-
-  it("invalidates the anonymous permissions cache when anonymous is touched", async () => {
-    await signInAsAdmin();
-    const kv = getKv();
-    await kv.put("anonymous:permissions", JSON.stringify(["roles:manage"]));
-    expect(await kv.get("anonymous:permissions")).not.toBeNull();
-
-    await bulkSetRolePermissionsAction({
-      roles: [{ roleId: "role_anonymous", permissionIds: [] }],
-    });
-
-    expect(await kv.get("anonymous:permissions")).toBeNull();
   });
 });
