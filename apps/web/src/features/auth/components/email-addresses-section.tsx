@@ -60,10 +60,12 @@ export function EmailAddressesSection({
         </header>
         <ItemGroup className="gap-2">
           <Item variant="outline" size="sm">
-            <ItemContent>
-              <ItemTitle>
-                <span className="truncate">{primaryEmail}</span>
-                <Badge variant="secondary">Primary</Badge>
+            <ItemContent className="min-w-0">
+              <ItemTitle className="w-full min-w-0">
+                <span className="min-w-0 flex-1 truncate">{primaryEmail}</span>
+                <Badge variant="secondary" className="shrink-0">
+                  Primary
+                </Badge>
               </ItemTitle>
               <ItemDescription>Verified at registration</ItemDescription>
             </ItemContent>
@@ -98,11 +100,23 @@ function ApprovedEmailAddressesSection() {
         <ItemGroup className="gap-2">
           {emails.map((row) => (
             <Item key={row.id} variant="outline" size="sm">
-              <ItemContent>
-                <ItemTitle>
-                  <span className="truncate">{row.email}</span>
+              {/*
+               * `min-w-0` on ItemContent + `w-full min-w-0` on ItemTitle
+               * are needed for the inner `truncate` span to actually
+               * ellipsis on long addresses. ItemContent is `flex-1` but
+               * its default `min-width: auto` lets children overflow,
+               * and ItemTitle ships with `w-fit` (shrink-to-content)
+               * which similarly prevents truncation. Without these,
+               * a 60-char email would widen the row instead of
+               * ellipsizing.
+               */}
+              <ItemContent className="min-w-0">
+                <ItemTitle className="w-full min-w-0">
+                  <span className="min-w-0 flex-1 truncate">{row.email}</span>
                   {row.isPrimary ? (
-                    <Badge variant="secondary">Primary</Badge>
+                    <Badge variant="secondary" className="shrink-0">
+                      Primary
+                    </Badge>
                   ) : null}
                 </ItemTitle>
                 <ItemDescription>

@@ -5,12 +5,11 @@ import { RouteErrorFallback } from "#/components/error-page";
 /**
  * Account hub layout: a page-level container with a horizontal tab bar
  * over the sub-routes (Profile / Details / Waiver / Sign-in /
- * Preferences) and an `<Outlet />` that renders the active child. The
- * Sign-in tab still routes to `/my/account/security` — only the label
- * was renamed, so existing bookmarks and the passkey E2E keep working.
- * Each
+ * Preferences) and an `<Outlet />` that renders the active child. Each
  * tab is a real URL (not state), so direct navigation, shareable links,
- * and the browser back button all work correctly.
+ * and the browser back button all work correctly. The Sign-in tab
+ * still routes to `/my/account/security` — only the label was renamed,
+ * so existing bookmarks and the passkey E2E keep working.
  *
  * The approved-only guard is hoisted to the parent `/my` route, so
  * pending/rejected users get shunted before they reach this layout
