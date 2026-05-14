@@ -64,6 +64,7 @@ export const AUDIT_ACTIONS = [
   "loan.checked_out",
   "loan.checked_in",
   "loan.extended",
+  "settings_updated",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

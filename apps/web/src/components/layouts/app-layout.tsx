@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -54,6 +55,7 @@ import {
   SUBBRAND_DISAMBIGUATION,
 } from "#/config/legal";
 import { GITHUB_REPO_URL } from "#/config/site";
+import { publicSiteContactQueryOptions } from "#/features/settings/api/queries";
 import {
   Collapsible,
   CollapsibleContent,
@@ -563,19 +565,20 @@ function SidebarUtilityNav() {
   const { isApproved, hasPermission } = useAuth();
   const canSubmitFeedback = isApproved && hasPermission("feedback:submit");
   const canViewAudit = hasPermission("audit:view");
+  const canManageSettings = hasPermission("settings:manage");
   return (
     <SidebarGroup>
       <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            aria-disabled
-            tabIndex={-1}
-            tooltip="Settings (coming soon)"
-          >
-            <Settings />
-            <span>Settings</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        {canManageSettings ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Settings">
+              <Link to="/settings">
+                <Settings />
+                <span>Settings</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
         {canSubmitFeedback ? (
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Feedback">
@@ -608,10 +611,10 @@ function SidebarUtilityNav() {
         </SidebarMenuItem>
         {canViewAudit ? (
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Audit log">
+            <SidebarMenuButton asChild tooltip="Audit">
               <Link to="/audit">
                 <History />
-                <span>Audit log</span>
+                <span>Audit</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -622,6 +625,8 @@ function SidebarUtilityNav() {
 }
 
 function AppFooter() {
+  const options = publicSiteContactQueryOptions();
+  const { data: contact = options.placeholderData } = useQuery(options);
   return (
     <footer className="mt-auto border-t px-4 py-6 text-xs text-muted-foreground">
       <div className="mx-auto flex max-w-6xl flex-col gap-4">
@@ -667,7 +672,7 @@ function AppFooter() {
               <GitHubIcon className="size-5" />
             </a>
             <a
-              href="mailto:ucmountaineering@gmail.com"
+              href={`mailto:${contact.clubEmail}`}
               className="hover:text-foreground"
               aria-label="Email UCMC"
             >
