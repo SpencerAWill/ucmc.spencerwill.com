@@ -177,6 +177,26 @@ export const updateSettingInputSchema: z.ZodType<UpdateSettingInput> = z
 
 // ── Lifecycle helpers ───────────────────────────────────────────────────
 /**
+ * `true` when `value` deep-equals the registry's schema default for the
+ * given key. Used by the admin UI to flag settings that have been
+ * actively touched (more interesting at a glance than untouched ones).
+ *
+ * Deep-equality is approximated by JSON serialization. That's correct
+ * for every shape the registry can hold today (strings, booleans,
+ * numbers, arrays, plain objects), and degrades gracefully for any
+ * future shape — a false negative just shows "Custom" on a value that
+ * round-tripped through serialization-with-different-key-order, which
+ * is a benign overestimate.
+ */
+export function isDefault<TKey extends SettingKey>(
+  key: TKey,
+  value: SettingValue<TKey>,
+): boolean {
+  const defaultValue = SETTINGS[key].parse(undefined);
+  return JSON.stringify(value) === JSON.stringify(defaultValue);
+}
+
+/**
  * A setting is "stale" when its `expiresAt` is in the past. Used by the
  * admin page to surface a "Needs review" tray per category.
  */

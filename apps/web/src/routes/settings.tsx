@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { requirePermission } from "#/features/auth/guards";
 import { siteSettingsQueryOptions } from "#/features/settings/api/queries";
 import { SettingRow } from "#/features/settings/components/setting-row";
+import type { SiteSettingsSnapshot } from "#/features/settings/server/settings-fns";
 import {
   CATEGORY_LABELS,
   getMeta,
@@ -14,7 +15,6 @@ import {
 import type {
   SettingCategory,
   SettingKey,
-  SettingValue,
 } from "#/features/settings/server/settings-registry";
 
 export const Route = createFileRoute("/settings")({
@@ -52,7 +52,7 @@ function SettingsPage() {
             key={category}
             category={category}
             keys={keys}
-            values={query.data}
+            entries={query.data}
           />
         );
       })}
@@ -63,21 +63,21 @@ function SettingsPage() {
 function CategorySection({
   category,
   keys,
-  values,
+  entries,
 }: {
   category: SettingCategory;
   keys: SettingKey[];
-  values: { [TKey in SettingKey]: SettingValue<TKey> } | undefined;
+  entries: SiteSettingsSnapshot | undefined;
 }) {
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">{CATEGORY_LABELS[category]}</h2>
       <div className="space-y-3">
         {keys.map((key) =>
-          values === undefined ? (
+          entries === undefined ? (
             <SettingRowSkeleton key={key} />
           ) : (
-            <SettingRow key={key} settingKey={key} value={values[key]} />
+            <SettingRow key={key} settingKey={key} entry={entries[key]} />
           ),
         )}
       </div>

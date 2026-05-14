@@ -81,6 +81,7 @@ beforeEach(async () => {
   // — clear it explicitly. site_settings is the unit-under-test.
   await db.delete(schema.auditLog);
   await db.delete(schema.siteSettings);
+  await db.delete(schema.profiles);
   await db.delete(schema.userRoles);
   await db.delete(schema.sessions);
   await db.delete(schema.users);
@@ -156,6 +157,41 @@ describe("readSetting fail-open", () => {
 });
 
 // ── public-read allowlist ──────────────────────────────────────────────
+
+describe("listSiteSettingsAction snapshot shape", () => {
+  it("returns null edit metadata for unset keys", async () => {
+    await signInAsManager();
+    const snapshot = await listSiteSettingsAction();
+    expect(snapshot["contact.clubEmail"]).toEqual({
+      value: SETTINGS["contact.clubEmail"].parse(undefined),
+      updatedAtMs: null,
+      updatedByName: null,
+    });
+  });
+
+  it("returns the actor's profile name + an updatedAtMs after an edit", async () => {
+    const actorId = await signInAsManager();
+    // Profile join requires a profiles row — seed one.
+    await getDb().insert(schema.profiles).values({
+      userId: actorId,
+      fullName: "Test Officer",
+      preferredName: "Test",
+      phone: "555-0100",
+      ucAffiliation: "student",
+    });
+
+    const result = await updateSettingAction({
+      key: "contact.clubEmail",
+      value: "new@example.com",
+    });
+    expect(result.ok).toBe(true);
+
+    const snapshot = await listSiteSettingsAction();
+    expect(snapshot["contact.clubEmail"].value).toBe("new@example.com");
+    expect(snapshot["contact.clubEmail"].updatedByName).toBe("Test Officer");
+    expect(typeof snapshot["contact.clubEmail"].updatedAtMs).toBe("number");
+  });
+});
 
 describe("getPublicSiteContactAction", () => {
   it("returns the curated subset with no auth gate", async () => {

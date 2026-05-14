@@ -61,43 +61,87 @@ export async function readSetting<TKey extends SettingKey>(
 }
 
 /**
- * Eager-load every registered setting in one round-trip. The /settings
- * route uses this to hydrate its form state; reading them individually
- * would be N queries per page render. Missing rows fall back to the
- * registry default per key (same fail-open semantics as `readSetting`).
+ * Per-key snapshot: value plus the metadata the admin UI uses for the
+ * "Last edited …" footer. `updatedAtMs` is a unix-ms number on the wire
+ * (createServerFn doesn't reliably round-trip `Date` across the worker
+ * boundary). `updatedByName` is the actor's display name from
+ * `profiles.fullName`, joined here so the client doesn't make N profile
+ * fetches; `null` when no row exists, the actor cascaded to NULL, or
+ * the profile is missing.
  */
-export async function readAllSettings(): Promise<{
-  [K in SettingKey]: SettingValue<K>;
-}> {
-  const out = {} as { [K in SettingKey]: SettingValue<K> };
-  let rowsByKey = new Map<string, string>();
+export type SiteSettingEntry<TKey extends SettingKey> = {
+  value: SettingValue<TKey>;
+  updatedAtMs: number | null;
+  updatedByName: string | null;
+};
+
+export type SiteSettingsEntries = {
+  [TKey in SettingKey]: SiteSettingEntry<TKey>;
+};
+
+/**
+ * Eager-load every registered setting plus its edit metadata in one
+ * round-trip (LEFT JOIN profiles for the actor's display name). The
+ * /settings route hydrates the page with this; reading rows + actor
+ * names individually would be O(N) queries per render. Missing rows
+ * fall back to the registry default per key (same fail-open semantics
+ * as `readSetting`) with `updatedAtMs`/`updatedByName` set to `null`.
+ */
+export async function readAllSettings(): Promise<SiteSettingsEntries> {
+  type Row = {
+    key: string;
+    valueJson: string;
+    updatedAt: Date;
+    updatedByName: string | null;
+  };
+  let rowsByKey = new Map<string, Row>();
   try {
     const rows = await getDb()
       .select({
         key: schema.siteSettings.key,
         valueJson: schema.siteSettings.valueJson,
+        updatedAt: schema.siteSettings.updatedAt,
+        updatedByName: schema.profiles.fullName,
       })
       .from(schema.siteSettings)
+      .leftJoin(
+        schema.profiles,
+        eq(schema.profiles.userId, schema.siteSettings.updatedBy),
+      )
       .all();
-    rowsByKey = new Map(rows.map((r) => [r.key, r.valueJson]));
+    rowsByKey = new Map(rows.map((r) => [r.key, r as Row]));
   } catch {
     // D1 hiccup — every key falls back to its schema default below.
   }
+
+  const out = {} as SiteSettingsEntries;
   for (const k of Object.keys(SETTINGS) as SettingKey[]) {
     const stored = rowsByKey.get(k);
     if (stored === undefined) {
-      out[k] = SETTINGS[k].parse(undefined);
+      out[k] = {
+        value: SETTINGS[k].parse(undefined),
+        updatedAtMs: null,
+        updatedByName: null,
+      };
       continue;
     }
     let raw: unknown;
     try {
-      raw = JSON.parse(stored);
+      raw = JSON.parse(stored.valueJson);
     } catch {
-      out[k] = SETTINGS[k].parse(undefined);
+      out[k] = {
+        value: SETTINGS[k].parse(undefined),
+        updatedAtMs: stored.updatedAt.getTime(),
+        updatedByName: stored.updatedByName,
+      };
       continue;
     }
     const parsed = SETTINGS[k].safeParse(raw);
-    out[k] = parsed.success ? parsed.data : SETTINGS[k].parse(undefined);
+    out[k] = {
+      value: parsed.success ? parsed.data : SETTINGS[k].parse(undefined),
+      updatedAtMs: stored.updatedAt.getTime(),
+      updatedByName: stored.updatedByName,
+    };
   }
   return out;
 }

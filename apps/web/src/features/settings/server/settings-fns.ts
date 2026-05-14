@@ -16,10 +16,17 @@ import type {
   UpdateSettingInput,
 } from "./settings-registry";
 import type { UpdateSettingResult } from "./settings-actions.server";
+import type {
+  SiteSettingEntry,
+  SiteSettingsEntries,
+} from "./settings-repo.server";
 
 export type { UpdateSettingResult, UpdateSettingInput };
 
-export type SiteSettingsSnapshot = { [K in SettingKey]: SettingValue<K> };
+// Public alias kept for route + UI imports. The per-key shape now includes
+// edit metadata (updatedAtMs + updatedByName) alongside the value.
+export type SiteSettingsSnapshot = SiteSettingsEntries;
+export type { SiteSettingEntry };
 
 /**
  * Read every site setting. Officer-gated server-side (the action checks

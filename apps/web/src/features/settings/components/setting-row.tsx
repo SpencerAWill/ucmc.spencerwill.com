@@ -9,6 +9,7 @@
  * Cache invalidation in the mutation hook re-syncs unsaved-but-unchanged
  * values from the canonical snapshot after each successful save.
  */
+import { formatDistanceToNowStrict } from "date-fns";
 import { useEffect, useState } from "react";
 
 import { Badge } from "#/components/ui/badge";
@@ -17,8 +18,10 @@ import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { Switch } from "#/components/ui/switch";
 import { useUpdateSetting } from "#/features/settings/api/use-update-setting";
+import type { SiteSettingEntry } from "#/features/settings/server/settings-fns";
 import {
   getMeta,
+  isDefault,
   isStale,
   SETTINGS,
 } from "#/features/settings/server/settings-registry";
@@ -31,13 +34,14 @@ import { autoFormType } from "./auto-form/introspect";
 
 export function SettingRow<TKey extends SettingKey>({
   settingKey,
-  value,
+  entry,
 }: {
   settingKey: TKey;
-  value: SettingValue<TKey>;
+  entry: SiteSettingEntry<TKey>;
 }) {
   const meta = getMeta(settingKey);
   const formType = autoFormType(SETTINGS[settingKey]);
+  const value = entry.value;
   const [draft, setDraft] = useState<SettingValue<TKey>>(value);
   const [error, setError] = useState<string | null>(null);
   const mutation = useUpdateSetting();
@@ -50,6 +54,7 @@ export function SettingRow<TKey extends SettingKey>({
 
   const isDirty = draft !== value;
   const isBoolean = formType === "boolean";
+  const isCustomized = !isDefault(settingKey, value);
 
   async function save(nextValue: SettingValue<TKey>) {
     setError(null);
@@ -70,9 +75,9 @@ export function SettingRow<TKey extends SettingKey>({
     <div className="flex flex-col gap-2 rounded-lg border p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Label className="text-sm font-medium">{meta.label}</Label>
-            <LifecycleBadges meta={meta} />
+            <LifecycleBadges meta={meta} isCustomized={isCustomized} />
           </div>
           <p className="text-xs text-muted-foreground">{meta.description}</p>
         </div>
@@ -116,14 +121,30 @@ export function SettingRow<TKey extends SettingKey>({
         </div>
       ) : null}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <LastEditedLine entry={entry} />
     </div>
   );
 }
 
-function LifecycleBadges({ meta }: { meta: SettingMeta }) {
+function LifecycleBadges({
+  meta,
+  isCustomized,
+}: {
+  meta: SettingMeta;
+  isCustomized: boolean;
+}) {
   const stale = isStale(meta);
   return (
     <div className="flex flex-wrap gap-1">
+      {/* "Custom" means the stored value differs from the schema default.
+          Settings that have been actively touched are more interesting at
+          a glance than untouched ones — surfacing this lets officers scan
+          the page and spot what's been changed without diffing per row. */}
+      {isCustomized ? (
+        <Badge variant="secondary" className="text-[10px]">
+          Custom
+        </Badge>
+      ) : null}
       {meta.flagKind ? (
         <Badge variant="outline" className="text-[10px] uppercase">
           {meta.flagKind}
@@ -135,6 +156,23 @@ function LifecycleBadges({ meta }: { meta: SettingMeta }) {
         </Badge>
       ) : null}
     </div>
+  );
+}
+
+function LastEditedLine<TKey extends SettingKey>({
+  entry,
+}: {
+  entry: SiteSettingEntry<TKey>;
+}) {
+  if (entry.updatedAtMs === null) return null;
+  const when = formatDistanceToNowStrict(new Date(entry.updatedAtMs), {
+    addSuffix: true,
+  });
+  const who = entry.updatedByName ?? "an officer";
+  return (
+    <p className="text-[11px] text-muted-foreground">
+      Edited {when} by {who}
+    </p>
   );
 }
 
