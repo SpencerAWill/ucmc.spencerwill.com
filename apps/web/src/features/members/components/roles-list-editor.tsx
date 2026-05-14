@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { GripVertical, Pencil, Plus, Shield, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Plus, Shield, Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -15,6 +15,7 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
+import { Checkbox } from "#/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -131,7 +132,9 @@ export function RolesListEditor() {
       <Sortable
         value={order}
         onValueChange={setOrder}
-        getItemLabel={(id) => rolesById.get(String(id))?.name ?? String(id)}
+        getItemLabel={(id) =>
+          rolesById.get(String(id))?.displayName ?? String(id)
+        }
       >
         <SortableContent asChild>
           <ul className="divide-y rounded-md border">
@@ -150,7 +153,7 @@ export function RolesListEditor() {
                 >
                   <li className="flex items-center gap-2 bg-background px-3 py-2 data-dragging:bg-muted data-dragging:shadow-md">
                     <SortableItemHandle
-                      aria-label={`Drag ${role.name}`}
+                      aria-label={`Drag ${role.displayName}`}
                       className="flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       <GripVertical className="size-4" />
@@ -160,20 +163,35 @@ export function RolesListEditor() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate font-medium">
-                          {role.name}
-                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="truncate font-medium">
+                              {role.displayName}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs">
+                            {role.description ?? "No description."}
+                          </TooltipContent>
+                        </Tooltip>
                         {role.isProtected ? (
                           <Badge variant="outline" className="text-xs">
                             protected
                           </Badge>
                         ) : null}
+                        {role.isOfficer ? (
+                          <Badge
+                            variant="secondary"
+                            className="text-xs"
+                            title="Surfaces on the public home page"
+                          >
+                            <Star className="mr-1 size-3" />
+                            officer
+                          </Badge>
+                        ) : null}
                       </div>
-                      {role.description ? (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {role.description}
-                        </p>
-                      ) : null}
+                      <p className="truncate text-xs text-muted-foreground">
+                        {role.name}
+                      </p>
                     </div>
 
                     <div className="hidden shrink-0 items-center gap-4 text-xs text-muted-foreground sm:flex">
@@ -197,7 +215,7 @@ export function RolesListEditor() {
                                 roleName: role.name,
                               })
                             }
-                            aria-label={`Edit ${role.name}`}
+                            aria-label={`Edit ${role.displayName}`}
                           >
                             <Pencil className="size-4" />
                           </Button>
@@ -211,7 +229,7 @@ export function RolesListEditor() {
                               variant="ghost"
                               size="icon"
                               onClick={() => setDeleteTarget(role)}
-                              aria-label={`Delete ${role.name}`}
+                              aria-label={`Delete ${role.displayName}`}
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -281,7 +299,7 @@ export function RolesListEditor() {
             <AlertDialogTitle>Delete role</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete the role &ldquo;
-              {deleteTarget?.name}&rdquo;? This will remove it from all{" "}
+              {deleteTarget?.displayName}&rdquo;? This will remove it from all{" "}
               {deleteTarget?.memberCount ?? 0} member(s) who have it.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -316,6 +334,12 @@ const roleNameSchema = z
     "Lowercase letters, digits, and underscores only; must start with a letter",
   );
 
+const displayNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Required")
+  .max(80, "At most 80 characters");
+
 function CreateRoleDialog({
   open,
   onOpenChange,
@@ -324,28 +348,41 @@ function CreateRoleDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [name, setName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [description, setDescription] = useState("");
+  const [isOfficer, setIsOfficer] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useCreateRole();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const parsed = roleNameSchema.safeParse(name);
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid name");
+    const parsedName = roleNameSchema.safeParse(name);
+    if (!parsedName.success) {
+      setError(parsedName.error.issues[0]?.message ?? "Invalid name");
+      return;
+    }
+    const parsedDisplay = displayNameSchema.safeParse(displayName);
+    if (!parsedDisplay.success) {
+      setError(
+        parsedDisplay.error.issues[0]?.message ?? "Invalid display name",
+      );
       return;
     }
     setError(null);
     mutation.mutate(
       {
-        name: parsed.data,
+        name: parsedName.data,
+        displayName: parsedDisplay.data,
         description: description.trim() || undefined,
+        isOfficer,
       },
       {
         onSuccess: () => {
           setName("");
+          setDisplayName("");
           setDescription("");
+          setIsOfficer(false);
           setError(null);
           onOpenChange(false);
         },
@@ -376,7 +413,20 @@ function CreateRoleDialog({
           </DialogHeader>
           <div className="mt-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="role-name">Name</Label>
+              <Label htmlFor="role-display-name">Display name</Label>
+              <Input
+                id="role-display-name"
+                placeholder="e.g. Trip Leader"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={80}
+              />
+              <p className="text-xs text-muted-foreground">
+                Shown wherever this role is presented to members.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-name">Identifier</Label>
               <Input
                 id="role-name"
                 placeholder="e.g. trip_leader"
@@ -400,6 +450,24 @@ function CreateRoleDialog({
                 rows={2}
               />
             </div>
+            <label
+              htmlFor="role-is-officer"
+              className="flex items-start gap-3 rounded-md border px-3 py-2"
+            >
+              <Checkbox
+                id="role-is-officer"
+                checked={isOfficer}
+                onCheckedChange={(checked) => setIsOfficer(checked === true)}
+                className="mt-0.5"
+              />
+              <div>
+                <span className="text-sm font-medium">Officer position</span>
+                <p className="text-xs text-muted-foreground">
+                  Show members holding this role on the public &ldquo;Meet the
+                  officers&rdquo; section of the home page.
+                </p>
+              </div>
+            </label>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
           <DialogFooter className="mt-6">

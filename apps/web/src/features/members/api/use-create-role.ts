@@ -6,8 +6,12 @@ import { createRoleFn } from "#/features/members/server/rbac-fns";
 export function useCreateRole() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; description?: string }) =>
-      createRoleFn({ data: input }),
+    mutationFn: (input: {
+      name: string;
+      displayName: string;
+      description?: string;
+      isOfficer?: boolean;
+    }) => createRoleFn({ data: input }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
     },

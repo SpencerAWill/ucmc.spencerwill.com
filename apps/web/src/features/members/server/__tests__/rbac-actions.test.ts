@@ -89,7 +89,11 @@ beforeEach(async () => {
   await db.delete(schema.profiles);
   await db.delete(schema.users);
   // Remove any test-created roles (keep seeded ones).
-  for (const id of ["role_test_custom", "role_another"]) {
+  for (const id of [
+    "role_test_custom",
+    "role_another",
+    "role_test_trip_leader",
+  ]) {
     await db.delete(schema.roles).where(eq(schema.roles.id, id));
   }
   // Remove test-only permissions.
@@ -178,6 +182,7 @@ describe("createRoleAction", () => {
     await signInAsAdmin();
     const { roleId } = await createRoleAction({
       name: "test_custom",
+      displayName: "Test Custom",
       description: "A test role",
     });
     expect(roleId).toBe("role_test_custom");
@@ -187,22 +192,41 @@ describe("createRoleAction", () => {
     });
     expect(role).toBeDefined();
     expect(role!.name).toBe("test_custom");
+    expect(role!.displayName).toBe("Test Custom");
     expect(role!.description).toBe("A test role");
+    expect(role!.isOfficer).toBe(false);
+  });
+
+  it("persists isOfficer when set", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+      isOfficer: true,
+    });
+
+    const role = await getDb().query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    });
+    expect(role!.isOfficer).toBe(true);
   });
 
   it("rejects duplicate role names", async () => {
     await signInAsAdmin();
-    await createRoleAction({ name: "test_custom" });
-    await expect(createRoleAction({ name: "test_custom" })).rejects.toThrow(
-      'Role "test_custom" already exists',
-    );
+    await createRoleAction({ name: "test_custom", displayName: "Test Custom" });
+    await expect(
+      createRoleAction({ name: "test_custom", displayName: "Test Custom" }),
+    ).rejects.toThrow('Role "test_custom" already exists');
   });
 });
 
 describe("updateRoleAction", () => {
   it("updates description of a role", async () => {
     await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
+    const { roleId } = await createRoleAction({
+      name: "test_custom",
+      displayName: "Test Custom",
+    });
 
     await updateRoleAction({ roleId, description: "Updated desc" });
 
@@ -218,12 +242,52 @@ describe("updateRoleAction", () => {
       updateRoleAction({ roleId: "role_fake", description: "x" }),
     ).rejects.toThrow("Role not found");
   });
+
+  it("updates displayName without touching other fields", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+      description: "Leads trips",
+    });
+    await updateRoleAction({ roleId, displayName: "Trip Lead" });
+
+    const role = await getDb().query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    });
+    expect(role!.displayName).toBe("Trip Lead");
+    expect(role!.description).toBe("Leads trips");
+    expect(role!.isOfficer).toBe(false);
+  });
+
+  it("toggles isOfficer", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    await updateRoleAction({ roleId, isOfficer: true });
+    let role = await getDb().query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    });
+    expect(role!.isOfficer).toBe(true);
+
+    await updateRoleAction({ roleId, isOfficer: false });
+    role = await getDb().query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    });
+    expect(role!.isOfficer).toBe(false);
+  });
 });
 
 describe("deleteRoleAction", () => {
   it("deletes a non-protected role", async () => {
     await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
+    const { roleId } = await createRoleAction({
+      name: "test_custom",
+      displayName: "Test Custom",
+    });
 
     await deleteRoleAction(roleId);
 
@@ -279,7 +343,10 @@ describe("listPermissionsAction", () => {
 describe("setRolePermissionsAction", () => {
   it("replaces permission grants for a role", async () => {
     await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
+    const { roleId } = await createRoleAction({
+      name: "test_custom",
+      displayName: "Test Custom",
+    });
 
     // Grant one permission.
     await setRolePermissionsAction({
@@ -321,7 +388,10 @@ describe("setRolePermissionsAction", () => {
 
   it("clears grants when given an empty array", async () => {
     await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
+    const { roleId } = await createRoleAction({
+      name: "test_custom",
+      displayName: "Test Custom",
+    });
     await setRolePermissionsAction({
       roleId,
       permissionIds: ["perm_roles_manage"],
@@ -362,7 +432,7 @@ describe("getUserRolesAction / setUserRolesAction", () => {
     expect(before.map((r) => r.name)).toEqual(["member"]);
 
     // Create a custom role and assign it.
-    await createRoleAction({ name: "test_custom" });
+    await createRoleAction({ name: "test_custom", displayName: "Test Custom" });
     await setUserRolesAction({
       userId: memberId,
       roleIds: ["role_member", "role_test_custom"],
@@ -432,8 +502,8 @@ describe("getUserRolesAction / setUserRolesAction", () => {
 describe("reorderRolesAction", () => {
   it("writes positions in the supplied order", async () => {
     await signInAsAdmin();
-    await createRoleAction({ name: "test_custom" });
-    await createRoleAction({ name: "another" });
+    await createRoleAction({ name: "test_custom", displayName: "Test Custom" });
+    await createRoleAction({ name: "another", displayName: "Another" });
 
     const before = await listRolesDetailedAction();
     const ids = before.map((r) => r.id);

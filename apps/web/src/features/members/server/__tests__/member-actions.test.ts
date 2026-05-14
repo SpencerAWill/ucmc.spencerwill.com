@@ -137,7 +137,11 @@ async function signInWithPermission(
   const roleId = `role_test_${permissionName.replace(":", "_")}`;
   await db
     .insert(schema.roles)
-    .values({ id: roleId, name: `test_${permissionName.replace(":", "_")}` })
+    .values({
+      id: roleId,
+      name: `test_${permissionName.replace(":", "_")}`,
+      displayName: `Test ${permissionName}`,
+    })
     .onConflictDoNothing();
   await db
     .insert(schema.rolePermissions)
@@ -973,8 +977,8 @@ describe("role list ordering matches reorderRolesAction", () => {
     await db.delete(schema.roles).where(eq(schema.roles.id, "role_zeta"));
     await db.delete(schema.roles).where(eq(schema.roles.id, "role_alpha"));
     await db.insert(schema.roles).values([
-      { id: "role_zeta", name: "zeta", position: 0 },
-      { id: "role_alpha", name: "alpha", position: 1 },
+      { id: "role_zeta", name: "zeta", displayName: "Zeta", position: 0 },
+      { id: "role_alpha", name: "alpha", displayName: "Alpha", position: 1 },
     ]);
 
     // Assign both new roles + system_admin to the admin user so the

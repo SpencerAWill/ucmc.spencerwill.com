@@ -40,8 +40,10 @@ const MEMBER_ROLE_ID = "role_member";
 export interface RoleWithPermissions {
   id: string;
   name: string;
+  displayName: string;
   description: string | null;
   isProtected: boolean;
+  isOfficer: boolean;
   permissionIds: string[];
   memberCount: number;
   position: number;
@@ -127,8 +129,10 @@ export async function listRolesDetailedAction(): Promise<
   return roles.map((r) => ({
     id: r.id,
     name: r.name,
+    displayName: r.displayName,
     description: r.description,
     isProtected: PROTECTED_ROLE_IDS.has(r.id),
+    isOfficer: r.isOfficer,
     permissionIds: permsByRole.get(r.id) ?? [],
     memberCount: countByRole.get(r.id) ?? 0,
     position: r.position,
@@ -175,8 +179,10 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
   return {
     id: role.id,
     name: role.name,
+    displayName: role.displayName,
     description: role.description,
     isProtected: PROTECTED_ROLE_IDS.has(role.id),
+    isOfficer: role.isOfficer,
     permissionIds: permGrants.map((g) => g.permissionId),
     memberCount: memberRows.length,
     position: role.position,
@@ -192,7 +198,9 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
 
 export async function createRoleAction(input: {
   name: string;
+  displayName: string;
   description?: string;
+  isOfficer?: boolean;
 }): Promise<{ roleId: string }> {
   const principal = await requireRolesManager();
   const db = getDb();
@@ -207,6 +215,7 @@ export async function createRoleAction(input: {
     .select({ maxPos: max(schema.roles.position) })
     .from(schema.roles);
   const nextPos = (maxPos ?? -1) + 1;
+  const isOfficer = input.isOfficer ?? false;
 
   try {
     // Atomic with the audit row.
@@ -214,15 +223,21 @@ export async function createRoleAction(input: {
       db.insert(schema.roles).values({
         id: roleId,
         name: input.name,
+        displayName: input.displayName,
         description: input.description ?? null,
         position: nextPos,
+        isOfficer,
       }),
       buildAuditEventStatement({
         actorUserId: principal.userId,
         action: "role.created",
         targetType: "role",
         targetId: roleId,
-        metadata: { name: input.name },
+        metadata: {
+          name: input.name,
+          displayName: input.displayName,
+          isOfficer,
+        },
       }),
     ]);
   } catch (err) {
@@ -240,7 +255,9 @@ export async function createRoleAction(input: {
 
 export async function updateRoleAction(input: {
   roleId: string;
-  description: string | null;
+  description?: string | null;
+  displayName?: string;
+  isOfficer?: boolean;
 }): Promise<{ ok: true }> {
   await requireRolesManager();
   const db = getDb();
@@ -253,9 +270,24 @@ export async function updateRoleAction(input: {
     throw new Error("Role not found");
   }
 
+  const patch: Partial<typeof schema.roles.$inferInsert> = {};
+  if (input.description !== undefined) {
+    patch.description = input.description;
+  }
+  if (input.displayName !== undefined) {
+    patch.displayName = input.displayName;
+  }
+  if (input.isOfficer !== undefined) {
+    patch.isOfficer = input.isOfficer;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { ok: true };
+  }
+
   await db
     .update(schema.roles)
-    .set({ description: input.description })
+    .set(patch)
     .where(eq(schema.roles.id, input.roleId));
 
   return { ok: true };

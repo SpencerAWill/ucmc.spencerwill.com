@@ -178,9 +178,22 @@ export const roles = sqliteTable(
   "roles",
   {
     id: text("id").primaryKey(),
+    // Identifier-style slug, regex-constrained at the API layer
+    // (^[a-z][a-z0-9_]*$). Stable; never user-facing.
     name: text("name").notNull(),
+    // Human-readable label shown wherever the role is presented to a
+    // user (role editor, member detail, landing "Meet the officers"
+    // section). Enforced non-empty by the editor; the migration
+    // backfilled existing rows.
+    displayName: text("display_name").notNull(),
     description: text("description"),
     position: integer("position").notNull().default(0),
+    // When true, members assigned to this role surface on the public
+    // home page's "Meet the officers" section. Toggled in the role
+    // editor; no other behavior keys off this flag.
+    isOfficer: integer("is_officer", { mode: "boolean" })
+      .notNull()
+      .default(false),
   },
   (t) => [uniqueIndex("roles_name_unique").on(t.name)],
 );
