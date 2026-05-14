@@ -4,11 +4,13 @@
 import {
   PUBLIC_FLAGS_QUERY_KEY,
   PUBLIC_SITE_CONTACT_QUERY_KEY,
+  settingHistoryQueryKey,
   SITE_SETTINGS_QUERY_KEY,
 } from "./query-keys";
 import {
   getPublicFlagsFn,
   getPublicSiteContactFn,
+  listSettingHistoryFn,
   listSiteSettingsFn,
 } from "#/features/settings/server/settings-fns";
 import type {
@@ -16,6 +18,7 @@ import type {
   PublicSiteContact,
 } from "#/features/settings/server/settings-fns";
 import { SETTINGS } from "#/server/settings/settings-registry";
+import type { SettingKey } from "#/server/settings/settings-registry";
 
 export function siteSettingsQueryOptions() {
   return {
@@ -55,5 +58,21 @@ export function publicFlagsQueryOptions() {
     queryKey: PUBLIC_FLAGS_QUERY_KEY,
     queryFn: () => getPublicFlagsFn(),
     placeholderData: fallback,
+  } as const;
+}
+
+/**
+ * Per-setting audit history. Lazy — only fired when the user opens the
+ * history dialog for a given row (the component sets `enabled` via
+ * mount). Officer-gated server-side.
+ */
+export function settingHistoryQueryOptions(
+  key: SettingKey,
+  options: { enabled?: boolean } = {},
+) {
+  return {
+    queryKey: settingHistoryQueryKey(key),
+    queryFn: () => listSettingHistoryFn({ data: { key } }),
+    enabled: options.enabled ?? true,
   } as const;
 }

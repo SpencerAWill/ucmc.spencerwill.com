@@ -8,6 +8,7 @@
  * auto-extends the validator without any edit here.
  */
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 
 import {
   SETTINGS,
@@ -86,6 +87,32 @@ export const getPublicFlagsFn = createServerFn({
     await import("./settings-actions-read.server");
   return getPublicFlagsAction();
 });
+
+/**
+ * Per-setting change history. Officer-gated. Returns the most recent
+ * `settings_updated` audit rows for a given key, with the actor's
+ * display name resolved. `booleanValue` is non-null only when the audit
+ * row recorded a boolean (matches the metadata policy in
+ * settings-actions.server.ts).
+ */
+export type SettingHistoryEntry = {
+  id: string;
+  atMs: number;
+  actorName: string | null;
+  booleanValue: boolean | null;
+};
+
+const listSettingHistoryInputSchema = z.object({
+  key: z.string().min(1),
+});
+
+export const listSettingHistoryFn = createServerFn({ method: "GET" })
+  .inputValidator(listSettingHistoryInputSchema)
+  .handler(async ({ data }): Promise<SettingHistoryEntry[]> => {
+    const { listSettingHistoryAction } =
+      await import("./settings-actions-read.server");
+    return listSettingHistoryAction({ key: data.key as SettingKey });
+  });
 
 export const updateSettingFn = createServerFn({ method: "POST" })
   .inputValidator(updateSettingInputSchema)

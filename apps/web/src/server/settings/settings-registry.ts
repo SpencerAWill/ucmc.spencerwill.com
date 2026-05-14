@@ -81,6 +81,15 @@ export type SettingMeta = {
    * undefined and pick up the schema-introspection default.
    */
   editor?: string;
+  /**
+   * When set, the admin UI gates every save of this setting (toggle
+   * flip OR text save OR reset-to-default) behind an AlertDialog
+   * showing this message. Use for high-impact / hard-to-reverse changes
+   * — kill switches that yank features for everyone, anything that
+   * invalidates downstream state. Plain prose; the dialog supplies the
+   * Cancel/Confirm buttons.
+   */
+  confirm?: string;
 };
 
 const registry = z.registry<SettingMeta>();
@@ -123,6 +132,8 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-05-13",
+    confirm:
+      "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
   }),
 } as const;
 

@@ -10,13 +10,29 @@
  * values from the canonical snapshot after each successful save.
  */
 import { formatDistanceToNowStrict } from "date-fns";
+import { History, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "#/components/ui/alert-dialog";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { Switch } from "#/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "#/components/ui/tooltip";
 import { useUpdateSetting } from "#/features/settings/api/use-update-setting";
 import type { SiteSettingEntry } from "#/features/settings/server/settings-fns";
 import {
@@ -31,6 +47,7 @@ import type {
   SettingValue,
 } from "#/server/settings/settings-registry";
 import { autoFormType } from "./auto-form/introspect";
+import { SettingHistoryDialog } from "./setting-history-dialog";
 
 export function SettingRow<TKey extends SettingKey>({
   settingKey,
@@ -44,6 +61,11 @@ export function SettingRow<TKey extends SettingKey>({
   const value = entry.value;
   const [draft, setDraft] = useState<SettingValue<TKey>>(value);
   const [error, setError] = useState<string | null>(null);
+  // When `meta.confirm` is set, every save routes through an AlertDialog
+  // first. `pending` carries the proposed value across the open → confirm
+  // hop; clearing it on cancel/confirm closes the dialog.
+  const [pending, setPending] = useState<SettingValue<TKey> | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const mutation = useUpdateSetting();
 
   // When the canonical value changes from outside (another tab edited;
@@ -55,8 +77,11 @@ export function SettingRow<TKey extends SettingKey>({
   const isDirty = draft !== value;
   const isBoolean = formType === "boolean";
   const isCustomized = !isDefault(settingKey, value);
+  const defaultValue = SETTINGS[settingKey].parse(undefined) as SettingValue<
+    typeof settingKey
+  >;
 
-  async function save(nextValue: SettingValue<TKey>) {
+  async function persist(nextValue: SettingValue<TKey>) {
     setError(null);
     const result = await mutation.mutateAsync({
       key: settingKey,
@@ -71,6 +96,19 @@ export function SettingRow<TKey extends SettingKey>({
     }
   }
 
+  /**
+   * Save entry point: gates through the confirm dialog when the
+   * setting's metadata requires it. The reset and toggle/save flows
+   * both feed through this so the gate is consistent.
+   */
+  function requestSave(nextValue: SettingValue<TKey>) {
+    if (meta.confirm) {
+      setPending(nextValue);
+      return;
+    }
+    void persist(nextValue);
+  }
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-4">
       <div className="flex items-start justify-between gap-4">
@@ -83,12 +121,20 @@ export function SettingRow<TKey extends SettingKey>({
         </div>
         {isBoolean ? (
           <Switch
+            // For settings with a `confirm` gate, the switch must NOT
+            // optimistically flip — render the canonical value until
+            // the user confirms (or cancels) in the dialog. Otherwise
+            // we'd briefly show a state the user hasn't agreed to.
             checked={draft as boolean}
             disabled={mutation.isPending}
             onCheckedChange={(checked) => {
               const next = checked as SettingValue<TKey>;
+              if (meta.confirm) {
+                requestSave(next);
+                return;
+              }
               setDraft(next);
-              void save(next);
+              void persist(next);
             }}
           />
         ) : null}
@@ -112,16 +158,117 @@ export function SettingRow<TKey extends SettingKey>({
           <Button
             type="button"
             disabled={!isDirty || mutation.isPending}
-            onClick={() => {
-              void save(draft);
-            }}
+            onClick={() => requestSave(draft)}
           >
             {mutation.isPending ? "Saving..." : "Save"}
           </Button>
         </div>
       ) : null}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <RowFooter
+        entry={entry}
+        isCustomized={isCustomized}
+        canReset={isCustomized && !mutation.isPending}
+        onReset={() => requestSave(defaultValue)}
+        onOpenHistory={() => setHistoryOpen(true)}
+      />
+
+      {meta.confirm ? (
+        <AlertDialog
+          open={pending !== null}
+          onOpenChange={(open) => {
+            if (!open) setPending(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Confirm change to {meta.label}
+              </AlertDialogTitle>
+              <AlertDialogDescription>{meta.confirm}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={mutation.isPending}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={mutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (pending !== null) {
+                    setDraft(pending);
+                    void persist(pending).finally(() => setPending(null));
+                  }
+                }}
+              >
+                {mutation.isPending ? "Saving..." : "Confirm"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
+
+      <SettingHistoryDialog
+        settingKey={settingKey}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        label={meta.label}
+      />
+    </div>
+  );
+}
+
+function RowFooter<TKey extends SettingKey>({
+  entry,
+  isCustomized,
+  canReset,
+  onReset,
+  onOpenHistory,
+}: {
+  entry: SiteSettingEntry<TKey>;
+  isCustomized: boolean;
+  canReset: boolean;
+  onReset: () => void;
+  onOpenHistory: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 pt-1">
       <LastEditedLine entry={entry} />
+      <div className="flex items-center gap-1">
+        {isCustomized ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                aria-label="Reset to default"
+                disabled={!canReset}
+                onClick={onReset}
+              >
+                <RotateCcw className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Reset to default</TooltipContent>
+          </Tooltip>
+        ) : null}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              aria-label="Edit history"
+              onClick={onOpenHistory}
+            >
+              <History className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Edit history</TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   );
 }

@@ -26,3 +26,6 @@ export const PUBLIC_FLAGS_QUERY_KEY = [
   "site-settings",
   "public-flags",
 ] as const;
+
+export const settingHistoryQueryKey = (key: string) =>
+  ["site-settings", "history", key] as const;

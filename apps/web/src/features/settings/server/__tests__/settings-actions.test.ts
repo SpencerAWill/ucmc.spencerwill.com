@@ -25,8 +25,11 @@ vi.mock("#/server/rate-limit.server", () => ({
 
 const { updateSettingAction } =
   await import("#/features/settings/server/settings-actions.server");
-const { listSiteSettingsAction, getPublicSiteContactAction } =
-  await import("#/features/settings/server/settings-actions-read.server");
+const {
+  listSiteSettingsAction,
+  getPublicSiteContactAction,
+  listSettingHistoryAction,
+} = await import("#/features/settings/server/settings-actions-read.server");
 const { readSetting } = await import("#/server/settings/settings-repo.server");
 const { SETTINGS } = await import("#/server/settings/settings-registry");
 const { openSession } = await import("#/server/auth/session.server");
@@ -263,5 +266,92 @@ describe("updateSettingAction", () => {
       .where(eq(schema.auditLog.action, "settings_updated"))
       .all();
     expect(auditRows).toHaveLength(0);
+  });
+});
+
+// ── per-setting history ────────────────────────────────────────────────
+
+describe("listSettingHistoryAction", () => {
+  it("rejects callers without settings:manage", async () => {
+    await signInAsRegularMember();
+    await expect(
+      listSettingHistoryAction({ key: "contact.clubEmail" }),
+    ).rejects.toThrow("Forbidden: missing settings:manage");
+  });
+
+  it("returns empty list when no edits have been recorded", async () => {
+    await signInAsManager();
+    const history = await listSettingHistoryAction({
+      key: "contact.clubEmail",
+    });
+    expect(history).toEqual([]);
+  });
+
+  it("returns rows in newest-first order with actor name + boolean value", async () => {
+    const actorId = await signInAsManager();
+    await getDb().insert(schema.profiles).values({
+      userId: actorId,
+      fullName: "Test Officer",
+      preferredName: "Test",
+      phone: "555-0100",
+      ucAffiliation: "student",
+    });
+
+    // Two edits on a boolean setting → both audit rows carry value.
+    await updateSettingAction({ key: "announcements.enabled", value: true });
+    await updateSettingAction({ key: "announcements.enabled", value: false });
+
+    const history = await listSettingHistoryAction({
+      key: "announcements.enabled",
+    });
+    expect(history).toHaveLength(2);
+    expect(history[0].booleanValue).toBe(false); // newest first
+    expect(history[1].booleanValue).toBe(true);
+    expect(history[0].actorName).toBe("Test Officer");
+    expect(typeof history[0].atMs).toBe("number");
+  });
+
+  it("does not expose values for non-boolean settings", async () => {
+    await signInAsManager();
+    await updateSettingAction({
+      key: "contact.clubEmail",
+      value: "secret@example.com",
+    });
+    const history = await listSettingHistoryAction({
+      key: "contact.clubEmail",
+    });
+    expect(history).toHaveLength(1);
+    // Non-boolean values are deliberately omitted from audit metadata
+    // (see settings-actions.server.ts) so the history view can't leak
+    // emails / URLs / freeform JSON.
+    expect(history[0].booleanValue).toBeNull();
+  });
+});
+
+// ── reset-to-default behaves like a regular save ───────────────────────
+
+describe("reset-to-default semantics", () => {
+  it("writing the schema default leaves no Custom badge state", async () => {
+    await signInAsManager();
+    await updateSettingAction({
+      key: "contact.clubEmail",
+      value: "off-default@example.com",
+    });
+    // "Reset" is just an update to the default value; the action layer
+    // doesn't need a special code path.
+    const defaultValue = SETTINGS["contact.clubEmail"].parse(undefined);
+    await updateSettingAction({
+      key: "contact.clubEmail",
+      value: defaultValue,
+    });
+    const stored = await readSetting("contact.clubEmail");
+    expect(stored).toBe(defaultValue);
+    const auditRows = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "settings_updated"))
+      .all();
+    // One row per edit including the reset — it's an audit-worthy event.
+    expect(auditRows).toHaveLength(2);
   });
 });
