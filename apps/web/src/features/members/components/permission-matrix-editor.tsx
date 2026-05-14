@@ -24,8 +24,18 @@ import type {
   PermissionSummary,
   RoleWithPermissions,
 } from "#/features/members/server/rbac-fns";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 const SYSTEM_ADMIN_ROLE_NAME = "system_admin";
+
+// Map from a feature's flag state to the permission name-prefix to hide
+// from the matrix when the flag is off. Permissions for disabled features
+// stay in the DB (and any existing role grants are preserved through
+// edits) — they just disappear from the matrix UI until the feature flips
+// back on. Add new entries here when a new feature gains a kill switch.
+const FEATURE_PERMISSION_PREFIXES = [
+  { prefix: "announcements:", flagKey: "announcements" as const },
+] as const;
 
 /** Group permissions by the prefix before the colon (e.g. "roles" from "roles:manage"). */
 function groupPermissions(
@@ -45,9 +55,25 @@ export function PermissionMatrixEditor() {
   const { data: roles = [], isLoading: rolesLoading } = useQuery(
     rolesDetailedQueryOptions(),
   );
-  const { data: permissions = [], isLoading: permsLoading } = useQuery(
+  const { data: allPermissions = [], isLoading: permsLoading } = useQuery(
     permissionsQueryOptions(),
   );
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+
+  // Hide permissions whose feature flag is off. Hidden permissions
+  // remain in the role's grant set (sourced from the server below), so
+  // saves preserve them and toggling the flag back on restores access
+  // without any DB rewrite.
+  const permissions = useMemo(() => {
+    const hiddenPrefixes = FEATURE_PERMISSION_PREFIXES.filter(
+      (entry) => !flags[entry.flagKey],
+    ).map((entry) => entry.prefix);
+    if (hiddenPrefixes.length === 0) return allPermissions;
+    return allPermissions.filter(
+      (p) => !hiddenPrefixes.some((prefix) => p.name.startsWith(prefix)),
+    );
+  }, [allPermissions, flags]);
 
   // Pending overrides per role: presence in this map means "this role's
   // grants have been edited and should be saved as the contained Set."
@@ -63,6 +89,14 @@ export function PermissionMatrixEditor() {
   }, [roles]);
 
   const grouped = useMemo(() => groupPermissions(permissions), [permissions]);
+
+  // IDs of permissions currently visible in the matrix. Used to compute
+  // per-role "granted out of visible" counts without leaking the
+  // hidden-feature permissions into the denominator OR numerator.
+  const visiblePermissionIds = useMemo(
+    () => new Set(permissions.map((p) => p.id)),
+    [permissions],
+  );
 
   const dirtyRoleCount = pending.size;
   const dirtyEditCount = useMemo(() => {
@@ -179,7 +213,9 @@ export function PermissionMatrixEditor() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-xs text-muted-foreground">
-                    {isAdmin ? "—" : `${current.size}/${permissions.length}`}
+                    {isAdmin
+                      ? "—"
+                      : `${countIntersection(current, visiblePermissionIds)}/${permissions.length}`}
                   </span>
                   <ChevronDown className="chev size-4 transition-transform" />
                 </div>
@@ -386,6 +422,15 @@ function setsEqual(a: Set<string>, b: Set<string>): boolean {
     }
   }
   return true;
+}
+
+function countIntersection(a: Set<string>, b: Set<string>): number {
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+  let count = 0;
+  for (const v of small) {
+    if (large.has(v)) count++;
+  }
+  return count;
 }
 
 function symmetricDifferenceSize(a: Set<string>, b: Set<string>): number {

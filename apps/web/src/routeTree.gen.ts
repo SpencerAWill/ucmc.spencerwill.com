@@ -13,6 +13,7 @@ import { Route as WaiverRouteImport } from './routes/waiver'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OpenSourceRouteImport } from './routes/open-source'
 import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
@@ -74,6 +75,11 @@ const TermsRoute = TermsRouteImport.update({
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -303,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -349,6 +356,7 @@ export interface FileRoutesByTo {
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -397,6 +405,7 @@ export interface FileRoutesById {
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -447,6 +456,7 @@ export interface FileRouteTypes {
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
+    | '/settings'
     | '/sign-in'
     | '/terms'
     | '/verify-email'
@@ -493,6 +503,7 @@ export interface FileRouteTypes {
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
+    | '/settings'
     | '/sign-in'
     | '/terms'
     | '/verify-email'
@@ -540,6 +551,7 @@ export interface FileRouteTypes {
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
+    | '/settings'
     | '/sign-in'
     | '/terms'
     | '/verify-email'
@@ -589,6 +601,7 @@ export interface RootRouteChildren {
   NondiscriminationRoute: typeof NondiscriminationRoute
   OpenSourceRoute: typeof OpenSourceRoute
   PrivacyRoute: typeof PrivacyRoute
+  SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
@@ -632,6 +645,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -1018,6 +1038,7 @@ const rootRouteChildren: RootRouteChildren = {
   NondiscriminationRoute: NondiscriminationRoute,
   OpenSourceRoute: OpenSourceRoute,
   PrivacyRoute: PrivacyRoute,
+  SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,

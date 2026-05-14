@@ -6,16 +6,25 @@ import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { announcementsUnreadQueryOptions } from "#/features/announcements/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export function AnnouncementsBell() {
   const { hasPermission, isAuthenticated } = useAuth();
   const canRead = hasPermission("announcements:read");
+  // Kill switch: when `announcements.enabled` is off, the bell disappears
+  // even for officers with the permission. The route + server actions
+  // refuse independently as defense-in-depth.
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  const featureEnabled = flags.announcements;
 
   const { data } = useQuery(
-    announcementsUnreadQueryOptions({ enabled: isAuthenticated && canRead }),
+    announcementsUnreadQueryOptions({
+      enabled: isAuthenticated && canRead && featureEnabled,
+    }),
   );
 
-  if (!canRead) {
+  if (!canRead || !featureEnabled) {
     return null;
   }
 

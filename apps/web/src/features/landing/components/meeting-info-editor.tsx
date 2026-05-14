@@ -23,7 +23,6 @@ export interface MeetingInfoEditorProps {
   values: {
     dayTime: string;
     location: string;
-    email: string;
     instagramUrl: string;
   };
   imageKey: string | null;
@@ -37,7 +36,6 @@ export function MeetingInfoEditor({
 }: MeetingInfoEditorProps) {
   const [dayTime, setDayTime] = useState(values.dayTime);
   const [location, setLocation] = useState(values.location);
-  const [email, setEmail] = useState(values.email);
   const [instagramUrl, setInstagramUrl] = useState(values.instagramUrl);
   const update = useUpdateLandingSetting();
   const setImage = useSetMeetingImage();
@@ -59,10 +57,6 @@ export function MeetingInfoEditor({
       await update.mutateAsync({
         key: LANDING_SETTING_KEYS.meetingLocation,
         value: location.trim(),
-      });
-      await update.mutateAsync({
-        key: LANDING_SETTING_KEYS.meetingEmail,
-        value: email.trim(),
       });
       await update.mutateAsync({
         key: LANDING_SETTING_KEYS.meetingInstagramUrl,
@@ -137,17 +131,13 @@ export function MeetingInfoEditor({
             {...noPasswordManagerProps}
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="meeting-email">Contact email</Label>
-          <Input
-            id="meeting-email"
-            type="email"
-            value={email}
-            maxLength={LANDING_LIMITS.meetingField.max}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ucmc@example.com"
-            {...noPasswordManagerProps}
-          />
+        <div className="rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+          The club email shown here (and in the footer) is a site-wide setting.
+          Edit it at{" "}
+          <a href="/settings" className="underline hover:text-foreground">
+            /settings
+          </a>
+          .
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="meeting-instagram">Instagram URL</Label>

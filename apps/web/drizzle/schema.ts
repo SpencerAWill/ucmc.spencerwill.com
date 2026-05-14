@@ -373,6 +373,22 @@ export const landingSettings = sqliteTable("landing_settings", {
   }),
 });
 
+// Singleton key/value store for runtime-editable site settings + feature
+// flags. Distinct from `landing_settings` (the homepage CMS) — this one
+// holds cross-cutting platform configuration. Schemas + defaults live in
+// `features/settings/server/settings-registry.ts`; that registry is the
+// only thing that knows what shapes are legal in `value_json`.
+export const siteSettings = sqliteTable("site_settings", {
+  key: text("key").primaryKey(),
+  valueJson: text("value_json").notNull(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedBy: text("updated_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+});
+
 export const landingHeroSlides = sqliteTable(
   "landing_hero_slides",
   {
@@ -564,6 +580,12 @@ export const auditAction = [
   "loan.checked_out",
   "loan.checked_in",
   "loan.extended",
+  // Site settings / feature-flag edits via /settings. One action covers
+  // both scalar settings and boolean flags — the metadata payload
+  // distinguishes them. For boolean values metadata is { key, value };
+  // for any other shape metadata is { key } only, to avoid leaking
+  // freeform values (emails, URLs, JSON blobs) into the audit log.
+  "settings_updated",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
