@@ -12,7 +12,7 @@ const verifyEmailSearchSchema = z.object({
 
 /**
  * Landing page for the verification link emailed by the
- * "Add an email" form on /my/account/details. Confirms the recipient is
+ * "Add an email" form on /my/account/security. Confirms the recipient is
  * signed in to the same account that requested the link
  * (`session.userId === magicLink.targetUserId`), then attaches the
  * email to the account.
@@ -91,7 +91,7 @@ function VerifyEmailPage() {
         </header>
         <Button
           size="lg"
-          onClick={() => navigate({ to: "/my/account/details" })}
+          onClick={() => navigate({ to: "/my/account/security" })}
         >
           Back to your account
         </Button>
@@ -110,7 +110,7 @@ function VerifyEmailPage() {
           <p className="text-sm text-muted-foreground">{message}</p>
         </header>
         <Button asChild size="lg" variant="outline">
-          <Link to="/my/account/details">Back to your account</Link>
+          <Link to="/my/account/security">Back to your account</Link>
         </Button>
       </div>
     );

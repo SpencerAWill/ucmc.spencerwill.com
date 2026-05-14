@@ -5,6 +5,14 @@ import { z } from "zod";
 
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "#/components/ui/item";
 import { myEmailsQueryOptions } from "#/features/auth/api/queries";
 import { useAddEmail } from "#/features/auth/api/use-add-email";
 import { useRemoveEmail } from "#/features/auth/api/use-remove-email";
@@ -16,7 +24,8 @@ const addEmailSchema = z.object({
 });
 
 /**
- * "Email addresses" section on `/my/account/details`. Lists every
+ * "Email addresses" section on the Sign-in tab
+ * (`/my/account/security`). Lists every
  * verified address attached to the user, with a Primary badge, a
  * "Make primary" button on non-primary rows, and a "Remove" button
  * (disabled on the primary row and when only one row exists). Below
@@ -49,19 +58,19 @@ export function EmailAddressesSection({
             approved.
           </p>
         </header>
-        <ul className="flex flex-col gap-2">
-          <li className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 truncate text-sm font-medium">
-                <span className="truncate">{primaryEmail}</span>
-                <Badge variant="secondary">Primary</Badge>
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Verified at registration
-              </p>
-            </div>
-          </li>
-        </ul>
+        <ItemGroup className="gap-2">
+          <Item variant="outline" size="sm">
+            <ItemContent className="min-w-0">
+              <ItemTitle className="w-full min-w-0">
+                <span className="min-w-0 flex-1 truncate">{primaryEmail}</span>
+                <Badge variant="secondary" className="shrink-0">
+                  Primary
+                </Badge>
+              </ItemTitle>
+              <ItemDescription>Verified at registration</ItemDescription>
+            </ItemContent>
+          </Item>
+        </ItemGroup>
       </section>
     );
   }
@@ -88,29 +97,38 @@ function ApprovedEmailAddressesSection() {
       {query.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ItemGroup className="gap-2">
           {emails.map((row) => (
-            <li
-              key={row.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-2 truncate text-sm font-medium">
-                  <span className="truncate">{row.email}</span>
+            <Item key={row.id} variant="outline" size="sm">
+              {/*
+               * `min-w-0` on ItemContent + `w-full min-w-0` on ItemTitle
+               * are needed for the inner `truncate` span to actually
+               * ellipsis on long addresses. ItemContent is `flex-1` but
+               * its default `min-width: auto` lets children overflow,
+               * and ItemTitle ships with `w-fit` (shrink-to-content)
+               * which similarly prevents truncation. Without these,
+               * a 60-char email would widen the row instead of
+               * ellipsizing.
+               */}
+              <ItemContent className="min-w-0">
+                <ItemTitle className="w-full min-w-0">
+                  <span className="min-w-0 flex-1 truncate">{row.email}</span>
                   {row.isPrimary ? (
-                    <Badge variant="secondary">Primary</Badge>
+                    <Badge variant="secondary" className="shrink-0">
+                      Primary
+                    </Badge>
                   ) : null}
-                </p>
-                <p className="text-xs text-muted-foreground">
+                </ItemTitle>
+                <ItemDescription>
                   {row.verifiedAt
                     ? `Verified ${new Date(row.verifiedAt).toLocaleDateString(
                         undefined,
                         { year: "numeric", month: "short", day: "numeric" },
                       )}`
                     : "Pending verification"}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-2">
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
                 {row.isPrimary ? null : (
                   <Button
                     type="button"
@@ -158,10 +176,10 @@ function ApprovedEmailAddressesSection() {
                 >
                   Remove
                 </Button>
-              </div>
-            </li>
+              </ItemActions>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       )}
 
       <AddEmailForm />

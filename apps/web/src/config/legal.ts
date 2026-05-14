@@ -308,13 +308,13 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
       RETENTION_DEACTIVATED_COPY,
       "Waiver attestation records (metadata only — not the paper waiver) are retained while still in effect; revoked attestations are deleted 90 days after revocation.",
       "Avatar images and landing-page images stored in object storage are reconciled against the database daily; any object no longer referenced by an active row is deleted.",
-      "You can delete your account immediately at any time via the controls on /my/account; this also removes your avatar from R2 and signs you out everywhere.",
+      "You can delete your account immediately at any time via the controls on /my/account/preferences; this also removes your avatar from R2 and signs you out everywhere.",
     ],
   },
   {
     heading: "Your rights",
     paragraphs: [
-      "You can download a JSON copy of everything we have on you from your /my/account page. You can hard-delete your account from the same page; the deletion is immediate and irreversible. To correct or update individual fields, edit them on /my/account or /my/account/details.",
+      "You can download a JSON copy of everything we have on you from /my/account/preferences. You can hard-delete your account from the same page; the deletion is immediate and irreversible. To correct or update individual fields, edit them on /my/account (public profile) or /my/account/details (private details and emergency contacts). To add, remove, or change the primary address for your sign-in emails, use /my/account/security.",
     ],
   },
   {
