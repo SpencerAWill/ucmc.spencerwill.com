@@ -65,28 +65,38 @@ export function SettingHistoryDialog({
             No edits recorded yet.
           </p>
         ) : (
-          <ol className="divide-y rounded-md border text-sm">
-            {entries.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex items-center justify-between gap-3 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate">{entry.actorName ?? "An officer"}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDistanceToNowStrict(new Date(entry.atMs), {
-                      addSuffix: true,
-                    })}
-                  </p>
-                </div>
-                {entry.booleanValue === null ? null : (
-                  <Badge variant={entry.booleanValue ? "default" : "secondary"}>
-                    {entry.booleanValue ? "On" : "Off"}
-                  </Badge>
-                )}
-              </li>
-            ))}
-          </ol>
+          // Cap the list at 60vh so a long change history scrolls inside
+          // the dialog rather than pushing the dialog itself past the
+          // viewport. `overscroll-contain` keeps the page underneath
+          // from scrolling when the list reaches its top/bottom.
+          <div className="max-h-[60vh] overflow-y-auto overscroll-contain rounded-md border">
+            <ol className="divide-y text-sm">
+              {entries.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate">
+                      {entry.actorName ?? "An officer"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDistanceToNowStrict(new Date(entry.atMs), {
+                        addSuffix: true,
+                      })}
+                    </p>
+                  </div>
+                  {entry.booleanValue === null ? null : (
+                    <Badge
+                      variant={entry.booleanValue ? "default" : "secondary"}
+                    >
+                      {entry.booleanValue ? "On" : "Off"}
+                    </Badge>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
         )}
       </DialogContent>
     </Dialog>
