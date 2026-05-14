@@ -1,13 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  GripVertical,
-  KeyRound,
-  Pencil,
-  Plus,
-  Shield,
-  Trash2,
-  Users,
-} from "lucide-react";
+import { GripVertical, Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -49,20 +41,15 @@ import { rolesDetailedQueryOptions } from "#/features/members/api/queries";
 import { useCreateRole } from "#/features/members/api/use-create-role";
 import { useDeleteRole } from "#/features/members/api/use-delete-role";
 import { useReorderRoles } from "#/features/members/api/use-reorder-roles";
-import { RoleMembersDialog } from "#/features/members/components/role-members-dialog";
-import { RoleMetadataDialog } from "#/features/members/components/role-metadata-dialog";
-import { RolePermissionsDialog } from "#/features/members/components/role-permissions-dialog";
+import { RoleEditorSheet } from "#/features/members/components/role-editor-sheet";
 import type { RoleWithPermissions } from "#/features/members/server/rbac-fns";
-
-type DialogKind = "members" | "permissions" | "metadata";
 
 export function RolesListEditor() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RoleWithPermissions | null>(
     null,
   );
-  const [openDialog, setOpenDialog] = useState<{
-    kind: DialogKind;
+  const [editorTarget, setEditorTarget] = useState<{
     roleId: string;
     roleName: string;
   } | null>(null);
@@ -149,7 +136,6 @@ export function RolesListEditor() {
                 return null;
               }
               const isAdmin = role.name === "system_admin";
-              const isAnonymous = role.name === "anonymous";
               return (
                 <SortableItem
                   key={id}
@@ -197,54 +183,13 @@ export function RolesListEditor() {
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1">
-                      {!isAnonymous ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setOpenDialog({
-                                  kind: "members",
-                                  roleId: role.id,
-                                  roleName: role.name,
-                                })
-                              }
-                              aria-label={`Members of ${role.name}`}
-                            >
-                              <Users className="size-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Members</TooltipContent>
-                        </Tooltip>
-                      ) : null}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() =>
-                              setOpenDialog({
-                                kind: "permissions",
-                                roleId: role.id,
-                                roleName: role.name,
-                              })
-                            }
-                            aria-label={`Permissions of ${role.name}`}
-                          >
-                            <KeyRound className="size-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Permissions</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              setOpenDialog({
-                                kind: "metadata",
+                              setEditorTarget({
                                 roleId: role.id,
                                 roleName: role.name,
                               })
@@ -307,38 +252,14 @@ export function RolesListEditor() {
 
       <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} />
 
-      {openDialog?.kind === "members" ? (
-        <RoleMembersDialog
-          roleId={openDialog.roleId}
-          roleName={openDialog.roleName}
+      {editorTarget ? (
+        <RoleEditorSheet
+          roleId={editorTarget.roleId}
+          roleName={editorTarget.roleName}
           open
           onOpenChange={(o) => {
             if (!o) {
-              setOpenDialog(null);
-            }
-          }}
-        />
-      ) : null}
-      {openDialog?.kind === "permissions" ? (
-        <RolePermissionsDialog
-          roleId={openDialog.roleId}
-          roleName={openDialog.roleName}
-          open
-          onOpenChange={(o) => {
-            if (!o) {
-              setOpenDialog(null);
-            }
-          }}
-        />
-      ) : null}
-      {openDialog?.kind === "metadata" ? (
-        <RoleMetadataDialog
-          roleId={openDialog.roleId}
-          roleName={openDialog.roleName}
-          open
-          onOpenChange={(o) => {
-            if (!o) {
-              setOpenDialog(null);
+              setEditorTarget(null);
             }
           }}
         />
