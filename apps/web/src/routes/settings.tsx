@@ -11,11 +11,11 @@ import {
   isStale,
   keysByCategory,
   SETTING_CATEGORIES,
-} from "#/features/settings/server/settings-registry";
+} from "#/server/settings/settings-registry";
 import type {
   SettingCategory,
   SettingKey,
-} from "#/features/settings/server/settings-registry";
+} from "#/server/settings/settings-registry";
 
 export const Route = createFileRoute("/settings")({
   beforeLoad: async ({ context }) => {

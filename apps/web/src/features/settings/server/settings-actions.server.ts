@@ -19,9 +19,12 @@
 import { getDb } from "#/server/db";
 import { buildAuditEventStatement } from "#/server/audit/audit-log.server";
 import { requireSettingsManager } from "./permissions.server";
-import { isSettingKey, SETTINGS } from "./settings-registry";
-import type { SettingKey, UpdateSettingInput } from "./settings-registry";
-import { writeSettingStatement } from "./settings-repo.server";
+import { isSettingKey, SETTINGS } from "#/server/settings/settings-registry";
+import type {
+  SettingKey,
+  UpdateSettingInput,
+} from "#/server/settings/settings-registry";
+import { writeSettingStatement } from "#/server/settings/settings-repo.server";
 
 export type UpdateSettingResult =
   | { ok: true }

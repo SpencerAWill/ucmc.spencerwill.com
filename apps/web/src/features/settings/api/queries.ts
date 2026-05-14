@@ -2,15 +2,20 @@
  * Query options factories for the /settings admin surface.
  */
 import {
+  PUBLIC_FLAGS_QUERY_KEY,
   PUBLIC_SITE_CONTACT_QUERY_KEY,
   SITE_SETTINGS_QUERY_KEY,
 } from "./query-keys";
 import {
+  getPublicFlagsFn,
   getPublicSiteContactFn,
   listSiteSettingsFn,
 } from "#/features/settings/server/settings-fns";
-import type { PublicSiteContact } from "#/features/settings/server/settings-fns";
-import { SETTINGS } from "#/features/settings/server/settings-registry";
+import type {
+  PublicFlags,
+  PublicSiteContact,
+} from "#/features/settings/server/settings-fns";
+import { SETTINGS } from "#/server/settings/settings-registry";
 
 export function siteSettingsQueryOptions() {
   return {
@@ -31,6 +36,24 @@ export function publicSiteContactQueryOptions() {
   return {
     queryKey: PUBLIC_SITE_CONTACT_QUERY_KEY,
     queryFn: () => getPublicSiteContactFn(),
+    placeholderData: fallback,
+  } as const;
+}
+
+/**
+ * Feature-flag snapshot for client-side gating (sidebar nav, header
+ * bell, anywhere a feature's UI needs to disappear synchronously).
+ * `placeholderData` is the schema-default snapshot so pre-hydration /
+ * pre-query renders see the same answer the server would return for a
+ * cold DB — that means features default to off until proven on.
+ */
+export function publicFlagsQueryOptions() {
+  const fallback: PublicFlags = {
+    announcements: SETTINGS["announcements.enabled"].parse(undefined),
+  };
+  return {
+    queryKey: PUBLIC_FLAGS_QUERY_KEY,
+    queryFn: () => getPublicFlagsFn(),
     placeholderData: fallback,
   } as const;
 }

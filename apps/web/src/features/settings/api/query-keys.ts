@@ -15,3 +15,14 @@ export const PUBLIC_SITE_CONTACT_QUERY_KEY = [
   "site-settings",
   "public-contact",
 ] as const;
+
+/**
+ * Public-read feature-flag snapshot. Distinct from the admin snapshot so
+ * the sidebar / bell can read flag state without pulling the gated full
+ * settings list. Invalidated alongside the admin snapshot from
+ * `useUpdateSetting`.
+ */
+export const PUBLIC_FLAGS_QUERY_KEY = [
+  "site-settings",
+  "public-flags",
+] as const;

@@ -24,12 +24,12 @@ import {
   isDefault,
   isStale,
   SETTINGS,
-} from "#/features/settings/server/settings-registry";
+} from "#/server/settings/settings-registry";
 import type {
   SettingKey,
   SettingMeta,
   SettingValue,
-} from "#/features/settings/server/settings-registry";
+} from "#/server/settings/settings-registry";
 import { autoFormType } from "./auto-form/introspect";
 
 export function SettingRow<TKey extends SettingKey>({

@@ -55,7 +55,10 @@ import {
   SUBBRAND_DISAMBIGUATION,
 } from "#/config/legal";
 import { GITHUB_REPO_URL } from "#/config/site";
-import { publicSiteContactQueryOptions } from "#/features/settings/api/queries";
+import {
+  publicFlagsQueryOptions,
+  publicSiteContactQueryOptions,
+} from "#/features/settings/api/queries";
 import {
   Collapsible,
   CollapsibleContent,
@@ -191,7 +194,14 @@ function EmulationBanner() {
 
 function SidebarNav() {
   const { isApproved, hasPermission } = useAuth();
-  const canReadAnnouncements = hasPermission("announcements:read");
+  // Announcements gates compose: must have the permission AND the kill
+  // switch must be on. `placeholderData` returns the schema default
+  // (off) until the query resolves, so a fresh-DB / pre-hydration render
+  // keeps the entry hidden.
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  const canReadAnnouncements =
+    hasPermission("announcements:read") && flags.announcements;
   const canManageMembers = hasPermission("members:manage");
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");

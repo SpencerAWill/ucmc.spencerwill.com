@@ -19,7 +19,7 @@
  */
 import { eq } from "drizzle-orm";
 
-import * as schema from "../../../../drizzle/schema";
+import * as schema from "../../../drizzle/schema";
 import { getDb } from "#/server/db";
 import { SETTINGS } from "./settings-registry";
 import type { SettingKey, SettingValue } from "./settings-registry";
@@ -114,7 +114,14 @@ export async function readAllSettings(): Promise<SiteSettingsEntries> {
     // D1 hiccup — every key falls back to its schema default below.
   }
 
-  const out = {} as SiteSettingsEntries;
+  // The `out` cast pattern below uses a record over plain `unknown`
+  // because TypeScript collapses `SiteSettingsEntries[SettingKey]` to
+  // `never` on indexed assignment (each registry entry's value type
+  // differs, and TS picks the intersection). Each assignment is locally
+  // type-correct — the parse-or-default branch yields the right shape
+  // per key — but TS can't carry that through a single uniform loop.
+  // We surface the typed result at the function boundary with `as`.
+  const out: Record<string, unknown> = {};
   for (const k of Object.keys(SETTINGS) as SettingKey[]) {
     const stored = rowsByKey.get(k);
     if (stored === undefined) {
@@ -143,7 +150,7 @@ export async function readAllSettings(): Promise<SiteSettingsEntries> {
       updatedByName: stored.updatedByName,
     };
   }
-  return out;
+  return out as SiteSettingsEntries;
 }
 
 /**

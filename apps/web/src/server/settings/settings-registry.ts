@@ -22,9 +22,14 @@
 import { z } from "zod";
 
 // ── Categories: groups rendered as sections on /settings ────────────────
+// Categories double as section headings on /settings. The convention is
+// per-feature scoping (`announcements`, `gear`, etc. — one section per
+// feature that has any runtime config), with `contact` / `integrations` /
+// `appearance` / `legal` reserved for cross-cutting concerns that don't
+// belong to a single feature.
 export const SETTING_CATEGORIES = [
   "contact",
-  "platform",
+  "announcements",
   "integrations",
   "appearance",
   "legal",
@@ -33,7 +38,7 @@ export type SettingCategory = (typeof SETTING_CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
   contact: "Contact",
-  platform: "Platform",
+  announcements: "Announcements",
   integrations: "Integrations",
   appearance: "Appearance",
   legal: "Legal",
@@ -101,6 +106,24 @@ export const SETTINGS = {
         "Public contact address for the club. Shown on the landing page meeting block and in the footer mail icon.",
       category: "contact",
     }),
+
+  // Kill switch for the in-progress announcements feature. Defaults to
+  // off so a fresh DB keeps the feature hidden — the bell in the header,
+  // the sidebar entry, AND the /announcements route are all gated; the
+  // server actions also refuse independently as defense-in-depth.
+  // Officers with `announcements:*` still don't see anything until this
+  // flag flips on, so the gate composes (flag-on AND permission). Public
+  // (exposed via getPublicFlagsFn) because "is this feature visible?"
+  // isn't sensitive — anyone hitting /announcements gets the same answer.
+  "announcements.enabled": z.boolean().default(false).register(registry, {
+    label: "Enabled",
+    description:
+      "Hides the announcement bell, sidebar entry, and /announcements route while off. Toggle on once the feature is ready.",
+    category: "announcements",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-05-13",
+  }),
 } as const;
 
 // ── Derived types ───────────────────────────────────────────────────────
@@ -126,7 +149,7 @@ export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 export function keysByCategory(): Record<SettingCategory, SettingKey[]> {
   const out: Record<SettingCategory, SettingKey[]> = {
     contact: [],
-    platform: [],
+    announcements: [],
     integrations: [],
     appearance: [],
     legal: [],

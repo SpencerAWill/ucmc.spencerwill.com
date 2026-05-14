@@ -9,17 +9,20 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 
-import { SETTINGS, updateSettingInputSchema } from "./settings-registry";
+import {
+  SETTINGS,
+  updateSettingInputSchema,
+} from "#/server/settings/settings-registry";
 import type {
   SettingKey,
   SettingValue,
   UpdateSettingInput,
-} from "./settings-registry";
+} from "#/server/settings/settings-registry";
 import type { UpdateSettingResult } from "./settings-actions.server";
 import type {
   SiteSettingEntry,
   SiteSettingsEntries,
-} from "./settings-repo.server";
+} from "#/server/settings/settings-repo.server";
 
 export type { UpdateSettingResult, UpdateSettingInput };
 
@@ -61,6 +64,27 @@ export const getPublicSiteContactFn = createServerFn({
   const { getPublicSiteContactAction } =
     await import("./settings-actions-read.server");
   return getPublicSiteContactAction();
+});
+
+/**
+ * Public read of feature-flag state. No auth gate — "is this feature
+ * visible?" isn't sensitive (anyone hitting the gated URL would get the
+ * same answer back), and the sidebar / header bell need this synchronously
+ * to decide whether to render. Each flag here corresponds to a boolean
+ * setting in the registry; the allowlist is hand-maintained, not auto-
+ * derived, so reclassifying a boolean setting can't accidentally surface
+ * it publicly.
+ */
+export type PublicFlags = {
+  announcements: boolean;
+};
+
+export const getPublicFlagsFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<PublicFlags> => {
+  const { getPublicFlagsAction } =
+    await import("./settings-actions-read.server");
+  return getPublicFlagsAction();
 });
 
 export const updateSettingFn = createServerFn({ method: "POST" })

@@ -27,10 +27,8 @@ const { updateSettingAction } =
   await import("#/features/settings/server/settings-actions.server");
 const { listSiteSettingsAction, getPublicSiteContactAction } =
   await import("#/features/settings/server/settings-actions-read.server");
-const { readSetting } =
-  await import("#/features/settings/server/settings-repo.server");
-const { SETTINGS } =
-  await import("#/features/settings/server/settings-registry");
+const { readSetting } = await import("#/server/settings/settings-repo.server");
+const { SETTINGS } = await import("#/server/settings/settings-registry");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────

@@ -90,14 +90,37 @@ async function signInAsBareUser(email = "bare@example.com"): Promise<string> {
 
 // ── setup ──────────────────────────────────────────────────────────────
 
+/**
+ * Override the `announcements.enabled` kill switch. Default is OFF in
+ * the registry, so existing tests (which assert auth gates) need this
+ * on to reach the auth checks; the flag-off behavior gets its own
+ * describe block below.
+ */
+async function setAnnouncementsFlag(enabled: boolean): Promise<void> {
+  await getDb()
+    .insert(schema.siteSettings)
+    .values({
+      key: "announcements.enabled",
+      valueJson: JSON.stringify(enabled),
+    })
+    .onConflictDoUpdate({
+      target: schema.siteSettings.key,
+      set: { valueJson: JSON.stringify(enabled), updatedAt: new Date() },
+    });
+}
+
 beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
   await db.delete(schema.announcements);
+  await db.delete(schema.siteSettings);
   await db.delete(schema.userRoles);
   await db.delete(schema.sessions);
   await db.delete(schema.profiles);
   await db.delete(schema.users);
+  // Enable the feature so existing assertions reach the auth checks
+  // they're testing. The flag-off describe block below overrides this.
+  await setAnnouncementsFlag(true);
 });
 
 // ── authorization ─────────────────────────────────────────────────────
@@ -210,5 +233,42 @@ describe("announcements lifecycle", () => {
     await deleteAnnouncementAction({ id });
     list = await listAnnouncementsAction();
     expect(list).toHaveLength(0);
+  });
+});
+
+// ── feature-flag kill switch ──────────────────────────────────────────
+
+describe("announcements feature flag", () => {
+  it("blocks reads even for officers with announcements:read", async () => {
+    await signInAsAdmin();
+    await setAnnouncementsFlag(false);
+    await expect(listAnnouncementsAction()).rejects.toThrow(
+      "Forbidden: announcements feature is disabled",
+    );
+    await expect(getUnreadCountAction()).rejects.toThrow(
+      "Forbidden: announcements feature is disabled",
+    );
+  });
+
+  it("blocks writes even for officers with announcements:manage", async () => {
+    await signInAsAdmin();
+    await setAnnouncementsFlag(false);
+    await expect(
+      createAnnouncementAction({ title: "t", body: "b" }),
+    ).rejects.toThrow("Forbidden: announcements feature is disabled");
+    await expect(
+      updateAnnouncementAction({ id: "x", title: "t", body: "b" }),
+    ).rejects.toThrow("Forbidden: announcements feature is disabled");
+    await expect(deleteAnnouncementAction({ id: "x" })).rejects.toThrow(
+      "Forbidden: announcements feature is disabled",
+    );
+  });
+
+  it("trips before the auth check (anonymous caller still sees disabled)", async () => {
+    cookieJar.clear();
+    await setAnnouncementsFlag(false);
+    await expect(listAnnouncementsAction()).rejects.toThrow(
+      "Forbidden: announcements feature is disabled",
+    );
   });
 });
