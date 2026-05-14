@@ -3,13 +3,13 @@ import { Users } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "#/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "#/components/ui/sheet";
 import { roleQueryOptions } from "#/features/members/api/queries";
 
 export function RoleMembersDialog({
@@ -29,19 +29,19 @@ export function RoleMembersDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
             <Users className="size-5 text-muted-foreground" />
             Members of {roleName}
-          </DialogTitle>
-          <DialogDescription>
+          </SheetTitle>
+          <SheetDescription>
             {role ? `${role.memberCount} member(s) with this role.` : null}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-4">
           {isLoading || !role ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : role.members.length === 0 ? (
@@ -65,7 +65,7 @@ export function RoleMembersDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <SheetFooter>
           <Button
             type="button"
             variant="outline"
@@ -73,8 +73,8 @@ export function RoleMembersDialog({
           >
             Close
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

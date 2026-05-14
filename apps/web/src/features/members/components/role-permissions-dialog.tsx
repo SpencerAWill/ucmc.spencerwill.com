@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "#/components/ui/button";
 import { Checkbox } from "#/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "#/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "#/components/ui/sheet";
 import {
   permissionsQueryOptions,
   roleQueryOptions,
@@ -112,18 +112,18 @@ export function RolePermissionsDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Permissions · {roleName}</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Permissions · {roleName}</SheetTitle>
+          <SheetDescription>
             {isAdmin
               ? "System admin automatically receives all permissions."
               : "Toggle the permissions this role grants."}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+        <div className="flex-1 space-y-4 overflow-y-auto px-4">
           {isAdmin ? (
             <p className="text-sm text-muted-foreground">
               This cannot be changed.
@@ -174,7 +174,7 @@ export function RolePermissionsDialog({
           ) : null}
         </div>
 
-        <DialogFooter>
+        <SheetFooter>
           <Button
             type="button"
             variant="outline"
@@ -190,8 +190,8 @@ export function RolePermissionsDialog({
           >
             {mutation.isPending ? "Saving…" : "Save"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

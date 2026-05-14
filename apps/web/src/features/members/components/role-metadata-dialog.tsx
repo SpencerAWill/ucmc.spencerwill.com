@@ -2,16 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { Button } from "#/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "#/components/ui/dialog";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "#/components/ui/sheet";
 import { Textarea } from "#/components/ui/textarea";
 import { roleQueryOptions } from "#/features/members/api/queries";
 import { useUpdateRole } from "#/features/members/api/use-update-role";
@@ -63,16 +63,16 @@ export function RoleMetadataDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit role</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Edit role</SheetTitle>
+          <SheetDescription>
             Role names are immutable; only the description can change.
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-4">
           <div className="space-y-2">
             <Label htmlFor="role-meta-name">Name</Label>
             <Input
@@ -108,7 +108,7 @@ export function RoleMetadataDialog({
           ) : null}
         </div>
 
-        <DialogFooter>
+        <SheetFooter>
           <Button
             type="button"
             variant="outline"
@@ -124,8 +124,8 @@ export function RoleMetadataDialog({
           >
             {mutation.isPending ? "Saving…" : "Save"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
