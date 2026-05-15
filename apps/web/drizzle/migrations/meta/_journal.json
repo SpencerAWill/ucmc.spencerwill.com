@@ -253,6 +253,20 @@
       "when": 1778559511327,
       "tag": "0035_gear_loan_permissions_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1778717898518,
+      "tag": "0036_site_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1778717898519,
+      "tag": "0037_settings_manage_permission_seed",
+      "breakpoints": true
     }
   ]
 }

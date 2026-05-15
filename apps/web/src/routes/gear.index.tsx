@@ -18,11 +18,7 @@ import {
 import { useAuth } from "#/features/auth/api/use-auth";
 import { GearBulkImportSheet } from "#/features/gear/components/gear-bulk-import-sheet";
 import { GearFilterBar } from "#/features/gear/components/gear-filter-bar";
-import type {
-  GearFilterState,
-  GearSortMode,
-  GearView,
-} from "#/features/gear/components/gear-filter-bar";
+import type { GearFilterState } from "#/features/gear/components/gear-filter-bar";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
@@ -68,8 +64,8 @@ function GearIndexPage() {
     lifecycle: search.lifecycle ?? "active",
     condition: search.condition ?? null,
     q: search.q ?? "",
-    sort: (search.sort ?? "code") as GearSortMode,
-    view: (search.view ?? "list") as GearView,
+    sort: search.sort ?? "code",
+    view: search.view ?? "list",
   };
 
   const onFilterChange = (next: GearFilterState) => {

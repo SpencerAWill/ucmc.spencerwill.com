@@ -15,10 +15,26 @@ import {
 } from "#/features/announcements/server/repo.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import { readSetting } from "#/server/settings/settings-repo.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
 
+/**
+ * Kill-switch gate. Composed into every action below so the feature
+ * disappears at the action boundary even if a caller bypasses the route
+ * loader and the client-side bell/sidebar gates. Fail-open via the
+ * registry default — same semantics as every other `readSetting` call —
+ * which means a fresh DB keeps the feature hidden (default is `false`).
+ */
+async function requireAnnouncementsEnabled(): Promise<void> {
+  const enabled = await readSetting("announcements.enabled");
+  if (!enabled) {
+    throw new Error("Forbidden: announcements feature is disabled");
+  }
+}
+
 async function requireAnnouncementsReader(): Promise<Principal> {
+  await requireAnnouncementsEnabled();
   const principal = await loadCurrentPrincipal();
   if (!principal) {
     throw new Error("Not signed in");
@@ -30,6 +46,7 @@ async function requireAnnouncementsReader(): Promise<Principal> {
 }
 
 async function requireAnnouncementsManager(): Promise<Principal> {
+  await requireAnnouncementsEnabled();
   const principal = await loadCurrentPrincipal();
   if (!principal) {
     throw new Error("Not signed in");

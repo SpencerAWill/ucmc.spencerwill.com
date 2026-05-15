@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -25,9 +25,20 @@ import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { requirePermission } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
 import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export const Route = createFileRoute("/announcements/")({
   beforeLoad: async ({ context }) => {
+    // Flag-off should look like "the page doesn't exist" for everyone,
+    // regardless of permission. Read flags first so the redirect is
+    // uniform across permission states. The server actions also block
+    // independently — this just keeps the URL from rendering anything.
+    const flags = await context.queryClient.ensureQueryData(
+      publicFlagsQueryOptions(),
+    );
+    if (!flags.announcements) {
+      throw redirect({ to: "/" });
+    }
     await requirePermission(context.queryClient, "announcements:read");
   },
   component: AnnouncementsPage,

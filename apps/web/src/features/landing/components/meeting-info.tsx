@@ -6,6 +6,7 @@ import { landingContentQueryOptions } from "#/features/landing/api/queries";
 import { EditAffordance } from "#/features/landing/components/edit-affordance";
 import { MeetingInfoEditor } from "#/features/landing/components/meeting-info-editor";
 import { landingImageUrlFor } from "#/features/landing/lib/image-url";
+import { publicSiteContactQueryOptions } from "#/features/settings/api/queries";
 
 function readString(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -13,10 +14,15 @@ function readString(v: unknown): string {
 
 export function MeetingInfo() {
   const { data } = useQuery(landingContentQueryOptions());
+  // Club email is a site-wide setting (also drives the footer mail icon),
+  // not part of the landing CMS. Edited at /settings.
+  const contactOptions = publicSiteContactQueryOptions();
+  const { data: contact = contactOptions.placeholderData } =
+    useQuery(contactOptions);
   const settings = data?.settings ?? {};
   const dayTime = readString(settings["meeting.day_time"]);
   const location = readString(settings["meeting.location"]);
-  const email = readString(settings["meeting.email"]);
+  const email = contact.clubEmail;
   const instagramUrl = readString(settings["meeting.instagram_url"]);
   const imageKey = readString(settings["meeting.image_key"]);
   const hasImage = imageKey.length > 0;
@@ -121,7 +127,7 @@ export function MeetingInfo() {
       <EditAffordance label="Edit meeting info">
         {({ close }) => (
           <MeetingInfoEditor
-            values={{ dayTime, location, email, instagramUrl }}
+            values={{ dayTime, location, instagramUrl }}
             imageKey={hasImage ? imageKey : null}
             onClose={close}
           />
