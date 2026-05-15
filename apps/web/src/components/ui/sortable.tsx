@@ -108,6 +108,13 @@ type SortableProps<T> = DndContextProps &
     strategy?: SortableContextProps["strategy"];
     orientation?: "vertical" | "horizontal" | "mixed";
     flatCursor?: boolean;
+    /**
+     * Maps a sortable item's id to a human-readable label used in the
+     * default screen-reader announcements (e.g. "Grabbed sortable item
+     * \"trip_leader\""). Falls back to the id when not provided, which
+     * is fine for short string ids but reads opaque UUIDs poorly.
+     */
+    getItemLabel?: (id: UniqueIdentifier) => string;
   };
 
 function Sortable<T>(props: SortableProps<T>) {
@@ -121,6 +128,7 @@ function Sortable<T>(props: SortableProps<T>) {
     orientation = "vertical",
     flatCursor = false,
     getItemValue: getItemValueProp,
+    getItemLabel,
     accessibility,
     ...sortableProps
   } = props;
@@ -206,10 +214,16 @@ function Sortable<T>(props: SortableProps<T>) {
     [sortableProps.onDragCancel],
   );
 
+  const labelFor = React.useCallback(
+    (itemId: UniqueIdentifier) =>
+      getItemLabel ? getItemLabel(itemId) : itemId.toString(),
+    [getItemLabel],
+  );
+
   const announcements: Announcements = React.useMemo(
     () => ({
       onDragStart({ active }) {
-        const activeValue = active.id.toString();
+        const activeValue = labelFor(active.id);
         return `Grabbed sortable item "${activeValue}". Current position is ${active.data.current?.sortable.index + 1} of ${value.length}. Use arrow keys to move, space to drop.`;
       },
       onDragOver({ active, over }) {
@@ -217,13 +231,13 @@ function Sortable<T>(props: SortableProps<T>) {
           const overIndex = over.data.current?.sortable.index ?? 0;
           const activeIndex = active.data.current?.sortable.index ?? 0;
           const moveDirection = overIndex > activeIndex ? "down" : "up";
-          const activeValue = active.id.toString();
+          const activeValue = labelFor(active.id);
           return `Sortable item "${activeValue}" moved ${moveDirection} to position ${overIndex + 1} of ${value.length}.`;
         }
         return "Sortable item is no longer over a droppable area. Press escape to cancel.";
       },
       onDragEnd({ active, over }) {
-        const activeValue = active.id.toString();
+        const activeValue = labelFor(active.id);
         if (over) {
           const overIndex = over.data.current?.sortable.index ?? 0;
           return `Sortable item "${activeValue}" dropped at position ${overIndex + 1} of ${value.length}.`;
@@ -232,7 +246,7 @@ function Sortable<T>(props: SortableProps<T>) {
       },
       onDragCancel({ active }) {
         const activeIndex = active.data.current?.sortable.index ?? 0;
-        const activeValue = active.id.toString();
+        const activeValue = labelFor(active.id);
         return `Sorting cancelled. Sortable item "${activeValue}" returned to position ${activeIndex + 1} of ${value.length}.`;
       },
       onDragMove({ active, over }) {
@@ -240,13 +254,13 @@ function Sortable<T>(props: SortableProps<T>) {
           const overIndex = over.data.current?.sortable.index ?? 0;
           const activeIndex = active.data.current?.sortable.index ?? 0;
           const moveDirection = overIndex > activeIndex ? "down" : "up";
-          const activeValue = active.id.toString();
+          const activeValue = labelFor(active.id);
           return `Sortable item "${activeValue}" is moving ${moveDirection} to position ${overIndex + 1} of ${value.length}.`;
         }
         return "Sortable item is no longer over a droppable area. Press escape to cancel.";
       },
     }),
-    [value],
+    [value, labelFor],
   );
 
   const screenReaderInstructions: ScreenReaderInstructions = React.useMemo(

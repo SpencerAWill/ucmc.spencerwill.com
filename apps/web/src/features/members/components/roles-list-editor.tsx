@@ -127,7 +127,11 @@ export function RolesListEditor() {
         </Button>
       </div>
 
-      <Sortable value={order} onValueChange={setOrder}>
+      <Sortable
+        value={order}
+        onValueChange={setOrder}
+        getItemLabel={(id) => rolesById.get(String(id))?.name ?? String(id)}
+      >
         <SortableContent asChild>
           <ul className="divide-y rounded-md border">
             {order.map((id) => {
@@ -155,25 +159,20 @@ export function RolesListEditor() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span
-                              tabIndex={0}
-                              className="truncate rounded-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                              {role.name}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-xs">
-                            {role.description ?? "No description."}
-                          </TooltipContent>
-                        </Tooltip>
+                        <span className="truncate font-medium">
+                          {role.name}
+                        </span>
                         {role.isProtected ? (
                           <Badge variant="outline" className="text-xs">
                             protected
                           </Badge>
                         ) : null}
                       </div>
+                      {role.description ? (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {role.description}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="hidden shrink-0 items-center gap-4 text-xs text-muted-foreground sm:flex">
