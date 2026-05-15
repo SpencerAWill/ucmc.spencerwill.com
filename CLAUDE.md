@@ -2,12 +2,12 @@
 
 ## Project
 
-UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (v10.33+, ESM-only).
+UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (v11+, ESM-only).
 
 - `apps/web/` — TanStack Start + React 19 + Vite 8 + Tailwind v4 + shadcn, deployed to Cloudflare Workers via Wrangler
 - `infra/` — Pulumi (TypeScript, two stacks: `dev`, `prod`)
 - `libs/` — shared libraries
-- `.devcontainer/` — Debian-based devcontainer with Node 22, Pulumi, gh, Claude Code, Playwright, Mailpit sidecar
+- `.devcontainer/` — Debian-based devcontainer with Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit sidecar
 - `.wiki/` — git submodule, auto-synced via husky hooks + CI
 
 ## Tooling
