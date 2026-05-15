@@ -157,7 +157,10 @@ export function RolesListEditor() {
                       <div className="flex items-center gap-2">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="truncate font-medium">
+                            <span
+                              tabIndex={0}
+                              className="truncate rounded-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
                               {role.name}
                             </span>
                           </TooltipTrigger>

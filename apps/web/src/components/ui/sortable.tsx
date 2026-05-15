@@ -41,8 +41,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { Slot as SlotPrimitive } from "radix-ui";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { useComposedRefs } from "#/lib/compose-refs.ts";
-import { cn } from "#/lib/utils.ts";
+import { useComposedRefs } from "#/lib/compose-refs";
+import { cn } from "#/lib/utils";
 
 const orientationConfig = {
   vertical: {
@@ -328,7 +328,7 @@ function SortableContent(props: SortableContentProps) {
 
   const context = useSortableContext(CONTENT_NAME);
 
-  const ContentPrimitive = asChild ? SlotPrimitive.Slot : "div";
+  const ContentPrimitive = asChild ? SlotPrimitive.Root : "div";
 
   return (
     <SortableContentContext.Provider value={true}>
@@ -442,7 +442,7 @@ function SortableItem(props: SortableItemProps) {
     [id, attributes, listeners, setActivatorNodeRef, isDragging, disabled],
   );
 
-  const ItemPrimitive = asChild ? SlotPrimitive.Slot : "div";
+  const ItemPrimitive = asChild ? SlotPrimitive.Root : "div";
 
   return (
     <SortableItemContext.Provider value={itemContext}>
@@ -486,11 +486,11 @@ function SortableItemHandle(props: SortableItemHandleProps) {
   const isDisabled = disabled ?? itemContext.disabled;
 
   const composedRef = useComposedRefs(ref, (node) => {
-    if (!isDisabled) return;
+    if (isDisabled) return;
     itemContext.setActivatorNodeRef(node);
   });
 
-  const HandlePrimitive = asChild ? SlotPrimitive.Slot : "button";
+  const HandlePrimitive = asChild ? SlotPrimitive.Root : "button";
 
   return (
     <HandlePrimitive
