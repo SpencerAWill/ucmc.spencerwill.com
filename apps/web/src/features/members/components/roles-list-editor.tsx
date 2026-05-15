@@ -118,7 +118,8 @@ export function RolesListEditor() {
     <>
       <div className="flex items-center justify-between pb-4">
         <p className="text-sm text-muted-foreground">
-          Drag to reorder. Hover a name to see its description.
+          Drag to reorder. Click the pencil to edit members, permissions, or the
+          description.
         </p>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="mr-2 size-4" />

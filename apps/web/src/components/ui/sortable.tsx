@@ -224,7 +224,8 @@ function Sortable<T>(props: SortableProps<T>) {
     () => ({
       onDragStart({ active }) {
         const activeValue = labelFor(active.id);
-        return `Grabbed sortable item "${activeValue}". Current position is ${active.data.current?.sortable.index + 1} of ${value.length}. Use arrow keys to move, space to drop.`;
+        const activeIndex = active.data.current?.sortable.index ?? 0;
+        return `Grabbed sortable item "${activeValue}". Current position is ${activeIndex + 1} of ${value.length}. Use arrow keys to move, space to drop.`;
       },
       onDragOver({ active, over }) {
         if (over) {

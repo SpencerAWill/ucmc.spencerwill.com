@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import { Checkbox } from "#/components/ui/checkbox";
@@ -96,14 +96,24 @@ export function RoleEditorSheet({
   const metadataDirty = description !== initialDescription;
   const updateRole = useUpdateRole();
 
-  // Reset local state whenever the sheet (re)opens against a role.
+  // Initialize local edit state once per open session from the loaded
+  // role. We deliberately do NOT depend on role.permissionIds /
+  // role.description here: a background refetch (or another mutation
+  // invalidating the cache) would otherwise wipe whatever the user is
+  // mid-edit on. The ref clears on close so the next open re-inits.
+  const initializedRef = useRef(false);
   useEffect(() => {
-    if (open) {
-      setTab(initialTab);
-      setPendingGrants(new Set(role?.permissionIds ?? []));
-      setDescription(role?.description ?? "");
+    if (!open) {
+      initializedRef.current = false;
+      return;
     }
-  }, [open, role?.permissionIds, role?.description, initialTab]);
+    if (initializedRef.current) return;
+    if (!role) return;
+    setTab(initialTab);
+    setPendingGrants(new Set(role.permissionIds));
+    setDescription(role.description ?? "");
+    initializedRef.current = true;
+  }, [open, role, initialTab]);
 
   const anyDirty = permsDirty || metadataDirty;
 
@@ -119,17 +129,28 @@ export function RoleEditorSheet({
     });
   }
 
+  // Only auto-close when nothing else is left to save. If another tab
+  // still has pending edits, stay open so the user can review them
+  // rather than silently losing their work on close.
   function handleSavePermissions() {
     setPermissions.mutate(
       { roleId, permissionIds: Array.from(pendingGrants) },
-      { onSuccess: () => onOpenChange(false) },
+      {
+        onSuccess: () => {
+          if (!metadataDirty) onOpenChange(false);
+        },
+      },
     );
   }
 
   function handleSaveMetadata() {
     updateRole.mutate(
       { roleId, description: description.trim() || null },
-      { onSuccess: () => onOpenChange(false) },
+      {
+        onSuccess: () => {
+          if (!permsDirty) onOpenChange(false);
+        },
+      },
     );
   }
 
