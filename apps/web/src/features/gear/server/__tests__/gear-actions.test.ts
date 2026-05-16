@@ -195,10 +195,142 @@ describe("authorization", () => {
     expect(list.rows[0]?.code).toBe("CH1");
   });
 
-  it("strips acquisitionCostCents for non-manager readers", async () => {
+  it("round-trips msrp, manufacturer, serial, condition grade through create + detail", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
-    // Seed gear with a non-null cost so the strip is observable.
+    const created = await createGearAction({
+      typePublicId,
+      code: "CH1",
+      description: "Petzl Sama",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: 6000,
+      msrpCents: 7500,
+      manufacturer: " Petzl ",
+      serialNumber: " ABC-123 ",
+      conditionGrade: "good",
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    if (!created.ok) throw new Error("seed failed");
+
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    expect(detail.msrpCents).toBe(7500);
+    expect(detail.manufacturer).toBe("Petzl");
+    expect(detail.serialNumber).toBe("ABC-123");
+    expect(detail.conditionGrade).toBe("good");
+
+    // Manufacturer + grade are public; msrp is officer-only (same gate
+    // as acquisition cost).
+    await signInAsRegularMember();
+    const memberDetail = await getGearDetailAction({
+      publicId: created.publicId,
+    });
+    expect(memberDetail.manufacturer).toBe("Petzl");
+    expect(memberDetail.conditionGrade).toBe("good");
+    expect(memberDetail.msrpCents).toBeNull();
+  });
+
+  it("editGearAction diffs the new attributes and emits gear.updated", async () => {
+    const actorId = await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const publicId = await createGearOk({ typePublicId, code: "CH1" });
+
+    const result = await editGearAction({
+      publicId,
+      typePublicId,
+      code: "CH1",
+      description: "Test gear",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      msrpCents: 4500,
+      manufacturer: "Black Diamond",
+      serialNumber: null,
+      conditionGrade: "fair",
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    expect(result.ok).toBe(true);
+
+    const detail = await getGearDetailAction({ publicId });
+    expect(detail.msrpCents).toBe(4500);
+    expect(detail.manufacturer).toBe("Black Diamond");
+    expect(detail.conditionGrade).toBe("fair");
+
+    const audit = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear.updated"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.actorUserId).toBe(actorId);
+    const meta = JSON.parse(audit[0]?.metadataJson ?? "{}") as {
+      changedFields: string[];
+    };
+    expect(meta.changedFields).toEqual(
+      expect.arrayContaining(["msrp_cents", "manufacturer", "condition_grade"]),
+    );
+    // serialNumber went from null → null: not a change.
+    expect(meta.changedFields).not.toContain("serial_number");
+  });
+
+  it("editGearAction preserves serialNumber when the field is omitted", async () => {
+    // The form sheet opened from the gear list page passes a
+    // GearSummary, which doesn't include `serialNumber`. The submit
+    // path omits `serialNumber` in that scenario; this test pins the
+    // server contract that an omitted (undefined) field is a no-op,
+    // not a clearing edit.
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const created = await createGearAction({
+      typePublicId,
+      code: "CH1",
+      description: "Test gear",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      serialNumber: "ABC-123",
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    if (!created.ok) throw new Error("seed failed");
+
+    const result = await editGearAction({
+      publicId: created.publicId,
+      typePublicId,
+      code: "CH1",
+      description: "Renamed",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      // serialNumber intentionally omitted — simulates list-page edit.
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    expect(result.ok).toBe(true);
+
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    expect(detail.serialNumber).toBe("ABC-123");
+
+    const audit = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear.updated"));
+    const meta = JSON.parse(audit[0]?.metadataJson ?? "{}") as {
+      changedFields: string[];
+    };
+    expect(meta.changedFields).not.toContain("serial_number");
+  });
+
+  it("strips officer-only fields (cost, msrp, serial) for non-manager readers", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    // Seed gear with non-null values on every officer-gated field so
+    // the strip is observable.
     const created = await createGearAction({
       typePublicId,
       code: "CH1",
@@ -206,28 +338,43 @@ describe("authorization", () => {
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: 6000,
+      msrpCents: 8495,
+      manufacturer: "Petzl",
+      serialNumber: "ABC-123",
+      conditionGrade: "good",
       notesMarkdown: null,
       condition: "serviceable",
       tagPublicIds: [],
     });
     if (!created.ok) throw new Error("seed failed");
 
-    // Manager view: cost is present.
+    // Manager view: every field is present.
     const managerList = await listGearAction({});
     expect(managerList.rows[0]?.acquisitionCostCents).toBe(6000);
+    expect(managerList.rows[0]?.msrpCents).toBe(8495);
+    expect(managerList.rows[0]?.manufacturer).toBe("Petzl");
     const managerDetail = await getGearDetailAction({
       publicId: created.publicId,
     });
     expect(managerDetail.acquisitionCostCents).toBe(6000);
+    expect(managerDetail.msrpCents).toBe(8495);
+    expect(managerDetail.serialNumber).toBe("ABC-123");
 
-    // Regular member view: cost is null.
+    // Regular member view: financial + serial are null; brand and
+    // grade remain visible (intentional — useful for browsing).
     await signInAsRegularMember();
     const memberList = await listGearAction({});
     expect(memberList.rows[0]?.acquisitionCostCents).toBeNull();
+    expect(memberList.rows[0]?.msrpCents).toBeNull();
+    expect(memberList.rows[0]?.manufacturer).toBe("Petzl");
     const memberDetail = await getGearDetailAction({
       publicId: created.publicId,
     });
     expect(memberDetail.acquisitionCostCents).toBeNull();
+    expect(memberDetail.msrpCents).toBeNull();
+    expect(memberDetail.serialNumber).toBeNull();
+    expect(memberDetail.manufacturer).toBe("Petzl");
+    expect(memberDetail.conditionGrade).toBe("good");
   });
 });
 

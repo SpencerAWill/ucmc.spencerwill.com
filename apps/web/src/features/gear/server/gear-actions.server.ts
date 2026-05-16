@@ -71,8 +71,15 @@ export interface GearSummary {
   thumbnailKey: string | null;
   lifecycle: schema.GearLifecycle;
   condition: schema.GearCondition;
+  /** Coarse wear grade (excellent/good/fair) carried over from the
+   *  legacy paper inventory. Orthogonal to `condition`. Null when no
+   *  grade has been assigned. */
+  conditionGrade: schema.GearConditionGrade | null;
   acquiredAt: Date | null;
   acquisitionCostCents: number | null;
+  /** Officer-only (same gate as `acquisitionCostCents`). */
+  msrpCents: number | null;
+  manufacturer: string | null;
   retiredAt: Date | null;
   retiredReason: string | null;
   createdAt: Date;
@@ -83,6 +90,10 @@ export interface GearSummary {
 
 export interface GearDetail extends GearSummary {
   notesMarkdown: string | null;
+  /** Manufacturer's serial number. Officer-only (same gate as
+   *  `acquisitionCostCents` / `msrpCents`) — stripped for callers
+   *  without `gear:manage`. */
+  serialNumber: string | null;
   /** Currently open loan, if any. The `memberFullName` field is
    *  populated ONLY for officers (gear:loan) OR for the borrower
    *  themselves — anyone else with `gear:read` sees the borrower's
@@ -134,11 +145,14 @@ function toSummary(
     thumbnailKey: row.thumbnailKey,
     lifecycle: row.lifecycle,
     condition: row.condition,
+    conditionGrade: row.conditionGrade,
     acquiredAt: row.acquiredAt,
     // Cost is officer-only: budget detail shouldn't be readable by
     // every approved member. The UI hides the field, but stripping it
     // here keeps the JSON response honest even for a direct fetch.
     acquisitionCostCents: canSeeCost ? row.acquisitionCostCents : null,
+    msrpCents: canSeeCost ? row.msrpCents : null,
+    manufacturer: row.manufacturer,
     retiredAt: row.retiredAt,
     retiredReason: row.retiredReason,
     createdAt: row.createdAt,
@@ -169,6 +183,14 @@ async function resolveTagIds(tagPublicIds: string[]): Promise<string[]> {
 function normalizeCode(code: string | null | undefined): string | null {
   if (code === null || code === undefined) return null;
   const trimmed = code.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+function normalizeOptionalText(
+  value: string | null | undefined,
+): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
   return trimmed.length === 0 ? null : trimmed;
 }
 
@@ -293,7 +315,16 @@ export async function getGearDetailAction(input: {
     };
   }
 
-  return { ...summary, notesMarkdown: row.notesMarkdown, currentLoan };
+  return {
+    ...summary,
+    notesMarkdown: row.notesMarkdown,
+    // Serial rides the same officer-only gate as the financial fields.
+    // Leaking serials to all approved members hands a thief a shopping
+    // list — name/brand alone isn't enough to flip a piece, but serial
+    // + brand correlates against marketplace listings.
+    serialNumber: canSeeCost ? row.serialNumber : null,
+    currentLoan,
+  };
 }
 
 export interface CreateGearInput {
@@ -309,6 +340,13 @@ export interface CreateGearInput {
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
+  // Extended attributes carried over from the legacy paper inventory.
+  // Optional on the wire (omit = unknown / not supplied). The action
+  // normalizes `undefined` to `null` at the boundary.
+  msrpCents?: number | null;
+  manufacturer?: string | null;
+  serialNumber?: string | null;
+  conditionGrade?: schema.GearConditionGrade | null;
   notesMarkdown: string | null;
   condition: schema.GearCondition;
   tagPublicIds: string[];
@@ -360,6 +398,10 @@ export async function createGearAction(
       thumbnailKey,
       acquiredAt: msToDate(input.acquiredAt),
       acquisitionCostCents: input.acquisitionCostCents,
+      msrpCents: input.msrpCents,
+      manufacturer: normalizeOptionalText(input.manufacturer),
+      serialNumber: normalizeOptionalText(input.serialNumber),
+      conditionGrade: input.conditionGrade,
       notesMarkdown: input.notesMarkdown,
       condition: input.condition,
       createdBy: principal.userId,
@@ -409,6 +451,12 @@ export interface EditGearInput {
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
+  // Same omit-means-no-change semantics as `thumbnailDataUrl`. Pass
+  // `null` to clear the field, omit to leave it unchanged.
+  msrpCents?: number | null;
+  manufacturer?: string | null;
+  serialNumber?: string | null;
+  conditionGrade?: schema.GearConditionGrade | null;
   notesMarkdown: string | null;
   condition: schema.GearCondition;
   tagPublicIds: string[];
@@ -451,6 +499,31 @@ export async function editGearAction(
   if (input.acquisitionCostCents !== existing.acquisitionCostCents) {
     patch.acquisitionCostCents = input.acquisitionCostCents;
     changedFields.push("acquisition_cost_cents");
+  }
+  if (input.msrpCents !== undefined && input.msrpCents !== existing.msrpCents) {
+    patch.msrpCents = input.msrpCents;
+    changedFields.push("msrp_cents");
+  }
+  if (input.manufacturer !== undefined) {
+    const next = normalizeOptionalText(input.manufacturer);
+    if (next !== existing.manufacturer) {
+      patch.manufacturer = next;
+      changedFields.push("manufacturer");
+    }
+  }
+  if (input.serialNumber !== undefined) {
+    const next = normalizeOptionalText(input.serialNumber);
+    if (next !== existing.serialNumber) {
+      patch.serialNumber = next;
+      changedFields.push("serial_number");
+    }
+  }
+  if (
+    input.conditionGrade !== undefined &&
+    input.conditionGrade !== existing.conditionGrade
+  ) {
+    patch.conditionGrade = input.conditionGrade;
+    changedFields.push("condition_grade");
   }
   if (input.notesMarkdown !== existing.notesMarkdown) {
     patch.notesMarkdown = input.notesMarkdown;

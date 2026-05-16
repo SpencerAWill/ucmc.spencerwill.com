@@ -288,6 +288,13 @@
       "when": 1778723653419,
       "tag": "0040_roles_display_name_non_empty",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1778961884496,
+      "tag": "0041_gear_extended_attributes",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,15 @@ const CONDITION_LABEL: Record<GearDetail["condition"], string> = {
   lost: "Lost",
 };
 
+const CONDITION_GRADE_LABEL: Record<
+  NonNullable<GearDetail["conditionGrade"]>,
+  string
+> = {
+  excellent: "Excellent",
+  good: "Good",
+  fair: "Fair",
+};
+
 // Mirrors the placeholder used on the list page so the detail view
 // matches visually. Swap for a real per-gear thumbnail key when that
 // feature lands.
@@ -72,6 +81,11 @@ export function GearDetailCard({
               {isRetired ? "Retired" : "Active"}
             </Badge>
             <Badge variant="outline">{CONDITION_LABEL[gear.condition]}</Badge>
+            {gear.conditionGrade ? (
+              <Badge variant="outline">
+                {CONDITION_GRADE_LABEL[gear.conditionGrade]}
+              </Badge>
+            ) : null}
           </div>
           {gear.tags.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -86,6 +100,18 @@ export function GearDetailCard({
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {gear.manufacturer ? (
+            <div>
+              <dt className="text-xs text-muted-foreground">Manufacturer</dt>
+              <dd>{gear.manufacturer}</dd>
+            </div>
+          ) : null}
+          {gear.serialNumber ? (
+            <div>
+              <dt className="text-xs text-muted-foreground">Serial</dt>
+              <dd className="font-mono text-xs">{gear.serialNumber}</dd>
+            </div>
+          ) : null}
           {gear.acquiredAt ? (
             <div>
               <dt className="text-xs text-muted-foreground">Acquired</dt>
@@ -96,6 +122,12 @@ export function GearDetailCard({
             <div>
               <dt className="text-xs text-muted-foreground">Cost</dt>
               <dd>${(gear.acquisitionCostCents / 100).toFixed(2)}</dd>
+            </div>
+          ) : null}
+          {canManage && gear.msrpCents !== null ? (
+            <div>
+              <dt className="text-xs text-muted-foreground">MSRP</dt>
+              <dd>${(gear.msrpCents / 100).toFixed(2)}</dd>
             </div>
           ) : null}
           <div>

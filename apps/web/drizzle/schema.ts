@@ -726,6 +726,19 @@ export const gearCondition = [
 ] as const;
 export type GearCondition = (typeof gearCondition)[number];
 
+/**
+ * Optional wear-level grade independent of {@link gearCondition}.
+ *
+ * `condition` is operational state ("can this be loaned out?"); the
+ * grade is a coarse subjective wear assessment carried over from
+ * legacy paper inventories. A piece can be `condition=serviceable,
+ * conditionGrade=fair` (loanable but visibly worn) or
+ * `condition=needs_repair, conditionGrade=excellent` (only just
+ * developed a defect on a near-new item).
+ */
+export const gearConditionGrade = ["excellent", "good", "fair"] as const;
+export type GearConditionGrade = (typeof gearConditionGrade)[number];
+
 export const gearTypes = sqliteTable(
   "gear_types",
   {
@@ -775,6 +788,14 @@ export const gear = sqliteTable(
     thumbnailKey: text("thumbnail_key"),
     acquiredAt: timestamp("acquired_at"),
     acquisitionCostCents: integer("acquisition_cost_cents"),
+    // Manufacturer's listed retail price at acquisition, in cents.
+    // Separate from `acquisitionCostCents` so the club can report
+    // replacement value for pieces that were donated or bought at
+    // steep discount.
+    msrpCents: integer("msrp_cents"),
+    manufacturer: text("manufacturer"),
+    serialNumber: text("serial_number"),
+    conditionGrade: text("condition_grade", { enum: gearConditionGrade }),
     notesMarkdown: text("notes_markdown"),
     lifecycle: text("lifecycle", { enum: gearLifecycle })
       .notNull()

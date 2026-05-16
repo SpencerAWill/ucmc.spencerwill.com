@@ -31,9 +31,13 @@ import { useCreateGear } from "#/features/gear/api/use-create-gear";
 import { useEditGear } from "#/features/gear/api/use-edit-gear";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
-import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
+import {
+  GEAR_CONDITION_GRADE_VALUES,
+  GEAR_CONDITION_VALUES,
+} from "#/features/gear/server/gear-fns";
 import type {
   GearCondition,
+  GearConditionGrade,
   GearDetail,
   GearSummary,
 } from "#/features/gear/server/gear-fns";
@@ -64,6 +68,17 @@ const CONDITION_LABEL: Record<GearCondition, string> = {
   lost: "Lost",
 };
 
+const CONDITION_GRADE_LABEL: Record<GearConditionGrade, string> = {
+  excellent: "Excellent",
+  good: "Good",
+  fair: "Fair",
+};
+
+// Sentinel value for "no grade" — `<Select>` can't accept an empty
+// string as an item value, so we round-trip through a literal that
+// won't collide with any real enum member.
+const CONDITION_GRADE_NONE = "__none__";
+
 export type GearFormMode =
   | { mode: "create" }
   | { mode: "edit"; gear: GearSummary | GearDetail };
@@ -80,7 +95,7 @@ export function GearFormSheet({
   const isEdit = intent.mode === "edit";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex flex-col gap-0">
+      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-xl">
         <SheetHeader>
           <SheetTitle>{isEdit ? "Edit gear" : "Add gear"}</SheetTitle>
           <SheetDescription>
@@ -105,6 +120,12 @@ function GearForm({
   onClose: () => void;
 }) {
   const isEdit = intent.mode === "edit";
+  // True only when the caller handed us a GearDetail (the gear detail
+  // page does; the list page passes a GearSummary, which omits
+  // `serialNumber`). Drives whether to render the serial input — if we
+  // never received the real value we shouldn't offer to overwrite it.
+  const hasDetailFields = isEdit && "serialNumber" in intent.gear;
+  const showSerialNumber = !isEdit || hasDetailFields;
   const { data: types } = useQuery(gearTypesQueryOptions());
   const { data: tags } = useQuery(gearTagsQueryOptions());
   const createMutation = useCreateGear();
@@ -126,6 +147,26 @@ function GearForm({
     isEdit && intent.gear.acquisitionCostCents !== null
       ? (intent.gear.acquisitionCostCents / 100).toFixed(2)
       : "",
+  );
+  const [msrpDollars, setMsrpDollars] = useState<string>(
+    isEdit && intent.gear.msrpCents !== null
+      ? (intent.gear.msrpCents / 100).toFixed(2)
+      : "",
+  );
+  const [manufacturer, setManufacturer] = useState<string>(
+    isEdit ? (intent.gear.manufacturer ?? "") : "",
+  );
+  const [serialNumber, setSerialNumber] = useState<string>(
+    isEdit && "serialNumber" in intent.gear
+      ? (intent.gear.serialNumber ?? "")
+      : "",
+  );
+  const [conditionGrade, setConditionGrade] = useState<
+    GearConditionGrade | typeof CONDITION_GRADE_NONE
+  >(
+    isEdit && intent.gear.conditionGrade !== null
+      ? intent.gear.conditionGrade
+      : CONDITION_GRADE_NONE,
   );
   const [notes, setNotes] = useState<string>(
     isEdit && "notesMarkdown" in intent.gear
@@ -236,19 +277,40 @@ function GearForm({
       setError("Cost must be a non-negative number.");
       return;
     }
+    const msrp =
+      msrpDollars.trim().length > 0
+        ? Math.round(Number(msrpDollars) * 100)
+        : null;
+    if (msrp !== null && (!Number.isFinite(msrp) || msrp < 0)) {
+      setError("MSRP must be a non-negative number.");
+      return;
+    }
+    const trimmedSerial =
+      serialNumber.trim().length === 0 ? null : serialNumber;
+    // `serialNumber` lives only on GearDetail. When the sheet is
+    // opened from the gear list (which passes a GearSummary), the
+    // form falls back to empty, and naively including it in the edit
+    // payload would clobber the stored value — `editGearAction`
+    // treats any present-but-different field as an intentional
+    // change. Only send it on edit when the caller gave us a
+    // detail-shaped source so it round-trips safely.
     const basePayload = {
       typePublicId,
       code: code.trim().length === 0 ? null : code.trim(),
       description: trimmedDescription,
       acquiredAt: acquiredAtMs,
       acquisitionCostCents: cents,
+      msrpCents: msrp,
+      manufacturer: manufacturer.trim().length === 0 ? null : manufacturer,
+      conditionGrade:
+        conditionGrade === CONDITION_GRADE_NONE ? null : conditionGrade,
       notesMarkdown: notes.trim().length === 0 ? null : notes,
       condition,
       tagPublicIds,
     };
 
     if (isEdit) {
-      // Three-way:
+      // Three-way thumbnail handling:
       //   - new image picked → send the new data URL
       //   - explicitly cleared → send null (server deletes the R2 object)
       //   - neither → omit so the existing key stays untouched
@@ -256,6 +318,9 @@ function GearForm({
         publicId: intent.gear.publicId,
         ...basePayload,
       };
+      if (hasDetailFields) {
+        editPayload.serialNumber = trimmedSerial;
+      }
       if (newThumbnailDataUrl !== null) {
         editPayload.thumbnailDataUrl = newThumbnailDataUrl;
       } else if (thumbnailCleared) {
@@ -277,6 +342,7 @@ function GearForm({
     createMutation.mutate(
       {
         ...basePayload,
+        serialNumber: trimmedSerial,
         thumbnailDataUrl: newThumbnailDataUrl,
       },
       {
@@ -429,6 +495,34 @@ function GearForm({
             Primary heading on the gear card.
           </p>
         </div>
+        <div
+          className={
+            showSerialNumber ? "grid grid-cols-2 gap-3" : "space-y-1.5"
+          }
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-manufacturer">Manufacturer</Label>
+            <Input
+              id="gear-manufacturer"
+              value={manufacturer}
+              onChange={(e) => setManufacturer(e.target.value)}
+              placeholder="Petzl"
+              maxLength={100}
+            />
+          </div>
+          {showSerialNumber ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="gear-serial">Serial number</Label>
+              <Input
+                id="gear-serial"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="ABC-12345"
+                maxLength={100}
+              />
+            </div>
+          ) : null}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="gear-acquired">Acquired</Label>
@@ -452,13 +546,59 @@ function GearForm({
             />
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-msrp">MSRP (USD)</Label>
+            <Input
+              id="gear-msrp"
+              type="number"
+              step="0.01"
+              min="0"
+              value={msrpDollars}
+              onChange={(e) => setMsrpDollars(e.target.value)}
+              placeholder="84.95"
+            />
+            <p className="text-xs text-muted-foreground">
+              Manufacturer's listed price — used for replacement-value
+              reporting.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-condition-grade">Condition grade</Label>
+            <Select
+              value={conditionGrade}
+              onValueChange={(v) =>
+                setConditionGrade(
+                  v as GearConditionGrade | typeof CONDITION_GRADE_NONE,
+                )
+              }
+            >
+              <SelectTrigger id="gear-condition-grade" className="w-full">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CONDITION_GRADE_NONE}>
+                  <span className="text-muted-foreground">No grade</span>
+                </SelectItem>
+                {GEAR_CONDITION_GRADE_VALUES.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {CONDITION_GRADE_LABEL[g]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Subjective wear level — independent of repair status.
+            </p>
+          </div>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="gear-condition">Condition</Label>
           <Select
             value={condition}
             onValueChange={(v) => setCondition(v as GearCondition)}
           >
-            <SelectTrigger id="gear-condition">
+            <SelectTrigger id="gear-condition" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

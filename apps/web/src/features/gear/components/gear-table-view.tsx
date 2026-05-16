@@ -94,6 +94,7 @@ export function GearTableView({
             <TableHead className="w-22">Code</TableHead>
             <TableHead>Description</TableHead>
             <TableHead className="hidden sm:table-cell">Type</TableHead>
+            <TableHead className="hidden md:table-cell">Manufacturer</TableHead>
             <TableHead className="hidden sm:table-cell">Condition</TableHead>
             <TableHead className="w-12 text-right">
               <span className="sr-only">Actions</span>
@@ -151,6 +152,13 @@ export function GearTableView({
                 </TableCell>
                 <TableCell className="hidden text-sm sm:table-cell">
                   {g.type.name}
+                </TableCell>
+                <TableCell className="hidden text-sm md:table-cell">
+                  {g.manufacturer ? (
+                    g.manufacturer
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
