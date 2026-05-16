@@ -37,7 +37,7 @@ To use it, open the repo in VS Code and select **Reopen in Container** when prom
 #### Prerequisites
 
 - [Node.js](https://nodejs.org/) (v24+)
-- [pnpm](https://pnpm.io/) (v11+)
+- [pnpm](https://pnpm.io/) v11.1.2 (managed by corepack — `package.json#packageManager` pins it, so a `corepack enable` is all you need)
 - [Pulumi CLI](https://www.pulumi.com/docs/install/) (for infrastructure changes)
 
 #### Getting Started

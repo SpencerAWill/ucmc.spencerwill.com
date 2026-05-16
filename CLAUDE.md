@@ -2,7 +2,7 @@
 
 ## Project
 
-UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (v11+, ESM-only).
+UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (pnpm@11.1.2 pinned via corepack, ESM-only).
 
 - `apps/web/` — TanStack Start + React 19 + Vite 8 + Tailwind v4 + shadcn, deployed to Cloudflare Workers via Wrangler
 - `infra/` — Pulumi (TypeScript, two stacks: `dev`, `prod`)
@@ -19,7 +19,7 @@ UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (v11+, ESM
 - **pnpm config lives in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11 stopped reading the `pnpm.*` block in `package.json` — `overrides`, `peerDependencyRules`, `auditConfig`, `minimumReleaseAge`, and `allowBuilds` must all be in the workspace file or they silently no-op.
 - **Supply-chain hardening** (in `pnpm-workspace.yaml`):
   - `minimumReleaseAge: 10080` quarantines any version published in the last 7 days. Primary defense against publish-compromise incidents (e.g. the TanStack `latest`-tag hijack). **Never spec a dep as `"latest"`** — it bypasses the resolver's age check and is exactly what got hijacked. Every direct dep gets an exact version or caret pin where every in-range version is ≥7 days old.
-  - `allowBuilds` (renamed from pnpm 10's `onlyBuiltDependencies`) is a map of `pkg: true|false`. Lifecycle scripts run only for listed packages; everything else is blocked. Current allowlist: `@pulumi/command`, `esbuild`, `lightningcss`, `protobufjs`, `sharp`, `unrs-resolver`, `workerd`.
+  - `allowBuilds` (renamed from pnpm 10's `onlyBuiltDependencies`) is a map of `pkg: true|false`. Lifecycle scripts run only for listed packages; everything else is blocked. Audit pnpm's actual decisions in `node_modules/.modules.yaml`. Current allowlist: `@pulumi/command`, `esbuild`, `lightningcss`, `protobufjs`, `sharp`, `unrs-resolver`, `workerd`.
   - `overrides` pins transitive deps above the known-CVE range: `esbuild >=0.25.0`, `fast-uri >=3.1.2`, `ip-address >=10.1.1`, `protobufjs 8.0.3`. Also pins `@tanstack/query-core` so the auto-installed peer stays in lockstep with the pinned `@tanstack/react-query`.
   - `.npmrc` pins `registry=https://registry.npmjs.org/` so an environment-level registry override can't redirect us to a poisoned mirror.
 

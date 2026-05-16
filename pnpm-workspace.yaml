@@ -9,13 +9,14 @@ packages:
 # pinned to specific versions (no `latest`) so this is reachable.
 minimumReleaseAge: 10080
 
-# Lifecycle-script allowlist. pnpm 11 renamed this from
-# `onlyBuiltDependencies` (array) to `allowBuilds` (map of
-# package → allow/deny). Only these packages may run pre/post-install
-# scripts; everything else is blocked. Native deps (sharp, workerd,
-# lightningcss, unrs-resolver) need their build step, pulumi command
-# is a dynamic provider with setup scripts, esbuild/protobufjs
-# transitive entries trigger native rebuilds.
+# Lifecycle-script allowlist. pnpm 11 renamed `onlyBuiltDependencies`
+# (array) to `allowBuilds` (map of package → allow/deny) — see
+# https://pnpm.io/settings#allowbuilds. pnpm records the resolved
+# decisions in node_modules/.modules.yaml so it's easy to audit.
+# Only these packages may run pre/post-install scripts; everything
+# else has its lifecycle scripts blocked. lightningcss's published
+# package.json looks scriptless, but pnpm 11.1.2 still flags it on
+# `pnpm install` as needing approval — leave it in.
 allowBuilds:
   "@pulumi/command": true
   esbuild: true
