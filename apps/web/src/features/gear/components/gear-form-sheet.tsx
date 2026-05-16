@@ -31,9 +31,13 @@ import { useCreateGear } from "#/features/gear/api/use-create-gear";
 import { useEditGear } from "#/features/gear/api/use-edit-gear";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
-import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
+import {
+  GEAR_CONDITION_GRADE_VALUES,
+  GEAR_CONDITION_VALUES,
+} from "#/features/gear/server/gear-fns";
 import type {
   GearCondition,
+  GearConditionGrade,
   GearDetail,
   GearSummary,
 } from "#/features/gear/server/gear-fns";
@@ -63,6 +67,17 @@ const CONDITION_LABEL: Record<GearCondition, string> = {
   missing: "Missing",
   lost: "Lost",
 };
+
+const CONDITION_GRADE_LABEL: Record<GearConditionGrade, string> = {
+  excellent: "Excellent",
+  good: "Good",
+  fair: "Fair",
+};
+
+// Sentinel value for "no grade" — `<Select>` can't accept an empty
+// string as an item value, so we round-trip through a literal that
+// won't collide with any real enum member.
+const CONDITION_GRADE_NONE = "__none__";
 
 export type GearFormMode =
   | { mode: "create" }
@@ -126,6 +141,26 @@ function GearForm({
     isEdit && intent.gear.acquisitionCostCents !== null
       ? (intent.gear.acquisitionCostCents / 100).toFixed(2)
       : "",
+  );
+  const [msrpDollars, setMsrpDollars] = useState<string>(
+    isEdit && intent.gear.msrpCents !== null
+      ? (intent.gear.msrpCents / 100).toFixed(2)
+      : "",
+  );
+  const [manufacturer, setManufacturer] = useState<string>(
+    isEdit ? (intent.gear.manufacturer ?? "") : "",
+  );
+  const [serialNumber, setSerialNumber] = useState<string>(
+    isEdit && "serialNumber" in intent.gear
+      ? (intent.gear.serialNumber ?? "")
+      : "",
+  );
+  const [conditionGrade, setConditionGrade] = useState<
+    GearConditionGrade | typeof CONDITION_GRADE_NONE
+  >(
+    isEdit && intent.gear.conditionGrade !== null
+      ? intent.gear.conditionGrade
+      : CONDITION_GRADE_NONE,
   );
   const [notes, setNotes] = useState<string>(
     isEdit && "notesMarkdown" in intent.gear
@@ -236,12 +271,25 @@ function GearForm({
       setError("Cost must be a non-negative number.");
       return;
     }
+    const msrp =
+      msrpDollars.trim().length > 0
+        ? Math.round(Number(msrpDollars) * 100)
+        : null;
+    if (msrp !== null && (!Number.isFinite(msrp) || msrp < 0)) {
+      setError("MSRP must be a non-negative number.");
+      return;
+    }
     const basePayload = {
       typePublicId,
       code: code.trim().length === 0 ? null : code.trim(),
       description: trimmedDescription,
       acquiredAt: acquiredAtMs,
       acquisitionCostCents: cents,
+      msrpCents: msrp,
+      manufacturer: manufacturer.trim().length === 0 ? null : manufacturer,
+      serialNumber: serialNumber.trim().length === 0 ? null : serialNumber,
+      conditionGrade:
+        conditionGrade === CONDITION_GRADE_NONE ? null : conditionGrade,
       notesMarkdown: notes.trim().length === 0 ? null : notes,
       condition,
       tagPublicIds,
@@ -431,6 +479,28 @@ function GearForm({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
+            <Label htmlFor="gear-manufacturer">Manufacturer</Label>
+            <Input
+              id="gear-manufacturer"
+              value={manufacturer}
+              onChange={(e) => setManufacturer(e.target.value)}
+              placeholder="Petzl"
+              maxLength={100}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-serial">Serial number</Label>
+            <Input
+              id="gear-serial"
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              placeholder="ABC-12345"
+              maxLength={100}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
             <Label htmlFor="gear-acquired">Acquired</Label>
             <Input
               id="gear-acquired"
@@ -450,6 +520,52 @@ function GearForm({
               onChange={(e) => setCostDollars(e.target.value)}
               placeholder="60.00"
             />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-msrp">MSRP (USD)</Label>
+            <Input
+              id="gear-msrp"
+              type="number"
+              step="0.01"
+              min="0"
+              value={msrpDollars}
+              onChange={(e) => setMsrpDollars(e.target.value)}
+              placeholder="84.95"
+            />
+            <p className="text-xs text-muted-foreground">
+              Manufacturer's listed price — used for replacement-value
+              reporting.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-condition-grade">Condition grade</Label>
+            <Select
+              value={conditionGrade}
+              onValueChange={(v) =>
+                setConditionGrade(
+                  v as GearConditionGrade | typeof CONDITION_GRADE_NONE,
+                )
+              }
+            >
+              <SelectTrigger id="gear-condition-grade">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CONDITION_GRADE_NONE}>
+                  <span className="text-muted-foreground">No grade</span>
+                </SelectItem>
+                {GEAR_CONDITION_GRADE_VALUES.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {CONDITION_GRADE_LABEL[g]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Subjective wear level — independent of repair status.
+            </p>
           </div>
         </div>
         <div className="space-y-1.5">
