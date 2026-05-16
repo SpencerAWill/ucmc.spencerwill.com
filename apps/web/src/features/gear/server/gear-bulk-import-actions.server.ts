@@ -23,10 +23,13 @@ import { requireGearManager } from "#/features/gear/server/permissions.server";
 import {
   getGearTypeByPublicId,
   insertGear,
+  listGearTags,
+  setGearTags,
 } from "#/features/gear/server/repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { isUniqueViolation } from "#/server/db";
+import type { schema } from "#/server/db";
 
 export interface BulkImportRow {
   typePublicId: string;
@@ -37,6 +40,16 @@ export interface BulkImportRow {
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
+  // Optional extended attributes — passthroughs from the CSV. Omit /
+  // null means "not supplied" (the column stays NULL).
+  msrpCents?: number | null;
+  manufacturer?: string | null;
+  serialNumber?: string | null;
+  conditionGrade?: schema.GearConditionGrade | null;
+  /** Tag NAMES (not publicIds). Resolved server-side against
+   *  `gear_tags.name` (case-insensitive). Any unknown name skips the
+   *  whole row with reason `tag_not_found`. */
+  tagNames?: string[];
 }
 
 export interface BulkImportInput {
@@ -56,8 +69,12 @@ export interface BulkImportSkipped {
     | "code_in_use"
     | "code_duplicate_in_import"
     | "missing_description"
+    | "tag_not_found"
     | "invalid";
   code: string | null;
+  /** Populated when `reason === "tag_not_found"`: the tag name(s) that
+   *  didn't match an existing `gear_tags.name` row. */
+  missingTags?: string[];
 }
 
 export interface BulkImportResult {
@@ -71,6 +88,12 @@ function normalizeCode(code: string | null | undefined): string | null {
   return trimmed.length === 0 ? null : trimmed;
 }
 
+function normalizeOptional(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
 export async function bulkImportGearAction(
   input: BulkImportInput,
 ): Promise<BulkImportResult> {
@@ -80,6 +103,25 @@ export async function bulkImportGearAction(
 
   const typeCache = new Map<string, string | null>(); // typePublicId -> typeId (null = not found)
   const seenCodes = new Set<string>();
+
+  // Resolve every tag name in the payload up-front against the
+  // (typically small) `gear_tags` table. One round-trip vs. one per
+  // row. Indexed by lowercased name for case-insensitive lookup; the
+  // canonical id is what we'll insert into `gear_tag_assignments`.
+  const tagsNeeded = new Set<string>();
+  for (const row of input.rows) {
+    for (const name of row.tagNames ?? []) {
+      const lower = name.trim().toLowerCase();
+      if (lower.length > 0) tagsNeeded.add(lower);
+    }
+  }
+  const tagByLowerName = new Map<string, string>(); // lowerName -> tagId
+  if (tagsNeeded.size > 0) {
+    const allTags = await listGearTags({ includeInternal: true });
+    for (const t of allTags) {
+      tagByLowerName.set(t.name.toLowerCase(), t.id);
+    }
+  }
 
   for (let i = 0; i < input.rows.length; i++) {
     const row = input.rows[i];
@@ -115,6 +157,32 @@ export async function bulkImportGearAction(
       continue;
     }
 
+    // Resolve tag names → ids. Unknown tags fail the whole row so the
+    // import never silently drops officer-supplied tags; the officer
+    // creates the canonical tag (via the tag-management dialog) and
+    // re-runs the import.
+    const tagIds: string[] = [];
+    const missingTags: string[] = [];
+    for (const rawName of row.tagNames ?? []) {
+      const lower = rawName.trim().toLowerCase();
+      if (lower.length === 0) continue;
+      const id = tagByLowerName.get(lower);
+      if (id === undefined) {
+        missingTags.push(rawName.trim());
+      } else if (!tagIds.includes(id)) {
+        tagIds.push(id);
+      }
+    }
+    if (missingTags.length > 0) {
+      skipped.push({
+        rowIndex: i,
+        reason: "tag_not_found",
+        code,
+        missingTags,
+      });
+      continue;
+    }
+
     const id = `g_${uuidv7()}`;
     const publicId = generatePublicId();
     try {
@@ -129,6 +197,10 @@ export async function bulkImportGearAction(
         thumbnailKey: null,
         acquiredAt: row.acquiredAt === null ? null : new Date(row.acquiredAt),
         acquisitionCostCents: row.acquisitionCostCents,
+        msrpCents: row.msrpCents ?? null,
+        manufacturer: normalizeOptional(row.manufacturer),
+        serialNumber: normalizeOptional(row.serialNumber),
+        conditionGrade: row.conditionGrade ?? null,
         notesMarkdown: null,
         condition: "serviceable",
         createdBy: principal.userId,
@@ -139,6 +211,14 @@ export async function bulkImportGearAction(
         continue;
       }
       throw err;
+    }
+
+    if (tagIds.length > 0) {
+      await setGearTags({
+        gearId: id,
+        tagIds,
+        assignedBy: principal.userId,
+      });
     }
 
     await recordAuditEvent({

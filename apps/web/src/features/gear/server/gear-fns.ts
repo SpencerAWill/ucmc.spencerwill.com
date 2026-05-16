@@ -294,6 +294,15 @@ const bulkImportInputSchema = z.object({
         description: z.string().max(500),
         acquiredAt: acquiredAtSchema,
         acquisitionCostCents: z.number().int().min(0).nullable(),
+        // Optional passthroughs — see BulkImportRow.
+        msrpCents: z.number().int().min(0).nullable().optional(),
+        manufacturer: z.string().trim().max(100).nullable().optional(),
+        serialNumber: z.string().trim().max(100).nullable().optional(),
+        conditionGrade: z
+          .enum(GEAR_CONDITION_GRADE_VALUES)
+          .nullable()
+          .optional(),
+        tagNames: z.array(z.string().min(1).max(40)).max(50).optional(),
       }),
     )
     .min(1)

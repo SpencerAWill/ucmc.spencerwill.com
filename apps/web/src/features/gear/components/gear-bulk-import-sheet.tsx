@@ -45,6 +45,7 @@ import type {
 import type {
   BulkImportResult,
   BulkImportSkipped,
+  GearConditionGrade,
   GearTypeSummary,
 } from "#/features/gear/server/gear-fns";
 
@@ -60,6 +61,15 @@ interface RowState {
   acquiredAt: string;
   /** Dollar amount as typed, e.g. "60.00". Converted to cents at submit. */
   costDollars: string;
+  // CSV-only fields. The manual row editor doesn't surface inputs for
+  // these to keep the sheet compact; they ride through silently from
+  // import → submit. Officers who want to tweak an extended field on
+  // a single piece use the singular Add/Edit sheet instead.
+  msrpCents: number | null;
+  manufacturer: string | null;
+  serialNumber: string | null;
+  conditionGrade: GearConditionGrade | null;
+  tagNames: string[];
 }
 
 function makeRow(initial: Partial<RowState> = {}): RowState {
@@ -70,6 +80,11 @@ function makeRow(initial: Partial<RowState> = {}): RowState {
     description: initial.description ?? "",
     acquiredAt: initial.acquiredAt ?? "",
     costDollars: initial.costDollars ?? "",
+    msrpCents: initial.msrpCents ?? null,
+    manufacturer: initial.manufacturer ?? null,
+    serialNumber: initial.serialNumber ?? null,
+    conditionGrade: initial.conditionGrade ?? null,
+    tagNames: initial.tagNames ?? [],
   };
 }
 
@@ -194,6 +209,11 @@ export function GearBulkImportSheet({
             r.acquisitionCostCents !== null
               ? (r.acquisitionCostCents / 100).toFixed(2)
               : "",
+          msrpCents: r.msrpCents,
+          manufacturer: r.manufacturer,
+          serialNumber: r.serialNumber,
+          conditionGrade: r.conditionGrade,
+          tagNames: r.tagNames,
         }),
       );
       const merged = [...existing, ...incoming];
@@ -257,6 +277,11 @@ export function GearBulkImportSheet({
         row.costDollars.trim().length === 0
           ? null
           : Math.round(Number(row.costDollars) * 100),
+      msrpCents: row.msrpCents,
+      manufacturer: row.manufacturer,
+      serialNumber: row.serialNumber,
+      conditionGrade: row.conditionGrade,
+      tagNames: row.tagNames,
     }));
     try {
       const result = await bulkImport.mutateAsync({ rows: payload });
@@ -340,7 +365,10 @@ export function GearBulkImportSheet({
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Columns: type (name or prefix, required), code, description,
-              acquired_at (YYYY-MM-DD), cost. Header row optional.
+              acquired_at (YYYY-MM-DD), cost. Header row optional. Header-only
+              extras: manufacturer, serial_number, msrp, condition_grade
+              (excellent|good|fair), tags (comma-separated names). Tags must
+              already exist — create canonical names in the Tags dialog first.
             </p>
             {importSummary ? (
               <div className="mt-2 text-xs">
@@ -583,6 +611,13 @@ function skippedLabel(s: BulkImportSkipped): string {
       return `code "${s.code ?? ""}" appears twice in this import`;
     case "missing_description":
       return "description is required";
+    case "tag_not_found": {
+      const list =
+        s.missingTags && s.missingTags.length > 0
+          ? ` (${s.missingTags.join(", ")})`
+          : "";
+      return `unknown tag${list} — create it in the Tags dialog first`;
+    }
     case "invalid":
       return "invalid";
     default:
