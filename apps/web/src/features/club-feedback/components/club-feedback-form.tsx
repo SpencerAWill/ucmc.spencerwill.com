@@ -114,7 +114,15 @@ export function ClubFeedbackForm() {
                 form.setFieldValue("kind", v as ClubFeedbackKind)
               }
             >
-              <TabsList className="grid w-full grid-cols-4">
+              {/*
+                Four labels can't share one row on phones without truncation
+                ("Suggestion" alone needs ~85 px). A 2-col grid gives a
+                clean 2×2 layout on mobile; from `sm` (640 px) on, fall
+                back to a single row. Mirrors the pattern used in
+                MembersTabsBar (which solves the same problem for five
+                labels).
+              */}
+              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
                 {CLUB_FEEDBACK_KIND_VALUES.map((value) => (
                   <TabsTrigger key={value} value={value}>
                     {CLUB_FEEDBACK_KIND_LABELS[value]}
