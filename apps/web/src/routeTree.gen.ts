@@ -50,7 +50,6 @@ import { Route as MyAccountWaiverRouteImport } from './routes/my.account.waiver'
 import { Route as MyAccountSecurityRouteImport } from './routes/my.account.security'
 import { Route as MyAccountPreferencesRouteImport } from './routes/my.account.preferences'
 import { Route as MyAccountDetailsRouteImport } from './routes/my.account.details'
-import { Route as MembersRolesRoleIdRouteImport } from './routes/members.roles_.$roleId'
 import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publicId'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
@@ -262,11 +261,6 @@ const MyAccountDetailsRoute = MyAccountDetailsRouteImport.update({
   path: '/details',
   getParentRoute: () => MyAccountRoute,
 } as any)
-const MembersRolesRoleIdRoute = MembersRolesRoleIdRouteImport.update({
-  id: '/roles_/$roleId',
-  path: '/roles/$roleId',
-  getParentRoute: () => MembersRoute,
-} as any)
 const GearLoansPublicIdRoute = GearLoansPublicIdRouteImport.update({
   id: '/loans/$publicId',
   path: '/loans/$publicId',
@@ -334,7 +328,6 @@ export interface FileRoutesByFullPath {
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
-  '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
@@ -380,7 +373,6 @@ export interface FileRoutesByTo {
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
-  '/members/roles/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
@@ -430,7 +422,6 @@ export interface FileRoutesById {
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
-  '/members/roles_/$roleId': typeof MembersRolesRoleIdRoute
   '/my/account/details': typeof MyAccountDetailsRoute
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
@@ -481,7 +472,6 @@ export interface FileRouteTypes {
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/gear/loans/$publicId'
-    | '/members/roles/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
     | '/my/account/security'
@@ -527,7 +517,6 @@ export interface FileRouteTypes {
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/gear/loans/$publicId'
-    | '/members/roles/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
     | '/my/account/security'
@@ -576,7 +565,6 @@ export interface FileRouteTypes {
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/gear/loans/$publicId'
-    | '/members/roles_/$roleId'
     | '/my/account/details'
     | '/my/account/preferences'
     | '/my/account/security'
@@ -906,13 +894,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyAccountDetailsRouteImport
       parentRoute: typeof MyAccountRoute
     }
-    '/members/roles_/$roleId': {
-      id: '/members/roles_/$roleId'
-      path: '/roles/$roleId'
-      fullPath: '/members/roles/$roleId'
-      preLoaderRoute: typeof MembersRolesRoleIdRouteImport
-      parentRoute: typeof MembersRoute
-    }
     '/gear/loans/$publicId': {
       id: '/gear/loans/$publicId'
       path: '/loans/$publicId'
@@ -974,7 +955,6 @@ interface MembersRouteChildren {
   MembersRolesRoute: typeof MembersRolesRoute
   MembersWaiversRoute: typeof MembersWaiversRoute
   MembersIndexRoute: typeof MembersIndexRoute
-  MembersRolesRoleIdRoute: typeof MembersRolesRoleIdRoute
 }
 
 const MembersRouteChildren: MembersRouteChildren = {
@@ -984,7 +964,6 @@ const MembersRouteChildren: MembersRouteChildren = {
   MembersRolesRoute: MembersRolesRoute,
   MembersWaiversRoute: MembersWaiversRoute,
   MembersIndexRoute: MembersIndexRoute,
-  MembersRolesRoleIdRoute: MembersRolesRoleIdRoute,
 }
 
 const MembersRouteWithChildren =

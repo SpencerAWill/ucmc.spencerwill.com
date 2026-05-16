@@ -140,22 +140,3 @@ export const reorderRolesFn = createServerFn({ method: "POST" })
       await import("#/features/members/server/rbac-actions.server");
     return reorderRolesAction(data);
   });
-
-// ── bulk permission grants ─────────────────────────────────────────────
-
-export const bulkSetRolePermissionsFn = createServerFn({ method: "POST" })
-  .inputValidator(
-    z.object({
-      roles: z.array(
-        z.object({
-          roleId: z.string().min(1),
-          permissionIds: z.array(z.string().min(1)),
-        }),
-      ),
-    }),
-  )
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    const { bulkSetRolePermissionsAction } =
-      await import("#/features/members/server/rbac-actions.server");
-    return bulkSetRolePermissionsAction(data);
-  });

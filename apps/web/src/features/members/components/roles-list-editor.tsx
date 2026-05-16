@@ -1,10 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { GripVertical, Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
-import { SortableItem, SortableList } from "#/components/sortable-list";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +26,12 @@ import {
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import {
+  Sortable,
+  SortableContent,
+  SortableItem,
+  SortableItemHandle,
+} from "#/components/ui/sortable";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -37,6 +41,7 @@ import { rolesDetailedQueryOptions } from "#/features/members/api/queries";
 import { useCreateRole } from "#/features/members/api/use-create-role";
 import { useDeleteRole } from "#/features/members/api/use-delete-role";
 import { useReorderRoles } from "#/features/members/api/use-reorder-roles";
+import { RoleEditorSheet } from "#/features/members/components/role-editor-sheet";
 import type { RoleWithPermissions } from "#/features/members/server/rbac-fns";
 
 export function RolesListEditor() {
@@ -44,6 +49,10 @@ export function RolesListEditor() {
   const [deleteTarget, setDeleteTarget] = useState<RoleWithPermissions | null>(
     null,
   );
+  const [editorTarget, setEditorTarget] = useState<{
+    roleId: string;
+    roleName: string;
+  } | null>(null);
 
   const { data: roles = [], isLoading } = useQuery(rolesDetailedQueryOptions());
 
@@ -109,7 +118,8 @@ export function RolesListEditor() {
     <>
       <div className="flex items-center justify-between pb-4">
         <p className="text-sm text-muted-foreground">
-          Drag to reorder. Hover a name to see its description.
+          Drag to reorder. Click the pencil to edit members, permissions, or the
+          description.
         </p>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="mr-2 size-4" />
@@ -118,67 +128,58 @@ export function RolesListEditor() {
         </Button>
       </div>
 
-      <SortableList
-        ids={order}
-        onReorder={setOrder}
-        disabled={reorderMutation.isPending}
+      <Sortable
+        value={order}
+        onValueChange={setOrder}
+        getItemLabel={(id) => rolesById.get(String(id))?.name ?? String(id)}
       >
-        <ul className="divide-y rounded-md border">
-          {order.map((id) => {
-            const role = rolesById.get(id);
-            if (!role) {
-              return null;
-            }
-            return (
-              <SortableItem key={id} id={id}>
-                {({ setNodeRef, style, attributes, listeners, isDragging }) => (
-                  <li
-                    ref={setNodeRef}
-                    style={style}
-                    className={`flex items-center gap-2 px-3 py-2 ${
-                      isDragging ? "bg-muted shadow-md" : "bg-background"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+        <SortableContent asChild>
+          <ul className="divide-y rounded-md border">
+            {order.map((id) => {
+              const role = rolesById.get(id);
+              if (!role) {
+                return null;
+              }
+              const isAdmin = role.name === "system_admin";
+              return (
+                <SortableItem
+                  key={id}
+                  value={id}
+                  asChild
+                  disabled={reorderMutation.isPending}
+                >
+                  <li className="flex items-center gap-2 bg-background px-3 py-2 data-dragging:bg-muted data-dragging:shadow-md">
+                    <SortableItemHandle
                       aria-label={`Drag ${role.name}`}
-                      {...attributes}
-                      {...listeners}
+                      className="flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       <GripVertical className="size-4" />
-                    </button>
+                    </SortableItemHandle>
 
                     <Shield className="size-4 shrink-0 text-muted-foreground" />
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Link
-                              to="/members/roles/$roleId"
-                              params={{ roleId: role.id }}
-                              className="truncate font-medium hover:underline"
-                            >
-                              {role.name}
-                            </Link>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-xs">
-                            {role.description ?? "No description."}
-                          </TooltipContent>
-                        </Tooltip>
+                        <span className="truncate font-medium">
+                          {role.name}
+                        </span>
                         {role.isProtected ? (
                           <Badge variant="outline" className="text-xs">
                             protected
                           </Badge>
                         ) : null}
                       </div>
+                      {role.description ? (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {role.description}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="hidden shrink-0 items-center gap-4 text-xs text-muted-foreground sm:flex">
                       <span>{role.memberCount} member(s)</span>
                       <span>
-                        {role.name === "system_admin"
+                        {isAdmin
                           ? "All perms"
                           : `${role.permissionIds.length} perm(s)`}
                       </span>
@@ -187,14 +188,18 @@ export function RolesListEditor() {
                     <div className="flex shrink-0 items-center gap-1">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" asChild>
-                            <Link
-                              to="/members/roles/$roleId"
-                              params={{ roleId: role.id }}
-                              aria-label={`Edit ${role.name}`}
-                            >
-                              <Pencil className="size-4" />
-                            </Link>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setEditorTarget({
+                                roleId: role.id,
+                                roleName: role.name,
+                              })
+                            }
+                            aria-label={`Edit ${role.name}`}
+                          >
+                            <Pencil className="size-4" />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Edit</TooltipContent>
@@ -216,12 +221,12 @@ export function RolesListEditor() {
                       ) : null}
                     </div>
                   </li>
-                )}
-              </SortableItem>
-            );
-          })}
-        </ul>
-      </SortableList>
+                </SortableItem>
+              );
+            })}
+          </ul>
+        </SortableContent>
+      </Sortable>
 
       {orderDirty ? (
         <div className="sticky bottom-0 mt-4 -mx-4 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
@@ -249,6 +254,19 @@ export function RolesListEditor() {
       ) : null}
 
       <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      {editorTarget ? (
+        <RoleEditorSheet
+          roleId={editorTarget.roleId}
+          roleName={editorTarget.roleName}
+          open
+          onOpenChange={(o) => {
+            if (!o) {
+              setEditorTarget(null);
+            }
+          }}
+        />
+      ) : null}
 
       <AlertDialog
         open={deleteTarget !== null}
