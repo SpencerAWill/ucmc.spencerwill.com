@@ -333,6 +333,8 @@ export function RoleEditorSheet({
                 System admin automatically receives all permissions. This cannot
                 be changed.
               </p>
+            ) : !initialized ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
             ) : permissions.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No permissions defined.
@@ -353,7 +355,7 @@ export function RoleEditorSheet({
                         >
                           <Checkbox
                             checked={granted}
-                            disabled={setPermissions.isPending}
+                            disabled={setPermissions.isPending || !initialized}
                             onCheckedChange={(checked) =>
                               togglePerm(p.id, checked === true)
                             }
@@ -413,7 +415,7 @@ export function RoleEditorSheet({
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={200}
                 rows={3}
-                disabled={isAdmin}
+                disabled={isAdmin || !initialized}
               />
               {isAdmin ? (
                 <p className="text-xs text-muted-foreground">
