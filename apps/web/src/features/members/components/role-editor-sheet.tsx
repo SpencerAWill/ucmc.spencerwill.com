@@ -79,20 +79,21 @@ export function RoleEditorSheet({
     enabled: open,
   });
 
-  // If the role goes missing (e.g. deleted while the sheet was open),
-  // close the sheet so the user isn't stuck on an indefinite Loading
-  // state. Skipping the dirty-state confirm — there's no role to save
-  // back to.
-  useEffect(() => {
-    if (open && roleError) {
-      onOpenChange(false);
-    }
-  }, [open, roleError, onOpenChange]);
-
-  const { data: permissions = [] } = useQuery({
+  const {
+    data: permissions = [],
+    isError: permsError,
+    error: permsErrorValue,
+  } = useQuery({
     ...permissionsQueryOptions(),
     enabled: open,
   });
+
+  // Don't auto-close on query error: if a user has typed into the
+  // Details tab and the role goes missing, they should keep their
+  // work so they can copy it out. Inline error + disabled Save below
+  // is the affordance; closing flows through the unsaved-changes
+  // guard like any other close.
+  const loadFailed = roleError || permsError;
 
   const [tab, setTab] = useState<TabValue>(initialTab);
 
@@ -248,13 +249,20 @@ export function RoleEditorSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {roleError ? (
+        {loadFailed ? (
           <div className="px-4 pt-2">
             <p className="text-sm text-destructive">
-              Couldn&rsquo;t load this role
-              {roleErrorValue instanceof Error
-                ? `: ${roleErrorValue.message}`
-                : "."}
+              {roleError
+                ? `Couldn't load this role${
+                    roleErrorValue instanceof Error
+                      ? `: ${roleErrorValue.message}`
+                      : "."
+                  }`
+                : `Couldn't load the permissions catalog${
+                    permsErrorValue instanceof Error
+                      ? `: ${permsErrorValue.message}`
+                      : "."
+                  }`}
             </p>
           </div>
         ) : null}
@@ -434,7 +442,7 @@ export function RoleEditorSheet({
             <Button
               type="button"
               onClick={handleSavePermissions}
-              disabled={isAdmin || !permsDirty || isPending}
+              disabled={isAdmin || !permsDirty || isPending || loadFailed}
             >
               {setPermissions.isPending ? "Saving…" : "Save"}
             </Button>
@@ -443,7 +451,7 @@ export function RoleEditorSheet({
             <Button
               type="button"
               onClick={handleSaveMetadata}
-              disabled={isAdmin || !metadataDirty || isPending}
+              disabled={isAdmin || !metadataDirty || isPending || loadFailed}
             >
               {updateRole.isPending ? "Saving…" : "Save"}
             </Button>
