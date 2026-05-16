@@ -16,6 +16,12 @@ UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (v11+, ESM
 - **Hooks**: Husky — pre-commit (lint-staged), commit-msg (commitlint), post-merge/checkout/pre-push (wiki submodule).
 - **Commits**: Conventional Commits enforced. Scopes validated against pnpm workspace names + `wiki`, `devcontainer`. Use `pnpm commit`.
 - **CI**: `web-ci.yml` (lint+typecheck+vitest, axe a11y), `web-deploy.yml` (auto dev / approved prod), `infra-ci.yml` + `infra-deploy.yml`, `seed-admin.yml` (manual sysadmin promotion), `sync-wiki.yml`, `lint-pr.yaml`.
+- **pnpm config lives in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11 stopped reading the `pnpm.*` block in `package.json` — `overrides`, `peerDependencyRules`, `auditConfig`, `minimumReleaseAge`, and `allowBuilds` must all be in the workspace file or they silently no-op.
+- **Supply-chain hardening** (in `pnpm-workspace.yaml`):
+  - `minimumReleaseAge: 10080` quarantines any version published in the last 7 days. Primary defense against publish-compromise incidents (e.g. the TanStack `latest`-tag hijack). **Never spec a dep as `"latest"`** — it bypasses the resolver's age check and is exactly what got hijacked. Every direct dep gets an exact version or caret pin where every in-range version is ≥7 days old.
+  - `allowBuilds` (renamed from pnpm 10's `onlyBuiltDependencies`) is a map of `pkg: true|false`. Lifecycle scripts run only for listed packages; everything else is blocked. Current allowlist: `@pulumi/command`, `esbuild`, `lightningcss`, `protobufjs`, `sharp`, `unrs-resolver`, `workerd`.
+  - `overrides` pins transitive deps above the known-CVE range: `esbuild >=0.25.0`, `fast-uri >=3.1.2`, `ip-address >=10.1.1`, `protobufjs 8.0.3`. Also pins `@tanstack/query-core` so the auto-installed peer stays in lockstep with the pinned `@tanstack/react-query`.
+  - `.npmrc` pins `registry=https://registry.npmjs.org/` so an environment-level registry override can't redirect us to a poisoned mirror.
 
 ## Web app (`apps/web`) — load-bearing invariants
 
