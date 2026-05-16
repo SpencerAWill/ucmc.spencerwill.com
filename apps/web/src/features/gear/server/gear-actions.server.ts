@@ -90,6 +90,9 @@ export interface GearSummary {
 
 export interface GearDetail extends GearSummary {
   notesMarkdown: string | null;
+  /** Manufacturer's serial number. Officer-only (same gate as
+   *  `acquisitionCostCents` / `msrpCents`) — stripped for callers
+   *  without `gear:manage`. */
   serialNumber: string | null;
   /** Currently open loan, if any. The `memberFullName` field is
    *  populated ONLY for officers (gear:loan) OR for the borrower
@@ -315,7 +318,11 @@ export async function getGearDetailAction(input: {
   return {
     ...summary,
     notesMarkdown: row.notesMarkdown,
-    serialNumber: row.serialNumber,
+    // Serial rides the same officer-only gate as the financial fields.
+    // Leaking serials to all approved members hands a thief a shopping
+    // list — name/brand alone isn't enough to flip a piece, but serial
+    // + brand correlates against marketplace listings.
+    serialNumber: canSeeCost ? row.serialNumber : null,
     currentLoan,
   };
 }

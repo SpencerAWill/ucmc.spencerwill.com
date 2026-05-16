@@ -276,10 +276,11 @@ describe("authorization", () => {
     expect(meta.changedFields).not.toContain("serial_number");
   });
 
-  it("strips acquisitionCostCents for non-manager readers", async () => {
+  it("strips officer-only fields (cost, msrp, serial) for non-manager readers", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
-    // Seed gear with a non-null cost so the strip is observable.
+    // Seed gear with non-null values on every officer-gated field so
+    // the strip is observable.
     const created = await createGearAction({
       typePublicId,
       code: "CH1",
@@ -287,28 +288,43 @@ describe("authorization", () => {
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: 6000,
+      msrpCents: 8495,
+      manufacturer: "Petzl",
+      serialNumber: "ABC-123",
+      conditionGrade: "good",
       notesMarkdown: null,
       condition: "serviceable",
       tagPublicIds: [],
     });
     if (!created.ok) throw new Error("seed failed");
 
-    // Manager view: cost is present.
+    // Manager view: every field is present.
     const managerList = await listGearAction({});
     expect(managerList.rows[0]?.acquisitionCostCents).toBe(6000);
+    expect(managerList.rows[0]?.msrpCents).toBe(8495);
+    expect(managerList.rows[0]?.manufacturer).toBe("Petzl");
     const managerDetail = await getGearDetailAction({
       publicId: created.publicId,
     });
     expect(managerDetail.acquisitionCostCents).toBe(6000);
+    expect(managerDetail.msrpCents).toBe(8495);
+    expect(managerDetail.serialNumber).toBe("ABC-123");
 
-    // Regular member view: cost is null.
+    // Regular member view: financial + serial are null; brand and
+    // grade remain visible (intentional — useful for browsing).
     await signInAsRegularMember();
     const memberList = await listGearAction({});
     expect(memberList.rows[0]?.acquisitionCostCents).toBeNull();
+    expect(memberList.rows[0]?.msrpCents).toBeNull();
+    expect(memberList.rows[0]?.manufacturer).toBe("Petzl");
     const memberDetail = await getGearDetailAction({
       publicId: created.publicId,
     });
     expect(memberDetail.acquisitionCostCents).toBeNull();
+    expect(memberDetail.msrpCents).toBeNull();
+    expect(memberDetail.serialNumber).toBeNull();
+    expect(memberDetail.manufacturer).toBe("Petzl");
+    expect(memberDetail.conditionGrade).toBe("good");
   });
 });
 
