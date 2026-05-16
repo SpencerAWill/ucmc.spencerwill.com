@@ -1,8 +1,8 @@
 import { toast } from "sonner";
 
+import { Button } from "#/components/ui/button";
 import { Checkbox } from "#/components/ui/checkbox";
 import { Label } from "#/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { useSubmitClubFeedback } from "#/features/club-feedback/api/use-submit-club-feedback";
 import {
   CLUB_FEEDBACK_KIND_HELP,
@@ -108,28 +108,39 @@ export function ClubFeedbackForm() {
       >
         {({ isSubmitting, kind, anonymous }) => (
           <fieldset disabled={isSubmitting} className="space-y-4 border-0 p-0">
-            <Tabs
-              value={kind}
-              onValueChange={(v) =>
-                form.setFieldValue("kind", v as ClubFeedbackKind)
-              }
+            {/*
+              Hand-rolled segmented control instead of shadcn's Tabs
+              primitive: TabsTrigger's `h-[calc(100%-1px)]` + `flex-1`
+              fight a 2-col grid layout, and four longer labels
+              ("Suggestion" alone is ~85 px) overflow a single-row
+              TabsList on phones. This mirrors the MembersTabsBar
+              approach — a plain div with Button children — which
+              gives clean 2x2 wrapping on mobile and a single row from
+              `sm` (640 px) on without any of the height fighting.
+            */}
+            <div
+              role="radiogroup"
+              aria-label="Feedback kind"
+              className="grid grid-cols-2 gap-1 rounded-md border p-1 sm:grid-cols-4"
             >
-              {/*
-                Four labels can't share one row on phones without truncation
-                ("Suggestion" alone needs ~85 px). A 2-col grid gives a
-                clean 2×2 layout on mobile; from `sm` (640 px) on, fall
-                back to a single row. Mirrors the pattern used in
-                MembersTabsBar (which solves the same problem for five
-                labels).
-              */}
-              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
-                {CLUB_FEEDBACK_KIND_VALUES.map((value) => (
-                  <TabsTrigger key={value} value={value}>
+              {CLUB_FEEDBACK_KIND_VALUES.map((value) => {
+                const active = kind === value;
+                return (
+                  <Button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    variant={active ? "secondary" : "ghost"}
+                    size="sm"
+                    className="w-full"
+                    onClick={() => form.setFieldValue("kind", value)}
+                  >
                     {CLUB_FEEDBACK_KIND_LABELS[value]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+                  </Button>
+                );
+              })}
+            </div>
 
             <p className="text-sm text-muted-foreground">
               {CLUB_FEEDBACK_KIND_HELP[kind]}
