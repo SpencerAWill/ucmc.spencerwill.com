@@ -136,12 +136,8 @@ export function UserMenu() {
         {isElevated && principal.status === "approved" ? (
           <>
             <DropdownMenuSeparator />
-            {isSystemAdmin ? (
-              <div
-                className="flex items-center gap-2 px-2 py-1.5"
-                onKeyDown={(e) => e.stopPropagation()}
-              >
-                <Eye className="size-4 shrink-0 text-muted-foreground" />
+            <EmulationRow>
+              {isSystemAdmin ? (
                 <Select
                   value={emulatedRole ?? "__actual__"}
                   onValueChange={(value) => {
@@ -164,29 +160,25 @@ export function UserMenu() {
                       ))}
                   </SelectContent>
                 </Select>
-              </div>
-            ) : (
-              <div
-                className="flex items-center gap-2 px-2 py-1.5"
-                onKeyDown={(e) => e.stopPropagation()}
-              >
-                <Eye className="size-4 shrink-0 text-muted-foreground" />
-                <Label
-                  htmlFor="view-as-member-switch"
-                  className="flex-1 text-xs font-normal"
-                >
-                  View as member
-                </Label>
-                <Switch
-                  id="view-as-member-switch"
-                  size="sm"
-                  checked={emulatedRole === "member"}
-                  onCheckedChange={(on) =>
-                    setEmulatedRole(on ? "member" : null)
-                  }
-                />
-              </div>
-            )}
+              ) : (
+                <>
+                  <Label
+                    htmlFor="view-as-member-switch"
+                    className="flex-1 text-xs font-normal"
+                  >
+                    View as member
+                  </Label>
+                  <Switch
+                    id="view-as-member-switch"
+                    size="sm"
+                    checked={emulatedRole === "member"}
+                    onCheckedChange={(on) =>
+                      setEmulatedRole(on ? "member" : null)
+                    }
+                  />
+                </>
+              )}
+            </EmulationRow>
           </>
         ) : null}
         <DropdownMenuSeparator />
@@ -202,5 +194,17 @@ export function UserMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function EmulationRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="flex items-center gap-2 px-2 py-1.5"
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <Eye className="size-4 shrink-0 text-muted-foreground" />
+      {children}
+    </div>
   );
 }

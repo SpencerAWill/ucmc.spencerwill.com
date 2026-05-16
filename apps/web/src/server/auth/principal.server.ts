@@ -123,38 +123,43 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     // System admin always has every permission, including ones added
     // after the role was created. This is the canonical enforcement
     // point — no need to maintain role_permissions rows for system_admin.
-    const allPerms = await db.query.permissions.findMany({
-      columns: { name: true },
-    });
+    //
+    // The second query loads every other role's permission grants so
+    // the view-mode emulator can switch into any role on the site —
+    // not just the ones the admin happens to hold. Ordered by
+    // `roles.position` so the resulting object keys iterate in a
+    // stable, UI-friendly order. `leftJoin` keeps roles with zero
+    // permission rows (e.g. a freshly created officer role) in the
+    // map as `[]`. Anonymous and system_admin are excluded — the
+    // former isn't user-facing, the latter is the "actual permissions"
+    // state. Both reads are sys-admin-only and independent, so we
+    // bundle them in `db.batch` to ride a single D1 HTTP request.
+    const [allPerms, allRoleGrants] = await db.batch([
+      db.select({ name: schema.permissions.name }).from(schema.permissions),
+      db
+        .select({
+          roleName: schema.roles.name,
+          permName: schema.permissions.name,
+        })
+        .from(schema.roles)
+        .leftJoin(
+          schema.rolePermissions,
+          eq(schema.rolePermissions.roleId, schema.roles.id),
+        )
+        .leftJoin(
+          schema.permissions,
+          eq(schema.permissions.id, schema.rolePermissions.permissionId),
+        )
+        .where(
+          notInArray(schema.roles.id, [
+            ANONYMOUS_ROLE_ID,
+            SYSTEM_ADMIN_ROLE_ID,
+          ]),
+        )
+        .orderBy(asc(schema.roles.position), asc(schema.roles.name)),
+    ]);
     permissions = allPerms.map((p) => p.name);
     rolePermissionMap["system_admin"] = permissions;
-
-    // Load every other role's permission grants so the view-mode
-    // emulator can switch into any role on the site — not just the
-    // ones the admin happens to hold. Ordered by `roles.position` so
-    // the resulting object keys iterate in a stable, UI-friendly order.
-    // `leftJoin` keeps roles with zero permission rows (e.g. a freshly
-    // created officer role) in the map as `[]`. Anonymous and
-    // system_admin are excluded — the former isn't user-facing, the
-    // latter is the "actual permissions" state.
-    const allRoleGrants = await db
-      .select({
-        roleName: schema.roles.name,
-        permName: schema.permissions.name,
-      })
-      .from(schema.roles)
-      .leftJoin(
-        schema.rolePermissions,
-        eq(schema.rolePermissions.roleId, schema.roles.id),
-      )
-      .leftJoin(
-        schema.permissions,
-        eq(schema.permissions.id, schema.rolePermissions.permissionId),
-      )
-      .where(
-        notInArray(schema.roles.id, [ANONYMOUS_ROLE_ID, "role_system_admin"]),
-      )
-      .orderBy(asc(schema.roles.position), asc(schema.roles.name));
 
     for (const row of allRoleGrants) {
       const list = rolePermissionMap[row.roleName] ?? [];
@@ -211,9 +216,13 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
   };
 }
 
-// ── anonymous permissions ──────────────────────────────────────────────
+// ── role-id constants ──────────────────────────────────────────────────
 
 const ANONYMOUS_ROLE_ID = "role_anonymous";
+const SYSTEM_ADMIN_ROLE_ID = "role_system_admin";
+
+// ── anonymous permissions ──────────────────────────────────────────────
+
 const ANONYMOUS_CACHE_KEY = "anonymous:permissions";
 const ANONYMOUS_CACHE_TTL = 300; // 5 minutes
 
