@@ -62,6 +62,7 @@ async function asViewer(
     hasProfile: false,
     avatarKey: null,
     roles: [],
+    isSystemAdmin: false,
     permissions,
     rolePermissionMap: {},
   });
