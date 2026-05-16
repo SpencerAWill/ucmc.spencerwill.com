@@ -563,7 +563,17 @@ function SidebarNav() {
 
 function SidebarUtilityNav() {
   const { isApproved, hasPermission } = useAuth();
-  const canSubmitFeedback = isApproved && hasPermission("feedback:submit");
+  // Sidebar entry is one link to `/feedback`; the tab layout decides
+  // which surfaces to show inside. So we render the link if the user
+  // can submit to *either* surface. Managers also see it via their
+  // `*:manage` permission (system_admin auto-grants both via the
+  // principal bypass).
+  const canSubmitFeedback =
+    isApproved &&
+    (hasPermission("feedback:submit") ||
+      hasPermission("club_feedback:submit") ||
+      hasPermission("feedback:manage") ||
+      hasPermission("club_feedback:manage"));
   const canViewAudit = hasPermission("audit:view");
   const canManageSettings = hasPermission("settings:manage");
   return (
