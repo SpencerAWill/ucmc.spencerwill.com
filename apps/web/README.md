@@ -70,8 +70,11 @@ The footer also shows the registration disclaimer text **on every page** (not ju
 
 - `/my/account` (public profile), `/my/account/details` (private PII + emergency contacts), `/my/account/security` (Sign-in tab: emails + passkeys), `/my/account/preferences` (theme + data export + hard delete) — the member's own account surface
 - `/my/account/waiver` — read-only view of the member's paper-waiver attestation status
-- `/members` — directory (auth-gated, robots-disallowed)
-- `/members/management` — member lifecycle admin: approve pending registrations, pre-add unclaimed members, un-reject rejected, reactivate deactivated (`members:manage`)
+- `/members` — directory (auth-gated, robots-disallowed). Approved members see only the approved tab; officers with `members:manage` see a tab bar with four additional siblings:
+  - `/members/pending` — approve pending registrations
+  - `/members/unclaimed` — pre-add unclaimed members (off-platform stubs)
+  - `/members/rejected` — un-reject rejected registrations
+  - `/members/deactivated` — reactivate deactivated members
 - `/members/waivers` — officer attestation queue (`waivers:verify`; held by Treasurer + President)
 - `/members/roles` — RBAC editor (`roles:manage`)
 

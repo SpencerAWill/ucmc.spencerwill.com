@@ -121,7 +121,7 @@ The app uses a two-path authentication system:
 
 2. **Passkeys / WebAuthn** (primary for sign-in) — approved users can enroll FIDO2 passkeys on `/my/account/security`. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
 
-**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (fill profile) → `/register/pending` (wait for exec approval) → exec approves at `/members/registrations` → user is `approved` with the `member` role.
+**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (fill profile) → `/register/pending` (wait for exec approval) → exec approves at `/members/pending` → user is `approved` with the `member` role.
 
 **Anti-abuse**: Turnstile CAPTCHA on the magic-link form, per-IP + per-email rate limiting (10 req / 60 s), timing jitter (500–800 ms) to prevent email enumeration, SHA-256 hashed tokens in D1 (stolen DB can't replay links).
 
