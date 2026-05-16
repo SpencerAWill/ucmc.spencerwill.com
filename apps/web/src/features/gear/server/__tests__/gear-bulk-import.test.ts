@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, schema } from "#/server/db";
@@ -241,6 +242,22 @@ describe("bulkImportGearAction", () => {
       "color:red",
       "size:m",
     ]);
+
+    // The per-row gear.added audit event carries the assigned tag IDs
+    // so a future audit query can find this attachment without
+    // walking gear_tag_assignments.
+    const auditRows = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear.added"));
+    expect(auditRows).toHaveLength(1);
+    const meta = JSON.parse(auditRows[0]?.metadataJson ?? "{}") as {
+      source?: string;
+      tagIds?: string[];
+    };
+    expect(meta.source).toBe("bulk_import");
+    expect(meta.tagIds).toBeDefined();
+    expect(meta.tagIds).toHaveLength(2);
   });
 
   it("skips rows whose tags don't exist", async () => {

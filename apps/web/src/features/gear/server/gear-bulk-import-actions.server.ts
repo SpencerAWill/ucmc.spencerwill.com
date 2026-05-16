@@ -213,6 +213,14 @@ export async function bulkImportGearAction(
       throw err;
     }
 
+    // setGearTags runs after the insert — the gear row already exists
+    // when this fires. A failure here throws out of the loop, leaving
+    // a tag-less gear row behind. That's the same partial-failure
+    // shape the per-row audit emission carries (see the file-level
+    // comment): observability and tag attachment are non-load-bearing
+    // for any RBAC / billing path, so we accept the risk rather than
+    // rolling back the insert. An officer can re-tag the orphan row
+    // via the singular Edit sheet.
     if (tagIds.length > 0) {
       await setGearTags({
         gearId: id,
@@ -221,12 +229,22 @@ export async function bulkImportGearAction(
       });
     }
 
+    // Pull the assigned tag IDs into the per-row audit metadata so a
+    // future "who attached `color:red` to this piece?" query lands on
+    // the import event without needing a join through
+    // gear_tag_assignments. Tag IDs (not names) keep the metadata
+    // stable across tag renames.
     await recordAuditEvent({
       actorUserId: principal.userId,
       action: "gear.added",
       targetType: "gear",
       targetId: id,
-      metadata: { typeId, code, source: "bulk_import" },
+      metadata: {
+        typeId,
+        code,
+        source: "bulk_import",
+        ...(tagIds.length > 0 ? { tagIds } : {}),
+      },
     });
     created.push({ rowIndex: i, publicId, code });
   }
