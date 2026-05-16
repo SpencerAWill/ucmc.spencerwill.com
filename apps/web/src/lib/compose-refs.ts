@@ -1,3 +1,7 @@
+// LOCAL PATCH — re-running `pnpm dlx shadcn add @diceui/sortable` will
+// overwrite this file and undo the inferrable-types/unnecessary-condition
+// rewrite around `hasCleanup`. See PR #92.
+
 import * as React from "react";
 
 type PossibleRef<T> = React.Ref<T> | undefined;

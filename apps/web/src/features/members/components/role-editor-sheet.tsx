@@ -88,6 +88,7 @@ export function RoleEditorSheet({
       onOpenChange(false);
     }
   }, [open, roleError, onOpenChange]);
+
   const { data: permissions = [] } = useQuery({
     ...permissionsQueryOptions(),
     enabled: open,
@@ -241,7 +242,9 @@ export function RoleEditorSheet({
         <SheetHeader>
           <SheetTitle>{roleName}</SheetTitle>
           <SheetDescription>
-            Manage members, permissions, and metadata for this role.
+            {isAnonymous
+              ? "Manage the permissions granted to signed-out visitors."
+              : "Manage members, permissions, and details for this role."}
           </SheetDescription>
         </SheetHeader>
 
@@ -272,7 +275,7 @@ export function RoleEditorSheet({
                 Permissions
               </TabsTrigger>
               <TabsTrigger value="metadata" className="flex-1">
-                Edit
+                Details
               </TabsTrigger>
             </TabsList>
           </div>

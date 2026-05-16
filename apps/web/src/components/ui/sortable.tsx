@@ -1,5 +1,15 @@
 "use client";
 
+// LOCAL PATCHES — re-running `pnpm dlx shadcn add @diceui/sortable` will
+// overwrite this file and silently undo:
+//   - Slot.Root (not the non-existent Slot.Slot) for asChild rendering
+//   - flipped activator-ref guard (run when ENabled, not disabled)
+//   - extensionless internal imports (#/lib/compose-refs, #/lib/utils)
+//   - getItemLabel prop + safe-fallback in screen-reader announcements
+//   - setNodeRef always registered, even for disabled items
+// See PR #92 for the diff and rationale. If you need to update from the
+// registry, install to a scratch file and merge patches by hand.
+
 import {
   closestCenter,
   closestCorners,
