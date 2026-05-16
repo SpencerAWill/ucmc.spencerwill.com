@@ -20,6 +20,10 @@ export interface GearRow {
   thumbnailKey: string | null;
   acquiredAt: Date | null;
   acquisitionCostCents: number | null;
+  msrpCents: number | null;
+  manufacturer: string | null;
+  serialNumber: string | null;
+  conditionGrade: schema.GearConditionGrade | null;
   notesMarkdown: string | null;
   lifecycle: schema.GearLifecycle;
   condition: schema.GearCondition;
@@ -126,6 +130,10 @@ export async function listGear(
       thumbnailKey: schema.gear.thumbnailKey,
       acquiredAt: schema.gear.acquiredAt,
       acquisitionCostCents: schema.gear.acquisitionCostCents,
+      msrpCents: schema.gear.msrpCents,
+      manufacturer: schema.gear.manufacturer,
+      serialNumber: schema.gear.serialNumber,
+      conditionGrade: schema.gear.conditionGrade,
       notesMarkdown: schema.gear.notesMarkdown,
       lifecycle: schema.gear.lifecycle,
       condition: schema.gear.condition,
@@ -167,6 +175,10 @@ export async function getGearByPublicId(
       thumbnailKey: schema.gear.thumbnailKey,
       acquiredAt: schema.gear.acquiredAt,
       acquisitionCostCents: schema.gear.acquisitionCostCents,
+      msrpCents: schema.gear.msrpCents,
+      manufacturer: schema.gear.manufacturer,
+      serialNumber: schema.gear.serialNumber,
+      conditionGrade: schema.gear.conditionGrade,
       notesMarkdown: schema.gear.notesMarkdown,
       lifecycle: schema.gear.lifecycle,
       condition: schema.gear.condition,
@@ -241,6 +253,10 @@ export async function insertGear(input: {
   thumbnailKey: string | null;
   acquiredAt: Date | null;
   acquisitionCostCents: number | null;
+  msrpCents?: number | null;
+  manufacturer?: string | null;
+  serialNumber?: string | null;
+  conditionGrade?: schema.GearConditionGrade | null;
   notesMarkdown: string | null;
   condition: schema.GearCondition;
   createdBy: string;
@@ -256,6 +272,10 @@ export async function insertGear(input: {
     thumbnailKey: input.thumbnailKey,
     acquiredAt: input.acquiredAt,
     acquisitionCostCents: input.acquisitionCostCents,
+    msrpCents: input.msrpCents ?? null,
+    manufacturer: input.manufacturer ?? null,
+    serialNumber: input.serialNumber ?? null,
+    conditionGrade: input.conditionGrade ?? null,
     notesMarkdown: input.notesMarkdown,
     lifecycle: "active",
     condition: input.condition,
@@ -274,6 +294,10 @@ export async function updateGearById(
     thumbnailKey: string | null;
     acquiredAt: Date | null;
     acquisitionCostCents: number | null;
+    msrpCents: number | null;
+    manufacturer: string | null;
+    serialNumber: string | null;
+    conditionGrade: schema.GearConditionGrade | null;
     notesMarkdown: string | null;
     condition: schema.GearCondition;
   }>,

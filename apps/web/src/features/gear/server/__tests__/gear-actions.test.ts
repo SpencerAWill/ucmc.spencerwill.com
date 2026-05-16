@@ -195,6 +195,87 @@ describe("authorization", () => {
     expect(list.rows[0]?.code).toBe("CH1");
   });
 
+  it("round-trips msrp, manufacturer, serial, condition grade through create + detail", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const created = await createGearAction({
+      typePublicId,
+      code: "CH1",
+      description: "Petzl Sama",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: 6000,
+      msrpCents: 7500,
+      manufacturer: " Petzl ",
+      serialNumber: " ABC-123 ",
+      conditionGrade: "good",
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    if (!created.ok) throw new Error("seed failed");
+
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    expect(detail.msrpCents).toBe(7500);
+    expect(detail.manufacturer).toBe("Petzl");
+    expect(detail.serialNumber).toBe("ABC-123");
+    expect(detail.conditionGrade).toBe("good");
+
+    // Manufacturer + grade are public; msrp is officer-only (same gate
+    // as acquisition cost).
+    await signInAsRegularMember();
+    const memberDetail = await getGearDetailAction({
+      publicId: created.publicId,
+    });
+    expect(memberDetail.manufacturer).toBe("Petzl");
+    expect(memberDetail.conditionGrade).toBe("good");
+    expect(memberDetail.msrpCents).toBeNull();
+  });
+
+  it("editGearAction diffs the new attributes and emits gear.updated", async () => {
+    const actorId = await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const publicId = await createGearOk({ typePublicId, code: "CH1" });
+
+    const result = await editGearAction({
+      publicId,
+      typePublicId,
+      code: "CH1",
+      description: "Test gear",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      msrpCents: 4500,
+      manufacturer: "Black Diamond",
+      serialNumber: null,
+      conditionGrade: "fair",
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    expect(result.ok).toBe(true);
+
+    const detail = await getGearDetailAction({ publicId });
+    expect(detail.msrpCents).toBe(4500);
+    expect(detail.manufacturer).toBe("Black Diamond");
+    expect(detail.conditionGrade).toBe("fair");
+
+    const audit = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear.updated"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.actorUserId).toBe(actorId);
+    const meta = JSON.parse(audit[0]?.metadataJson ?? "{}") as {
+      changedFields: string[];
+    };
+    expect(meta.changedFields).toEqual(
+      expect.arrayContaining(["msrp_cents", "manufacturer", "condition_grade"]),
+    );
+    // serialNumber went from null → null: not a change.
+    expect(meta.changedFields).not.toContain("serial_number");
+  });
+
   it("strips acquisitionCostCents for non-manager readers", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });

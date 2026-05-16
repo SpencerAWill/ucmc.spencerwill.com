@@ -87,6 +87,13 @@ export const GEAR_CONDITION_VALUES = [
 ] as const;
 export type GearCondition = (typeof GEAR_CONDITION_VALUES)[number];
 
+export const GEAR_CONDITION_GRADE_VALUES = [
+  "excellent",
+  "good",
+  "fair",
+] as const;
+export type GearConditionGrade = (typeof GEAR_CONDITION_GRADE_VALUES)[number];
+
 export const GEAR_INSPECTION_RESULT_VALUES = [
   "pass",
   "fail",
@@ -189,6 +196,13 @@ export const createGearInputSchema = z.object({
   thumbnailDataUrl: thumbnailDataUrlSchema.nullable(),
   acquiredAt: acquiredAtSchema,
   acquisitionCostCents: z.number().int().min(0).nullable(),
+  // Optional on the wire — omit means "unknown / not provided" on
+  // create, and "no change" on edit. The action normalizes undefined
+  // to null at the boundary.
+  msrpCents: z.number().int().min(0).nullable().optional(),
+  manufacturer: z.string().trim().max(100).nullable().optional(),
+  serialNumber: z.string().trim().max(100).nullable().optional(),
+  conditionGrade: z.enum(GEAR_CONDITION_GRADE_VALUES).nullable().optional(),
   notesMarkdown: z.string().max(10_000).nullable(),
   condition: z.enum(GEAR_CONDITION_VALUES),
   tagPublicIds: z.array(z.string().min(1)),
