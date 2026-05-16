@@ -25,31 +25,23 @@ function UnclaimedRoute() {
   const page = searchPage ?? 1;
 
   return (
-    <>
-      <p className="text-sm text-muted-foreground">
-        Real-world members an officer pre-added so off-platform records (gear,
-        attendance) can reference a stable account before the person ever signs
-        in. They claim the row by clicking their first magic link.
-      </p>
-
-      <UnclaimedTab
-        perPage={perPage}
-        page={page}
-        onPerPageChange={(value) =>
-          void navigate({
-            search: (prev) => ({
-              ...prev,
-              limit: Number(value),
-              page: undefined,
-            }),
-          })
-        }
-        onPageChange={(p) =>
-          void navigate({
-            search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
-          })
-        }
-      />
-    </>
+    <UnclaimedTab
+      perPage={perPage}
+      page={page}
+      onPerPageChange={(value) =>
+        void navigate({
+          search: (prev) => ({
+            ...prev,
+            limit: Number(value),
+            page: undefined,
+          }),
+        })
+      }
+      onPageChange={(p) =>
+        void navigate({
+          search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
+        })
+      }
+    />
   );
 }

@@ -1,7 +1,10 @@
-import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 
 import { requireApproved } from "#/features/auth/guards";
-import { MembersTabsBar } from "#/features/members/components/members-tabs-bar";
+import {
+  MembersTabsBar,
+  getMembersTabSubtitle,
+} from "#/features/members/components/members-tabs-bar";
 
 /**
  * Pathless layout for the five status tabs that share the same page
@@ -24,10 +27,14 @@ export const Route = createFileRoute("/members/_tabs")({
 });
 
 function MembersTabsLayout() {
+  const pathname = useLocation({ select: (l) => l.pathname });
+  const subtitle = getMembersTabSubtitle(pathname);
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <header>
+      <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Members</h1>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
       </header>
 
       <MembersTabsBar />

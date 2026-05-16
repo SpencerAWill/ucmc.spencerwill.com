@@ -27,42 +27,35 @@ function PendingRoute() {
   const page = searchPage ?? 1;
 
   return (
-    <>
-      <p className="text-sm text-muted-foreground">
-        New registrations awaiting an officer’s decision. Approving grants the
-        &quot;member&quot; role automatically.
-      </p>
-
-      <PendingTab
-        from={from}
-        to={to}
-        perPage={perPage}
-        page={page}
-        onDateRangeChange={(nextFrom, nextTo) =>
-          void navigate({
-            search: (prev) => ({
-              ...prev,
-              from: nextFrom,
-              to: nextTo,
-              page: undefined, // reset on filter change
-            }),
-          })
-        }
-        onPerPageChange={(value) =>
-          void navigate({
-            search: (prev) => ({
-              ...prev,
-              limit: Number(value),
-              page: undefined,
-            }),
-          })
-        }
-        onPageChange={(p) =>
-          void navigate({
-            search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
-          })
-        }
-      />
-    </>
+    <PendingTab
+      from={from}
+      to={to}
+      perPage={perPage}
+      page={page}
+      onDateRangeChange={(nextFrom, nextTo) =>
+        void navigate({
+          search: (prev) => ({
+            ...prev,
+            from: nextFrom,
+            to: nextTo,
+            page: undefined, // reset on filter change
+          }),
+        })
+      }
+      onPerPageChange={(value) =>
+        void navigate({
+          search: (prev) => ({
+            ...prev,
+            limit: Number(value),
+            page: undefined,
+          }),
+        })
+      }
+      onPageChange={(p) =>
+        void navigate({
+          search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
+        })
+      }
+    />
   );
 }

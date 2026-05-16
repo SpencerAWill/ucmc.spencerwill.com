@@ -60,50 +60,46 @@ function ApprovedRoute() {
   };
 
   return (
-    <>
-      <p className="text-sm text-muted-foreground">Approved club members.</p>
-
-      <ApprovedTab
-        search={search}
-        affiliations={affiliations}
-        roles={roles}
-        sort={sort ?? "name_asc"}
-        perPage={perPage}
-        page={page}
-        view={view}
-        onAffiliationsChange={(next) =>
-          updateSearch({
-            affiliations: next.length > 0 ? next.join(",") : undefined,
-            page: undefined,
-          })
-        }
-        onRolesChange={(next) =>
-          updateSearch({
-            roles: next.length > 0 ? next.join(",") : undefined,
-            page: undefined,
-          })
-        }
-        onSortChange={(value) =>
-          updateSearch({
-            sort: value === "name_asc" ? undefined : value,
-            page: undefined,
-          })
-        }
-        onPerPageChange={(value) =>
-          updateSearch({ limit: Number(value), page: undefined })
-        }
-        onPageChange={(p) => updateSearch({ page: p === 1 ? undefined : p })}
-        onViewChange={(mode) =>
-          updateSearch({ view: mode === "list" ? undefined : mode })
-        }
-        onClearFilters={() =>
-          updateSearch({
-            affiliations: undefined,
-            roles: undefined,
-            page: undefined,
-          })
-        }
-      />
-    </>
+    <ApprovedTab
+      search={search}
+      affiliations={affiliations}
+      roles={roles}
+      sort={sort ?? "name_asc"}
+      perPage={perPage}
+      page={page}
+      view={view}
+      onAffiliationsChange={(next) =>
+        updateSearch({
+          affiliations: next.length > 0 ? next.join(",") : undefined,
+          page: undefined,
+        })
+      }
+      onRolesChange={(next) =>
+        updateSearch({
+          roles: next.length > 0 ? next.join(",") : undefined,
+          page: undefined,
+        })
+      }
+      onSortChange={(value) =>
+        updateSearch({
+          sort: value === "name_asc" ? undefined : value,
+          page: undefined,
+        })
+      }
+      onPerPageChange={(value) =>
+        updateSearch({ limit: Number(value), page: undefined })
+      }
+      onPageChange={(p) => updateSearch({ page: p === 1 ? undefined : p })}
+      onViewChange={(mode) =>
+        updateSearch({ view: mode === "list" ? undefined : mode })
+      }
+      onClearFilters={() =>
+        updateSearch({
+          affiliations: undefined,
+          roles: undefined,
+          page: undefined,
+        })
+      }
+    />
   );
 }

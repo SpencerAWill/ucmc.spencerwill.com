@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { RETENTION_REJECTED_COPY } from "#/config/legal";
 import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { LifecycleTab } from "#/features/members/components/lifecycle-tab";
 
@@ -26,31 +25,24 @@ function RejectedRoute() {
   const page = searchPage ?? 1;
 
   return (
-    <>
-      <p className="text-sm text-muted-foreground">
-        Registrations an officer declined. Un-rejecting moves users back to the
-        pending queue. {RETENTION_REJECTED_COPY}
-      </p>
-
-      <LifecycleTab
-        kind="rejected"
-        perPage={perPage}
-        page={page}
-        onPerPageChange={(value) =>
-          void navigate({
-            search: (prev) => ({
-              ...prev,
-              limit: Number(value),
-              page: undefined,
-            }),
-          })
-        }
-        onPageChange={(p) =>
-          void navigate({
-            search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
-          })
-        }
-      />
-    </>
+    <LifecycleTab
+      kind="rejected"
+      perPage={perPage}
+      page={page}
+      onPerPageChange={(value) =>
+        void navigate({
+          search: (prev) => ({
+            ...prev,
+            limit: Number(value),
+            page: undefined,
+          }),
+        })
+      }
+      onPageChange={(p) =>
+        void navigate({
+          search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
+        })
+      }
+    />
   );
 }

@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { RETENTION_DEACTIVATED_COPY } from "#/config/legal";
 import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { LifecycleTab } from "#/features/members/components/lifecycle-tab";
 
@@ -26,32 +25,24 @@ function DeactivatedRoute() {
   const page = searchPage ?? 1;
 
   return (
-    <>
-      <p className="text-sm text-muted-foreground">
-        Approved members an officer turned off — sessions revoked, role removed,
-        hidden from the directory. Reactivating restores the member role.{" "}
-        {RETENTION_DEACTIVATED_COPY}
-      </p>
-
-      <LifecycleTab
-        kind="deactivated"
-        perPage={perPage}
-        page={page}
-        onPerPageChange={(value) =>
-          void navigate({
-            search: (prev) => ({
-              ...prev,
-              limit: Number(value),
-              page: undefined,
-            }),
-          })
-        }
-        onPageChange={(p) =>
-          void navigate({
-            search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
-          })
-        }
-      />
-    </>
+    <LifecycleTab
+      kind="deactivated"
+      perPage={perPage}
+      page={page}
+      onPerPageChange={(value) =>
+        void navigate({
+          search: (prev) => ({
+            ...prev,
+            limit: Number(value),
+            page: undefined,
+          }),
+        })
+      }
+      onPageChange={(p) =>
+        void navigate({
+          search: (prev) => ({ ...prev, page: p === 1 ? undefined : p }),
+        })
+      }
+    />
   );
 }
