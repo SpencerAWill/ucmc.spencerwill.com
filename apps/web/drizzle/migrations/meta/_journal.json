@@ -281,6 +281,13 @@
       "when": 1778723653418,
       "tag": "0039_officer_roles_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1778723653419,
+      "tag": "0040_roles_display_name_non_empty",
+      "breakpoints": true
     }
   ]
 }

@@ -539,6 +539,7 @@ export const auditAction = [
   "email.primary_changed",
   // RBAC.
   "role.created",
+  "role.updated",
   "role.deleted",
   "role.permissions_set",
   "role.assigned",

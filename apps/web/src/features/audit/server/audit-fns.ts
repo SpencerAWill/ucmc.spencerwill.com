@@ -35,6 +35,7 @@ export const AUDIT_ACTIONS = [
   "email.removed",
   "email.primary_changed",
   "role.created",
+  "role.updated",
   "role.deleted",
   "role.permissions_set",
   "role.assigned",

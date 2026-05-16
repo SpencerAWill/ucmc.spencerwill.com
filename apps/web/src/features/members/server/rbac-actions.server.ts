@@ -259,36 +259,84 @@ export async function updateRoleAction(input: {
   displayName?: string;
   isOfficer?: boolean;
 }): Promise<{ ok: true }> {
-  await requireRolesManager();
+  const principal = await requireRolesManager();
   const db = getDb();
 
   const role = await db.query.roles.findFirst({
     where: eq(schema.roles.id, input.roleId),
-    columns: { id: true },
+    columns: {
+      id: true,
+      name: true,
+      displayName: true,
+      description: true,
+      isOfficer: true,
+    },
   });
   if (!role) {
     throw new Error("Role not found");
   }
 
+  // Constitutional-role protections. system_admin's identity is system-
+  // shaped, not a public-facing label, and surfacing every system_admin
+  // on the public home page would leak the role assignment. anonymous
+  // has no users so officer-flagging it is a no-op at best and a
+  // misleading audit row at worst — reject explicitly. Other officer
+  // roles (advisor, president, treasurer) remain editable because that's
+  // exactly the surface the editor exists for.
+  if (input.roleId === SYSTEM_ADMIN_ROLE_ID) {
+    if (
+      input.displayName !== undefined &&
+      input.displayName !== role.displayName
+    ) {
+      throw new Error("Cannot change the system_admin display name");
+    }
+    if (input.isOfficer === true) {
+      throw new Error("Cannot flag system_admin as an officer position");
+    }
+  }
+  if (input.roleId === ANONYMOUS_ROLE_ID && input.isOfficer === true) {
+    throw new Error("Cannot flag the anonymous role as an officer position");
+  }
+
   const patch: Partial<typeof schema.roles.$inferInsert> = {};
-  if (input.description !== undefined) {
+  const changed: Record<string, { from: unknown; to: unknown }> = {};
+  if (
+    input.description !== undefined &&
+    input.description !== role.description
+  ) {
     patch.description = input.description;
+    changed.description = { from: role.description, to: input.description };
   }
-  if (input.displayName !== undefined) {
+  if (
+    input.displayName !== undefined &&
+    input.displayName !== role.displayName
+  ) {
     patch.displayName = input.displayName;
+    changed.displayName = { from: role.displayName, to: input.displayName };
   }
-  if (input.isOfficer !== undefined) {
+  if (input.isOfficer !== undefined && input.isOfficer !== role.isOfficer) {
     patch.isOfficer = input.isOfficer;
+    changed.isOfficer = { from: role.isOfficer, to: input.isOfficer };
   }
 
   if (Object.keys(patch).length === 0) {
     return { ok: true };
   }
 
-  await db
-    .update(schema.roles)
-    .set(patch)
-    .where(eq(schema.roles.id, input.roleId));
+  // Atomic with the audit row. `role.updated` lets us correlate
+  // public-surface flips (`isOfficer`) and visible-label edits
+  // (`displayName`) back to an actor — important now that toggling
+  // `is_officer` directly changes what unauthenticated visitors see.
+  await db.batch([
+    db.update(schema.roles).set(patch).where(eq(schema.roles.id, input.roleId)),
+    buildAuditEventStatement({
+      actorUserId: principal.userId,
+      action: "role.updated",
+      targetType: "role",
+      targetId: input.roleId,
+      metadata: { name: role.name, changed },
+    }),
+  ]);
 
   return { ok: true };
 }

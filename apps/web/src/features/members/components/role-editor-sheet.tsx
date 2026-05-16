@@ -122,9 +122,13 @@ export function RoleEditorSheet({
   const [baselineDisplayName, setBaselineDisplayName] = useState("");
   const [isOfficer, setIsOfficer] = useState(false);
   const [baselineIsOfficer, setBaselineIsOfficer] = useState(false);
+  // Compare trim-symmetric on both sides so a trailing space alone
+  // doesn't flip dirty — the server trims on persist, so a baseline
+  // never carries whitespace and a typed trailing space shouldn't ride
+  // a saved-clean state back into dirty after save.
   const metadataDirty =
     initialized &&
-    (description !== baselineDescription ||
+    (description.trim() !== baselineDescription ||
       displayName.trim() !== baselineDisplayName ||
       isOfficer !== baselineIsOfficer);
   const updateRole = useUpdateRole();
@@ -227,7 +231,7 @@ export function RoleEditorSheet({
           const latest = latestRef.current;
           const stillDirty =
             latest.initialized &&
-            (latest.description !== latest.baselineDescription ||
+            (latest.description.trim() !== latest.baselineDescription ||
               latest.displayName.trim() !== latest.baselineDisplayName ||
               latest.isOfficer !== latest.baselineIsOfficer);
           if (!stillDirty) onOpenChange(false);
@@ -436,12 +440,12 @@ export function RoleEditorSheet({
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 maxLength={80}
-                disabled={!initialized}
+                disabled={isAdmin || !initialized}
               />
               <p className="text-xs text-muted-foreground">
-                Shown wherever this role is presented to members, and on the
-                public home page when the role is flagged as an officer
-                position.
+                {isAdmin
+                  ? "The system_admin role’s label is fixed."
+                  : "Shown wherever this role is presented to members, and on the public home page when the role is flagged as an officer position."}
               </p>
             </div>
             <div className="space-y-2">
@@ -485,17 +489,16 @@ export function RoleEditorSheet({
                 <Checkbox
                   id="role-meta-is-officer"
                   checked={isOfficer}
-                  disabled={!initialized}
-                  onCheckedChange={(checked) =>
-                    setIsOfficer(checked === true)
-                  }
+                  disabled={isAdmin || !initialized}
+                  onCheckedChange={(checked) => setIsOfficer(checked === true)}
                   className="mt-0.5"
                 />
                 <div>
                   <span className="text-sm font-medium">Officer position</span>
                   <p className="text-xs text-muted-foreground">
-                    Show members holding this role on the public &ldquo;Meet
-                    the officers&rdquo; section of the home page.
+                    {isAdmin
+                      ? "system_admin cannot be flagged as an officer position."
+                      : "Show members holding this role on the public “Meet the officers” section of the home page."}
                   </p>
                 </div>
               </label>

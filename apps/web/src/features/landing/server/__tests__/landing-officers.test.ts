@@ -72,7 +72,7 @@ beforeEach(async () => {
   await db.delete(schema.auditLog);
   // Drop any test-created officer roles to keep `listLandingOfficers`
   // deterministic. Seeded officer roles (role_president, role_treasurer)
-  // are flagged `is_officer = 1` by migration 0037; unflag them here so
+  // are flagged `is_officer = 1` by migration 0039; unflag them here so
   // the empty-case test sees an empty list.
   await db
     .delete(schema.roles)
