@@ -36,7 +36,6 @@ import {
   Shield,
   Star,
   Target,
-  UserPlus,
   Users,
   Vote,
 } from "lucide-react";
@@ -202,7 +201,6 @@ function SidebarNav() {
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
   const canReadAnnouncements =
     hasPermission("announcements:read") && flags.announcements;
-  const canManageMembers = hasPermission("members:manage");
   const canManageRoles = hasPermission("roles:manage");
   const canVerifyWaivers = hasPermission("waivers:verify");
   const canReadGear = hasPermission("gear:read");
@@ -210,7 +208,9 @@ function SidebarNav() {
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
-  const hasSubItems = canManageMembers || canManageRoles || canVerifyWaivers;
+  // (Member management is reached via the tab bar inside /members
+  // itself for officers, so it doesn't need its own sub-link.)
+  const hasSubItems = canManageRoles || canVerifyWaivers;
 
   return (
     <>
@@ -393,16 +393,6 @@ function SidebarNav() {
                     {hasSubItems ? (
                       <CollapsibleContent>
                         <SidebarMenuSub>
-                          {canManageMembers ? (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link to="/members/management">
-                                  <UserPlus />
-                                  <span>Management</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ) : null}
                           {canVerifyWaivers ? (
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>

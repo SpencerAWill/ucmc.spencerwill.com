@@ -1,7 +1,7 @@
 /**
- * The "Unclaimed" tab on `/members/management`. Lists officer-pre-
- * added stub members, exposes the bulk pre-add sheet, and provides
- * per-row edit + bulk-delete affordances.
+ * The "Unclaimed" tab on `/members/unclaimed`. Lists officer-pre-added
+ * stub members, exposes the bulk pre-add sheet, and provides per-row
+ * edit + bulk-delete affordances.
  */
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";

@@ -1,14 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { requireApproved } from "#/features/auth/guards";
 import { ApprovedTab } from "#/features/members/components/approved-tab";
 import type {
   ApprovedSortOption,
   ApprovedViewMode,
 } from "#/features/members/components/approved-tab";
 
-const membersSearchSchema = z.object({
+const approvedSearchSchema = z.object({
   q: z.string().optional(),
   affiliations: z.string().optional(), // comma-separated values
   roles: z.string().optional(), // comma-separated values
@@ -18,15 +17,14 @@ const membersSearchSchema = z.object({
   view: z.enum(["list", "grid"]).optional(),
 });
 
-export const Route = createFileRoute("/members/")({
-  validateSearch: membersSearchSchema,
-  beforeLoad: async ({ context }) => {
-    await requireApproved(context.queryClient);
-  },
-  component: MembersIndexPage,
+// `requireApproved` is enforced by the `_tabs` layout parent — no need
+// to re-check here.
+export const Route = createFileRoute("/members/_tabs/")({
+  validateSearch: approvedSearchSchema,
+  component: ApprovedRoute,
 });
 
-function MembersIndexPage() {
+function ApprovedRoute() {
   const {
     q: search,
     affiliations: affiliationsParam,
@@ -62,11 +60,8 @@ function MembersIndexPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Members</h1>
-        <p className="text-sm text-muted-foreground">Approved club members.</p>
-      </header>
+    <>
+      <p className="text-sm text-muted-foreground">Approved club members.</p>
 
       <ApprovedTab
         search={search}
@@ -109,6 +104,6 @@ function MembersIndexPage() {
           })
         }
       />
-    </div>
+    </>
   );
 }

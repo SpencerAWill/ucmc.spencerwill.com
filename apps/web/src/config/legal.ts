@@ -64,7 +64,7 @@ export const WAIVER_PDF_PATH = `/legal/ucmc-waiver-${WAIVER_VERSION}.pdf`;
 /**
  * Retention copy for deactivated accounts. Shared between the privacy
  * page (where it appears as a bullet under "Retention") and the
- * `/members/management` deactivated tab so the policy text stays
+ * `/members/deactivated` tab so the policy text stays
  * single-sourced — bumping the retention window is a one-line change.
  */
 export const RETENTION_DEACTIVATED_COPY =

@@ -175,7 +175,7 @@ export async function listMembersAction(opts: {
   // everyone else is locked to "approved". `unclaimed` is *always*
   // excluded — these are officer-pre-added stubs with no profile, no
   // verified email, and no avatar; they have their own tab on
-  // /members/management and do not belong in the directory.
+  // /members/unclaimed and do not belong in the directory.
   const requested = canManage
     ? (opts.statuses?.split(",").filter(Boolean) ?? ["approved"])
     : ["approved"];

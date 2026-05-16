@@ -7,13 +7,13 @@ import { waitForHydration } from "./fixtures/hydration";
 import { expect, test } from "./fixtures/mailpit";
 
 /**
- * Coverage for the consolidated `/members/management` admin surface:
- *   - Old `/members/registrations` URL still works (redirect).
+ * Coverage for the consolidated `/members` admin surface (Approved /
+ * Pending / Unclaimed / Rejected / Deactivated tabs):
  *   - The members directory dropped its status filter (admin status
- *     concerns moved here).
+ *     concerns moved into the tab bar).
  *   - Switching between the rejected and deactivated tabs resets the
  *     row-selection state — regression for the React reconciliation
- *     bug where the same `LifecycleView` instance carried a stale Set
+ *     bug where the same `LifecycleTab` instance carried a stale Set
  *     across tabs.
  *   - Bulk reactivate flips status back to `approved` and refreshes
  *     the deactivated tab.
@@ -112,38 +112,20 @@ async function signInAsOfficer(
   });
 }
 
-test("/members/registrations redirects to /members/management", async ({
-  page,
-  mailpit,
-}) => {
-  const officerEmail = `e2e-officer-redirect-${Date.now()}@example.com`;
-  await signInAsOfficer(page, mailpit, officerEmail);
-
-  await page.goto("/members/registrations");
-  await page.waitForURL((u) => u.pathname === "/members/management", {
-    timeout: 10_000,
-  });
-  await waitForHydration(page);
-  // The page heading is the management UI's, not a 404 / blank stub.
-  await expect(
-    page.getByRole("heading", { name: /member management/i }),
-  ).toBeVisible();
-});
-
 test("/members directory has no status filter dropdown", async ({
   page,
   mailpit,
 }) => {
   // Officer (role_system_admin) used to see a status filter on the
-  // directory; the refactor moved every non-approved status to the
-  // management page so the filter shouldn't render — even for admins.
+  // directory; the refactor moved every non-approved status to its own
+  // tab so the filter shouldn't render — even for admins.
   const officerEmail = `e2e-officer-filter-${Date.now()}@example.com`;
   await signInAsOfficer(page, mailpit, officerEmail);
 
   await page.goto("/members");
   await waitForHydration(page);
 
-  // Directory header copy is the simpler "Approved club members."
+  // Directory subtitle copy is the simpler "Approved club members."
   // line, no longer parameterized on the active status filter.
   await expect(page.getByText(/approved club members/i)).toBeVisible();
 
@@ -165,7 +147,7 @@ test("switching between rejected and deactivated tabs clears row selection", asy
   seedUserWithStatus(deactivatedEmail, "deactivated");
   await signInAsOfficer(page, mailpit, officerEmail);
 
-  await page.goto("/members/management?tab=rejected");
+  await page.goto("/members/rejected");
   await waitForHydration(page);
 
   // Check the rejected row.
@@ -179,9 +161,9 @@ test("switching between rejected and deactivated tabs clears row selection", asy
     page.getByRole("button", { name: /^un-reject \(1\)/i }),
   ).toBeVisible();
 
-  // Switch to the deactivated tab.
-  await page.getByRole("button", { name: /^deactivated$/i }).click();
-  await page.waitForURL((u) => u.search.includes("tab=deactivated"));
+  // Switch to the deactivated tab via the tab bar link.
+  await page.getByRole("link", { name: /^deactivated$/i }).click();
+  await page.waitForURL((u) => u.pathname === "/members/deactivated");
   await waitForHydration(page);
 
   // Wait for the new tab's data to render.
@@ -212,7 +194,7 @@ test("bulk reactivate flips status to approved and removes the row from the tab"
   seedUserWithStatus(targetEmail, "deactivated");
   await signInAsOfficer(page, mailpit, officerEmail);
 
-  await page.goto("/members/management?tab=deactivated");
+  await page.goto("/members/deactivated");
   await waitForHydration(page);
 
   const targetRow = page.getByRole("checkbox", {

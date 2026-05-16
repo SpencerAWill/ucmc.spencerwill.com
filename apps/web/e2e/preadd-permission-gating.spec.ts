@@ -4,23 +4,23 @@ import { expect, test } from "./fixtures/mailpit";
 
 /**
  * Permission gating regression: an approved member without the
- * `members:manage` permission must not be able to reach
- * `/members/management` (the member-lifecycle admin surface that
- * houses pending registrations, the "Unclaimed" pre-add tab, and the
- * un-reject / reactivate flows). The route guard is
- * `requirePermission(queryClient, "members:manage")`, which — per
- * `requirePermission` in `apps/web/src/features/auth/guards.ts` —
- * redirects approved-but-unauthorized users to `/`.
+ * `members:manage` permission must not be able to reach the management
+ * tabs nested under `/members` (pending / unclaimed / rejected /
+ * deactivated). Each child route's `beforeLoad` calls
+ * `requirePermissionOrNotFound(queryClient, "members:manage")`, which
+ * — per `apps/web/src/features/auth/guards.ts` — throws `notFound()`
+ * instead of redirecting, so direct navigation surfaces the app's
+ * notFound boundary rather than silently bouncing the user home.
  *
- * Why an e2e and not a unit test: the redirect is wired via TanStack
- * Router's `beforeLoad` + a thrown `redirect()` instance, which only
- * resolves into an actual navigation when the router is mounted. Unit
- * tests that import the guard would assert the throw shape, not the
- * landing URL — and the more interesting failure mode (a future
- * refactor that drops the guard or moves the unclaimed tab onto a
- * different route) is invisible to the unit-level boundary.
+ * Why an e2e and not a unit test: the notFound is wired via TanStack
+ * Router's `beforeLoad` + a thrown `notFound()` instance, which only
+ * resolves into an actual rendered boundary when the router is mounted.
+ * Unit tests that import the guard would assert the throw shape, not
+ * the rendered outcome — and the more interesting failure mode (a
+ * future refactor that drops the guard or moves the unclaimed tab onto
+ * a different route) is invisible to the unit-level boundary.
  */
-test("non-officer cannot reach /members/management", async ({
+test("non-officer cannot reach members management tabs", async ({
   page,
   mailpit,
 }) => {
@@ -45,21 +45,24 @@ test("non-officer cannot reach /members/management", async ({
     timeout: 15_000,
   });
 
-  // Try to reach the management page directly. The route guard should
-  // kick us to `/`. Land somewhere that's *not* `/members/management`
-  // — the home page is the documented destination, but waiting for
-  // "anywhere else" makes the assertion robust to future redirect-
-  // target tweaks.
-  await page.goto("/members/management");
-  await page.waitForURL((u) => !u.pathname.startsWith("/members/management"), {
-    timeout: 10_000,
-  });
+  // The approved tab itself (`/members`) is open to any approved
+  // member — no notFound, no pre-add UI.
+  await page.goto("/members");
+  await waitForHydration(page);
+  await expect(page.getByRole("heading", { name: /^members$/i })).toBeVisible();
 
-  // And the page we actually land on must not contain the unclaimed-
-  // pre-add UI affordances (defense in depth — if a future regression
-  // skips the redirect but renders an empty stub of the page, the URL
-  // assertion alone would miss it).
-  await expect(
-    page.getByRole("button", { name: /pre-add members/i }),
-  ).toHaveCount(0);
+  // Each management child route is gated; direct navigation should
+  // surface the notFound boundary and never the pre-add UI.
+  for (const path of [
+    "/members/pending",
+    "/members/unclaimed",
+    "/members/rejected",
+    "/members/deactivated",
+  ]) {
+    await page.goto(path);
+    await waitForHydration(page);
+    await expect(
+      page.getByRole("button", { name: /pre-add members/i }),
+    ).toHaveCount(0);
+  }
 });
