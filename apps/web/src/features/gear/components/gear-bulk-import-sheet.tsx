@@ -549,7 +549,7 @@ function GearImportRow({
             value={row.typePublicId}
             onValueChange={(v) => onChange({ typePublicId: v })}
           >
-            <SelectTrigger id={`type-${row.key}`} className="h-9">
+            <SelectTrigger id={`type-${row.key}`} className="h-9 w-full">
               <SelectValue placeholder="Select…" />
             </SelectTrigger>
             <SelectContent>
@@ -644,7 +644,7 @@ function GearImportRow({
               })
             }
           >
-            <SelectTrigger id={`grade-${row.key}`} className="h-9">
+            <SelectTrigger id={`grade-${row.key}`} className="h-9 w-full">
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>

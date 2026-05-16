@@ -95,7 +95,7 @@ export function GearFormSheet({
   const isEdit = intent.mode === "edit";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex flex-col gap-0">
+      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-xl">
         <SheetHeader>
           <SheetTitle>{isEdit ? "Edit gear" : "Add gear"}</SheetTitle>
           <SheetDescription>
@@ -549,7 +549,7 @@ function GearForm({
                 )
               }
             >
-              <SelectTrigger id="gear-condition-grade">
+              <SelectTrigger id="gear-condition-grade" className="w-full">
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
@@ -574,7 +574,7 @@ function GearForm({
             value={condition}
             onValueChange={(v) => setCondition(v as GearCondition)}
           >
-            <SelectTrigger id="gear-condition">
+            <SelectTrigger id="gear-condition" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
