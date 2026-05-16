@@ -1,5 +1,11 @@
+/**
+ * The approved-members directory: search-by-filters (affiliation +
+ * role), sort, list/grid view, pagination, optional role-assignment
+ * affordance for officers. URL state is owned by the calling route and
+ * threaded through props — this component is purely controlled.
+ */
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   Filter,
   LayoutGrid,
@@ -9,10 +15,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { z } from "zod";
 
-import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
-import { UserAvatar } from "#/components/user-avatar";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Checkbox } from "#/components/ui/checkbox";
@@ -37,12 +40,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "#/components/ui/tooltip";
-import { requireApproved } from "#/features/auth/guards";
+import { UserAvatar } from "#/components/user-avatar";
 import { useAuth } from "#/features/auth/api/use-auth";
 import {
   membersDirectoryQueryOptions,
   rolesQueryOptions,
 } from "#/features/members/api/queries";
+import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
 import type {
   MemberSummary,
   RoleOption,
@@ -50,7 +54,7 @@ import type {
 
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
-type ViewMode = "list" | "grid";
+export type ApprovedViewMode = "list" | "grid";
 
 const AFFILIATION_OPTIONS = [
   { value: "student", label: "Student" },
@@ -67,111 +71,57 @@ const SORT_OPTIONS = [
   { value: "oldest", label: "Oldest first" },
 ] as const;
 
-type SortOption = (typeof SORT_OPTIONS)[number]["value"];
+export type ApprovedSortOption = (typeof SORT_OPTIONS)[number]["value"];
 
-const membersSearchSchema = z.object({
-  q: z.string().optional(),
-  affiliations: z.string().optional(), // comma-separated values
-  roles: z.string().optional(), // comma-separated values
-  sort: z.enum(["name_asc", "name_desc", "newest", "oldest"]).optional(),
-  limit: z.coerce.number().int().min(1).max(500).optional(),
-  page: z.coerce.number().int().min(1).optional(),
-  view: z.enum(["list", "grid"]).optional(),
-});
+export interface ApprovedTabProps {
+  search: string | undefined;
+  affiliations: string[];
+  roles: string[];
+  sort: ApprovedSortOption;
+  perPage: number;
+  page: number;
+  view: ApprovedViewMode;
+  onAffiliationsChange: (next: string[]) => void;
+  onRolesChange: (next: string[]) => void;
+  onSortChange: (sort: ApprovedSortOption) => void;
+  onPerPageChange: (value: string) => void;
+  onPageChange: (page: number) => void;
+  onViewChange: (view: ApprovedViewMode) => void;
+  onClearFilters: () => void;
+}
 
-export const Route = createFileRoute("/members/")({
-  validateSearch: membersSearchSchema,
-  beforeLoad: async ({ context }) => {
-    await requireApproved(context.queryClient);
-  },
-  component: MembersIndexPage,
-});
-
-function MembersIndexPage() {
-  const {
-    q: search,
-    affiliations: affiliationsParam,
-    roles: rolesParam,
-    sort,
-    limit: searchLimit,
-    page: searchPage,
-    view: searchView,
-  } = Route.useSearch();
-  const navigate = useNavigate({ from: Route.fullPath });
-
-  const perPage = searchLimit ?? 50;
-  const page = searchPage ?? 1;
+export function ApprovedTab({
+  search,
+  affiliations,
+  roles,
+  sort,
+  perPage,
+  page,
+  view,
+  onAffiliationsChange,
+  onRolesChange,
+  onSortChange,
+  onPerPageChange,
+  onPageChange,
+  onViewChange,
+  onClearFilters,
+}: ApprovedTabProps) {
   const offset = (page - 1) * perPage;
-  const [view, setViewState] = useState<ViewMode>(searchView ?? "list");
-
-  const affiliations = affiliationsParam?.split(",").filter(Boolean) ?? [];
-  const roles = rolesParam?.split(",").filter(Boolean) ?? [];
-
-  const updateSearch = (
-    updates: Partial<{
-      q: string | undefined;
-      affiliations: string | undefined;
-      roles: string | undefined;
-      sort: SortOption | undefined;
-      limit: number | undefined;
-      page: number | undefined;
-      view: ViewMode | undefined;
-    }>,
-  ) => {
-    void navigate({
-      search: (prev) => ({ ...prev, ...updates }),
-    });
-  };
-
-  // TODO: uncomment when server-side search (LIKE query) is wired up.
-  // const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // const setSearch = useCallback(
-  //   (value: string) => {
-  //     if (searchTimer.current) {
-  //       clearTimeout(searchTimer.current);
-  //     }
-  //     searchTimer.current = setTimeout(() => {
-  //       updateSearch({ q: value || undefined, page: undefined });
-  //     }, 300);
-  //   },
-  //   [],
-  // );
-
-  const setPage = (p: number) =>
-    updateSearch({ page: p === 1 ? undefined : p });
-
-  const setView = (mode: ViewMode) => {
-    setViewState(mode);
-    updateSearch({ view: mode === "list" ? undefined : mode });
-  };
-
-  const setLimit = (value: string) =>
-    updateSearch({ limit: Number(value), page: undefined });
-
-  const setSort = (value: string) =>
-    updateSearch({
-      sort: value === "name_asc" ? undefined : (value as SortOption),
-      page: undefined,
-    });
 
   const toggleAffiliation = (value: string) => {
-    const next = affiliations.includes(value)
-      ? affiliations.filter((a) => a !== value)
-      : [...affiliations, value];
-    updateSearch({
-      affiliations: next.length > 0 ? next.join(",") : undefined,
-      page: undefined,
-    });
+    onAffiliationsChange(
+      affiliations.includes(value)
+        ? affiliations.filter((a) => a !== value)
+        : [...affiliations, value],
+    );
   };
 
   const toggleRole = (value: string) => {
-    const next = roles.includes(value)
-      ? roles.filter((r) => r !== value)
-      : [...roles, value];
-    updateSearch({
-      roles: next.length > 0 ? next.join(",") : undefined,
-      page: undefined,
-    });
+    onRolesChange(
+      roles.includes(value)
+        ? roles.filter((r) => r !== value)
+        : [...roles, value],
+    );
   };
 
   const activeFilterCount = affiliations.length + roles.length;
@@ -184,9 +134,10 @@ function MembersIndexPage() {
   const { data, isLoading } = useQuery(
     membersDirectoryQueryOptions({
       search,
-      affiliations: affiliationsParam,
-      roles: rolesParam,
-      sort: sort ?? "name_asc",
+      affiliations:
+        affiliations.length > 0 ? affiliations.join(",") : undefined,
+      roles: roles.length > 0 ? roles.join(",") : undefined,
+      sort,
       limit: perPage,
       offset,
     }),
@@ -202,12 +153,7 @@ function MembersIndexPage() {
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Members</h1>
-        <p className="text-sm text-muted-foreground">Approved club members.</p>
-      </header>
-
+    <div className="flex flex-col gap-6">
       {/* Row 1: Search + view toggle */}
       {/* TODO: wire search to LIKE query in listMembersAction */}
       <div className="flex items-center gap-3">
@@ -222,7 +168,7 @@ function MembersIndexPage() {
                 variant={view === "list" ? "secondary" : "ghost"}
                 size="icon"
                 className="h-full w-9 rounded-r-none"
-                onClick={() => setView("list")}
+                onClick={() => onViewChange("list")}
               >
                 <List className="size-4" />
                 <span className="sr-only">List view</span>
@@ -236,7 +182,7 @@ function MembersIndexPage() {
                 variant={view === "grid" ? "secondary" : "ghost"}
                 size="icon"
                 className="h-full w-9 rounded-l-none"
-                onClick={() => setView("grid")}
+                onClick={() => onViewChange("grid")}
               >
                 <LayoutGrid className="size-4" />
                 <span className="sr-only">Grid view</span>
@@ -304,13 +250,7 @@ function MembersIndexPage() {
                 variant="ghost"
                 size="sm"
                 className="w-full"
-                onClick={() =>
-                  updateSearch({
-                    affiliations: undefined,
-                    roles: undefined,
-                    page: undefined,
-                  })
-                }
+                onClick={onClearFilters}
               >
                 Clear all filters
               </Button>
@@ -319,7 +259,10 @@ function MembersIndexPage() {
         </Popover>
 
         {/* Sort */}
-        <Select value={sort ?? "name_asc"} onValueChange={setSort}>
+        <Select
+          value={sort}
+          onValueChange={(value) => onSortChange(value as ApprovedSortOption)}
+        >
           <SelectTrigger className="w-[9rem]">
             <SelectValue />
           </SelectTrigger>
@@ -369,8 +312,8 @@ function MembersIndexPage() {
             total={total}
             perPage={perPage}
             perPageOptions={LIMIT_OPTIONS}
-            onPageChange={setPage}
-            onPerPageChange={setLimit}
+            onPageChange={onPageChange}
+            onPerPageChange={onPerPageChange}
           />
         </>
       )}

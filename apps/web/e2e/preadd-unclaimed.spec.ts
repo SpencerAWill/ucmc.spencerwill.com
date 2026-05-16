@@ -6,9 +6,9 @@ import { expect, test } from "./fixtures/mailpit";
  * Officer drives the bulk pre-add UI end-to-end.
  *
  * Covers what the unit tests + component tests can't see together:
- *   - Route guard (`requirePermission("members:manage")`) lets the
- *     officer in.
- *   - Unclaimed tab swap on the management page.
+ *   - Route guard (`requirePermissionOrNotFound("members:manage")`)
+ *     lets the officer in.
+ *   - Unclaimed tab routing under `/members/unclaimed`.
  *   - Sheet open → dynamic-rows form fill → submit.
  *   - Server fn round-trip (`preAddUnclaimedFn`) lands in D1.
  *   - The mutation hook's invalidation flushes the unclaimed-list query
@@ -48,10 +48,9 @@ test("officer pre-adds unclaimed members via the bulk-add sheet", async ({
     timeout: 15_000,
   });
 
-  // Navigate to the management page → switch to the Unclaimed tab.
-  await page.goto("/members/management");
+  // Navigate straight to the Unclaimed tab under /members.
+  await page.goto("/members/unclaimed");
   await waitForHydration(page);
-  await page.getByRole("button", { name: /^unclaimed$/i }).click();
 
   // Open the bulk-add sheet.
   await page.getByRole("button", { name: /pre-add members/i }).click();

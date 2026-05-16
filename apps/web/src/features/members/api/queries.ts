@@ -56,10 +56,10 @@ export function pendingRegistrationsQueryOptions(
 }
 
 /**
- * Members in a non-active lifecycle state — the "rejected" and
- * "deactivated" tabs on /members/management. Lives under the
- * registrations key so lifecycle mutations (unreject, reactivate)
- * invalidate by prefix and clear all sibling tabs at once.
+ * Members in a non-active lifecycle state — the `/members/rejected`
+ * and `/members/deactivated` tabs. Lives under the registrations key
+ * so lifecycle mutations (unreject, reactivate) invalidate by prefix
+ * and clear all sibling tabs at once.
  */
 export function lifecycleMembersQueryOptions(
   status: Extract<UserStatus, "rejected" | "deactivated">,

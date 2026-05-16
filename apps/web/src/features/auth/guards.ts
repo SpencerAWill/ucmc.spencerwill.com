@@ -5,7 +5,7 @@
  * route gets it typed.
  */
 import type { QueryClient } from "@tanstack/react-query";
-import { redirect } from "@tanstack/react-router";
+import { notFound, redirect } from "@tanstack/react-router";
 
 import {
   SESSION_QUERY_KEY,
@@ -80,6 +80,27 @@ export async function requirePermission(
   const principal = await requireApproved(queryClient);
   if (!principal.permissions.includes(permission)) {
     throw redirect({ to: "/" });
+  }
+  return principal;
+}
+
+/**
+ * Variant of `requirePermission` that throws `notFound()` instead of
+ * redirecting when an approved user lacks the permission. Use this for
+ * routes that should be invisible to non-holders — direct navigation
+ * surfaces the app's notFound boundary rather than bouncing them home
+ * (which can confuse: "I clicked a link, why did I land at /?").
+ *
+ * Unauthenticated / unapproved users still flow through the normal
+ * registration funnel via `requireApproved`.
+ */
+export async function requirePermissionOrNotFound(
+  queryClient: QueryClient,
+  permission: string,
+): Promise<Principal> {
+  const principal = await requireApproved(queryClient);
+  if (!principal.permissions.includes(permission)) {
+    throw notFound();
   }
   return principal;
 }
