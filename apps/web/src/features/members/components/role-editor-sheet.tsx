@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import { Checkbox } from "#/components/ui/checkbox";
@@ -80,40 +80,50 @@ export function RoleEditorSheet({
 
   const [tab, setTab] = useState<TabValue>(initialTab);
 
-  // ── permissions tab state ─────────────────────────────────────────────
-  const serverGrants = useMemo(
-    () => new Set(role?.permissionIds ?? []),
-    [role?.permissionIds],
+  // Baselines snapshot the server values at init time. Dirty flags
+  // compare against these snapshots — never directly against the live
+  // role query — so a background refetch can't briefly desync the
+  // baseline from the pending state and flip Save to "dirty" before
+  // the user has touched anything.
+  const [initialized, setInitialized] = useState(false);
+  const [baselineGrants, setBaselineGrants] = useState<Set<string>>(
+    () => new Set(),
   );
-  const [pendingGrants, setPendingGrants] = useState<Set<string>>(serverGrants);
+  const [baselineDescription, setBaselineDescription] = useState("");
+
+  // ── permissions tab state ─────────────────────────────────────────────
+  const [pendingGrants, setPendingGrants] = useState<Set<string>>(
+    () => new Set(),
+  );
   const grouped = useMemo(() => groupPermissions(permissions), [permissions]);
-  const permsDirty = !setsEqual(pendingGrants, serverGrants);
+  const permsDirty = initialized && !setsEqual(pendingGrants, baselineGrants);
   const setPermissions = useSetRolePermissions();
 
   // ── metadata tab state ────────────────────────────────────────────────
-  const initialDescription = role?.description ?? "";
-  const [description, setDescription] = useState(initialDescription);
-  const metadataDirty = description !== initialDescription;
+  const [description, setDescription] = useState("");
+  const metadataDirty = initialized && description !== baselineDescription;
   const updateRole = useUpdateRole();
 
-  // Initialize local edit state once per open session from the loaded
-  // role. We deliberately do NOT depend on role.permissionIds /
+  // Initialize local edit state and baselines once per open session.
+  // We deliberately do NOT depend on role.permissionIds /
   // role.description here: a background refetch (or another mutation
   // invalidating the cache) would otherwise wipe whatever the user is
-  // mid-edit on. The ref clears on close so the next open re-inits.
-  const initializedRef = useRef(false);
+  // mid-edit on. State resets on close so the next open re-inits.
   useEffect(() => {
     if (!open) {
-      initializedRef.current = false;
+      setInitialized(false);
       return;
     }
-    if (initializedRef.current) return;
+    if (initialized) return;
     if (!role) return;
-    setTab(initialTab);
-    setPendingGrants(new Set(role.permissionIds));
+    const grants = new Set(role.permissionIds);
+    setBaselineGrants(grants);
+    setPendingGrants(grants);
+    setBaselineDescription(role.description ?? "");
     setDescription(role.description ?? "");
-    initializedRef.current = true;
-  }, [open, role, initialTab]);
+    setTab(initialTab);
+    setInitialized(true);
+  }, [open, role, initialTab, initialized]);
 
   const anyDirty = permsDirty || metadataDirty;
 
@@ -137,6 +147,9 @@ export function RoleEditorSheet({
       { roleId, permissionIds: Array.from(pendingGrants) },
       {
         onSuccess: () => {
+          // Roll baseline forward so this tab reads "clean" if the
+          // sheet stays open for the other tab's save.
+          setBaselineGrants(new Set(pendingGrants));
           if (!metadataDirty) onOpenChange(false);
         },
       },
@@ -144,10 +157,13 @@ export function RoleEditorSheet({
   }
 
   function handleSaveMetadata() {
+    const trimmed = description.trim();
     updateRole.mutate(
-      { roleId, description: description.trim() || null },
+      { roleId, description: trimmed || null },
       {
         onSuccess: () => {
+          setBaselineDescription(trimmed);
+          setDescription(trimmed);
           if (!permsDirty) onOpenChange(false);
         },
       },
