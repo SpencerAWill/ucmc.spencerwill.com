@@ -276,6 +276,56 @@ describe("authorization", () => {
     expect(meta.changedFields).not.toContain("serial_number");
   });
 
+  it("editGearAction preserves serialNumber when the field is omitted", async () => {
+    // The form sheet opened from the gear list page passes a
+    // GearSummary, which doesn't include `serialNumber`. The submit
+    // path omits `serialNumber` in that scenario; this test pins the
+    // server contract that an omitted (undefined) field is a no-op,
+    // not a clearing edit.
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const created = await createGearAction({
+      typePublicId,
+      code: "CH1",
+      description: "Test gear",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      serialNumber: "ABC-123",
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    if (!created.ok) throw new Error("seed failed");
+
+    const result = await editGearAction({
+      publicId: created.publicId,
+      typePublicId,
+      code: "CH1",
+      description: "Renamed",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      // serialNumber intentionally omitted — simulates list-page edit.
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    expect(result.ok).toBe(true);
+
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    expect(detail.serialNumber).toBe("ABC-123");
+
+    const audit = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear.updated"));
+    const meta = JSON.parse(audit[0]?.metadataJson ?? "{}") as {
+      changedFields: string[];
+    };
+    expect(meta.changedFields).not.toContain("serial_number");
+  });
+
   it("strips officer-only fields (cost, msrp, serial) for non-manager readers", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });

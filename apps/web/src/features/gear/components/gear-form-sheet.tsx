@@ -120,6 +120,12 @@ function GearForm({
   onClose: () => void;
 }) {
   const isEdit = intent.mode === "edit";
+  // True only when the caller handed us a GearDetail (the gear detail
+  // page does; the list page passes a GearSummary, which omits
+  // `serialNumber`). Drives whether to render the serial input — if we
+  // never received the real value we shouldn't offer to overwrite it.
+  const hasDetailFields = isEdit && "serialNumber" in intent.gear;
+  const showSerialNumber = !isEdit || hasDetailFields;
   const { data: types } = useQuery(gearTypesQueryOptions());
   const { data: tags } = useQuery(gearTagsQueryOptions());
   const createMutation = useCreateGear();
@@ -279,6 +285,15 @@ function GearForm({
       setError("MSRP must be a non-negative number.");
       return;
     }
+    const trimmedSerial =
+      serialNumber.trim().length === 0 ? null : serialNumber;
+    // `serialNumber` lives only on GearDetail. When the sheet is
+    // opened from the gear list (which passes a GearSummary), the
+    // form falls back to empty, and naively including it in the edit
+    // payload would clobber the stored value — `editGearAction`
+    // treats any present-but-different field as an intentional
+    // change. Only send it on edit when the caller gave us a
+    // detail-shaped source so it round-trips safely.
     const basePayload = {
       typePublicId,
       code: code.trim().length === 0 ? null : code.trim(),
@@ -287,7 +302,6 @@ function GearForm({
       acquisitionCostCents: cents,
       msrpCents: msrp,
       manufacturer: manufacturer.trim().length === 0 ? null : manufacturer,
-      serialNumber: serialNumber.trim().length === 0 ? null : serialNumber,
       conditionGrade:
         conditionGrade === CONDITION_GRADE_NONE ? null : conditionGrade,
       notesMarkdown: notes.trim().length === 0 ? null : notes,
@@ -296,7 +310,7 @@ function GearForm({
     };
 
     if (isEdit) {
-      // Three-way:
+      // Three-way thumbnail handling:
       //   - new image picked → send the new data URL
       //   - explicitly cleared → send null (server deletes the R2 object)
       //   - neither → omit so the existing key stays untouched
@@ -304,6 +318,9 @@ function GearForm({
         publicId: intent.gear.publicId,
         ...basePayload,
       };
+      if (hasDetailFields) {
+        editPayload.serialNumber = trimmedSerial;
+      }
       if (newThumbnailDataUrl !== null) {
         editPayload.thumbnailDataUrl = newThumbnailDataUrl;
       } else if (thumbnailCleared) {
@@ -325,6 +342,7 @@ function GearForm({
     createMutation.mutate(
       {
         ...basePayload,
+        serialNumber: trimmedSerial,
         thumbnailDataUrl: newThumbnailDataUrl,
       },
       {
@@ -477,7 +495,11 @@ function GearForm({
             Primary heading on the gear card.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div
+          className={
+            showSerialNumber ? "grid grid-cols-2 gap-3" : "space-y-1.5"
+          }
+        >
           <div className="space-y-1.5">
             <Label htmlFor="gear-manufacturer">Manufacturer</Label>
             <Input
@@ -488,16 +510,18 @@ function GearForm({
               maxLength={100}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="gear-serial">Serial number</Label>
-            <Input
-              id="gear-serial"
-              value={serialNumber}
-              onChange={(e) => setSerialNumber(e.target.value)}
-              placeholder="ABC-12345"
-              maxLength={100}
-            />
-          </div>
+          {showSerialNumber ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="gear-serial">Serial number</Label>
+              <Input
+                id="gear-serial"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="ABC-12345"
+                maxLength={100}
+              />
+            </div>
+          ) : null}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
