@@ -521,7 +521,7 @@ export async function editUnclaimedMemberAction(args: {
   let userUpdated: Array<{ id: string }>;
   try {
     const results = await db.batch(stmts as [Stmt, ...Stmt[]]);
-    userUpdated = results[0] as unknown as Array<{ id: string }>;
+    userUpdated = results[0];
   } catch (err) {
     if (isUniqueViolation(err, "user_emails.email")) {
       return { ok: false, error: { kind: "email_taken" } };

@@ -1,3 +1,53 @@
 packages:
   - "apps/web"
   - "infra"
+
+# Quarantine window for newly published versions — refuses to install
+# anything released in the last 7 days. The primary supply-chain
+# defense: catches publish-compromise incidents (e.g. the TanStack
+# `latest`-tag hijack) before they land in our tree. All deps are
+# pinned to specific versions (no `latest`) so this is reachable.
+minimumReleaseAge: 10080
+
+# Lifecycle-script allowlist. pnpm 11 renamed `onlyBuiltDependencies`
+# (array) to `allowBuilds` (map of package → allow/deny) — see
+# https://pnpm.io/settings#allowbuilds. pnpm records the resolved
+# decisions in node_modules/.modules.yaml so it's easy to audit.
+# Only these packages may run pre/post-install scripts; everything
+# else has its lifecycle scripts blocked. lightningcss's published
+# package.json looks scriptless, but pnpm 11.1.2 still flags it on
+# `pnpm install` as needing approval — leave it in.
+allowBuilds:
+  "@pulumi/command": true
+  esbuild: true
+  lightningcss: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true
+
+# Security overrides. pnpm 11 requires these in pnpm-workspace.yaml
+# (the `package.json` location stopped being read). Pin transitive
+# versions above the known-bad range for these CVEs:
+#   - esbuild   <0.25.0  GHSA-67mh-4wv8-2f99 (dev-server CORS)
+#   - fast-uri  <3.1.2   ReDoS
+#   - ip-address <10.1.1 ReDoS
+#   - protobufjs <8.0.2  GHSA-h755-8qp9-cq85
+overrides:
+  "esbuild@<0.25.0": ">=0.25.0"
+  "fast-uri@<3.1.2": ">=3.1.2"
+  "ip-address@<10.1.1": ">=10.1.1"
+  "protobufjs@<8.0.2": "8.0.3"
+  # Pin @tanstack/query-core to match our pinned react-query so the
+  # auto-installed peer dep stays in lockstep (otherwise pnpm picks
+  # the latest matching version, which can be quarantined).
+  "@tanstack/query-core": "5.100.9"
+
+peerDependencyRules:
+  allowedVersions:
+    "eslint-plugin-jsx-a11y>eslint": "10"
+    "tiptap-markdown>@tiptap/core": "3"
+
+auditConfig:
+  ignoreGhsas:
+    - GHSA-rmmr-r34h-pfm5

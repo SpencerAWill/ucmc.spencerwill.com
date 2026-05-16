@@ -109,7 +109,7 @@ export async function readAllSettings(): Promise<SiteSettingsEntries> {
         eq(schema.profiles.userId, schema.siteSettings.updatedBy),
       )
       .all();
-    rowsByKey = new Map(rows.map((r) => [r.key, r as Row]));
+    rowsByKey = new Map(rows.map((r) => [r.key, r]));
   } catch {
     // D1 hiccup — every key falls back to its schema default below.
   }

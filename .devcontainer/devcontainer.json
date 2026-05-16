@@ -5,8 +5,9 @@
   "workspaceFolder": "/workspace",
   "remoteUser": "vscode",
   "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "24",
+      "pnpmVersion": "none"
     },
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },

@@ -36,8 +36,8 @@ To use it, open the repo in VS Code and select **Reopen in Container** when prom
 
 #### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v22+)
-- [pnpm](https://pnpm.io/) (v10.33.0+)
+- [Node.js](https://nodejs.org/) (v24+)
+- [pnpm](https://pnpm.io/) v11.1.2 (managed by corepack — `package.json#packageManager` pins it, so a `corepack enable` is all you need)
 - [Pulumi CLI](https://www.pulumi.com/docs/install/) (for infrastructure changes)
 
 #### Getting Started
@@ -50,6 +50,15 @@ pnpm install
 If you already cloned without `--recurse-submodules`, `pnpm install` will initialize the wiki submodule automatically.
 
 This also sets up Git hooks via Husky.
+
+### pnpm config and supply-chain hardening
+
+All pnpm config (`overrides`, `peerDependencyRules`, `auditConfig`, `minimumReleaseAge`, `allowBuilds`) lives in `pnpm-workspace.yaml`. pnpm 11 stopped reading the `pnpm.*` block in `package.json`, so a stale entry there is a silent no-op.
+
+Two policies are load-bearing for security and should not be relaxed casually:
+
+- **`minimumReleaseAge: 10080`** — pnpm refuses to install any version published in the last 7 days. This catches publish-compromise incidents (a hijacked `latest` tag, a poisoned `postinstall`) before they land in the tree. Because of this, every direct dep is pinned to a specific version that's already older than 7 days. **Never use `"latest"` as a version spec.** If you need to bump a dep, set the exact version in `package.json` and re-run `pnpm install` — pnpm will reject anything fresher than the quarantine window.
+- **`allowBuilds`** — an explicit allowlist of packages that may run lifecycle scripts (`postinstall`, etc.). Everything else has its build steps blocked. Add to the list only when you've reviewed the script.
 
 ### Committing
 

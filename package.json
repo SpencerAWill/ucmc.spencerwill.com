@@ -12,7 +12,7 @@
   "author": "Spencer Will",
   "license": "MIT",
   "type": "module",
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@11.1.2",
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.0",
@@ -33,33 +33,5 @@
     "*": [
       "prettier --write --ignore-unknown"
     ]
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@pulumi/command",
-      "esbuild",
-      "lightningcss",
-      "protobufjs",
-      "sharp",
-      "unrs-resolver",
-      "workerd"
-    ],
-    "overrides": {
-      "esbuild@<0.25.0": ">=0.25.0",
-      "fast-uri@<3.1.2": ">=3.1.2",
-      "ip-address@<10.1.1": ">=10.1.1",
-      "protobufjs@<8.0.2": ">=8.0.2"
-    },
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "eslint-plugin-jsx-a11y>eslint": "10",
-        "tiptap-markdown>@tiptap/core": "3"
-      }
-    },
-    "auditConfig": {
-      "ignoreGhsas": [
-        "GHSA-rmmr-r34h-pfm5"
-      ]
-    }
   }
 }

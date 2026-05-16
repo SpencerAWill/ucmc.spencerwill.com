@@ -12,7 +12,6 @@ import { useSubmitDetails } from "#/features/auth/api/use-submit-details";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
-import type { DetailsInput } from "#/server/profile/profile-schemas";
 
 /**
  * `/my/account/details` — private profile fields (legal name, phone)
@@ -102,7 +101,7 @@ function DetailsEditor({ defaults }: { defaults: ProfileFormShape }) {
           fullName: value.fullName,
           phone: value.phone,
           emergencyContacts: value.emergencyContacts,
-        } as DetailsInput,
+        },
         {
           onSuccess: () => {
             toast.success("Details saved");
