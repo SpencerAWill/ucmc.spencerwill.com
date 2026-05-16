@@ -238,7 +238,7 @@ describe("updateSettingAction", () => {
     await signInAsManager();
     const result = await updateSettingAction({
       key: "contact.clubEmail",
-      value: "not-an-email" as never,
+      value: "not-an-email",
     });
     expect(result).toEqual({ ok: false, reason: "invalid_value" });
 
