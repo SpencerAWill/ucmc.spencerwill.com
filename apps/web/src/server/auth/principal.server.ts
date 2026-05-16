@@ -4,7 +4,7 @@
  * `users`, `profiles`, `user_roles`, and `role_permissions` once per
  * request and handed to loaders/guards/server-fns.
  */
-import { asc, desc, eq, inArray, notInArray } from "drizzle-orm";
+import { asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import { getKv } from "#/server/kv";
@@ -138,8 +138,19 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
       db.select({ name: schema.permissions.name }).from(schema.permissions),
       db
         .select({
-          roleName: schema.roles.name,
-          permName: schema.permissions.name,
+          // Explicit SQL aliases so drizzle emits distinct column
+          // names in the SELECT. Without them both `roles.name` and
+          // `permissions.name` come back keyed as `"name"` in D1's
+          // batch response (drizzle's `d1ToRawMapping` reads keyed
+          // objects, not positional `.raw()` rows, in batch mode), the
+          // second column overwrites the first, and the resulting
+          // `rolePermissionMap` is keyed by permission strings
+          // instead of role names — surfacing as "members:manage"
+          // etc. in the view-as emulator dropdown.
+          roleName: sql<string>`${schema.roles.name}`.as("role_name"),
+          permName: sql<string | null>`${schema.permissions.name}`.as(
+            "perm_name",
+          ),
         })
         .from(schema.roles)
         .leftJoin(
