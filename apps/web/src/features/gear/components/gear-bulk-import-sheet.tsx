@@ -596,31 +596,6 @@ function GearImportRow({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label className="text-xs" htmlFor={`acquired-${row.key}`}>
-            Acquired
-          </Label>
-          <Input
-            id={`acquired-${row.key}`}
-            type="date"
-            value={row.acquiredAt}
-            onChange={(e) => onChange({ acquiredAt: e.target.value })}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs" htmlFor={`cost-${row.key}`}>
-            Cost (USD)
-          </Label>
-          <Input
-            id={`cost-${row.key}`}
-            type="number"
-            step="0.01"
-            min="0"
-            value={row.costDollars}
-            onChange={(e) => onChange({ costDollars: e.target.value })}
-            placeholder="60.00"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
           <Label className="text-xs" htmlFor={`manufacturer-${row.key}`}>
             Manufacturer
           </Label>
@@ -645,17 +620,14 @@ function GearImportRow({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label className="text-xs" htmlFor={`msrp-${row.key}`}>
-            MSRP (USD)
+          <Label className="text-xs" htmlFor={`acquired-${row.key}`}>
+            Acquired
           </Label>
           <Input
-            id={`msrp-${row.key}`}
-            type="number"
-            step="0.01"
-            min="0"
-            value={row.msrpDollars}
-            onChange={(e) => onChange({ msrpDollars: e.target.value })}
-            placeholder="84.95"
+            id={`acquired-${row.key}`}
+            type="date"
+            value={row.acquiredAt}
+            onChange={(e) => onChange({ acquiredAt: e.target.value })}
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -686,6 +658,34 @@ function GearImportRow({
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`cost-${row.key}`}>
+            Cost (USD)
+          </Label>
+          <Input
+            id={`cost-${row.key}`}
+            type="number"
+            step="0.01"
+            min="0"
+            value={row.costDollars}
+            onChange={(e) => onChange({ costDollars: e.target.value })}
+            placeholder="60.00"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`msrp-${row.key}`}>
+            MSRP (USD)
+          </Label>
+          <Input
+            id={`msrp-${row.key}`}
+            type="number"
+            step="0.01"
+            min="0"
+            value={row.msrpDollars}
+            onChange={(e) => onChange({ msrpDollars: e.target.value })}
+            placeholder="84.95"
+          />
         </div>
         <div className="flex flex-col gap-1 sm:col-span-2">
           <Label className="text-xs" htmlFor={`tags-${row.key}`}>
