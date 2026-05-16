@@ -124,6 +124,40 @@ describe("loadPrincipal", () => {
     expect(principal!.permissions).toContain("test:only");
   });
 
+  it("system_admin's rolePermissionMap is keyed by role names, not permission strings", async () => {
+    // Regression for the view-as emulator showing entries like
+    // "members:manage" / "roles:assign" instead of role names. The
+    // sys-admin branch builds rolePermissionMap from a joined SELECT
+    // where both sides project `name` (`roles.name` + `permissions.name`);
+    // without explicit SQL aliases, drizzle's `db.batch` result mapping
+    // collapses both into a single object key and the second value
+    // overwrites the first, keying the map by permission strings.
+    const userId = await seedUser("admin-keys@example.com");
+    await assignRole(userId, "role_system_admin");
+
+    const principal = await loadPrincipal(userId);
+
+    expect(principal).not.toBeNull();
+    const keys = Object.keys(principal!.rolePermissionMap);
+    expect(keys.length).toBeGreaterThan(0);
+    // Role names are lowercase identifier slugs (`member`, `president`,
+    // …); permission names follow `<feature>:<action>` and contain `:`.
+    // No key may contain `:`.
+    for (const k of keys) {
+      expect(k).not.toContain(":");
+    }
+    // The system_admin sentinel is the "actual permissions" entry the
+    // view-as Select filters out before rendering.
+    expect(keys).toContain("system_admin");
+    // And every value is an array of permission names (or empty).
+    for (const perms of Object.values(principal!.rolePermissionMap)) {
+      expect(Array.isArray(perms)).toBe(true);
+      for (const p of perms) {
+        expect(p).toMatch(/^[a-z_]+:[a-z_]+$/);
+      }
+    }
+  });
+
   it("regular user does NOT get unlinked permissions", async () => {
     const userId = await seedUser("regular@example.com");
     await assignRole(userId, "role_member");
