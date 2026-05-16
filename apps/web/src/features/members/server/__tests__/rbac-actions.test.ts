@@ -83,13 +83,18 @@ async function signInAs(userId: string): Promise<void> {
 beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
+  await db.delete(schema.auditLog);
   await db.delete(schema.userRoles);
   await db.delete(schema.rolePermissions);
   await db.delete(schema.sessions);
   await db.delete(schema.profiles);
   await db.delete(schema.users);
   // Remove any test-created roles (keep seeded ones).
-  for (const id of ["role_test_custom", "role_another"]) {
+  for (const id of [
+    "role_test_custom",
+    "role_another",
+    "role_test_trip_leader",
+  ]) {
     await db.delete(schema.roles).where(eq(schema.roles.id, id));
   }
   // Remove test-only permissions.
@@ -178,6 +183,7 @@ describe("createRoleAction", () => {
     await signInAsAdmin();
     const { roleId } = await createRoleAction({
       name: "test_custom",
+      displayName: "Test Custom",
       description: "A test role",
     });
     expect(roleId).toBe("role_test_custom");
@@ -187,22 +193,41 @@ describe("createRoleAction", () => {
     });
     expect(role).toBeDefined();
     expect(role!.name).toBe("test_custom");
+    expect(role!.displayName).toBe("Test Custom");
     expect(role!.description).toBe("A test role");
+    expect(role!.isOfficer).toBe(false);
+  });
+
+  it("persists isOfficer when set", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+      isOfficer: true,
+    });
+
+    const role = await getDb().query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    });
+    expect(role!.isOfficer).toBe(true);
   });
 
   it("rejects duplicate role names", async () => {
     await signInAsAdmin();
-    await createRoleAction({ name: "test_custom" });
-    await expect(createRoleAction({ name: "test_custom" })).rejects.toThrow(
-      'Role "test_custom" already exists',
-    );
+    await createRoleAction({ name: "test_custom", displayName: "Test Custom" });
+    await expect(
+      createRoleAction({ name: "test_custom", displayName: "Test Custom" }),
+    ).rejects.toThrow('Role "test_custom" already exists');
   });
 });
 
 describe("updateRoleAction", () => {
   it("updates description of a role", async () => {
     await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
+    const { roleId } = await createRoleAction({
+      name: "test_custom",
+      displayName: "Test Custom",
+    });
 
     await updateRoleAction({ roleId, description: "Updated desc" });
 
@@ -218,12 +243,185 @@ describe("updateRoleAction", () => {
       updateRoleAction({ roleId: "role_fake", description: "x" }),
     ).rejects.toThrow("Role not found");
   });
+
+  it("updates displayName without touching other fields", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+      description: "Leads trips",
+    });
+    await updateRoleAction({ roleId, displayName: "Trip Lead" });
+
+    const role = await getDb().query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    });
+    expect(role!.displayName).toBe("Trip Lead");
+    expect(role!.description).toBe("Leads trips");
+    expect(role!.isOfficer).toBe(false);
+  });
+
+  it("toggles isOfficer", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    await updateRoleAction({ roleId, isOfficer: true });
+    let role = await getDb().query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    });
+    expect(role!.isOfficer).toBe(true);
+
+    await updateRoleAction({ roleId, isOfficer: false });
+    role = await getDb().query.roles.findFirst({
+      where: eq(schema.roles.id, roleId),
+    });
+    expect(role!.isOfficer).toBe(false);
+  });
+
+  it("rejects flagging system_admin as an officer", async () => {
+    await signInAsAdmin();
+    await expect(
+      updateRoleAction({ roleId: "role_system_admin", isOfficer: true }),
+    ).rejects.toThrow(/Cannot flag system_admin/);
+  });
+
+  it("rejects renaming system_admin", async () => {
+    await signInAsAdmin();
+    await expect(
+      updateRoleAction({
+        roleId: "role_system_admin",
+        displayName: "Owner",
+      }),
+    ).rejects.toThrow(/Cannot change the system_admin display name/);
+  });
+
+  it("rejects flagging anonymous as an officer", async () => {
+    await signInAsAdmin();
+    await expect(
+      updateRoleAction({ roleId: "role_anonymous", isOfficer: true }),
+    ).rejects.toThrow(/Cannot flag the anonymous role/);
+  });
+
+  it("emits a role.updated audit row capturing only the fields that changed", async () => {
+    const adminId = await signInAsAdmin();
+    const { roleId } = await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    // Reset the audit log so the assertion only sees this update's row.
+    await getDb().delete(schema.auditLog);
+
+    await updateRoleAction({
+      roleId,
+      displayName: "Trip Lead",
+      isOfficer: true,
+    });
+
+    const rows = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "role.updated"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].actorUserId).toBe(adminId);
+    expect(rows[0].targetType).toBe("role");
+    expect(rows[0].targetId).toBe(roleId);
+    const meta = JSON.parse(rows[0].metadataJson ?? "{}") as {
+      name: string;
+      changed: Record<string, { from: unknown; to: unknown }>;
+    };
+    expect(meta.name).toBe("test_trip_leader");
+    expect(meta.changed).toEqual({
+      displayName: { from: "Trip Leader", to: "Trip Lead" },
+      isOfficer: { from: false, to: true },
+    });
+  });
+
+  it("DB-layer trigger blocks empty display_name writes (defense in depth)", async () => {
+    // Bypass the action's validation by going straight at the table.
+    // The migration 0040 trigger is the last line of defense if a
+    // future seed / fixture / D1 console session forgets to validate.
+    // Drizzle wraps D1 errors in a generic "Failed query" prefix, so
+    // assert on the underlying message via error.cause instead of the
+    // top-level Error.message.
+    const db = getDb();
+    let insertErr: unknown;
+    try {
+      await db.insert(schema.roles).values({
+        id: "role_empty_label",
+        name: "empty_label",
+        displayName: "",
+      });
+    } catch (e) {
+      insertErr = e;
+    }
+    expect(insertErr).toBeInstanceOf(Error);
+    expect(String((insertErr as Error).cause ?? insertErr)).toMatch(
+      /display_name must not be empty/,
+    );
+    // And the row really wasn't inserted.
+    expect(
+      await db.query.roles.findFirst({
+        where: eq(schema.roles.id, "role_empty_label"),
+      }),
+    ).toBeUndefined();
+
+    // Update path: existing row gets blanked.
+    await db.insert(schema.roles).values({
+      id: "role_has_label",
+      name: "has_label",
+      displayName: "Has Label",
+    });
+    let updateErr: unknown;
+    try {
+      await db
+        .update(schema.roles)
+        .set({ displayName: "" })
+        .where(eq(schema.roles.id, "role_has_label"));
+    } catch (e) {
+      updateErr = e;
+    }
+    expect(updateErr).toBeInstanceOf(Error);
+    expect(String((updateErr as Error).cause ?? updateErr)).toMatch(
+      /display_name must not be empty/,
+    );
+    const after = await db.query.roles.findFirst({
+      where: eq(schema.roles.id, "role_has_label"),
+    });
+    expect(after?.displayName).toBe("Has Label");
+    // Cleanup so other tests in this file don't trip on the leftover row.
+    await db.delete(schema.roles).where(eq(schema.roles.id, "role_has_label"));
+  });
+
+  it("does not emit an audit row when the patch is a no-op", async () => {
+    await signInAsAdmin();
+    const { roleId } = await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+    await getDb().delete(schema.auditLog);
+
+    // Re-asserting the same values produces no diff.
+    await updateRoleAction({ roleId, displayName: "Trip Leader" });
+
+    const rows = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "role.updated"));
+    expect(rows).toHaveLength(0);
+  });
 });
 
 describe("deleteRoleAction", () => {
   it("deletes a non-protected role", async () => {
     await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
+    const { roleId } = await createRoleAction({
+      name: "test_custom",
+      displayName: "Test Custom",
+    });
 
     await deleteRoleAction(roleId);
 
@@ -279,7 +477,10 @@ describe("listPermissionsAction", () => {
 describe("setRolePermissionsAction", () => {
   it("replaces permission grants for a role", async () => {
     await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
+    const { roleId } = await createRoleAction({
+      name: "test_custom",
+      displayName: "Test Custom",
+    });
 
     // Grant one permission.
     await setRolePermissionsAction({
@@ -321,7 +522,10 @@ describe("setRolePermissionsAction", () => {
 
   it("clears grants when given an empty array", async () => {
     await signInAsAdmin();
-    const { roleId } = await createRoleAction({ name: "test_custom" });
+    const { roleId } = await createRoleAction({
+      name: "test_custom",
+      displayName: "Test Custom",
+    });
     await setRolePermissionsAction({
       roleId,
       permissionIds: ["perm_roles_manage"],
@@ -362,7 +566,7 @@ describe("getUserRolesAction / setUserRolesAction", () => {
     expect(before.map((r) => r.name)).toEqual(["member"]);
 
     // Create a custom role and assign it.
-    await createRoleAction({ name: "test_custom" });
+    await createRoleAction({ name: "test_custom", displayName: "Test Custom" });
     await setUserRolesAction({
       userId: memberId,
       roleIds: ["role_member", "role_test_custom"],
@@ -432,8 +636,8 @@ describe("getUserRolesAction / setUserRolesAction", () => {
 describe("reorderRolesAction", () => {
   it("writes positions in the supplied order", async () => {
     await signInAsAdmin();
-    await createRoleAction({ name: "test_custom" });
-    await createRoleAction({ name: "another" });
+    await createRoleAction({ name: "test_custom", displayName: "Test Custom" });
+    await createRoleAction({ name: "another", displayName: "Another" });
 
     const before = await listRolesDetailedAction();
     const ids = before.map((r) => r.id);

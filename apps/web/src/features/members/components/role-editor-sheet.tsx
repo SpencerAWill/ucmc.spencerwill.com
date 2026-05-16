@@ -118,7 +118,19 @@ export function RoleEditorSheet({
 
   // ── metadata tab state ────────────────────────────────────────────────
   const [description, setDescription] = useState("");
-  const metadataDirty = initialized && description !== baselineDescription;
+  const [displayName, setDisplayName] = useState("");
+  const [baselineDisplayName, setBaselineDisplayName] = useState("");
+  const [isOfficer, setIsOfficer] = useState(false);
+  const [baselineIsOfficer, setBaselineIsOfficer] = useState(false);
+  // Compare trim-symmetric on both sides so a trailing space alone
+  // doesn't flip dirty — the server trims on persist, so a baseline
+  // never carries whitespace and a typed trailing space shouldn't ride
+  // a saved-clean state back into dirty after save.
+  const metadataDirty =
+    initialized &&
+    (description.trim() !== baselineDescription ||
+      displayName.trim() !== baselineDisplayName ||
+      isOfficer !== baselineIsOfficer);
   const updateRole = useUpdateRole();
 
   // Initialize local edit state and baselines once per open session.
@@ -138,6 +150,10 @@ export function RoleEditorSheet({
     setPendingGrants(grants);
     setBaselineDescription(role.description ?? "");
     setDescription(role.description ?? "");
+    setBaselineDisplayName(role.displayName);
+    setDisplayName(role.displayName);
+    setBaselineIsOfficer(role.isOfficer);
+    setIsOfficer(role.isOfficer);
     setTab(initialTab);
     setInitialized(true);
   }, [open, role, initialTab, initialized]);
@@ -152,23 +168,35 @@ export function RoleEditorSheet({
   const latestRef = useRef({
     pendingGrants,
     description,
+    displayName,
+    isOfficer,
     baselineGrants,
     baselineDescription,
+    baselineDisplayName,
+    baselineIsOfficer,
     initialized,
   });
   useEffect(() => {
     latestRef.current = {
       pendingGrants,
       description,
+      displayName,
+      isOfficer,
       baselineGrants,
       baselineDescription,
+      baselineDisplayName,
+      baselineIsOfficer,
       initialized,
     };
   }, [
     pendingGrants,
     description,
+    displayName,
+    isOfficer,
     baselineGrants,
     baselineDescription,
+    baselineDisplayName,
+    baselineIsOfficer,
     initialized,
   ]);
 
@@ -203,7 +231,9 @@ export function RoleEditorSheet({
           const latest = latestRef.current;
           const stillDirty =
             latest.initialized &&
-            latest.description !== latest.baselineDescription;
+            (latest.description.trim() !== latest.baselineDescription ||
+              latest.displayName.trim() !== latest.baselineDisplayName ||
+              latest.isOfficer !== latest.baselineIsOfficer);
           if (!stillDirty) onOpenChange(false);
         },
       },
@@ -211,13 +241,25 @@ export function RoleEditorSheet({
   }
 
   function handleSaveMetadata() {
-    const trimmed = description.trim();
+    const trimmedDescription = description.trim();
+    const trimmedDisplayName = displayName.trim();
+    if (trimmedDisplayName.length === 0) {
+      return;
+    }
     updateRole.mutate(
-      { roleId, description: trimmed || null },
+      {
+        roleId,
+        description: trimmedDescription || null,
+        displayName: trimmedDisplayName,
+        isOfficer,
+      },
       {
         onSuccess: () => {
-          setBaselineDescription(trimmed);
-          setDescription(trimmed);
+          setBaselineDescription(trimmedDescription);
+          setDescription(trimmedDescription);
+          setBaselineDisplayName(trimmedDisplayName);
+          setDisplayName(trimmedDisplayName);
+          setBaselineIsOfficer(isOfficer);
           const latest = latestRef.current;
           const stillDirty =
             latest.initialized &&
@@ -241,7 +283,7 @@ export function RoleEditorSheet({
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>{roleName}</SheetTitle>
+          <SheetTitle>{role?.displayName ?? roleName}</SheetTitle>
           <SheetDescription>
             {isAnonymous
               ? "Manage the permissions granted to signed-out visitors."
@@ -391,7 +433,23 @@ export function RoleEditorSheet({
             className="flex-1 space-y-4 overflow-y-auto px-4 pt-3"
           >
             <div className="space-y-2">
-              <Label htmlFor="role-meta-name">Name</Label>
+              <Label htmlFor="role-meta-display-name">Display name</Label>
+              <Input
+                id="role-meta-display-name"
+                placeholder="e.g. Trip Leader"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={80}
+                disabled={isAdmin || !initialized}
+              />
+              <p className="text-xs text-muted-foreground">
+                {isAdmin
+                  ? "The system_admin role’s label is fixed."
+                  : "Shown wherever this role is presented to members, and on the public home page when the role is flagged as an officer position."}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-meta-name">Identifier</Label>
               <Input
                 id="role-meta-name"
                 value={roleName}
@@ -399,7 +457,7 @@ export function RoleEditorSheet({
                 className="bg-muted/40"
               />
               <p className="text-xs text-muted-foreground">
-                Role names are immutable.
+                Identifiers are immutable.
               </p>
             </div>
             <div className="space-y-2">
@@ -423,6 +481,28 @@ export function RoleEditorSheet({
                 </p>
               ) : null}
             </div>
+            {!isAnonymous ? (
+              <label
+                htmlFor="role-meta-is-officer"
+                className="flex items-start gap-3 rounded-md border px-3 py-2"
+              >
+                <Checkbox
+                  id="role-meta-is-officer"
+                  checked={isOfficer}
+                  disabled={isAdmin || !initialized}
+                  onCheckedChange={(checked) => setIsOfficer(checked === true)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <span className="text-sm font-medium">Officer position</span>
+                  <p className="text-xs text-muted-foreground">
+                    {isAdmin
+                      ? "system_admin cannot be flagged as an officer position."
+                      : "Show members holding this role on the public “Meet the officers” section of the home page."}
+                  </p>
+                </div>
+              </label>
+            ) : null}
             {updateRole.isError ? (
               <p className="text-sm text-destructive">
                 {updateRole.error.message}
@@ -453,7 +533,12 @@ export function RoleEditorSheet({
             <Button
               type="button"
               onClick={handleSaveMetadata}
-              disabled={isAdmin || !metadataDirty || isPending || loadFailed}
+              disabled={
+                !metadataDirty ||
+                isPending ||
+                Boolean(loadFailed) ||
+                displayName.trim().length === 0
+              }
             >
               {updateRole.isPending ? "Saving…" : "Save"}
             </Button>

@@ -274,6 +274,12 @@ export default [
             {
               target: "./src/features/members",
               from: "./src/features/landing",
+              // The role-update hook invalidates the landing-content
+              // query cache when a role's displayName / isOfficer
+              // changes — those fields surface on the public home page.
+              // Carve out the query-key constant so the hook doesn't
+              // hand-roll a brittle string literal.
+              except: ["./api/query-keys.ts"],
             },
             {
               target: "./src/features/waivers",

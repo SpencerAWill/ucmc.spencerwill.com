@@ -147,6 +147,7 @@ async function seedApprover(): Promise<string> {
   await getDb().insert(schema.roles).values({
     id: "role_system_admin",
     name: "system_admin",
+    displayName: "System Admin",
     description: "System administrator",
   });
   await getDb().insert(schema.permissions).values({
@@ -164,7 +165,12 @@ async function seedApprover(): Promise<string> {
   // Also seed the member role (granted on approval).
   await getDb()
     .insert(schema.roles)
-    .values({ id: "role_member", name: "member", description: "Member" })
+    .values({
+      id: "role_member",
+      name: "member",
+      displayName: "Member",
+      description: "Member",
+    })
     .onConflictDoNothing();
   return id;
 }

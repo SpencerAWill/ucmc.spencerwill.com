@@ -40,8 +40,10 @@ const MEMBER_ROLE_ID = "role_member";
 export interface RoleWithPermissions {
   id: string;
   name: string;
+  displayName: string;
   description: string | null;
   isProtected: boolean;
+  isOfficer: boolean;
   permissionIds: string[];
   memberCount: number;
   position: number;
@@ -127,8 +129,10 @@ export async function listRolesDetailedAction(): Promise<
   return roles.map((r) => ({
     id: r.id,
     name: r.name,
+    displayName: r.displayName,
     description: r.description,
     isProtected: PROTECTED_ROLE_IDS.has(r.id),
+    isOfficer: r.isOfficer,
     permissionIds: permsByRole.get(r.id) ?? [],
     memberCount: countByRole.get(r.id) ?? 0,
     position: r.position,
@@ -175,8 +179,10 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
   return {
     id: role.id,
     name: role.name,
+    displayName: role.displayName,
     description: role.description,
     isProtected: PROTECTED_ROLE_IDS.has(role.id),
+    isOfficer: role.isOfficer,
     permissionIds: permGrants.map((g) => g.permissionId),
     memberCount: memberRows.length,
     position: role.position,
@@ -192,7 +198,9 @@ export async function getRoleAction(roleId: string): Promise<RoleDetail> {
 
 export async function createRoleAction(input: {
   name: string;
+  displayName: string;
   description?: string;
+  isOfficer?: boolean;
 }): Promise<{ roleId: string }> {
   const principal = await requireRolesManager();
   const db = getDb();
@@ -207,6 +215,7 @@ export async function createRoleAction(input: {
     .select({ maxPos: max(schema.roles.position) })
     .from(schema.roles);
   const nextPos = (maxPos ?? -1) + 1;
+  const isOfficer = input.isOfficer ?? false;
 
   try {
     // Atomic with the audit row.
@@ -214,15 +223,21 @@ export async function createRoleAction(input: {
       db.insert(schema.roles).values({
         id: roleId,
         name: input.name,
+        displayName: input.displayName,
         description: input.description ?? null,
         position: nextPos,
+        isOfficer,
       }),
       buildAuditEventStatement({
         actorUserId: principal.userId,
         action: "role.created",
         targetType: "role",
         targetId: roleId,
-        metadata: { name: input.name },
+        metadata: {
+          name: input.name,
+          displayName: input.displayName,
+          isOfficer,
+        },
       }),
     ]);
   } catch (err) {
@@ -240,23 +255,88 @@ export async function createRoleAction(input: {
 
 export async function updateRoleAction(input: {
   roleId: string;
-  description: string | null;
+  description?: string | null;
+  displayName?: string;
+  isOfficer?: boolean;
 }): Promise<{ ok: true }> {
-  await requireRolesManager();
+  const principal = await requireRolesManager();
   const db = getDb();
 
   const role = await db.query.roles.findFirst({
     where: eq(schema.roles.id, input.roleId),
-    columns: { id: true },
+    columns: {
+      id: true,
+      name: true,
+      displayName: true,
+      description: true,
+      isOfficer: true,
+    },
   });
   if (!role) {
     throw new Error("Role not found");
   }
 
-  await db
-    .update(schema.roles)
-    .set({ description: input.description })
-    .where(eq(schema.roles.id, input.roleId));
+  // Constitutional-role protections. system_admin's identity is system-
+  // shaped, not a public-facing label, and surfacing every system_admin
+  // on the public home page would leak the role assignment. anonymous
+  // has no users so officer-flagging it is a no-op at best and a
+  // misleading audit row at worst — reject explicitly. Other officer
+  // roles (advisor, president, treasurer) remain editable because that's
+  // exactly the surface the editor exists for.
+  if (input.roleId === SYSTEM_ADMIN_ROLE_ID) {
+    if (
+      input.displayName !== undefined &&
+      input.displayName !== role.displayName
+    ) {
+      throw new Error("Cannot change the system_admin display name");
+    }
+    if (input.isOfficer === true) {
+      throw new Error("Cannot flag system_admin as an officer position");
+    }
+  }
+  if (input.roleId === ANONYMOUS_ROLE_ID && input.isOfficer === true) {
+    throw new Error("Cannot flag the anonymous role as an officer position");
+  }
+
+  const patch: Partial<typeof schema.roles.$inferInsert> = {};
+  const changed: Record<string, { from: unknown; to: unknown }> = {};
+  if (
+    input.description !== undefined &&
+    input.description !== role.description
+  ) {
+    patch.description = input.description;
+    changed.description = { from: role.description, to: input.description };
+  }
+  if (
+    input.displayName !== undefined &&
+    input.displayName !== role.displayName
+  ) {
+    patch.displayName = input.displayName;
+    changed.displayName = { from: role.displayName, to: input.displayName };
+  }
+  if (input.isOfficer !== undefined && input.isOfficer !== role.isOfficer) {
+    patch.isOfficer = input.isOfficer;
+    changed.isOfficer = { from: role.isOfficer, to: input.isOfficer };
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { ok: true };
+  }
+
+  // Atomic with the audit row. `role.updated` lets us correlate
+  // public-surface flips (`isOfficer`) and visible-label edits
+  // (`displayName`) back to an actor — important now that toggling
+  // `is_officer` directly changes what unauthenticated visitors see.
+  await db.batch([
+    db.update(schema.roles).set(patch).where(eq(schema.roles.id, input.roleId)),
+    buildAuditEventStatement({
+      actorUserId: principal.userId,
+      action: "role.updated",
+      targetType: "role",
+      targetId: input.roleId,
+      metadata: { name: role.name, changed },
+    }),
+  ]);
 
   return { ok: true };
 }

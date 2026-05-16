@@ -41,6 +41,8 @@ import {
   putLandingImage,
   shortContentHash,
 } from "#/features/landing/server/landing-image.server";
+import type { LandingOfficerRole } from "#/features/landing/server/landing-officers.server";
+import { listLandingOfficers } from "#/features/landing/server/landing-officers.server";
 import {
   LANDING_LIMITS,
   LANDING_SETTING_KEYS,
@@ -109,17 +111,20 @@ export interface LandingContent {
   heroSlides: HeroSlideSummary[];
   faqItems: FaqItemSummary[];
   activities: ActivitySummary[];
+  officers: LandingOfficerRole[];
 }
 
 // ── read ────────────────────────────────────────────────────────────────
 
 export async function getLandingContentAction(): Promise<LandingContent> {
-  const [settingRows, heroSlides, faqItems, activities] = await Promise.all([
-    listSettings(),
-    listHeroSlides(),
-    listFaqItems(),
-    listActivities(),
-  ]);
+  const [settingRows, heroSlides, faqItems, activities, officers] =
+    await Promise.all([
+      listSettings(),
+      listHeroSlides(),
+      listFaqItems(),
+      listActivities(),
+      listLandingOfficers(),
+    ]);
 
   const settings: Record<string, LandingSettingValue> = {};
   for (const row of settingRows) {
@@ -163,6 +168,7 @@ export async function getLandingContentAction(): Promise<LandingContent> {
       imageKey: a.imageKey,
       sortOrder: a.sortOrder,
     })),
+    officers,
   };
 }
 

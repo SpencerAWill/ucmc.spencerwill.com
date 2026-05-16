@@ -45,11 +45,19 @@ const roleNameSchema = z
     "Lowercase letters, digits, and underscores only; must start with a letter",
   );
 
+const displayNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Required")
+  .max(80, "At most 80 characters");
+
 export const createRoleFn = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       name: roleNameSchema,
+      displayName: displayNameSchema,
       description: z.string().trim().max(200).optional(),
+      isOfficer: z.boolean().optional(),
     }),
   )
   .handler(async ({ data }): Promise<{ roleId: string }> => {
@@ -62,7 +70,9 @@ export const updateRoleFn = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       roleId: z.string().min(1),
-      description: z.string().trim().max(200).nullable(),
+      description: z.string().trim().max(200).nullable().optional(),
+      displayName: displayNameSchema.optional(),
+      isOfficer: z.boolean().optional(),
     }),
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
