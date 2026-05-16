@@ -365,10 +365,12 @@ export function GearBulkImportSheet({
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Columns: type (name or prefix, required), code, description,
-              acquired_at (YYYY-MM-DD), cost. Header row optional. Header-only
-              extras: manufacturer, serial_number, msrp, condition_grade
-              (excellent|good|fair), tags (comma-separated names). Tags must
-              already exist — create canonical names in the Tags dialog first.
+              acquired_at (YYYY-MM-DD), cost. Money cells are always read as
+              dollars (60 and 60.00 both = $60.00). Header row optional.
+              Header-only extras: manufacturer, serial_number, msrp,
+              condition_grade (excellent|good|fair), tags (comma-separated
+              names). Tags must already exist — create canonical names in the
+              Tags dialog first.
             </p>
             {importSummary ? (
               <div className="mt-2 text-xs">

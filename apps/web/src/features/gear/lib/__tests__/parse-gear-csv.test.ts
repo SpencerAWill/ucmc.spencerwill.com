@@ -40,6 +40,34 @@ describe("parseGearCsv extended columns", () => {
     expect(errors[0].message).toMatch(/condition_grade must be/);
   });
 
+  it("reads integer cost/msrp cells as dollars (not cents)", async () => {
+    const csv = [
+      "type,description,cost,msrp",
+      "CH,Petzl Sama,60,175",
+      'CH,Black Diamond,"$1,200",250.00',
+    ].join("\n");
+    const { rows, errors } = await parseGearCsv(csv, TYPES);
+    expect(errors).toEqual([]);
+    expect(rows).toHaveLength(2);
+    // 60 → $60.00 → 6000 cents (not 60).
+    expect(rows[0].acquisitionCostCents).toBe(6000);
+    expect(rows[0].msrpCents).toBe(17500);
+    // Currency punctuation tolerated; decimal forms unchanged.
+    expect(rows[1].acquisitionCostCents).toBe(120000);
+    expect(rows[1].msrpCents).toBe(25000);
+  });
+
+  it("rejects `status` as a condition_grade alias", async () => {
+    // `status` was dropped from the header set because it's too
+    // generic — the user's legacy `Status` column gets renamed to
+    // `condition_grade` before import.
+    const csv = ["type,description,status", "CH,Petzl Sama,good"].join("\n");
+    const { rows, errors } = await parseGearCsv(csv, TYPES);
+    expect(errors).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].conditionGrade).toBeNull();
+  });
+
   it("leaves extended fields null when the columns are absent", async () => {
     const csv = ["type,code,description", "CH,CH1,Petzl Sama"].join("\n");
     const { rows, errors } = await parseGearCsv(csv, TYPES);

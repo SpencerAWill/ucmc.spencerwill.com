@@ -12,12 +12,15 @@
  *                                  for unlabeled gear
  *   - description    (required) — primary heading on the gear card
  *   - acquired_at    (optional) — ISO date (YYYY-MM-DD); parsed to ms
- *   - cost / cost_cents (optional) — non-numeric values flag the row
+ *   - cost / price / amount (optional) — **always interpreted as
+ *                                  dollars**, integer or decimal. `60`
+ *                                  and `60.00` both become 6000 cents.
+ *                                  Non-numeric values flag the row.
  *   - manufacturer   (optional) — free-text brand
  *   - serial_number  (optional) — free-text serial
- *   - msrp / msrp_cents (optional) — same dollars-or-cents heuristic as
- *                                     `cost`
- *   - condition_grade (optional) — must be excellent|good|fair if present
+ *   - msrp / list_price (optional) — same always-dollars rule as `cost`
+ *   - condition_grade / grade / wear (optional) — must be
+ *                                  excellent|good|fair if present
  *   - tags           (optional) — comma-separated list of tag NAMES; the
  *                                  server resolves each to an existing
  *                                  tag (case-insensitive) and skips the
@@ -77,19 +80,8 @@ const ACQUIRED_AT_HEADERS = new Set([
   "purchased",
   "date",
 ]);
-const COST_HEADERS = new Set([
-  "cost",
-  "cost_cents",
-  "cost cents",
-  "price",
-  "amount",
-]);
-const MSRP_HEADERS = new Set([
-  "msrp",
-  "msrp_cents",
-  "msrp cents",
-  "list_price",
-]);
+const COST_HEADERS = new Set(["cost", "price", "amount"]);
+const MSRP_HEADERS = new Set(["msrp", "list_price"]);
 const MANUFACTURER_HEADERS = new Set(["manufacturer", "brand", "maker"]);
 const SERIAL_HEADERS = new Set([
   "serial_number",
@@ -97,12 +89,15 @@ const SERIAL_HEADERS = new Set([
   "serial",
   "serial_no",
 ]);
+// `status` is intentionally NOT an alias here — too generic, would
+// collide with lifecycle/availability columns on other sheets. The
+// legacy paper inventory's `Status` column is renamed by the officer
+// to `condition_grade` (or `grade` / `wear`) before import.
 const CONDITION_GRADE_HEADERS = new Set([
   "condition_grade",
   "condition grade",
   "grade",
   "wear",
-  "status",
 ]);
 const TAGS_HEADERS = new Set(["tags", "tag", "labels"]);
 
@@ -160,9 +155,10 @@ function detectColumns(firstRow: string[]): ColumnMap {
       hasHeader: true,
     };
   }
-  // Positional fallback: only the original 5 columns are positional.
-  // The new fields are header-driven only — sites relying on the
-  // positional fallback shouldn't silently start picking up the wrong
+  // Positional fallback: type, code, description, acquired_at, cost.
+  // Only the original 5 columns are positional — extended fields
+  // (manufacturer, msrp, etc.) are header-driven so sites that rely on
+  // the positional fallback don't silently start picking up the wrong
   // cells if their sheet happens to have 6+ columns.
   return {
     type: 0,
@@ -238,18 +234,22 @@ function parseMoney(
   if (cell.length === 0) return { value: null };
   const cleaned = cell.replace(/[$,_\s]/g, "");
   if (cleaned.length === 0) return { value: null };
-  // Accept either dollar amounts (with optional decimal) or raw cents.
-  // The header set distinguishes "cost" / "price" (dollars) from
-  // "cost_cents" / "amount" (cents). Keep it lenient — multiply by 100
-  // if the value has a decimal point regardless.
+  // Always dollars, integer or decimal. `60` and `60.00` both become
+  // 6000 cents. Officers reading from a spreadsheet think in dollars;
+  // the old "integer = cents" heuristic was a footgun. Negatives are
+  // rejected — the schema's z.number().int().min(0) would catch them
+  // server-side, but failing here gives a per-line error message.
   const asNumber = Number(cleaned);
   if (!Number.isFinite(asNumber)) {
     return { value: null, error: `${label} is not a number (line ${line})` };
   }
-  if (cleaned.includes(".")) {
-    return { value: Math.round(asNumber * 100) };
+  if (asNumber < 0) {
+    return {
+      value: null,
+      error: `${label} must be non-negative (line ${line})`,
+    };
   }
-  return { value: Math.round(asNumber) };
+  return { value: Math.round(asNumber * 100) };
 }
 
 function parseConditionGrade(
