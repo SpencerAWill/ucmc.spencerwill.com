@@ -50,7 +50,9 @@ export async function getPublicSiteContactAction(): Promise<PublicSiteContact> {
  */
 export async function getPublicFlagsAction(): Promise<PublicFlags> {
   const announcements = await readSetting("announcements.enabled");
-  return { announcements };
+  const websiteFeedback = await readSetting("feedback.website_enabled");
+  const clubFeedback = await readSetting("feedback.club_enabled");
+  return { announcements, websiteFeedback, clubFeedback };
 }
 
 /**

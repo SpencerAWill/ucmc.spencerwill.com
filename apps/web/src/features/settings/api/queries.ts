@@ -53,6 +53,8 @@ export function publicSiteContactQueryOptions() {
 export function publicFlagsQueryOptions() {
   const fallback: PublicFlags = {
     announcements: SETTINGS["announcements.enabled"].parse(undefined),
+    websiteFeedback: SETTINGS["feedback.website_enabled"].parse(undefined),
+    clubFeedback: SETTINGS["feedback.club_enabled"].parse(undefined),
   };
   return {
     queryKey: PUBLIC_FLAGS_QUERY_KEY,
