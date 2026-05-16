@@ -42,6 +42,7 @@ import type {
   ParseGearCsvError,
   ParsedGearRow,
 } from "#/features/gear/lib/parse-gear-csv";
+import { GEAR_CONDITION_GRADE_VALUES } from "#/features/gear/server/gear-fns";
 import type {
   BulkImportResult,
   BulkImportSkipped,
@@ -50,6 +51,16 @@ import type {
 } from "#/features/gear/server/gear-fns";
 
 const MAX_ROWS = 200;
+
+// Sentinel for the condition-grade `<Select>` — same trick as the
+// singular gear form, since shadcn's Select can't take an empty value.
+const CONDITION_GRADE_NONE = "__none__";
+
+const CONDITION_GRADE_LABEL: Record<GearConditionGrade, string> = {
+  excellent: "Excellent",
+  good: "Good",
+  fair: "Fair",
+};
 
 interface RowState {
   /** Stable key so React doesn't remount inputs as the array shifts. */
@@ -61,15 +72,13 @@ interface RowState {
   acquiredAt: string;
   /** Dollar amount as typed, e.g. "60.00". Converted to cents at submit. */
   costDollars: string;
-  // CSV-only fields. The manual row editor doesn't surface inputs for
-  // these to keep the sheet compact; they ride through silently from
-  // import → submit. Officers who want to tweak an extended field on
-  // a single piece use the singular Add/Edit sheet instead.
-  msrpCents: number | null;
-  manufacturer: string | null;
-  serialNumber: string | null;
-  conditionGrade: GearConditionGrade | null;
-  tagNames: string[];
+  /** Dollar amount as typed. Converted to cents at submit. */
+  msrpDollars: string;
+  manufacturer: string;
+  serialNumber: string;
+  conditionGrade: GearConditionGrade | typeof CONDITION_GRADE_NONE;
+  /** Raw comma-separated text. Split + trimmed at submit. */
+  tagsInput: string;
 }
 
 function makeRow(initial: Partial<RowState> = {}): RowState {
@@ -80,12 +89,19 @@ function makeRow(initial: Partial<RowState> = {}): RowState {
     description: initial.description ?? "",
     acquiredAt: initial.acquiredAt ?? "",
     costDollars: initial.costDollars ?? "",
-    msrpCents: initial.msrpCents ?? null,
-    manufacturer: initial.manufacturer ?? null,
-    serialNumber: initial.serialNumber ?? null,
-    conditionGrade: initial.conditionGrade ?? null,
-    tagNames: initial.tagNames ?? [],
+    msrpDollars: initial.msrpDollars ?? "",
+    manufacturer: initial.manufacturer ?? "",
+    serialNumber: initial.serialNumber ?? "",
+    conditionGrade: initial.conditionGrade ?? CONDITION_GRADE_NONE,
+    tagsInput: initial.tagsInput ?? "",
   };
+}
+
+function splitTagsInput(input: string): string[] {
+  return input
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
 }
 
 function rowHasContent(row: RowState): boolean {
@@ -94,7 +110,12 @@ function rowHasContent(row: RowState): boolean {
     row.code.trim().length > 0 ||
     row.description.trim().length > 0 ||
     row.acquiredAt.length > 0 ||
-    row.costDollars.trim().length > 0
+    row.costDollars.trim().length > 0 ||
+    row.msrpDollars.trim().length > 0 ||
+    row.manufacturer.trim().length > 0 ||
+    row.serialNumber.trim().length > 0 ||
+    row.conditionGrade !== CONDITION_GRADE_NONE ||
+    row.tagsInput.trim().length > 0
   );
 }
 
@@ -105,6 +126,10 @@ function rowIsValid(row: RowState): boolean {
   if (row.description.trim().length === 0) return false;
   if (row.costDollars.trim().length > 0) {
     const n = Number(row.costDollars);
+    if (!Number.isFinite(n) || n < 0) return false;
+  }
+  if (row.msrpDollars.trim().length > 0) {
+    const n = Number(row.msrpDollars);
     if (!Number.isFinite(n) || n < 0) return false;
   }
   if (row.acquiredAt.length > 0) {
@@ -209,11 +234,12 @@ export function GearBulkImportSheet({
             r.acquisitionCostCents !== null
               ? (r.acquisitionCostCents / 100).toFixed(2)
               : "",
-          msrpCents: r.msrpCents,
-          manufacturer: r.manufacturer,
-          serialNumber: r.serialNumber,
-          conditionGrade: r.conditionGrade,
-          tagNames: r.tagNames,
+          msrpDollars:
+            r.msrpCents !== null ? (r.msrpCents / 100).toFixed(2) : "",
+          manufacturer: r.manufacturer ?? "",
+          serialNumber: r.serialNumber ?? "",
+          conditionGrade: r.conditionGrade ?? CONDITION_GRADE_NONE,
+          tagsInput: r.tagNames.join(", "),
         }),
       );
       const merged = [...existing, ...incoming];
@@ -277,11 +303,17 @@ export function GearBulkImportSheet({
         row.costDollars.trim().length === 0
           ? null
           : Math.round(Number(row.costDollars) * 100),
-      msrpCents: row.msrpCents,
-      manufacturer: row.manufacturer,
-      serialNumber: row.serialNumber,
-      conditionGrade: row.conditionGrade,
-      tagNames: row.tagNames,
+      msrpCents:
+        row.msrpDollars.trim().length === 0
+          ? null
+          : Math.round(Number(row.msrpDollars) * 100),
+      manufacturer:
+        row.manufacturer.trim().length === 0 ? null : row.manufacturer.trim(),
+      serialNumber:
+        row.serialNumber.trim().length === 0 ? null : row.serialNumber.trim(),
+      conditionGrade:
+        row.conditionGrade === CONDITION_GRADE_NONE ? null : row.conditionGrade,
+      tagNames: splitTagsInput(row.tagsInput),
     }));
     try {
       const result = await bulkImport.mutateAsync({ rows: payload });
@@ -587,6 +619,87 @@ function GearImportRow({
             onChange={(e) => onChange({ costDollars: e.target.value })}
             placeholder="60.00"
           />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`manufacturer-${row.key}`}>
+            Manufacturer
+          </Label>
+          <Input
+            id={`manufacturer-${row.key}`}
+            value={row.manufacturer}
+            onChange={(e) => onChange({ manufacturer: e.target.value })}
+            placeholder="Petzl"
+            maxLength={100}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`serial-${row.key}`}>
+            Serial number
+          </Label>
+          <Input
+            id={`serial-${row.key}`}
+            value={row.serialNumber}
+            onChange={(e) => onChange({ serialNumber: e.target.value })}
+            placeholder="ABC-12345"
+            maxLength={100}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`msrp-${row.key}`}>
+            MSRP (USD)
+          </Label>
+          <Input
+            id={`msrp-${row.key}`}
+            type="number"
+            step="0.01"
+            min="0"
+            value={row.msrpDollars}
+            onChange={(e) => onChange({ msrpDollars: e.target.value })}
+            placeholder="84.95"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`grade-${row.key}`}>
+            Condition grade
+          </Label>
+          <Select
+            value={row.conditionGrade}
+            onValueChange={(v) =>
+              onChange({
+                conditionGrade: v as
+                  | GearConditionGrade
+                  | typeof CONDITION_GRADE_NONE,
+              })
+            }
+          >
+            <SelectTrigger id={`grade-${row.key}`} className="h-9">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={CONDITION_GRADE_NONE}>
+                <span className="text-muted-foreground">No grade</span>
+              </SelectItem>
+              {GEAR_CONDITION_GRADE_VALUES.map((g) => (
+                <SelectItem key={g} value={g}>
+                  {CONDITION_GRADE_LABEL[g]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <Label className="text-xs" htmlFor={`tags-${row.key}`}>
+            Tags
+          </Label>
+          <Input
+            id={`tags-${row.key}`}
+            value={row.tagsInput}
+            onChange={(e) => onChange({ tagsInput: e.target.value })}
+            placeholder="color:red, size:m"
+          />
+          <p className="text-xs text-muted-foreground">
+            Comma-separated names. Must already exist in the Tags dialog.
+          </p>
         </div>
       </div>
       <Button
