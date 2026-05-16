@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import { Checkbox } from "#/components/ui/checkbox";
@@ -69,10 +69,25 @@ export function RoleEditorSheet({
   const isAdmin = roleName === "system_admin";
   const isAnonymous = roleName === "anonymous";
 
-  const { data: role, isLoading } = useQuery({
+  const {
+    data: role,
+    isLoading,
+    isError: roleError,
+    error: roleErrorValue,
+  } = useQuery({
     ...roleQueryOptions(roleId),
     enabled: open,
   });
+
+  // If the role goes missing (e.g. deleted while the sheet was open),
+  // close the sheet so the user isn't stuck on an indefinite Loading
+  // state. Skipping the dirty-state confirm — there's no role to save
+  // back to.
+  useEffect(() => {
+    if (open && roleError) {
+      onOpenChange(false);
+    }
+  }, [open, roleError, onOpenChange]);
   const { data: permissions = [] } = useQuery({
     ...permissionsQueryOptions(),
     enabled: open,
@@ -127,6 +142,34 @@ export function RoleEditorSheet({
 
   const anyDirty = permsDirty || metadataDirty;
 
+  // Latest-state refs so a mutation's onSuccess can decide whether to
+  // close based on what the user has typed since the mutation began,
+  // not what was on screen at click time. (The other tab stays
+  // editable while a save is in-flight, so the closure value can be
+  // stale by the time onSuccess fires.)
+  const latestRef = useRef({
+    pendingGrants,
+    description,
+    baselineGrants,
+    baselineDescription,
+    initialized,
+  });
+  useEffect(() => {
+    latestRef.current = {
+      pendingGrants,
+      description,
+      baselineGrants,
+      baselineDescription,
+      initialized,
+    };
+  }, [
+    pendingGrants,
+    description,
+    baselineGrants,
+    baselineDescription,
+    initialized,
+  ]);
+
   function togglePerm(permId: string, checked: boolean) {
     setPendingGrants((prev) => {
       const next = new Set(prev);
@@ -143,14 +186,23 @@ export function RoleEditorSheet({
   // still has pending edits, stay open so the user can review them
   // rather than silently losing their work on close.
   function handleSavePermissions() {
+    const savedGrants = new Set(pendingGrants);
     setPermissions.mutate(
-      { roleId, permissionIds: Array.from(pendingGrants) },
+      { roleId, permissionIds: Array.from(savedGrants) },
       {
         onSuccess: () => {
           // Roll baseline forward so this tab reads "clean" if the
           // sheet stays open for the other tab's save.
-          setBaselineGrants(new Set(pendingGrants));
-          if (!metadataDirty) onOpenChange(false);
+          setBaselineGrants(savedGrants);
+          // Re-derive metadata-dirty from the latest state, not the
+          // closure captured at click time — the user could have kept
+          // typing in the description tab while the mutation was
+          // in-flight.
+          const latest = latestRef.current;
+          const stillDirty =
+            latest.initialized &&
+            latest.description !== latest.baselineDescription;
+          if (!stillDirty) onOpenChange(false);
         },
       },
     );
@@ -164,7 +216,11 @@ export function RoleEditorSheet({
         onSuccess: () => {
           setBaselineDescription(trimmed);
           setDescription(trimmed);
-          if (!permsDirty) onOpenChange(false);
+          const latest = latestRef.current;
+          const stillDirty =
+            latest.initialized &&
+            !setsEqual(latest.pendingGrants, latest.baselineGrants);
+          if (!stillDirty) onOpenChange(false);
         },
       },
     );
@@ -188,6 +244,17 @@ export function RoleEditorSheet({
             Manage members, permissions, and metadata for this role.
           </SheetDescription>
         </SheetHeader>
+
+        {roleError ? (
+          <div className="px-4 pt-2">
+            <p className="text-sm text-destructive">
+              Couldn&rsquo;t load this role
+              {roleErrorValue instanceof Error
+                ? `: ${roleErrorValue.message}`
+                : "."}
+            </p>
+          </div>
+        ) : null}
 
         <Tabs
           value={tab}

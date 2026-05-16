@@ -432,9 +432,11 @@ function SortableItem(props: SortableItemProps) {
   } = useSortable({ id: value, disabled });
 
   const composedRef = useComposedRefs(ref, (node) => {
-    if (disabled) return;
+    // Always register the node ref — dnd-kit needs it to measure /
+    // layout items even when they aren't draggable. Only gate the
+    // activator ref + drag wiring on `disabled`.
     setNodeRef(node);
-    if (asHandle) setActivatorNodeRef(node);
+    if (!disabled && asHandle) setActivatorNodeRef(node);
   });
 
   const composedStyle = React.useMemo<React.CSSProperties>(() => {

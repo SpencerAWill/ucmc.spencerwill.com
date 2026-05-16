@@ -38,6 +38,7 @@ const {
   PROTECTED_ROLE_IDS,
 } = await import("#/features/members/server/rbac-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const { getKv } = await import("#/server/kv");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -333,6 +334,20 @@ describe("setRolePermissionsAction", () => {
       .from(schema.rolePermissions)
       .where(eq(schema.rolePermissions.roleId, roleId));
     expect(grants).toEqual([]);
+  });
+
+  it("invalidates the anonymous permissions cache when anonymous is touched", async () => {
+    await signInAsAdmin();
+    const kv = getKv();
+    await kv.put("anonymous:permissions", JSON.stringify(["roles:manage"]));
+    expect(await kv.get("anonymous:permissions")).not.toBeNull();
+
+    await setRolePermissionsAction({
+      roleId: "role_anonymous",
+      permissionIds: [],
+    });
+
+    expect(await kv.get("anonymous:permissions")).toBeNull();
   });
 });
 
