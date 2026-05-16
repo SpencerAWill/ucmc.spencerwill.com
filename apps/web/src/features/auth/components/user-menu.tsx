@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { Label } from "#/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -25,11 +26,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select";
+import { Switch } from "#/components/ui/switch";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useViewMode } from "#/features/auth/api/view-mode";
 
 export function UserMenu() {
-  const { principal, isLoading, isElevated, emulatedRole, signOut } = useAuth();
+  const {
+    principal,
+    isLoading,
+    isElevated,
+    isSystemAdmin,
+    emulatedRole,
+    signOut,
+  } = useAuth();
   const { setEmulatedRole } = useViewMode();
   const navigate = useNavigate();
 
@@ -120,34 +129,64 @@ export function UserMenu() {
             </DropdownMenuItem>
           </>
         )}
-        {/* Role emulation dropdown — only for users with multiple roles */}
+        {/* Role emulation — sys admins get a full role select (any role
+            on the site); non-admin officers get a Switch toggling to
+            member-view; single-role members get nothing. UI-only — route
+            guards still use the raw principal. */}
         {isElevated && principal.status === "approved" ? (
           <>
             <DropdownMenuSeparator />
-            <div
-              className="flex items-center gap-2 px-2 py-1.5"
-              onKeyDown={(e) => e.stopPropagation()}
-            >
-              <Eye className="size-4 shrink-0 text-muted-foreground" />
-              <Select
-                value={emulatedRole ?? "__actual__"}
-                onValueChange={(value) => {
-                  setEmulatedRole(value === "__actual__" ? null : value);
-                }}
+            {isSystemAdmin ? (
+              <div
+                className="flex items-center gap-2 px-2 py-1.5"
+                onKeyDown={(e) => e.stopPropagation()}
               >
-                <SelectTrigger className="h-7 flex-1 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__actual__">Actual permissions</SelectItem>
-                  {principal.roles.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      View as {role.replace(/_/g, " ")}
+                <Eye className="size-4 shrink-0 text-muted-foreground" />
+                <Select
+                  value={emulatedRole ?? "__actual__"}
+                  onValueChange={(value) => {
+                    setEmulatedRole(value === "__actual__" ? null : value);
+                  }}
+                >
+                  <SelectTrigger className="h-7 flex-1 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__actual__">
+                      Actual permissions
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                    {Object.keys(principal.rolePermissionMap)
+                      .filter((role) => role !== "system_admin")
+                      .map((role) => (
+                        <SelectItem key={role} value={role}>
+                          View as {role.replace(/_/g, " ")}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div
+                className="flex items-center gap-2 px-2 py-1.5"
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <Eye className="size-4 shrink-0 text-muted-foreground" />
+                <Label
+                  htmlFor="view-as-member-switch"
+                  className="flex-1 text-xs font-normal"
+                >
+                  View as member
+                </Label>
+                <Switch
+                  id="view-as-member-switch"
+                  size="sm"
+                  checked={emulatedRole === "member"}
+                  onCheckedChange={(on) =>
+                    setEmulatedRole(on ? "member" : null)
+                  }
+                />
+              </div>
+            )}
           </>
         ) : null}
         <DropdownMenuSeparator />

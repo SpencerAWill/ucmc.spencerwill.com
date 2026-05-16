@@ -451,6 +451,7 @@ describe("removeEmailAction", () => {
         hasProfile: false,
         avatarKey: null,
         roles: [],
+        isSystemAdmin: false,
         permissions: [],
         rolePermissionMap: {},
       });

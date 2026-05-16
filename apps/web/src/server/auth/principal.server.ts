@@ -4,7 +4,7 @@
  * `users`, `profiles`, `user_roles`, and `role_permissions` once per
  * request and handed to loaders/guards/server-fns.
  */
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray, notInArray } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import { getKv } from "#/server/kv";
@@ -28,9 +28,17 @@ export interface Principal {
   hasProfile: boolean;
   avatarKey: string | null;
   roles: string[];
+  /** Whether the user holds the `system_admin` role. Surfaces in the
+   *  client so the view-mode emulator can offer roles the admin
+   *  doesn't personally hold; not used by route guards (those read
+   *  `permissions` directly). */
+  isSystemAdmin: boolean;
   permissions: string[];
   /** Per-role permission breakdown so the view-mode emulator can show
-   *  what a specific role grants without an extra fetch. */
+   *  what a specific role grants without an extra fetch. For system
+   *  admins this includes every role on the site (minus anonymous);
+   *  for everyone else it's keyed by the user's own roles. Insertion
+   *  order matches `roles.position` so iteration is stable. */
   rolePermissionMap: Record<string, string[]>;
 }
 
@@ -119,11 +127,43 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
       columns: { name: true },
     });
     permissions = allPerms.map((p) => p.name);
-    // system_admin gets all; other roles still get their individual breakdowns.
     rolePermissionMap["system_admin"] = permissions;
-  }
 
-  if (roleIds.length > 0) {
+    // Load every other role's permission grants so the view-mode
+    // emulator can switch into any role on the site — not just the
+    // ones the admin happens to hold. Ordered by `roles.position` so
+    // the resulting object keys iterate in a stable, UI-friendly order.
+    // `leftJoin` keeps roles with zero permission rows (e.g. a freshly
+    // created officer role) in the map as `[]`. Anonymous and
+    // system_admin are excluded — the former isn't user-facing, the
+    // latter is the "actual permissions" state.
+    const allRoleGrants = await db
+      .select({
+        roleName: schema.roles.name,
+        permName: schema.permissions.name,
+      })
+      .from(schema.roles)
+      .leftJoin(
+        schema.rolePermissions,
+        eq(schema.rolePermissions.roleId, schema.roles.id),
+      )
+      .leftJoin(
+        schema.permissions,
+        eq(schema.permissions.id, schema.rolePermissions.permissionId),
+      )
+      .where(
+        notInArray(schema.roles.id, [ANONYMOUS_ROLE_ID, "role_system_admin"]),
+      )
+      .orderBy(asc(schema.roles.position), asc(schema.roles.name));
+
+    for (const row of allRoleGrants) {
+      const list = rolePermissionMap[row.roleName] ?? [];
+      if (row.permName) {
+        list.push(row.permName);
+      }
+      rolePermissionMap[row.roleName] = list;
+    }
+  } else if (roleIds.length > 0) {
     const rows = await db
       .select({
         roleId: schema.rolePermissions.roleId,
@@ -140,20 +180,17 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     const roleIdToName = new Map(userRoleRows.map((r) => [r.roleId, r.name]));
     for (const row of rows) {
       const roleName = roleIdToName.get(row.roleId);
-      if (roleName && roleName !== "system_admin") {
+      if (roleName) {
         const list = rolePermissionMap[roleName] ?? [];
         list.push(row.permName);
         rolePermissionMap[roleName] = list;
       }
     }
 
-    // For non-admin users, build the aggregated set from the per-role data.
-    if (!isSystemAdmin) {
-      permissions = Array.from(new Set(rows.map((r) => r.permName)));
-    }
+    permissions = Array.from(new Set(rows.map((r) => r.permName)));
   }
 
-  // Ensure every role has an entry (even if empty).
+  // Ensure every role the user holds has an entry (even if empty).
   for (const r of userRoleRows) {
     if (!(r.name in rolePermissionMap)) {
       rolePermissionMap[r.name] = [];
@@ -168,6 +205,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     hasProfile: Boolean(profile),
     avatarKey: profile?.avatarKey ?? null,
     roles: userRoleRows.map((r) => r.name),
+    isSystemAdmin,
     permissions,
     rolePermissionMap,
   };

@@ -115,6 +115,7 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
     hasProfile: true,
     avatarKey: null,
     roles: [],
+    isSystemAdmin: false,
     permissions: [],
     rolePermissionMap: {},
     ...overrides,

@@ -17,14 +17,18 @@ export function useAuth() {
   const principal = query.data?.principal ?? null;
   const anonymousPermissions = query.data?.anonymousPermissions ?? [];
 
-  // Show the emulation dropdown when the user has more than one role.
-  const isElevated = (principal?.roles.length ?? 0) > 1;
+  // Show the emulation UI when the user has multiple roles to switch
+  // between, or when they're a system admin (who can emulate any role
+  // on the site, even ones they don't personally hold).
+  const isSystemAdmin = principal?.isSystemAdmin ?? false;
+  const isElevated = isSystemAdmin || (principal?.roles.length ?? 0) > 1;
 
   // Resolve emulated permissions from the live principal data (not a
-  // stale localStorage snapshot). If the emulated role was removed from
-  // the user or doesn't exist in the map, treat it as no permissions.
+  // stale localStorage snapshot). Validate against `rolePermissionMap`
+  // rather than `roles` — for a sys admin emulating a role they don't
+  // hold, `roles.includes(emulatedRole)` would always be false.
   const activeEmulatedRole =
-    emulatedRole && principal?.roles.includes(emulatedRole)
+    emulatedRole && principal && emulatedRole in principal.rolePermissionMap
       ? emulatedRole
       : null;
 
@@ -48,6 +52,7 @@ export function useAuth() {
     },
     emulatedRole: activeEmulatedRole,
     isElevated,
+    isSystemAdmin,
     refresh: () =>
       queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
     signOut: async () => {
