@@ -160,6 +160,7 @@ export function ClubFeedbackForm() {
               {(field) => (
                 <field.TextArea
                   label="Details"
+                  description="Markdown formatting (bold, lists, links) is supported."
                   rows={8}
                   placeholder="What would you like the exec board to know?"
                   maxLength={CLUB_FEEDBACK_LIMITS.body.max}
