@@ -1,26 +1,48 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
+import { useAuth } from "#/features/auth/api/use-auth";
+import { requireApproved } from "#/features/auth/guards";
 import {
   allFeedbackQueryOptions,
   myFeedbackQueryOptions,
 } from "#/features/feedback/api/queries";
 import { FeedbackCard } from "#/features/feedback/components/feedback-card";
 import { FeedbackForm } from "#/features/feedback/components/feedback-form";
-import { useAuth } from "#/features/auth/api/use-auth";
-import { requirePermission } from "#/features/auth/guards";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
-export const Route = createFileRoute("/feedback/")({
+export const Route = createFileRoute("/feedback/_tabs/")({
   beforeLoad: async ({ context }) => {
-    await requirePermission(context.queryClient, "feedback:submit");
+    const principal = await requireApproved(context.queryClient);
+    const canWebsite =
+      principal.permissions.includes("feedback:submit") ||
+      principal.permissions.includes("feedback:manage");
+    const canClub =
+      principal.permissions.includes("club_feedback:submit") ||
+      principal.permissions.includes("club_feedback:manage");
+
+    // A user with no access to website feedback but who can see club
+    // feedback should land on /feedback/club rather than getting a
+    // notFound on their default tab. With access to neither, fall
+    // through to notFound — the sidebar entry doesn't render either.
+    if (!canWebsite) {
+      if (canClub) {
+        throw redirect({ to: "/feedback/club" });
+      }
+      throw notFound();
+    }
   },
-  component: FeedbackPage,
+  component: WebsiteFeedbackPage,
 });
 
-function FeedbackPage() {
+function WebsiteFeedbackPage() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission("feedback:manage");
+  const canSubmit = hasPermission("feedback:submit");
+
+  const flagsQuery = useQuery(publicFlagsQueryOptions());
+  const submissionsEnabled = flagsQuery.data?.websiteFeedback ?? true;
 
   const myQuery = useQuery(myFeedbackQueryOptions());
   const adminQuery = useQuery(allFeedbackQueryOptions({ enabled: canManage }));
@@ -29,16 +51,15 @@ function FeedbackPage() {
   const allSubmissions = adminQuery.data ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 p-4">
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Feedback</h1>
-        <p className="text-sm text-muted-foreground">
-          Found a bug, have an idea, or just want to share something? Send it
-          here — we read everything.
-        </p>
-      </header>
-
-      <FeedbackForm />
+    <div className="space-y-6">
+      {canSubmit && submissionsEnabled ? (
+        <FeedbackForm />
+      ) : !submissionsEnabled && canSubmit ? (
+        <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+          Website feedback submissions are paused right now. Check back later,
+          or contact an officer if it&apos;s urgent.
+        </div>
+      ) : null}
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">

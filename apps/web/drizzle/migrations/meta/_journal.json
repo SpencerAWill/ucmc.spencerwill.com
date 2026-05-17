@@ -295,6 +295,20 @@
       "when": 1778961884496,
       "tag": "0041_gear_extended_attributes",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1778980705937,
+      "tag": "0042_club_feedback",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1778980705938,
+      "tag": "0043_club_feedback_permissions_seed",
+      "breakpoints": true
     }
   ]
 }

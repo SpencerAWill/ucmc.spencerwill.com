@@ -109,6 +109,7 @@ beforeEach(async () => {
   });
   const db = getDb();
   await db.delete(schema.feedback);
+  await db.delete(schema.siteSettings);
   await db.delete(schema.userRoles);
   await db.delete(schema.sessions);
   await db.delete(schema.profiles);
@@ -156,6 +157,28 @@ describe("feedback authorization", () => {
     await expect(
       updateFeedbackStatusAction({ id: "fb_x", status: "resolved" }),
     ).rejects.toThrow("Forbidden: missing feedback:manage");
+  });
+
+  it("submitFeedbackAction rejects when feedback.website_enabled is off", async () => {
+    await signInAsMember();
+    // Set the kill switch to false. `readSetting` falls back to the
+    // schema default (true) when the row is absent, so we have to
+    // write an explicit false row here.
+    await getDb().insert(schema.siteSettings).values({
+      key: "feedback.website_enabled",
+      valueJson: "false",
+      updatedBy: null,
+    });
+    await expect(
+      submitFeedbackAction({
+        kind: "general",
+        title: "After hours",
+        body: "Anyone home?",
+      }),
+    ).rejects.toThrow("Website feedback submissions are currently disabled.");
+    // No row written, no mirror attempted.
+    expect(await getDb().select().from(schema.feedback)).toHaveLength(0);
+    expect(mirrorToGithub).not.toHaveBeenCalled();
   });
 });
 

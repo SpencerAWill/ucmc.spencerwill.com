@@ -314,6 +314,73 @@ export default [
               target: "./src/features/landing",
               from: "./src/features/waivers",
             },
+            // features/club-feedback (governance feedback) is fully
+            // isolated from every other feature except for read access
+            // to auth's public API (the standard exception). It pairs
+            // with features/feedback but they intentionally do NOT
+            // depend on each other — the shared tab bar lives in
+            // src/components/layouts so neither feature has to.
+            {
+              target: "./src/features/announcements",
+              from: "./src/features/club-feedback",
+            },
+            {
+              target: "./src/features/audit",
+              from: "./src/features/club-feedback",
+            },
+            {
+              target: "./src/features/auth",
+              from: "./src/features/club-feedback",
+            },
+            {
+              target: "./src/features/feedback",
+              from: "./src/features/club-feedback",
+            },
+            {
+              target: "./src/features/landing",
+              from: "./src/features/club-feedback",
+            },
+            {
+              target: "./src/features/members",
+              from: "./src/features/club-feedback",
+            },
+            {
+              target: "./src/features/waivers",
+              from: "./src/features/club-feedback",
+            },
+            {
+              target: "./src/features/club-feedback",
+              from: "./src/features/announcements",
+            },
+            {
+              target: "./src/features/club-feedback",
+              from: "./src/features/audit",
+            },
+            {
+              target: "./src/features/club-feedback",
+              from: "./src/features/auth",
+              except: [
+                "./api/use-auth.ts",
+                "./api/view-mode.tsx",
+                "./guards.ts",
+              ],
+            },
+            {
+              target: "./src/features/club-feedback",
+              from: "./src/features/feedback",
+            },
+            {
+              target: "./src/features/club-feedback",
+              from: "./src/features/landing",
+            },
+            {
+              target: "./src/features/club-feedback",
+              from: "./src/features/members",
+            },
+            {
+              target: "./src/features/club-feedback",
+              from: "./src/features/waivers",
+            },
             // 2. Shared can't import features
             { target: "./src/components/ui", from: "./src/features" },
             { target: "./src/components/profile", from: "./src/features" },

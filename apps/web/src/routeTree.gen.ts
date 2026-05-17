@@ -23,6 +23,7 @@ import { Route as MembersRouteImport } from './routes/members'
 import { Route as LegalRouteImport } from './routes/legal'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as GearRouteImport } from './routes/gear'
+import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as AuditRouteImport } from './routes/audit'
@@ -30,7 +31,6 @@ import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GearIndexRouteImport } from './routes/gear.index'
-import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
@@ -41,10 +41,12 @@ import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersTabsRouteImport } from './routes/members._tabs'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
+import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
 import { Route as MembersTabsIndexRouteImport } from './routes/members._tabs.index'
 import { Route as GearLoansIndexRouteImport } from './routes/gear.loans.index'
+import { Route as FeedbackTabsIndexRouteImport } from './routes/feedback._tabs.index'
 import { Route as MyAccountWaiverRouteImport } from './routes/my.account.waiver'
 import { Route as MyAccountSecurityRouteImport } from './routes/my.account.security'
 import { Route as MyAccountPreferencesRouteImport } from './routes/my.account.preferences'
@@ -54,6 +56,7 @@ import { Route as MembersTabsRejectedRouteImport } from './routes/members._tabs.
 import { Route as MembersTabsPendingRouteImport } from './routes/members._tabs.pending'
 import { Route as MembersTabsDeactivatedRouteImport } from './routes/members._tabs.deactivated'
 import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publicId'
+import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.club'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
@@ -129,6 +132,11 @@ const GearRoute = GearRouteImport.update({
   path: '/gear',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeedbackRoute = FeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DisclaimerRoute = DisclaimerRouteImport.update({
   id: '/disclaimer',
   path: '/disclaimer',
@@ -163,11 +171,6 @@ const GearIndexRoute = GearIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => GearRoute,
-} as any)
-const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
-  id: '/feedback/',
-  path: '/feedback/',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const AnnouncementsIndexRoute = AnnouncementsIndexRouteImport.update({
   id: '/announcements/',
@@ -218,6 +221,10 @@ const GearPublicIdRoute = GearPublicIdRouteImport.update({
   path: '/$publicId',
   getParentRoute: () => GearRoute,
 } as any)
+const FeedbackTabsRoute = FeedbackTabsRouteImport.update({
+  id: '/_tabs',
+  getParentRoute: () => FeedbackRoute,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
@@ -237,6 +244,11 @@ const GearLoansIndexRoute = GearLoansIndexRouteImport.update({
   id: '/loans/',
   path: '/loans/',
   getParentRoute: () => GearRoute,
+} as any)
+const FeedbackTabsIndexRoute = FeedbackTabsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => FeedbackTabsRoute,
 } as any)
 const MyAccountWaiverRoute = MyAccountWaiverRouteImport.update({
   id: '/waiver',
@@ -283,6 +295,11 @@ const GearLoansPublicIdRoute = GearLoansPublicIdRouteImport.update({
   path: '/loans/$publicId',
   getParentRoute: () => GearRoute,
 } as any)
+const FeedbackTabsClubRoute = FeedbackTabsClubRouteImport.update({
+  id: '/club',
+  path: '/club',
+  getParentRoute: () => FeedbackTabsRoute,
+} as any)
 const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
   id: '/api/landing/$',
   path: '/api/landing/$',
@@ -311,6 +328,7 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
+  '/feedback': typeof FeedbackTabsRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/health': typeof HealthRoute
   '/legal': typeof LegalRoute
@@ -335,12 +353,12 @@ export interface FileRoutesByFullPath {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
-  '/feedback/': typeof FeedbackIndexRoute
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/feedback/club': typeof FeedbackTabsClubRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/deactivated': typeof MembersTabsDeactivatedRoute
   '/members/pending': typeof MembersTabsPendingRoute
@@ -350,6 +368,7 @@ export interface FileRoutesByFullPath {
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/feedback/': typeof FeedbackTabsIndexRoute
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/': typeof MembersTabsIndexRoute
   '/my/account/': typeof MyAccountIndexRoute
@@ -361,6 +380,7 @@ export interface FileRoutesByTo {
   '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
+  '/feedback': typeof FeedbackTabsIndexRoute
   '/health': typeof HealthRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersTabsIndexRoute
@@ -383,12 +403,12 @@ export interface FileRoutesByTo {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements': typeof AnnouncementsIndexRoute
-  '/feedback': typeof FeedbackIndexRoute
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/feedback/club': typeof FeedbackTabsClubRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/deactivated': typeof MembersTabsDeactivatedRoute
   '/members/pending': typeof MembersTabsPendingRoute
@@ -409,6 +429,7 @@ export interface FileRoutesById {
   '/audit': typeof AuditRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
+  '/feedback': typeof FeedbackRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/health': typeof HealthRoute
   '/legal': typeof LegalRoute
@@ -424,6 +445,7 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/_tabs': typeof MembersTabsRouteWithChildren
@@ -434,12 +456,12 @@ export interface FileRoutesById {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
-  '/feedback/': typeof FeedbackIndexRoute
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/feedback/_tabs/club': typeof FeedbackTabsClubRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/_tabs/deactivated': typeof MembersTabsDeactivatedRoute
   '/members/_tabs/pending': typeof MembersTabsPendingRoute
@@ -449,6 +471,7 @@ export interface FileRoutesById {
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/feedback/_tabs/': typeof FeedbackTabsIndexRoute
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/_tabs/': typeof MembersTabsIndexRoute
   '/my/account/': typeof MyAccountIndexRoute
@@ -462,6 +485,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/deactivated'
     | '/disclaimer'
+    | '/feedback'
     | '/gear'
     | '/health'
     | '/legal'
@@ -486,12 +510,12 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
-    | '/feedback/'
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/feedback/club'
     | '/gear/loans/$publicId'
     | '/members/deactivated'
     | '/members/pending'
@@ -501,6 +525,7 @@ export interface FileRouteTypes {
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/feedback/'
     | '/gear/loans/'
     | '/members/'
     | '/my/account/'
@@ -512,6 +537,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/deactivated'
     | '/disclaimer'
+    | '/feedback'
     | '/health'
     | '/legal'
     | '/members'
@@ -534,12 +560,12 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements'
-    | '/feedback'
     | '/gear'
     | '/api/account/export'
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/feedback/club'
     | '/gear/loans/$publicId'
     | '/members/deactivated'
     | '/members/pending'
@@ -559,6 +585,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/deactivated'
     | '/disclaimer'
+    | '/feedback'
     | '/gear'
     | '/health'
     | '/legal'
@@ -574,6 +601,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/waiver'
     | '/auth/callback'
+    | '/feedback/_tabs'
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/_tabs'
@@ -584,12 +612,12 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
-    | '/feedback/'
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/feedback/_tabs/club'
     | '/gear/loans/$publicId'
     | '/members/_tabs/deactivated'
     | '/members/_tabs/pending'
@@ -599,6 +627,7 @@ export interface FileRouteTypes {
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/feedback/_tabs/'
     | '/gear/loans/'
     | '/members/_tabs/'
     | '/my/account/'
@@ -611,6 +640,7 @@ export interface RootRouteChildren {
   AuditRoute: typeof AuditRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
+  FeedbackRoute: typeof FeedbackRouteWithChildren
   GearRoute: typeof GearRouteWithChildren
   HealthRoute: typeof HealthRoute
   LegalRoute: typeof LegalRoute
@@ -629,7 +659,6 @@ export interface RootRouteChildren {
   RegisterPendingRoute: typeof RegisterPendingRoute
   RegisterProfileRoute: typeof RegisterProfileRoute
   AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
-  FeedbackIndexRoute: typeof FeedbackIndexRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
@@ -736,6 +765,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GearRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/feedback': {
+      id: '/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/disclaimer': {
       id: '/disclaimer'
       path: '/disclaimer'
@@ -784,13 +820,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/gear/'
       preLoaderRoute: typeof GearIndexRouteImport
       parentRoute: typeof GearRoute
-    }
-    '/feedback/': {
-      id: '/feedback/'
-      path: '/feedback'
-      fullPath: '/feedback/'
-      preLoaderRoute: typeof FeedbackIndexRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/announcements/': {
       id: '/announcements/'
@@ -862,6 +891,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GearPublicIdRouteImport
       parentRoute: typeof GearRoute
     }
+    '/feedback/_tabs': {
+      id: '/feedback/_tabs'
+      path: ''
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackTabsRouteImport
+      parentRoute: typeof FeedbackRoute
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/auth/callback'
@@ -889,6 +925,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/gear/loans/'
       preLoaderRoute: typeof GearLoansIndexRouteImport
       parentRoute: typeof GearRoute
+    }
+    '/feedback/_tabs/': {
+      id: '/feedback/_tabs/'
+      path: '/'
+      fullPath: '/feedback/'
+      preLoaderRoute: typeof FeedbackTabsIndexRouteImport
+      parentRoute: typeof FeedbackTabsRoute
     }
     '/my/account/waiver': {
       id: '/my/account/waiver'
@@ -953,6 +996,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GearLoansPublicIdRouteImport
       parentRoute: typeof GearRoute
     }
+    '/feedback/_tabs/club': {
+      id: '/feedback/_tabs/club'
+      path: '/club'
+      fullPath: '/feedback/club'
+      preLoaderRoute: typeof FeedbackTabsClubRouteImport
+      parentRoute: typeof FeedbackTabsRoute
+    }
     '/api/landing/$': {
       id: '/api/landing/$'
       path: '/api/landing/$'
@@ -983,6 +1033,32 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface FeedbackTabsRouteChildren {
+  FeedbackTabsClubRoute: typeof FeedbackTabsClubRoute
+  FeedbackTabsIndexRoute: typeof FeedbackTabsIndexRoute
+}
+
+const FeedbackTabsRouteChildren: FeedbackTabsRouteChildren = {
+  FeedbackTabsClubRoute: FeedbackTabsClubRoute,
+  FeedbackTabsIndexRoute: FeedbackTabsIndexRoute,
+}
+
+const FeedbackTabsRouteWithChildren = FeedbackTabsRoute._addFileChildren(
+  FeedbackTabsRouteChildren,
+)
+
+interface FeedbackRouteChildren {
+  FeedbackTabsRoute: typeof FeedbackTabsRouteWithChildren
+}
+
+const FeedbackRouteChildren: FeedbackRouteChildren = {
+  FeedbackTabsRoute: FeedbackTabsRouteWithChildren,
+}
+
+const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
+  FeedbackRouteChildren,
+)
 
 interface GearRouteChildren {
   GearPublicIdRoute: typeof GearPublicIdRoute
@@ -1076,6 +1152,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuditRoute: AuditRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
+  FeedbackRoute: FeedbackRouteWithChildren,
   GearRoute: GearRouteWithChildren,
   HealthRoute: HealthRoute,
   LegalRoute: LegalRoute,
@@ -1094,7 +1171,6 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterPendingRoute: RegisterPendingRoute,
   RegisterProfileRoute: RegisterProfileRoute,
   AnnouncementsIndexRoute: AnnouncementsIndexRoute,
-  FeedbackIndexRoute: FeedbackIndexRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,

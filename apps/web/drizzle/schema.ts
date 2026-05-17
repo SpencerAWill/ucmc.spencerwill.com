@@ -680,6 +680,71 @@ export const feedback = sqliteTable(
   ],
 );
 
+// ── Club feedback ───────────────────────────────────────────────────────
+//
+// Parallel surface to `feedback` aimed at exec-board governance instead
+// of website maintainers. Intentionally separate table because the two
+// have different lifecycles, different triage audiences, and different
+// taxonomies — and because club feedback must NEVER mirror to GitHub.
+//
+// Kinds drop "bug" (not a defect tracker) and add "praise" + "concern"
+// + "suggestion" alongside "general". Statuses are reused from the
+// website-feedback enum (open → acknowledged → resolved/closed) since
+// the triage workflow is the same shape.
+//
+// Anonymity: `createdBy` is always set when known so the per-user rate
+// limit + abuse handling work, but `anonymous = 1` causes the admin
+// triage view to redact the submitter (the repo + actions layers strip
+// the joined user info server-side — clients never see the FK). Owners
+// always see their own submissions un-redacted.
+//
+// Omitted vs. `feedback`: `pageUrl`, `userAgent`, GitHub mirror columns
+// — none are meaningful for club feedback.
+export const clubFeedbackKind = [
+  "suggestion",
+  "concern",
+  "praise",
+  "general",
+] as const;
+export type ClubFeedbackKind = (typeof clubFeedbackKind)[number];
+
+// Reuse the same status taxonomy as website feedback — the triage
+// workflow is identical even if the audiences differ.
+export const clubFeedbackStatus = feedbackStatus;
+export type ClubFeedbackStatus = FeedbackStatus;
+
+export const clubFeedback = sqliteTable(
+  "club_feedback",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind", { enum: clubFeedbackKind }).notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    status: text("status", { enum: clubFeedbackStatus })
+      .notNull()
+      .default("open"),
+    // 1 = submitter asked to be hidden from officers in the triage view.
+    // The FK below is still set when known so per-user rate limiting
+    // and abuse handling stay possible.
+    anonymous: integer("anonymous", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index("club_feedback_status_created_at_idx").on(t.status, t.createdAt),
+    index("club_feedback_created_by_idx").on(t.createdBy),
+  ],
+);
+
 /**
  * Gear inventory.
  *

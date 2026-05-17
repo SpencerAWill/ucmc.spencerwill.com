@@ -30,6 +30,7 @@ import { z } from "zod";
 export const SETTING_CATEGORIES = [
   "contact",
   "announcements",
+  "feedback",
   "integrations",
   "appearance",
   "legal",
@@ -39,6 +40,7 @@ export type SettingCategory = (typeof SETTING_CATEGORIES)[number];
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
   contact: "Contact",
   announcements: "Announcements",
+  feedback: "Feedback",
   integrations: "Integrations",
   appearance: "Appearance",
   legal: "Legal",
@@ -135,6 +137,32 @@ export const SETTINGS = {
     confirm:
       "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
   }),
+
+  // Submission gates for the two feedback surfaces. Each flag controls
+  // ONLY whether new submissions are accepted — managers always retain
+  // access to the triage view of existing rows (gated separately by
+  // `feedback:manage` / `club_feedback:manage`). Defaults are ON so a
+  // fresh DB / new deploy keeps both forms open. Exposed publicly via
+  // `getPublicFlagsFn` so the route guards and tab bar can decide
+  // synchronously whether to render the submit UI for non-managers.
+  "feedback.website_enabled": z.boolean().default(true).register(registry, {
+    label: "Accept website feedback submissions",
+    description:
+      "When off, the website-feedback submit form and endpoint are disabled. Managers still see existing submissions in the triage view, and the GitHub mirror still fires for legacy in-flight rows.",
+    category: "feedback",
+    flagKind: "ops",
+    owner: "system_admin",
+    createdAt: "2026-05-16",
+  }),
+  "feedback.club_enabled": z.boolean().default(true).register(registry, {
+    label: "Accept club feedback submissions",
+    description:
+      "When off, the club-feedback submit form and endpoint are disabled. Managers still see existing submissions in the triage view.",
+    category: "feedback",
+    flagKind: "ops",
+    owner: "system_admin",
+    createdAt: "2026-05-16",
+  }),
 } as const;
 
 // ── Derived types ───────────────────────────────────────────────────────
@@ -161,6 +189,7 @@ export function keysByCategory(): Record<SettingCategory, SettingKey[]> {
   const out: Record<SettingCategory, SettingKey[]> = {
     contact: [],
     announcements: [],
+    feedback: [],
     integrations: [],
     appearance: [],
     legal: [],

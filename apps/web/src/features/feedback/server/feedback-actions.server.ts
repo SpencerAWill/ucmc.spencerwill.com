@@ -25,6 +25,7 @@ import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { redactString } from "#/server/log/redact.server";
 import { checkFeedbackRateLimit } from "#/server/rate-limit.server";
+import { readSetting } from "#/server/settings/settings-repo.server";
 
 // Strip query + fragment from a submitter-provided URL before it
 // reaches D1 or the GitHub mirror. Submitters set `pageUrl` to
@@ -146,6 +147,15 @@ export async function submitFeedbackAction(
   input: FeedbackInput,
 ): Promise<{ id: string }> {
   const principal = await requireFeedbackSubmitter();
+  // Runtime kill switch. Admins flip this off when they need to pause
+  // the website-feedback intake (e.g. while triaging a backlog) without
+  // also nuking the GitHub mirror or revoking everyone's permission.
+  // The `*:manage` permission keeps managers' access to the triage view
+  // intact regardless — this gate is on **submissions**, not reads.
+  const enabled = await readSetting("feedback.website_enabled");
+  if (!enabled) {
+    throw new Error("Website feedback submissions are currently disabled.");
+  }
   const allowed = await checkFeedbackRateLimit(principal.userId);
   if (!allowed) {
     throw new Error("Rate limit exceeded — please try again in a minute.");

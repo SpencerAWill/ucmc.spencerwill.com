@@ -78,6 +78,8 @@ export const getPublicSiteContactFn = createServerFn({
  */
 export type PublicFlags = {
   announcements: boolean;
+  websiteFeedback: boolean;
+  clubFeedback: boolean;
 };
 
 export const getPublicFlagsFn = createServerFn({
