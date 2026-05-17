@@ -53,9 +53,11 @@ function validateClubFeedback({
  * defect-style sub-sections, because club feedback is narrative
  * governance input, not a bug template.
  *
- * Body is a plain textarea (not `field.MarkdownField`) so the route
- * doesn't pull the ~265 KB-gz TipTap bundle for a tab a member may
- * never open.
+ * Body uses `field.MarkdownField` (TipTap WYSIWYG round-tripped to a
+ * markdown string) to match how the card renders submissions via
+ * `<MarkdownContent>`. The editor is lazy-loaded — the ~265 KB-gz
+ * TipTap bundle only ships when this route mounts, not on the wider
+ * app.
  *
  * The anonymous checkbox is a UI-level affordance — the server still
  * stamps `createdBy` for rate limiting + abuse handling, but flips
@@ -158,9 +160,8 @@ export function ClubFeedbackForm() {
 
             <form.AppField name="body">
               {(field) => (
-                <field.TextArea
+                <field.MarkdownField
                   label="Details"
-                  description="Markdown formatting (bold, lists, links) is supported."
                   rows={8}
                   placeholder="What would you like the exec board to know?"
                   maxLength={CLUB_FEEDBACK_LIMITS.body.max}
