@@ -96,7 +96,7 @@ jobs:
           VITE_R2_PUBLIC_HOST: ${{ steps.pulumi.outputs.r2_public_host }}
 
       - name: Apply D1 migrations (dev)
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -113,7 +113,7 @@ jobs:
       # FEEDBACK_GITHUB_* secrets are optional — leave them unset to
       # disable the GitHub mirror; submissions still land in D1.
       - name: Deploy Worker (dev)
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -203,7 +203,7 @@ jobs:
           VITE_R2_PUBLIC_HOST: ${{ steps.pulumi.outputs.r2_public_host }}
 
       - name: Apply D1 migrations (prod)
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -226,7 +226,7 @@ jobs:
       # job correctly omits this input because dev IS the top-level
       # worker.
       - name: Deploy Worker (prod)
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
