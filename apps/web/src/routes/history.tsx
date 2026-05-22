@@ -3,21 +3,28 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { LegalSections } from "#/components/legal/legal-section";
 import { HISTORY_BODY } from "#/config/legal";
+import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { historyContentQueryOptions } from "#/features/history/api/queries";
 import { HonoraryMembers } from "#/features/history/components/honorary-members";
 import { PastOfficers } from "#/features/history/components/past-officers";
 
 /**
- * Public /history page. Pairs static narrative content (founding
- * story + Steve Must memorial, owned in `legal.ts`) with the dynamic
- * past-officers archive + honorary-members list (sourced from D1 so
- * the historical record can be corrected and extended over time).
+ * Member-only /history page. Pairs static narrative content (founding
+ * story + Steve Must memorial, owned in `legal.ts` for now — the
+ * dynamic markdown migration lands in a follow-up commit) with the
+ * dynamic past-officers archive + honorary-members list.
  *
- * The page is anonymous-safe — no auth, no rate limiting beyond the
- * global health limiter — so the route loader can prefetch the
- * content bundle unconditionally.
+ * Gated by `history:view` (auto-granted to `role_member`, so every
+ * approved member sees it). Non-holders get the notFound boundary
+ * rather than a redirect — deep-link to /history without permission
+ * is treated as "this page is invisible to you," not "the link is
+ * broken." `history:manage` is required to edit; gated separately at
+ * the action layer.
  */
 export const Route = createFileRoute("/history")({
+  beforeLoad: async ({ context }) => {
+    await requirePermissionOrNotFound(context.queryClient, "history:view");
+  },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(historyContentQueryOptions());
   },
