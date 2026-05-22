@@ -27,11 +27,10 @@ const REASON_COPY: Record<string, string> = {
 };
 
 /**
- * Member-only "Add to cart" affordance for /gear list cards and the
+ * Member-facing "Add to cart" affordance for /gear list cards and the
  * gear detail page. Hidden for non-approved viewers (anonymous,
- * pending, deactivated) and for officers operating gear admin tools —
- * the latter check via the dedicated `gear:manage` permission so the
- * button doesn't crowd inventory-management workflows.
+ * pending, deactivated). Officers see it too — they're still members
+ * of the club and may want to borrow gear themselves.
  *
  * Waiver enforcement happens server-side; clicking as a waiver-lapsed
  * member surfaces the action's error as a toast. We don't pre-check
@@ -44,7 +43,7 @@ export function AddToCartButton({
   lifecycle,
   variant = "card",
 }: AddToCartButtonProps) {
-  const { principal, hasPermission } = useAuth();
+  const { principal } = useAuth();
   const cart = useQuery({
     ...myCartQueryOptions(),
     // Only fetch the cart when there's a chance the button will render
@@ -58,12 +57,6 @@ export function AddToCartButton({
   const add = useAddToCart();
 
   if (!principal || principal.status !== "approved") {
-    return null;
-  }
-  // Officers actively managing inventory don't need a personal-cart
-  // button cluttering every row — they reach the desk via the
-  // dedicated checkout sheet.
-  if (hasPermission("gear:manage")) {
     return null;
   }
   if (lifecycle === "retired") {
