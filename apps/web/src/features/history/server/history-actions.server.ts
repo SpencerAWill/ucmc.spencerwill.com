@@ -17,17 +17,15 @@ import type {
   ReorderHonoraryMembersInput,
   UpdateHistoricalOfficerInput,
   UpdateHonoraryMemberInput,
-  UpdateNarrativeInput,
 } from "#/features/history/server/history-schemas";
 import { requireHistoryManager } from "#/features/history/server/history-permissions.server";
 import {
   listHistoricalOfficers,
   listHonoraryMembers,
-  readNarrativeMarkdown,
-  writeNarrativeMarkdown,
 } from "#/features/history/server/history-repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { getDb, schema } from "#/server/db";
+import { readMarkdownPage } from "#/server/markdown-pages/markdown-pages-repo.server";
 
 export interface OfficerEntry {
   id: number;
@@ -57,7 +55,7 @@ export interface HistoryContent {
 
 export async function getHistoryContentAction(): Promise<HistoryContent> {
   const [narrativeMarkdown, officers, honorary] = await Promise.all([
-    readNarrativeMarkdown(),
+    readMarkdownPage("history.narrative"),
     listHistoricalOfficers(),
     listHonoraryMembers(),
   ]);
@@ -104,24 +102,12 @@ export async function getHistoryContentAction(): Promise<HistoryContent> {
 }
 
 // ── mutations (history:manage) ──────────────────────────────────────────
-
-export async function updateNarrativeAction(
-  input: UpdateNarrativeInput,
-): Promise<{ ok: true }> {
-  const principal = await requireHistoryManager();
-  await writeNarrativeMarkdown(input.markdown, principal.userId);
-  await recordAuditEvent({
-    actorUserId: principal.userId,
-    action: "history.narrative_updated",
-    targetType: "history_content",
-    targetId: "1",
-    // Length only, not the body itself — audit metadata stays
-    // bounded and non-PII (the narrative is public anyway, but
-    // logging the full body on every edit bloats audit rows).
-    metadata: { markdownLength: input.markdown.length },
-  });
-  return { ok: true };
-}
+//
+// Narrative editing is handled by the generic markdown_pages action
+// (see #/server/markdown-pages/markdown-pages-actions.server.ts) keyed
+// on slug="history.narrative". The slug → permission map in
+// `#/server/markdown-pages/slugs` routes that slug back to
+// history:manage, so the per-page gate is preserved.
 
 export async function createHistoricalOfficerAction(
   input: CreateHistoricalOfficerInput,

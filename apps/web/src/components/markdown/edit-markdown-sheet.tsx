@@ -10,33 +10,54 @@ import {
   SheetHeader,
   SheetTitle,
 } from "#/components/ui/sheet";
-import { useUpdateHistoryNarrative } from "#/features/history/api/use-update-narrative";
-import { NARRATIVE_MAX } from "#/features/history/server/history-schemas";
 import { useAppForm } from "#/lib/form/form";
+import { MARKDOWN_PAGE_MAX } from "#/server/markdown-pages/markdown-pages-schemas";
+import type { MarkdownPageSlug } from "#/server/markdown-pages/slugs";
+import { useUpdateMarkdownPage } from "#/server/markdown-pages/use-update-markdown-page";
 
 /**
- * `history:manage`-gated editor for the /history narrative markdown.
- * Renders nothing of its own — exposed as a controlled Sheet so the
- * parent /history page controls open state from the Edit button.
+ * Reusable markdown editor surface for any `markdown_pages` row.
+ * Parent owns the open state + passes the slug; this component
+ * fetches no data itself — the parent reads the latest body from
+ * `markdownPageQueryOptions(slug)` and passes it in as
+ * `initialMarkdown` so SSR-cached content is the source of truth.
  *
- * Wraps a one-field form so the TipTap WYSIWYG MarkdownField (lazy-
- * loaded, ~265 KB-gz) doesn't ship to readers — only mounts when a
- * manager actually opens the sheet.
+ * The TipTap WYSIWYG `MarkdownField` is lazy-loaded (~265 KB-gz), so
+ * the editor bundle only ships once a manager opens the sheet. Read-
+ * only viewers never download it.
+ *
+ * Gating is the parent's responsibility — render this component only
+ * when the viewer holds the slug's `*:manage` permission. The server
+ * action checks the same permission independently as defense-in-
+ * depth, so a missing client-side gate fails closed rather than
+ * silently writing.
  */
-export function EditNarrativeSheet({
+export function EditMarkdownSheet({
+  slug,
+  title,
+  description,
   open,
   onOpenChange,
   initialMarkdown,
+  fieldLabel = "Markdown",
+  placeholder = "…",
+  rows = 20,
 }: {
+  slug: MarkdownPageSlug;
+  title: string;
+  description?: string;
   open: boolean;
   onOpenChange: (next: boolean) => void;
   initialMarkdown: string;
+  fieldLabel?: string;
+  placeholder?: string;
+  rows?: number;
 }) {
-  const mutation = useUpdateHistoryNarrative();
-  // Bumped each time the sheet opens; passed into useAppForm's `key`
-  // so the form's `defaultValues` re-reads `initialMarkdown` after a
-  // previous save updates the prop. Otherwise the form would keep
-  // showing the value from the first mount.
+  const mutation = useUpdateMarkdownPage();
+  // Bumped each time the sheet opens so `defaultValues` re-reads
+  // `initialMarkdown` after a previous save updated the prop. Without
+  // the key bump the form would keep showing the value from the
+  // first mount.
   const [formKey, setFormKey] = useState(0);
 
   return (
@@ -54,23 +75,25 @@ export function EditNarrativeSheet({
         className="flex w-full flex-col gap-0 sm:max-w-2xl"
       >
         <SheetHeader>
-          <SheetTitle>Edit history narrative</SheetTitle>
-          <SheetDescription>
-            The founding story, decades-of-camaraderie overview, and Steve Must
-            memorial. Renders as markdown — headings (##), bold, italic, links,
-            and lists are all supported.
-          </SheetDescription>
+          <SheetTitle>{title}</SheetTitle>
+          {description ? (
+            <SheetDescription>{description}</SheetDescription>
+          ) : null}
         </SheetHeader>
 
-        <NarrativeForm
+        <MarkdownPageForm
           key={formKey}
+          slug={slug}
           initialMarkdown={initialMarkdown}
+          fieldLabel={fieldLabel}
+          placeholder={placeholder}
+          rows={rows}
           onCancel={() => onOpenChange(false)}
           onSaved={() => onOpenChange(false)}
           submitMutation={{
             isPending: mutation.isPending,
             mutateAsync: async (markdown) => {
-              await mutation.mutateAsync({ markdown });
+              await mutation.mutateAsync({ slug, markdown });
             },
           }}
         />
@@ -79,13 +102,21 @@ export function EditNarrativeSheet({
   );
 }
 
-function NarrativeForm({
+function MarkdownPageForm({
+  slug,
   initialMarkdown,
+  fieldLabel,
+  placeholder,
+  rows,
   onCancel,
   onSaved,
   submitMutation,
 }: {
+  slug: MarkdownPageSlug;
   initialMarkdown: string;
+  fieldLabel: string;
+  placeholder: string;
+  rows: number;
   onCancel: () => void;
   onSaved: () => void;
   submitMutation: {
@@ -98,13 +129,13 @@ function NarrativeForm({
     onSubmit: async ({ value }) => {
       try {
         await submitMutation.mutateAsync(value.markdown);
-        toast.success("History narrative saved.");
+        toast.success(`Saved.`);
         onSaved();
       } catch (err) {
         toast.error(
           err instanceof Error && err.message
             ? err.message
-            : "Couldn't save the narrative.",
+            : `Couldn't save ${slug}.`,
         );
       }
     },
@@ -123,10 +154,10 @@ function NarrativeForm({
         <form.AppField name="markdown">
           {(field) => (
             <field.MarkdownField
-              label="Narrative"
-              rows={20}
-              placeholder="Tell the club's story…"
-              maxLength={NARRATIVE_MAX}
+              label={fieldLabel}
+              rows={rows}
+              placeholder={placeholder}
+              maxLength={MARKDOWN_PAGE_MAX}
             />
           )}
         </form.AppField>

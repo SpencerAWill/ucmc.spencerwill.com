@@ -344,6 +344,34 @@
       "when": 1779418552469,
       "tag": "0048_history_content_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1779421766275,
+      "tag": "0049_markdown_pages",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1779421766276,
+      "tag": "0050_markdown_pages_seed",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "6",
+      "when": 1779421766277,
+      "tag": "0051_public_page_permissions_seed",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "6",
+      "when": 1779422279467,
+      "tag": "0052_drop_history_content",
+      "breakpoints": true
     }
   ]
 }

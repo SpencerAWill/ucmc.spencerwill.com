@@ -607,7 +607,16 @@ export const auditAction = [
   // and honorary mutations carry only `schoolYear`/`role`/`name` —
   // enough context to follow a "who edited what" trail without
   // duplicating the row's contents.
+  // Legacy: narrative-only updates before the markdown_pages
+  // generalization. Kept in the enum so older audit rows still
+  // surface in the viewer; no new code emits this — see
+  // `markdown_page.updated` below.
   "history.narrative_updated",
+  // Generalized public-page markdown edit. One event per save with
+  // { slug, markdownLength } metadata. Slug is the row key in
+  // markdown_pages (history.narrative, policies, scholarships,
+  // gear_cave, resources).
+  "markdown_page.updated",
   "historical_officer.created",
   "historical_officer.updated",
   "historical_officer.deleted",
@@ -1185,36 +1194,46 @@ export type HistoricalOfficer = typeof historicalOfficers.$inferSelect;
 export type HonoraryMember = typeof honoraryMembers.$inferSelect;
 
 /**
- * Single-row store for /history page narrative markdown. Seeded with
- * the founding-story + Steve Must memorial content originally living
- * in `HISTORY_BODY` (config/legal.ts), now editable by holders of
- * `history:manage` via the page's edit affordance.
- *
- * Convention: there is exactly one row, with `id = 1`. The action
- * layer guarantees this — writes use UPDATE-by-id, reads grab the
- * first row and fall back to an empty string. We don't enforce
- * single-row at the DB layer (no CHECK in SQLite for a constant
- * value); the convention is sufficient because no code path inserts
- * a second row.
- *
- * Why a dedicated table (not site_settings or landing_settings):
- * site_settings is gated by `settings:manage`, which is the wrong
- * grant; landing_settings is semantically the landing page. A
- * dedicated table keeps the `history:manage` boundary cleanly
- * scoped without cross-feature reuse confusion.
+ * Slug enum for `markdown_pages`. Lives in the schema module so the
+ * column type is narrowed everywhere drizzle is consumed; the matching
+ * runtime permission map lives in `src/server/markdown-pages/slugs.ts`
+ * (kept separate because the schema module is server-only and the
+ * permission map needs to be importable from client-side route
+ * guards). Adding a new editable public page is a four-line change:
+ *   1. New string here.
+ *   2. New entry in the permission map.
+ *   3. New permissions seeded in a migration.
+ *   4. Seed row inserted into markdown_pages.
  */
-export const historyContent = sqliteTable("history_content", {
-  id: integer("id").primaryKey(),
-  narrativeMarkdown: text("narrative_markdown").notNull().default(""),
+export const markdownPageSlug = [
+  "history.narrative",
+  "policies",
+  "scholarships",
+  "gear_cave",
+  "resources",
+] as const;
+export type MarkdownPageSlug = (typeof markdownPageSlug)[number];
+
+/**
+ * Slug-keyed store for any public-facing markdown page whose content
+ * is editable at runtime by a `*:manage` permission holder. Started
+ * as a single-row `history_content` table, generalized in migration
+ * 0049 to cover the rest of the editable public surface (policies,
+ * scholarships, the gear-cave overview, resources).
+ *
+ * `updated_by` snapshot of users.id with SET NULL on delete so the
+ * audit chain in `audit_log` survives an editor's account removal —
+ * the page row stays even though the FK is nulled.
+ */
+export const markdownPages = sqliteTable("markdown_pages", {
+  slug: text("slug", { enum: markdownPageSlug }).primaryKey(),
+  markdown: text("markdown").notNull().default(""),
   updatedAt: timestamp("updated_at")
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
-  // Officer who last edited the narrative. Snapshot of users.id;
-  // SET NULL on delete preserves the audit chain in audit_log even
-  // after the editor's account is removed.
   updatedBy: text("updated_by").references(() => users.id, {
     onDelete: "set null",
   }),
 });
 
-export type HistoryContent = typeof historyContent.$inferSelect;
+export type MarkdownPage = typeof markdownPages.$inferSelect;

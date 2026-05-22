@@ -67,6 +67,7 @@ export const AUDIT_ACTIONS = [
   "loan.extended",
   "settings_updated",
   "history.narrative_updated",
+  "markdown_page.updated",
   "historical_officer.created",
   "historical_officer.updated",
   "historical_officer.deleted",

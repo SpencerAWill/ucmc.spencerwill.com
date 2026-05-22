@@ -106,6 +106,41 @@ export async function requirePermissionOrNotFound(
 }
 
 /**
+ * Variant of `requirePermissionOrNotFound` that does NOT funnel
+ * unauthenticated users through the registration flow. Use for public
+ * pages whose visibility is permission-gated but where a viewer
+ * permission may legitimately be granted to `role_anonymous`. The
+ * session query already carries the anonymous-role permission set
+ * (see `getSessionFn`); we read from that for null-principal cases.
+ *
+ * Behaviour matrix:
+ *   - Anonymous + permission granted to role_anonymous → returns null,
+ *     route renders for the unauthenticated viewer.
+ *   - Anonymous + permission NOT granted               → notFound().
+ *   - Authenticated + permission granted              → returns the principal.
+ *   - Authenticated + permission NOT granted          → notFound().
+ *
+ * Returns the principal (or null for anonymous) so route loaders can
+ * branch on auth state if they need to.
+ */
+export async function requireViewPermission(
+  queryClient: QueryClient,
+  permission: string,
+): Promise<Principal | null> {
+  const session = await queryClient.ensureQueryData(sessionQueryOptions());
+  if (session.principal) {
+    if (session.principal.permissions.includes(permission)) {
+      return session.principal;
+    }
+    throw notFound();
+  }
+  if (session.anonymousPermissions.includes(permission)) {
+    return null;
+  }
+  throw notFound();
+}
+
+/**
  * Authorization context for the `/register/profile` page. Accepts either
  * a fresh email-verification proof cookie OR a returning-user session
  * for someone who hasn't completed a profile yet — mirrors the magic-link

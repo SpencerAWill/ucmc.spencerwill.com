@@ -15,7 +15,6 @@ import {
   reorderHonoraryMembersInputSchema,
   updateHistoricalOfficerInputSchema,
   updateHonoraryMemberInputSchema,
-  updateNarrativeInputSchema,
 } from "#/features/history/server/history-schemas";
 
 export type {
@@ -36,15 +35,8 @@ export const getHistoryContentFn = createServerFn({ method: "GET" }).handler(
   },
 );
 
-// ── narrative ───────────────────────────────────────────────────────────
-
-export const updateNarrativeFn = createServerFn({ method: "POST" })
-  .inputValidator(updateNarrativeInputSchema)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    const { updateNarrativeAction } =
-      await import("#/features/history/server/history-actions.server");
-    return updateNarrativeAction(data);
-  });
+// Narrative editing moved to the generic markdown_pages server fns;
+// see #/server/markdown-pages/markdown-pages-fns.ts (slug="history.narrative").
 
 // ── historical officers ─────────────────────────────────────────────────
 

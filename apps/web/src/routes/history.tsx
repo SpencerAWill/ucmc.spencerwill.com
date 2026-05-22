@@ -4,6 +4,7 @@ import { Info, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { EditMarkdownSheet } from "#/components/markdown/edit-markdown-sheet";
 import { MarkdownContent } from "#/components/markdown/markdown-content";
 import {
   AlertDialog,
@@ -25,7 +26,6 @@ import {
   useDeleteHistoricalOfficersByYear,
 } from "#/features/history/api/use-historical-officer-mutations";
 import { useDeleteHonoraryMember } from "#/features/history/api/use-honorary-member-mutations";
-import { EditNarrativeSheet } from "#/features/history/components/edit-narrative-sheet";
 import { HonoraryFormDialog } from "#/features/history/components/honorary-form-dialog";
 import type { HonoraryFormSeed } from "#/features/history/components/honorary-form-dialog";
 import { HonoraryMembers } from "#/features/history/components/honorary-members";
@@ -205,10 +205,15 @@ function HistoryPage() {
       ) : null}
 
       {canManageHistory ? (
-        <EditNarrativeSheet
+        <EditMarkdownSheet
+          slug="history.narrative"
+          title="Edit history narrative"
+          description="The founding story, decades-of-camaraderie overview, and Steve Must memorial. Renders as markdown — headings (##), bold, italic, links, and lists are all supported."
           open={editNarrativeOpen}
           onOpenChange={setEditNarrativeOpen}
           initialMarkdown={data.narrativeMarkdown}
+          fieldLabel="Narrative"
+          placeholder="Tell the club's story…"
         />
       ) : null}
 

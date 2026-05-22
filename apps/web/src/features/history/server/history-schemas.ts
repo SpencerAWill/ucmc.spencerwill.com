@@ -6,17 +6,9 @@
  */
 import { z } from "zod";
 
-// ── narrative ───────────────────────────────────────────────────────────
-
-// Generous cap; the seeded narrative is ~3 KB and a reasonable history
-// page won't exceed a few thousand words. 50 KB matches the wiggle
-// room the announcements editor uses.
-export const NARRATIVE_MAX = 50_000;
-
-export const updateNarrativeInputSchema = z.object({
-  markdown: z.string().max(NARRATIVE_MAX),
-});
-export type UpdateNarrativeInput = z.infer<typeof updateNarrativeInputSchema>;
+// Narrative editing moved to the generic markdown_pages action layer
+// (see #/server/markdown-pages/markdown-pages-schemas.ts) — the
+// /history page passes slug="history.narrative" through that path.
 
 // ── historical officers ─────────────────────────────────────────────────
 
