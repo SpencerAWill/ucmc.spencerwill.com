@@ -21,6 +21,7 @@ import { Route as MyRouteImport } from './routes/my'
 import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MembersRouteImport } from './routes/members'
 import { Route as LegalRouteImport } from './routes/legal'
+import { Route as HistoryRouteImport } from './routes/history'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as GearRouteImport } from './routes/gear'
 import { Route as FeedbackRouteImport } from './routes/feedback'
@@ -120,6 +121,11 @@ const MembersRoute = MembersRouteImport.update({
 const LegalRoute = LegalRouteImport.update({
   id: '/legal',
   path: '/legal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HealthRoute = HealthRouteImport.update({
@@ -331,6 +337,7 @@ export interface FileRoutesByFullPath {
   '/feedback': typeof FeedbackTabsRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/health': typeof HealthRoute
+  '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersTabsRouteWithChildren
   '/membership': typeof MembershipRoute
@@ -382,6 +389,7 @@ export interface FileRoutesByTo {
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsIndexRoute
   '/health': typeof HealthRoute
+  '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersTabsIndexRoute
   '/membership': typeof MembershipRoute
@@ -432,6 +440,7 @@ export interface FileRoutesById {
   '/feedback': typeof FeedbackRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/health': typeof HealthRoute
+  '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersRouteWithChildren
   '/membership': typeof MembershipRoute
@@ -488,6 +497,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/gear'
     | '/health'
+    | '/history'
     | '/legal'
     | '/members'
     | '/membership'
@@ -539,6 +549,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/feedback'
     | '/health'
+    | '/history'
     | '/legal'
     | '/members'
     | '/membership'
@@ -588,6 +599,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/gear'
     | '/health'
+    | '/history'
     | '/legal'
     | '/members'
     | '/membership'
@@ -643,6 +655,7 @@ export interface RootRouteChildren {
   FeedbackRoute: typeof FeedbackRouteWithChildren
   GearRoute: typeof GearRouteWithChildren
   HealthRoute: typeof HealthRoute
+  HistoryRoute: typeof HistoryRoute
   LegalRoute: typeof LegalRoute
   MembersRoute: typeof MembersRouteWithChildren
   MembershipRoute: typeof MembershipRoute
@@ -749,6 +762,13 @@ declare module '@tanstack/react-router' {
       path: '/legal'
       fullPath: '/legal'
       preLoaderRoute: typeof LegalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/health': {
@@ -1155,6 +1175,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedbackRoute: FeedbackRouteWithChildren,
   GearRoute: GearRouteWithChildren,
   HealthRoute: HealthRoute,
+  HistoryRoute: HistoryRoute,
   LegalRoute: LegalRoute,
   MembersRoute: MembersRouteWithChildren,
   MembershipRoute: MembershipRoute,

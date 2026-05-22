@@ -1087,3 +1087,73 @@ export type GearTag = typeof gearTags.$inferSelect;
 export type GearTagAssignment = typeof gearTagAssignments.$inferSelect;
 export type GearInspection = typeof gearInspections.$inferSelect;
 export type GearLoan = typeof gearLoans.$inferSelect;
+
+/**
+ * Historical archive of past UCMC officer rosters, one row per
+ * (school_year, role, name). Distinct from the live officer list on
+ * the landing page (which renders the *current* exec board): this
+ * table is an immutable-feeling record of who held what role in past
+ * years, ported from the legacy Weebly site and editable directly in
+ * D1 for corrections.
+ *
+ * Roles are intentionally free-form text rather than an enum because
+ * the club's role set has drifted over the decades — "Librarian"
+ * existed in the 1970s but isn't current; "Trip Coordinator" was added
+ * mid-2000s; "Gear Assistants" came in the 2010s and is plural. Pinning
+ * to today's roles would falsify the historical record.
+ *
+ * `name` is also free-form (not a FK to `users`) so it can carry
+ * mid-year transitions like "Tom Bailey (Fall) / Steve Kramrech" that
+ * appeared verbatim on the legacy site. Most names belong to alumni
+ * who never had a portal account; FK-ing them would force fake stubs.
+ *
+ * `startYear` gates the display sort (oldest first or newest first);
+ * `roleOrder` controls within-year order (President → VP → Treasurer
+ * → Secretary → Trip Coordinator → Equipment Manager → others).
+ */
+export const historicalOfficers = sqliteTable(
+  "historical_officers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    schoolYear: text("school_year").notNull(),
+    startYear: integer("start_year").notNull(),
+    role: text("role").notNull(),
+    roleOrder: integer("role_order").notNull(),
+    name: text("name").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("historical_officers_year_idx").on(t.startYear, t.roleOrder)],
+);
+
+/**
+ * Honorary UCMC members — a flat list ported from the legacy Weebly
+ * site. Honorary membership is granted by majority vote per
+ * Constitution §3.4; the list is small and changes rarely. `sortOrder`
+ * preserves the canonical legacy ordering; alphabetical sort can be
+ * applied at the view layer instead if/when that's preferred.
+ */
+export const honoraryMembers = sqliteTable(
+  "honorary_members",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("honorary_members_sort_idx").on(t.sortOrder)],
+);
+
+export type HistoricalOfficer = typeof historicalOfficers.$inferSelect;
+export type HonoraryMember = typeof honoraryMembers.$inferSelect;

@@ -314,13 +314,11 @@ function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="History (coming soon)"
-            >
-              <Landmark />
-              <span>History</span>
+            <SidebarMenuButton asChild tooltip="History">
+              <Link to="/history">
+                <Landmark />
+                <span>History</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
