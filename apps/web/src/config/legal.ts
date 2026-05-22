@@ -1126,6 +1126,62 @@ export const CONSTITUTION_BODY: readonly LegalSection[] = [
 ];
 
 /**
+ * Public /gear-cave content. The gear cave is UCMC's communal
+ * equipment library — a physical room (and the operational service
+ * around it) where members check out club gear for trips. This page
+ * is the prospective-member view: what we own, how to access it, and
+ * who to talk to. The auth'd /gear inventory remains separate;
+ * non-members shouldn't see the per-piece detail or the loans desk.
+ *
+ * Consolidates equipment.html and the public-facing summary of
+ * gear-list.html from the legacy site.
+ */
+export const GEAR_CAVE_BODY: readonly LegalSection[] = [
+  {
+    heading: "What it is",
+    paragraphs: [
+      "The gear cave is a closet of club-owned outdoor equipment that any active UCMC member can borrow for trips. We've been accumulating gear since the founders' first REI order in 1972; today it covers most of the categories the club actively does trips in.",
+      "The point of the cave isn't a substitute for owning your own kit — it's a way to get on a trip *before* you've decided whether kayaking or caving is going to be your thing. Members regularly borrow for a few seasons, decide they're hooked, and start building their own kit.",
+    ],
+  },
+  {
+    heading: "Access — who can borrow",
+    paragraphs: [
+      "Borrowing requires three things in place: (1) an active UCMC membership in good standing with the annual equipment fee paid (per Bylaw §6.1, $60 per year or $20 per semester at the time of the bylaws' last amendment — confirm the current fee schedule with the Treasurer), (2) a current paper waiver on file with the Treasurer, completed at least one week before your first trip, and (3) coordination with the Equipment Manager to actually pick up the gear.",
+      "The waiver is a paper form. Once signed, it covers an entire year of trips; you don't repeat it per trip. The Treasurer holds the signed paper off-platform.",
+    ],
+    references: [
+      { label: "Membership and dues", href: "/membership" },
+      { label: "Waiver", href: "/waiver" },
+      { label: "Gear checkout policy", href: "/policies" },
+    ],
+  },
+  {
+    heading: "What we own",
+    paragraphs: [
+      "A high-level overview of the club's inventory. Members can browse the full live inventory after signing in; officers maintain it at /gear.",
+    ],
+    bullets: [
+      "Backpacking and camping — tents (2–6 person), sleeping bags rated for three-season use, sleeping pads, canister and liquid-fuel stoves, water filtration, cooking kits, headlamps.",
+      "Climbing — harnesses, helmets, climbing shoes in a range of sizes, top-rope-length and lead-length ropes, quickdraws, slings, locking and non-locking carabiners, belay/rappel devices, a modest trad rack.",
+      "Mountaineering and ice — ice axes, crampons, alpine helmets, avalanche transceivers (when relevant), probes, shovels.",
+      "Caving — caving-rated helmets, primary headlamps and backups, vertical-caving ascenders and descenders, harnesses, gloves, knee pads.",
+      "Whitewater — whitewater kayaks (several boats), touring kayaks, rafts and rescue rafts, PFDs in adult sizes, helmets, paddles, throw bags, breakdown rescue gear.",
+      "Reference library — a small but growing collection of guidebooks, route reference materials, and outdoor-skills books in the cave for member reference.",
+      "Miscellaneous — first-aid kits, two-way radios, coolers, group tarps, group kitchen kits.",
+    ],
+  },
+  {
+    heading: "How to actually check something out",
+    paragraphs: [
+      "The standard cycle is the Wednesday meeting through the following Wednesday at 6:45 PM, with returns due one hour before the next meeting. Talk to the Equipment Manager at a meeting (or via the contact email in the footer) to arrange a checkout; the digital record at /gear is the source of truth.",
+      "Returns must be clean, dry, and in working condition. Minor wear-and-tear from honest use is just the cost of running a club gear cave; damage from misuse and overdue returns are fined per the gear policy. Lost or unreturned gear after one month may be reported as theft. If something goes wrong on a trip, tell an officer.",
+    ],
+    references: [{ label: "Gear checkout policy", href: "/policies" }],
+  },
+];
+
+/**
  * Public legal-page index — surfaces all five legal/policy routes
  * (disclaimer, non-discrimination, anti-hazing, waiver, privacy,
  * terms) plus the colophon, in one place. Not strictly required, but

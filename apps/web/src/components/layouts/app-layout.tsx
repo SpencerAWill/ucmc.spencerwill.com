@@ -214,13 +214,11 @@ function SidebarNav() {
       <SidebarGroup>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="The Gear Cave (coming soon)"
-            >
-              <Boxes />
-              <span>The Gear Cave</span>
+            <SidebarMenuButton asChild tooltip="The Gear Cave">
+              <Link to="/gear-cave">
+                <Boxes />
+                <span>The Gear Cave</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>

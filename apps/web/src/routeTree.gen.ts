@@ -26,6 +26,7 @@ import { Route as MembersRouteImport } from './routes/members'
 import { Route as LegalRouteImport } from './routes/legal'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as GearCaveRouteImport } from './routes/gear-cave'
 import { Route as GearRouteImport } from './routes/gear'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
@@ -150,6 +151,11 @@ const HistoryRoute = HistoryRouteImport.update({
 const HealthRoute = HealthRouteImport.update({
   id: '/health',
   path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GearCaveRoute = GearCaveRouteImport.update({
+  id: '/gear-cave',
+  path: '/gear-cave',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GearRoute = GearRouteImport.update({
@@ -361,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsRouteWithChildren
   '/gear': typeof GearRouteWithChildren
+  '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
@@ -417,6 +424,7 @@ export interface FileRoutesByTo {
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsIndexRoute
+  '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
@@ -472,6 +480,7 @@ export interface FileRoutesById {
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/gear': typeof GearRouteWithChildren
+  '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
@@ -533,6 +542,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/feedback'
     | '/gear'
+    | '/gear-cave'
     | '/health'
     | '/history'
     | '/legal'
@@ -589,6 +599,7 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gear-cave'
     | '/health'
     | '/history'
     | '/legal'
@@ -643,6 +654,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/feedback'
     | '/gear'
+    | '/gear-cave'
     | '/health'
     | '/history'
     | '/legal'
@@ -703,6 +715,7 @@ export interface RootRouteChildren {
   DisclaimerRoute: typeof DisclaimerRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   GearRoute: typeof GearRouteWithChildren
+  GearCaveRoute: typeof GearCaveRoute
   HealthRoute: typeof HealthRoute
   HistoryRoute: typeof HistoryRoute
   LegalRoute: typeof LegalRoute
@@ -849,6 +862,13 @@ declare module '@tanstack/react-router' {
       path: '/health'
       fullPath: '/health'
       preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gear-cave': {
+      id: '/gear-cave'
+      path: '/gear-cave'
+      fullPath: '/gear-cave'
+      preLoaderRoute: typeof GearCaveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gear': {
@@ -1255,6 +1275,7 @@ const rootRouteChildren: RootRouteChildren = {
   DisclaimerRoute: DisclaimerRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   GearRoute: GearRouteWithChildren,
+  GearCaveRoute: GearCaveRoute,
   HealthRoute: HealthRoute,
   HistoryRoute: HistoryRoute,
   LegalRoute: LegalRoute,
