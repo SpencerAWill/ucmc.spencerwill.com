@@ -10,9 +10,15 @@ import { cn } from "#/lib/utils";
 /**
  * Click-to-zoom modal for the Trip Gallery grid. Built directly on
  * Radix Dialog (rather than the shadcn `<Dialog>` wrapper) so the
- * content surface can render full-bleed without the wrapper's
- * default padding + close-button — we want the photo to dominate
- * the viewport.
+ * content surface can render with our own padding / chrome instead
+ * of the wrapper's stock dialog shell.
+ *
+ * Layout: dark backdrop fills the viewport; the lightbox itself is
+ * a centered card with `p-4 sm:p-8` of breathing room. The image
+ * area uses `flex-1 min-h-0` so the `<img>` actually shrinks to fit
+ * the flex parent (without `min-h-0`, a flex item's default
+ * `min-height: auto` honors the image's intrinsic 1600×1200 and
+ * overflows the viewport).
  *
  * Keyboard:
  *   - ← / → navigate to the previous / next photo in the visible
@@ -82,15 +88,16 @@ export function PhotoLightbox({
           )}
         />
         <DialogPrimitive.Content
-          className="fixed inset-0 z-50 flex flex-col"
+          className="fixed inset-0 z-50 flex flex-col p-3 sm:p-6"
           aria-describedby={undefined}
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogPrimitive.Title className="sr-only">
             {active?.caption ?? active?.altText ?? "Gallery photo"}
           </DialogPrimitive.Title>
 
           {/* Top bar: counter + close */}
-          <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm text-white">
+          <div className="flex shrink-0 items-center justify-between gap-4 pb-3 text-sm text-white">
             <span>
               {activeIndex + 1} / {photos.length}
             </span>
@@ -107,14 +114,18 @@ export function PhotoLightbox({
             </DialogPrimitive.Close>
           </div>
 
-          {/* Image area with prev/next overlays */}
-          <div className="relative flex flex-1 items-center justify-center px-4">
+          {/*
+            Image area. `min-h-0` is load-bearing: without it the
+            flex item's default `min-height: auto` honors the
+            image's intrinsic 1600×1200 and the photo overflows the
+            viewport. `min-w-0` does the same job horizontally.
+          */}
+          <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center">
             {active ? (
               <img
+                key={active.publicId}
                 src={galleryImageUrl(active.imageKey)}
                 alt={active.altText}
-                width={active.widthPx}
-                height={active.heightPx}
                 className="max-h-full max-w-full object-contain"
               />
             ) : null}
@@ -123,35 +134,37 @@ export function PhotoLightbox({
               <button
                 type="button"
                 onClick={() => onChange(photos[activeIndex - 1].publicId)}
-                className="absolute left-2 top-1/2 flex size-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20"
+                className="absolute left-1 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20 sm:left-2 sm:size-12"
                 aria-label="Previous photo"
               >
-                <ChevronLeft className="size-6" />
+                <ChevronLeft className="size-5 sm:size-6" />
               </button>
             ) : null}
             {activeIndex < photos.length - 1 ? (
               <button
                 type="button"
                 onClick={() => onChange(photos[activeIndex + 1].publicId)}
-                className="absolute right-2 top-1/2 flex size-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20"
+                className="absolute right-1 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20 sm:right-2 sm:size-12"
                 aria-label="Next photo"
               >
-                <ChevronRight className="size-6" />
+                <ChevronRight className="size-5 sm:size-6" />
               </button>
             ) : null}
           </div>
 
           {/* Caption + metadata strip */}
-          {active ? (
-            <div className="space-y-1 px-4 py-3 text-sm text-white">
+          {active && (active.caption || active.credit || active.tag) ? (
+            <div className="shrink-0 space-y-1 pt-3 text-sm text-white">
               {active.caption ? (
                 <p className="font-medium">{active.caption}</p>
               ) : null}
-              <p className="text-xs text-white/70">
-                {active.credit ? `Photo by ${active.credit}` : null}
-                {active.credit && active.tag ? " · " : null}
-                {active.tag}
-              </p>
+              {active.credit || active.tag ? (
+                <p className="text-xs text-white/70">
+                  {active.credit ? `Photo by ${active.credit}` : null}
+                  {active.credit && active.tag ? " · " : null}
+                  {active.tag}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </DialogPrimitive.Content>
