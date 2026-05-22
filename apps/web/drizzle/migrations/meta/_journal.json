@@ -400,6 +400,13 @@
       "when": 1779473668896,
       "tag": "0056_gallery_permissions_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1779477596934,
+      "tag": "0057_drop_dead_gallery_taken_at_idx",
+      "breakpoints": true
     }
   ]
 }

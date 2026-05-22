@@ -1355,9 +1355,12 @@ export const galleryPhotos = sqliteTable(
     }),
   },
   (t) => [
-    // Drives the default list query (newest taken-date first).
-    index("gallery_photos_taken_at_idx").on(t.takenAt),
     // Drives tag-filtered queries from the grid's tag dropdown.
+    // No `taken_at` index — the list query orders by
+    // `COALESCE(taken_at, created_at) DESC` which the planner can't
+    // serve from an index on `taken_at` alone (it would need an
+    // expression index). Club-scale photo counts (<1k) sort
+    // unindexed in microseconds either way.
     index("gallery_photos_tag_idx").on(t.tag),
   ],
 );

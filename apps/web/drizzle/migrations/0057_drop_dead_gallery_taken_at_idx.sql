@@ -1,0 +1,1 @@
+DROP INDEX `gallery_photos_taken_at_idx`;
