@@ -208,6 +208,7 @@ function SidebarNav() {
   const canViewGearCave = hasPermission("public_gear_cave:view");
   const canViewResources = hasPermission("public_resources:view");
   const canViewGazette = hasPermission("public_gazette:view");
+  const canViewGallery = hasPermission("public_gallery:view");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -259,16 +260,16 @@ function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="Trip Gallery (coming soon)"
-            >
-              <Images />
-              <span>Trip Gallery</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {canViewGallery ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Trip Gallery">
+                <Link to="/gallery">
+                  <Images />
+                  <span>Trip Gallery</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled

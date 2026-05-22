@@ -29,6 +29,7 @@ import { Route as HealthRouteImport } from './routes/health'
 import { Route as GearCaveRouteImport } from './routes/gear-cave'
 import { Route as GearRouteImport } from './routes/gear'
 import { Route as GazetteRouteImport } from './routes/gazette'
+import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
@@ -171,6 +172,11 @@ const GearRoute = GearRouteImport.update({
 const GazetteRoute = GazetteRouteImport.update({
   id: '/gazette',
   path: '/gazette',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GalleryRoute = GalleryRouteImport.update({
+  id: '/gallery',
+  path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedbackRoute = FeedbackRouteImport.update({
@@ -396,6 +402,7 @@ export interface FileRoutesByFullPath {
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsRouteWithChildren
+  '/gallery': typeof GalleryRoute
   '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/gear-cave': typeof GearCaveRoute
@@ -459,6 +466,7 @@ export interface FileRoutesByTo {
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsIndexRoute
+  '/gallery': typeof GalleryRoute
   '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
@@ -518,6 +526,7 @@ export interface FileRoutesById {
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackRouteWithChildren
+  '/gallery': typeof GalleryRoute
   '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/gear-cave': typeof GearCaveRoute
@@ -585,6 +594,7 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gallery'
     | '/gazette'
     | '/gear'
     | '/gear-cave'
@@ -648,6 +658,7 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gallery'
     | '/gear-cave'
     | '/health'
     | '/history'
@@ -706,6 +717,7 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gallery'
     | '/gazette'
     | '/gear'
     | '/gear-cave'
@@ -772,6 +784,7 @@ export interface RootRouteChildren {
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
+  GalleryRoute: typeof GalleryRoute
   GazetteRoute: typeof GazetteRouteWithChildren
   GearRoute: typeof GearRouteWithChildren
   GearCaveRoute: typeof GearCaveRoute
@@ -944,6 +957,13 @@ declare module '@tanstack/react-router' {
       path: '/gazette'
       fullPath: '/gazette'
       preLoaderRoute: typeof GazetteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gallery': {
+      id: '/gallery'
+      path: '/gallery'
+      fullPath: '/gallery'
+      preLoaderRoute: typeof GalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feedback': {
@@ -1383,6 +1403,7 @@ const rootRouteChildren: RootRouteChildren = {
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
+  GalleryRoute: GalleryRoute,
   GazetteRoute: GazetteRouteWithChildren,
   GearRoute: GearRouteWithChildren,
   GearCaveRoute: GearCaveRoute,
