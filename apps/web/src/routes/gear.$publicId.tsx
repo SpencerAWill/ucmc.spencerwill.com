@@ -8,6 +8,7 @@ import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { gearDetailQueryOptions } from "#/features/gear/api/queries";
 import { useUnretireGear } from "#/features/gear/api/use-unretire-gear";
+import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { GearDetailCard } from "#/features/gear/components/gear-detail-card";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import { GearInspectionsSection } from "#/features/gear/components/gear-inspections-section";
@@ -54,6 +55,14 @@ function GearDetailPage() {
             Back to gear
           </Link>
         </Button>
+        <div className="flex items-center gap-2">
+          <AddToCartButton
+            publicId={publicId}
+            code={data.code}
+            lifecycle={data.lifecycle}
+            variant="detail"
+          />
+        </div>
         {canManage ? (
           <div className="flex items-center gap-2">
             {data.code ? (

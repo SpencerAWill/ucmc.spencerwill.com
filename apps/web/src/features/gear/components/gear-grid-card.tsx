@@ -18,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "#/components/ui/popover";
+import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
@@ -145,6 +146,11 @@ export function GearGridCard({
             {isRetired ? <Badge variant="outline">Retired</Badge> : null}
           </div>
           <div className="flex items-center gap-0">
+            <AddToCartButton
+              publicId={gear.publicId}
+              code={gear.code}
+              lifecycle={gear.lifecycle}
+            />
             {gear.tags.length > 0 ? <TagsPopover tags={gear.tags} /> : null}
             {canManage ? (
               <DropdownMenu>
