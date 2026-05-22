@@ -1,14 +1,36 @@
+import { useState } from "react";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "#/components/ui/select";
 import type { OfficerYearGroup } from "#/features/history/server/history-fns";
 
+const ALL_YEARS_VALUE = "__all__";
+
 /**
- * Renders the past-officer archive grouped by school year, newest
- * first. Each year is a small block: the school-year label as a sub-
- * heading, then a definition-list of role → holder. Free-form role
- * text matches what each year's exec board was actually called; the
- * roster intentionally preserves "Unknown" / "X" placeholders for
- * years where the source data is incomplete.
+ * Past-officer archive with a year selector.
+ *
+ * The full archive runs ~50 years × 5–6 roles, which is a lot to render
+ * unconditionally — so the default view is the most recent year only,
+ * and the selector lets a reader jump to any other year or expand to
+ * "All years" for the full scroll.
+ *
+ * Selection is local state (no URL param) because the archive is a
+ * content surface, not an app surface — deep links to a specific year
+ * don't currently survive a refresh, and that's an acceptable tradeoff
+ * for keeping this a one-component change.
  */
 export function PastOfficers({ groups }: { groups: OfficerYearGroup[] }) {
+  // Groups arrive newest-first from the server (start_year DESC). The
+  // default selection is the first group; if the archive is somehow
+  // empty (fresh DB) we fall through to the empty-state block below.
+  const initialSelection = groups[0]?.schoolYear ?? ALL_YEARS_VALUE;
+  const [selected, setSelected] = useState<string>(initialSelection);
+
   if (groups.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -16,28 +38,60 @@ export function PastOfficers({ groups }: { groups: OfficerYearGroup[] }) {
       </p>
     );
   }
+
+  const visible =
+    selected === ALL_YEARS_VALUE
+      ? groups
+      : groups.filter((g) => g.schoolYear === selected);
+
   return (
-    <div className="space-y-6">
-      {groups.map((group) => (
-        <article
-          key={group.schoolYear}
-          className="space-y-2 rounded-md border border-border/60 bg-card/50 p-4"
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <label
+          htmlFor="past-officers-year"
+          className="text-sm font-medium text-muted-foreground"
         >
-          <h3 className="text-sm font-semibold tracking-tight">
-            {group.schoolYear}
-          </h3>
-          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-            {group.officers.map((officer) => (
-              <div key={officer.id} className="contents">
-                <dt className="font-medium text-muted-foreground">
-                  {officer.role}
-                </dt>
-                <dd>{officer.name}</dd>
-              </div>
+          Show
+        </label>
+        <Select value={selected} onValueChange={setSelected}>
+          <SelectTrigger id="past-officers-year" className="w-[14rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_YEARS_VALUE}>
+              All years ({groups.length} total)
+            </SelectItem>
+            {groups.map((group) => (
+              <SelectItem key={group.schoolYear} value={group.schoolYear}>
+                {group.schoolYear}
+              </SelectItem>
             ))}
-          </dl>
-        </article>
-      ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-6">
+        {visible.map((group) => (
+          <article
+            key={group.schoolYear}
+            className="space-y-2 rounded-md border border-border/60 bg-card/50 p-4"
+          >
+            <h3 className="text-sm font-semibold tracking-tight">
+              {group.schoolYear}
+            </h3>
+            <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+              {group.officers.map((officer) => (
+                <div key={officer.id} className="contents">
+                  <dt className="font-medium text-muted-foreground">
+                    {officer.role}
+                  </dt>
+                  <dd>{officer.name}</dd>
+                </div>
+              ))}
+            </dl>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
