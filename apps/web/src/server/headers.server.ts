@@ -19,7 +19,16 @@
  */
 const CSP_VALUE = [
   "default-src 'self'",
-  "img-src 'self' data: https:",
+  // `blob:` is required by the in-app image cropper (landing editors,
+  // /gallery photo upload): `browser-image-compression` returns a Blob
+  // wrapped in `URL.createObjectURL`, and `react-image-crop` displays
+  // that blob URL via `<img src>`.
+  "img-src 'self' data: https: blob:",
+  // Same cropper path spins up a web worker from a blob URL for the
+  // off-main-thread compression. `worker-src` would otherwise fall
+  // back to `script-src` (which deliberately omits `blob:`), so it
+  // gets its own narrow directive.
+  "worker-src 'self' blob:",
   // `'unsafe-inline'` is required for React's hydration scripts and
   // for the Tailwind-emitted style tags. We deliberately do *not*
   // include `'unsafe-eval'` — the production build doesn't need it.
