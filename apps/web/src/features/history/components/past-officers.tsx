@@ -117,13 +117,23 @@ export function PastOfficers({
                 </Button>
               ) : null}
             </div>
-            <dl className="grid grid-cols-[max-content_1fr_max-content] gap-x-4 gap-y-1 text-sm">
+            <dl className="space-y-1 text-sm">
               {group.officers.map((officer) => (
-                <div key={officer.id} className="contents">
+                <div
+                  key={officer.id}
+                  className="grid grid-cols-[max-content_1fr_max-content] items-baseline gap-x-4"
+                >
                   <dt className="font-medium text-muted-foreground">
                     {officer.role}
                   </dt>
-                  <dd>{officer.name}</dd>
+                  <dd>
+                    <p>{officer.name}</p>
+                    {officer.notes ? (
+                      <p className="mt-0.5 text-xs italic text-muted-foreground">
+                        {officer.notes}
+                      </p>
+                    ) : null}
+                  </dd>
                   <dd className="flex justify-end gap-1">
                     {canManage && onEditOfficer ? (
                       <Button

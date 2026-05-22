@@ -43,10 +43,19 @@ export function HonoraryMembers({
     );
   }
   if (!canManage) {
+    // Two-column grid keeps the canonical-order list compact while
+    // notes (when present) sit on a second line in muted italics
+    // underneath the name. Members without notes render as a single
+    // line.
     return (
-      <ul className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
         {members.map((m) => (
-          <li key={m.id}>{m.name}</li>
+          <li key={m.id}>
+            <p>{m.name}</p>
+            {m.notes ? (
+              <p className="text-xs italic text-muted-foreground">{m.notes}</p>
+            ) : null}
+          </li>
         ))}
       </ul>
     );
@@ -122,7 +131,14 @@ function SortableHonoraryList({
                     <GripVertical className="size-4" />
                   </button>
                 </SortableItemHandle>
-                <p className="min-w-0 flex-1 truncate">{member.name}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate">{member.name}</p>
+                  {member.notes ? (
+                    <p className="text-xs italic text-muted-foreground">
+                      {member.notes}
+                    </p>
+                  ) : null}
+                </div>
                 <div className="flex gap-1">
                   {onEdit ? (
                     <Button

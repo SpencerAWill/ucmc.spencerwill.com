@@ -12,6 +12,7 @@ import {
 } from "#/components/ui/dialog";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import { Textarea } from "#/components/ui/textarea";
 import {
   useCreateHistoricalOfficer,
   useUpdateHistoricalOfficer,
@@ -237,10 +238,13 @@ export function OfficerFormDialog({
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <Label htmlFor="officer-notes">Notes (optional)</Label>
-                <Input
+                <Textarea
                   id="officer-notes"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder="Context: mid-year handoff details, etc."
+                  rows={3}
+                  maxLength={500}
                 />
               </div>
             </div>
