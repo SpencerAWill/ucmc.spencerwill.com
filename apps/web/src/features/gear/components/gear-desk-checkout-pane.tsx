@@ -18,8 +18,15 @@ import { DueDatePicker } from "#/features/gear/components/due-date-picker";
 import { CheckoutItemRow } from "#/features/gear/components/gear-desk-item-row";
 import { GearCodeSearchCombobox } from "#/features/gear/components/gear-code-search-combobox";
 import { MemberSearchCombobox } from "#/features/gear/components/member-search-combobox";
+import { isCartToken } from "#/features/gear/lib/cart-token";
 import { DEFAULT_LOAN_DURATION_DAYS } from "#/features/gear/lib/loan-duration";
+import {
+  resolveCartTokenFn,
+  getMemberForLoanFn,
+} from "#/features/gear/server/gear-fns";
 import type {
+  CartItemAvailability,
+  CartItemRow,
   CheckoutLoansResult,
   GearLookupRow,
   MemberSearchResult,
@@ -40,6 +47,46 @@ const SKIP_LABEL: Record<
   not_serviceable: "Condition isn't serviceable",
   already_on_loan: "Already checked out to someone else",
 };
+
+/**
+ * Maps a cart row's availability flag to the same vocabulary the
+ * server uses for post-submit skip reasons. `loanable` rows have no
+ * error string; everything else flags the row as unsubmittable until
+ * the officer removes it.
+ */
+const CART_AVAILABILITY_LABEL: Partial<Record<CartItemAvailability, string>> = {
+  on_loan: "Already checked out to someone else",
+  not_serviceable: "Condition isn't serviceable",
+  retired: "Retired since the cart was built",
+  not_found: "No longer in inventory",
+};
+
+function cartItemToCheckoutItem(
+  cartItem: CartItemRow,
+  defaultDurationDays: number,
+): CheckoutItem {
+  // The CheckoutItemRow renderer needs a GearLookupRow. CartItemRow
+  // carries every field a GearLookupRow does except the borrower
+  // avatar key (cart hydration doesn't fetch it — the cart is the
+  // member's own intent, not someone else's loan). Default to null.
+  const row: GearLookupRow = {
+    publicId: cartItem.publicId,
+    code: cartItem.code,
+    description: cartItem.description,
+    typeName: cartItem.typeName,
+    thumbnailKey: cartItem.thumbnailKey,
+    lifecycle: cartItem.lifecycle,
+    condition: cartItem.condition,
+    hasOpenLoan: cartItem.hasOpenLoan,
+    openLoanMemberFullName: cartItem.openLoanMemberFullName,
+    openLoanMemberAvatarKey: null,
+  };
+  return {
+    row,
+    durationDays: defaultDurationDays,
+    error: CART_AVAILABILITY_LABEL[cartItem.availability],
+  };
+}
 
 export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   const [member, setMember] = useState<MemberSearchResult | null>(null);
@@ -67,6 +114,10 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   };
 
   const handleScan = async (code: string) => {
+    if (isCartToken(code)) {
+      await handleCartScan(code);
+      return;
+    }
     try {
       const row = await fetchGearByCode(code);
       if (!row) {
@@ -87,6 +138,71 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     }
   };
 
+  /**
+   * Resolve a member-scanned `ucmc-cart:<uuid>` payload at the desk:
+   *   - 'expired' / 'member_unavailable' surfaces as a targeted toast.
+   *   - On success: if the desk already has a different member selected,
+   *     refuse rather than silently swap. Otherwise seed the member and
+   *     append every cart row, visually flagging any row whose
+   *     availability is anything but `loanable` so the officer must
+   *     remove it before submitting.
+   */
+  const handleCartScan = async (token: string) => {
+    let resolved;
+    try {
+      resolved = await resolveCartTokenFn({ data: { token } });
+    } catch {
+      toast.error("Couldn't read that cart QR.");
+      return;
+    }
+    if (!resolved.ok) {
+      if (resolved.reason === "expired") {
+        toast.error("Cart QR expired — ask the member to refresh it.");
+      } else {
+        toast.error("Member is no longer eligible to borrow gear.");
+      }
+      return;
+    }
+    if (member && member.publicId !== resolved.cart.memberPublicId) {
+      toast.error(
+        "This cart belongs to a different member. Clear the current selection first.",
+      );
+      return;
+    }
+    // Hydrate a MemberSearchResult so the combobox renders the chip.
+    // The cart-resolve payload only ships publicId + name + email, but
+    // the combobox also wants `userId`; fetch the full row.
+    try {
+      const memberRow = await getMemberForLoanFn({
+        data: { publicId: resolved.cart.memberPublicId },
+      });
+      if (memberRow) {
+        setMember(memberRow);
+      }
+    } catch {
+      // Combobox is best-effort — already-set member from a prior scan
+      // / search stays.
+    }
+    setItems((prev) => {
+      const next = [...prev];
+      for (const cartItem of resolved.cart.items) {
+        if (next.some((i) => i.row.publicId === cartItem.publicId)) continue;
+        next.push(cartItemToCheckoutItem(cartItem, defaultDurationDays));
+      }
+      return next;
+    });
+    const blocked = resolved.cart.items.filter(
+      (i) => i.availability !== "loanable",
+    ).length;
+    if (blocked > 0) {
+      toast.warning(
+        `Added ${resolved.cart.items.length} items; ${blocked} need attention before checkout.`,
+      );
+    } else {
+      toast.success(`Added ${resolved.cart.items.length} items from cart.`);
+    }
+  };
+
   const submit = () => {
     if (!member) {
       toast.error("Pick a member first.");
@@ -94,6 +210,10 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     }
     if (items.length === 0) {
       toast.error("Add at least one gear piece.");
+      return;
+    }
+    if (items.some((i) => i.error)) {
+      toast.error("Remove unavailable items before checking out.");
       return;
     }
     checkout.mutate(
