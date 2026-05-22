@@ -30,6 +30,7 @@ import { Route as GearRouteImport } from './routes/gear'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
+import { Route as ConstitutionRouteImport } from './routes/constitution'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AboutRouteImport } from './routes/about'
@@ -169,6 +170,11 @@ const DisclaimerRoute = DisclaimerRouteImport.update({
 const DeactivatedRoute = DeactivatedRouteImport.update({
   id: '/deactivated',
   path: '/deactivated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConstitutionRoute = ConstitutionRouteImport.update({
+  id: '/constitution',
+  path: '/constitution',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuditRoute = AuditRouteImport.update({
@@ -350,6 +356,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsRouteWithChildren
@@ -406,6 +413,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsIndexRoute
@@ -459,6 +467,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackRouteWithChildren
@@ -519,6 +528,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/anti-hazing'
     | '/audit'
+    | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
@@ -575,6 +585,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/anti-hazing'
     | '/audit'
+    | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
@@ -627,6 +638,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/anti-hazing'
     | '/audit'
+    | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
@@ -686,6 +698,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
+  ConstitutionRoute: typeof ConstitutionRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
@@ -864,6 +877,13 @@ declare module '@tanstack/react-router' {
       path: '/deactivated'
       fullPath: '/deactivated'
       preLoaderRoute: typeof DeactivatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/constitution': {
+      id: '/constitution'
+      path: '/constitution'
+      fullPath: '/constitution'
+      preLoaderRoute: typeof ConstitutionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/audit': {
@@ -1230,6 +1250,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
+  ConstitutionRoute: ConstitutionRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
   FeedbackRoute: FeedbackRouteWithChildren,

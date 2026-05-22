@@ -943,6 +943,189 @@ export const RESOURCES_BODY: readonly LegalSection[] = [
 ];
 
 /**
+ * UCMC's governing constitution and bylaws. Single-sourced from the
+ * legacy constitution.html. Where the source uses block quotes,
+ * those are reproduced verbatim; the rest is faithful paraphrase to
+ * fit the LegalSection structure without changing meaning.
+ *
+ * Amendments require a two-thirds vote of the voting membership per
+ * Article VIII; any future amendment that changes this page should be
+ * accompanied by the corresponding vote in the meeting minutes.
+ */
+export const CONSTITUTION_BODY: readonly LegalSection[] = [
+  {
+    heading: "Article I — Name",
+    paragraphs: [
+      '"This organization shall be called the University of Cincinnati Mountaineering Club (UCMC)."',
+    ],
+  },
+  {
+    heading: "Article II — Purpose",
+    paragraphs: [
+      'The organization\'s purpose includes wilderness activities such as mountaineering, backpacking, caving, whitewater sports, and bicycling. "Through participating in these activities it is our purpose to develop an appreciation of the outdoors, to preserve the natural balance, and to proceed safely." The club provides educational services through outings, lectures, and instruction courses.',
+    ],
+  },
+  {
+    heading: "Article III — Membership",
+    bullets: [
+      "§3.1 — Three membership classes exist: voting, non-voting, and honorary.",
+      "§3.2 — Voting membership is available to full- or part-time undergraduate and graduate students enrolled in any University college, school, or division.",
+      "§3.3 — Non-voting membership is available to students, faculty, community members, and administrative staff.",
+      "§3.4 — Honorary membership is available to any person elected by majority voting-member vote.",
+      '§3.5 — "There shall be no limit on the size of the membership of the Mountaineering Club, provided that the number of the non-voting and honorary members together shall not exceed the number of voting members."',
+    ],
+  },
+  {
+    heading: "Article IV — Officers",
+    bullets: [
+      "§4.1 — Elected officer positions are President, Vice-President, Secretary, Treasurer, and Trip Coordinator.",
+      "§4.2 — The President, Vice-President, Secretary, and Treasurer appoint Equipment Managers.",
+      "§4.3 — Officers must be voting members, matriculating students with a minimum 2.300 semester GPA, and in good standing with their college.",
+      "§4.4 — Officers unable to complete their term are removed, with successor election or appointment required.",
+      "§4.5 — Officers required to co-op out of town may appoint a replacement for the co-op semester(s), subject to majority voting-member ratification.",
+    ],
+  },
+  {
+    heading: "Article V — Meetings",
+    bullets: [
+      "§5.1 — Regular meetings occur a minimum of twice per operating semester.",
+      "§5.2 — The Executive Committee may call special meetings at any time.",
+    ],
+  },
+  {
+    heading: "Article VI — Liability and waivers",
+    paragraphs: [
+      '§6.1 — "The U.C. Mountaineering Club officers, employees, servants, or agents do not have any responsibility, legal or otherwise, expressed or implied, in connection with the Club\'s activity," and participants accept all injury and damage risks.',
+      "§6.2 — Officers and agents are held harmless from responsibility for injuries or damages from club participation or member conduct.",
+      "§6.3 — All members should obtain personal insurance coverage.",
+      '§6.4 — All members must receive and sign "Waiver, Release, Indemnity and Gear" forms as a membership condition.',
+    ],
+  },
+  {
+    heading: "Article VII — University advisor",
+    paragraphs: [
+      "The club shall have a University Advisor who is a full-time faculty, staff, or administration member, selected by the Executive Board.",
+    ],
+  },
+  {
+    heading: "Article VIII — Amendments",
+    bullets: [
+      "§8.1 — Any member may propose constitutional amendments.",
+      "§8.2 — Two weeks' prior notification is required before an amendment vote.",
+      '§8.3 — "This Constitution may be amended by a two-thirds (2/3) affirmative vote of the membership present, with the approval of the Student Activities Board."',
+      "§8.4 — Mandated amendments from the Student Activities Board may have the notification period suspended by the President with two-thirds voting-member approval.",
+    ],
+  },
+  {
+    heading: "Article IX — Ratification",
+    paragraphs: [
+      '"This Constitution will be ratified by a majority affirmative vote of the voting members present at the meeting at which it is presented, and with the approval of the Student Activities Board."',
+    ],
+  },
+  {
+    heading: "By-laws §1 — Elected positions (duties)",
+    bullets: [
+      "§1.1 President — presides over all UCMC and Executive Committee meetings; ex-officio committee member; sanctions outings and courses; registers the club annually; secures meeting space; guides the club generally.",
+      "§1.2 Vice-President — maintains correspondence with other organizations; manages marketing and club displays; serves as liaison on gear-space issues; performs quarterly fund audits with another executive member; assists the President and acts as President when absent.",
+      '§1.3 Treasurer — "responsible in conjunction with the University Advisor for all fiscal matters of the Student Organization." Collects funds, deposits them, approves expenditures with the Advisor, co-signs checks, maintains the membership roster including medical information, educates successors, keeps inspectable books, and makes semester reports.',
+      "§1.4 Secretary — updates the club website and Facebook page; keeps Executive and general meeting minutes; posts minutes and approved trip announcements via listserv and social media; manages external fundraising and volunteering; assists officers; attends every meeting.",
+      "§1.5 Equipment / Gear Manager — maintains current and historical equipment inventory; assumes full responsibility for club gear (except that the President, Vice-President, and Treasurer together may retire unsafe equipment). Acquires and retires gear, marks equipment for identification, updates sign-out procedures, assesses fines, withholds gear from violators, and may file service blocks for non-returners or code-of-conduct violators.",
+      "§1.6 Trip Coordinator — one or more individuals; ensures trip leaders follow the UCMC Trip Leader Checklist; submits emergency contact sheets and rosters to the trip monitor and advisor for funded trips; plans weekly trips; schedules large break trips 6–8 weeks in advance; fosters new trip leader development; presents large trips to the Executive board 3–4 weeks ahead; copies themselves on trip leader emails; ensures safety-gate-guideline compliance; maintains sign-up sheets at general meetings.",
+    ],
+  },
+  {
+    heading: "By-laws §2 — University Advisor",
+    bullets: [
+      "§2.1 — The Advisor consults with the club and ensures activities align with organizational purposes.",
+      "§2.2 — The Advisor approves all off-campus activities where students formally represent the club.",
+      "§2.3 — The Advisor must file official academic-standing certifications for officers with the Student Activities and Programming Office each semester.",
+      '§2.4 — "The University Advisor has an obligation to know the rules and regulations governing the handling of all funds and to assist and advise the Treasurer in all financial matters and to co-sign checks."',
+      "§2.5 — The Advisor must attend programs featuring off-campus speakers.",
+    ],
+  },
+  {
+    heading: "By-laws §3 — Executive Committee",
+    bullets: [
+      "§3.1 — The Committee consists of President, Vice-President, Treasurer, Secretary, Equipment Manager, Trip Coordinator, and University Advisor.",
+      "§3.2 — The Committee determines policies and activities, disciplines members, approves budgets, and manages the club generally.",
+      "§3.3 — The Committee meets once each operating semester with the Equipment Committee.",
+    ],
+  },
+  {
+    heading: "By-laws §4 — General meetings",
+    bullets: [
+      "§4.1 — Regular meetings occur weekly at times and places determined by the Executive Committee.",
+      '§4.2 — "At all meetings a quorum shall be one-half (1/2) of the voting members of the U.C. Mountaineering Club. A quorum is necessary for the Club to conduct official business."',
+    ],
+  },
+  {
+    heading: "By-laws §5 — Executive elections",
+    bullets: [
+      "§5.1 — Normal elections occur at the tenth meeting of Spring semester.",
+      "§5.2 — Special elections occur at the first regular meeting after an officer cannot fulfill their term.",
+      "§5.3 — Elected officers are chosen by majority ballot vote with a quorum present.",
+      "§5.4 — Officers take office during the first week of Summer semester following election and serve one-year terms.",
+      "§5.5 — The Vice-President collects absentee ballots before elections.",
+    ],
+  },
+  {
+    heading: "By-laws §6 — Funding and equipment fees",
+    bullets: [
+      '§6.1 — "Equipment usage fees shall be sixty dollars ($60.00) per year (September through August); twenty dollars ($20.00) per Semester (fall, winter and summer)." Alumni rates match student rates.',
+      "§6.2 — Revenue from other sources may be raised as determined by the Executive Committee and approved by the club and appropriate University office.",
+      "§6.3 — The Committee determines revenue disbursement with club and University policy approval; primary use is replacing previously received University funds for equipment.",
+    ],
+  },
+  {
+    heading: "By-laws §7 — Special committees",
+    bullets: [
+      "§7.1 — The Executive Committee may establish special committees performing defined duties.",
+      "§7.2 — The Committee appoints and may remove chairpersons and members.",
+    ],
+  },
+  {
+    heading: "By-laws §8 — UCMC trips",
+    paragraphs: [
+      '"A U.C. Mountaineering Club trip shall be: any activity that is approved by the UCMC President, or the Executive Committee; is listed on the UCMC Outgoing trips slide during the UCMC meetings; contained in the official UCMC meeting announcement sent out by an Executive member, or is funded with University Funding Board funds."',
+    ],
+  },
+  {
+    heading: "By-laws §9 — Order and conduct",
+    bullets: [
+      "§9.1 — The club has no standing rules of order.",
+      "§9.2 — The club adopts Creative Conflict rules when the President deems necessary.",
+      "§9.3 — The President determines meeting format and recognizes speakers as necessary.",
+    ],
+  },
+  {
+    heading: "By-laws §10 — Violations of club rules",
+    bullets: [
+      "§10.1 — Members repeatedly abusing or misusing club equipment or the club name, after Executive Committee warning, may have membership terminated by a two-thirds Executive Committee vote.",
+      "§10.2 — Terminated members forfeit all interest in club funds or property and cannot use the club name.",
+      "§10.3 — Members may appeal expulsion in writing within two weeks to the Student Activities Board, and if upheld, may further appeal within two weeks to the Student Activities and Leadership Development Office.",
+    ],
+  },
+  {
+    heading: "By-laws §11 — Amendments to the by-laws",
+    bullets: [
+      "§11.1 — Any member may propose by-law amendments.",
+      "§11.2 — One week's prior notification is required before an amendment vote.",
+      '§11.3 — "These by-laws may be amended by a majority affirmative vote of the voting members present, with the approval of the Student Activities Board."',
+      "§11.4 — Mandated amendments may have the notification period suspended by the President with two-thirds voting-member approval.",
+    ],
+  },
+  {
+    heading: "By-laws §14 — Title IX, anti-hazing, and non-discrimination",
+    paragraphs: [
+      "§14.1 — Ohio state laws and University of Cincinnati anti-hazing policies are observed.",
+      '§14.2 — "Hazing shall be defined as participating in or allowing any act or coercing another, including the victim, to do any act that creates a substantial risk of causing mental or physical harm to any person."',
+      "§14.3 — Explicitly prohibited activities include any activity creating substantial physical or mental harm risk; paddling, beating, or hitting individuals; wearing degrading or uncomfortable items; depriving individuals of six hours daily sleep, proper nutrition, or hygiene access; and any activity interfering with academics through exhaustion or study-time loss.",
+      '§14.4 — "All people are given equal opportunity in all club matters and shall not be discriminated based on race, ethnicity, religion, gender, sexual orientation, age, or any other membership to another group."',
+    ],
+  },
+];
+
+/**
  * Public legal-page index — surfaces all five legal/policy routes
  * (disclaimer, non-discrimination, anti-hazing, waiver, privacy,
  * terms) plus the colophon, in one place. Not strictly required, but
@@ -998,6 +1181,12 @@ export const LEGAL_INDEX_LINKS: readonly {
     href: "/about",
     label: "About UCMC",
     description: "Who we are, how we operate, and how this site fits in.",
+  },
+  {
+    href: "/constitution",
+    label: "Constitution and by-laws",
+    description:
+      "UCMC's governing document — officer duties, membership classes, equipment fees, and the formal anti-hazing and non-discrimination commitments.",
   },
   {
     href: "/open-source",
