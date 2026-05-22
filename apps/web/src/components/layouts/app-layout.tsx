@@ -204,6 +204,7 @@ function SidebarNav() {
   const canLoanGear = hasPermission("gear:loan");
   const canViewHistory = hasPermission("history:view");
   const canViewPolicies = hasPermission("public_policies:view");
+  const canViewScholarships = hasPermission("public_scholarships:view");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -223,14 +224,16 @@ function SidebarNav() {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Scholarships">
-              <Link to="/scholarships">
-                <GraduationCap />
-                <span>Scholarships</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {canViewScholarships ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Scholarships">
+                <Link to="/scholarships">
+                  <GraduationCap />
+                  <span>Scholarships</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           {canViewPolicies ? (
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip="Club policies">
