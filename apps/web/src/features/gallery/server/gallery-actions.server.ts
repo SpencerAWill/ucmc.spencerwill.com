@@ -225,22 +225,33 @@ export async function updateGalleryPhotoAction(
     }
   }
 
-  await getDb()
-    .update(schema.galleryPhotos)
-    .set({
-      caption: input.caption,
-      credit: input.credit,
-      takenAt: input.takenAt,
-      tag: input.tag,
-      altText: input.altText,
-      imageKey,
-      imageBytes,
-      widthPx: input.widthPx,
-      heightPx: input.heightPx,
-      updatedAt: new Date(),
-      updatedBy: principal.userId,
-    })
-    .where(eq(schema.galleryPhotos.id, existing.id));
+  try {
+    await getDb()
+      .update(schema.galleryPhotos)
+      .set({
+        caption: input.caption,
+        credit: input.credit,
+        takenAt: input.takenAt,
+        tag: input.tag,
+        altText: input.altText,
+        imageKey,
+        imageBytes,
+        widthPx: input.widthPx,
+        heightPx: input.heightPx,
+        updatedAt: new Date(),
+        updatedBy: principal.userId,
+      })
+      .where(eq(schema.galleryPhotos.id, existing.id));
+  } catch (err) {
+    // UPDATE failed. If we already PUT a replacement image, that
+    // fresh key is now orphaned — clean it up to mirror the
+    // symmetric handling on insert. The old image is still
+    // referenced by the row, so leave it alone.
+    if (imageKey !== existing.imageKey) {
+      void deleteGalleryImage(imageKey).catch(() => {});
+    }
+    throw err;
+  }
 
   if (oldKeyToDelete) {
     void deleteGalleryImage(oldKeyToDelete).catch(() => {});

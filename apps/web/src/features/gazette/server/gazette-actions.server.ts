@@ -223,22 +223,34 @@ export async function updateGazetteIssueAction(
     }
   }
 
-  await getDb()
-    .update(schema.gazetteIssues)
-    .set({
-      schoolYear: input.schoolYear,
-      startYear: input.startYear,
-      issueNumber: input.issueNumber,
-      title: input.title,
-      editor: input.editor,
-      publishedAt: input.publishedAt,
-      description: input.description,
-      pdfKey,
-      pdfBytes,
-      updatedAt: new Date(),
-      updatedBy: principal.userId,
-    })
-    .where(eq(schema.gazetteIssues.id, existing.id));
+  try {
+    await getDb()
+      .update(schema.gazetteIssues)
+      .set({
+        schoolYear: input.schoolYear,
+        startYear: input.startYear,
+        issueNumber: input.issueNumber,
+        title: input.title,
+        editor: input.editor,
+        publishedAt: input.publishedAt,
+        description: input.description,
+        pdfKey,
+        pdfBytes,
+        updatedAt: new Date(),
+        updatedBy: principal.userId,
+      })
+      .where(eq(schema.gazetteIssues.id, existing.id));
+  } catch (err) {
+    // UPDATE failed (most likely unique-index violation on
+    // school_year+issue_number after edit). If we already PUT a
+    // replacement PDF, that fresh key is now orphaned — clean it
+    // up to mirror the symmetric handling on insert. The old PDF
+    // is still referenced by the row, so we leave it alone.
+    if (pdfKey !== existing.pdfKey) {
+      void deleteGazettePdf(pdfKey).catch(() => {});
+    }
+    throw err;
+  }
 
   // Best-effort cleanup of the previous PDF. If the delete fails the
   // orphan-GC sweep picks it up on the next daily run.
