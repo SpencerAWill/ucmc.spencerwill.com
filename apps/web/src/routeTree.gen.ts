@@ -28,6 +28,7 @@ import { Route as HistoryRouteImport } from './routes/history'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as GearCaveRouteImport } from './routes/gear-cave'
 import { Route as GearRouteImport } from './routes/gear'
+import { Route as GazetteRouteImport } from './routes/gazette'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
@@ -47,6 +48,7 @@ import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersTabsRouteImport } from './routes/members._tabs'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
+import { Route as GazettePublicIdRouteImport } from './routes/gazette.$publicId'
 import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
@@ -65,6 +67,7 @@ import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publ
 import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.club'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
+import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
 
@@ -163,6 +166,11 @@ const GearRoute = GearRouteImport.update({
   path: '/gear',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GazetteRoute = GazetteRouteImport.update({
+  id: '/gazette',
+  path: '/gazette',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FeedbackRoute = FeedbackRouteImport.update({
   id: '/feedback',
   path: '/feedback',
@@ -257,6 +265,11 @@ const GearPublicIdRoute = GearPublicIdRouteImport.update({
   path: '/$publicId',
   getParentRoute: () => GearRoute,
 } as any)
+const GazettePublicIdRoute = GazettePublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => GazetteRoute,
+} as any)
 const FeedbackTabsRoute = FeedbackTabsRouteImport.update({
   id: '/_tabs',
   getParentRoute: () => FeedbackRoute,
@@ -346,6 +359,11 @@ const ApiGearThumbnailsSplatRoute = ApiGearThumbnailsSplatRouteImport.update({
   path: '/api/gear-thumbnails/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGazettePdfSplatRoute = ApiGazettePdfSplatRouteImport.update({
+  id: '/api/gazette-pdf/$',
+  path: '/api/gazette-pdf/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   id: '/api/avatars/$',
   path: '/api/avatars/$',
@@ -366,6 +384,7 @@ export interface FileRoutesByFullPath {
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsRouteWithChildren
+  '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
@@ -386,6 +405,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/roles': typeof MembersRolesRoute
@@ -398,6 +418,7 @@ export interface FileRoutesByFullPath {
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/feedback/club': typeof FeedbackTabsClubRoute
@@ -424,6 +445,7 @@ export interface FileRoutesByTo {
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsIndexRoute
+  '/gazette': typeof GazetteRouteWithChildren
   '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
@@ -443,6 +465,7 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/roles': typeof MembersRolesRoute
@@ -454,6 +477,7 @@ export interface FileRoutesByTo {
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/feedback/club': typeof FeedbackTabsClubRoute
@@ -479,6 +503,7 @@ export interface FileRoutesById {
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackRouteWithChildren
+  '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
@@ -500,6 +525,7 @@ export interface FileRoutesById {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
+  '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/_tabs': typeof MembersTabsRouteWithChildren
@@ -513,6 +539,7 @@ export interface FileRoutesById {
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/feedback/_tabs/club': typeof FeedbackTabsClubRoute
@@ -541,6 +568,7 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gazette'
     | '/gear'
     | '/gear-cave'
     | '/health'
@@ -561,6 +589,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/waiver'
     | '/auth/callback'
+    | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/roles'
@@ -573,6 +602,7 @@ export interface FileRouteTypes {
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/feedback/club'
@@ -599,6 +629,7 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gazette'
     | '/gear-cave'
     | '/health'
     | '/history'
@@ -618,6 +649,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/waiver'
     | '/auth/callback'
+    | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/roles'
@@ -629,6 +661,7 @@ export interface FileRouteTypes {
     | '/gear'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/feedback/club'
@@ -653,6 +686,7 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gazette'
     | '/gear'
     | '/gear-cave'
     | '/health'
@@ -674,6 +708,7 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/feedback/_tabs'
+    | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/_tabs'
@@ -687,6 +722,7 @@ export interface FileRouteTypes {
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/feedback/_tabs/club'
@@ -714,6 +750,7 @@ export interface RootRouteChildren {
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
+  GazetteRoute: typeof GazetteRouteWithChildren
   GearRoute: typeof GearRouteWithChildren
   GearCaveRoute: typeof GearCaveRoute
   HealthRoute: typeof HealthRoute
@@ -739,6 +776,7 @@ export interface RootRouteChildren {
   AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
+  ApiGazettePdfSplatRoute: typeof ApiGazettePdfSplatRoute
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
 }
@@ -878,6 +916,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GearRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gazette': {
+      id: '/gazette'
+      path: '/gazette'
+      fullPath: '/gazette'
+      preLoaderRoute: typeof GazetteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/feedback': {
       id: '/feedback'
       path: '/feedback'
@@ -1011,6 +1056,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GearPublicIdRouteImport
       parentRoute: typeof GearRoute
     }
+    '/gazette/$publicId': {
+      id: '/gazette/$publicId'
+      path: '/$publicId'
+      fullPath: '/gazette/$publicId'
+      preLoaderRoute: typeof GazettePublicIdRouteImport
+      parentRoute: typeof GazetteRoute
+    }
     '/feedback/_tabs': {
       id: '/feedback/_tabs'
       path: ''
@@ -1137,6 +1189,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGearThumbnailsSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/gazette-pdf/$': {
+      id: '/api/gazette-pdf/$'
+      path: '/api/gazette-pdf/$'
+      fullPath: '/api/gazette-pdf/$'
+      preLoaderRoute: typeof ApiGazettePdfSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/avatars/$': {
       id: '/api/avatars/$'
       path: '/api/avatars/$'
@@ -1179,6 +1238,17 @@ const FeedbackRouteChildren: FeedbackRouteChildren = {
 const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
   FeedbackRouteChildren,
 )
+
+interface GazetteRouteChildren {
+  GazettePublicIdRoute: typeof GazettePublicIdRoute
+}
+
+const GazetteRouteChildren: GazetteRouteChildren = {
+  GazettePublicIdRoute: GazettePublicIdRoute,
+}
+
+const GazetteRouteWithChildren =
+  GazetteRoute._addFileChildren(GazetteRouteChildren)
 
 interface GearRouteChildren {
   GearPublicIdRoute: typeof GearPublicIdRoute
@@ -1274,6 +1344,7 @@ const rootRouteChildren: RootRouteChildren = {
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
+  GazetteRoute: GazetteRouteWithChildren,
   GearRoute: GearRouteWithChildren,
   GearCaveRoute: GearCaveRoute,
   HealthRoute: HealthRoute,
@@ -1299,6 +1370,7 @@ const rootRouteChildren: RootRouteChildren = {
   AnnouncementsIndexRoute: AnnouncementsIndexRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
+  ApiGazettePdfSplatRoute: ApiGazettePdfSplatRoute,
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,
 }

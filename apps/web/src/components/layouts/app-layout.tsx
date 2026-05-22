@@ -207,6 +207,7 @@ function SidebarNav() {
   const canViewScholarships = hasPermission("public_scholarships:view");
   const canViewGearCave = hasPermission("public_gear_cave:view");
   const canViewResources = hasPermission("public_resources:view");
+  const canViewGazette = hasPermission("public_gazette:view");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -278,16 +279,16 @@ function SidebarNav() {
               <span>Blog</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="Goosedown Gazette (coming soon)"
-            >
-              <Newspaper />
-              <span>Goosedown Gazette</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {canViewGazette ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Goosedown Gazette">
+                <Link to="/gazette">
+                  <Newspaper />
+                  <span>Goosedown Gazette</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled
