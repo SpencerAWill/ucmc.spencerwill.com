@@ -190,7 +190,7 @@ export function PhotoFormDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
             {seed?.mode === "edit" ? "Edit photo" : "Add photo"}
@@ -223,7 +223,7 @@ export function PhotoFormDialog({
                   <img
                     src={existingImageUrl}
                     alt={form.altText || "Current photo"}
-                    className="max-h-[30vh] max-w-full rounded-md"
+                    className="max-h-[30dvh] max-w-full rounded-md sm:max-h-[40vh]"
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">

@@ -198,7 +198,12 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
       src: workingUrl ?? "",
       alt: "Image to crop",
       onLoad: onImageLoad,
-      className: "max-h-[40vh] max-w-full",
+      // Cap the cropper image so it doesn't dominate the viewport on
+      // phones (`30dvh`) but can still breathe on desktop (`40vh`).
+      // `dvh` accounts for mobile browser chrome — `vh` would let the
+      // image push the form fields off-screen when the URL bar
+      // appears.
+      className: "max-h-[30dvh] max-w-full sm:max-h-[40vh]",
     },
     getCroppedDataUrl,
   };
