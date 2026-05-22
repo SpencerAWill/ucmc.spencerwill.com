@@ -643,6 +643,12 @@ export const auditAction = [
   "gazette_issue.created",
   "gazette_issue.updated",
   "gazette_issue.deleted",
+  // Trip Gallery photo CRUD via /gallery manage affordances.
+  // Metadata carries { caption, tag } so the audit row stays
+  // informative even after the photo row is deleted.
+  "gallery_photo.created",
+  "gallery_photo.updated",
+  "gallery_photo.deleted",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -1303,3 +1309,57 @@ export const gazetteIssues = sqliteTable(
 );
 
 export type GazetteIssue = typeof gazetteIssues.$inferSelect;
+
+/**
+ * Trip Gallery — UCMC's photo archive. Photos are cropped to a fixed
+ * 4:3 ratio at upload time (`useImageCrop()` in the dialog → canvas
+ * → WebP), so every grid tile is uniform. The cropped WebP is what
+ * gets stored; the original is discarded after crop.
+ *
+ * Storage: `BUCKET_PUBLIC` at `gallery/<id>/<contentHash>.webp`.
+ * Content-hashed keys mean `Cache-Control: immutable` is safe forever;
+ * a replacement upload produces a new key and the row swaps.
+ *
+ * Layout: flat collection — no albums/trips entity in v1. Each photo
+ * has caption, credit, `takenAt`, optional `tag`, and required
+ * `altText` for accessibility (every gallery `<img>` MUST have alt
+ * text; this is the SQL guard for it). Width/height columns are
+ * stored even though the aspect is fixed so a future masonry layout
+ * doesn't need a column-add migration.
+ */
+export const galleryPhotos = sqliteTable(
+  "gallery_photos",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    caption: text("caption"),
+    credit: text("credit"),
+    takenAt: timestamp("taken_at"),
+    tag: text("tag"),
+    altText: text("alt_text").notNull(),
+    imageKey: text("image_key").notNull(),
+    imageBytes: integer("image_bytes").notNull(),
+    widthPx: integer("width_px").notNull(),
+    heightPx: integer("height_px").notNull(),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    // Drives the default list query (newest taken-date first).
+    index("gallery_photos_taken_at_idx").on(t.takenAt),
+    // Drives tag-filtered queries from the grid's tag dropdown.
+    index("gallery_photos_tag_idx").on(t.tag),
+  ],
+);
+
+export type GalleryPhoto = typeof galleryPhotos.$inferSelect;
