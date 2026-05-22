@@ -93,3 +93,16 @@ export const updateHonoraryMemberInputSchema = z.object({
 export type UpdateHonoraryMemberInput = z.infer<
   typeof updateHonoraryMemberInputSchema
 >;
+
+/**
+ * Bulk-reorder honorary members. `ids` is the new display order
+ * (lowest sort_order first); the server rewrites every row's
+ * sort_order to its index + 1 to match. Capped at 500 entries —
+ * the legacy seed has 36, this leaves plenty of headroom.
+ */
+export const reorderHonoraryMembersInputSchema = z.object({
+  ids: z.array(z.number().int().positive()).max(500),
+});
+export type ReorderHonoraryMembersInput = z.infer<
+  typeof reorderHonoraryMembersInputSchema
+>;

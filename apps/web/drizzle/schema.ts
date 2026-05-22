@@ -620,6 +620,12 @@ export const auditAction = [
   "honorary_member.created",
   "honorary_member.updated",
   "honorary_member.deleted",
+  // Bulk reorder of the honorary-members list via drag-and-drop in
+  // /history's manage UI. One audit event per reorder action with
+  // metadata { count } — we deliberately don't log the full id ordering
+  // because each row's new sort_order is implicit in the index it
+  // landed at after batch update.
+  "honorary_member.reordered",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 

@@ -4,11 +4,13 @@ import { HISTORY_CONTENT_QUERY_KEY } from "#/features/history/api/query-keys";
 import {
   createHonoraryMemberFn,
   deleteHonoraryMemberFn,
+  reorderHonoraryMembersFn,
   updateHonoraryMemberFn,
 } from "#/features/history/server/history-fns";
 import type {
   CreateHonoraryMemberInput,
   DeleteByIdInput,
+  ReorderHonoraryMembersInput,
   UpdateHonoraryMemberInput,
 } from "#/features/history/server/history-schemas";
 
@@ -41,6 +43,21 @@ export function useDeleteHonoraryMember() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: DeleteByIdInput) => deleteHonoraryMemberFn({ data }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: HISTORY_CONTENT_QUERY_KEY }),
+  });
+}
+
+/**
+ * Bulk reorder honorary members. Caller passes the new display order
+ * (lowest sort_order first); server rewrites every row's sort_order
+ * to (index + 1) in one batch.
+ */
+export function useReorderHonoraryMembers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ReorderHonoraryMembersInput) =>
+      reorderHonoraryMembersFn({ data }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: HISTORY_CONTENT_QUERY_KEY }),
   });

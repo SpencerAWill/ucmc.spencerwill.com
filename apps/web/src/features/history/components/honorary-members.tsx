@@ -1,17 +1,28 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
+import {
+  Sortable,
+  SortableContent,
+  SortableItem,
+  SortableItemHandle,
+} from "#/components/ui/sortable";
+import { useReorderHonoraryMembers } from "#/features/history/api/use-honorary-member-mutations";
 import type { HonoraryEntry } from "#/features/history/server/history-fns";
 
 /**
  * Flat list of honorary UCMC members. Honorary membership is granted
- * by majority voting-member vote per Constitution §3.4. The list is
- * small and changes rarely; alphabetical sort by display order is
- * preserved from the legacy site rather than re-sorted in code.
+ * by majority voting-member vote per Constitution §3.4.
  *
- * When `canManage` is true, each row decorates with pencil + trash
- * buttons that emit callbacks to the parent (which hosts the
- * edit-dialog and delete-confirm state).
+ * Read-only viewers see a tight two-column grid in display order.
+ * `history:manage` holders see a draggable list — grab the
+ * `GripVertical` handle on any row to reorder; each drop fires a
+ * batch sort_order rewrite on the server. The dialog edit form
+ * dropped its sort-order number input now that DnD is the way to
+ * change ordering. Pencil + trash on each row open the parent's
+ * edit dialog / delete confirm.
  */
 export function HonoraryMembers({
   members,
@@ -21,7 +32,7 @@ export function HonoraryMembers({
 }: {
   members: HonoraryEntry[];
   canManage?: boolean;
-  onEdit?: (member: HonoraryEntry, sortOrder: number) => void;
+  onEdit?: (member: HonoraryEntry) => void;
   onDelete?: (member: HonoraryEntry) => void;
 }) {
   if (members.length === 0) {
@@ -31,56 +42,118 @@ export function HonoraryMembers({
       </p>
     );
   }
+  if (!canManage) {
+    return (
+      <ul className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+        {members.map((m) => (
+          <li key={m.id}>{m.name}</li>
+        ))}
+      </ul>
+    );
+  }
   return (
-    <ul
-      className={
-        canManage
-          ? "divide-y divide-border/60 rounded-md border border-border/60 bg-card/40 text-sm"
-          : "grid grid-cols-1 gap-1 text-sm sm:grid-cols-2"
-      }
+    <SortableHonoraryList
+      members={members}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
+  );
+}
+
+function SortableHonoraryList({
+  members,
+  onEdit,
+  onDelete,
+}: {
+  members: HonoraryEntry[];
+  onEdit?: (member: HonoraryEntry) => void;
+  onDelete?: (member: HonoraryEntry) => void;
+}) {
+  const reorder = useReorderHonoraryMembers();
+
+  // Local optimistic copy of `members` so the UI snaps to the new
+  // order on drop without waiting for the server round-trip. The
+  // effect resyncs whenever the id-set or order from props changes
+  // (server invalidation after add / delete / parallel-tab edit) by
+  // diffing the joined ids — a deep equality check would be heavier
+  // for the same outcome.
+  const [items, setItems] = useState<HonoraryEntry[]>(members);
+  const idsKey = members.map((m) => m.id).join(",");
+  // `idsKey` (not `members`) is the dependency on purpose: we only want
+  // to resync when the actual ordering or membership of the list
+  // changes server-side, not on every parent re-render that happens to
+  // pass a new array reference with the same contents.
+  useEffect(() => {
+    setItems(members);
+  }, [idsKey, members]);
+
+  async function handleReorder(next: HonoraryEntry[]) {
+    setItems(next);
+    try {
+      await reorder.mutateAsync({ ids: next.map((m) => m.id) });
+    } catch (err) {
+      // Revert to last-known server state and surface the error.
+      setItems(members);
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't save the new order.",
+      );
+    }
+  }
+
+  return (
+    <Sortable
+      value={items}
+      onValueChange={(next) => void handleReorder(next)}
+      getItemValue={(m) => m.id}
     >
-      {members.map((member, idx) => {
-        // `sortOrder` is the 1-indexed slot derived from server
-        // ordering; honoraryEntries don't carry the value on the wire.
-        const sortOrder = idx + 1;
-        if (canManage) {
-          return (
-            <li
-              key={member.id}
-              className="flex items-center justify-between gap-2 px-3 py-1.5"
-            >
-              <p className="truncate">{member.name}</p>
-              <div className="flex gap-1">
-                {onEdit ? (
-                  <Button
+      <SortableContent asChild>
+        <ul className="divide-y divide-border/60 rounded-md border border-border/60 bg-card/40 text-sm">
+          {items.map((member) => (
+            <SortableItem key={member.id} value={member.id} asChild>
+              <li className="flex items-center gap-2 px-3 py-1.5">
+                <SortableItemHandle asChild>
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    aria-label={`Edit ${member.name}`}
-                    onClick={() => onEdit(member, sortOrder)}
+                    className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                    aria-label={`Drag to reorder ${member.name}`}
                   >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                ) : null}
-                {onDelete ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    aria-label={`Delete ${member.name}`}
-                    onClick={() => onDelete(member)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                ) : null}
-              </div>
-            </li>
-          );
-        }
-        return <li key={member.id}>{member.name}</li>;
-      })}
-    </ul>
+                    <GripVertical className="size-4" />
+                  </button>
+                </SortableItemHandle>
+                <p className="min-w-0 flex-1 truncate">{member.name}</p>
+                <div className="flex gap-1">
+                  {onEdit ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      aria-label={`Edit ${member.name}`}
+                      onClick={() => onEdit(member)}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  ) : null}
+                  {onDelete ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      aria-label={`Delete ${member.name}`}
+                      onClick={() => onDelete(member)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            </SortableItem>
+          ))}
+        </ul>
+      </SortableContent>
+    </Sortable>
   );
 }

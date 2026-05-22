@@ -14,6 +14,7 @@ import type {
   CreateHonoraryMemberInput,
   DeleteByIdInput,
   DeleteOfficersByYearInput,
+  ReorderHonoraryMembersInput,
   UpdateHistoricalOfficerInput,
   UpdateHonoraryMemberInput,
   UpdateNarrativeInput,
@@ -294,6 +295,36 @@ export async function updateHonoraryMemberAction(
     metadata: { name: input.name },
   });
   return { ok: true };
+}
+
+export async function reorderHonoraryMembersAction(
+  input: ReorderHonoraryMembersInput,
+): Promise<{ ok: true; count: number }> {
+  const principal = await requireHistoryManager();
+  const { ids } = input;
+  if (ids.length === 0) {
+    return { ok: true, count: 0 };
+  }
+  // Rewrite every row's sort_order to (index + 1) so the resulting
+  // canonical order is dense (1..N) — keeps the read-side ordering
+  // stable across mixed dataset operations (add → reorder → delete).
+  const db = getDb();
+  const now = new Date();
+  const stmts = ids.map((id, idx) =>
+    db
+      .update(schema.honoraryMembers)
+      .set({ sortOrder: idx + 1, updatedAt: now })
+      .where(eq(schema.honoraryMembers.id, id)),
+  );
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "honorary_member.reordered",
+    targetType: "honorary_member_list",
+    targetId: "1",
+    metadata: { count: ids.length },
+  });
+  return { ok: true, count: ids.length };
 }
 
 export async function deleteHonoraryMemberAction(

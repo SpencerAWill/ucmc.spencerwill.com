@@ -12,6 +12,7 @@ import {
   createHonoraryMemberInputSchema,
   deleteByIdInputSchema,
   deleteOfficersByYearInputSchema,
+  reorderHonoraryMembersInputSchema,
   updateHistoricalOfficerInputSchema,
   updateHonoraryMemberInputSchema,
   updateNarrativeInputSchema,
@@ -109,4 +110,12 @@ export const deleteHonoraryMemberFn = createServerFn({ method: "POST" })
     const { deleteHonoraryMemberAction } =
       await import("#/features/history/server/history-actions.server");
     return deleteHonoraryMemberAction(data);
+  });
+
+export const reorderHonoraryMembersFn = createServerFn({ method: "POST" })
+  .inputValidator(reorderHonoraryMembersInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true; count: number }> => {
+    const { reorderHonoraryMembersAction } =
+      await import("#/features/history/server/history-actions.server");
+    return reorderHonoraryMembersAction(data);
   });

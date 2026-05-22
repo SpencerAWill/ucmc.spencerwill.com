@@ -74,6 +74,7 @@ export const AUDIT_ACTIONS = [
   "honorary_member.created",
   "honorary_member.updated",
   "honorary_member.deleted",
+  "honorary_member.reordered",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

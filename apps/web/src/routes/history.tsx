@@ -306,9 +306,16 @@ function HistoryPage() {
         <HonoraryMembers
           members={data.honoraryMembers}
           canManage={canManageHistory}
-          onEdit={(member, sortOrder) =>
-            setHonorarySeed({ mode: "edit", member, sortOrder })
-          }
+          onEdit={(member) => {
+            // Look up the member's current slot from server-ordered
+            // data so the edit-mode dialog can preserve sort_order
+            // (DnD is the only path to change it).
+            const idx = data.honoraryMembers.findIndex(
+              (m) => m.id === member.id,
+            );
+            const sortOrder = idx >= 0 ? idx + 1 : 1;
+            setHonorarySeed({ mode: "edit", member, sortOrder });
+          }}
           onDelete={(member) => setDeletingHonorary({ member })}
         />
       </section>

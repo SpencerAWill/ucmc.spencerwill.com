@@ -19,9 +19,11 @@ import {
 import type { HonoraryEntry } from "#/features/history/server/history-fns";
 
 /**
- * Seed for opening the honorary-member dialog. For create mode the
- * parent may pass `defaultSortOrder` so the form defaults to the
- * "next slot" past the current count.
+ * Seed for opening the honorary-member dialog. Sort order is set
+ * automatically — at create time we land the entry at the end of the
+ * canonical list (parent passes `defaultSortOrder`); at edit time we
+ * preserve the existing sortOrder unchanged (DnD is the only way to
+ * reorder).
  */
 export type HonoraryFormSeed =
   | {
@@ -36,7 +38,6 @@ export type HonoraryFormSeed =
 
 interface FormState {
   name: string;
-  sortOrder: string;
   notes: string;
 }
 
@@ -44,13 +45,11 @@ function seedToForm(seed: HonoraryFormSeed): FormState {
   if (seed.mode === "edit") {
     return {
       name: seed.member.name,
-      sortOrder: String(seed.sortOrder),
       notes: seed.member.notes ?? "",
     };
   }
   return {
     name: "",
-    sortOrder: String(seed.defaultSortOrder),
     notes: "",
   };
 }
@@ -76,24 +75,31 @@ export function HonoraryFormDialog({
     if (!form || !seed) {
       return;
     }
-    const sortOrder = Number.parseInt(form.sortOrder, 10);
-    if (!Number.isFinite(sortOrder) || sortOrder < 0) {
-      toast.error("Sort order must be a non-negative integer.");
-      return;
-    }
     const name = form.name.trim();
     if (name.length === 0) {
       toast.error("Name is required.");
       return;
     }
     const notes = form.notes.trim().length > 0 ? form.notes.trim() : null;
-    const payload = { name, sortOrder, notes };
     try {
       if (seed.mode === "create") {
-        await createMut.mutateAsync(payload);
+        // New entries land at the end of the list; existing sort_order
+        // for the rest is left alone, and DnD reorders later.
+        await createMut.mutateAsync({
+          name,
+          sortOrder: seed.defaultSortOrder,
+          notes,
+        });
         toast.success("Honorary member added.");
       } else {
-        await updateMut.mutateAsync({ id: seed.member.id, ...payload });
+        // Edits preserve the existing sort_order — DnD is the only way
+        // to reorder, so the dialog has no slot for it.
+        await updateMut.mutateAsync({
+          id: seed.member.id,
+          name,
+          sortOrder: seed.sortOrder,
+          notes,
+        });
         toast.success("Honorary member updated.");
       }
       onClose();
@@ -123,8 +129,8 @@ export function HonoraryFormDialog({
               : "Add honorary member"}
           </DialogTitle>
           <DialogDescription>
-            Sort order controls display sequence. The list renders in ascending
-            order — pick a higher number to push newer inductees toward the end.
+            New entries land at the end of the list. To change ordering, drag
+            the handle on each row after saving.
           </DialogDescription>
         </DialogHeader>
         {form !== null ? (
@@ -137,35 +143,22 @@ export function HonoraryFormDialog({
               void submitForm();
             }}
           >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="honorary-name">Name</Label>
-                <Input
-                  id="honorary-name"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Steve Must"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="honorary-sort-order">Sort order</Label>
-                <Input
-                  id="honorary-sort-order"
-                  type="number"
-                  value={form.sortOrder}
-                  onChange={(e) =>
-                    setForm({ ...form, sortOrder: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="honorary-notes">Notes (optional)</Label>
-                <Input
-                  id="honorary-notes"
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                />
-              </div>
+            <div className="space-y-1">
+              <Label htmlFor="honorary-name">Name</Label>
+              <Input
+                id="honorary-name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Steve Must"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="honorary-notes">Notes (optional)</Label>
+              <Input
+                id="honorary-notes"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
             </div>
           </form>
         ) : null}
