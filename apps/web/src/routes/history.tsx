@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil } from "lucide-react";
+import { Pencil, Settings2 } from "lucide-react";
 import { useState } from "react";
 
 import { MarkdownContent } from "#/components/markdown/markdown-content";
@@ -10,6 +10,8 @@ import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { historyContentQueryOptions } from "#/features/history/api/queries";
 import { EditNarrativeSheet } from "#/features/history/components/edit-narrative-sheet";
 import { HonoraryMembers } from "#/features/history/components/honorary-members";
+import { ManageHonoraryMembersSheet } from "#/features/history/components/manage-honorary-sheet";
+import { ManageOfficersSheet } from "#/features/history/components/manage-officers-sheet";
 import { PastOfficers } from "#/features/history/components/past-officers";
 
 /**
@@ -40,6 +42,8 @@ function HistoryPage() {
   const { hasPermission } = useAuth();
   const canManageHistory = hasPermission("history:manage");
   const [editNarrativeOpen, setEditNarrativeOpen] = useState(false);
+  const [manageOfficersOpen, setManageOfficersOpen] = useState(false);
+  const [manageHonoraryOpen, setManageHonoraryOpen] = useState(false);
 
   return (
     <main id="main" className="mx-auto w-full max-w-2xl space-y-10 px-6 py-12">
@@ -80,7 +84,22 @@ function HistoryPage() {
       ) : null}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-tight">Past officers</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold tracking-tight">
+            Past officers
+          </h2>
+          {canManageHistory ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setManageOfficersOpen(true)}
+              aria-label="Manage past officers"
+            >
+              <Settings2 className="size-4" />
+              Manage
+            </Button>
+          ) : null}
+        </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
           A year-by-year archive of UCMC's elected leadership and equipment
           managers, beginning with the 1973–74 academic year. Role names and
@@ -94,9 +113,22 @@ function HistoryPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-tight">
-          Honorary members
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold tracking-tight">
+            Honorary members
+          </h2>
+          {canManageHistory ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setManageHonoraryOpen(true)}
+              aria-label="Manage honorary members"
+            >
+              <Settings2 className="size-4" />
+              Manage
+            </Button>
+          ) : null}
+        </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
           Honorary membership is granted by majority vote of the voting
           membership per Constitution §3.4, in recognition of long-running
@@ -105,6 +137,21 @@ function HistoryPage() {
         </p>
         <HonoraryMembers members={data.honoraryMembers} />
       </section>
+
+      {canManageHistory ? (
+        <>
+          <ManageOfficersSheet
+            open={manageOfficersOpen}
+            onOpenChange={setManageOfficersOpen}
+            groups={data.officersByYear}
+          />
+          <ManageHonoraryMembersSheet
+            open={manageHonoraryOpen}
+            onOpenChange={setManageHonoraryOpen}
+            members={data.honoraryMembers}
+          />
+        </>
+      ) : null}
     </main>
   );
 }
