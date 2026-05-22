@@ -108,7 +108,7 @@ export async function getGazetteIssueByPublicIdAction(
 
 // ── mutations (public_gazette:manage) ───────────────────────────────────
 
-const PDF_DATA_URL_RE = /^data:application\/pdf;base64,([A-Za-z0-9+/]+=*)$/;
+const PDF_DATA_URL_RE = /^data:application\/pdf;base64,([A-Za-z0-9+/]+={0,2})$/;
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // "%PDF"
 
 function decodePdfDataUrl(dataUrl: string): ArrayBuffer {

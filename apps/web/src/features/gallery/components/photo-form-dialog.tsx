@@ -26,9 +26,9 @@ import { useImageCrop } from "#/features/landing/lib/use-image-crop";
 
 /**
  * Seed for opening the photo dialog. `mode = "create"` opens a fresh
- * form (PDF is required). `mode = "edit"` pre-loads from an existing
- * row — file input is optional (omit to keep current image, attach
- * to replace).
+ * form (an image upload + completed crop is required). `mode =
+ * "edit"` pre-loads from an existing row — the file input is
+ * optional (omit to keep the current image, attach to replace).
  */
 export type PhotoFormSeed =
   | { mode: "create" }

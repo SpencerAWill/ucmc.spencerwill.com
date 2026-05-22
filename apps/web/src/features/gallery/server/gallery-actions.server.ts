@@ -108,7 +108,7 @@ export async function getGalleryPhotoByPublicIdAction(
 
 // ── mutations (public_gallery:manage) ──────────────────────────────────
 
-const WEBP_DATA_URL_RE = /^data:image\/webp;base64,([A-Za-z0-9+/]+=*)$/;
+const WEBP_DATA_URL_RE = /^data:image\/webp;base64,([A-Za-z0-9+/]+={0,2})$/;
 // "RIFF" + 4-byte size (unchecked) + "WEBP"
 const WEBP_MAGIC_HEAD = [0x52, 0x49, 0x46, 0x46]; // RIFF
 const WEBP_MAGIC_TAIL = [0x57, 0x45, 0x42, 0x50]; // WEBP
