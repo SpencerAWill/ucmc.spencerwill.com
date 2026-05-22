@@ -46,7 +46,7 @@ const R2_BATCH_DELETE_LIMIT = 1000;
 
 // R2 prefixes the cron is allowed to GC. Any object outside these
 // prefixes (e.g. a future `static/` bucket layout) is left alone.
-const GC_PREFIXES = ["avatars/", "landing/"] as const;
+const GC_PREFIXES = ["avatars/", "landing/", "gazette/"] as const;
 
 // Settings keys whose JSON value is an R2 image key. `landingSettings`
 // is a singleton key/value store; the about + meeting sections store
@@ -189,10 +189,10 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
   const db = getDb();
   const live = new Set<string>();
 
-  // Four independent reads against four separate tables — bundle into
+  // Five independent reads against five separate tables — bundle into
   // one `db.batch` so the cron's D1 wait is a single HTTP request.
   // Order doesn't matter; everything funnels into the same Set.
-  const [avatars, heroes, activities, settings] = await db.batch([
+  const [avatars, heroes, activities, settings, gazette] = await db.batch([
     db
       .select({ key: schema.profiles.avatarKey })
       .from(schema.profiles)
@@ -211,6 +211,7 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
       })
       .from(schema.landingSettings)
       .where(inArray(schema.landingSettings.key, SETTINGS_IMAGE_KEYS)),
+    db.select({ key: schema.gazetteIssues.pdfKey }).from(schema.gazetteIssues),
   ]);
 
   for (const row of avatars) {
@@ -239,6 +240,9 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
     } catch {
       // Not valid JSON — leave as-is, the GC sweep skips this row.
     }
+  }
+  for (const row of gazette) {
+    live.add(row.key);
   }
 
   return live;

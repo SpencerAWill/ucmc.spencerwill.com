@@ -635,6 +635,14 @@ export const auditAction = [
   // because each row's new sort_order is implicit in the index it
   // landed at after batch update.
   "honorary_member.reordered",
+  // Goosedown Gazette issue CRUD via /gazette manage affordances.
+  // Metadata carries { schoolYear, issueNumber, title } so the audit
+  // page surfaces enough context to follow "who uploaded what" without
+  // chasing the issue row (which may have been deleted by the time
+  // the audit is reviewed).
+  "gazette_issue.created",
+  "gazette_issue.updated",
+  "gazette_issue.deleted",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -1237,3 +1245,61 @@ export const markdownPages = sqliteTable("markdown_pages", {
 });
 
 export type MarkdownPage = typeof markdownPages.$inferSelect;
+
+/**
+ * Goosedown Gazette — UCMC's club newsletter, archived by school year
+ * and issue number. PDFs live in `BUCKET_PUBLIC` under
+ * `gazette/<id>/<contentHash>.pdf`; the row stores the key plus
+ * metadata (title, editor, published date, file size, description).
+ *
+ * Both `editor` and `publishedAt` are nullable so a future backfill
+ * of the 1978–2020 legacy archive can land incomplete metadata
+ * without schema changes — many old issues lack an exact date or a
+ * recorded editor.
+ *
+ * `UNIQUE (school_year, issue_number)` is the de-dupe guard: a year
+ * can't have two "Issue 1"s. The action layer surfaces the SQLite
+ * uniqueness error cleanly to the UI.
+ */
+export const gazetteIssues = sqliteTable(
+  "gazette_issues",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    schoolYear: text("school_year").notNull(),
+    startYear: integer("start_year").notNull(),
+    issueNumber: integer("issue_number").notNull(),
+    title: text("title"),
+    editor: text("editor"),
+    publishedAt: timestamp("published_at"),
+    description: text("description"),
+    pdfKey: text("pdf_key").notNull(),
+    pdfBytes: integer("pdf_bytes").notNull(),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    // Officer who first uploaded / most recently edited. SET NULL on
+    // delete so the audit chain in audit_log survives the editor's
+    // account removal.
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    uniqueIndex("gazette_issues_year_number_unique").on(
+      t.schoolYear,
+      t.issueNumber,
+    ),
+    // Drives the list query (newest year first, newest issue within
+    // year first).
+    index("gazette_issues_sort_idx").on(t.startYear, t.issueNumber),
+  ],
+);
+
+export type GazetteIssue = typeof gazetteIssues.$inferSelect;
