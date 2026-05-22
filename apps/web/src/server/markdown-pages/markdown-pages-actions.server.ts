@@ -2,8 +2,11 @@
  * Read + write actions for `markdown_pages`. Each mutation gates on
  * the slug's per-page `*:manage` permission (resolved via the
  * permission map in `./slugs`), so a `public_policies:manage` holder
- * can edit /policies but not /scholarships. The read is anonymous-safe
- * — gating is the route layer's job.
+ * can edit /policies but not /scholarships. The read mirrors the
+ * `*:view` half of that pair so a slug whose view permission is not
+ * granted to `role_anonymous` (e.g. `history.narrative`) can't be
+ * fetched by signed-out callers via the server fn — the route guard
+ * isn't the only enforcement point.
  *
  * One audit action covers every page edit: `markdown_page.updated`,
  * with `{ slug, markdownLength }` metadata. The legacy
@@ -20,6 +23,7 @@ import {
 } from "#/server/markdown-pages/markdown-pages-repo.server";
 import { permissionsForSlug } from "#/server/markdown-pages/slugs";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
+import { loadAnonymousPermissions } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 
@@ -37,9 +41,34 @@ async function requireMarkdownPageManager(
   return principal;
 }
 
+/**
+ * Server-side equivalent of `requireViewPermission` for this action
+ * layer. We can't import the client-side guard (it takes a
+ * QueryClient), so re-derive: an authenticated principal needs the
+ * slug's view permission on their effective set; anonymous callers
+ * need it on `role_anonymous`.
+ */
+async function assertCanViewSlug(
+  slug: GetMarkdownPageInput["slug"],
+): Promise<void> {
+  const { view } = permissionsForSlug(slug);
+  const principal = await loadCurrentPrincipal();
+  if (principal) {
+    if (!principal.permissions.includes(view)) {
+      throw new Error(`Forbidden: missing ${view}`);
+    }
+    return;
+  }
+  const anonPerms = await loadAnonymousPermissions();
+  if (!anonPerms.includes(view)) {
+    throw new Error(`Forbidden: missing ${view}`);
+  }
+}
+
 export async function getMarkdownPageAction(
   input: GetMarkdownPageInput,
 ): Promise<{ slug: GetMarkdownPageInput["slug"]; markdown: string }> {
+  await assertCanViewSlug(input.slug);
   const markdown = await readMarkdownPage(input.slug);
   return { slug: input.slug, markdown };
 }
