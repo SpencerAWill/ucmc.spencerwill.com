@@ -256,7 +256,7 @@ export function PhotoFormDialog({
                     </Button>
                   ) : null}
                 </div>
-                <input {...crop.fileInputProps} />
+                <input ref={crop.fileInputRef} {...crop.fileInputProps} />
               </div>
             </div>
 
