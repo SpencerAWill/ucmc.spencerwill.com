@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { PastOfficers } from "#/features/history/components/past-officers";
 import type { OfficerYearGroup } from "#/features/history/server/history-fns";
@@ -122,5 +122,86 @@ describe("PastOfficers", () => {
     expect(
       within(listbox).getByRole("option", { name: "2020-21" }),
     ).toBeInTheDocument();
+  });
+
+  it("hides manage affordances when canManage is false", () => {
+    render(<PastOfficers groups={GROUPS} />);
+    expect(
+      screen.queryByRole("button", { name: /Edit /i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Delete /i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders pencil + trash per row and a delete-year button on the card when canManage", () => {
+    render(
+      <PastOfficers
+        groups={GROUPS}
+        canManage
+        onEditOfficer={() => {}}
+        onDeleteOfficer={() => {}}
+        onDeleteYear={() => {}}
+      />,
+    );
+
+    // Card-level delete-year affordance for the currently-displayed year.
+    expect(
+      screen.getByRole("button", { name: /Delete entire 2022-23 year/i }),
+    ).toBeInTheDocument();
+    // Per-row pencil + trash for each of the 2022-23 officers.
+    expect(
+      screen.getByRole("button", { name: /Edit President \(2022-23\)/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Delete President \(2022-23\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("invokes the correct callback for edit, delete, and delete-year", async () => {
+    const user = userEvent.setup();
+    const onEditOfficer = vi.fn();
+    const onDeleteOfficer = vi.fn();
+    const onDeleteYear = vi.fn();
+    render(
+      <PastOfficers
+        groups={GROUPS}
+        canManage
+        onEditOfficer={onEditOfficer}
+        onDeleteOfficer={onDeleteOfficer}
+        onDeleteYear={onDeleteYear}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /Edit President \(2022-23\)/i }),
+    );
+    expect(onEditOfficer).toHaveBeenCalledTimes(1);
+    const [editedGroup, editedOfficer] = onEditOfficer.mock.calls[0] as [
+      OfficerYearGroup,
+      OfficerYearGroup["officers"][number],
+    ];
+    expect(editedGroup.schoolYear).toBe("2022-23");
+    expect(editedOfficer.role).toBe("President");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Delete Vice-President \(2022-23\)/i,
+      }),
+    );
+    expect(onDeleteOfficer).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        onDeleteOfficer.mock.calls[0] as [OfficerYearGroup["officers"][number]]
+      )[0].name,
+    ).toBe("Trevor Darst");
+
+    await user.click(
+      screen.getByRole("button", { name: /Delete entire 2022-23 year/i }),
+    );
+    expect(onDeleteYear).toHaveBeenCalledTimes(1);
+    expect(
+      (onDeleteYear.mock.calls[0] as [OfficerYearGroup])[0].schoolYear,
+    ).toBe("2022-23");
   });
 });

@@ -13,6 +13,7 @@ import type {
   CreateHistoricalOfficerInput,
   CreateHonoraryMemberInput,
   DeleteByIdInput,
+  DeleteOfficersByYearInput,
   UpdateHistoricalOfficerInput,
   UpdateHonoraryMemberInput,
   UpdateNarrativeInput,
@@ -183,6 +184,39 @@ export async function updateHistoricalOfficerAction(
     },
   });
   return { ok: true };
+}
+
+export async function deleteHistoricalOfficersByYearAction(
+  input: DeleteOfficersByYearInput,
+): Promise<{ deletedCount: number; schoolYear: string | null }> {
+  const principal = await requireHistoryManager();
+  const deleted = await getDb()
+    .delete(schema.historicalOfficers)
+    .where(eq(schema.historicalOfficers.startYear, input.startYear))
+    .returning({
+      id: schema.historicalOfficers.id,
+      schoolYear: schema.historicalOfficers.schoolYear,
+    });
+  const deletedCount = deleted.length;
+  // Capture schoolYear from the deleted rows (rather than re-deriving
+  // from startYear) so audit metadata reflects exactly what was in
+  // the DB — handles the edge case where rows for one start_year
+  // disagree on the school_year string.
+  const schoolYear = deleted[0]?.schoolYear ?? null;
+  if (deletedCount > 0) {
+    await recordAuditEvent({
+      actorUserId: principal.userId,
+      action: "historical_officer.year_deleted",
+      targetType: "historical_officer_year",
+      targetId: String(input.startYear),
+      metadata: {
+        startYear: input.startYear,
+        schoolYear,
+        deletedCount,
+      },
+    });
+  }
+  return { deletedCount, schoolYear };
 }
 
 export async function deleteHistoricalOfficerAction(

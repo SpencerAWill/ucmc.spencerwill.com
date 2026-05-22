@@ -4,11 +4,13 @@ import { HISTORY_CONTENT_QUERY_KEY } from "#/features/history/api/query-keys";
 import {
   createHistoricalOfficerFn,
   deleteHistoricalOfficerFn,
+  deleteHistoricalOfficersByYearFn,
   updateHistoricalOfficerFn,
 } from "#/features/history/server/history-fns";
 import type {
   CreateHistoricalOfficerInput,
   DeleteByIdInput,
+  DeleteOfficersByYearInput,
   UpdateHistoricalOfficerInput,
 } from "#/features/history/server/history-schemas";
 
@@ -43,6 +45,21 @@ export function useDeleteHistoricalOfficer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: DeleteByIdInput) => deleteHistoricalOfficerFn({ data }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: HISTORY_CONTENT_QUERY_KEY }),
+  });
+}
+
+/**
+ * Bulk-delete every officer entry for one school year. Returns the
+ * deleted-row count + the schoolYear string from the deleted rows
+ * (mostly informational; toasts use the count).
+ */
+export function useDeleteHistoricalOfficersByYear() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: DeleteOfficersByYearInput) =>
+      deleteHistoricalOfficersByYearFn({ data }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: HISTORY_CONTENT_QUERY_KEY }),
   });

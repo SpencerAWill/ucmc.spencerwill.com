@@ -611,6 +611,12 @@ export const auditAction = [
   "historical_officer.created",
   "historical_officer.updated",
   "historical_officer.deleted",
+  // Bulk deletion of every officer entry for one school year. One
+  // event per year-delete (not one per row) with metadata carrying
+  // the schoolYear and how many rows were removed — that's enough
+  // context to follow a "who wiped 2022-23?" trail without flooding
+  // the audit log with five identical-looking rows on one click.
+  "historical_officer.year_deleted",
   "honorary_member.created",
   "honorary_member.updated",
   "honorary_member.deleted",

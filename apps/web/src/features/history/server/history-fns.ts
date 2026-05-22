@@ -11,6 +11,7 @@ import {
   createHistoricalOfficerInputSchema,
   createHonoraryMemberInputSchema,
   deleteByIdInputSchema,
+  deleteOfficersByYearInputSchema,
   updateHistoricalOfficerInputSchema,
   updateHonoraryMemberInputSchema,
   updateNarrativeInputSchema,
@@ -69,6 +70,20 @@ export const deleteHistoricalOfficerFn = createServerFn({ method: "POST" })
       await import("#/features/history/server/history-actions.server");
     return deleteHistoricalOfficerAction(data);
   });
+
+export const deleteHistoricalOfficersByYearFn = createServerFn({
+  method: "POST",
+})
+  .inputValidator(deleteOfficersByYearInputSchema)
+  .handler(
+    async ({
+      data,
+    }): Promise<{ deletedCount: number; schoolYear: string | null }> => {
+      const { deleteHistoricalOfficersByYearAction } =
+        await import("#/features/history/server/history-actions.server");
+      return deleteHistoricalOfficersByYearAction(data);
+    },
+  );
 
 // ── honorary members ────────────────────────────────────────────────────
 

@@ -59,6 +59,20 @@ export const deleteByIdInputSchema = z.object({
 });
 export type DeleteByIdInput = z.infer<typeof deleteByIdInputSchema>;
 
+/**
+ * Bulk-delete every historical-officer row for one school year.
+ * Identified by `startYear` (an integer like 2022) rather than the
+ * `school_year` string so the server doesn't need to re-parse the
+ * "YYYY-YY" format. The /history Manage UI passes both alongside;
+ * `startYear` is the source of truth on the wire.
+ */
+export const deleteOfficersByYearInputSchema = z.object({
+  startYear: z.number().int().min(1900).max(2100),
+});
+export type DeleteOfficersByYearInput = z.infer<
+  typeof deleteOfficersByYearInputSchema
+>;
+
 // ── honorary members ────────────────────────────────────────────────────
 
 const honoraryFields = {

@@ -70,6 +70,7 @@ export const AUDIT_ACTIONS = [
   "historical_officer.created",
   "historical_officer.updated",
   "historical_officer.deleted",
+  "historical_officer.year_deleted",
   "honorary_member.created",
   "honorary_member.updated",
   "honorary_member.deleted",
