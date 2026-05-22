@@ -232,6 +232,14 @@ function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Club policies">
+              <Link to="/policies">
+                <Gavel />
+                <span>Policies</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled
               tabIndex={-1}

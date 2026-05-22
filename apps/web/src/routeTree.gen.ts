@@ -16,6 +16,7 @@ import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ScholarshipsRouteImport } from './routes/scholarships'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as PoliciesRouteImport } from './routes/policies'
 import { Route as OpenSourceRouteImport } from './routes/open-source'
 import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
 import { Route as MyRouteImport } from './routes/my'
@@ -97,6 +98,11 @@ const ScholarshipsRoute = ScholarshipsRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PoliciesRoute = PoliciesRouteImport.update({
+  id: '/policies',
+  path: '/policies',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpenSourceRoute = OpenSourceRouteImport.update({
@@ -350,6 +356,7 @@ export interface FileRoutesByFullPath {
   '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
@@ -403,6 +410,7 @@ export interface FileRoutesByTo {
   '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
@@ -455,6 +463,7 @@ export interface FileRoutesById {
   '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
@@ -513,6 +522,7 @@ export interface FileRouteTypes {
     | '/my'
     | '/nondiscrimination'
     | '/open-source'
+    | '/policies'
     | '/privacy'
     | '/scholarships'
     | '/settings'
@@ -566,6 +576,7 @@ export interface FileRouteTypes {
     | '/my'
     | '/nondiscrimination'
     | '/open-source'
+    | '/policies'
     | '/privacy'
     | '/scholarships'
     | '/settings'
@@ -617,6 +628,7 @@ export interface FileRouteTypes {
     | '/my'
     | '/nondiscrimination'
     | '/open-source'
+    | '/policies'
     | '/privacy'
     | '/scholarships'
     | '/settings'
@@ -674,6 +686,7 @@ export interface RootRouteChildren {
   MyRoute: typeof MyRouteWithChildren
   NondiscriminationRoute: typeof NondiscriminationRoute
   OpenSourceRoute: typeof OpenSourceRoute
+  PoliciesRoute: typeof PoliciesRoute
   PrivacyRoute: typeof PrivacyRoute
   ScholarshipsRoute: typeof ScholarshipsRoute
   SettingsRoute: typeof SettingsRoute
@@ -740,6 +753,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/policies': {
+      id: '/policies'
+      path: '/policies'
+      fullPath: '/policies'
+      preLoaderRoute: typeof PoliciesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/open-source': {
@@ -1202,6 +1222,7 @@ const rootRouteChildren: RootRouteChildren = {
   MyRoute: MyRouteWithChildren,
   NondiscriminationRoute: NondiscriminationRoute,
   OpenSourceRoute: OpenSourceRoute,
+  PoliciesRoute: PoliciesRoute,
   PrivacyRoute: PrivacyRoute,
   ScholarshipsRoute: ScholarshipsRoute,
   SettingsRoute: SettingsRoute,
