@@ -65,6 +65,7 @@ export const AUDIT_ACTIONS = [
   "loan.checked_out",
   "loan.checked_in",
   "loan.extended",
+  "loan.cart_scanned",
   "settings_updated",
   "history.narrative_updated",
   "markdown_page.updated",
