@@ -32,7 +32,6 @@ import {
   ScrollText,
   Settings,
   Shield,
-  ShoppingCart,
   Target,
   Users,
   Vote,
@@ -440,44 +439,43 @@ function SidebarNav() {
                   <SidebarMenuItem>
                     {/* Same Collapsible-inside-MenuItem pattern as the
                      * Members entry so the <ul> only contains <li>
-                     * children (axe-core's list rule). Sub-items always
-                     * include the member's own cart; the Loans sub-link
-                     * is officer-only (`gear:loan`). */}
-                    <Collapsible defaultOpen className="group/collapsible">
+                     * children (axe-core's list rule). Sub-item appears
+                     * only when the user has `gear:loan`. Members reach
+                     * their personal surfaces (My Gear, My Cart) from
+                     * the user menu — kept off the sidebar so the
+                     * sidebar stays officer-shaped. */}
+                    <Collapsible
+                      defaultOpen={canLoanGear}
+                      className="group/collapsible"
+                    >
                       <SidebarMenuButton asChild tooltip="Gear">
                         <Link to="/gear">
                           <Package />
                           <span>Gear</span>
                         </Link>
                       </SidebarMenuButton>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuAction className="data-[state=open]:rotate-90">
-                          <ChevronRight />
-                          <span className="sr-only">Toggle sub-menu</span>
-                        </SidebarMenuAction>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild>
-                              <Link to="/my/gear/cart">
-                                <ShoppingCart />
-                                <span>My cart</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          {canLoanGear ? (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link to="/gear/loans">
-                                  <Handshake />
-                                  <span>Loans</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ) : null}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
+                      {canLoanGear ? (
+                        <>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuAction className="data-[state=open]:rotate-90">
+                              <ChevronRight />
+                              <span className="sr-only">Toggle sub-menu</span>
+                            </SidebarMenuAction>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub>
+                              <SidebarMenuSubItem>
+                                <SidebarMenuSubButton asChild>
+                                  <Link to="/gear/loans">
+                                    <Handshake />
+                                    <span>Loans</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </>
+                      ) : null}
                     </Collapsible>
                   </SidebarMenuItem>
                 ) : null}
