@@ -39,10 +39,33 @@ export default {
 
   fetch: cachedFetch as unknown as typeof startEntry.fetch,
 
-  async scheduled(_event, _env, ctx) {
-    // Server-only import. Lazy-loaded so the worker entry's static
-    // module graph stays small and matches the dynamic-import pattern
-    // used by the server-fn shells.
+  async scheduled(event, _env, ctx) {
+    // Dispatch by `event.cron` so additional schedules are a single
+    // branch each, rather than every job firing on every tick.
+    //
+    // Schedules currently wired (must match wrangler.jsonc):
+    //   - "0 8 * * *"   → daily retention sweeps
+    //   - "15 8 1 3 *"  → annual officer-archive snapshot (March 1)
+    if (event.cron === "15 8 1 3 *") {
+      const { archiveCurrentOfficers } =
+        await import("./server/cron/archive-officers.server");
+      ctx.waitUntil(
+        archiveCurrentOfficers().then(
+          (result) =>
+            // eslint-disable-next-line no-console
+            console.log("officers.archive_complete", result),
+          (err: unknown) =>
+            // eslint-disable-next-line no-console
+            console.error("officers.archive_failed", {
+              error: err instanceof Error ? err.message : String(err),
+            }),
+        ),
+      );
+      return;
+    }
+
+    // Default fallback: daily retention. Catches "0 8 * * *" plus any
+    // future daily schedules that piggyback on the same wakeup.
     const { runRetentionSweeps } =
       await import("./server/cron/retention.server");
     ctx.waitUntil(runRetentionSweeps());
