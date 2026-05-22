@@ -6,6 +6,7 @@
 import {
   listHistoricalOfficers,
   listHonoraryMembers,
+  readNarrativeMarkdown,
 } from "#/features/history/server/history-repo.server";
 
 export interface OfficerEntry {
@@ -29,12 +30,14 @@ export interface HonoraryEntry {
 }
 
 export interface HistoryContent {
+  narrativeMarkdown: string;
   officersByYear: OfficerYearGroup[];
   honoraryMembers: HonoraryEntry[];
 }
 
 export async function getHistoryContentAction(): Promise<HistoryContent> {
-  const [officers, honorary] = await Promise.all([
+  const [narrativeMarkdown, officers, honorary] = await Promise.all([
+    readNarrativeMarkdown(),
     listHistoricalOfficers(),
     listHonoraryMembers(),
   ]);
@@ -70,6 +73,7 @@ export async function getHistoryContentAction(): Promise<HistoryContent> {
   }
 
   return {
+    narrativeMarkdown,
     officersByYear,
     honoraryMembers: honorary.map((h) => ({
       id: h.id,

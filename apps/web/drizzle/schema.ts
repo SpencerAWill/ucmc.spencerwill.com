@@ -1157,3 +1157,38 @@ export const honoraryMembers = sqliteTable(
 
 export type HistoricalOfficer = typeof historicalOfficers.$inferSelect;
 export type HonoraryMember = typeof honoraryMembers.$inferSelect;
+
+/**
+ * Single-row store for /history page narrative markdown. Seeded with
+ * the founding-story + Steve Must memorial content originally living
+ * in `HISTORY_BODY` (config/legal.ts), now editable by holders of
+ * `history:manage` via the page's edit affordance.
+ *
+ * Convention: there is exactly one row, with `id = 1`. The action
+ * layer guarantees this — writes use UPDATE-by-id, reads grab the
+ * first row and fall back to an empty string. We don't enforce
+ * single-row at the DB layer (no CHECK in SQLite for a constant
+ * value); the convention is sufficient because no code path inserts
+ * a second row.
+ *
+ * Why a dedicated table (not site_settings or landing_settings):
+ * site_settings is gated by `settings:manage`, which is the wrong
+ * grant; landing_settings is semantically the landing page. A
+ * dedicated table keeps the `history:manage` boundary cleanly
+ * scoped without cross-feature reuse confusion.
+ */
+export const historyContent = sqliteTable("history_content", {
+  id: integer("id").primaryKey(),
+  narrativeMarkdown: text("narrative_markdown").notNull().default(""),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  // Officer who last edited the narrative. Snapshot of users.id;
+  // SET NULL on delete preserves the audit chain in audit_log even
+  // after the editor's account is removed.
+  updatedBy: text("updated_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+});
+
+export type HistoryContent = typeof historyContent.$inferSelect;

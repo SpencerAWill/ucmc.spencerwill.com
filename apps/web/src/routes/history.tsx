@@ -1,18 +1,17 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { LegalSections } from "#/components/legal/legal-section";
-import { HISTORY_BODY } from "#/config/legal";
+import { MarkdownContent } from "#/components/markdown/markdown-content";
 import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { historyContentQueryOptions } from "#/features/history/api/queries";
 import { HonoraryMembers } from "#/features/history/components/honorary-members";
 import { PastOfficers } from "#/features/history/components/past-officers";
 
 /**
- * Member-only /history page. Pairs static narrative content (founding
- * story + Steve Must memorial, owned in `legal.ts` for now — the
- * dynamic markdown migration lands in a follow-up commit) with the
- * dynamic past-officers archive + honorary-members list.
+ * Member-only /history page. Pairs the dynamic narrative markdown
+ * (single-row `history_content` table, editable by `history:manage`
+ * holders) with the dynamic past-officers archive + honorary-members
+ * list.
  *
  * Gated by `history:view` (auto-granted to `role_member`, so every
  * approved member sees it). Non-holders get the notFound boundary
@@ -45,7 +44,9 @@ function HistoryPage() {
         </p>
       </header>
 
-      <LegalSections sections={HISTORY_BODY} />
+      {data.narrativeMarkdown.length > 0 ? (
+        <MarkdownContent>{data.narrativeMarkdown}</MarkdownContent>
+      ) : null}
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Past officers</h2>
