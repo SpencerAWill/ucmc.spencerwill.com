@@ -203,6 +203,7 @@ function SidebarNav() {
   const canReadGear = hasPermission("gear:read");
   const canLoanGear = hasPermission("gear:loan");
   const canViewHistory = hasPermission("history:view");
+  const canViewPolicies = hasPermission("public_policies:view");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -230,14 +231,16 @@ function SidebarNav() {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Club policies">
-              <Link to="/policies">
-                <Gavel />
-                <span>Policies</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {canViewPolicies ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Club policies">
+                <Link to="/policies">
+                  <Gavel />
+                  <span>Policies</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Resources">
               <Link to="/resources">
