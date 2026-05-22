@@ -16,9 +16,18 @@ import {
  * (route guard) — non-holders get the notFound boundary rather than
  * a redirect.
  *
- * Inline rendering of the PDF + CSP updates land in the follow-up
- * commit. This first pass surfaces metadata + a download link so the
- * Issue Card's "View" button has somewhere to navigate to.
+ * The inline `<iframe>` loads the PDF from the R2 custom domain
+ * (`cdn.{dev.,}ucmc.spencerwill.com`). CSP's `frame-src` allow-lists
+ * both hosts. The download `<a>` points at the same URL with the
+ * `download` attribute; cross-origin means some browsers may ignore
+ * the attribute and open the PDF inline regardless, but that's an
+ * acceptable degradation since the iframe already covers inline
+ * viewing.
+ *
+ * Mobile fallback: native browser PDF viewers vary in quality. The
+ * iframe is still the primary surface — when iOS Safari refuses to
+ * render it inline, users see the empty frame and the Download
+ * button below as a recovery path.
  */
 export const Route = createFileRoute("/gazette/$publicId")({
   beforeLoad: async ({ context }) => {
@@ -73,12 +82,39 @@ function GazetteIssuePage() {
         ) : null}
       </header>
 
-      <Button asChild variant="default">
-        <a href={downloadUrl} download={downloadName}>
-          <Download className="size-4" />
-          Download PDF
-        </a>
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="default">
+          <a href={downloadUrl} download={downloadName}>
+            <Download className="size-4" />
+            Download PDF
+          </a>
+        </Button>
+        <Button asChild variant="outline">
+          <a href={downloadUrl} target="_blank" rel="noopener noreferrer">
+            Open in new tab
+          </a>
+        </Button>
+      </div>
+
+      <div className="rounded-md border bg-muted/30">
+        <iframe
+          src={downloadUrl}
+          title={`${displayTitle} — PDF reader`}
+          className="block h-[80vh] w-full rounded-md"
+        >
+          <p className="p-4 text-sm">
+            Your browser doesn't support inline PDF viewing.{" "}
+            <a
+              href={downloadUrl}
+              download={downloadName}
+              className="underline underline-offset-4"
+            >
+              Download the PDF
+            </a>{" "}
+            to read it.
+          </p>
+        </iframe>
+      </div>
     </main>
   );
 }

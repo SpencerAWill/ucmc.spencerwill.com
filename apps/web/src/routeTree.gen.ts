@@ -38,6 +38,7 @@ import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GearIndexRouteImport } from './routes/gear.index'
+import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
@@ -215,6 +216,11 @@ const GearIndexRoute = GearIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => GearRoute,
+} as any)
+const GazetteIndexRoute = GazetteIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GazetteRoute,
 } as any)
 const AnnouncementsIndexRoute = AnnouncementsIndexRouteImport.update({
   id: '/announcements/',
@@ -415,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
+  '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -445,7 +452,6 @@ export interface FileRoutesByTo {
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsIndexRoute
-  '/gazette': typeof GazetteRouteWithChildren
   '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
@@ -474,6 +480,7 @@ export interface FileRoutesByTo {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements': typeof AnnouncementsIndexRoute
+  '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -536,6 +543,7 @@ export interface FileRoutesById {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
+  '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
@@ -599,6 +607,7 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
+    | '/gazette/'
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -629,7 +638,6 @@ export interface FileRouteTypes {
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
-    | '/gazette'
     | '/gear-cave'
     | '/health'
     | '/history'
@@ -658,6 +666,7 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements'
+    | '/gazette'
     | '/gear'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -719,6 +728,7 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
+    | '/gazette/'
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
@@ -986,6 +996,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GearIndexRouteImport
       parentRoute: typeof GearRoute
     }
+    '/gazette/': {
+      id: '/gazette/'
+      path: '/'
+      fullPath: '/gazette/'
+      preLoaderRoute: typeof GazetteIndexRouteImport
+      parentRoute: typeof GazetteRoute
+    }
     '/announcements/': {
       id: '/announcements/'
       path: '/announcements'
@@ -1241,10 +1258,12 @@ const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
 
 interface GazetteRouteChildren {
   GazettePublicIdRoute: typeof GazettePublicIdRoute
+  GazetteIndexRoute: typeof GazetteIndexRoute
 }
 
 const GazetteRouteChildren: GazetteRouteChildren = {
   GazettePublicIdRoute: GazettePublicIdRoute,
+  GazetteIndexRoute: GazetteIndexRoute,
 }
 
 const GazetteRouteWithChildren =

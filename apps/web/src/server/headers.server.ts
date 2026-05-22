@@ -40,7 +40,14 @@ const CSP_VALUE = [
   // 17+ doesn't actually execute any WASM, but the CSP directive
   // applies uniformly so the polyfill fallback works when needed.
   "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
-  "frame-src https://challenges.cloudflare.com",
+  // `frame-src` covers the Turnstile widget AND the inline PDF
+  // iframe on /gazette/$publicId. Gazette PDFs are served from the
+  // R2 custom domain `cdn.{dev.,}ucmc.spencerwill.com` — that's
+  // cross-origin from the app even though same TLD, so `'self'`
+  // alone isn't sufficient. Both dev + prod CDN hosts are listed
+  // unconditionally; the deployment branch determines which one
+  // resolves, but the same CSP string ships to both envs.
+  "frame-src https://challenges.cloudflare.com https://cdn.ucmc.spencerwill.com https://cdn.dev.ucmc.spencerwill.com",
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
   "object-src 'none'",
