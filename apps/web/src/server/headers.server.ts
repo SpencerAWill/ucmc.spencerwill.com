@@ -83,9 +83,31 @@ function permissionsPolicyForPath(pathname: string): string {
 }
 
 /**
+ * CSP for routes whose response is intended to be embedded by the app
+ * itself via `<iframe>`. The global CSP sets `frame-ancestors 'none'`
+ * and `X-Frame-Options: DENY` so no random page can frame us; that
+ * blanket policy also blocks /gazette from framing its own PDFs.
+ * Same-origin embedding (`frame-ancestors 'self'`) is the surgical
+ * exception.
+ */
+const EMBEDDABLE_CSP_VALUE = [
+  "default-src 'self'",
+  "frame-ancestors 'self'",
+  "base-uri 'self'",
+].join("; ");
+
+const EMBEDDABLE_PATH_PREFIXES = ["/api/gazette-pdf/"] as const;
+
+function isEmbeddablePath(pathname: string): boolean {
+  return EMBEDDABLE_PATH_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+/**
  * Compute the security headers for the current request. Pathname is
  * inspected so the Permissions-Policy can scope camera access to just
- * the gear-cave scanner routes. Everything else is static.
+ * the gear-cave scanner routes, and so the gazette PDF route can be
+ * embedded by /gazette/$publicId (the global CSP otherwise blocks any
+ * iframe of it).
  *
  * Returns an array (not an object) because `start.ts` applies each
  * header via `setResponseHeader` (the singular form — the plural
@@ -95,6 +117,21 @@ function permissionsPolicyForPath(pathname: string): string {
 export function securityHeadersForPath(
   pathname: string,
 ): ReadonlyArray<readonly [string, string]> {
+  if (isEmbeddablePath(pathname)) {
+    // Embeddable response: drop X-Frame-Options + frame-ancestors so
+    // the iframe load isn't blocked, but keep nosniff + HSTS so the
+    // PDF bytes are still served safely.
+    return [
+      ["Content-Security-Policy", EMBEDDABLE_CSP_VALUE],
+      [
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains; preload",
+      ],
+      ["X-Frame-Options", "SAMEORIGIN"],
+      ["Referrer-Policy", "strict-origin-when-cross-origin"],
+      ["X-Content-Type-Options", "nosniff"],
+    ];
+  }
   return [
     ["Content-Security-Policy", CSP_VALUE],
     // Pin TLS for one year, include subdomains, and signal eligibility

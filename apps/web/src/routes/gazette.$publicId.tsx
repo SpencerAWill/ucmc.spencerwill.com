@@ -96,24 +96,21 @@ function GazetteIssuePage() {
         </Button>
       </div>
 
+      {/*
+       * Bare iframe — no fallback children. iframe children are a
+       * legacy mechanism for browsers that don't support frames at
+       * all; React serializes them during SSR and the client then
+       * sees an empty/HTML-rendered child, producing a hydration
+       * mismatch. The "Download" + "Open in new tab" buttons above
+       * already serve as the recovery path when a browser can't
+       * display the PDF inline (notably iOS Safari).
+       */}
       <div className="rounded-md border bg-muted/30">
         <iframe
           src={downloadUrl}
           title={`${displayTitle} — PDF reader`}
           className="block h-[80vh] w-full rounded-md"
-        >
-          <p className="p-4 text-sm">
-            Your browser doesn't support inline PDF viewing.{" "}
-            <a
-              href={downloadUrl}
-              download={downloadName}
-              className="underline underline-offset-4"
-            >
-              Download the PDF
-            </a>{" "}
-            to read it.
-          </p>
-        </iframe>
+        />
       </div>
     </main>
   );
