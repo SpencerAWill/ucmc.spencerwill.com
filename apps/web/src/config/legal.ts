@@ -508,6 +508,133 @@ export const HISTORY_BODY: readonly LegalSection[] = [
 ];
 
 /**
+ * Static content for the /scholarships page. Consolidates four legacy
+ * pages — scholarships.html (overview), earn-it.html (procedural rules
+ * sometimes called the "Earn It" program), committee.html (selection
+ * committee makeup), contribute.html (donation instructions),
+ * experiences.html (past recipients) — into one config-driven page.
+ *
+ * The donation memo line and UC Foundation account number (F102341)
+ * are exact strings; any donor cover letter or memo line needs to
+ * reproduce them verbatim so the gift routes correctly inside UC's
+ * accounting system.
+ */
+export const SCHOLARSHIPS_BODY: readonly LegalSection[] = [
+  {
+    heading: "Steve Must Memorial Scholarship",
+    paragraphs: [
+      "UCMC established the Outdoor Leadership Scholarship in 1997 to underwrite undergraduate members attending professional wilderness and outdoor education programs. In 1999 the fund was renamed in memory of Steve Must, a beloved 1980s-era club member who went on to spend years in the Pacific Northwest mountaineering with the legendary Fred Beckey.",
+      'In the words of the program: "The goal of the UCMC Steve Must Memorial Scholarship (SMMS) is to further develop the outdoor leadership skills of UCMC student members who have proven commitment and leadership potential." Recipients are expected to return to the club and share what they learn — it is an investment, not a reward.',
+    ],
+    references: [
+      {
+        label: "Steve Must — in memoriam",
+        href: "/history#steve-must-in-memoriam",
+      },
+    ],
+  },
+  {
+    heading: "Eligibility",
+    paragraphs: [
+      "Applicants must be matriculated UC undergraduates in good standing with UCMC, with at least one year of undergraduate study remaining, a UCMC membership of at least 8 months at the time the funded course begins, and an academic record showing both:",
+    ],
+    bullets: [
+      "Cumulative GPA of 2.25 or higher (maintained through the award);",
+      "GPA of 2.00 or higher in each of the two quarters/semesters immediately preceding the course;",
+      "Evidence that the applicant has first applied for any other available scholarships or financial aid;",
+      "Consistent demonstration of leadership potential and commitment to UCMC.",
+    ],
+  },
+  {
+    heading: "Application timeline",
+    paragraphs: [
+      "Applications are reviewed twice per academic year by the Scholarship Committee. The cycles align with when courses tend to run.",
+    ],
+    bullets: [
+      "Fall (for late-October-through-February courses): budget announced in Week 4; applications open Weeks 4–8; selections announced Week 9; recipients accept by Week 11.",
+      "Spring (for March-through-September courses): remaining funds announced in Fall Week 13; applications open Fall Week 14 through Spring Week 4; selections announced Week 5; recipients accept by Week 7.",
+      "Applications outside these windows are reviewed case-by-case.",
+    ],
+  },
+  {
+    heading: "Formal proposal",
+    paragraphs: [
+      "Every application is a formal written proposal submitted to the Executive and Scholarship Committees. It must include:",
+    ],
+    bullets: [
+      "Course provider description and curriculum, including all prerequisites, costs, and required insurance;",
+      "Documentation showing the applicant meets every provider prerequisite (medical exam, prior certifications, insurance);",
+      "Proof of UC enrollment, current GPA, and active medical insurance;",
+      "Copies of every other scholarship or financial-aid application the applicant has submitted;",
+      "A written plan for how the acquired knowledge will be shared back with UCMC membership (lectures, trip leadership, gear training, Goosedown Gazette articles, etc.);",
+      "A statement of the applicant's prior UCMC participation, leadership history, and committed service to the club.",
+    ],
+  },
+  {
+    heading: "Selection criteria",
+    paragraphs: [
+      "The committee weighs three questions when ranking proposals:",
+    ],
+    bullets: [
+      "What outdoor-leadership development does UCMC currently need?",
+      "Which programs would meet those needs?",
+      "Which candidates are most likely to return their new knowledge to the club?",
+    ],
+  },
+  {
+    heading: "Refund policy",
+    paragraphs: [
+      'Awards are conditional on completing the funded course. "In the event that a scholarship recipient does not successfully complete the course for which the award was designated, the UCMC will require that the award amount be refunded." The Treasurer manages refund arrangements case-by-case.',
+    ],
+  },
+  {
+    heading: "Selection committee",
+    paragraphs: [
+      "The Scholarship Committee is a five-person body appointed by the Executive Committee: two UCMC alumni, two current student members, and the UCMC faculty advisor. Membership is documented in the bylaws and rotates annually as roles change.",
+    ],
+  },
+  {
+    heading: "Past recipients",
+    paragraphs: [
+      "A partial record of past awards — names, courses, and (where available) reflections written by the recipient — is preserved as historical context. The first scholarship (1997) was an informal collection from members and officers; the formal program with its current rules begins in 1999.",
+    ],
+    bullets: [
+      "Emily Hannan, Spring 2020 — AAI Alpinism 1 on Mount Baker (Steve Must Memorial Scholarship).",
+      "Several members, Fall 2002 — WFR (Wilderness First Responder); fees offset by the scholarship.",
+      "Robert Sexton, Summer 2000 — ACA Whitewater Kayaking Instructor.",
+      "Annelies Koob and three others, Spring 1999 — WMA Wilderness First Responder (72-hour course).",
+      "Robert Sexton, Spring 1999 — ACA Swiftwater Rescue Instructor.",
+      "Jeremy Sibert, Summer 1997 — NOLS Mountaineering in Alaska (the first, informal UCMC scholarship).",
+    ],
+    references: [
+      {
+        label: "Robert Sexton — recipient documentation (1 of 2)",
+        href: "/scholarships/sexton_01.pdf",
+      },
+      {
+        label: "Robert Sexton — recipient documentation (2 of 2)",
+        href: "/scholarships/sexton_02.pdf",
+      },
+      {
+        label: "Annelies Koob — recipient documentation",
+        href: "/scholarships/koob.pdf",
+      },
+    ],
+  },
+  {
+    heading: "How to donate",
+    paragraphs: [
+      "Donations are routed through the UC Foundation, which is a 501(c)(3) tax-exempt entity — gifts are tax-deductible to the extent allowed by law. Many employers offer matching programs for gifts to non-profits; ask your HR department.",
+      'For mailed gifts: make checks payable to The UC Foundation. On the memo line, write: UCMC Steve Must Scholarship (F102341). Mail to The University of Cincinnati Foundation, PO Box 19970, Cincinnati, OH 45219-0970. A short cover letter noting the gift supports the "UC Mountaineering Club Steve Must Memorial Scholarship (F102341)" helps the Foundation\'s mailroom route it correctly.',
+      "For online gifts: visit foundation.uc.edu/UCMC, enter the amount, complete the donor information, and submit.",
+    ],
+    references: [
+      { label: "Give online", href: "https://foundation.uc.edu/UCMC" },
+    ],
+  },
+];
+
+/**
  * Public legal-page index — surfaces all five legal/policy routes
  * (disclaimer, non-discrimination, anti-hazing, waiver, privacy,
  * terms) plus the colophon, in one place. Not strictly required, but

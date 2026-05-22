@@ -14,6 +14,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ScholarshipsRouteImport } from './routes/scholarships'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OpenSourceRouteImport } from './routes/open-source'
 import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
@@ -86,6 +87,11 @@ const SignInRoute = SignInRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScholarshipsRoute = ScholarshipsRouteImport.update({
+  id: '/scholarships',
+  path: '/scholarships',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -345,6 +351,7 @@ export interface FileRoutesByFullPath {
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
+  '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
@@ -397,6 +404,7 @@ export interface FileRoutesByTo {
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
+  '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
@@ -448,6 +456,7 @@ export interface FileRoutesById {
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
   '/privacy': typeof PrivacyRoute
+  '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
@@ -505,6 +514,7 @@ export interface FileRouteTypes {
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
+    | '/scholarships'
     | '/settings'
     | '/sign-in'
     | '/terms'
@@ -557,6 +567,7 @@ export interface FileRouteTypes {
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
+    | '/scholarships'
     | '/settings'
     | '/sign-in'
     | '/terms'
@@ -607,6 +618,7 @@ export interface FileRouteTypes {
     | '/nondiscrimination'
     | '/open-source'
     | '/privacy'
+    | '/scholarships'
     | '/settings'
     | '/sign-in'
     | '/terms'
@@ -663,6 +675,7 @@ export interface RootRouteChildren {
   NondiscriminationRoute: typeof NondiscriminationRoute
   OpenSourceRoute: typeof OpenSourceRoute
   PrivacyRoute: typeof PrivacyRoute
+  ScholarshipsRoute: typeof ScholarshipsRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   TermsRoute: typeof TermsRoute
@@ -713,6 +726,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scholarships': {
+      id: '/scholarships'
+      path: '/scholarships'
+      fullPath: '/scholarships'
+      preLoaderRoute: typeof ScholarshipsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -1183,6 +1203,7 @@ const rootRouteChildren: RootRouteChildren = {
   NondiscriminationRoute: NondiscriminationRoute,
   OpenSourceRoute: OpenSourceRoute,
   PrivacyRoute: PrivacyRoute,
+  ScholarshipsRoute: ScholarshipsRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   TermsRoute: TermsRoute,

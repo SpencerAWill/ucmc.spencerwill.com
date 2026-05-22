@@ -15,10 +15,8 @@ import {
   FileText,
   Gavel,
   GraduationCap,
-  HandCoins,
   HandHeart,
   Handshake,
-  HelpCircle,
   History,
   Images,
   Landmark,
@@ -34,7 +32,6 @@ import {
   ScrollText,
   Settings,
   Shield,
-  Star,
   Target,
   Users,
   Vote,
@@ -227,51 +224,12 @@ function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            {/*
-             * Collapsible sits inside SidebarMenuItem (not the other way
-             * around) so the <ul> only has <li> direct children — axe-core
-             * rule `list` rejects a <ul> with a <div> child, which is what
-             * Radix Collapsible renders as. Same pattern is used for
-             * Members below.
-             */}
-            <Collapsible className="group/collapsible">
-              <SidebarMenuButton
-                aria-disabled
-                tabIndex={-1}
-                tooltip="Scholarships (coming soon)"
-              >
+            <SidebarMenuButton asChild tooltip="Scholarships">
+              <Link to="/scholarships">
                 <GraduationCap />
                 <span>Scholarships</span>
-              </SidebarMenuButton>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuAction className="data-[state=open]:rotate-90">
-                  <ChevronRight />
-                  <span className="sr-only">Toggle sub-menu</span>
-                </SidebarMenuAction>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                      <HandCoins />
-                      <span>Earn It</span>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                      <Star />
-                      <span>Experiences</span>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                      <HelpCircle />
-                      <span>Questions</span>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
