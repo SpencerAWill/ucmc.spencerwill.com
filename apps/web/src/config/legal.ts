@@ -626,10 +626,7 @@ export const SCHOLARSHIPS_BODY: readonly LegalSection[] = [
     paragraphs: [
       "Donations are routed through the UC Foundation, which is a 501(c)(3) tax-exempt entity — gifts are tax-deductible to the extent allowed by law. Many employers offer matching programs for gifts to non-profits; ask your HR department.",
       'For mailed gifts: make checks payable to The UC Foundation. On the memo line, write: UCMC Steve Must Scholarship (F102341). Mail to The University of Cincinnati Foundation, PO Box 19970, Cincinnati, OH 45219-0970. A short cover letter noting the gift supports the "UC Mountaineering Club Steve Must Memorial Scholarship (F102341)" helps the Foundation\'s mailroom route it correctly.',
-      "For online gifts: visit foundation.uc.edu/UCMC, enter the amount, complete the donor information, and submit.",
-    ],
-    references: [
-      { label: "Give online", href: "https://foundation.uc.edu/UCMC" },
+      'For online gifts: the canonical online-giving page for the Steve Must Memorial Scholarship lives on the UC Foundation site, but because "UCMC" inside the University of Cincinnati can refer to either the Mountaineering Club or UC Health / UC Medical Center, the legacy /UCMC vanity URL is ambiguous and not currently verified as our scholarship\'s landing page. Please ask the UCMC Treasurer for the current verified online-giving URL before sending an online gift, or fall back to the mailed-check instructions above — the F102341 fund identifier on the memo line is unambiguous.',
     ],
   },
 ];
