@@ -206,6 +206,7 @@ function SidebarNav() {
   const canViewPolicies = hasPermission("public_policies:view");
   const canViewScholarships = hasPermission("public_scholarships:view");
   const canViewGearCave = hasPermission("public_gear_cave:view");
+  const canViewResources = hasPermission("public_resources:view");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -247,14 +248,16 @@ function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Resources">
-              <Link to="/resources">
-                <ListChecks />
-                <span>Resources</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {canViewResources ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Resources">
+                <Link to="/resources">
+                  <ListChecks />
+                  <span>Resources</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled
