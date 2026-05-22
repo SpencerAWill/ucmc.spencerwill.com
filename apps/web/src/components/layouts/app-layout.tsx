@@ -205,6 +205,7 @@ function SidebarNav() {
   const canViewHistory = hasPermission("history:view");
   const canViewPolicies = hasPermission("public_policies:view");
   const canViewScholarships = hasPermission("public_scholarships:view");
+  const canViewGearCave = hasPermission("public_gear_cave:view");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -216,14 +217,16 @@ function SidebarNav() {
     <>
       <SidebarGroup>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="The Gear Cave">
-              <Link to="/gear-cave">
-                <Boxes />
-                <span>The Gear Cave</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {canViewGearCave ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="The Gear Cave">
+                <Link to="/gear-cave">
+                  <Boxes />
+                  <span>The Gear Cave</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           {canViewScholarships ? (
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip="Scholarships">
