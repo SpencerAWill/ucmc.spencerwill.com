@@ -66,6 +66,13 @@ export const AUDIT_ACTIONS = [
   "loan.checked_in",
   "loan.extended",
   "settings_updated",
+  "history.narrative_updated",
+  "historical_officer.created",
+  "historical_officer.updated",
+  "historical_officer.deleted",
+  "honorary_member.created",
+  "honorary_member.updated",
+  "honorary_member.deleted",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

@@ -600,6 +600,20 @@ export const auditAction = [
   // for any other shape metadata is { key } only, to avoid leaking
   // freeform values (emails, URLs, JSON blobs) into the audit log.
   "settings_updated",
+  // /history edits via the history:manage edit affordance. The
+  // narrative-update event carries only `markdownLength` to keep the
+  // audit row bounded (the markdown itself is public anyway, but we
+  // don't want to balloon the audit table on every edit). Officer
+  // and honorary mutations carry only `schoolYear`/`role`/`name` —
+  // enough context to follow a "who edited what" trail without
+  // duplicating the row's contents.
+  "history.narrative_updated",
+  "historical_officer.created",
+  "historical_officer.updated",
+  "historical_officer.deleted",
+  "honorary_member.created",
+  "honorary_member.updated",
+  "honorary_member.deleted",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 

@@ -1,9 +1,14 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { Pencil } from "lucide-react";
+import { useState } from "react";
 
 import { MarkdownContent } from "#/components/markdown/markdown-content";
+import { Button } from "#/components/ui/button";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { historyContentQueryOptions } from "#/features/history/api/queries";
+import { EditNarrativeSheet } from "#/features/history/components/edit-narrative-sheet";
 import { HonoraryMembers } from "#/features/history/components/honorary-members";
 import { PastOfficers } from "#/features/history/components/past-officers";
 
@@ -32,20 +37,46 @@ export const Route = createFileRoute("/history")({
 
 function HistoryPage() {
   const { data } = useSuspenseQuery(historyContentQueryOptions());
+  const { hasPermission } = useAuth();
+  const canManageHistory = hasPermission("history:manage");
+  const [editNarrativeOpen, setEditNarrativeOpen] = useState(false);
 
   return (
     <main id="main" className="mx-auto w-full max-w-2xl space-y-10 px-6 py-12">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">UCMC History</h1>
-        <p className="text-sm text-muted-foreground">
-          How the University of Cincinnati Mountaineering Club started, the
-          people who carried it through five decades, and the friends we've lost
-          along the way.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            UCMC History
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            How the University of Cincinnati Mountaineering Club started, the
+            people who carried it through five decades, and the friends we've
+            lost along the way.
+          </p>
+        </div>
+        {canManageHistory ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditNarrativeOpen(true)}
+            aria-label="Edit history narrative"
+          >
+            <Pencil className="size-4" />
+            Edit
+          </Button>
+        ) : null}
       </header>
 
       {data.narrativeMarkdown.length > 0 ? (
         <MarkdownContent>{data.narrativeMarkdown}</MarkdownContent>
+      ) : null}
+
+      {canManageHistory ? (
+        <EditNarrativeSheet
+          open={editNarrativeOpen}
+          onOpenChange={setEditNarrativeOpen}
+          initialMarkdown={data.narrativeMarkdown}
+        />
       ) : null}
 
       <section className="space-y-3">
