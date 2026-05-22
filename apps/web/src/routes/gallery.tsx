@@ -1,8 +1,9 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import {
   AlertDialog,
@@ -22,19 +23,30 @@ import { useDeleteGalleryPhoto } from "#/features/gallery/api/use-gallery-mutati
 import { PhotoFormDialog } from "#/features/gallery/components/photo-form-dialog";
 import type { PhotoFormSeed } from "#/features/gallery/components/photo-form-dialog";
 import { PhotoGrid } from "#/features/gallery/components/photo-grid";
+import { PhotoLightbox } from "#/features/gallery/components/photo-lightbox";
 import type { GalleryPhotoSummary } from "#/features/gallery/server/gallery-fns";
+
+/**
+ * Search params for /gallery. Only `photo` lives in the URL — the
+ * lightbox is opened when this is set to a known publicId, so a
+ * shared `?photo=abc` link reliably opens the lightbox at that
+ * photo on first paint. Filter state (year / tag) is kept in
+ * component-local `useState` inside PhotoGrid.
+ */
+const gallerySearchSchema = z.object({
+  photo: z.string().optional(),
+});
 
 /**
  * Public /gallery index. View gated by `public_gallery:view`
  * (default-granted to role_anonymous + role_member). Manage UX
  * (Add Photo button + pencil / trash on each tile) gated by
- * `public_gallery:manage`.
- *
- * Lightbox + URL-shareable `?photo=$publicId` state land in the
- * next commit. This first pass surfaces the grid + filters + manage
- * dialogs; clicking a tile is a no-op for now.
+ * `public_gallery:manage`. Clicking a tile opens the lightbox by
+ * setting `?photo=$publicId` in the URL; the lightbox reads the
+ * search param so a shared link reproduces the state.
  */
 export const Route = createFileRoute("/gallery")({
+  validateSearch: gallerySearchSchema,
   beforeLoad: async ({ context }) => {
     await requireViewPermission(context.queryClient, "public_gallery:view");
   },
@@ -48,11 +60,34 @@ function GalleryPage() {
   const { data } = useSuspenseQuery(galleryListQueryOptions());
   const { hasPermission } = useAuth();
   const canManage = hasPermission("public_gallery:manage");
+  const { photo: activePublicId } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
 
   const [formSeed, setFormSeed] = useState<PhotoFormSeed | null>(null);
   const [deletingPhoto, setDeletingPhoto] =
     useState<GalleryPhotoSummary | null>(null);
   const deleteMut = useDeleteGalleryPhoto();
+
+  function openLightbox(photo: GalleryPhotoSummary) {
+    void navigate({
+      search: (prev) => ({ ...prev, photo: photo.publicId }),
+      replace: false,
+    });
+  }
+  function closeLightbox() {
+    void navigate({
+      search: (prev) => ({ ...prev, photo: undefined }),
+      replace: false,
+    });
+  }
+  function changeLightboxPhoto(publicId: string) {
+    // Use `replace: true` for keyboard nav so a long lightbox session
+    // doesn't fill the back/forward history with intermediate photos.
+    void navigate({
+      search: (prev) => ({ ...prev, photo: publicId }),
+      replace: true,
+    });
+  }
 
   const knownTags = Array.from(
     new Set(
@@ -106,11 +141,16 @@ function GalleryPage() {
       <PhotoGrid
         photos={data.photos}
         canManage={canManage}
-        onSelect={() => {
-          // Lightbox lands in the next commit.
-        }}
+        onSelect={openLightbox}
         onEditPhoto={(photo) => setFormSeed({ mode: "edit", photo })}
         onDeletePhoto={(photo) => setDeletingPhoto(photo)}
+      />
+
+      <PhotoLightbox
+        photos={data.photos}
+        activePublicId={activePublicId ?? null}
+        onClose={closeLightbox}
+        onChange={changeLightboxPhoto}
       />
 
       {canManage ? (
