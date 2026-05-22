@@ -69,6 +69,7 @@ import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.cl
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
+import { Route as ApiGalleryImageSplatRouteImport } from './routes/api/gallery-image.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
 
@@ -370,6 +371,11 @@ const ApiGazettePdfSplatRoute = ApiGazettePdfSplatRouteImport.update({
   path: '/api/gazette-pdf/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGalleryImageSplatRoute = ApiGalleryImageSplatRouteImport.update({
+  id: '/api/gallery-image/$',
+  path: '/api/gallery-image/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   id: '/api/avatars/$',
   path: '/api/avatars/$',
@@ -425,6 +431,7 @@ export interface FileRoutesByFullPath {
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -484,6 +491,7 @@ export interface FileRoutesByTo {
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -547,6 +555,7 @@ export interface FileRoutesById {
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -611,6 +620,7 @@ export interface FileRouteTypes {
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gallery-image/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -670,6 +680,7 @@ export interface FileRouteTypes {
     | '/gear'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gallery-image/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -732,6 +743,7 @@ export interface FileRouteTypes {
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gallery-image/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -786,6 +798,7 @@ export interface RootRouteChildren {
   AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
+  ApiGalleryImageSplatRoute: typeof ApiGalleryImageSplatRoute
   ApiGazettePdfSplatRoute: typeof ApiGazettePdfSplatRoute
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
@@ -1213,6 +1226,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGazettePdfSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/gallery-image/$': {
+      id: '/api/gallery-image/$'
+      path: '/api/gallery-image/$'
+      fullPath: '/api/gallery-image/$'
+      preLoaderRoute: typeof ApiGalleryImageSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/avatars/$': {
       id: '/api/avatars/$'
       path: '/api/avatars/$'
@@ -1389,6 +1409,7 @@ const rootRouteChildren: RootRouteChildren = {
   AnnouncementsIndexRoute: AnnouncementsIndexRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
+  ApiGalleryImageSplatRoute: ApiGalleryImageSplatRoute,
   ApiGazettePdfSplatRoute: ApiGazettePdfSplatRoute,
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,
