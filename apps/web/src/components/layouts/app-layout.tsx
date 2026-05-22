@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import {
   BarChart3,
   Boxes,
@@ -15,10 +15,8 @@ import {
   FileText,
   Gavel,
   GraduationCap,
-  HandCoins,
   HandHeart,
   Handshake,
-  HelpCircle,
   History,
   Images,
   Landmark,
@@ -34,7 +32,6 @@ import {
   ScrollText,
   Settings,
   Shield,
-  Star,
   Target,
   Users,
   Vote,
@@ -78,6 +75,7 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from "#/components/ui/sidebar";
 import {
   Tooltip,
@@ -149,6 +147,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
       </header>
       <EmulationBanner />
+      <CloseSidebarOnNavigate />
       <div className="flex flex-1">
         <Sidebar
           variant="sidebar"
@@ -178,6 +177,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Closes the mobile sidebar Sheet whenever the pathname changes. On
+ * mobile the sidebar renders as a slide-in Sheet; without this, a
+ * tap on a nav Link would navigate underneath the open Sheet and
+ * leave the user staring at the overlay until they tap outside.
+ * On desktop `openMobile` is unused, so calling `setOpenMobile(false)`
+ * after a desktop nav is a harmless no-op — no need to gate on
+ * `isMobile`.
+ */
+function CloseSidebarOnNavigate() {
+  const pathname = useLocation({ select: (l) => l.pathname });
+  const { setOpenMobile } = useSidebar();
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
+  return null;
+}
+
 function EmulationBanner() {
   const { emulatedRole } = useAuth();
   if (!emulatedRole) {
@@ -205,6 +222,13 @@ function SidebarNav() {
   const canVerifyWaivers = hasPermission("waivers:verify");
   const canReadGear = hasPermission("gear:read");
   const canLoanGear = hasPermission("gear:loan");
+  const canViewHistory = hasPermission("history:view");
+  const canViewPolicies = hasPermission("public_policies:view");
+  const canViewScholarships = hasPermission("public_scholarships:view");
+  const canViewGearCave = hasPermission("public_gear_cave:view");
+  const canViewResources = hasPermission("public_resources:view");
+  const canViewGazette = hasPermission("public_gazette:view");
+  const canViewGallery = hasPermission("public_gallery:view");
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -216,73 +240,56 @@ function SidebarNav() {
     <>
       <SidebarGroup>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="The Gear Cave (coming soon)"
-            >
-              <Boxes />
-              <span>The Gear Cave</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            {/*
-             * Collapsible sits inside SidebarMenuItem (not the other way
-             * around) so the <ul> only has <li> direct children — axe-core
-             * rule `list` rejects a <ul> with a <div> child, which is what
-             * Radix Collapsible renders as. Same pattern is used for
-             * Members below.
-             */}
-            <Collapsible className="group/collapsible">
-              <SidebarMenuButton
-                aria-disabled
-                tabIndex={-1}
-                tooltip="Scholarships (coming soon)"
-              >
-                <GraduationCap />
-                <span>Scholarships</span>
+          {canViewGearCave ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="The Gear Cave">
+                <Link to="/gear-cave">
+                  <Boxes />
+                  <span>The Gear Cave</span>
+                </Link>
               </SidebarMenuButton>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuAction className="data-[state=open]:rotate-90">
-                  <ChevronRight />
-                  <span className="sr-only">Toggle sub-menu</span>
-                </SidebarMenuAction>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                      <HandCoins />
-                      <span>Earn It</span>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                      <Star />
-                      <span>Experiences</span>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                      <HelpCircle />
-                      <span>Questions</span>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="Trip Gallery (coming soon)"
-            >
-              <Images />
-              <span>Trip Gallery</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+            </SidebarMenuItem>
+          ) : null}
+          {canViewScholarships ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Scholarships">
+                <Link to="/scholarships">
+                  <GraduationCap />
+                  <span>Scholarships</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
+          {canViewPolicies ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Club policies">
+                <Link to="/policies">
+                  <Gavel />
+                  <span>Policies</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
+          {canViewResources ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Resources">
+                <Link to="/resources">
+                  <ListChecks />
+                  <span>Resources</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
+          {canViewGallery ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Trip Gallery">
+                <Link to="/gallery">
+                  <Images />
+                  <span>Trip Gallery</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled
@@ -293,16 +300,16 @@ function SidebarNav() {
               <span>Blog</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="Goosedown Gazette (coming soon)"
-            >
-              <Newspaper />
-              <span>Goosedown Gazette</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {canViewGazette ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Goosedown Gazette">
+                <Link to="/gazette">
+                  <Newspaper />
+                  <span>Goosedown Gazette</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled
@@ -313,16 +320,16 @@ function SidebarNav() {
               <span>Volunteer</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="History (coming soon)"
-            >
-              <Landmark />
-              <span>History</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {canViewHistory ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="History">
+                <Link to="/history">
+                  <Landmark />
+                  <span>History</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarGroup>
 

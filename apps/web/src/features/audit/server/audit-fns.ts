@@ -66,6 +66,22 @@ export const AUDIT_ACTIONS = [
   "loan.checked_in",
   "loan.extended",
   "settings_updated",
+  "history.narrative_updated",
+  "markdown_page.updated",
+  "historical_officer.created",
+  "historical_officer.updated",
+  "historical_officer.deleted",
+  "historical_officer.year_deleted",
+  "honorary_member.created",
+  "honorary_member.updated",
+  "honorary_member.deleted",
+  "honorary_member.reordered",
+  "gazette_issue.created",
+  "gazette_issue.updated",
+  "gazette_issue.deleted",
+  "gallery_photo.created",
+  "gallery_photo.updated",
+  "gallery_photo.deleted",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

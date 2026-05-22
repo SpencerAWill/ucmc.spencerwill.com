@@ -600,6 +600,55 @@ export const auditAction = [
   // for any other shape metadata is { key } only, to avoid leaking
   // freeform values (emails, URLs, JSON blobs) into the audit log.
   "settings_updated",
+  // /history edits via the history:manage edit affordance. The
+  // narrative-update event carries only `markdownLength` to keep the
+  // audit row bounded (the markdown itself is public anyway, but we
+  // don't want to balloon the audit table on every edit). Officer
+  // and honorary mutations carry only `schoolYear`/`role`/`name` —
+  // enough context to follow a "who edited what" trail without
+  // duplicating the row's contents.
+  // Legacy: narrative-only updates before the markdown_pages
+  // generalization. Kept in the enum so older audit rows still
+  // surface in the viewer; no new code emits this — see
+  // `markdown_page.updated` below.
+  "history.narrative_updated",
+  // Generalized public-page markdown edit. One event per save with
+  // { slug, markdownLength } metadata. Slug is the row key in
+  // markdown_pages (history.narrative, policies, scholarships,
+  // gear_cave, resources).
+  "markdown_page.updated",
+  "historical_officer.created",
+  "historical_officer.updated",
+  "historical_officer.deleted",
+  // Bulk deletion of every officer entry for one school year. One
+  // event per year-delete (not one per row) with metadata carrying
+  // the schoolYear and how many rows were removed — that's enough
+  // context to follow a "who wiped 2022-23?" trail without flooding
+  // the audit log with five identical-looking rows on one click.
+  "historical_officer.year_deleted",
+  "honorary_member.created",
+  "honorary_member.updated",
+  "honorary_member.deleted",
+  // Bulk reorder of the honorary-members list via drag-and-drop in
+  // /history's manage UI. One audit event per reorder action with
+  // metadata { count } — we deliberately don't log the full id ordering
+  // because each row's new sort_order is implicit in the index it
+  // landed at after batch update.
+  "honorary_member.reordered",
+  // Goosedown Gazette issue CRUD via /gazette manage affordances.
+  // Metadata carries { schoolYear, issueNumber, title } so the audit
+  // page surfaces enough context to follow "who uploaded what" without
+  // chasing the issue row (which may have been deleted by the time
+  // the audit is reviewed).
+  "gazette_issue.created",
+  "gazette_issue.updated",
+  "gazette_issue.deleted",
+  // Trip Gallery photo CRUD via /gallery manage affordances.
+  // Metadata carries { caption, tag } so the audit row stays
+  // informative even after the photo row is deleted.
+  "gallery_photo.created",
+  "gallery_photo.updated",
+  "gallery_photo.deleted",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -1087,3 +1136,233 @@ export type GearTag = typeof gearTags.$inferSelect;
 export type GearTagAssignment = typeof gearTagAssignments.$inferSelect;
 export type GearInspection = typeof gearInspections.$inferSelect;
 export type GearLoan = typeof gearLoans.$inferSelect;
+
+/**
+ * Historical archive of past UCMC officer rosters, one row per
+ * (school_year, role, name). Distinct from the live officer list on
+ * the landing page (which renders the *current* exec board): this
+ * table is an immutable-feeling record of who held what role in past
+ * years, ported from the legacy Weebly site and editable directly in
+ * D1 for corrections.
+ *
+ * Roles are intentionally free-form text rather than an enum because
+ * the club's role set has drifted over the decades — "Librarian"
+ * existed in the 1970s but isn't current; "Trip Coordinator" was added
+ * mid-2000s; "Gear Assistants" came in the 2010s and is plural. Pinning
+ * to today's roles would falsify the historical record.
+ *
+ * `name` is also free-form (not a FK to `users`) so it can carry
+ * mid-year transitions like "Tom Bailey (Fall) / Steve Kramrech" that
+ * appeared verbatim on the legacy site. Most names belong to alumni
+ * who never had a portal account; FK-ing them would force fake stubs.
+ *
+ * `startYear` gates the display sort (oldest first or newest first);
+ * `roleOrder` controls within-year order (President → VP → Treasurer
+ * → Secretary → Trip Coordinator → Equipment Manager → others).
+ */
+export const historicalOfficers = sqliteTable(
+  "historical_officers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    schoolYear: text("school_year").notNull(),
+    startYear: integer("start_year").notNull(),
+    role: text("role").notNull(),
+    roleOrder: integer("role_order").notNull(),
+    name: text("name").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("historical_officers_year_idx").on(t.startYear, t.roleOrder)],
+);
+
+/**
+ * Honorary UCMC members — a flat list ported from the legacy Weebly
+ * site. Honorary membership is granted by majority vote per
+ * Constitution §3.4; the list is small and changes rarely. `sortOrder`
+ * preserves the canonical legacy ordering; alphabetical sort can be
+ * applied at the view layer instead if/when that's preferred.
+ */
+export const honoraryMembers = sqliteTable(
+  "honorary_members",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("honorary_members_sort_idx").on(t.sortOrder)],
+);
+
+export type HistoricalOfficer = typeof historicalOfficers.$inferSelect;
+export type HonoraryMember = typeof honoraryMembers.$inferSelect;
+
+/**
+ * Slug enum for `markdown_pages`. Lives in the schema module so the
+ * column type is narrowed everywhere drizzle is consumed; the matching
+ * runtime permission map lives in `src/server/markdown-pages/slugs.ts`
+ * (kept separate because the schema module is server-only and the
+ * permission map needs to be importable from client-side route
+ * guards). Adding a new editable public page is a four-line change:
+ *   1. New string here.
+ *   2. New entry in the permission map.
+ *   3. New permissions seeded in a migration.
+ *   4. Seed row inserted into markdown_pages.
+ */
+export const markdownPageSlug = [
+  "history.narrative",
+  "policies",
+  "scholarships",
+  "gear_cave",
+  "resources",
+] as const;
+export type MarkdownPageSlug = (typeof markdownPageSlug)[number];
+
+/**
+ * Slug-keyed store for any public-facing markdown page whose content
+ * is editable at runtime by a `*:manage` permission holder. Started
+ * as a single-row `history_content` table, generalized in migration
+ * 0049 to cover the rest of the editable public surface (policies,
+ * scholarships, the gear-cave overview, resources).
+ *
+ * `updated_by` snapshot of users.id with SET NULL on delete so the
+ * audit chain in `audit_log` survives an editor's account removal —
+ * the page row stays even though the FK is nulled.
+ */
+export const markdownPages = sqliteTable("markdown_pages", {
+  slug: text("slug", { enum: markdownPageSlug }).primaryKey(),
+  markdown: text("markdown").notNull().default(""),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedBy: text("updated_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+});
+
+export type MarkdownPage = typeof markdownPages.$inferSelect;
+
+/**
+ * Goosedown Gazette — UCMC's club newsletter, archived by school year
+ * and issue number. PDFs live in `BUCKET_PUBLIC` under
+ * `gazette/<id>/<contentHash>.pdf`; the row stores the key plus
+ * metadata (title, editor, published date, file size, description).
+ *
+ * Both `editor` and `publishedAt` are nullable so a future backfill
+ * of the 1978–2020 legacy archive can land incomplete metadata
+ * without schema changes — many old issues lack an exact date or a
+ * recorded editor.
+ *
+ * `UNIQUE (school_year, issue_number)` is the de-dupe guard: a year
+ * can't have two "Issue 1"s. The action layer surfaces the SQLite
+ * uniqueness error cleanly to the UI.
+ */
+export const gazetteIssues = sqliteTable(
+  "gazette_issues",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    schoolYear: text("school_year").notNull(),
+    startYear: integer("start_year").notNull(),
+    issueNumber: integer("issue_number").notNull(),
+    title: text("title"),
+    editor: text("editor"),
+    publishedAt: timestamp("published_at"),
+    description: text("description"),
+    pdfKey: text("pdf_key").notNull(),
+    pdfBytes: integer("pdf_bytes").notNull(),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    // Officer who first uploaded / most recently edited. SET NULL on
+    // delete so the audit chain in audit_log survives the editor's
+    // account removal.
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    uniqueIndex("gazette_issues_year_number_unique").on(
+      t.schoolYear,
+      t.issueNumber,
+    ),
+    // Drives the list query (newest year first, newest issue within
+    // year first).
+    index("gazette_issues_sort_idx").on(t.startYear, t.issueNumber),
+  ],
+);
+
+export type GazetteIssue = typeof gazetteIssues.$inferSelect;
+
+/**
+ * Trip Gallery — UCMC's photo archive. Photos are cropped to a fixed
+ * 4:3 ratio at upload time (`useImageCrop()` in the dialog → canvas
+ * → WebP), so every grid tile is uniform. The cropped WebP is what
+ * gets stored; the original is discarded after crop.
+ *
+ * Storage: `BUCKET_PUBLIC` at `gallery/<id>/<contentHash>.webp`.
+ * Content-hashed keys mean `Cache-Control: immutable` is safe forever;
+ * a replacement upload produces a new key and the row swaps.
+ *
+ * Layout: flat collection — no albums/trips entity in v1. Each photo
+ * has caption, credit, `takenAt`, optional `tag`, and required
+ * `altText` for accessibility (every gallery `<img>` MUST have alt
+ * text; this is the SQL guard for it). Width/height columns are
+ * stored even though the aspect is fixed so a future masonry layout
+ * doesn't need a column-add migration.
+ */
+export const galleryPhotos = sqliteTable(
+  "gallery_photos",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    caption: text("caption"),
+    credit: text("credit"),
+    takenAt: timestamp("taken_at"),
+    tag: text("tag"),
+    altText: text("alt_text").notNull(),
+    imageKey: text("image_key").notNull(),
+    imageBytes: integer("image_bytes").notNull(),
+    widthPx: integer("width_px").notNull(),
+    heightPx: integer("height_px").notNull(),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    // Drives tag-filtered queries from the grid's tag dropdown.
+    // No `taken_at` index — the list query orders by
+    // `COALESCE(taken_at, created_at) DESC` which the planner can't
+    // serve from an index on `taken_at` alone (it would need an
+    // expression index). Club-scale photo counts (<1k) sort
+    // unindexed in microseconds either way.
+    index("gallery_photos_tag_idx").on(t.tag),
+  ],
+);
+
+export type GalleryPhoto = typeof galleryPhotos.$inferSelect;

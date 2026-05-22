@@ -14,23 +14,32 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ScholarshipsRouteImport } from './routes/scholarships'
+import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as PoliciesRouteImport } from './routes/policies'
 import { Route as OpenSourceRouteImport } from './routes/open-source'
 import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
 import { Route as MyRouteImport } from './routes/my'
 import { Route as MembershipRouteImport } from './routes/membership'
 import { Route as MembersRouteImport } from './routes/members'
 import { Route as LegalRouteImport } from './routes/legal'
+import { Route as HistoryRouteImport } from './routes/history'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as GearCaveRouteImport } from './routes/gear-cave'
 import { Route as GearRouteImport } from './routes/gear'
+import { Route as GazetteRouteImport } from './routes/gazette'
+import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
+import { Route as ConstitutionRouteImport } from './routes/constitution'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GearIndexRouteImport } from './routes/gear.index'
+import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
 import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
@@ -41,6 +50,7 @@ import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersTabsRouteImport } from './routes/members._tabs'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
+import { Route as GazettePublicIdRouteImport } from './routes/gazette.$publicId'
 import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
@@ -59,6 +69,8 @@ import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publ
 import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.club'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
+import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
+import { Route as ApiGalleryImageSplatRouteImport } from './routes/api/gallery-image.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
 
@@ -87,9 +99,24 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ScholarshipsRoute = ScholarshipsRouteImport.update({
+  id: '/scholarships',
+  path: '/scholarships',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResourcesRoute = ResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PoliciesRoute = PoliciesRouteImport.update({
+  id: '/policies',
+  path: '/policies',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpenSourceRoute = OpenSourceRouteImport.update({
@@ -122,14 +149,34 @@ const LegalRoute = LegalRouteImport.update({
   path: '/legal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HealthRoute = HealthRouteImport.update({
   id: '/health',
   path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GearCaveRoute = GearCaveRouteImport.update({
+  id: '/gear-cave',
+  path: '/gear-cave',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GearRoute = GearRouteImport.update({
   id: '/gear',
   path: '/gear',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GazetteRoute = GazetteRouteImport.update({
+  id: '/gazette',
+  path: '/gazette',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GalleryRoute = GalleryRouteImport.update({
+  id: '/gallery',
+  path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedbackRoute = FeedbackRouteImport.update({
@@ -145,6 +192,11 @@ const DisclaimerRoute = DisclaimerRouteImport.update({
 const DeactivatedRoute = DeactivatedRouteImport.update({
   id: '/deactivated',
   path: '/deactivated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConstitutionRoute = ConstitutionRouteImport.update({
+  id: '/constitution',
+  path: '/constitution',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuditRoute = AuditRouteImport.update({
@@ -171,6 +223,11 @@ const GearIndexRoute = GearIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => GearRoute,
+} as any)
+const GazetteIndexRoute = GazetteIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GazetteRoute,
 } as any)
 const AnnouncementsIndexRoute = AnnouncementsIndexRouteImport.update({
   id: '/announcements/',
@@ -220,6 +277,11 @@ const GearPublicIdRoute = GearPublicIdRouteImport.update({
   id: '/$publicId',
   path: '/$publicId',
   getParentRoute: () => GearRoute,
+} as any)
+const GazettePublicIdRoute = GazettePublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => GazetteRoute,
 } as any)
 const FeedbackTabsRoute = FeedbackTabsRouteImport.update({
   id: '/_tabs',
@@ -310,6 +372,16 @@ const ApiGearThumbnailsSplatRoute = ApiGearThumbnailsSplatRouteImport.update({
   path: '/api/gear-thumbnails/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGazettePdfSplatRoute = ApiGazettePdfSplatRouteImport.update({
+  id: '/api/gazette-pdf/$',
+  path: '/api/gazette-pdf/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGalleryImageSplatRoute = ApiGalleryImageSplatRouteImport.update({
+  id: '/api/gallery-image/$',
+  path: '/api/gallery-image/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   id: '/api/avatars/$',
   path: '/api/avatars/$',
@@ -326,24 +398,33 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsRouteWithChildren
+  '/gallery': typeof GalleryRoute
+  '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
+  '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
+  '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersTabsRouteWithChildren
   '/membership': typeof MembershipRoute
   '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
+  '/resources': typeof ResourcesRoute
+  '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/roles': typeof MembersRolesRoute
@@ -353,9 +434,12 @@ export interface FileRoutesByFullPath {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
+  '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
+  '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/feedback/club': typeof FeedbackTabsClubRoute
@@ -378,23 +462,31 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsIndexRoute
+  '/gallery': typeof GalleryRoute
+  '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
+  '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersTabsIndexRoute
   '/membership': typeof MembershipRoute
   '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
+  '/resources': typeof ResourcesRoute
+  '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/roles': typeof MembersRolesRoute
@@ -403,9 +495,12 @@ export interface FileRoutesByTo {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements': typeof AnnouncementsIndexRoute
+  '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
+  '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/feedback/club': typeof FeedbackTabsClubRoute
@@ -427,18 +522,26 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackRouteWithChildren
+  '/gallery': typeof GalleryRoute
+  '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
+  '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
+  '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
   '/members': typeof MembersRouteWithChildren
   '/membership': typeof MembershipRoute
   '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
   '/open-source': typeof OpenSourceRoute
+  '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
+  '/resources': typeof ResourcesRoute
+  '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
@@ -446,6 +549,7 @@ export interface FileRoutesById {
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
+  '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/_tabs': typeof MembersTabsRouteWithChildren
@@ -456,9 +560,12 @@ export interface FileRoutesById {
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
+  '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
+  '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/feedback/_tabs/club': typeof FeedbackTabsClubRoute
@@ -483,24 +590,33 @@ export interface FileRouteTypes {
     | '/about'
     | '/anti-hazing'
     | '/audit'
+    | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gallery'
+    | '/gazette'
     | '/gear'
+    | '/gear-cave'
     | '/health'
+    | '/history'
     | '/legal'
     | '/members'
     | '/membership'
     | '/my'
     | '/nondiscrimination'
     | '/open-source'
+    | '/policies'
     | '/privacy'
+    | '/resources'
+    | '/scholarships'
     | '/settings'
     | '/sign-in'
     | '/terms'
     | '/verify-email'
     | '/waiver'
     | '/auth/callback'
+    | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/roles'
@@ -510,9 +626,12 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
+    | '/gazette/'
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gallery-image/$'
+    | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/feedback/club'
@@ -535,23 +654,31 @@ export interface FileRouteTypes {
     | '/about'
     | '/anti-hazing'
     | '/audit'
+    | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gallery'
+    | '/gear-cave'
     | '/health'
+    | '/history'
     | '/legal'
     | '/members'
     | '/membership'
     | '/my'
     | '/nondiscrimination'
     | '/open-source'
+    | '/policies'
     | '/privacy'
+    | '/resources'
+    | '/scholarships'
     | '/settings'
     | '/sign-in'
     | '/terms'
     | '/verify-email'
     | '/waiver'
     | '/auth/callback'
+    | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/roles'
@@ -560,9 +687,12 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements'
+    | '/gazette'
     | '/gear'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gallery-image/$'
+    | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/feedback/club'
@@ -583,18 +713,26 @@ export interface FileRouteTypes {
     | '/about'
     | '/anti-hazing'
     | '/audit'
+    | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
+    | '/gallery'
+    | '/gazette'
     | '/gear'
+    | '/gear-cave'
     | '/health'
+    | '/history'
     | '/legal'
     | '/members'
     | '/membership'
     | '/my'
     | '/nondiscrimination'
     | '/open-source'
+    | '/policies'
     | '/privacy'
+    | '/resources'
+    | '/scholarships'
     | '/settings'
     | '/sign-in'
     | '/terms'
@@ -602,6 +740,7 @@ export interface FileRouteTypes {
     | '/waiver'
     | '/auth/callback'
     | '/feedback/_tabs'
+    | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/_tabs'
@@ -612,9 +751,12 @@ export interface FileRouteTypes {
     | '/register/pending'
     | '/register/profile'
     | '/announcements/'
+    | '/gazette/'
     | '/gear/'
     | '/api/account/export'
     | '/api/avatars/$'
+    | '/api/gallery-image/$'
+    | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/feedback/_tabs/club'
@@ -638,18 +780,26 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
+  ConstitutionRoute: typeof ConstitutionRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
+  GalleryRoute: typeof GalleryRoute
+  GazetteRoute: typeof GazetteRouteWithChildren
   GearRoute: typeof GearRouteWithChildren
+  GearCaveRoute: typeof GearCaveRoute
   HealthRoute: typeof HealthRoute
+  HistoryRoute: typeof HistoryRoute
   LegalRoute: typeof LegalRoute
   MembersRoute: typeof MembersRouteWithChildren
   MembershipRoute: typeof MembershipRoute
   MyRoute: typeof MyRouteWithChildren
   NondiscriminationRoute: typeof NondiscriminationRoute
   OpenSourceRoute: typeof OpenSourceRoute
+  PoliciesRoute: typeof PoliciesRoute
   PrivacyRoute: typeof PrivacyRoute
+  ResourcesRoute: typeof ResourcesRoute
+  ScholarshipsRoute: typeof ScholarshipsRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   TermsRoute: typeof TermsRoute
@@ -661,6 +811,8 @@ export interface RootRouteChildren {
   AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
+  ApiGalleryImageSplatRoute: typeof ApiGalleryImageSplatRoute
+  ApiGazettePdfSplatRoute: typeof ApiGazettePdfSplatRoute
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
 }
@@ -702,11 +854,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/scholarships': {
+      id: '/scholarships'
+      path: '/scholarships'
+      fullPath: '/scholarships'
+      preLoaderRoute: typeof ScholarshipsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resources': {
+      id: '/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof ResourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/policies': {
+      id: '/policies'
+      path: '/policies'
+      fullPath: '/policies'
+      preLoaderRoute: typeof PoliciesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/open-source': {
@@ -751,6 +924,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/health': {
       id: '/health'
       path: '/health'
@@ -758,11 +938,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gear-cave': {
+      id: '/gear-cave'
+      path: '/gear-cave'
+      fullPath: '/gear-cave'
+      preLoaderRoute: typeof GearCaveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/gear': {
       id: '/gear'
       path: '/gear'
       fullPath: '/gear'
       preLoaderRoute: typeof GearRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gazette': {
+      id: '/gazette'
+      path: '/gazette'
+      fullPath: '/gazette'
+      preLoaderRoute: typeof GazetteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gallery': {
+      id: '/gallery'
+      path: '/gallery'
+      fullPath: '/gallery'
+      preLoaderRoute: typeof GalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feedback': {
@@ -784,6 +985,13 @@ declare module '@tanstack/react-router' {
       path: '/deactivated'
       fullPath: '/deactivated'
       preLoaderRoute: typeof DeactivatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/constitution': {
+      id: '/constitution'
+      path: '/constitution'
+      fullPath: '/constitution'
+      preLoaderRoute: typeof ConstitutionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/audit': {
@@ -820,6 +1028,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/gear/'
       preLoaderRoute: typeof GearIndexRouteImport
       parentRoute: typeof GearRoute
+    }
+    '/gazette/': {
+      id: '/gazette/'
+      path: '/'
+      fullPath: '/gazette/'
+      preLoaderRoute: typeof GazetteIndexRouteImport
+      parentRoute: typeof GazetteRoute
     }
     '/announcements/': {
       id: '/announcements/'
@@ -890,6 +1105,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/gear/$publicId'
       preLoaderRoute: typeof GearPublicIdRouteImport
       parentRoute: typeof GearRoute
+    }
+    '/gazette/$publicId': {
+      id: '/gazette/$publicId'
+      path: '/$publicId'
+      fullPath: '/gazette/$publicId'
+      preLoaderRoute: typeof GazettePublicIdRouteImport
+      parentRoute: typeof GazetteRoute
     }
     '/feedback/_tabs': {
       id: '/feedback/_tabs'
@@ -1017,6 +1239,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGearThumbnailsSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/gazette-pdf/$': {
+      id: '/api/gazette-pdf/$'
+      path: '/api/gazette-pdf/$'
+      fullPath: '/api/gazette-pdf/$'
+      preLoaderRoute: typeof ApiGazettePdfSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/gallery-image/$': {
+      id: '/api/gallery-image/$'
+      path: '/api/gallery-image/$'
+      fullPath: '/api/gallery-image/$'
+      preLoaderRoute: typeof ApiGalleryImageSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/avatars/$': {
       id: '/api/avatars/$'
       path: '/api/avatars/$'
@@ -1059,6 +1295,19 @@ const FeedbackRouteChildren: FeedbackRouteChildren = {
 const FeedbackRouteWithChildren = FeedbackRoute._addFileChildren(
   FeedbackRouteChildren,
 )
+
+interface GazetteRouteChildren {
+  GazettePublicIdRoute: typeof GazettePublicIdRoute
+  GazetteIndexRoute: typeof GazetteIndexRoute
+}
+
+const GazetteRouteChildren: GazetteRouteChildren = {
+  GazettePublicIdRoute: GazettePublicIdRoute,
+  GazetteIndexRoute: GazetteIndexRoute,
+}
+
+const GazetteRouteWithChildren =
+  GazetteRoute._addFileChildren(GazetteRouteChildren)
 
 interface GearRouteChildren {
   GearPublicIdRoute: typeof GearPublicIdRoute
@@ -1150,18 +1399,26 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
+  ConstitutionRoute: ConstitutionRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
+  GalleryRoute: GalleryRoute,
+  GazetteRoute: GazetteRouteWithChildren,
   GearRoute: GearRouteWithChildren,
+  GearCaveRoute: GearCaveRoute,
   HealthRoute: HealthRoute,
+  HistoryRoute: HistoryRoute,
   LegalRoute: LegalRoute,
   MembersRoute: MembersRouteWithChildren,
   MembershipRoute: MembershipRoute,
   MyRoute: MyRouteWithChildren,
   NondiscriminationRoute: NondiscriminationRoute,
   OpenSourceRoute: OpenSourceRoute,
+  PoliciesRoute: PoliciesRoute,
   PrivacyRoute: PrivacyRoute,
+  ResourcesRoute: ResourcesRoute,
+  ScholarshipsRoute: ScholarshipsRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   TermsRoute: TermsRoute,
@@ -1173,6 +1430,8 @@ const rootRouteChildren: RootRouteChildren = {
   AnnouncementsIndexRoute: AnnouncementsIndexRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
+  ApiGalleryImageSplatRoute: ApiGalleryImageSplatRoute,
+  ApiGazettePdfSplatRoute: ApiGazettePdfSplatRoute,
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,
 }

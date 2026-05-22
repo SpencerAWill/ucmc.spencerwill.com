@@ -19,7 +19,16 @@
  */
 const CSP_VALUE = [
   "default-src 'self'",
-  "img-src 'self' data: https:",
+  // `blob:` is required by the in-app image cropper (landing editors,
+  // /gallery photo upload): `browser-image-compression` returns a Blob
+  // wrapped in `URL.createObjectURL`, and `react-image-crop` displays
+  // that blob URL via `<img src>`.
+  "img-src 'self' data: https: blob:",
+  // Same cropper path spins up a web worker from a blob URL for the
+  // off-main-thread compression. `worker-src` would otherwise fall
+  // back to `script-src` (which deliberately omits `blob:`), so it
+  // gets its own narrow directive.
+  "worker-src 'self' blob:",
   // `'unsafe-inline'` is required for React's hydration scripts and
   // for the Tailwind-emitted style tags. We deliberately do *not*
   // include `'unsafe-eval'` — the production build doesn't need it.
@@ -40,7 +49,20 @@ const CSP_VALUE = [
   // 17+ doesn't actually execute any WASM, but the CSP directive
   // applies uniformly so the polyfill fallback works when needed.
   "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
-  "frame-src https://challenges.cloudflare.com",
+  // `frame-src` covers the Turnstile widget AND the inline PDF
+  // iframe on /gazette/$publicId.
+  //
+  // `'self'` is required for the local-dev fallback route at
+  // `/api/gazette-pdf/$` — Miniflare doesn't expose the R2 custom
+  // domain so the iframe loads same-origin in dev. CSP's `frame-src`
+  // does NOT fall back to `default-src 'self'` when set, so `'self'`
+  // must be listed explicitly here.
+  //
+  // Production loads PDFs from the R2 custom domain
+  // `cdn.{dev.,}ucmc.spencerwill.com` (cross-origin from the app
+  // even though same TLD); both hosts are listed unconditionally so
+  // the same CSP string ships to dev + prod environments.
+  "frame-src 'self' https://challenges.cloudflare.com https://cdn.ucmc.spencerwill.com https://cdn.dev.ucmc.spencerwill.com",
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
   "object-src 'none'",
@@ -70,9 +92,31 @@ function permissionsPolicyForPath(pathname: string): string {
 }
 
 /**
+ * CSP for routes whose response is intended to be embedded by the app
+ * itself via `<iframe>`. The global CSP sets `frame-ancestors 'none'`
+ * and `X-Frame-Options: DENY` so no random page can frame us; that
+ * blanket policy also blocks /gazette from framing its own PDFs.
+ * Same-origin embedding (`frame-ancestors 'self'`) is the surgical
+ * exception.
+ */
+const EMBEDDABLE_CSP_VALUE = [
+  "default-src 'self'",
+  "frame-ancestors 'self'",
+  "base-uri 'self'",
+].join("; ");
+
+const EMBEDDABLE_PATH_PREFIXES = ["/api/gazette-pdf/"] as const;
+
+function isEmbeddablePath(pathname: string): boolean {
+  return EMBEDDABLE_PATH_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+/**
  * Compute the security headers for the current request. Pathname is
  * inspected so the Permissions-Policy can scope camera access to just
- * the gear-cave scanner routes. Everything else is static.
+ * the gear-cave scanner routes, and so the gazette PDF route can be
+ * embedded by /gazette/$publicId (the global CSP otherwise blocks any
+ * iframe of it).
  *
  * Returns an array (not an object) because `start.ts` applies each
  * header via `setResponseHeader` (the singular form — the plural
@@ -82,6 +126,21 @@ function permissionsPolicyForPath(pathname: string): string {
 export function securityHeadersForPath(
   pathname: string,
 ): ReadonlyArray<readonly [string, string]> {
+  if (isEmbeddablePath(pathname)) {
+    // Embeddable response: drop X-Frame-Options + frame-ancestors so
+    // the iframe load isn't blocked, but keep nosniff + HSTS so the
+    // PDF bytes are still served safely.
+    return [
+      ["Content-Security-Policy", EMBEDDABLE_CSP_VALUE],
+      [
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains; preload",
+      ],
+      ["X-Frame-Options", "SAMEORIGIN"],
+      ["Referrer-Policy", "strict-origin-when-cross-origin"],
+      ["X-Content-Type-Options", "nosniff"],
+    ];
+  }
   return [
     ["Content-Security-Policy", CSP_VALUE],
     // Pin TLS for one year, include subdomains, and signal eligibility
