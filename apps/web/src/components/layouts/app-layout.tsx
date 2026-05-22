@@ -240,6 +240,14 @@ function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Resources">
+              <Link to="/resources">
+                <ListChecks />
+                <span>Resources</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled
               tabIndex={-1}

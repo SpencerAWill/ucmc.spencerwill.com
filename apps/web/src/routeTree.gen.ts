@@ -15,6 +15,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ScholarshipsRouteImport } from './routes/scholarships'
+import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PoliciesRouteImport } from './routes/policies'
 import { Route as OpenSourceRouteImport } from './routes/open-source'
@@ -93,6 +94,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const ScholarshipsRoute = ScholarshipsRouteImport.update({
   id: '/scholarships',
   path: '/scholarships',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResourcesRoute = ResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -358,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/open-source': typeof OpenSourceRoute
   '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
+  '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
@@ -412,6 +419,7 @@ export interface FileRoutesByTo {
   '/open-source': typeof OpenSourceRoute
   '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
+  '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
@@ -465,6 +473,7 @@ export interface FileRoutesById {
   '/open-source': typeof OpenSourceRoute
   '/policies': typeof PoliciesRoute
   '/privacy': typeof PrivacyRoute
+  '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
@@ -524,6 +533,7 @@ export interface FileRouteTypes {
     | '/open-source'
     | '/policies'
     | '/privacy'
+    | '/resources'
     | '/scholarships'
     | '/settings'
     | '/sign-in'
@@ -578,6 +588,7 @@ export interface FileRouteTypes {
     | '/open-source'
     | '/policies'
     | '/privacy'
+    | '/resources'
     | '/scholarships'
     | '/settings'
     | '/sign-in'
@@ -630,6 +641,7 @@ export interface FileRouteTypes {
     | '/open-source'
     | '/policies'
     | '/privacy'
+    | '/resources'
     | '/scholarships'
     | '/settings'
     | '/sign-in'
@@ -688,6 +700,7 @@ export interface RootRouteChildren {
   OpenSourceRoute: typeof OpenSourceRoute
   PoliciesRoute: typeof PoliciesRoute
   PrivacyRoute: typeof PrivacyRoute
+  ResourcesRoute: typeof ResourcesRoute
   ScholarshipsRoute: typeof ScholarshipsRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
@@ -746,6 +759,13 @@ declare module '@tanstack/react-router' {
       path: '/scholarships'
       fullPath: '/scholarships'
       preLoaderRoute: typeof ScholarshipsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resources': {
+      id: '/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof ResourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -1224,6 +1244,7 @@ const rootRouteChildren: RootRouteChildren = {
   OpenSourceRoute: OpenSourceRoute,
   PoliciesRoute: PoliciesRoute,
   PrivacyRoute: PrivacyRoute,
+  ResourcesRoute: ResourcesRoute,
   ScholarshipsRoute: ScholarshipsRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
