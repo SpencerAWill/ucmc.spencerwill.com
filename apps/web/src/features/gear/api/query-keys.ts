@@ -32,6 +32,10 @@ export const loanDetailQueryKey = (publicId: string) =>
 
 export const MY_LOANS_QUERY_KEY = ["gear", "loans", "mine"] as const;
 
+// ── cart ───────────────────────────────────────────────────────────────
+
+export const MY_CART_QUERY_KEY = ["gear", "cart", "mine"] as const;
+
 export const memberLoanSearchQueryKey = (q: string) =>
   ["gear", "loans", "search-members", q] as const;
 
