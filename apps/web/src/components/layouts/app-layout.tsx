@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import {
   BarChart3,
   Boxes,
@@ -75,6 +75,7 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from "#/components/ui/sidebar";
 import {
   Tooltip,
@@ -146,6 +147,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
       </header>
       <EmulationBanner />
+      <CloseSidebarOnNavigate />
       <div className="flex flex-1">
         <Sidebar
           variant="sidebar"
@@ -173,6 +175,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
     </SidebarProvider>
   );
+}
+
+/**
+ * Closes the mobile sidebar Sheet whenever the pathname changes. On
+ * mobile the sidebar renders as a slide-in Sheet; without this, a
+ * tap on a nav Link would navigate underneath the open Sheet and
+ * leave the user staring at the overlay until they tap outside.
+ * On desktop `openMobile` is unused, so calling `setOpenMobile(false)`
+ * after a desktop nav is a harmless no-op — no need to gate on
+ * `isMobile`.
+ */
+function CloseSidebarOnNavigate() {
+  const pathname = useLocation({ select: (l) => l.pathname });
+  const { setOpenMobile } = useSidebar();
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
+  return null;
 }
 
 function EmulationBanner() {
