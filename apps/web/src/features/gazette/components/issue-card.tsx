@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { format } from "date-fns";
 import { Download, FileText, Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import {
+  formatPublishedAtUtc,
   gazettePdfFilename,
   gazettePdfUrl,
 } from "#/features/gazette/lib/pdf-url";
@@ -44,7 +44,7 @@ export function IssueCard({
             {issue.schoolYear} · Issue {issue.issueNumber}
             {issue.editor ? ` · edited by ${issue.editor}` : null}
             {issue.publishedAt
-              ? ` · ${format(new Date(issue.publishedAt), "MMM d, yyyy")}`
+              ? ` · ${formatPublishedAtUtc(issue.publishedAt)}`
               : null}
           </p>
         </div>

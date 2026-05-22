@@ -41,13 +41,19 @@ const CSP_VALUE = [
   // applies uniformly so the polyfill fallback works when needed.
   "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   // `frame-src` covers the Turnstile widget AND the inline PDF
-  // iframe on /gazette/$publicId. Gazette PDFs are served from the
-  // R2 custom domain `cdn.{dev.,}ucmc.spencerwill.com` — that's
-  // cross-origin from the app even though same TLD, so `'self'`
-  // alone isn't sufficient. Both dev + prod CDN hosts are listed
-  // unconditionally; the deployment branch determines which one
-  // resolves, but the same CSP string ships to both envs.
-  "frame-src https://challenges.cloudflare.com https://cdn.ucmc.spencerwill.com https://cdn.dev.ucmc.spencerwill.com",
+  // iframe on /gazette/$publicId.
+  //
+  // `'self'` is required for the local-dev fallback route at
+  // `/api/gazette-pdf/$` — Miniflare doesn't expose the R2 custom
+  // domain so the iframe loads same-origin in dev. CSP's `frame-src`
+  // does NOT fall back to `default-src 'self'` when set, so `'self'`
+  // must be listed explicitly here.
+  //
+  // Production loads PDFs from the R2 custom domain
+  // `cdn.{dev.,}ucmc.spencerwill.com` (cross-origin from the app
+  // even though same TLD); both hosts are listed unconditionally so
+  // the same CSP string ships to dev + prod environments.
+  "frame-src 'self' https://challenges.cloudflare.com https://cdn.ucmc.spencerwill.com https://cdn.dev.ucmc.spencerwill.com",
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
   "object-src 'none'",

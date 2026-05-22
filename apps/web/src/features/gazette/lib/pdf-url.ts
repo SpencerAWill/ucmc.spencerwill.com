@@ -41,3 +41,32 @@ export function gazettePdfFilename(
 ): string {
   return `goosedown-gazette-${schoolYear}-issue-${issueNumber}.pdf`;
 }
+
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+/**
+ * Format a published-at timestamp as a calendar date in UTC. The
+ * dialog's date input emits `YYYY-MM-DD` which the server stores as
+ * UTC midnight; using `date-fns` `format()` here would surface the
+ * date in the runtime's local timezone, which produces a hydration
+ * mismatch between the worker (UTC) and the user's browser (likely
+ * not UTC). Hand-formatting from `getUTC*()` is deterministic on
+ * both sides.
+ */
+export function formatPublishedAtUtc(date: Date | string | number): string {
+  const d = date instanceof Date ? date : new Date(date);
+  return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}

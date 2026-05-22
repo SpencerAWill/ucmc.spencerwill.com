@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -41,6 +40,21 @@ export type IssueFormSeed =
 
 const SCHOOL_YEAR_RE = /^\d{4}-\d{2}$/;
 
+/**
+ * Format a Date as `YYYY-MM-DD` for an `<input type="date">` default
+ * value, using UTC components so the server-side render (UTC) and
+ * the client (any local timezone) agree on the same calendar day —
+ * avoids the hydration mismatch the local-time `date-fns format()`
+ * was producing.
+ */
+function toDateInputValue(date: Date | string | number): string {
+  const d = date instanceof Date ? date : new Date(date);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 interface FormState {
   schoolYear: string;
   startYear: string;
@@ -63,7 +77,7 @@ function seedToForm(seed: IssueFormSeed): FormState {
       title: seed.issue.title ?? "",
       editor: seed.issue.editor ?? "",
       publishedAt: seed.issue.publishedAt
-        ? format(new Date(seed.issue.publishedAt), "yyyy-MM-dd")
+        ? toDateInputValue(seed.issue.publishedAt)
         : "",
       description: seed.issue.description ?? "",
       pdfDataUrl: null,

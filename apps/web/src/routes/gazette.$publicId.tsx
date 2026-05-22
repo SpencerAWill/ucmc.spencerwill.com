@@ -1,12 +1,12 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { format } from "date-fns";
 import { ArrowLeft, Download } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import { requireViewPermission } from "#/features/auth/guards";
 import { gazetteIssueQueryOptions } from "#/features/gazette/api/queries";
 import {
+  formatPublishedAtUtc,
   gazettePdfFilename,
   gazettePdfUrl,
 } from "#/features/gazette/lib/pdf-url";
@@ -74,7 +74,7 @@ function GazetteIssuePage() {
           {issue.schoolYear} · Issue {issue.issueNumber}
           {issue.editor ? ` · edited by ${issue.editor}` : null}
           {issue.publishedAt
-            ? ` · published ${format(new Date(issue.publishedAt), "MMM d, yyyy")}`
+            ? ` · published ${formatPublishedAtUtc(issue.publishedAt)}`
             : null}
         </p>
         {issue.description ? (
