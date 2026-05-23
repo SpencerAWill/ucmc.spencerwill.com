@@ -28,7 +28,7 @@ const AVAILABILITY_COPY: Record<
   on_loan: { label: "Currently on loan", variant: "destructive" },
   not_serviceable: { label: "Out for repair", variant: "destructive" },
   retired: { label: "Retired", variant: "destructive" },
-  not_found: { label: "No longer in inventory", variant: "destructive" },
+  no_code: { label: "Code cleared — ask an officer", variant: "destructive" },
 };
 
 /**
@@ -149,7 +149,7 @@ function CartItemRowDisplay({
           <div className="min-w-0 space-y-1 p-3 sm:p-4">
             <div className="flex items-center gap-2">
               <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
-                {item.code}
+                {item.code ?? "—"}
               </span>
               <Link
                 to="/gear/$publicId"
@@ -168,7 +168,7 @@ function CartItemRowDisplay({
             <Button
               variant="ghost"
               size="icon"
-              aria-label={`Remove ${item.code} from cart`}
+              aria-label={`Remove ${item.code ?? item.description} from cart`}
               onClick={onRemove}
             >
               <X className="size-4" />

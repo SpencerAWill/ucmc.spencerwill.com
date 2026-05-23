@@ -376,6 +376,7 @@ describe("mintCartTokenAction + resolveCartTokenAction", () => {
     await addToCartAction({ gearPublicId: a });
     await addToCartAction({ gearPublicId: b });
     const minted = await mintCartTokenAction();
+    if (!minted.ok) throw new Error("expected mint.ok");
     expect(minted.token.startsWith(CART_TOKEN_PREFIX)).toBe(true);
 
     await signInAsLoanOfficer();
@@ -398,6 +399,7 @@ describe("mintCartTokenAction + resolveCartTokenAction", () => {
     const member = await signInAsApprovedMemberWithWaiver();
     await addToCartAction({ gearPublicId: a });
     const minted = await mintCartTokenAction();
+    if (!minted.ok) throw new Error("expected mint.ok");
 
     // Member mutates cart after minting; the QR should still resolve
     // to the originally-snapshotted contents.
@@ -419,12 +421,19 @@ describe("mintCartTokenAction + resolveCartTokenAction", () => {
     expect(resolved).toEqual({ ok: false, reason: "expired" });
   });
 
+  it("rejects mint on an empty cart with reason 'empty_cart'", async () => {
+    await signInAsApprovedMemberWithWaiver();
+    const minted = await mintCartTokenAction();
+    expect(minted).toEqual({ ok: false, reason: "empty_cart" });
+  });
+
   it("emits exactly one loan.cart_scanned audit event per successful resolve", async () => {
     const typePublicId = await createTypeOk();
     const a = await createGearOk({ typePublicId, code: "CR14" });
     const member = await signInAsApprovedMemberWithWaiver();
     await addToCartAction({ gearPublicId: a });
     const minted = await mintCartTokenAction();
+    if (!minted.ok) throw new Error("expected mint.ok");
 
     const officer = await signInAsLoanOfficer();
     const resolved = await resolveCartTokenAction({ token: minted.token });
@@ -442,5 +451,70 @@ describe("mintCartTokenAction + resolveCartTokenAction", () => {
       itemCount?: number;
     } | null;
     expect(metadata?.itemCount).toBe(1);
+  });
+});
+
+// ── review-gap coverage ─────────────────────────────────────────────────
+
+describe("getMyCartAction prune behavior", () => {
+  it("does NOT rewrite KV when no prune is needed (TTL stays stable)", async () => {
+    const typePublicId = await createTypeOk();
+    const a = await createGearOk({ typePublicId, code: "CR20" });
+    const member = await signInAsApprovedMemberWithWaiver();
+    await addToCartAction({ gearPublicId: a });
+
+    // Read the raw KV value before, then after a no-prune getMyCart.
+    // If the action rewrote KV, the stored JSON's `updatedAt` would
+    // change (putCart sets it to Date.now()). Identical bytes ⇒ no
+    // write, which is the TTL-stability behavior we want.
+    const key = `gear-cart:user:${member.id}`;
+    const before = await getKv().get(key);
+    expect(before).not.toBeNull();
+
+    await getMyCartAction();
+
+    const after = await getKv().get(key);
+    expect(after).toBe(before);
+  });
+
+  it("DOES rewrite KV when hard-deleted gear is pruned", async () => {
+    const typePublicId = await createTypeOk();
+    const a = await createGearOk({ typePublicId, code: "CR21" });
+    const member = await signInAsApprovedMemberWithWaiver();
+    await addToCartAction({ gearPublicId: a });
+
+    const key = `gear-cart:user:${member.id}`;
+    const before = await getKv().get(key);
+
+    // Hard-delete the gear; next getMyCart should prune + rewrite.
+    await getDb().delete(schema.gear).where(eq(schema.gear.publicId, a));
+    await getMyCartAction();
+
+    const after = await getKv().get(key);
+    expect(after).not.toBe(before);
+    const parsed = JSON.parse(after ?? "null") as { items: unknown[] };
+    expect(parsed.items).toEqual([]);
+  });
+});
+
+describe("hydration surfaces no_code for code-cleared rows", () => {
+  it("surfaces a row as availability='no_code' when its code is nulled post-add", async () => {
+    const typePublicId = await createTypeOk();
+    const a = await createGearOk({ typePublicId, code: "CR22" });
+    await signInAsApprovedMemberWithWaiver();
+    await addToCartAction({ gearPublicId: a });
+
+    // Simulate an officer clearing the code (e.g. retire/unretire
+    // cycle, or a manual edit). The row stays in inventory but loses
+    // its scannable identifier.
+    await getDb()
+      .update(schema.gear)
+      .set({ code: null })
+      .where(eq(schema.gear.publicId, a));
+
+    const cart = await getMyCartAction();
+    expect(cart.items).toHaveLength(1);
+    expect(cart.items[0]?.code).toBeNull();
+    expect(cart.items[0]?.availability).toBe("no_code");
   });
 });

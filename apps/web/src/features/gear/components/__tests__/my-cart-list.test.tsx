@@ -85,7 +85,6 @@ function row(overrides: Partial<MyCartResult["items"][number]>) {
     lifecycle: "active" as const,
     condition: "serviceable" as const,
     hasOpenLoan: false,
-    openLoanMemberFullName: null,
     availability: "loanable" as const,
     addedAt: 1,
     ...overrides,
@@ -103,7 +102,7 @@ beforeEach(() => {
 
 describe("MyCartList", () => {
   it("renders the empty state with a link to /gear when the cart has no items", async () => {
-    myCartFnMock.mockResolvedValue({ items: [], updatedAt: 0 });
+    myCartFnMock.mockResolvedValue({ items: [] });
     renderWithClient();
     expect(await screen.findByText(/your cart is empty/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /gear/i })).toHaveAttribute(
@@ -129,7 +128,6 @@ describe("MyCartList", () => {
           condition: "needs_repair",
         }),
       ],
-      updatedAt: 0,
     });
     renderWithClient();
     expect(await screen.findByText("Available")).toBeInTheDocument();
@@ -140,7 +138,6 @@ describe("MyCartList", () => {
   it("calls remove + clear mutations on the corresponding buttons", async () => {
     myCartFnMock.mockResolvedValue({
       items: [row({ publicId: "gear_a", code: "CR1" })],
-      updatedAt: 0,
     });
     renderWithClient();
     const user = userEvent.setup();
@@ -160,7 +157,6 @@ describe("MyCartList", () => {
   it("opens the QR dialog when the show-QR button is clicked", async () => {
     myCartFnMock.mockResolvedValue({
       items: [row({ publicId: "gear_a", code: "CR1" })],
-      updatedAt: 0,
     });
     renderWithClient();
     const user = userEvent.setup();

@@ -34,7 +34,7 @@ import { requireGearLoanManager } from "#/features/gear/server/permissions.serve
 import { getGearByPublicId } from "#/features/gear/server/repo.server";
 import {
   getApprovedMemberByPublicId,
-  getOpenLoanForGear,
+  getCartHydrationRowsByPublicIds,
 } from "#/features/gear/server/loans-repo.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
@@ -84,13 +84,19 @@ async function requireCartMember(): Promise<Principal> {
  * the desk pane via a scanned QR). Mirrors the per-item skip reasons
  * `CheckoutLoansResult` already surfaces so the desk pane can flag a
  * row using the same vocabulary, except `loanable` for the happy path.
+ *
+ * `no_code` covers the asymmetric case where addToCart rejects null-code
+ * pieces up front, but a piece that was added with a code can later
+ * have its code cleared by an officer (retire/unretire cycle). Surfacing
+ * the row keeps the cart honest with the member instead of vanishing
+ * the entry silently.
  */
 export type CartItemAvailability =
   | "loanable"
   | "on_loan"
   | "not_serviceable"
   | "retired"
-  | "not_found";
+  | "no_code";
 
 /**
  * Hydrated cart row. Shaped to drop into the desk pane's existing
@@ -100,14 +106,16 @@ export type CartItemAvailability =
  */
 export interface CartItemRow {
   publicId: string;
-  code: string;
+  /** Nullable because a piece's code can be cleared after it landed
+   *  in the cart; the row then surfaces with `availability: "no_code"`
+   *  so the member sees a deliberate flag instead of a silent drop. */
+  code: string | null;
   description: string;
   typeName: string;
   thumbnailKey: string | null;
   lifecycle: schema.GearLifecycle;
   condition: schema.GearCondition;
   hasOpenLoan: boolean;
-  openLoanMemberFullName: string | null;
   availability: CartItemAvailability;
   /** ms-since-epoch */
   addedAt: number;
@@ -115,8 +123,6 @@ export interface CartItemRow {
 
 export interface MyCartResult {
   items: CartItemRow[];
-  /** ms-since-epoch of the last mutation, or 0 for a never-seeded cart. */
-  updatedAt: number;
 }
 
 export type AddToCartResult =
@@ -126,13 +132,15 @@ export type AddToCartResult =
       reason: "not_found" | "retired" | "no_code" | "already_in_cart";
     };
 
-export interface MintCartTokenResult {
-  ok: boolean;
-  /** Full `ucmc-cart:<uuid>` payload, ready for the QR encoder. */
-  token: string;
-  /** ms-since-epoch when the token's KV entry will expire. */
-  expiresAt: number;
-}
+export type MintCartTokenResult =
+  | {
+      ok: true;
+      /** Full `ucmc-cart:<uuid>` payload, ready for the QR encoder. */
+      token: string;
+      /** ms-since-epoch when the token's KV entry will expire. */
+      expiresAt: number;
+    }
+  | { ok: false; reason: "empty_cart" };
 
 export interface ResolvedCart {
   memberPublicId: string;
@@ -147,52 +155,57 @@ export type ResolveCartTokenResult =
 
 // ── hydration ──────────────────────────────────────────────────────────
 
+/**
+ * Resolve every cart entry to a hydrated row in one D1 round-trip.
+ * Missing publicIds (gear hard-deleted) drop out — the caller persists
+ * the trimmed entries so subsequent reads stay O(remaining).
+ *
+ * Availability priority mirrors `checkoutLoansAction`'s skip order:
+ * retired → not_serviceable → on_loan → no_code → loanable.
+ */
 async function hydrateCartItems(
   cart: StoredCart,
 ): Promise<{ items: CartItemRow[]; prunedCart: StoredCart }> {
+  if (cart.items.length === 0) {
+    return { items: [], prunedCart: cart };
+  }
+  const publicIds = cart.items.map((i) => i.gearPublicId);
+  const rows = await getCartHydrationRowsByPublicIds(publicIds);
+  const byPublicId = new Map(rows.map((r) => [r.publicId, r]));
+
   const items: CartItemRow[] = [];
   const survivingEntries: StoredCart["items"] = [];
   for (const entry of cart.items) {
-    const gear = await getGearByPublicId(entry.gearPublicId);
-    if (!gear) {
-      // Hard-deleted gear gets pruned from the cart — there's nothing
-      // for the member to act on, and we don't want a stale publicId
-      // hanging around forever.
+    const row = byPublicId.get(entry.gearPublicId);
+    if (!row) {
+      // Hard-deleted gear is pruned from the cart silently — nothing
+      // for the member to act on and no point keeping the publicId.
       continue;
     }
     survivingEntries.push(entry);
 
-    // `gear.code` is nullable in the schema, but addToCartAction
-    // rejects null-code pieces; an existing cart entry might still
-    // carry one if an officer cleared the code after the member added
-    // the piece (it then became unscannable). Treat as not_found-like.
-    if (gear.code === null) {
-      continue;
-    }
-
-    const openLoan = await getOpenLoanForGear(gear.id);
-    const hasOpenLoan = openLoan !== null;
     let availability: CartItemAvailability;
-    if (gear.lifecycle === "retired") {
+    if (row.lifecycle === "retired") {
       availability = "retired";
-    } else if (gear.condition !== "serviceable") {
+    } else if (row.condition !== "serviceable") {
       availability = "not_serviceable";
-    } else if (hasOpenLoan) {
+    } else if (row.hasOpenLoan) {
       availability = "on_loan";
+    } else if (row.code === null) {
+      availability = "no_code";
     } else {
       availability = "loanable";
     }
 
     items.push({
-      publicId: gear.publicId,
-      code: gear.code,
-      description: gear.description,
-      typeName: gear.typeName,
-      thumbnailKey: gear.thumbnailKey,
-      lifecycle: gear.lifecycle,
-      condition: gear.condition,
-      hasOpenLoan,
-      openLoanMemberFullName: null,
+      publicId: row.publicId,
+      code: row.code,
+      description: row.description,
+      typeName: row.typeName,
+      thumbnailKey: row.thumbnailKey,
+      lifecycle: row.lifecycle,
+      condition: row.condition,
+      hasOpenLoan: row.hasOpenLoan,
       availability,
       addedAt: entry.addedAt,
     });
@@ -211,20 +224,27 @@ export async function getMyCartAction(): Promise<MyCartResult> {
   const principal = await requireCartMember();
   const stored = await getCart(principal.userId);
   const { items, prunedCart } = await hydrateCartItems(stored);
-  // Best-effort prune: if hydration dropped not_found entries, persist
-  // the trimmed cart so subsequent reads are O(remaining). Fire-and-
-  // forget — a KV write failure here doesn't affect the response.
+  // Best-effort prune: only rewrite KV when hydration actually dropped
+  // entries (hard-deleted gear). The no-op branch is important — it
+  // avoids refreshing the 24 h TTL on every read, which would let an
+  // open tab keep a cart alive indefinitely.
   if (prunedCart.items.length !== stored.items.length) {
     await putCart(principal.userId, {
       items: prunedCart.items,
       updatedAt: Date.now(),
     });
   }
-  return { items, updatedAt: stored.updatedAt };
+  return { items };
 }
 
 // ── writes ─────────────────────────────────────────────────────────────
 
+/**
+ * Read-modify-write into KV. KV has no CAS, so two concurrent add
+ * calls from the same user could clobber each other. The UI defends
+ * against this by disabling the button while `add.isPending`; the
+ * server treats double-click as best-effort.
+ */
 export async function addToCartAction(input: {
   gearPublicId: string;
 }): Promise<AddToCartResult> {
@@ -286,9 +306,13 @@ export async function clearCartAction(): Promise<{ ok: true }> {
 export async function mintCartTokenAction(): Promise<MintCartTokenResult> {
   const principal = await requireCartMember();
   const cart = await getCart(principal.userId);
-  // Empty carts still mint a token — the desk pane will surface
-  // "cart is empty" once resolved, which is more helpful than a
-  // generic failure here.
+  if (cart.items.length === 0) {
+    // Minting on an empty cart used to silently succeed and surface
+    // "your cart is empty" at the officer's desk after a scan. Surface
+    // the failure up front so the dialog can prompt the member to
+    // add gear first.
+    return { ok: false, reason: "empty_cart" };
+  }
   const token = newToken();
   const createdAt = Date.now();
   await putToken(token, {
@@ -296,6 +320,10 @@ export async function mintCartTokenAction(): Promise<MintCartTokenResult> {
     snapshot: cart.items.map((i) => i.gearPublicId),
     createdAt,
   });
+  // Minting is a strong "I'm about to use this cart" signal — bump
+  // the cart's 24 h TTL so the contents don't expire between mint
+  // and the walk to the cave.
+  await putCart(principal.userId, cart);
   return {
     ok: true,
     token: `${CART_TOKEN_PREFIX}${token}`,

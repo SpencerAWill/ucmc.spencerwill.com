@@ -6,6 +6,7 @@ import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { myCartQueryOptions } from "#/features/gear/api/queries";
 import { useAddToCart } from "#/features/gear/api/use-add-to-cart";
+import type { AddToCartResult } from "#/features/gear/server/gear-fns";
 
 type Variant = "card" | "detail";
 
@@ -19,7 +20,9 @@ interface AddToCartButtonProps {
   variant?: Variant;
 }
 
-const REASON_COPY: Record<string, string> = {
+type AddToCartFailureReason = Extract<AddToCartResult, { ok: false }>["reason"];
+
+const REASON_COPY: Record<AddToCartFailureReason, string> = {
   not_found: "That piece is no longer in inventory.",
   retired: "That piece has been retired.",
   no_code: "Ask an officer to tag this piece before adding it to a cart.",
@@ -81,7 +84,7 @@ export function AddToCartButton({
             toast.success(`Added ${code} to your cart.`);
             return;
           }
-          toast.error(REASON_COPY[result.reason] ?? "Couldn't add to cart.");
+          toast.error(REASON_COPY[result.reason]);
         },
         onError: (err: unknown) => {
           toast.error(

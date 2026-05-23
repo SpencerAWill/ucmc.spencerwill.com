@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#/components/ui/dialog";
-import { useMintCartToken } from "#/features/gear/api/use-mint-cart-token";
+import { mintCartTokenFn } from "#/features/gear/server/gear-fns";
 
 interface CartQrDialogProps {
   open: boolean;
@@ -22,14 +22,18 @@ interface CartQrDialogProps {
  * cart and renders it as a QR code for the officer to scan at the
  * gear desk.
  *
- * Token freshness: every time the dialog opens we call `mintCartToken`.
- * A re-open mints a new token rather than reusing the previous one —
- * cheap insurance against a photographed QR being replayed off-camera
- * after the member has left the cave.
+ * Token freshness: every time the dialog opens we call
+ * `mintCartTokenFn` directly. A re-open mints a new token rather than
+ * reusing the previous one — cheap insurance against a photographed
+ * QR being replayed off-camera after the member has left the cave.
+ *
+ * `useMutation` would add no value here (no cache to invalidate, no
+ * pending state we'd surface anywhere else), so we call the server fn
+ * directly per the project rule banning inline `useMutation` only in
+ * routes/components that ALSO need cache invalidation.
  */
 export function CartQrDialog({ open, onOpenChange }: CartQrDialogProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const mint = useMintCartToken();
   const [token, setToken] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -43,10 +47,15 @@ export function CartQrDialog({ open, onOpenChange }: CartQrDialogProps) {
       return;
     }
     let cancelled = false;
-    mint
-      .mutateAsync()
+    mintCartTokenFn()
       .then((result) => {
         if (cancelled) return;
+        if (!result.ok) {
+          setErrorMessage(
+            "Your cart is empty — add some gear before generating a QR code.",
+          );
+          return;
+        }
         setToken(result.token);
         setExpiresAt(result.expiresAt);
       })
@@ -61,8 +70,6 @@ export function CartQrDialog({ open, onOpenChange }: CartQrDialogProps) {
     return () => {
       cancelled = true;
     };
-    // Only re-mint on the open→true transition; `mint` is a stable
-    // mutation handle and including it in deps would re-fire endlessly.
   }, [open]);
 
   // Render to canvas when the token is ready and the canvas is mounted.

@@ -53,22 +53,26 @@ const SKIP_LABEL: Record<
  * server uses for post-submit skip reasons. `loanable` rows have no
  * error string; everything else flags the row as unsubmittable until
  * the officer removes it.
+ *
+ * `no_code` is intentionally absent — null-code rows are filtered out
+ * before they ever reach `cartItemToCheckoutItem` (the desk needs a
+ * scannable code on every row), so there's no error string to surface.
  */
 const CART_AVAILABILITY_LABEL: Partial<Record<CartItemAvailability, string>> = {
   on_loan: "Already checked out to someone else",
   not_serviceable: "Condition isn't serviceable",
   retired: "Retired since the cart was built",
-  not_found: "No longer in inventory",
 };
 
+/**
+ * Adapts a hydrated cart row into the desk pane's `CheckoutItem`
+ * shape. Caller must filter `code === null` rows before calling — the
+ * desk pane's existing `GearLookupRow` type requires a non-null code.
+ */
 function cartItemToCheckoutItem(
-  cartItem: CartItemRow,
+  cartItem: CartItemRow & { code: string },
   defaultDurationDays: number,
 ): CheckoutItem {
-  // The CheckoutItemRow renderer needs a GearLookupRow. CartItemRow
-  // carries every field a GearLookupRow does except the borrower
-  // avatar key (cart hydration doesn't fetch it — the cart is the
-  // member's own intent, not someone else's loan). Default to null.
   const row: GearLookupRow = {
     publicId: cartItem.publicId,
     code: cartItem.code,
@@ -78,7 +82,10 @@ function cartItemToCheckoutItem(
     lifecycle: cartItem.lifecycle,
     condition: cartItem.condition,
     hasOpenLoan: cartItem.hasOpenLoan,
-    openLoanMemberFullName: cartItem.openLoanMemberFullName,
+    // Cart hydration doesn't fetch the borrower's display info — the
+    // member's cart is their own intent, not someone else's loan. The
+    // CheckoutItemRow renderer falls back gracefully when these are null.
+    openLoanMemberFullName: null,
     openLoanMemberAvatarKey: null,
   };
   return {
@@ -183,23 +190,32 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
       // Combobox is best-effort — already-set member from a prior scan
       // / search stays.
     }
+    // Skip rows whose code was cleared after the member added them —
+    // the desk has no scannable identifier to attach a loan to. They
+    // remain in the member's cart with `availability: "no_code"` so
+    // the member sees the flag; the officer just doesn't get them.
+    const codedItems = resolved.cart.items.filter(
+      (i): i is typeof i & { code: string } => i.code !== null,
+    );
+    const skippedNoCode = resolved.cart.items.length - codedItems.length;
     setItems((prev) => {
       const next = [...prev];
-      for (const cartItem of resolved.cart.items) {
+      for (const cartItem of codedItems) {
         if (next.some((i) => i.row.publicId === cartItem.publicId)) continue;
         next.push(cartItemToCheckoutItem(cartItem, defaultDurationDays));
       }
       return next;
     });
-    const blocked = resolved.cart.items.filter(
+    const blocked = codedItems.filter(
       (i) => i.availability !== "loanable",
     ).length;
-    if (blocked > 0) {
+    if (blocked > 0 || skippedNoCode > 0) {
+      const tail = skippedNoCode > 0 ? ` (${skippedNoCode} untagged)` : "";
       toast.warning(
-        `Added ${resolved.cart.items.length} items; ${blocked} need attention before checkout.`,
+        `Added ${codedItems.length} items; ${blocked} need attention before checkout${tail}.`,
       );
     } else {
-      toast.success(`Added ${resolved.cart.items.length} items from cart.`);
+      toast.success(`Added ${codedItems.length} items from cart.`);
     }
   };
 
