@@ -32,12 +32,14 @@ allowBuilds:
 #   - esbuild   <0.25.0  GHSA-67mh-4wv8-2f99 (dev-server CORS)
 #   - fast-uri  <3.1.2   ReDoS
 #   - ip-address <10.1.1 ReDoS
-#   - protobufjs <8.0.2  GHSA-h755-8qp9-cq85
+#   - protobufjs <8.2.0  GHSA-jggg-4jg4-v7c6 (DoS via unbounded recursive JSON descriptor expansion)
+#   - ws        <8.20.1  GHSA-58qx-3vcg-4xpx (uninitialized memory disclosure; reaches us via miniflare)
 overrides:
   "esbuild@<0.25.0": ">=0.25.0"
   "fast-uri@<3.1.2": ">=3.1.2"
   "ip-address@<10.1.1": ">=10.1.1"
-  "protobufjs@<8.0.2": "8.0.3"
+  "protobufjs@<8.2.0": ">=8.2.0"
+  "ws@<8.20.1": ">=8.20.1"
   # Pin @tanstack/query-core to match our pinned react-query so the
   # auto-installed peer dep stays in lockstep (otherwise pnpm picks
   # the latest matching version, which can be quarantined).
