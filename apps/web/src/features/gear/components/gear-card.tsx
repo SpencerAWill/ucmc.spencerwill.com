@@ -18,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "#/components/ui/popover";
+import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
@@ -175,6 +176,11 @@ export function GearCard({
          * always renders so the grid columns stay stable even when
          * neither tags nor manage affordances are visible. */}
         <div className="flex items-start gap-0 p-2 sm:p-3">
+          <AddToCartButton
+            publicId={gear.publicId}
+            code={gear.code}
+            lifecycle={gear.lifecycle}
+          />
           {gear.tags.length > 0 ? <TagsPopover tags={gear.tags} /> : null}
           {canManage ? (
             <DropdownMenu>

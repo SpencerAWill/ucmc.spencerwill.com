@@ -538,6 +538,76 @@ export async function lookupBackfillGearByCode(
 }
 
 /**
+ * Joined shape used by the cart-hydration path. Same columns as
+ * `GearCodeSearchRow` except `code` is nullable (the cart may
+ * still hold a piece whose code was cleared by an officer post-add)
+ * and the borrower display columns are dropped — cart UX doesn't
+ * surface them, and dropping them keeps the query narrower.
+ */
+export interface GearCartHydrationRow {
+  publicId: string;
+  code: string | null;
+  description: string;
+  typeName: string;
+  thumbnailKey: string | null;
+  lifecycle: schema.GearLifecycle;
+  condition: schema.GearCondition;
+  hasOpenLoan: boolean;
+}
+
+/**
+ * Batched lookup for cart hydration: one SQL round-trip resolves every
+ * publicId to the joined `gear` ⨝ `gear_types` ⨝ (open `gear_loans`)
+ * shape. Missing publicIds simply don't appear in the result; the
+ * caller treats them as pruned-from-cart.
+ *
+ * The LEFT JOIN on `gear_loans WHERE returned_at IS NULL` is safe
+ * because the `gear_loans_one_active_per_gear` partial unique index
+ * guarantees ≤1 row per gear, so the JOIN can't fan-out the result.
+ */
+export async function getCartHydrationRowsByPublicIds(
+  publicIds: string[],
+): Promise<GearCartHydrationRow[]> {
+  if (publicIds.length === 0) return [];
+  const db = getDb();
+  const rows = await db
+    .select({
+      publicId: schema.gear.publicId,
+      code: schema.gear.code,
+      description: schema.gear.description,
+      typeName: schema.gearTypes.name,
+      thumbnailKey: schema.gear.thumbnailKey,
+      lifecycle: schema.gear.lifecycle,
+      condition: schema.gear.condition,
+      // PK of the joined row is the only non-nullable column we can
+      // use to detect a hit through the LEFT JOIN (`returnedAt` is
+      // NULL both when there's no loan and when there's an open loan,
+      // since the JOIN filter is `returnedAt IS NULL`).
+      loanId: schema.gearLoans.id,
+    })
+    .from(schema.gear)
+    .innerJoin(schema.gearTypes, eq(schema.gearTypes.id, schema.gear.typeId))
+    .leftJoin(
+      schema.gearLoans,
+      and(
+        eq(schema.gearLoans.gearId, schema.gear.id),
+        isNull(schema.gearLoans.returnedAt),
+      ),
+    )
+    .where(inArray(schema.gear.publicId, publicIds));
+  return rows.map((r) => ({
+    publicId: r.publicId,
+    code: r.code,
+    description: r.description,
+    typeName: r.typeName,
+    thumbnailKey: r.thumbnailKey,
+    lifecycle: r.lifecycle,
+    condition: r.condition,
+    hasOpenLoan: r.loanId !== null,
+  }));
+}
+
+/**
  * Gear search by code prefix. Returns rows shaped for the gear-desk
  * item picker — joined with gear_types for the type name and the open
  * loan (if any) so the picker can flag eligibility inline.

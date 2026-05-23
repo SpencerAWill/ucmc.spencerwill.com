@@ -594,6 +594,12 @@ export const auditAction = [
   "loan.checked_out",
   "loan.checked_in",
   "loan.extended",
+  // Officer scanned a member's gear-cart QR at the checkout desk
+  // (resolveCartTokenAction). One event per scan, with metadata
+  // { memberUserId, itemCount } so the audit trail captures officer
+  // interactions with members' carts independently of whether the
+  // checkout itself was actually submitted.
+  "loan.cart_scanned",
   // Site settings / feature-flag edits via /settings. One action covers
   // both scalar settings and boolean flags — the metadata payload
   // distinguishes them. For boolean values metadata is { key, value };

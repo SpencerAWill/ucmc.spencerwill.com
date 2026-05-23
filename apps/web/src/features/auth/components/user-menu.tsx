@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LogOut,
   Map,
+  ShoppingCart,
   User as UserIcon,
 } from "lucide-react";
 
@@ -125,6 +126,12 @@ export function UserMenu() {
               <Link to="/my/gear">
                 <Backpack className="mr-2 size-4" />
                 My Gear
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to="/my/gear/cart">
+                <ShoppingCart className="mr-2 size-4" />
+                My Cart
               </Link>
             </DropdownMenuItem>
           </>

@@ -440,7 +440,10 @@ function SidebarNav() {
                     {/* Same Collapsible-inside-MenuItem pattern as the
                      * Members entry so the <ul> only contains <li>
                      * children (axe-core's list rule). Sub-item appears
-                     * only when the user has `gear:loan`. */}
+                     * only when the user has `gear:loan`. Members reach
+                     * their personal surfaces (My Gear, My Cart) from
+                     * the user menu — kept off the sidebar so the
+                     * sidebar stays officer-shaped. */}
                     <Collapsible
                       defaultOpen={canLoanGear}
                       className="group/collapsible"

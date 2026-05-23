@@ -1,29 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { MyGearList } from "#/features/gear/components/my-gear-list";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 
 /**
- * Member's own gear page. The `/my` parent route guards on
- * `requireApproved`; we don't gate on `gear:read` here because the
- * server fn `listMyLoansAction` only requires `gear:read` and any
- * approved member should have it via the default role grant. If a
- * future role strips `gear:read`, the empty state still renders
- * gracefully because the loader doesn't throw.
+ * Pathless layout for `/my/gear*`. TanStack file-based routing nests
+ * `my.gear.cart.tsx` as a child of this route, so without an `<Outlet />`
+ * here the cart page would never reach the screen at `/my/gear/cart`.
+ *
+ * The /my/gear page content (active loans + history) moved to
+ * `my.gear.index.tsx`; the cart lives at `my.gear.cart.tsx`. The
+ * approved-only guard inherited from `/my` still applies to both.
  */
 export const Route = createFileRoute("/my/gear")({
-  component: MyGearPage,
+  component: () => <Outlet />,
 });
-
-function MyGearPage() {
-  return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">My gear</h1>
-        <p className="text-sm text-muted-foreground">
-          Equipment you've checked out from the gear cave.
-        </p>
-      </header>
-      <MyGearList />
-    </div>
-  );
-}

@@ -9,6 +9,7 @@ import {
   GEAR_TAGS_QUERY_KEY,
   GEAR_TYPES_QUERY_KEY,
   LOANS_QUERY_KEY,
+  MY_CART_QUERY_KEY,
   MY_LOANS_QUERY_KEY,
   gearCodeSearchQueryKey,
   gearDetailQueryKey,
@@ -24,6 +25,7 @@ import {
   getGearDetailFn,
   getLoanDetailFn,
   getMemberForLoanFn,
+  getMyCartFn,
   listGearFn,
   listGearInspectionsFn,
   listGearLabelsFn,
@@ -120,6 +122,19 @@ export function myLoansQueryOptions() {
   return {
     queryKey: MY_LOANS_QUERY_KEY,
     queryFn: () => listMyLoansFn(),
+  } as const;
+}
+
+/**
+ * Member's gear cart at `/my/gear/cart`. The action's
+ * `requireCartMember` gate enforces approved + current-waiver, so this
+ * query 401s for waiver-lapsed users; the route-level guard catches
+ * them before the query fires.
+ */
+export function myCartQueryOptions() {
+  return {
+    queryKey: MY_CART_QUERY_KEY,
+    queryFn: () => getMyCartFn(),
   } as const;
 }
 

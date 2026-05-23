@@ -65,6 +65,15 @@ import type {
   LoanDetail,
   LoanSummary,
 } from "#/features/gear/server/loans-actions.server";
+import type {
+  AddToCartResult,
+  CartItemAvailability,
+  CartItemRow,
+  MintCartTokenResult,
+  MyCartResult,
+  ResolveCartTokenResult,
+  ResolvedCart,
+} from "#/features/gear/server/cart-actions.server";
 import type { MemberSearchResult } from "#/features/gear/server/loans-repo.server";
 
 // ── bulk multi-select handlers ─────────────────────────────────────────
@@ -103,9 +112,16 @@ export type GearInspectionResultValue =
   (typeof GEAR_INSPECTION_RESULT_VALUES)[number];
 
 export type {
+  AddToCartResult,
   BulkImportInput,
   BulkImportResult,
   BulkImportSkipped,
+  CartItemAvailability,
+  CartItemRow,
+  MintCartTokenResult,
+  MyCartResult,
+  ResolveCartTokenResult,
+  ResolvedCart,
   BulkImportLoanRow,
   BulkImportLoansInput,
   BulkImportLoansResult,
@@ -720,4 +736,65 @@ export const getGearByCodeFn = createServerFn({ method: "GET" })
     const { getGearByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
     return getGearByCodeAction(data);
+  });
+
+// ── cart shells ────────────────────────────────────────────────────────
+
+const cartGearInputSchema = z.object({
+  gearPublicId: z.string().min(1),
+});
+
+// Token is small — a `ucmc-cart:` prefix plus a UUID. 200 chars is
+// generous and guards against pathological scanner payloads being
+// stuffed straight into KV.
+const resolveCartTokenInputSchema = z.object({
+  token: z.string().min(1).max(200),
+});
+
+export const getMyCartFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<MyCartResult> => {
+    const { getMyCartAction } =
+      await import("#/features/gear/server/cart-actions.server");
+    return getMyCartAction();
+  },
+);
+
+export const addToCartFn = createServerFn({ method: "POST" })
+  .inputValidator(cartGearInputSchema)
+  .handler(async ({ data }): Promise<AddToCartResult> => {
+    const { addToCartAction } =
+      await import("#/features/gear/server/cart-actions.server");
+    return addToCartAction(data);
+  });
+
+export const removeFromCartFn = createServerFn({ method: "POST" })
+  .inputValidator(cartGearInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { removeFromCartAction } =
+      await import("#/features/gear/server/cart-actions.server");
+    return removeFromCartAction(data);
+  });
+
+export const clearCartFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<{ ok: true }> => {
+    const { clearCartAction } =
+      await import("#/features/gear/server/cart-actions.server");
+    return clearCartAction();
+  },
+);
+
+export const mintCartTokenFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<MintCartTokenResult> => {
+    const { mintCartTokenAction } =
+      await import("#/features/gear/server/cart-actions.server");
+    return mintCartTokenAction();
+  },
+);
+
+export const resolveCartTokenFn = createServerFn({ method: "POST" })
+  .inputValidator(resolveCartTokenInputSchema)
+  .handler(async ({ data }): Promise<ResolveCartTokenResult> => {
+    const { resolveCartTokenAction } =
+      await import("#/features/gear/server/cart-actions.server");
+    return resolveCartTokenAction(data);
   });

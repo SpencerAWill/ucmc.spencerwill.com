@@ -53,10 +53,12 @@ import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
 import { Route as GazettePublicIdRouteImport } from './routes/gazette.$publicId'
 import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as MyGearIndexRouteImport } from './routes/my.gear.index'
 import { Route as MyAccountIndexRouteImport } from './routes/my.account.index'
 import { Route as MembersTabsIndexRouteImport } from './routes/members._tabs.index'
 import { Route as GearLoansIndexRouteImport } from './routes/gear.loans.index'
 import { Route as FeedbackTabsIndexRouteImport } from './routes/feedback._tabs.index'
+import { Route as MyGearCartRouteImport } from './routes/my.gear.cart'
 import { Route as MyAccountWaiverRouteImport } from './routes/my.account.waiver'
 import { Route as MyAccountSecurityRouteImport } from './routes/my.account.security'
 import { Route as MyAccountPreferencesRouteImport } from './routes/my.account.preferences'
@@ -292,6 +294,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MyGearIndexRoute = MyGearIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MyGearRoute,
+} as any)
 const MyAccountIndexRoute = MyAccountIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -311,6 +318,11 @@ const FeedbackTabsIndexRoute = FeedbackTabsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => FeedbackTabsRoute,
+} as any)
+const MyGearCartRoute = MyGearCartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
+  getParentRoute: () => MyGearRoute,
 } as any)
 const MyAccountWaiverRoute = MyAccountWaiverRouteImport.update({
   id: '/waiver',
@@ -430,7 +442,7 @@ export interface FileRoutesByFullPath {
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my/account': typeof MyAccountRouteWithChildren
-  '/my/gear': typeof MyGearRoute
+  '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
@@ -452,10 +464,12 @@ export interface FileRoutesByFullPath {
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/my/gear/cart': typeof MyGearCartRoute
   '/feedback/': typeof FeedbackTabsIndexRoute
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/': typeof MembersTabsIndexRoute
   '/my/account/': typeof MyAccountIndexRoute
+  '/my/gear/': typeof MyGearIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -491,7 +505,6 @@ export interface FileRoutesByTo {
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
-  '/my/gear': typeof MyGearRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements': typeof AnnouncementsIndexRoute
@@ -513,8 +526,10 @@ export interface FileRoutesByTo {
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/my/gear/cart': typeof MyGearCartRoute
   '/gear/loans': typeof GearLoansIndexRoute
   '/my/account': typeof MyAccountIndexRoute
+  '/my/gear': typeof MyGearIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -556,7 +571,7 @@ export interface FileRoutesById {
   '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my/account': typeof MyAccountRouteWithChildren
-  '/my/gear': typeof MyGearRoute
+  '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/announcements/': typeof AnnouncementsIndexRoute
@@ -578,10 +593,12 @@ export interface FileRoutesById {
   '/my/account/preferences': typeof MyAccountPreferencesRoute
   '/my/account/security': typeof MyAccountSecurityRoute
   '/my/account/waiver': typeof MyAccountWaiverRoute
+  '/my/gear/cart': typeof MyGearCartRoute
   '/feedback/_tabs/': typeof FeedbackTabsIndexRoute
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/_tabs/': typeof MembersTabsIndexRoute
   '/my/account/': typeof MyAccountIndexRoute
+  '/my/gear/': typeof MyGearIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -644,10 +661,12 @@ export interface FileRouteTypes {
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/my/gear/cart'
     | '/feedback/'
     | '/gear/loans/'
     | '/members/'
     | '/my/account/'
+    | '/my/gear/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -683,7 +702,6 @@ export interface FileRouteTypes {
     | '/members/$publicId'
     | '/members/roles'
     | '/members/waivers'
-    | '/my/gear'
     | '/register/pending'
     | '/register/profile'
     | '/announcements'
@@ -705,8 +723,10 @@ export interface FileRouteTypes {
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/my/gear/cart'
     | '/gear/loans'
     | '/my/account'
+    | '/my/gear'
   id:
     | '__root__'
     | '/'
@@ -769,10 +789,12 @@ export interface FileRouteTypes {
     | '/my/account/preferences'
     | '/my/account/security'
     | '/my/account/waiver'
+    | '/my/gear/cart'
     | '/feedback/_tabs/'
     | '/gear/loans/'
     | '/members/_tabs/'
     | '/my/account/'
+    | '/my/gear/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1127,6 +1149,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/my/gear/': {
+      id: '/my/gear/'
+      path: '/'
+      fullPath: '/my/gear/'
+      preLoaderRoute: typeof MyGearIndexRouteImport
+      parentRoute: typeof MyGearRoute
+    }
     '/my/account/': {
       id: '/my/account/'
       path: '/'
@@ -1154,6 +1183,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/feedback/'
       preLoaderRoute: typeof FeedbackTabsIndexRouteImport
       parentRoute: typeof FeedbackTabsRoute
+    }
+    '/my/gear/cart': {
+      id: '/my/gear/cart'
+      path: '/cart'
+      fullPath: '/my/gear/cart'
+      preLoaderRoute: typeof MyGearCartRouteImport
+      parentRoute: typeof MyGearRoute
     }
     '/my/account/waiver': {
       id: '/my/account/waiver'
@@ -1382,14 +1418,27 @@ const MyAccountRouteWithChildren = MyAccountRoute._addFileChildren(
   MyAccountRouteChildren,
 )
 
+interface MyGearRouteChildren {
+  MyGearCartRoute: typeof MyGearCartRoute
+  MyGearIndexRoute: typeof MyGearIndexRoute
+}
+
+const MyGearRouteChildren: MyGearRouteChildren = {
+  MyGearCartRoute: MyGearCartRoute,
+  MyGearIndexRoute: MyGearIndexRoute,
+}
+
+const MyGearRouteWithChildren =
+  MyGearRoute._addFileChildren(MyGearRouteChildren)
+
 interface MyRouteChildren {
   MyAccountRoute: typeof MyAccountRouteWithChildren
-  MyGearRoute: typeof MyGearRoute
+  MyGearRoute: typeof MyGearRouteWithChildren
 }
 
 const MyRouteChildren: MyRouteChildren = {
   MyAccountRoute: MyAccountRouteWithChildren,
-  MyGearRoute: MyGearRoute,
+  MyGearRoute: MyGearRouteWithChildren,
 }
 
 const MyRouteWithChildren = MyRoute._addFileChildren(MyRouteChildren)
