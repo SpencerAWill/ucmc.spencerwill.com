@@ -1,31 +1,86 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
+# Dependabot version updates.
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
+#
+# `cooldown` mirrors `minimumReleaseAge: 10080` (7 days) in
+# pnpm-workspace.yaml: pnpm refuses to install any version published in
+# the last week (publish-compromise defense), so Dependabot must not open
+# PRs for versions younger than that — the lockfile update would fail.
 version: 2
 updates:
+  # ── npm (whole pnpm workspace: root + apps/web + infra via the root lock)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 10
+    cooldown:
+      # 7 days = the `minimumReleaseAge` quarantine floor (pnpm won't
+      # install anything younger). Majors soak 30 days for stability;
+      # minor/patch fall back to `default-days`.
+      default-days: 7
+      semver-major-days: 30
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
     groups:
+      # Framework families — keep majors visible by batching per-family.
       tanstack:
         patterns: ["@tanstack/*"]
       tailwind:
         patterns: ["tailwindcss", "@tailwindcss/*"]
       cloudflare:
-        patterns: ["@cloudflare/*", "wrangler", "miniflare"]
+        patterns: ["@cloudflare/*", "wrangler", "miniflare", "workerd"]
+      pulumi:
+        patterns: ["@pulumi/*", "pulumi"]
+      linting:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "prettier"
+          - "prettier-*"
+          - "@commitlint/*"
+          - "commitlint"
+          - "lint-staged"
+          - "czg"
+          - "husky"
+      # Catch-alls: batch all remaining minor/patch bumps into one PR per
+      # dependency type. Majors fall through to individual PRs for review.
+      production-minor:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
       dev-dependencies:
         dependency-type: "development"
         update-types: ["minor", "patch"]
 
+  # ── GitHub Actions (guards against action tag-hijack; same cooldown)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns: ["*"]
 
+  # ── Devcontainer base image
   - package-ecosystem: "docker"
     directory: "/.devcontainer"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    groups:
+      docker:
+        patterns: ["*"]
