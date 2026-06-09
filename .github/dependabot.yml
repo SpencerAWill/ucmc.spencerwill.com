@@ -60,9 +60,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # semver-*-days are only valid for semver ecosystems (npm); actions
+    # uses non-semver tags, so only default-days applies here.
     cooldown:
       default-days: 7
-      semver-major-days: 30
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -75,9 +76,9 @@ updates:
     directory: "/.devcontainer"
     schedule:
       interval: "weekly"
+    # semver-*-days unsupported for docker image tags; default-days only.
     cooldown:
       default-days: 7
-      semver-major-days: 30
     commit-message:
       prefix: "build"
       include: "scope"
