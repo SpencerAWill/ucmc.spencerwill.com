@@ -15,7 +15,7 @@ UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (pnpm@11.1
 - **Lint/format**: ESLint v10 flat config, Prettier, EditorConfig. Sub-apps extend root config.
 - **Hooks**: Husky — pre-commit (lint-staged), commit-msg (commitlint), post-merge/checkout/pre-push (wiki submodule).
 - **Commits**: Conventional Commits enforced. Scopes validated against pnpm workspace names + `wiki`, `devcontainer`. Use `pnpm commit`.
-- **CI**: `web-ci.yml` (lint+typecheck+vitest, axe a11y), `web-deploy.yml` (auto dev / approved prod), `infra-ci.yml` + `infra-deploy.yml`, `seed-admin.yml` (manual sysadmin promotion), `sync-wiki.yml`, `lint-pr.yaml`.
+- **CI**: `ci.yml` (per-PR — paths-filter gates web lint/typecheck/vitest + axe a11y and infra lint/typecheck + pulumi preview; workspace audit always runs), `deploy.yml` (push-to-main auto-deploys dev with infra-dev → web-dev chaining; prod via workflow_dispatch with environment approval). Also `seed-admin.yml` (manual sysadmin promotion), `sync-wiki.yml`, `lint-pr.yaml`.
 - **pnpm config lives in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11 stopped reading the `pnpm.*` block in `package.json` — `overrides`, `peerDependencyRules`, `auditConfig`, `minimumReleaseAge`, and `allowBuilds` must all be in the workspace file or they silently no-op.
 - **Supply-chain hardening** (in `pnpm-workspace.yaml`):
   - `minimumReleaseAge: 10080` quarantines any version published in the last 7 days. Primary defense against publish-compromise incidents (e.g. the TanStack `latest`-tag hijack). **Never spec a dep as `"latest"`** — it bypasses the resolver's age check and is exactly what got hijacked. Every direct dep gets an exact version or caret pin where every in-range version is ≥7 days old.
@@ -49,7 +49,7 @@ TanStack Start's import-protection plugin blocks `*.server.*` from client graph 
 
 ### Cloudflare bindings
 
-- **D1** (Drizzle ORM) — schema `drizzle/schema.ts`, generated migrations committed in `drizzle/migrations/`. `wrangler.jsonc`'s `database_id` is a placeholder; web-deploy rewrites it from Pulumi `d1DatabaseId` output.
+- **D1** (Drizzle ORM) — schema `drizzle/schema.ts`, generated migrations committed in `drizzle/migrations/`. `wrangler.jsonc`'s `database_id` is a placeholder; `deploy.yml` rewrites it from Pulumi `d1DatabaseId` output.
 - **KV** — same UUID-injection pattern (`kvNamespaceId` Pulumi output).
 - **R2** — name-based bindings (no UUID injection). Two buckets per env: `BUCKET_PRIVATE` (worker-mediated reads, default for new media) and `BUCKET_PUBLIC` (bound to `cdn.{dev.,}ucmc.spencerwill.com` via `R2CustomDomain`, reads bypass worker). **Use `getPrivateBucket()` for any new media unless URL shape is unguessable AND content is intended public.** Avatars + landing images use content-hashed keys + opaque public IDs in the public bucket. Public uploads MUST set `httpMetadata.cacheControl` at upload time (custom domains pass through stored metadata, not worker headers).
 - **Function-wrapped access invariant**: never read `env.DB` / `env.KV` / `env.BUCKET_*` at module scope. Always go through `getDb()` / `getKv()` / `getPrivateBucket()` / `getPublicBucket()`. The `cloudflare:workers` module is stubbed for non-SSR bundles by a vite plugin, so module-scope access breaks the client build.
@@ -80,7 +80,7 @@ TanStack Start's import-protection plugin blocks `*.server.*` from client graph 
 
 ### Env
 
-`@t3-oss/env-core` + zod (`src/config/env.ts`) for `VITE_*` client vars. Server vars (`APP_BASE_URL`, `WEBAUTHN_RP_*`, `RESEND_*`, `SESSION_SECRET`, `MAILPIT_URL`) reach handlers via the Worker `env` binding through `src/server/cloudflare-env.ts`. Local dev loads from `apps/web/.env.local` per wrangler v4 `.env` precedence (`.dev.vars` is no longer used). Devcontainer sets `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` so host shell env wins over `.env.local`. Deployed envs get vars from Pulumi `--var` flags + `wrangler secret put` via `web-deploy.yml`.
+`@t3-oss/env-core` + zod (`src/config/env.ts`) for `VITE_*` client vars. Server vars (`APP_BASE_URL`, `WEBAUTHN_RP_*`, `RESEND_*`, `SESSION_SECRET`, `MAILPIT_URL`) reach handlers via the Worker `env` binding through `src/server/cloudflare-env.ts`. Local dev loads from `apps/web/.env.local` per wrangler v4 `.env` precedence (`.dev.vars` is no longer used). Devcontainer sets `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` so host shell env wins over `.env.local`. Deployed envs get vars from Pulumi `--var` flags + `wrangler secret put` via `deploy.yml`.
 
 Email three-tier fallback (`src/server/email/resend.ts`): (1) Resend API if `RESEND_API_KEY`, (2) Mailpit at `MAILPIT_URL`, (3) Worker console log.
 
@@ -108,7 +108,7 @@ Email three-tier fallback (`src/server/email/resend.ts`): (1) Resend API if `RES
 
 - **Pulumi**, two stacks (`dev` auto, `prod` manual+approval), state in Pulumi Cloud, `pnpm` runtime.
 - **Cloudflare provider** manages: Worker custom domains, D1 databases, R2 buckets (private + public, with `R2CustomDomain` `minTls: "1.2"`), KV namespaces, Resend DNS records (SPF, DKIM, MX). The `spencerwill.com` zone itself is NOT Pulumi-managed. D1/R2/KV are `protect: true`. Auth via `CLOUDFLARE_API_TOKEN`.
-- **Stack outputs** consumed by `web-deploy.yml`: `d1DatabaseId`, `kvNamespaceId`, `r2PublicHost` (→ `VITE_R2_PUBLIC_HOST`), `resendApiKey`, `resendFromEmail`. Bucket names exported for drift only (wrangler binds by name).
+- **Stack outputs** consumed by `deploy.yml`: `d1DatabaseId`, `kvNamespaceId`, `r2PublicHost` (→ `VITE_R2_PUBLIC_HOST`), `resendApiKey`, `resendFromEmail`. Bucket names exported for drift only (wrangler binds by name).
 - **Resend** (`infra/resend.ts`) — custom `ResendDomain` component shells out to `infra/scripts/resend.mjs` via `@pulumi/command` (no provider; pnpm + dynamic providers don't mix — pulumi/pulumi#9085). Prereq: `RESEND_MANAGEMENT_API_KEY` (full-access) as a GitHub env secret on both environments and exported locally for `pulumi up`. **Single-domain sharing** (free tier limit): prod owns the `ResendDomain`; dev sets `resendOwnerStack: prod` and reads `resendApiKey` + `resendFromEmail` via `pulumi.StackReference`. **Prod must `pulumi up` before dev** so the StackReference resolves. Component is `protect: true`; destroy re-issues DKIM and invalidates the sending token.
 
 ## Commands
