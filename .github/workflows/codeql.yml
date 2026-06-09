@@ -1,0 +1,50 @@
+name: CodeQL
+
+# Advanced-setup CodeQL. Replaces GitHub's default setup (which scanned
+# every push to main, every PR, AND a weekly cron — double-scanning each
+# change once deploy.yml pushes the merge to main). This workflow scans
+# only PRs that actually touch source, plus one scheduled full sweep per
+# week. Disable "Default setup" in Settings → Code security after merging
+# or GitHub will refuse to run both.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Mirror ci.yml's filter: scan only when shippable code changes, not
+    # on docs/wiki/config-only PRs. The weekly schedule below catches any
+    # drift the path filter skips.
+    paths:
+      - "apps/web/**"
+      - "libs/**"
+      - "infra/**"
+      - ".github/workflows/codeql.yml"
+  schedule:
+    # Weekly full scan, Mondays 06:00 UTC. Catches advisories that landed
+    # in dependencies since the last PR even when no code changed.
+    - cron: "0 6 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    # Match ci.yml: never burn a scan on a draft PR.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # Pure JS/TS monorepo — no compiled language to build.
+          build-mode: none
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
