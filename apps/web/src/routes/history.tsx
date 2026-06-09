@@ -19,7 +19,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requirePermissionOrNotFound } from "#/features/auth/guards";
+import { requireViewPermission } from "#/features/auth/guards";
 import { historyContentQueryOptions } from "#/features/history/api/queries";
 import {
   useDeleteHistoricalOfficer,
@@ -39,17 +39,19 @@ import type {
 } from "#/features/history/server/history-fns";
 
 /**
- * Member-only /history page. Pairs the dynamic narrative markdown
- * (single-row `history_content` table, editable by `history:manage`
- * holders) with the dynamic past-officers archive + honorary-members
- * list.
+ * /history page. Pairs the dynamic narrative markdown (single-row
+ * `history_content` table, editable by `history:manage` holders) with
+ * the dynamic past-officers archive + honorary-members list.
  *
- * Gated by `history:view` (auto-granted to `role_member`, so every
- * approved member sees it). Non-holders get the notFound boundary
- * rather than a redirect — deep-link to /history without permission
- * is treated as "this page is invisible to you," not "the link is
- * broken." `history:manage` is required to edit; gated separately at
- * the action layer.
+ * Gated by `history:view` via `requireViewPermission`, which honors
+ * the role_anonymous permission set — so the page is visible to
+ * anonymous visitors when `history:view` is granted to role_anonymous
+ * (and to every approved member via role_member's default grant).
+ * Non-holders (whether anonymous or authenticated) get the notFound
+ * boundary rather than a redirect — deep-link without permission is
+ * treated as "this page is invisible to you," not "the link is broken."
+ * `history:manage` is required to edit; gated separately at the
+ * action layer.
  *
  * Manage UX: when a `history:manage` holder views the page, the
  * past-officer cards and honorary list grow inline edit/delete
@@ -60,7 +62,7 @@ import type {
  */
 export const Route = createFileRoute("/history")({
   beforeLoad: async ({ context }) => {
-    await requirePermissionOrNotFound(context.queryClient, "history:view");
+    await requireViewPermission(context.queryClient, "history:view");
   },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(historyContentQueryOptions());
