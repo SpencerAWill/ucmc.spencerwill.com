@@ -1,14 +1,8 @@
-name: Web Deploy
+name: Deploy
 
 on:
   push:
     branches: [main]
-    paths:
-      - "apps/web/**"
-      - "libs/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - ".github/workflows/web-deploy.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -21,16 +15,99 @@ on:
         default: dev
 
 jobs:
-  deploy-dev:
-    name: Deploy Web to Dev
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+  # Computes once which side of the monorepo changed. On `push` we use
+  # this to skip infra-dev / web-dev when neither was touched; on
+  # `workflow_dispatch` the inputs decide and these outputs are ignored.
+  paths:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: filter
+        # dorny/paths-filter on `push` events compares HEAD against the
+        # previous commit on the branch.
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            web:
+              - 'apps/web/**'
+              - 'libs/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.github/workflows/deploy.yml'
+            infra:
+              - 'infra/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.github/workflows/deploy.yml'
+
+  infra-dev:
+    name: Infra — deploy dev
+    needs: paths
+    if: |
+      (github.event_name == 'push' && needs.paths.outputs.infra == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'dev')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    environment: dev
+    # Shared with web-dev so infra and web serialize per-env.
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: pulumi/actions@v7
+        with:
+          command: up
+          stack-name: dev
+          work-dir: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RESEND_MANAGEMENT_API_KEY: ${{ secrets.RESEND_MANAGEMENT_API_KEY }}
+
+  web-dev:
+    name: Web — deploy dev
+    needs: [paths, infra-dev]
+    # Run when the web side changed OR infra changed (to pick up rotated
+    # Pulumi outputs the worker reads via --var or UUID injection — D1
+    # ID, KV ID, Resend key, RP IDs, Turnstile keys). `always()` is
+    # required so this job still runs when infra-dev was skipped on a
+    # web-only push. Web-dev still fails if infra-dev itself failed.
+    if: |
+      always() &&
+      (needs.infra-dev.result == 'success' || needs.infra-dev.result == 'skipped') &&
+      (
+        (github.event_name == 'push' && (needs.paths.outputs.web == 'true' || needs.paths.outputs.infra == 'true')) ||
+        (github.event_name == 'workflow_dispatch' && inputs.environment == 'dev')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
     environment: dev
     concurrency:
-      group: web-deploy-dev
+      group: deploy-dev
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
@@ -138,16 +215,51 @@ jobs:
           FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
           FEEDBACK_GITHUB_REPO: ${{ vars.FEEDBACK_GITHUB_REPO }}
 
-  deploy-prod:
-    name: Deploy Web to Prod
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod'
+  infra-prod:
+    name: Infra — deploy prod
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'prod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    environment: prod
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: pulumi/actions@v7
+        with:
+          command: up
+          stack-name: prod
+          work-dir: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RESEND_MANAGEMENT_API_KEY: ${{ secrets.RESEND_MANAGEMENT_API_KEY }}
+
+  web-prod:
+    name: Web — deploy prod
+    needs: infra-prod
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'prod'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
     environment: prod
     concurrency:
-      group: web-deploy-prod
+      group: deploy-prod
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
