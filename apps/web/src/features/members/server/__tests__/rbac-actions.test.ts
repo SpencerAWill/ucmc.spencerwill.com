@@ -60,7 +60,7 @@ async function seedUser(
     preferredName: "Test",
     phone: "+15135551212",
     ucAffiliation: "student",
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   });
   return id;
 }

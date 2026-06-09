@@ -69,7 +69,7 @@ TanStack Start's import-protection plugin blocks `*.server.*` from client graph 
 
 - **`apps/web/src/config/legal.ts`** is the source-of-truth for every legal/policy string the site renders, plus `WAIVER_PDF_PATH`, `WAIVER_VERSION`, `POLICIES_VERSION`. **Site copy must match the canonical PDF byte-for-byte; treat copy edits to `/disclaimer`, `/nondiscrimination`, `/anti-hazing`, `/waiver`, `/privacy`, `/terms`, `/about`, `/membership`, `/legal`, `/open-source` as legal review, not word-smithing.**
 - **Bumping `WAIVER_VERSION` invalidates every existing attestation** (`requireCurrentWaiver` filters on `(userId, cycle, version)` together — non-revoked is not enough). `POLICIES_VERSION` is informational; no guard re-prompts.
-- **Waiver cycle**: `apps/web/src/config/waiver-cycle.ts` exports `currentWaiverCycle(now)` returning `"YYYY-YY"`. Rolls over **August 15** (`CYCLE_ROLLOVER_MONTH_DAY`). Worker runs UTC; rollover is calendar-day local-feel. **Never compute the cycle ad-hoc — always import the helper.** Tests pin `now`.
+- **Waiver cycle**: `apps/web/src/config/waiver-cycle.ts` exports `currentWaiverCycle(now: Temporal.Instant)` returning `"YYYY-YY"`. Rolls over **August 21** (`WAIVER_CYCLE_CUTOFF`) at **midnight Cincinnati-local** (`CLUB_TIME_ZONE`, `America/New_York`) — the worker runs UTC, so the helper converts the instant to the club zone before reading month/day. **Never compute the cycle ad-hoc — always import the helper.** Tests pin `now` (pass a `Temporal.Instant`, e.g. `Temporal.Instant.from("2025-08-21T00:00:00-04:00")`).
 - **Compliance matrix** in `.wiki/Compliance.md` maps each obligation (Ohio law, UC trademark, FERPA, Clery, EIT 9.2.1, bylaws) to the file/route satisfying it. Update it when adding compliance-shaped features.
 - The registration disclaimer (UC Rule 40-03-01) uses inline-style font to survive Tailwind purging.
 
@@ -77,6 +77,13 @@ TanStack Start's import-protection plugin blocks `*.server.*` from client graph 
 
 - `<MarkdownContent>` (`src/components/markdown/`) renders via `react-markdown` + `remark-gfm` + `remark-breaks` in a Tailwind `prose` wrapper. **No `rehype-raw`** — raw HTML pass-through is intentionally OFF for XSS safety. The `<a>` renderer only sets `target="_blank"`/rel on absolute http(s) URLs.
 - `<MarkdownEditor>` (`src/components/editor/`) is TipTap WYSIWYG round-tripped to a markdown string via `tiptap-markdown` (storage stays plain text). Exposed to forms as `field.MarkdownField` (registered in `src/lib/form/form.ts`) and lazy-loaded — the ~265KB-gz bundle only ships on routes that mount it. Cap enforcement uses markdown string length (matches zod `.max()`).
+
+### Dates & time (TC39 Temporal)
+
+- **`Temporal` is the timestamp type everywhere**, via the `temporal-polyfill` global installed at every entry point (`server-entry.ts`, `router.tsx`, both vitest setup files) — workerd + Safari < 17 have no native Temporal. There is no `date-fns`; raw `Date` survives only at hard external boundaries (R2's `object.uploaded`, `<input type="date">` glue, `Set-Cookie` `maxAge` is a number).
+- **DB**: the `drizzle/schema.ts` `timestamp` helper is a `customType` storing integer-ms but reading/writing `Temporal.Instant`. Inserts and query bounds (`gte`/`lt`) pass Instants; `Temporal` values cross the SSR / server-fn wire via the **serialization adapters** registered on `createStart` in `src/start.ts` (`#/lib/temporal-serialization.ts`). Numeric `*Ms` DTO fields stay numbers via `.epochMilliseconds`.
+- **Calendar reasoning runs in `CLUB_TIME_ZONE`** (`src/config/time.ts`, `America/New_York`) — waiver cycle, gear due-date end-of-day, officer-archive year, Gazette publish date. Convert `instant.toZonedDateTimeISO(CLUB_TIME_ZONE)` first; **never** UTC, never the runtime-default zone.
+- **Display goes through `#/lib/date-format`** (`formatDate` / `formatDateTime` / `formatRelative` / `toDateInputValue`) — absolute timestamps render in the **viewer's** local zone; `formatRelative` is locale-pinned to `"en"`.
 
 ### Env
 

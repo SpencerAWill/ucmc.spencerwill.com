@@ -91,7 +91,7 @@ export async function readAllSettings(): Promise<SiteSettingsEntries> {
   type Row = {
     key: string;
     valueJson: string;
-    updatedAt: Date;
+    updatedAt: Temporal.Instant;
     updatedByName: string | null;
   };
   let rowsByKey = new Map<string, Row>();
@@ -138,7 +138,7 @@ export async function readAllSettings(): Promise<SiteSettingsEntries> {
     } catch {
       out[k] = {
         value: SETTINGS[k].parse(undefined),
-        updatedAtMs: stored.updatedAt.getTime(),
+        updatedAtMs: stored.updatedAt.epochMilliseconds,
         updatedByName: stored.updatedByName,
       };
       continue;
@@ -146,7 +146,7 @@ export async function readAllSettings(): Promise<SiteSettingsEntries> {
     const parsed = SETTINGS[k].safeParse(raw);
     out[k] = {
       value: parsed.success ? parsed.data : SETTINGS[k].parse(undefined),
-      updatedAtMs: stored.updatedAt.getTime(),
+      updatedAtMs: stored.updatedAt.epochMilliseconds,
       updatedByName: stored.updatedByName,
     };
   }
@@ -177,7 +177,7 @@ export function writeSettingStatement<TKey extends SettingKey>(
       target: schema.siteSettings.key,
       set: {
         valueJson,
-        updatedAt: new Date(),
+        updatedAt: Temporal.Now.instant(),
         updatedBy: actorUserId,
       },
     });

@@ -24,8 +24,8 @@ export interface ClubFeedbackRow {
   anonymous: boolean;
   createdBy: string | null;
   createdByPublicId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
   authorEmail: string | null;
   authorFullName: string | null;
   authorPreferredName: string | null;
@@ -101,7 +101,7 @@ export async function insertClubFeedback(input: {
   createdBy: string;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.clubFeedback).values({
     id: input.id,
     kind: input.kind,
@@ -122,6 +122,6 @@ export async function updateClubFeedbackStatus(input: {
   const db = getDb();
   await db
     .update(schema.clubFeedback)
-    .set({ status: input.status, updatedAt: new Date() })
+    .set({ status: input.status, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.clubFeedback.id, input.id));
 }

@@ -93,10 +93,10 @@ export interface BulkImportLoansResult {
   skipped: BulkImportLoanSkipped[];
 }
 
-function parseIso(date: string): Date | null {
+function parseIso(date: string): Temporal.Instant | null {
   const ms = Date.parse(`${date}T00:00:00Z`);
   if (Number.isNaN(ms)) return null;
-  return new Date(ms);
+  return Temporal.Instant.fromEpochMilliseconds(ms);
 }
 
 export async function bulkImportLoansAction(
@@ -176,8 +176,9 @@ export async function bulkImportLoansAction(
     if (
       dueAt === null ||
       (row.returnedAt !== null && returnedAt === null) ||
-      dueAt.getTime() < checkedOutAt.getTime() ||
-      (returnedAt !== null && returnedAt.getTime() < checkedOutAt.getTime())
+      Temporal.Instant.compare(dueAt, checkedOutAt) < 0 ||
+      (returnedAt !== null &&
+        Temporal.Instant.compare(returnedAt, checkedOutAt) < 0)
     ) {
       skipped.push({
         rowIndex: i,
@@ -274,11 +275,11 @@ export async function bulkImportLoansAction(
       metadata: {
         memberUserId: member.userId,
         gearId: gear.id,
-        dueAt: dueAt.getTime(),
+        dueAt: dueAt.epochMilliseconds,
         code: gear.code,
         bulk: true,
         backfill: true,
-        checkedOutAt: checkedOutAt.getTime(),
+        checkedOutAt: checkedOutAt.epochMilliseconds,
       },
     });
     if (returnedAt !== null) {
@@ -294,7 +295,7 @@ export async function bulkImportLoansAction(
           conditionAtReturn: row.conditionAtReturn,
           bulk: true,
           backfill: true,
-          returnedAt: returnedAt.getTime(),
+          returnedAt: returnedAt.epochMilliseconds,
         },
       });
     }

@@ -143,7 +143,7 @@ async function seedUser(args: {
       preferredName: "Test",
       phone: "+15135551212",
       ucAffiliation: "student",
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     });
   }
 }

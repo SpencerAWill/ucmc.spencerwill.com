@@ -6,7 +6,7 @@ import { Button } from "#/components/ui/button";
 import { requireViewPermission } from "#/features/auth/guards";
 import { gazetteIssueQueryOptions } from "#/features/gazette/api/queries";
 import {
-  formatPublishedAtUtc,
+  formatPublishedAt,
   gazettePdfFilename,
   gazettePdfUrl,
 } from "#/features/gazette/lib/pdf-url";
@@ -74,7 +74,7 @@ function GazetteIssuePage() {
           {issue.schoolYear} · Issue {issue.issueNumber}
           {issue.editor ? ` · edited by ${issue.editor}` : null}
           {issue.publishedAt
-            ? ` · published ${formatPublishedAtUtc(issue.publishedAt)}`
+            ? ` · published ${formatPublishedAt(issue.publishedAt)}`
             : null}
         </p>
         {issue.description ? (

@@ -93,10 +93,16 @@ export async function listAuditEventsAction(input: {
   const filters = [
     input.action ? eq(schema.auditLog.action, input.action) : undefined,
     input.from !== undefined
-      ? gte(schema.auditLog.createdAt, new Date(input.from))
+      ? gte(
+          schema.auditLog.createdAt,
+          Temporal.Instant.fromEpochMilliseconds(input.from),
+        )
       : undefined,
     input.to !== undefined
-      ? lt(schema.auditLog.createdAt, new Date(input.to))
+      ? lt(
+          schema.auditLog.createdAt,
+          Temporal.Instant.fromEpochMilliseconds(input.to),
+        )
       : undefined,
   ].filter((f): f is NonNullable<typeof f> => f !== undefined);
 
@@ -164,7 +170,7 @@ export async function listAuditEventsAction(input: {
     entries: rows.map((r) => ({
       id: r.id,
       action: r.action,
-      createdAt: r.createdAt.getTime(),
+      createdAt: r.createdAt.epochMilliseconds,
       actor: r.actorUserId
         ? {
             userId: r.actorUserId,

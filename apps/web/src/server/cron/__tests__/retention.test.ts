@@ -20,7 +20,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // returning 0 deletions. Every other time-sensitive fixture is built
 // relative to NOW (`NOW.getTime() - N * DAY_MS`), so this shifts the
 // whole timeline forward without changing any test semantics.
-const NOW = new Date(Date.now() + 365 * DAY_MS);
+const NOW = Temporal.Now.instant().add({ milliseconds: 365 * DAY_MS });
 
 // Random suffix for ID uniqueness across tests sharing the worker DB.
 function uid(prefix: string): string {
@@ -29,8 +29,8 @@ function uid(prefix: string): string {
 
 async function seedUser(opts: {
   status: schema.UserStatus;
-  rejectedAt?: Date | null;
-  deactivatedAt?: Date | null;
+  rejectedAt?: Temporal.Instant | null;
+  deactivatedAt?: Temporal.Instant | null;
 }): Promise<string> {
   const id = uid("u");
   await getDb()
@@ -48,7 +48,7 @@ async function seedUser(opts: {
 
 async function seedWaiverAttestation(opts: {
   userId: string;
-  revokedAt: Date | null;
+  revokedAt: Temporal.Instant | null;
 }): Promise<string> {
   const id = uid("w");
   await getDb()
@@ -58,7 +58,7 @@ async function seedWaiverAttestation(opts: {
       userId: opts.userId,
       cycle: "2025-26",
       version: "v1",
-      attestedAt: new Date("2025-09-01T00:00:00Z"),
+      attestedAt: Temporal.Instant.from("2025-09-01T00:00:00Z"),
       attestedBy: null,
       revokedAt: opts.revokedAt,
     });
@@ -97,7 +97,7 @@ describe("sweepRejectedRegistrations", () => {
   it("deletes rows older than 30 days", async () => {
     const id = await seedUser({
       status: "rejected",
-      rejectedAt: new Date(NOW.getTime() - 31 * DAY_MS),
+      rejectedAt: NOW.subtract({ milliseconds: 31 * DAY_MS }),
     });
 
     const count = await sweepRejectedRegistrations(NOW);
@@ -113,7 +113,7 @@ describe("sweepRejectedRegistrations", () => {
   it("leaves rows younger than 30 days", async () => {
     const id = await seedUser({
       status: "rejected",
-      rejectedAt: new Date(NOW.getTime() - 29 * DAY_MS),
+      rejectedAt: NOW.subtract({ milliseconds: 29 * DAY_MS }),
     });
 
     const count = await sweepRejectedRegistrations(NOW);
@@ -145,7 +145,7 @@ describe("sweepRejectedRegistrations", () => {
     // not delete the user.
     const id = await seedUser({
       status: "approved",
-      rejectedAt: new Date(NOW.getTime() - 100 * DAY_MS),
+      rejectedAt: NOW.subtract({ milliseconds: 100 * DAY_MS }),
     });
 
     const count = await sweepRejectedRegistrations(NOW);
@@ -163,7 +163,7 @@ describe("sweepDeactivatedAccounts", () => {
   it("deletes rows older than 365 days", async () => {
     const id = await seedUser({
       status: "deactivated",
-      deactivatedAt: new Date(NOW.getTime() - 366 * DAY_MS),
+      deactivatedAt: NOW.subtract({ milliseconds: 366 * DAY_MS }),
     });
 
     const count = await sweepDeactivatedAccounts(NOW);
@@ -179,7 +179,7 @@ describe("sweepDeactivatedAccounts", () => {
   it("leaves rows younger than 365 days", async () => {
     await seedUser({
       status: "deactivated",
-      deactivatedAt: new Date(NOW.getTime() - 364 * DAY_MS),
+      deactivatedAt: NOW.subtract({ milliseconds: 364 * DAY_MS }),
     });
 
     const count = await sweepDeactivatedAccounts(NOW);
@@ -201,7 +201,7 @@ describe("sweepRevokedWaiverAttestations", () => {
     const userId = await seedUser({ status: "approved" });
     const attId = await seedWaiverAttestation({
       userId,
-      revokedAt: new Date(NOW.getTime() - 91 * DAY_MS),
+      revokedAt: NOW.subtract({ milliseconds: 91 * DAY_MS }),
     });
 
     const count = await sweepRevokedWaiverAttestations(NOW);
@@ -227,7 +227,7 @@ describe("sweepRevokedWaiverAttestations", () => {
     const userId = await seedUser({ status: "approved" });
     await seedWaiverAttestation({
       userId,
-      revokedAt: new Date(NOW.getTime() - 89 * DAY_MS),
+      revokedAt: NOW.subtract({ milliseconds: 89 * DAY_MS }),
     });
 
     const count = await sweepRevokedWaiverAttestations(NOW);
@@ -340,7 +340,10 @@ describe("sweepOrphanR2Keys", () => {
 
     // 5-minute guard, run "now" — the just-uploaded object is well
     // inside the skip window.
-    const count = await sweepOrphanR2Keys(new Date(), 5 * 60 * 1000);
+    const count = await sweepOrphanR2Keys(
+      Temporal.Now.instant(),
+      5 * 60 * 1000,
+    );
 
     expect(count).toBe(0);
     expect(await bucket.head(orphanKey)).not.toBeNull();
@@ -352,16 +355,16 @@ describe("runRetentionSweeps", () => {
     // Seed one row that each sweep will pick up.
     const rejectedId = await seedUser({
       status: "rejected",
-      rejectedAt: new Date(NOW.getTime() - 31 * DAY_MS),
+      rejectedAt: NOW.subtract({ milliseconds: 31 * DAY_MS }),
     });
     const deactivatedId = await seedUser({
       status: "deactivated",
-      deactivatedAt: new Date(NOW.getTime() - 366 * DAY_MS),
+      deactivatedAt: NOW.subtract({ milliseconds: 366 * DAY_MS }),
     });
     const userForWaiver = await seedUser({ status: "approved" });
     await seedWaiverAttestation({
       userId: userForWaiver,
-      revokedAt: new Date(NOW.getTime() - 91 * DAY_MS),
+      revokedAt: NOW.subtract({ milliseconds: 91 * DAY_MS }),
     });
     await getPublicBucket().put("avatars/orphan/x.webp", new Uint8Array([0]));
 

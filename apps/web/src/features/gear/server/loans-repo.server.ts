@@ -39,9 +39,9 @@ export interface LoanListRow {
   memberPublicId: string;
   memberFullName: string;
   memberAvatarKey: string | null;
-  checkedOutAt: Date;
-  dueAt: Date;
-  returnedAt: Date | null;
+  checkedOutAt: Temporal.Instant;
+  dueAt: Temporal.Instant;
+  returnedAt: Temporal.Instant | null;
   checkoutNotes: string | null;
   checkinNotes: string | null;
   conditionAtReturn: schema.GearCondition | null;
@@ -55,8 +55,8 @@ export interface InsertLoanRow {
   gearId: string;
   memberUserId: string;
   checkedOutByUserId: string;
-  checkedOutAt: Date;
-  dueAt: Date;
+  checkedOutAt: Temporal.Instant;
+  dueAt: Temporal.Instant;
   checkoutNotes: string | null;
 }
 
@@ -294,7 +294,7 @@ export async function listLoans(
 
 export async function markLoanReturned(input: {
   id: string;
-  returnedAt: Date;
+  returnedAt: Temporal.Instant;
   returnedToUserId: string;
   checkinNotes: string | null;
   conditionAtReturn: schema.GearCondition | null;
@@ -312,7 +312,7 @@ export async function markLoanReturned(input: {
 
 export async function extendLoanDueAt(input: {
   id: string;
-  newDueAt: Date;
+  newDueAt: Temporal.Instant;
 }): Promise<void> {
   await getDb()
     .update(schema.gearLoans)
@@ -370,8 +370,8 @@ export async function listLoansForMember(
   // History sorted most-recently-returned first (overrides the
   // due-at ordering of the combined fetch).
   history.sort((a, b) => {
-    const aReturned = a.returnedAt?.getTime() ?? 0;
-    const bReturned = b.returnedAt?.getTime() ?? 0;
+    const aReturned = a.returnedAt?.epochMilliseconds ?? 0;
+    const bReturned = b.returnedAt?.epochMilliseconds ?? 0;
     return bReturned - aReturned;
   });
   return { active, history };

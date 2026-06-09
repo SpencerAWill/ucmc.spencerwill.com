@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { formatDate } from "#/lib/date-format";
 
 import { Badge } from "#/components/ui/badge";
 import {
@@ -115,7 +115,7 @@ export function GearDetailCard({
           {gear.acquiredAt ? (
             <div>
               <dt className="text-xs text-muted-foreground">Acquired</dt>
-              <dd>{format(gear.acquiredAt, "MMM d, yyyy")}</dd>
+              <dd>{formatDate(gear.acquiredAt)}</dd>
             </div>
           ) : null}
           {canManage && gear.acquisitionCostCents !== null ? (
@@ -132,12 +132,12 @@ export function GearDetailCard({
           ) : null}
           <div>
             <dt className="text-xs text-muted-foreground">Added</dt>
-            <dd>{format(gear.createdAt, "MMM d, yyyy")}</dd>
+            <dd>{formatDate(gear.createdAt)}</dd>
           </div>
           {isRetired && gear.retiredAt ? (
             <div>
               <dt className="text-xs text-muted-foreground">Retired</dt>
-              <dd>{format(gear.retiredAt, "MMM d, yyyy")}</dd>
+              <dd>{formatDate(gear.retiredAt)}</dd>
             </div>
           ) : null}
         </dl>

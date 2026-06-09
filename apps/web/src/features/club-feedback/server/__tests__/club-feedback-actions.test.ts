@@ -54,7 +54,7 @@ async function seedUser(
     preferredName: fullName.split(" ")[0],
     phone: "+15135551212",
     ucAffiliation: "student",
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   });
   return id;
 }
@@ -313,8 +313,8 @@ describe("club feedback admin triage", () => {
       .from(schema.clubFeedback)
       .where(eq(schema.clubFeedback.id, a.id))
       .get();
-    expect(stored?.updatedAt.getTime()).toBeGreaterThanOrEqual(
-      stored?.createdAt.getTime() ?? 0,
+    expect(stored?.updatedAt.epochMilliseconds).toBeGreaterThanOrEqual(
+      stored?.createdAt.epochMilliseconds ?? 0,
     );
   });
 });

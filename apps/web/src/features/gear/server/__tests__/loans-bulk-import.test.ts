@@ -234,7 +234,7 @@ describe("bulkImportLoansAction happy paths", () => {
     expect(result.created).toHaveLength(1);
     const loan = (await getDb().select().from(schema.gearLoans)).at(0);
     // 7 days later — Jan 8, 2024.
-    expect(loan?.dueAt.toISOString().slice(0, 10)).toBe("2024-01-08");
+    expect(loan?.dueAt.toString().slice(0, 10)).toBe("2024-01-08");
   });
 
   it("resolves email case-insensitively via the user_emails index", async () => {

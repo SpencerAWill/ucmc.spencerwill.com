@@ -153,7 +153,7 @@ export async function updateHistoricalOfficerAction(
       roleOrder: input.roleOrder,
       name: input.name,
       notes: input.notes,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.historicalOfficers.id, input.id))
     .returning({ id: schema.historicalOfficers.id });
@@ -266,7 +266,7 @@ export async function updateHonoraryMemberAction(
       name: input.name,
       sortOrder: input.sortOrder,
       notes: input.notes,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.honoraryMembers.id, input.id))
     .returning({ id: schema.honoraryMembers.id });
@@ -295,7 +295,7 @@ export async function reorderHonoraryMembersAction(
   // canonical order is dense (1..N) — keeps the read-side ordering
   // stable across mixed dataset operations (add → reorder → delete).
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const stmts = ids.map((id, idx) =>
     db
       .update(schema.honoraryMembers)

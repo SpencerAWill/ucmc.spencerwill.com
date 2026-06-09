@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { format } from "date-fns";
+import { formatDate } from "#/lib/date-format";
 
 import { Badge } from "#/components/ui/badge";
 import {
@@ -26,7 +26,8 @@ const CONDITION_LABEL: Record<GearCondition, string> = {
 const PLACEHOLDER = "/gear-placeholder.svg";
 
 export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
-  const overdue = loan.returnedAt === null && loan.dueAt.getTime() < Date.now();
+  const overdue =
+    loan.returnedAt === null && loan.dueAt.epochMilliseconds < Date.now();
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -67,7 +68,7 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {loan.returnedAt ? (
               <Badge variant="outline">
-                Returned {format(loan.returnedAt, "MMM d, yyyy")}
+                Returned {formatDate(loan.returnedAt)}
               </Badge>
             ) : overdue ? (
               <Badge variant="destructive">Overdue</Badge>
@@ -97,13 +98,13 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Checked out</dt>
-            <dd>{format(loan.checkedOutAt, "MMM d, yyyy")}</dd>
+            <dd>{formatDate(loan.checkedOutAt)}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">
               {loan.returnedAt ? "Was due" : "Due"}
             </dt>
-            <dd>{format(loan.dueAt, "MMM d, yyyy")}</dd>
+            <dd>{formatDate(loan.dueAt)}</dd>
           </div>
           {loan.checkedOutByName ? (
             <div>

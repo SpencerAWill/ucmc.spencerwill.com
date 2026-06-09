@@ -35,7 +35,7 @@ async function seedUser(email: string): Promise<string> {
     id,
     publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
     status: "approved",
-    approvedAt: new Date(),
+    approvedAt: Temporal.Now.instant(),
   });
   await attachPrimaryEmail(id, email);
   await db.insert(schema.profiles).values({
@@ -44,7 +44,7 @@ async function seedUser(email: string): Promise<string> {
     preferredName: "Test",
     phone: "+15135551212",
     ucAffiliation: "student",
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   });
   return id;
 }
@@ -110,7 +110,7 @@ describe("exportMyDataAction", () => {
       userId,
       cycle: "2025-26",
       version: "v1",
-      attestedAt: new Date(),
+      attestedAt: Temporal.Now.instant(),
       attestedBy: userId,
       notes: "First semester",
     });
@@ -162,8 +162,8 @@ describe("exportMyDataAction", () => {
       tokenHash: "secret-token-hash",
       email: "withmagic@example.com",
       intent: "login",
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: Temporal.Now.instant(),
+      expiresAt: Temporal.Now.instant().add({ milliseconds: 60_000 }),
     });
     await signInAs(userId);
 

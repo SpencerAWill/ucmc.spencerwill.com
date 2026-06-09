@@ -23,6 +23,7 @@ import {
 import { galleryImageUrl } from "#/features/gallery/lib/image-url";
 import type { GalleryPhotoSummary } from "#/features/gallery/server/gallery-fns";
 import { useImageCrop } from "#/features/landing/lib/use-image-crop";
+import { toDateInputValue } from "#/lib/date-format";
 
 /**
  * Seed for opening the photo dialog. `mode = "create"` opens a fresh
@@ -45,23 +46,12 @@ interface FormState {
   altText: string;
 }
 
-function toDateInputValue(date: Date | string | null): string {
-  if (!date) {
-    return "";
-  }
-  const d = date instanceof Date ? date : new Date(date);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function seedToForm(seed: PhotoFormSeed): FormState {
   if (seed.mode === "edit") {
     return {
       caption: seed.photo.caption ?? "",
       credit: seed.photo.credit ?? "",
-      takenAt: toDateInputValue(seed.photo.takenAt),
+      takenAt: seed.photo.takenAt ? toDateInputValue(seed.photo.takenAt) : "",
       tag: seed.photo.tag ?? "",
       altText: seed.photo.altText,
     };

@@ -54,7 +54,7 @@ async function seedUser(
     id,
     publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
     status: "approved",
-    approvedAt: new Date(),
+    approvedAt: Temporal.Now.instant(),
   });
   await attachPrimaryEmail(id, email);
   await db.insert(schema.profiles).values({
@@ -64,7 +64,7 @@ async function seedUser(
     phone: "+15135551212",
     ucAffiliation: "student",
     avatarKey: opts?.avatarKey ?? null,
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   });
   return id;
 }
@@ -133,7 +133,7 @@ describe("deleteMyAccountAction", () => {
       userId,
       cycle: "2025-26",
       version: "v1",
-      attestedAt: new Date(),
+      attestedAt: Temporal.Now.instant(),
       attestedBy: userId,
     });
     await signInAs(userId);
@@ -272,7 +272,7 @@ describe("deleteMyAccountAction", () => {
       userId: memberId,
       cycle: "2025-26",
       version: "v1",
-      attestedAt: new Date(),
+      attestedAt: Temporal.Now.instant(),
       attestedBy: officerId,
     });
     await signInAs(officerId);
@@ -303,9 +303,9 @@ describe("deleteMyAccountAction", () => {
       userId: memberId,
       cycle: "2025-26",
       version: "v1",
-      attestedAt: new Date(),
+      attestedAt: Temporal.Now.instant(),
       attestedBy: memberId,
-      revokedAt: new Date(),
+      revokedAt: Temporal.Now.instant(),
       revokedBy: officerId,
       revocationReason: "wrong member",
     });

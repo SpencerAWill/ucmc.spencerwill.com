@@ -267,8 +267,8 @@ export async function listPasskeysAction(): Promise<{
     passkeys: rows.map((r) => ({
       credentialId: r.credentialId,
       nickname: r.nickname,
-      createdAt: r.createdAt.toISOString(),
-      lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,
+      createdAt: r.createdAt.toString(),
+      lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toString() : null,
     })),
   };
 }

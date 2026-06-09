@@ -63,7 +63,7 @@ async function seedUser(
       preferredName: "Test",
       phone: "+15135551212",
       ucAffiliation: "student",
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     });
     await db.insert(schema.emergencyContacts).values({
       id: `ec_${crypto.randomUUID()}`,
@@ -271,16 +271,16 @@ describe("deactivateMembersAction", () => {
     await db.insert(schema.sessions).values({
       id: "sess_target_1",
       userId: targetId,
-      createdAt: new Date(),
-      lastSeenAt: new Date(),
-      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: Temporal.Now.instant(),
+      lastSeenAt: Temporal.Now.instant(),
+      expiresAt: Temporal.Now.instant().add({ milliseconds: 86_400_000 }),
     });
     await db.insert(schema.sessions).values({
       id: "sess_target_2",
       userId: targetId,
-      createdAt: new Date(),
-      lastSeenAt: new Date(),
-      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: Temporal.Now.instant(),
+      lastSeenAt: Temporal.Now.instant(),
+      expiresAt: Temporal.Now.instant().add({ milliseconds: 86_400_000 }),
     });
 
     const sessionsBefore = await db
@@ -446,16 +446,16 @@ describe("revokeUserSessionsAction", () => {
     await db.insert(schema.sessions).values({
       id: "sess_rev_1",
       userId: targetId,
-      createdAt: new Date(),
-      lastSeenAt: new Date(),
-      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: Temporal.Now.instant(),
+      lastSeenAt: Temporal.Now.instant(),
+      expiresAt: Temporal.Now.instant().add({ milliseconds: 86_400_000 }),
     });
     await db.insert(schema.sessions).values({
       id: "sess_rev_2",
       userId: targetId,
-      createdAt: new Date(),
-      lastSeenAt: new Date(),
-      expiresAt: new Date(Date.now() + 86_400_000),
+      createdAt: Temporal.Now.instant(),
+      lastSeenAt: Temporal.Now.instant(),
+      expiresAt: Temporal.Now.instant().add({ milliseconds: 86_400_000 }),
     });
 
     const before = await db
@@ -748,9 +748,9 @@ describe("getMemberDetailAction", () => {
       .values({
         id: "sess_detail_1",
         userId: targetId,
-        createdAt: new Date(),
-        lastSeenAt: new Date(),
-        expiresAt: new Date(Date.now() + 86_400_000),
+        createdAt: Temporal.Now.instant(),
+        lastSeenAt: Temporal.Now.instant(),
+        expiresAt: Temporal.Now.instant().add({ milliseconds: 86_400_000 }),
       });
 
     const detail = await getMemberDetailAction(await publicIdOf(targetId));
@@ -913,16 +913,16 @@ describe("audit log: bulk lifecycle audits transitions, not requests", () => {
       {
         id: "sess_revoke_1",
         userId: targetId,
-        createdAt: new Date(),
-        lastSeenAt: new Date(),
-        expiresAt: new Date(Date.now() + 86_400_000),
+        createdAt: Temporal.Now.instant(),
+        lastSeenAt: Temporal.Now.instant(),
+        expiresAt: Temporal.Now.instant().add({ milliseconds: 86_400_000 }),
       },
       {
         id: "sess_revoke_2",
         userId: targetId,
-        createdAt: new Date(),
-        lastSeenAt: new Date(),
-        expiresAt: new Date(Date.now() + 86_400_000),
+        createdAt: Temporal.Now.instant(),
+        lastSeenAt: Temporal.Now.instant(),
+        expiresAt: Temporal.Now.instant().add({ milliseconds: 86_400_000 }),
       },
     ]);
 

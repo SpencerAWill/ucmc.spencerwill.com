@@ -31,8 +31,8 @@ export interface PasskeyCredentialRecord {
   counter: number;
   transports: AuthenticatorTransportFuture[] | undefined;
   nickname: string | null;
-  createdAt: Date;
-  lastUsedAt: Date | null;
+  createdAt: Temporal.Instant;
+  lastUsedAt: Temporal.Instant | null;
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {
@@ -95,7 +95,7 @@ export async function insertCredential(args: {
   nickname?: string;
 }): Promise<PasskeyCredentialRecord> {
   const id = `pk_${uuidv7()}`;
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await getDb()
     .insert(schema.passkeyCredentials)
     .values({
@@ -128,7 +128,7 @@ export async function updateCredentialCounter(args: {
 }): Promise<void> {
   await getDb()
     .update(schema.passkeyCredentials)
-    .set({ counter: args.counter, lastUsedAt: new Date() })
+    .set({ counter: args.counter, lastUsedAt: Temporal.Now.instant() })
     .where(eq(schema.passkeyCredentials.credentialId, args.credentialId));
 }
 

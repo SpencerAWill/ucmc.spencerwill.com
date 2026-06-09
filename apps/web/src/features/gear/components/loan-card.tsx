@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { format, formatDistanceToNowStrict } from "date-fns";
+import { formatDate, formatRelative } from "#/lib/date-format";
 
 import { Badge } from "#/components/ui/badge";
 import { Card } from "#/components/ui/card";
@@ -21,7 +21,8 @@ const PLACEHOLDER = "/gear-placeholder.svg";
  * image stays inside the same anchor.
  */
 export function LoanCard({ loan }: { loan: LoanSummary }) {
-  const overdue = loan.returnedAt === null && loan.dueAt.getTime() < Date.now();
+  const overdue =
+    loan.returnedAt === null && loan.dueAt.epochMilliseconds < Date.now();
   return (
     <li>
       <Link
@@ -57,17 +58,19 @@ export function LoanCard({ loan }: { loan: LoanSummary }) {
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 {loan.returnedAt ? (
                   <Badge variant="outline">
-                    Returned {format(loan.returnedAt, "MMM d")}
+                    Returned{" "}
+                    {formatDate(loan.returnedAt, {
+                      month: "short",
+                      day: "numeric",
+                    })}
                   </Badge>
                 ) : overdue ? (
                   <Badge variant="destructive">
-                    Overdue · due{" "}
-                    {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
+                    Overdue · due {formatRelative(loan.dueAt)}
                   </Badge>
                 ) : (
                   <Badge variant="secondary">
-                    Due{" "}
-                    {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
+                    Due {formatRelative(loan.dueAt)}
                   </Badge>
                 )}
               </div>

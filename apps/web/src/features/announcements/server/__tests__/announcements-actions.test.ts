@@ -51,7 +51,7 @@ async function seedUser(email: string): Promise<string> {
     preferredName: "Test",
     phone: "+15135551212",
     ucAffiliation: "student",
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   });
   return id;
 }
@@ -105,7 +105,10 @@ async function setAnnouncementsFlag(enabled: boolean): Promise<void> {
     })
     .onConflictDoUpdate({
       target: schema.siteSettings.key,
-      set: { valueJson: JSON.stringify(enabled), updatedAt: new Date() },
+      set: {
+        valueJson: JSON.stringify(enabled),
+        updatedAt: Temporal.Now.instant(),
+      },
     });
 }
 
@@ -202,12 +205,16 @@ describe("announcements lifecycle", () => {
     expect((await getUnreadCountAction()).count).toBe(0);
 
     // Bump the marker back by 1ms so a freshly inserted post lands strictly
-    // after it. Without the bump, the post's `new Date()` and the marker
+    // after it. Without the bump, the post's `Temporal.Now.instant()` and the marker
     // can collide on the same millisecond and the strict `>` comparison
     // hides the post.
     await getDb()
       .update(schema.users)
-      .set({ lastReadAnnouncementsAt: new Date(Date.now() - 1) })
+      .set({
+        lastReadAnnouncementsAt: Temporal.Now.instant().subtract({
+          milliseconds: 1,
+        }),
+      })
       .where(eq(schema.users.id, memberId));
 
     await signInAsAdmin("admin2@example.com");

@@ -11,6 +11,7 @@ import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { WAIVER_VERSION } from "#/config/legal";
+import { formatDate } from "#/lib/date-format";
 import { currentWaiverCycle } from "#/config/waiver-cycle";
 import { requirePermission } from "#/features/auth/guards";
 import {
@@ -281,9 +282,7 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
                       ) : null}
                     </td>
                     <td className="px-2 py-3 text-muted-foreground">
-                      {member.approvedAt
-                        ? new Date(member.approvedAt).toLocaleDateString()
-                        : "—"}
+                      {member.approvedAt ? formatDate(member.approvedAt) : "—"}
                     </td>
                     <td className="px-2 py-3 text-right">
                       <Button

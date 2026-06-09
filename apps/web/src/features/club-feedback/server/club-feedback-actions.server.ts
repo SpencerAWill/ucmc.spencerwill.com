@@ -75,8 +75,8 @@ export interface ClubFeedbackSummary {
   createdByPublicId: string | null;
   authorDisplayName: string | null;
   authorAvatarKey: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
 }
 
 type Row = {
@@ -92,8 +92,8 @@ type Row = {
   authorFullName: string | null;
   authorPreferredName: string | null;
   authorAvatarKey: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
 };
 
 // Project a row to a summary, optionally redacting submitter columns when

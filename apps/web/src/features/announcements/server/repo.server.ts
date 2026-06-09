@@ -11,8 +11,8 @@ export interface AnnouncementRow {
   id: string;
   title: string;
   body: string;
-  publishedAt: Date;
-  updatedAt: Date;
+  publishedAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
   createdBy: string | null;
   authorEmail: string | null;
   authorFullName: string | null;
@@ -94,7 +94,7 @@ export async function insertAnnouncement(input: {
   createdBy: string;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.announcements).values({
     id: input.id,
     title: input.title,
@@ -117,7 +117,7 @@ export async function updateAnnouncement(input: {
     .set({
       title: input.title,
       body: input.body,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.announcements.id, input.id));
 }
@@ -160,6 +160,6 @@ export async function markAllRead(userId: string): Promise<void> {
   const db = getDb();
   await db
     .update(schema.users)
-    .set({ lastReadAnnouncementsAt: new Date() })
+    .set({ lastReadAnnouncementsAt: Temporal.Now.instant() })
     .where(eq(schema.users.id, userId));
 }

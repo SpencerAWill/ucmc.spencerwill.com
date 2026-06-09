@@ -4,6 +4,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  customType,
   index,
   integer,
   primaryKey,
@@ -12,7 +13,25 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });
+/**
+ * Epoch-milliseconds column that reads/writes as a `Temporal.Instant`.
+ *
+ * Stored on disk as an INTEGER (identical DDL to the former
+ * `integer(name, { mode: "timestamp_ms" })`, so no migration), but the
+ * ORM boundary maps it to/from `Temporal.Instant` — the app layer never
+ * sees a raw `Date`. SQL-side defaults (`unixepoch() * 1000`) still apply;
+ * `fromDriver` converts the integer that comes back on read.
+ *
+ * Query comparisons (`gte`/`lt`/…) accept a `Temporal.Instant` too —
+ * Drizzle runs the bound value through `toDriver`.
+ */
+const instantMs = customType<{ data: Temporal.Instant; driverData: number }>({
+  dataType: () => "integer",
+  toDriver: (value) => value.epochMilliseconds,
+  fromDriver: (value) => Temporal.Instant.fromEpochMilliseconds(value),
+});
+
+const timestamp = (name: string) => instantMs(name);
 
 export const userStatus = [
   "pending",

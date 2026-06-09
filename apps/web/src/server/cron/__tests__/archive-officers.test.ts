@@ -33,7 +33,7 @@ async function seedUser(opts: SeedUserOpts): Promise<string> {
       phone: "+15135551212",
       ucAffiliation: "student",
       avatarKey: null,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     });
   }
   return id;
@@ -90,11 +90,15 @@ beforeEach(async () => {
 
 describe("schoolYearForArchiveFire", () => {
   it("encodes a March-1 fire as the just-completed academic year", () => {
-    expect(schoolYearForArchiveFire(new Date("2027-03-01T08:15:00Z"))).toEqual({
+    expect(
+      schoolYearForArchiveFire(Temporal.Instant.from("2027-03-01T08:15:00Z")),
+    ).toEqual({
       schoolYear: "2026-27",
       startYear: 2026,
     });
-    expect(schoolYearForArchiveFire(new Date("2030-03-01T08:15:00Z"))).toEqual({
+    expect(
+      schoolYearForArchiveFire(Temporal.Instant.from("2030-03-01T08:15:00Z")),
+    ).toEqual({
       schoolYear: "2029-30",
       startYear: 2029,
     });
@@ -103,11 +107,15 @@ describe("schoolYearForArchiveFire", () => {
   it("zero-pads the trailing two-digit year across a century boundary", () => {
     // 1999-00 appears verbatim in the legacy seed; this is the case that
     // tripped the original Weebly page until 2009.
-    expect(schoolYearForArchiveFire(new Date("2000-03-01T08:15:00Z"))).toEqual({
+    expect(
+      schoolYearForArchiveFire(Temporal.Instant.from("2000-03-01T08:15:00Z")),
+    ).toEqual({
       schoolYear: "1999-00",
       startYear: 1999,
     });
-    expect(schoolYearForArchiveFire(new Date("2010-03-01T08:15:00Z"))).toEqual({
+    expect(
+      schoolYearForArchiveFire(Temporal.Instant.from("2010-03-01T08:15:00Z")),
+    ).toEqual({
       schoolYear: "2009-10",
       startYear: 2009,
     });
@@ -117,7 +125,7 @@ describe("schoolYearForArchiveFire", () => {
 describe("archiveCurrentOfficers", () => {
   it("returns skipped + no_officers when there are no current officers", async () => {
     const result = await archiveCurrentOfficers(
-      new Date("2027-03-01T08:15:00Z"),
+      Temporal.Instant.from("2027-03-01T08:15:00Z"),
     );
 
     expect(result).toEqual({
@@ -158,7 +166,7 @@ describe("archiveCurrentOfficers", () => {
     await assignRole(treas, "role_test_treasurer");
 
     const result = await archiveCurrentOfficers(
-      new Date("2027-03-01T08:15:00Z"),
+      Temporal.Instant.from("2027-03-01T08:15:00Z"),
     );
 
     expect(result).toEqual({
@@ -211,7 +219,7 @@ describe("archiveCurrentOfficers", () => {
     await assignRole(alice, "role_test_president");
 
     const result = await archiveCurrentOfficers(
-      new Date("2027-03-01T08:15:00Z"),
+      Temporal.Instant.from("2027-03-01T08:15:00Z"),
     );
 
     expect(result.rolesArchived).toBe(1);
@@ -237,7 +245,7 @@ describe("archiveCurrentOfficers", () => {
     await assignRole(prez, "role_test_president");
 
     const first = await archiveCurrentOfficers(
-      new Date("2027-03-01T08:15:00Z"),
+      Temporal.Instant.from("2027-03-01T08:15:00Z"),
     );
     expect(first.skipped).toBe(false);
     expect(first.rolesArchived).toBe(1);
@@ -245,7 +253,7 @@ describe("archiveCurrentOfficers", () => {
     // Re-fire on the same March 1 (e.g. a Cloudflare retry) must NOT
     // duplicate rows or mutate the existing snapshot.
     const second = await archiveCurrentOfficers(
-      new Date("2027-03-01T08:15:00Z"),
+      Temporal.Instant.from("2027-03-01T08:15:00Z"),
     );
     expect(second).toEqual({
       schoolYear: "2026-27",
@@ -283,7 +291,7 @@ describe("archiveCurrentOfficers", () => {
     await assignRole(prez, "role_test_president");
 
     const result = await archiveCurrentOfficers(
-      new Date("2027-03-01T08:15:00Z"),
+      Temporal.Instant.from("2027-03-01T08:15:00Z"),
     );
 
     expect(result.skipReason).toBe("already_archived");
@@ -340,7 +348,7 @@ describe("archiveCurrentOfficers", () => {
     await assignRole(secretary, "role_test_secretary");
 
     const result = await archiveCurrentOfficers(
-      new Date("2027-03-01T08:15:00Z"),
+      Temporal.Instant.from("2027-03-01T08:15:00Z"),
     );
 
     expect(result.rolesArchived).toBe(1);

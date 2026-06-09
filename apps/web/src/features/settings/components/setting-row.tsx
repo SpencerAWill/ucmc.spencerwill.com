@@ -9,7 +9,7 @@
  * Cache invalidation in the mutation hook re-syncs unsaved-but-unchanged
  * values from the canonical snapshot after each successful save.
  */
-import { formatDistanceToNowStrict } from "date-fns";
+import { formatRelative } from "#/lib/date-format";
 import { History, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -312,9 +312,9 @@ function LastEditedLine<TKey extends SettingKey>({
   entry: SiteSettingEntry<TKey>;
 }) {
   if (entry.updatedAtMs === null) return null;
-  const when = formatDistanceToNowStrict(new Date(entry.updatedAtMs), {
-    addSuffix: true,
-  });
+  const when = formatRelative(
+    Temporal.Instant.fromEpochMilliseconds(entry.updatedAtMs),
+  );
   const who = entry.updatedByName ?? "an officer";
   return (
     <p className="text-[11px] text-muted-foreground">

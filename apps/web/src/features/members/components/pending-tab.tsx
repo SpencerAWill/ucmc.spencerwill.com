@@ -5,7 +5,6 @@
  * per-page) is owned by the calling route and threaded through props.
  */
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
 import { CalendarIcon, Check, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { DateRange } from "react-day-picker";
@@ -30,19 +29,32 @@ import { pendingRegistrationsQueryOptions } from "#/features/members/api/queries
 import { useApproveRegistrations } from "#/features/members/api/use-approve-registrations";
 import { useRejectRegistrations } from "#/features/members/api/use-reject-registrations";
 import type { PendingRegistration } from "#/features/members/server/member-fns";
+import { formatDate } from "#/lib/date-format";
 
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+// react-day-picker is `Date`-native, so the range filter stays in `Date`
+// space. These helpers convert at the picker boundary without date-fns:
+// `toISODate` mirrors the prior `format(d, "yyyy-MM-dd")` (local fields),
+// and the URL string is re-hydrated to a local-midnight `Date` below.
+function toISODate(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
-function toISODate(d: Date): string {
-  return format(d, "yyyy-MM-dd");
+function fromISODate(s: string): Date {
+  // Local midnight (matches date-fns `parseISO` of a date-only string),
+  // not `new Date(s)` which would parse as UTC midnight.
+  return new Date(`${s}T00:00:00`);
+}
+
+function formatRangeDay(d: Date, withYear: boolean): string {
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(withYear ? { year: "numeric" } : {}),
+  });
 }
 
 export interface PendingTabProps {
@@ -71,8 +83,8 @@ export function PendingTab({
   const dateRange: DateRange | undefined =
     (from ?? to)
       ? {
-          from: from ? parseISO(from) : undefined,
-          to: to ? parseISO(to) : undefined,
+          from: from ? fromISODate(from) : undefined,
+          to: to ? fromISODate(to) : undefined,
         }
       : undefined;
 
@@ -128,8 +140,8 @@ export function PendingTab({
 
   const dateLabel = dateRange?.from
     ? dateRange.to
-      ? `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, yyyy")}`
-      : `From ${format(dateRange.from, "MMM d, yyyy")}`
+      ? `${formatRangeDay(dateRange.from, false)} – ${formatRangeDay(dateRange.to, true)}`
+      : `From ${formatRangeDay(dateRange.from, true)}`
     : "All time";
 
   return (

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { format, formatDistanceToNowStrict } from "date-fns";
+import { formatDate, formatRelative } from "#/lib/date-format";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Badge } from "#/components/ui/badge";
@@ -74,7 +74,8 @@ export function MyGearList() {
 }
 
 function MyLoanRow({ loan }: { loan: LoanSummary }) {
-  const overdue = loan.returnedAt === null && loan.dueAt.getTime() < Date.now();
+  const overdue =
+    loan.returnedAt === null && loan.dueAt.epochMilliseconds < Date.now();
   return (
     <li>
       <Link
@@ -108,18 +109,15 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 {loan.returnedAt ? (
                   <Badge variant="outline">
-                    Returned {format(loan.returnedAt, "MMM d, yyyy")}
+                    Returned {formatDate(loan.returnedAt)}
                   </Badge>
                 ) : overdue ? (
                   <Badge variant="destructive">
-                    Overdue · was due{" "}
-                    {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
+                    Overdue · was due {formatRelative(loan.dueAt)}
                   </Badge>
                 ) : (
                   <Badge variant="secondary">
-                    Due {format(loan.dueAt, "MMM d, yyyy")} (
-                    {formatDistanceToNowStrict(loan.dueAt, { addSuffix: true })}
-                    )
+                    Due {formatDate(loan.dueAt)} ({formatRelative(loan.dueAt)})
                   </Badge>
                 )}
               </div>

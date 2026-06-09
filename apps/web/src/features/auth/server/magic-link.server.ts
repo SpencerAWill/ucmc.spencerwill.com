@@ -92,8 +92,8 @@ export async function requestMagicLink(
   const email = normalizeEmail(args.email);
   const token = generateToken();
   const tokenHash = await hashToken(token);
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + MAGIC_LINK_TTL_MS);
+  const now = Temporal.Now.instant();
+  const expiresAt = now.add({ milliseconds: MAGIC_LINK_TTL_MS });
 
   await getDb()
     .insert(schema.magicLinks)
@@ -131,7 +131,7 @@ export async function consumeMagicLink(
   token: string,
 ): Promise<MagicLinkProof | null> {
   const tokenHash = await hashToken(token);
-  const consumedAt = new Date();
+  const consumedAt = Temporal.Now.instant();
   const updated = await getDb()
     .update(schema.magicLinks)
     .set({ consumedAt })
@@ -147,7 +147,7 @@ export async function consumeMagicLink(
   if (!row) {
     return null;
   }
-  if (row.expiresAt.getTime() <= Date.now()) {
+  if (Temporal.Instant.compare(row.expiresAt, Temporal.Now.instant()) <= 0) {
     return null;
   }
   return {

@@ -138,7 +138,7 @@ describe("buildAuditEventStatement (atomic batch path)", () => {
     await db.batch([
       db
         .update(schema.users)
-        .set({ status: "rejected", rejectedAt: new Date() })
+        .set({ status: "rejected", rejectedAt: Temporal.Now.instant() })
         .where(eq(schema.users.id, target)),
       buildAuditEventStatement({
         actorUserId: actor,
@@ -169,7 +169,7 @@ describe("buildAuditEventStatement (atomic batch path)", () => {
       id: dupId,
       actorUserId: actor,
       action: "registration.approved",
-      createdAt: new Date(2026, 0, 1),
+      createdAt: Temporal.Instant.from("2026-01-01T00:00:00Z"),
     });
 
     const targetBeforeBatch = await db.query.users.findFirst({
@@ -181,7 +181,7 @@ describe("buildAuditEventStatement (atomic batch path)", () => {
       db.batch([
         db
           .update(schema.users)
-          .set({ status: "rejected", rejectedAt: new Date() })
+          .set({ status: "rejected", rejectedAt: Temporal.Now.instant() })
           .where(eq(schema.users.id, target)),
         // Drizzle insert with the colliding id; D1 will reject the
         // statement, which aborts the entire batch.
@@ -189,7 +189,7 @@ describe("buildAuditEventStatement (atomic batch path)", () => {
           id: dupId,
           actorUserId: actor,
           action: "registration.rejected",
-          createdAt: new Date(),
+          createdAt: Temporal.Now.instant(),
         }),
       ]),
     ).rejects.toThrow();

@@ -51,7 +51,7 @@ async function seedUser(email: string): Promise<string> {
     preferredName: "Test",
     phone: "+15135551212",
     ucAffiliation: "student",
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   });
   return id;
 }

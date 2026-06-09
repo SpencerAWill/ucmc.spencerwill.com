@@ -121,7 +121,7 @@ export async function listSettingHistoryAction(input: {
     }
     return {
       id: r.id,
-      atMs: r.createdAt.getTime(),
+      atMs: r.createdAt.epochMilliseconds,
       actorName: r.actorName,
       booleanValue: parsedValue,
     };

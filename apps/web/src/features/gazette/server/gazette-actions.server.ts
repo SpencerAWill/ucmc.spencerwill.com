@@ -55,7 +55,7 @@ export interface GazetteIssueSummary {
   issueNumber: number;
   title: string | null;
   editor: string | null;
-  publishedAt: Date | null;
+  publishedAt: Temporal.Instant | null;
   description: string | null;
   pdfKey: string;
   pdfBytes: number;
@@ -155,21 +155,28 @@ export async function createGazetteIssueAction(
   await putGazettePdf(pdfKey, bytes);
 
   try {
-    await getDb().insert(schema.gazetteIssues).values({
-      id,
-      publicId,
-      schoolYear: input.schoolYear,
-      startYear: input.startYear,
-      issueNumber: input.issueNumber,
-      title: input.title,
-      editor: input.editor,
-      publishedAt: input.publishedAt,
-      description: input.description,
-      pdfKey,
-      pdfBytes: bytes.byteLength,
-      createdBy: principal.userId,
-      updatedBy: principal.userId,
-    });
+    await getDb()
+      .insert(schema.gazetteIssues)
+      .values({
+        id,
+        publicId,
+        schoolYear: input.schoolYear,
+        startYear: input.startYear,
+        issueNumber: input.issueNumber,
+        title: input.title,
+        editor: input.editor,
+        publishedAt:
+          input.publishedAt === null
+            ? null
+            : Temporal.Instant.fromEpochMilliseconds(
+                input.publishedAt.getTime(),
+              ),
+        description: input.description,
+        pdfKey,
+        pdfBytes: bytes.byteLength,
+        createdBy: principal.userId,
+        updatedBy: principal.userId,
+      });
   } catch (err) {
     // Insert failed (most likely unique-index violation on
     // school_year+issue_number). Clean up the orphan PDF we just
@@ -232,11 +239,16 @@ export async function updateGazetteIssueAction(
         issueNumber: input.issueNumber,
         title: input.title,
         editor: input.editor,
-        publishedAt: input.publishedAt,
+        publishedAt:
+          input.publishedAt === null
+            ? null
+            : Temporal.Instant.fromEpochMilliseconds(
+                input.publishedAt.getTime(),
+              ),
         description: input.description,
         pdfKey,
         pdfBytes,
-        updatedAt: new Date(),
+        updatedAt: Temporal.Now.instant(),
         updatedBy: principal.userId,
       })
       .where(eq(schema.gazetteIssues.id, existing.id));

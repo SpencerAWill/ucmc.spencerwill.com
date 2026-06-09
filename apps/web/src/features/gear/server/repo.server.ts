@@ -18,7 +18,7 @@ export interface GearRow {
   code: string | null;
   description: string;
   thumbnailKey: string | null;
-  acquiredAt: Date | null;
+  acquiredAt: Temporal.Instant | null;
   acquisitionCostCents: number | null;
   msrpCents: number | null;
   manufacturer: string | null;
@@ -27,10 +27,10 @@ export interface GearRow {
   notesMarkdown: string | null;
   lifecycle: schema.GearLifecycle;
   condition: schema.GearCondition;
-  retiredAt: Date | null;
+  retiredAt: Temporal.Instant | null;
   retiredReason: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
   typePublicId: string;
   typeName: string;
   typePrefix: string | null;
@@ -251,7 +251,7 @@ export async function insertGear(input: {
   code: string | null;
   description: string;
   thumbnailKey: string | null;
-  acquiredAt: Date | null;
+  acquiredAt: Temporal.Instant | null;
   acquisitionCostCents: number | null;
   msrpCents?: number | null;
   manufacturer?: string | null;
@@ -262,7 +262,7 @@ export async function insertGear(input: {
   createdBy: string;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.gear).values({
     id: input.id,
     publicId: input.publicId,
@@ -292,7 +292,7 @@ export async function updateGearById(
     code: string | null;
     description: string;
     thumbnailKey: string | null;
-    acquiredAt: Date | null;
+    acquiredAt: Temporal.Instant | null;
     acquisitionCostCents: number | null;
     msrpCents: number | null;
     manufacturer: string | null;
@@ -305,7 +305,7 @@ export async function updateGearById(
   const db = getDb();
   await db
     .update(schema.gear)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...patch, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.gear.id, id));
 }
 
@@ -315,7 +315,7 @@ export async function markGearRetired(input: {
   reason: string | null;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db
     .update(schema.gear)
     .set({
@@ -338,7 +338,7 @@ export async function markGearUnretired(id: string): Promise<void> {
       retiredAt: null,
       retiredBy: null,
       retiredReason: null,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.gear.id, id));
 }
@@ -370,7 +370,7 @@ export function buildBulkMarkGearRetiredStatement(input: {
   reason: string | null;
 }) {
   if (input.ids.length === 0) return null;
-  const now = new Date();
+  const now = Temporal.Now.instant();
   return getDb()
     .update(schema.gear)
     .set({
@@ -399,7 +399,7 @@ export async function bulkMarkGearUnretired(ids: string[]): Promise<void> {
       retiredAt: null,
       retiredBy: null,
       retiredReason: null,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     })
     .where(
       and(inArray(schema.gear.id, ids), eq(schema.gear.lifecycle, "retired")),
@@ -414,7 +414,7 @@ export async function bulkSetGearCondition(input: {
   const db = getDb();
   await db
     .update(schema.gear)
-    .set({ condition: input.condition, updatedAt: new Date() })
+    .set({ condition: input.condition, updatedAt: Temporal.Now.instant() })
     .where(inArray(schema.gear.id, input.ids));
 }
 
@@ -430,7 +430,7 @@ export async function bulkAddGearTags(input: {
   assignedBy: string;
 }): Promise<void> {
   if (input.gearIds.length === 0 || input.tagIds.length === 0) return;
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const rows = input.gearIds.flatMap((gearId) =>
     input.tagIds.map((tagId) => ({
       gearId,
@@ -525,10 +525,10 @@ export interface GearInspectionRow {
   /** Profile.fullName joined at read time. Falls back to the snapshot
    *  when the inspector's profile or user row no longer exists. */
   inspectorDisplayName: string | null;
-  inspectedAt: Date;
+  inspectedAt: Temporal.Instant;
   result: schema.GearInspectionResult;
   notes: string | null;
-  createdAt: Date;
+  createdAt: Temporal.Instant;
 }
 
 export async function insertGearInspection(input: {
@@ -537,7 +537,7 @@ export async function insertGearInspection(input: {
   gearId: string;
   inspectorUserId: string;
   inspectorNameSnapshot: string;
-  inspectedAt: Date;
+  inspectedAt: Temporal.Instant;
   result: schema.GearInspectionResult;
   notes: string | null;
 }): Promise<void> {
@@ -631,7 +631,7 @@ export async function insertGearType(input: {
   createdBy: string;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.gearTypes).values({
     id: input.id,
     publicId: input.publicId,
@@ -655,7 +655,7 @@ export async function updateGearTypeById(
   const db = getDb();
   await db
     .update(schema.gearTypes)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...patch, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.gearTypes.id, id));
 }
 
@@ -709,7 +709,7 @@ export async function insertGearTag(input: {
   visibility: schema.GearTagVisibility;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.gearTags).values({
     id: input.id,
     publicId: input.publicId,
@@ -744,7 +744,7 @@ export async function updateGearTagById(
   const db = getDb();
   await db
     .update(schema.gearTags)
-    .set({ name: patch.name, updatedAt: new Date() })
+    .set({ name: patch.name, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.gearTags.id, id));
 }
 
@@ -778,7 +778,7 @@ export async function setGearTags(input: {
       );
   }
   if (added.length > 0) {
-    const now = new Date();
+    const now = Temporal.Now.instant();
     await db.insert(schema.gearTagAssignments).values(
       added.map((tagId) => ({
         gearId: input.gearId,

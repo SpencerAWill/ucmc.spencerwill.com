@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { format } from "date-fns";
 
+import { formatDateTime } from "#/lib/date-format";
 import { Badge } from "#/components/ui/badge";
 import {
   Card,
@@ -58,8 +58,14 @@ export function AuditCard({ entry }: { entry: AuditEntrySummary }) {
           </CardTitle>
         </div>
         <CardDescription className="text-xs">
-          <time dateTime={new Date(entry.createdAt).toISOString()}>
-            {format(new Date(entry.createdAt), "PPpp")}
+          <time
+            dateTime={Temporal.Instant.fromEpochMilliseconds(
+              entry.createdAt,
+            ).toString()}
+          >
+            {formatDateTime(
+              Temporal.Instant.fromEpochMilliseconds(entry.createdAt),
+            )}
           </time>
         </CardDescription>
       </CardHeader>

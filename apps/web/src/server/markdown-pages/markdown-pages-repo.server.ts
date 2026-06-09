@@ -59,14 +59,14 @@ export async function writeMarkdownPage(
     .values({
       slug,
       markdown,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
       updatedBy,
     })
     .onConflictDoUpdate({
       target: schema.markdownPages.slug,
       set: {
         markdown,
-        updatedAt: new Date(),
+        updatedAt: Temporal.Now.instant(),
         updatedBy,
       },
     });

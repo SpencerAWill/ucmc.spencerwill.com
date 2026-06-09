@@ -210,7 +210,7 @@ export async function consumeMagicLinkAction(
     if (existing.status === "unclaimed") {
       await getDb()
         .update(schema.userEmails)
-        .set({ verifiedAt: new Date() })
+        .set({ verifiedAt: Temporal.Now.instant() })
         .where(
           and(
             eq(schema.userEmails.userId, existing.userId),
@@ -327,26 +327,26 @@ export async function exportMyDataAction(): Promise<{
     // the type widening is for completeness, not because anyone in the
     // claim path can call /api/account/export without first round-
     // tripping a magic link (which stamps verifiedAt).
-    verifiedAt: Date | null;
-    createdAt: Date;
+    verifiedAt: Temporal.Instant | null;
+    createdAt: Temporal.Instant;
   }>;
   profile: typeof schema.profiles.$inferSelect | null;
   emergencyContacts: Array<{
     name: string;
     phone: string;
     relationship: schema.ContactRelationship;
-    createdAt: Date;
+    createdAt: Temporal.Instant;
   }>;
   roles: string[];
   waiverAttestations: Array<{
     cycle: string;
     version: string;
-    attestedAt: Date;
+    attestedAt: Temporal.Instant;
     // attestedBy + revokedBy can be null when the officer who acted
     // on the row has since deleted their account (FK ON DELETE SET
     // NULL, see 0018_waiver_attestedby_set_null.sql).
     attestedBy: string | null;
-    revokedAt: Date | null;
+    revokedAt: Temporal.Instant | null;
     revokedBy: string | null;
     revocationReason: string | null;
     notes: string | null;
@@ -420,7 +420,7 @@ export async function exportMyDataAction(): Promise<{
   ]);
 
   return {
-    exportedAt: new Date().toISOString(),
+    exportedAt: Temporal.Now.instant().toString(),
     schemaVersion: 1,
     user: userRows[0] ?? null,
     emails,
@@ -554,7 +554,7 @@ export async function submitProfileAction(
   const profileData = {
     ...rest,
     bio: bio.length > 0 ? bio : null,
-    policiesAcknowledgedAt: new Date(),
+    policiesAcknowledgedAt: Temporal.Now.instant(),
     policiesVersion: POLICIES_VERSION,
   };
 
@@ -590,7 +590,7 @@ export async function submitProfileAction(
             userId: newUserId,
             email,
             isPrimary: true,
-            verifiedAt: new Date(),
+            verifiedAt: Temporal.Now.instant(),
           }),
         ]);
         userId = newUserId;
@@ -623,7 +623,7 @@ export async function submitProfileAction(
   // can be stale by the time the batch commits (an approver flipping
   // the row mid-flight), and the WHERE keeps an unconditional revert
   // from racing with that approval.
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const stmts: Parameters<typeof db.batch>[0][number][] = [
     db
       .insert(schema.profiles)
@@ -675,7 +675,7 @@ export async function submitProfileAction(
         .update(schema.users)
         .set({
           status: "approved",
-          approvedAt: new Date(),
+          approvedAt: Temporal.Now.instant(),
           placeholderName: null,
           unclaimedAt: null,
         })
@@ -758,7 +758,7 @@ export async function submitPublicProfileAction(
     .set({
       ...rest,
       bio: bio.length > 0 ? bio : null,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.profiles.userId, principal.userId));
 
@@ -789,7 +789,7 @@ export async function submitDetailsAction(
   const stmts: Parameters<typeof db.batch>[0][number][] = [
     db
       .update(schema.profiles)
-      .set({ ...profileData, updatedAt: new Date() })
+      .set({ ...profileData, updatedAt: Temporal.Now.instant() })
       .where(eq(schema.profiles.userId, principal.userId)),
     db
       .delete(schema.emergencyContacts)

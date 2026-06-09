@@ -18,6 +18,7 @@ import { useAddEmail } from "#/features/auth/api/use-add-email";
 import { useRemoveEmail } from "#/features/auth/api/use-remove-email";
 import { useSetPrimaryEmail } from "#/features/auth/api/use-set-primary-email";
 import { useAppForm } from "#/lib/form/form";
+import { formatDate } from "#/lib/date-format";
 
 const addEmailSchema = z.object({
   email: z.email("Enter a valid email address").trim().toLowerCase().max(254),
@@ -121,10 +122,7 @@ function ApprovedEmailAddressesSection() {
                 </ItemTitle>
                 <ItemDescription>
                   {row.verifiedAt
-                    ? `Verified ${new Date(row.verifiedAt).toLocaleDateString(
-                        undefined,
-                        { year: "numeric", month: "short", day: "numeric" },
-                      )}`
+                    ? `Verified ${formatDate(row.verifiedAt)}`
                     : "Pending verification"}
                 </ItemDescription>
               </ItemContent>

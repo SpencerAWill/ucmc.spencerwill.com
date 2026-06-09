@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { formatDate } from "#/lib/date-format";
 import { ClipboardCheck, Plus } from "lucide-react";
 import { useState } from "react";
 
@@ -91,7 +91,7 @@ function InspectionRow({ entry }: { entry: GearInspectionSummary }) {
             {RESULT_LABEL[entry.result]}
           </Badge>
           <span className="text-sm font-medium">
-            {format(entry.inspectedAt, "MMM d, yyyy")}
+            {formatDate(entry.inspectedAt)}
           </span>
         </div>
         <span className="text-xs text-muted-foreground">

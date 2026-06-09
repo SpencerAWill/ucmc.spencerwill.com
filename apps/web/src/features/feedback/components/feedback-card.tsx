@@ -20,28 +20,7 @@ import {
   FEEDBACK_STATUS_VALUES,
 } from "#/features/feedback/server/limits";
 import type { FeedbackStatus } from "#/features/feedback/server/limits";
-
-const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-
-const UNITS: Array<{ unit: Intl.RelativeTimeFormatUnit; ms: number }> = [
-  { unit: "year", ms: 365 * 24 * 60 * 60 * 1000 },
-  { unit: "month", ms: 30 * 24 * 60 * 60 * 1000 },
-  { unit: "week", ms: 7 * 24 * 60 * 60 * 1000 },
-  { unit: "day", ms: 24 * 60 * 60 * 1000 },
-  { unit: "hour", ms: 60 * 60 * 1000 },
-  { unit: "minute", ms: 60 * 1000 },
-];
-
-function formatRelative(date: Date): string {
-  const diffMs = date.getTime() - Date.now();
-  const abs = Math.abs(diffMs);
-  for (const { unit, ms } of UNITS) {
-    if (abs >= ms) {
-      return RELATIVE.format(Math.round(diffMs / ms), unit);
-    }
-  }
-  return "just now";
-}
+import { formatRelative } from "#/lib/date-format";
 
 const STATUS_VARIANTS: Record<
   FeedbackStatus,
@@ -141,7 +120,7 @@ export function FeedbackCard({
                   <span aria-hidden>·</span>
                 </>
               ) : null}
-              <time dateTime={entry.createdAt.toISOString()}>
+              <time dateTime={entry.createdAt.toString()}>
                 {formatRelative(entry.createdAt)}
               </time>
             </div>

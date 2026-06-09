@@ -14,13 +14,13 @@ import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { useExtendLoan } from "#/features/gear/api/use-extend-loan";
 import type { LoanDetail } from "#/features/gear/server/gear-fns";
+import { toDateInputValue } from "#/lib/date-format";
 
-function toIsoDate(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
+// The submit path below builds the new due date from runtime-local
+// `y/m/d`, so the prefilled value is extracted in the runtime-local zone
+// too (mirrors the prior `getFullYear`/`getMonth`/`getDate` helper).
+const toIsoDate = (instant: Temporal.Instant): string =>
+  toDateInputValue(instant, Temporal.Now.timeZoneId());
 
 export function LoanExtendDialog({
   loan,
@@ -88,7 +88,7 @@ export function LoanExtendDialog({
             id="extend-date"
             type="date"
             value={date}
-            min={toIsoDate(new Date(Date.now() + 24 * 60 * 60 * 1000))}
+            min={toIsoDate(Temporal.Now.instant().add({ hours: 24 }))}
             onChange={(e) => setDate(e.target.value)}
           />
         </div>

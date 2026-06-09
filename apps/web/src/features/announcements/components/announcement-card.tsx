@@ -9,29 +9,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { formatRelative } from "#/lib/date-format";
 import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
-
-const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-
-const UNITS: Array<{ unit: Intl.RelativeTimeFormatUnit; ms: number }> = [
-  { unit: "year", ms: 365 * 24 * 60 * 60 * 1000 },
-  { unit: "month", ms: 30 * 24 * 60 * 60 * 1000 },
-  { unit: "week", ms: 7 * 24 * 60 * 60 * 1000 },
-  { unit: "day", ms: 24 * 60 * 60 * 1000 },
-  { unit: "hour", ms: 60 * 60 * 1000 },
-  { unit: "minute", ms: 60 * 1000 },
-];
-
-function formatRelative(date: Date): string {
-  const diffMs = date.getTime() - Date.now();
-  const abs = Math.abs(diffMs);
-  for (const { unit, ms } of UNITS) {
-    if (abs >= ms) {
-      return RELATIVE.format(Math.round(diffMs / ms), unit);
-    }
-  }
-  return "just now";
-}
 
 export function AnnouncementCard({
   announcement,
@@ -46,7 +25,8 @@ export function AnnouncementCard({
 }) {
   const author = announcement.authorDisplayName ?? "Unknown";
   const edited =
-    announcement.updatedAt.getTime() - announcement.publishedAt.getTime() >
+    announcement.updatedAt.epochMilliseconds -
+      announcement.publishedAt.epochMilliseconds >
     1000;
 
   return (
@@ -66,7 +46,7 @@ export function AnnouncementCard({
               />
               <span>{author}</span>
               <span aria-hidden>·</span>
-              <time dateTime={announcement.publishedAt.toISOString()}>
+              <time dateTime={announcement.publishedAt.toString()}>
                 {formatRelative(announcement.publishedAt)}
               </time>
               {edited ? (

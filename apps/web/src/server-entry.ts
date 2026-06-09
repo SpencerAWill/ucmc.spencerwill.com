@@ -10,7 +10,13 @@
  *
  * `wrangler.jsonc` `main` points here instead of straight at the
  * TanStack package.
+ *
+ * The first import installs the TC39 Temporal global polyfill. workerd
+ * has no native `Temporal`, so it must be patched in before any module
+ * (schema column mappers, server fns, cron handlers) touches it.
  */
+import "temporal-polyfill/global";
+
 import startEntry from "@tanstack/react-start/server-entry";
 
 import { withPublicPageCache } from "./server/edge-cache";

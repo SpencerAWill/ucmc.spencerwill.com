@@ -31,7 +31,7 @@ const { loadCurrentSession } = await import("#/server/auth/session.server");
 
 async function seedSession(
   opts: {
-    expiresAt?: Date;
+    expiresAt?: Temporal.Instant;
     status?: UserStatus;
   } = {},
 ): Promise<{ sid: string; userId: string }> {
@@ -44,7 +44,7 @@ async function seedSession(
       status: opts.status ?? "approved",
     });
   const sid = crypto.randomUUID();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await getDb()
     .insert(schema.sessions)
     .values({
@@ -52,7 +52,7 @@ async function seedSession(
       userId,
       createdAt: now,
       lastSeenAt: now,
-      expiresAt: opts.expiresAt ?? new Date(now.getTime() + 60_000),
+      expiresAt: opts.expiresAt ?? now.add({ milliseconds: 60_000 }),
     });
   return { sid, userId };
 }
@@ -79,7 +79,7 @@ describe("loadCurrentSession", () => {
 
   it("returns null and clears the cookie when the session is expired", async () => {
     const { sid } = await seedSession({
-      expiresAt: new Date(Date.now() - 1000),
+      expiresAt: Temporal.Now.instant().subtract({ milliseconds: 1000 }),
     });
     cookieValue = sid;
     expect(await loadCurrentSession()).toBeNull();
