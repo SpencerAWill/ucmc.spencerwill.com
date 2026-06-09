@@ -13,7 +13,14 @@ import {
 } from "#/server/cron/retention.server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const NOW = new Date("2026-06-01T00:00:00Z");
+// NOW trails wall-clock so Miniflare R2 fixture objects (whose
+// `uploaded` is stamped with real Date.now() at PUT time) fall on the
+// old side of sweepOrphanR2Keys' age-guard. A hardcoded past NOW makes
+// every R2 fixture look newer than NOW, defeating the guard and
+// returning 0 deletions. Every other time-sensitive fixture is built
+// relative to NOW (`NOW.getTime() - N * DAY_MS`), so this shifts the
+// whole timeline forward without changing any test semantics.
+const NOW = new Date(Date.now() + 365 * DAY_MS);
 
 // Random suffix for ID uniqueness across tests sharing the worker DB.
 function uid(prefix: string): string {
