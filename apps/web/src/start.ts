@@ -8,11 +8,16 @@
  * response headers (CSP, HSTS, X-Frame-Options, etc.).
  * Header values live in `#/server/headers.server` so they're version-
  * controlled and auditable independent of the middleware mechanics.
+ *
+ * It also registers the Temporal serialization adapters so Temporal
+ * values (returned from server fns / route loaders, now that DB
+ * timestamps are `Temporal.Instant`) survive the SSR + server-fn wire.
  */
 import { createMiddleware, createStart } from "@tanstack/react-start";
 import { getRequestUrl, setResponseHeader } from "@tanstack/react-start/server";
 
 import { securityHeadersForPath } from "#/server/headers.server";
+import { temporalSerializationAdapters } from "#/lib/temporal-serialization";
 
 const securityHeadersMiddleware = createMiddleware({
   type: "request",
@@ -32,4 +37,15 @@ const securityHeadersMiddleware = createMiddleware({
 
 export const startInstance = createStart(() => ({
   requestMiddleware: [securityHeadersMiddleware],
+  serializationAdapters: temporalSerializationAdapters,
 }));
+
+// Register the Start instance config so the serialization adapters are
+// known at the type level (`RegisteredSerializableInput`). Runtime
+// (de)serialization works regardless; this surfaces the adapter set to
+// the type system.
+declare module "@tanstack/react-start" {
+  interface Register {
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>;
+  }
+}
