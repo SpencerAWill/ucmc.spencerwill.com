@@ -190,7 +190,7 @@ describe("recordGearInspectionAction", () => {
       notes: "Buckle stress fracture, do not use.",
       inspectorName: "Inspector Pat",
     });
-    expect(inspections[0]?.inspectedAt.getTime()).toBe(inspectedAt);
+    expect(inspections[0]?.inspectedAt.epochMilliseconds).toBe(inspectedAt);
 
     const auditRows = await getDb().select().from(schema.auditLog);
     const inspectionAudit = auditRows.find(
@@ -234,7 +234,11 @@ describe("recordGearInspectionAction", () => {
     });
 
     const rows = await listGearInspectionsAction({ gearPublicId });
-    expect(rows.map((r) => r.inspectedAt.getTime())).toEqual([t2, t1, t0]);
+    expect(rows.map((r) => r.inspectedAt.epochMilliseconds)).toEqual([
+      t2,
+      t1,
+      t0,
+    ]);
   });
 
   it("snapshots inspector name and falls back if the user is later deleted", async () => {

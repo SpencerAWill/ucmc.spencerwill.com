@@ -47,7 +47,7 @@ export interface UnclaimedMember {
   publicId: string;
   placeholderName: string;
   email: string;
-  unclaimedAt: Date;
+  unclaimedAt: Temporal.Instant;
 }
 
 export interface UnclaimedMembersPage {
@@ -67,12 +67,18 @@ export async function listUnclaimedAction(opts: {
   const conditions = [eq(schema.users.status, "unclaimed")];
   if (opts.from) {
     conditions.push(
-      gte(schema.users.unclaimedAt, new Date(`${opts.from}T00:00:00.000Z`)),
+      gte(
+        schema.users.unclaimedAt,
+        Temporal.Instant.from(`${opts.from}T00:00:00.000Z`),
+      ),
     );
   }
   if (opts.to) {
     conditions.push(
-      lte(schema.users.unclaimedAt, new Date(`${opts.to}T23:59:59.999Z`)),
+      lte(
+        schema.users.unclaimedAt,
+        Temporal.Instant.from(`${opts.to}T23:59:59.999Z`),
+      ),
     );
   }
   const where = and(...conditions);
@@ -235,7 +241,7 @@ export async function preAddUnclaimedMembersAction(args: {
 
   // Generate IDs upfront so the audit row's targetUserId can land in
   // the same batch as the user/user_emails inserts.
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const created: PreAddCreated[] = toCreate.map((entry) => ({
     userId: `user_${uuidv7()}`,
     publicId: generatePublicId(),
@@ -321,7 +327,7 @@ async function preAddPerRowFallback(
 ): Promise<PreAddResult> {
   const created: PreAddCreated[] = [];
   const skipped: PreAddSkipped[] = [...preExistingSkipped];
-  const now = new Date();
+  const now = Temporal.Now.instant();
 
   for (const entry of okEntries) {
     // Skip entries the bulk-path pre-check already classified as

@@ -43,7 +43,9 @@ export function PhotoGrid({
   const years = Array.from(
     new Set(
       photos
-        .map((p) => (p.takenAt ? new Date(p.takenAt).getUTCFullYear() : null))
+        .map((p) =>
+          p.takenAt ? p.takenAt.toZonedDateTimeISO("UTC").year : null,
+        )
         .filter((y): y is number => y !== null),
     ),
   ).sort((a, b) => b - a);
@@ -67,7 +69,7 @@ export function PhotoGrid({
 
   const visible = photos.filter((p) => {
     if (selectedYear !== ALL_VALUE) {
-      const year = p.takenAt ? new Date(p.takenAt).getUTCFullYear() : null;
+      const year = p.takenAt ? p.takenAt.toZonedDateTimeISO("UTC").year : null;
       if (String(year) !== selectedYear) {
         return false;
       }

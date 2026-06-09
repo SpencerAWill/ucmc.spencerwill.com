@@ -54,7 +54,7 @@ export interface WaiverAttestationSummary {
   id: string;
   cycle: string;
   version: string;
-  attestedAt: Date;
+  attestedAt: Temporal.Instant;
   // All attestor-side identity fields are nullable because the FK is
   // `ON DELETE SET NULL` (0018_waiver_attestedby_set_null.sql) — when
   // an officer self-deletes, their prior attestations survive but
@@ -63,7 +63,7 @@ export interface WaiverAttestationSummary {
   attestedByUserId: string | null;
   attestedByPreferredName: string | null;
   attestedByEmail: string | null;
-  revokedAt: Date | null;
+  revokedAt: Temporal.Instant | null;
   revokedByUserId: string | null;
   revocationReason: string | null;
   notes: string | null;
@@ -82,7 +82,7 @@ export interface MemberNeedingAttestation {
   preferredName: string | null;
   fullName: string | null;
   ucAffiliation: string | null;
-  approvedAt: Date | null;
+  approvedAt: Temporal.Instant | null;
 }
 
 // ── reads ──────────────────────────────────────────────────────────────
@@ -212,7 +212,7 @@ export async function attestWaiverAction(input: {
       userId: input.userId,
       cycle,
       version: WAIVER_VERSION,
-      attestedAt: new Date(),
+      attestedAt: Temporal.Now.instant(),
       attestedBy: officer.userId,
       notes: input.notes?.trim() || null,
     }),
@@ -274,7 +274,7 @@ export async function bulkAttestWaiversAction(input: {
   }
 
   const cycle = currentWaiverCycle();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const notes = input.notes?.trim() || null;
   const rows = userIds.map((userId) => ({
     id: `wa_${uuidv7()}`,
@@ -351,7 +351,7 @@ export async function revokeWaiverAttestationAction(input: {
     db
       .update(schema.waiverAttestations)
       .set({
-        revokedAt: new Date(),
+        revokedAt: Temporal.Now.instant(),
         revokedBy: officer.userId,
         revocationReason: reason,
       })

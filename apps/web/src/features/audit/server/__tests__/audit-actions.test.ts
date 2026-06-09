@@ -82,19 +82,19 @@ describe("listAuditEventsAction", () => {
           id: "audit_1",
           actorUserId: actor,
           action: "registration.approved",
-          createdAt: new Date(2026, 0, 1),
+          createdAt: Temporal.Instant.from("2026-01-01T00:00:00Z"),
         },
         {
           id: "audit_2",
           actorUserId: actor,
           action: "registration.rejected",
-          createdAt: new Date(2026, 0, 2),
+          createdAt: Temporal.Instant.from("2026-01-02T00:00:00Z"),
         },
         {
           id: "audit_3",
           actorUserId: actor,
           action: "member.deactivated",
-          createdAt: new Date(2026, 0, 3),
+          createdAt: Temporal.Instant.from("2026-01-03T00:00:00Z"),
         },
       ]);
 
@@ -148,27 +148,27 @@ describe("listAuditEventsAction", () => {
           id: "audit_before",
           actorUserId: actor,
           action: "registration.approved",
-          createdAt: new Date("2026-04-30T23:59:00Z"),
+          createdAt: Temporal.Instant.from("2026-04-30T23:59:00Z"),
         },
         {
           id: "audit_in",
           actorUserId: actor,
           action: "registration.approved",
-          createdAt: new Date("2026-05-01T12:00:00Z"),
+          createdAt: Temporal.Instant.from("2026-05-01T12:00:00Z"),
         },
         {
           id: "audit_after",
           actorUserId: actor,
           action: "registration.approved",
-          createdAt: new Date("2026-05-02T00:00:00Z"),
+          createdAt: Temporal.Instant.from("2026-05-02T00:00:00Z"),
         },
       ]);
 
     const { listAuditEventsAction } =
       await import("#/features/audit/server/audit-actions.server");
     const result = await listAuditEventsAction({
-      from: new Date("2026-05-01T00:00:00Z").getTime(),
-      to: new Date("2026-05-02T00:00:00Z").getTime(),
+      from: Temporal.Instant.from("2026-05-01T00:00:00Z").epochMilliseconds,
+      to: Temporal.Instant.from("2026-05-02T00:00:00Z").epochMilliseconds,
     });
 
     expect(result.totalCount).toBe(1);
@@ -182,7 +182,9 @@ describe("listAuditEventsAction", () => {
       id: `audit_${String(i).padStart(3, "0")}`,
       actorUserId: actor,
       action: "registration.approved" as const,
-      createdAt: new Date(2026, 0, 1, 0, i),
+      createdAt: Temporal.Instant.from("2026-01-01T00:00:00Z").add({
+        minutes: i,
+      }),
     }));
     await getDb().insert(schema.auditLog).values(rows);
 
@@ -214,7 +216,7 @@ describe("listAuditEventsAction", () => {
   it("paginates stably across rows that share createdAt (id tiebreaker)", async () => {
     await asViewer();
     const actor = await seedUser();
-    const sharedTimestamp = new Date("2026-05-01T12:00:00Z");
+    const sharedTimestamp = Temporal.Instant.from("2026-05-01T12:00:00Z");
     // 10 rows with identical timestamps. Use ids that wouldn't sort
     // in the same order as insertion to make the tiebreaker visible.
     const rows = Array.from({ length: 10 }, (_, i) => ({

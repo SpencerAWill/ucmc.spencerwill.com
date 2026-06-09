@@ -109,7 +109,7 @@ async function seedAddEmailLink(args: {
   email: string;
   targetUserId: string;
   token?: string;
-  expiresAt?: Date;
+  expiresAt?: Temporal.Instant;
 }): Promise<string> {
   const token = args.token ?? `tok_${crypto.randomUUID()}`;
   const tokenHash = await sha256Base64Url(token);
@@ -120,8 +120,10 @@ async function seedAddEmailLink(args: {
       email: args.email,
       intent: "add_email",
       targetUserId: args.targetUserId,
-      createdAt: new Date(),
-      expiresAt: args.expiresAt ?? new Date(Date.now() + MAGIC_LINK_TTL_MS),
+      createdAt: Temporal.Now.instant(),
+      expiresAt:
+        args.expiresAt ??
+        Temporal.Now.instant().add({ milliseconds: MAGIC_LINK_TTL_MS }),
     });
   return token;
 }
@@ -160,14 +162,14 @@ describe("listMyEmailsAction", () => {
           userId,
           email: normalizeEmail("second@example.com"),
           isPrimary: false,
-          verifiedAt: new Date(Date.now() - 1000),
+          verifiedAt: Temporal.Now.instant().subtract({ milliseconds: 1000 }),
         },
         {
           id: `uem_${crypto.randomUUID()}`,
           userId,
           email: normalizeEmail("third@example.com"),
           isPrimary: false,
-          verifiedAt: new Date(),
+          verifiedAt: Temporal.Now.instant(),
         },
       ]);
 
@@ -437,7 +439,7 @@ describe("removeEmailAction", () => {
         userId,
         email: normalizeEmail("solo@example.com"),
         isPrimary: false,
-        verifiedAt: new Date(),
+        verifiedAt: Temporal.Now.instant(),
       });
 
     const sessionModule = await import("#/server/auth/session.server");
@@ -481,7 +483,7 @@ describe("removeEmailAction", () => {
         userId,
         email: normalizeEmail("second@example.com"),
         isPrimary: false,
-        verifiedAt: new Date(),
+        verifiedAt: Temporal.Now.instant(),
       });
 
     const result = await removeEmailAction({ emailId: secondaryId });
@@ -549,7 +551,7 @@ describe("setPrimaryEmailAction", () => {
         userId,
         email: normalizeEmail("second@example.com"),
         isPrimary: false,
-        verifiedAt: new Date(),
+        verifiedAt: Temporal.Now.instant(),
       });
 
     const result = await setPrimaryEmailAction({ emailId: secondaryId });
@@ -610,7 +612,7 @@ describe("setPrimaryEmailAction", () => {
         userId,
         email: normalizeEmail("second@example.com"),
         isPrimary: false,
-        verifiedAt: new Date(),
+        verifiedAt: Temporal.Now.instant(),
       });
 
     const seen = await getDb().query.userEmails.findFirst({

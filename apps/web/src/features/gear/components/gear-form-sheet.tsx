@@ -31,6 +31,7 @@ import { useCreateGear } from "#/features/gear/api/use-create-gear";
 import { useEditGear } from "#/features/gear/api/use-edit-gear";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
+import { toDateInputValue } from "#/lib/date-format";
 import {
   GEAR_CONDITION_GRADE_VALUES,
   GEAR_CONDITION_VALUES,
@@ -141,7 +142,9 @@ function GearForm({
     isEdit ? intent.gear.description : "",
   );
   const [acquiredAtIso, setAcquiredAtIso] = useState<string>(
-    isEdit && intent.gear.acquiredAt ? toIsoDate(intent.gear.acquiredAt) : "",
+    isEdit && intent.gear.acquiredAt
+      ? toDateInputValue(intent.gear.acquiredAt)
+      : "",
   );
   const [costDollars, setCostDollars] = useState<string>(
     isEdit && intent.gear.acquisitionCostCents !== null
@@ -649,13 +652,4 @@ function GearForm({
       </SheetFooter>
     </form>
   );
-}
-
-function toIsoDate(d: Date): string {
-  // Format as YYYY-MM-DD in UTC — the same shape the `<input type="date">`
-  // returns.
-  const yr = d.getUTCFullYear();
-  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const da = String(d.getUTCDate()).padStart(2, "0");
-  return `${yr}-${mo}-${da}`;
 }

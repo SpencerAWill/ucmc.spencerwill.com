@@ -58,7 +58,8 @@ async function seedUser(
       id,
       publicId,
       status: opts?.status ?? "approved",
-      approvedAt: opts?.status === "approved" || !opts ? new Date() : null,
+      approvedAt:
+        opts?.status === "approved" || !opts ? Temporal.Now.instant() : null,
     });
   await attachPrimaryEmail(id, email);
   await getDb().insert(schema.profiles).values({
@@ -79,7 +80,7 @@ async function attestCurrentWaiver(userId: string): Promise<void> {
       userId,
       cycle: currentWaiverCycle(),
       version: WAIVER_VERSION,
-      attestedAt: new Date(),
+      attestedAt: Temporal.Now.instant(),
     });
 }
 

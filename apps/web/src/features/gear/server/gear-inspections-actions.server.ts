@@ -28,14 +28,14 @@ import { getDb, schema } from "#/server/db";
 
 export interface GearInspectionSummary {
   publicId: string;
-  inspectedAt: Date;
+  inspectedAt: Temporal.Instant;
   result: schema.GearInspectionResult;
   notes: string | null;
   /** Best-effort display name: live profile.fullName joined at read
    *  time, falling back to the snapshot if the inspector's profile or
    *  user row has been deleted. */
   inspectorName: string | null;
-  createdAt: Date;
+  createdAt: Temporal.Instant;
 }
 
 function toSummary(row: GearInspectionRow): GearInspectionSummary {
@@ -114,7 +114,7 @@ export async function recordGearInspectionAction(
     gearId: gear.id,
     inspectorUserId: principal.userId,
     inspectorNameSnapshot: inspectorName,
-    inspectedAt: new Date(input.inspectedAt),
+    inspectedAt: Temporal.Instant.fromEpochMilliseconds(input.inspectedAt),
     result: input.result,
     notes: input.notes,
   });

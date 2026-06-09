@@ -5,6 +5,7 @@ import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { WAIVER_PDF_PATH, WAIVER_VERSION } from "#/config/legal";
+import { formatDate } from "#/lib/date-format";
 import {
   myWaiverHistoryQueryOptions,
   myWaiverStatusQueryOptions,
@@ -82,8 +83,8 @@ function CurrentStatusCard({
               attestation.attestedByEmail ??
               "(deleted user)"}{" "}
             on{" "}
-            <time dateTime={new Date(attestation.attestedAt).toISOString()}>
-              {new Date(attestation.attestedAt).toLocaleDateString()}
+            <time dateTime={attestation.attestedAt.toString()}>
+              {formatDate(attestation.attestedAt)}
             </time>
             .
           </p>
@@ -171,7 +172,7 @@ function HistoryCard({ history }: { history: WaiverAttestationSummary[] }) {
                 </span>
               </div>
               <p className="text-muted-foreground">
-                {new Date(row.attestedAt).toLocaleDateString()} by{" "}
+                {formatDate(row.attestedAt)} by{" "}
                 {row.attestedByPreferredName ??
                   row.attestedByEmail ??
                   "(deleted user)"}
@@ -179,7 +180,7 @@ function HistoryCard({ history }: { history: WaiverAttestationSummary[] }) {
               </p>
               {row.revokedAt ? (
                 <p className="text-xs text-muted-foreground">
-                  Revoked {new Date(row.revokedAt).toLocaleDateString()}
+                  Revoked {formatDate(row.revokedAt)}
                   {row.revocationReason ? ` — ${row.revocationReason}` : null}
                 </p>
               ) : null}

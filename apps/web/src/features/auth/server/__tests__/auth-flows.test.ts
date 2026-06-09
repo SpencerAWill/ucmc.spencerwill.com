@@ -110,7 +110,7 @@ async function seedUser(args: {
       preferredName: "Test",
       phone: "+15135551212",
       ucAffiliation: "student",
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     });
   }
   return id;
@@ -120,7 +120,7 @@ async function seedMagicLink(args: {
   email: string;
   intent: schema.MagicLinkIntent;
   token?: string;
-  expiresAt?: Date;
+  expiresAt?: Temporal.Instant;
 }): Promise<string> {
   const token = args.token ?? `tok_${crypto.randomUUID()}`;
   const tokenHash = await sha256Base64Url(token);
@@ -130,8 +130,10 @@ async function seedMagicLink(args: {
       tokenHash,
       email: args.email,
       intent: args.intent,
-      createdAt: new Date(),
-      expiresAt: args.expiresAt ?? new Date(Date.now() + MAGIC_LINK_TTL_MS),
+      createdAt: Temporal.Now.instant(),
+      expiresAt:
+        args.expiresAt ??
+        Temporal.Now.instant().add({ milliseconds: MAGIC_LINK_TTL_MS }),
     });
   return token;
 }
@@ -352,7 +354,7 @@ describe("token security", () => {
     const token = await seedMagicLink({
       email: TEST_EMAIL,
       intent: "login",
-      expiresAt: new Date(Date.now() - 1000), // expired 1s ago
+      expiresAt: Temporal.Now.instant().subtract({ milliseconds: 1000 }), // expired 1s ago
     });
 
     const result = await consumeMagicLinkAction(token);
@@ -638,7 +640,7 @@ describe("unclaimed claim flow", () => {
         publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
         status: "unclaimed",
         placeholderName: args.name,
-        unclaimedAt: new Date(),
+        unclaimedAt: Temporal.Now.instant(),
       });
     await getDb()
       .insert(schema.userEmails)
@@ -677,7 +679,7 @@ describe("unclaimed claim flow", () => {
     const emailAfterConsume = await getDb().query.userEmails.findFirst({
       where: drizzleEq(schema.userEmails.userId, preAddedId),
     });
-    expect(emailAfterConsume?.verifiedAt).toBeInstanceOf(Date);
+    expect(emailAfterConsume?.verifiedAt).toBeInstanceOf(Temporal.Instant);
 
     // Status hasn't flipped yet — that happens at profile submit.
     const userBeforeSubmit = await getDb().query.users.findFirst({
@@ -696,7 +698,7 @@ describe("unclaimed claim flow", () => {
     expect(userAfterSubmit?.status).toBe("approved");
     expect(userAfterSubmit?.placeholderName).toBeNull();
     expect(userAfterSubmit?.unclaimedAt).toBeNull();
-    expect(userAfterSubmit?.approvedAt).toBeInstanceOf(Date);
+    expect(userAfterSubmit?.approvedAt).toBeInstanceOf(Temporal.Instant);
 
     const profile = await getDb().query.profiles.findFirst({
       where: (p, { eq }) => eq(p.userId, preAddedId),

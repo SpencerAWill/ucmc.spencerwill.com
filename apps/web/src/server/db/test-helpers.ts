@@ -31,6 +31,6 @@ export async function attachPrimaryEmail(
       userId,
       email: normalizeEmail(email),
       isPrimary: true,
-      verifiedAt: new Date(),
+      verifiedAt: Temporal.Now.instant(),
     });
 }

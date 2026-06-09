@@ -29,11 +29,16 @@ export const WAIVER_CYCLE_CUTOFF = { month: 8, day: 21 } as const;
  * `now` defaults to "right now" so callers can usually call without args.
  * Tests pass a fixed `Date` to exercise rollover boundaries.
  */
-export function currentWaiverCycle(now: Date | number = Date.now()): string {
-  const date = now instanceof Date ? now : new Date(now);
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth() + 1;
-  const day = date.getUTCDate();
+export function currentWaiverCycle(
+  now: Temporal.Instant = Temporal.Now.instant(),
+): string {
+  // UTC for now — Phase 2 switches the rollover to the club zone
+  // (America/New_York). The ZonedDateTime fields below mirror the prior
+  // getUTC* reads exactly so this step is behavior-preserving.
+  const zoned = now.toZonedDateTimeISO("UTC");
+  const year = zoned.year;
+  const month = zoned.month;
+  const day = zoned.day;
 
   const beforeCutoff =
     month < WAIVER_CYCLE_CUTOFF.month ||

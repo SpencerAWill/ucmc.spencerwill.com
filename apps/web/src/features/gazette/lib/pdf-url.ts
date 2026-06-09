@@ -66,7 +66,10 @@ const MONTH_NAMES = [
  * not UTC). Hand-formatting from `getUTC*()` is deterministic on
  * both sides.
  */
-export function formatPublishedAtUtc(date: Date | string | number): string {
-  const d = date instanceof Date ? date : new Date(date);
-  return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+export function formatPublishedAtUtc(instant: Temporal.Instant): string {
+  // UTC for now — Phase 2 switches this to the club zone, which is also
+  // deterministic across server/client (so the hydration concern above
+  // still holds: the zone is fixed, never the runtime-local one).
+  const d = instant.toZonedDateTimeISO("UTC");
+  return `${MONTH_NAMES[d.month - 1]} ${d.day}, ${d.year}`;
 }

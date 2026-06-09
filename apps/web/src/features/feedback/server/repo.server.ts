@@ -23,8 +23,8 @@ export interface FeedbackRow {
   createdByPublicId: string | null;
   githubIssueNumber: number | null;
   githubIssueUrl: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
   authorEmail: string | null;
   authorFullName: string | null;
   authorPreferredName: string | null;
@@ -113,7 +113,7 @@ export async function insertFeedback(input: {
   createdBy: string;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.feedback).values({
     id: input.id,
     kind: input.kind,
@@ -135,7 +135,7 @@ export async function updateFeedbackStatus(input: {
   const db = getDb();
   await db
     .update(schema.feedback)
-    .set({ status: input.status, updatedAt: new Date() })
+    .set({ status: input.status, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.feedback.id, input.id));
 }
 
@@ -150,7 +150,7 @@ export async function setGithubIssue(
     .set({
       githubIssueNumber: number,
       githubIssueUrl: url,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.feedback.id, id));
 }

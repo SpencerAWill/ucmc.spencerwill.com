@@ -63,8 +63,8 @@ export interface AnnouncementSummary {
   id: string;
   title: string;
   body: string;
-  publishedAt: Date;
-  updatedAt: Date;
+  publishedAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
   createdBy: string | null;
   authorDisplayName: string | null;
   authorAvatarKey: string | null;
@@ -74,8 +74,8 @@ function toSummary(row: {
   id: string;
   title: string;
   body: string;
-  publishedAt: Date;
-  updatedAt: Date;
+  publishedAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
   createdBy: string | null;
   authorEmail: string | null;
   authorFullName: string | null;

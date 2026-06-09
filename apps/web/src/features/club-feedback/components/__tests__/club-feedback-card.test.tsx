@@ -39,8 +39,8 @@ function baseRow(
     createdByPublicId: "alice123",
     authorDisplayName: "Alice",
     authorAvatarKey: null,
-    createdAt: new Date("2026-05-01T12:00:00Z"),
-    updatedAt: new Date("2026-05-01T12:00:00Z"),
+    createdAt: Temporal.Instant.from("2026-05-01T12:00:00Z"),
+    updatedAt: Temporal.Instant.from("2026-05-01T12:00:00Z"),
     ...overrides,
   };
 }

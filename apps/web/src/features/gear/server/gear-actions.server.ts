@@ -75,15 +75,15 @@ export interface GearSummary {
    *  legacy paper inventory. Orthogonal to `condition`. Null when no
    *  grade has been assigned. */
   conditionGrade: schema.GearConditionGrade | null;
-  acquiredAt: Date | null;
+  acquiredAt: Temporal.Instant | null;
   acquisitionCostCents: number | null;
   /** Officer-only (same gate as `acquisitionCostCents`). */
   msrpCents: number | null;
   manufacturer: string | null;
-  retiredAt: Date | null;
+  retiredAt: Temporal.Instant | null;
   retiredReason: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
   type: { publicId: string; name: string; prefix: string | null };
   tags: GearTagSummary[];
 }
@@ -101,7 +101,7 @@ export interface GearDetail extends GearSummary {
    *  sensitive; just that someone has it out. */
   currentLoan: {
     publicId: string;
-    dueAt: Date;
+    dueAt: Temporal.Instant;
     memberFullName: string | null;
   } | null;
 }
@@ -352,8 +352,8 @@ export interface CreateGearInput {
   tagPublicIds: string[];
 }
 
-function msToDate(ms: number | null): Date | null {
-  return ms === null ? null : new Date(ms);
+function msToInstant(ms: number | null): Temporal.Instant | null {
+  return ms === null ? null : Temporal.Instant.fromEpochMilliseconds(ms);
 }
 
 async function uploadThumbnail(
@@ -396,7 +396,7 @@ export async function createGearAction(
       code,
       description: input.description,
       thumbnailKey,
-      acquiredAt: msToDate(input.acquiredAt),
+      acquiredAt: msToInstant(input.acquiredAt),
       acquisitionCostCents: input.acquisitionCostCents,
       msrpCents: input.msrpCents,
       manufacturer: normalizeOptionalText(input.manufacturer),
@@ -491,9 +491,9 @@ export async function editGearAction(
     patch.description = input.description;
     changedFields.push("description");
   }
-  const existingAcquiredAtMs = existing.acquiredAt?.getTime() ?? null;
+  const existingAcquiredAtMs = existing.acquiredAt?.epochMilliseconds ?? null;
   if (input.acquiredAt !== existingAcquiredAtMs) {
-    patch.acquiredAt = msToDate(input.acquiredAt);
+    patch.acquiredAt = msToInstant(input.acquiredAt);
     changedFields.push("acquired_at");
   }
   if (input.acquisitionCostCents !== existing.acquisitionCostCents) {

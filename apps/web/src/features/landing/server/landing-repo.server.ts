@@ -12,7 +12,7 @@ import { getDb, schema } from "#/server/db";
 export interface SettingRow {
   key: string;
   valueJson: string;
-  updatedAt: Date;
+  updatedAt: Temporal.Instant;
 }
 
 export async function listSettings(): Promise<SettingRow[]> {
@@ -37,14 +37,14 @@ export async function upsertSetting(
     .values({
       key,
       valueJson,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
       updatedBy,
     })
     .onConflictDoUpdate({
       target: schema.landingSettings.key,
       set: {
         valueJson,
-        updatedAt: new Date(),
+        updatedAt: Temporal.Now.instant(),
         updatedBy,
       },
     });
@@ -94,7 +94,7 @@ export async function insertHeroSlide(input: {
   alt: string;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.landingHeroSlides).values({
     id: input.id,
     imageKey: input.imageKey,
@@ -111,9 +111,9 @@ export async function updateHeroSlide(input: {
   alt: string;
 }): Promise<void> {
   const db = getDb();
-  const set: { alt: string; updatedAt: Date; imageKey?: string } = {
+  const set: { alt: string; updatedAt: Temporal.Instant; imageKey?: string } = {
     alt: input.alt,
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   };
   if (input.imageKey) {
     set.imageKey = input.imageKey;
@@ -141,7 +141,7 @@ export async function reorderHeroSlides(idsInOrder: string[]): Promise<void> {
     return;
   }
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const stmts = idsInOrder.map((id, i) =>
     db
       .update(schema.landingHeroSlides)
@@ -181,7 +181,7 @@ export async function insertFaqItem(input: {
   answer: string;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.landingFaqItems).values({
     id: input.id,
     question: input.question,
@@ -203,7 +203,7 @@ export async function updateFaqItem(input: {
     .set({
       question: input.question,
       answer: input.answer,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.landingFaqItems.id, input.id));
 }
@@ -228,7 +228,7 @@ export async function reorderFaqItems(idsInOrder: string[]): Promise<void> {
     return;
   }
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const stmts = idsInOrder.map((id, i) =>
     db
       .update(schema.landingFaqItems)
@@ -271,7 +271,7 @@ export async function insertActivity(input: {
   imageKey: string | null;
 }): Promise<void> {
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await db.insert(schema.landingActivities).values({
     id: input.id,
     icon: input.icon,
@@ -298,13 +298,13 @@ export async function updateActivity(input: {
     icon: string;
     title: string;
     blurb: string;
-    updatedAt: Date;
+    updatedAt: Temporal.Instant;
     imageKey?: string | null;
   } = {
     icon: input.icon,
     title: input.title,
     blurb: input.blurb,
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   };
   if (input.imageKey !== undefined) {
     set.imageKey = input.imageKey;
@@ -338,7 +338,7 @@ export async function reorderActivities(idsInOrder: string[]): Promise<void> {
     return;
   }
   const db = getDb();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const stmts = idsInOrder.map((id, i) =>
     db
       .update(schema.landingActivities)

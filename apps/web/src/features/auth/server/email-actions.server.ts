@@ -50,8 +50,8 @@ export interface EmailRow {
   // because the only path that inserts NULL is officer pre-add and
   // those users can't reach the Sign-in tab (/my/account/security)
   // that consumes this. The type widening keeps the contract honest.
-  verifiedAt: Date | null;
-  createdAt: Date;
+  verifiedAt: Temporal.Instant | null;
+  createdAt: Temporal.Instant;
 }
 
 export type ListMyEmailsResult =
@@ -215,7 +215,7 @@ export async function consumeAddEmailAction(
         userId: principal.userId,
         email,
         isPrimary: false,
-        verifiedAt: new Date(),
+        verifiedAt: Temporal.Now.instant(),
       }),
       buildAuditEventStatement({
         actorUserId: principal.userId,

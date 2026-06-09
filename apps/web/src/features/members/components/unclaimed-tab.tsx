@@ -31,16 +31,9 @@ import { useDeleteUnclaimed } from "#/features/members/api/use-delete-unclaimed"
 import { EditUnclaimedDialog } from "#/features/members/components/edit-unclaimed-dialog";
 import { PreAddUnclaimedSheet } from "#/features/members/components/pre-add-unclaimed-sheet";
 import type { UnclaimedMember } from "#/features/members/server/member-fns";
+import { formatDate } from "#/lib/date-format";
 
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
-
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export interface UnclaimedTabProps {
   perPage: number;

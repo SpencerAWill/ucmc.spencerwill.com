@@ -10,7 +10,7 @@
  * JSON would leak through the log otherwise).
  */
 import { useQuery } from "@tanstack/react-query";
-import { formatDistanceToNowStrict } from "date-fns";
+import { formatRelative } from "#/lib/date-format";
 
 import { Badge } from "#/components/ui/badge";
 import {
@@ -81,9 +81,9 @@ export function SettingHistoryDialog({
                       {entry.actorName ?? "An officer"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatDistanceToNowStrict(new Date(entry.atMs), {
-                        addSuffix: true,
-                      })}
+                      {formatRelative(
+                        Temporal.Instant.fromEpochMilliseconds(entry.atMs),
+                      )}
                     </p>
                   </div>
                   {entry.booleanValue === null ? null : (

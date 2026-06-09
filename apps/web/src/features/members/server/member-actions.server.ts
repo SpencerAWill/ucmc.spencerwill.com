@@ -47,7 +47,7 @@ async function requireApprovedPrincipal(): Promise<Principal> {
 export interface PendingRegistration {
   userId: string;
   email: string;
-  createdAt: Date;
+  createdAt: Temporal.Instant;
   hasProfile: boolean;
   fullName: string | null;
   preferredName: string | null;
@@ -74,13 +74,19 @@ export async function listPendingRegistrationsAction(opts: {
   if (opts.from) {
     // Explicit UTC to avoid local-timezone shifts in the devcontainer.
     conditions.push(
-      gte(schema.users.createdAt, new Date(`${opts.from}T00:00:00.000Z`)),
+      gte(
+        schema.users.createdAt,
+        Temporal.Instant.from(`${opts.from}T00:00:00.000Z`),
+      ),
     );
   }
   if (opts.to) {
     // Inclusive through end of the selected day in UTC.
     conditions.push(
-      lte(schema.users.createdAt, new Date(`${opts.to}T23:59:59.999Z`)),
+      lte(
+        schema.users.createdAt,
+        Temporal.Instant.from(`${opts.to}T23:59:59.999Z`),
+      ),
     );
   }
 
@@ -363,8 +369,8 @@ export interface MemberDetail {
   publicId: string;
   email: string;
   status: DirectoryStatus;
-  createdAt: Date;
-  approvedAt: Date | null;
+  createdAt: Temporal.Instant;
+  approvedAt: Temporal.Instant | null;
   approvedBy: string | null;
   fullName: string | null;
   preferredName: string | null;
@@ -526,7 +532,7 @@ export async function approveRegistrationsAction(
     .update(schema.users)
     .set({
       status: "approved",
-      approvedAt: new Date(),
+      approvedAt: Temporal.Now.instant(),
       approvedBy: approver.userId,
     })
     .where(inArray(schema.users.id, userIds))
@@ -570,7 +576,7 @@ export async function rejectRegistrationsAction(
   // false-positive audit rows.
   const updated = await getDb()
     .update(schema.users)
-    .set({ status: "rejected", rejectedAt: new Date() })
+    .set({ status: "rejected", rejectedAt: Temporal.Now.instant() })
     .where(inArray(schema.users.id, userIds))
     .returning({ id: schema.users.id });
 
@@ -606,7 +612,7 @@ export async function deactivateMembersAction(
   // log doesn't claim a deactivation for users in the wrong status.
   const updated = await db
     .update(schema.users)
-    .set({ status: "deactivated", deactivatedAt: new Date() })
+    .set({ status: "deactivated", deactivatedAt: Temporal.Now.instant() })
     .where(
       and(
         inArray(schema.users.id, userIds),
@@ -655,7 +661,7 @@ export async function reactivateMembersAction(
     .update(schema.users)
     .set({
       status: "approved",
-      approvedAt: new Date(),
+      approvedAt: Temporal.Now.instant(),
       approvedBy: approver.userId,
       deactivatedAt: null,
     })
@@ -793,10 +799,10 @@ export async function adminUpdateProfileAction(input: {
   const stmts = [
     db
       .insert(schema.profiles)
-      .values({ userId, ...profileData, updatedAt: new Date() })
+      .values({ userId, ...profileData, updatedAt: Temporal.Now.instant() })
       .onConflictDoUpdate({
         target: schema.profiles.userId,
-        set: { ...profileData, updatedAt: new Date() },
+        set: { ...profileData, updatedAt: Temporal.Now.instant() },
       }),
     db
       .delete(schema.emergencyContacts)

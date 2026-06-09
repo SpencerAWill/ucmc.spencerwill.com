@@ -88,8 +88,8 @@ export interface FeedbackSummary {
   authorAvatarKey: string | null;
   githubIssueNumber: number | null;
   githubIssueUrl: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
 }
 
 function toSummary(row: {
@@ -107,8 +107,8 @@ function toSummary(row: {
   authorAvatarKey: string | null;
   githubIssueNumber: number | null;
   githubIssueUrl: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Temporal.Instant;
+  updatedAt: Temporal.Instant;
 }): FeedbackSummary {
   return {
     id: row.id,

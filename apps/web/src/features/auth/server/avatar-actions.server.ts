@@ -122,7 +122,7 @@ export async function uploadAvatarAction({
 
   await db
     .update(schema.profiles)
-    .set({ avatarKey: key, updatedAt: new Date() })
+    .set({ avatarKey: key, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.profiles.userId, principal.userId));
 
   if (existing?.avatarKey && existing.avatarKey !== key) {
@@ -147,7 +147,7 @@ export async function removeAvatarAction(): Promise<{ ok: true }> {
   if (existing?.avatarKey) {
     await db
       .update(schema.profiles)
-      .set({ avatarKey: null, updatedAt: new Date() })
+      .set({ avatarKey: null, updatedAt: Temporal.Now.instant() })
       .where(eq(schema.profiles.userId, principal.userId));
     await deleteAvatar(existing.avatarKey);
   }

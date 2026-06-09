@@ -34,7 +34,7 @@ async function seedUser(opts: SeedUserOpts): Promise<string> {
       phone: "+15135551212",
       ucAffiliation: "student",
       avatarKey: opts.avatarKey ?? null,
-      updatedAt: new Date(),
+      updatedAt: Temporal.Now.instant(),
     });
   }
   return id;

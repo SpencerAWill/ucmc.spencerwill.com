@@ -60,8 +60,12 @@ export interface SweepCounts {
   orphanR2Keys: number;
 }
 
-export async function sweepRejectedRegistrations(now: Date): Promise<number> {
-  const cutoff = new Date(now.getTime() - REJECTED_RETENTION_DAYS * DAY_MS);
+export async function sweepRejectedRegistrations(
+  now: Temporal.Instant,
+): Promise<number> {
+  const cutoff = now.subtract({
+    milliseconds: REJECTED_RETENTION_DAYS * DAY_MS,
+  });
   const deleted = await getDb()
     .delete(schema.users)
     .where(
@@ -75,8 +79,12 @@ export async function sweepRejectedRegistrations(now: Date): Promise<number> {
   return deleted.length;
 }
 
-export async function sweepDeactivatedAccounts(now: Date): Promise<number> {
-  const cutoff = new Date(now.getTime() - DEACTIVATED_RETENTION_DAYS * DAY_MS);
+export async function sweepDeactivatedAccounts(
+  now: Temporal.Instant,
+): Promise<number> {
+  const cutoff = now.subtract({
+    milliseconds: DEACTIVATED_RETENTION_DAYS * DAY_MS,
+  });
   const deleted = await getDb()
     .delete(schema.users)
     .where(
@@ -91,11 +99,11 @@ export async function sweepDeactivatedAccounts(now: Date): Promise<number> {
 }
 
 export async function sweepRevokedWaiverAttestations(
-  now: Date,
+  now: Temporal.Instant,
 ): Promise<number> {
-  const cutoff = new Date(
-    now.getTime() - REVOKED_WAIVER_RETENTION_DAYS * DAY_MS,
-  );
+  const cutoff = now.subtract({
+    milliseconds: REVOKED_WAIVER_RETENTION_DAYS * DAY_MS,
+  });
   const deleted = await getDb()
     .delete(schema.waiverAttestations)
     .where(
@@ -134,7 +142,7 @@ export async function sweepRevokedWaiverAttestations(
  * by club membership + landing assets — a few hundred KB at worst.
  */
 export async function sweepOrphanR2Keys(
-  now: Date = new Date(),
+  now: Temporal.Instant = Temporal.Now.instant(),
   minOrphanAgeMs: number = DEFAULT_MIN_ORPHAN_AGE_MS,
 ): Promise<number> {
   const bucket = getPublicBucket();
@@ -160,7 +168,9 @@ export async function sweepOrphanR2Keys(
   //    R2 has either also landed in DB (no-op) or is too new for the
   //    age guard (skipped).
   const liveKeys = await loadReferencedR2Keys();
-  const ageCutoffMs = now.getTime() - minOrphanAgeMs;
+  // R2 `object.uploaded` is a native Date (R2 API), so the age guard stays
+  // in epoch-ms space rather than mixing Instant comparisons.
+  const ageCutoffMs = now.epochMilliseconds - minOrphanAgeMs;
 
   const orphans: string[] = [];
   for (const object of r2Objects) {
@@ -268,7 +278,7 @@ export interface RunRetentionSweepsOptions {
 }
 
 export async function runRetentionSweeps(
-  now: Date = new Date(),
+  now: Temporal.Instant = Temporal.Now.instant(),
   options: RunRetentionSweepsOptions = {},
 ): Promise<SweepCounts> {
   const counts: SweepCounts = {

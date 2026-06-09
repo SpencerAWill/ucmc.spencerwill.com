@@ -35,9 +35,9 @@ import {
 interface SessionRow {
   id: string;
   userId: string;
-  createdAt: Date;
-  lastSeenAt: Date;
-  expiresAt: Date;
+  createdAt: Temporal.Instant;
+  lastSeenAt: Temporal.Instant;
+  expiresAt: Temporal.Instant;
 }
 
 async function getSessionRow(sid: string): Promise<SessionRow | null> {
@@ -47,7 +47,7 @@ async function getSessionRow(sid: string): Promise<SessionRow | null> {
   if (!row) {
     return null;
   }
-  if (row.expiresAt.getTime() <= Date.now()) {
+  if (Temporal.Instant.compare(row.expiresAt, Temporal.Now.instant()) <= 0) {
     await deleteSessionRow(sid);
     return null;
   }
@@ -56,8 +56,8 @@ async function getSessionRow(sid: string): Promise<SessionRow | null> {
 
 async function insertSessionRow(userId: string): Promise<string> {
   const sid = uuidv7();
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+  const now = Temporal.Now.instant();
+  const expiresAt = now.add({ milliseconds: SESSION_TTL_MS });
   await getDb().insert(schema.sessions).values({
     id: sid,
     userId,
@@ -69,12 +69,12 @@ async function insertSessionRow(userId: string): Promise<string> {
 }
 
 async function slideSessionRow(sid: string): Promise<void> {
-  const now = new Date();
+  const now = Temporal.Now.instant();
   await getDb()
     .update(schema.sessions)
     .set({
       lastSeenAt: now,
-      expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+      expiresAt: now.add({ milliseconds: SESSION_TTL_MS }),
     })
     .where(eq(schema.sessions.id, sid));
 }
@@ -152,7 +152,11 @@ export async function loadCurrentPrincipal(): Promise<Principal | null> {
     return null;
   }
 
-  if (Date.now() - session.lastSeenAt.getTime() > SESSION_SLIDING_REFRESH_MS) {
+  if (
+    Temporal.Now.instant().epochMilliseconds -
+      session.lastSeenAt.epochMilliseconds >
+    SESSION_SLIDING_REFRESH_MS
+  ) {
     await slideSessionRow(sid);
   }
 

@@ -52,7 +52,7 @@ export interface GalleryPhotoSummary {
   publicId: string;
   caption: string | null;
   credit: string | null;
-  takenAt: Date | null;
+  takenAt: Temporal.Instant | null;
   tag: string | null;
   altText: string;
   imageKey: string;
@@ -161,21 +161,26 @@ export async function createGalleryPhotoAction(
   await putGalleryImage(imageKey, bytes);
 
   try {
-    await getDb().insert(schema.galleryPhotos).values({
-      id,
-      publicId,
-      caption: input.caption,
-      credit: input.credit,
-      takenAt: input.takenAt,
-      tag: input.tag,
-      altText: input.altText,
-      imageKey,
-      imageBytes: bytes.byteLength,
-      widthPx: input.widthPx,
-      heightPx: input.heightPx,
-      createdBy: principal.userId,
-      updatedBy: principal.userId,
-    });
+    await getDb()
+      .insert(schema.galleryPhotos)
+      .values({
+        id,
+        publicId,
+        caption: input.caption,
+        credit: input.credit,
+        takenAt:
+          input.takenAt === null
+            ? null
+            : Temporal.Instant.fromEpochMilliseconds(input.takenAt.getTime()),
+        tag: input.tag,
+        altText: input.altText,
+        imageKey,
+        imageBytes: bytes.byteLength,
+        widthPx: input.widthPx,
+        heightPx: input.heightPx,
+        createdBy: principal.userId,
+        updatedBy: principal.userId,
+      });
   } catch (err) {
     // Insert failed — clean up the orphan image so we don't leak
     // storage. Best-effort; the orphan-GC sweep catches anything we
@@ -231,14 +236,17 @@ export async function updateGalleryPhotoAction(
       .set({
         caption: input.caption,
         credit: input.credit,
-        takenAt: input.takenAt,
+        takenAt:
+          input.takenAt === null
+            ? null
+            : Temporal.Instant.fromEpochMilliseconds(input.takenAt.getTime()),
         tag: input.tag,
         altText: input.altText,
         imageKey,
         imageBytes,
         widthPx: input.widthPx,
         heightPx: input.heightPx,
-        updatedAt: new Date(),
+        updatedAt: Temporal.Now.instant(),
         updatedBy: principal.userId,
       })
       .where(eq(schema.galleryPhotos.id, existing.id));

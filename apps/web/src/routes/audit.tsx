@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { addDays, format, parseISO } from "date-fns";
 import { CalendarIcon, X } from "lucide-react";
 import { useCallback } from "react";
 import type { DateRange } from "react-day-picker";
@@ -53,23 +52,36 @@ export const Route = createFileRoute("/audit")({
   component: AuditPage,
 });
 
+// react-day-picker is `Date`-native; these convert at its boundary
+// without date-fns. `toISODate` mirrors `format(d, "yyyy-MM-dd")`
+// (local fields); `fromISODate` re-hydrates to a local-midnight Date.
 function toISODate(d: Date): string {
-  return format(d, "yyyy-MM-dd");
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
-// Inclusive `to` parses as start-of-day in local time; the server
-// expects an exclusive upper bound, so we want the start of the
-// NEXT calendar day. Use `addDays` rather than `+ 24h ms` because a
-// fixed millisecond offset is wrong across DST transitions — the
-// chosen day can be 23 or 25 hours long, and a flat +24h would
-// either include an hour of the next day or drop the last hour of
-// the chosen day. `addDays` does calendar arithmetic correctly.
+function fromISODate(s: string): Date {
+  return new Date(`${s}T00:00:00`);
+}
+
+// Inclusive `to` is start-of-day in local time; the server expects an
+// exclusive upper bound, so we want the start of the NEXT calendar day.
+// `Temporal.PlainDate.add({ days: 1 })` is calendar arithmetic (DST-safe,
+// unlike a flat +24h ms), then we resolve to the instant at local
+// midnight via the runtime zone.
 function dateRangeToMs(
   from: string | undefined,
   to: string | undefined,
 ): { fromMs: number | undefined; toMs: number | undefined } {
-  const fromMs = from ? parseISO(from).getTime() : undefined;
-  const toMs = to ? addDays(parseISO(to), 1).getTime() : undefined;
+  const zone = Temporal.Now.timeZoneId();
+  const fromMs = from
+    ? Temporal.PlainDate.from(from).toZonedDateTime(zone).epochMilliseconds
+    : undefined;
+  const toMs = to
+    ? Temporal.PlainDate.from(to).add({ days: 1 }).toZonedDateTime(zone)
+        .epochMilliseconds
+    : undefined;
   return { fromMs, toMs };
 }
 
@@ -85,8 +97,8 @@ function AuditPage() {
   const dateRange: DateRange | undefined =
     (search.from ?? search.to)
       ? {
-          from: search.from ? parseISO(search.from) : undefined,
-          to: search.to ? parseISO(search.to) : undefined,
+          from: search.from ? fromISODate(search.from) : undefined,
+          to: search.to ? fromISODate(search.to) : undefined,
         }
       : undefined;
 

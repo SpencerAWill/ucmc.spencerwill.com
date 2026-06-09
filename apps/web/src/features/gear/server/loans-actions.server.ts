@@ -69,9 +69,9 @@ export interface LoanSummary {
   memberPublicId: string;
   memberFullName: string;
   memberAvatarKey: string | null;
-  checkedOutAt: Date;
-  dueAt: Date;
-  returnedAt: Date | null;
+  checkedOutAt: Temporal.Instant;
+  dueAt: Temporal.Instant;
+  returnedAt: Temporal.Instant | null;
   checkoutNotes: string | null;
   checkinNotes: string | null;
   conditionAtReturn: schema.GearCondition | null;
@@ -158,7 +158,7 @@ export async function checkoutLoansAction(
     // throwing; the client form validated the member before submit.
     throw new Error("Member not found or not approved");
   }
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const results: CheckoutResult[] = [];
   const validRows: Array<{
     insert: Parameters<typeof insertLoans>[0][number];
@@ -168,7 +168,7 @@ export async function checkoutLoansAction(
     gearId: string;
     code: string | null;
     durationDays: number;
-    dueAt: Date;
+    dueAt: Temporal.Instant;
   }> = [];
 
   // Sequential pre-check: small N (typical batch ≤ 10), and we need
@@ -292,7 +292,7 @@ async function emitCheckoutAudits(
   actorUserId: string,
   memberUserId: string,
   rows: Array<{
-    insert: { gearId: string; dueAt: Date };
+    insert: { gearId: string; dueAt: Temporal.Instant };
     code: string | null;
     durationDays: number;
   }>,
@@ -306,7 +306,7 @@ async function emitCheckoutAudits(
       metadata: {
         memberUserId,
         gearId: r.insert.gearId,
-        dueAt: r.insert.dueAt.getTime(),
+        dueAt: r.insert.dueAt.epochMilliseconds,
         code: r.code,
         durationDays: r.durationDays,
         bulk: true,
@@ -346,7 +346,7 @@ export async function checkinLoansAction(
   input: CheckinLoansInput,
 ): Promise<CheckinLoansResult> {
   const principal = await requireGearLoanManager();
-  const now = new Date();
+  const now = Temporal.Now.instant();
   const results: CheckinResult[] = [];
   const auditPayloads: Array<Parameters<typeof recordAuditEvents>[0][number]> =
     [];
@@ -412,9 +412,10 @@ export async function checkinLoansAction(
       .limit(1);
     const memberRow = memberRows.at(0);
 
-    const daysHeldMs = now.getTime() - loan.checkedOutAt.getTime();
+    const daysHeldMs =
+      now.epochMilliseconds - loan.checkedOutAt.epochMilliseconds;
     const daysHeld = Math.round(daysHeldMs / (1000 * 60 * 60 * 24));
-    const overdue = now.getTime() > loan.dueAt.getTime();
+    const overdue = Temporal.Instant.compare(now, loan.dueAt) > 0;
 
     auditPayloads.push({
       actorUserId: principal.userId,
@@ -464,11 +465,11 @@ export async function extendLoanAction(input: {
   const loan = await getLoanByPublicId(input.publicId);
   if (!loan) return { ok: false, reason: "not_found" };
   if (loan.returnedAt !== null) return { ok: false, reason: "loan_returned" };
-  const newDue = new Date(input.newDueAt);
-  if (newDue.getTime() <= Date.now())
+  const newDue = Temporal.Instant.fromEpochMilliseconds(input.newDueAt);
+  if (Temporal.Instant.compare(newDue, Temporal.Now.instant()) <= 0)
     return { ok: false, reason: "due_before_now" };
 
-  const priorDueAt = loan.dueAt.getTime();
+  const priorDueAt = loan.dueAt.epochMilliseconds;
   await extendLoanDueAt({ id: loan.id, newDueAt: newDue });
   await recordAuditEvent({
     actorUserId: principal.userId,
@@ -478,13 +479,13 @@ export async function extendLoanAction(input: {
     metadata: {
       loanId: loan.id,
       priorDueAt,
-      newDueAt: newDue.getTime(),
+      newDueAt: newDue.epochMilliseconds,
       daysAdded: Math.round(
-        (newDue.getTime() - priorDueAt) / (1000 * 60 * 60 * 24),
+        (newDue.epochMilliseconds - priorDueAt) / (1000 * 60 * 60 * 24),
       ),
     },
   });
-  return { ok: true, dueAt: newDue.getTime() };
+  return { ok: true, dueAt: newDue.epochMilliseconds };
 }
 
 // ── officer reads ───────────────────────────────────────────────────────

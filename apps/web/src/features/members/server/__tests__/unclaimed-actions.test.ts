@@ -169,7 +169,7 @@ describe("preAddUnclaimedMembersAction", () => {
     });
     expect(aliceRow?.status).toBe("unclaimed");
     expect(aliceRow?.placeholderName).toBe("Alice Smith");
-    expect(aliceRow?.unclaimedAt).toBeInstanceOf(Date);
+    expect(aliceRow?.unclaimedAt).toBeInstanceOf(Temporal.Instant);
 
     const aliceEmail = await db.query.userEmails.findFirst({
       where: eq(schema.userEmails.userId, aliceUserId),
@@ -430,7 +430,7 @@ describe("claim integration (db-level invariants)", () => {
       .update(schema.users)
       .set({
         status: "approved",
-        approvedAt: new Date(),
+        approvedAt: Temporal.Now.instant(),
         placeholderName: null,
         unclaimedAt: null,
       })
@@ -450,7 +450,7 @@ describe("claim integration (db-level invariants)", () => {
       entries: [{ name: "VA", email: "va@uc.edu" }],
     });
     const userId = created[0].userId;
-    const at = new Date(2026, 0, 15);
+    const at = Temporal.Instant.from("2026-01-15T00:00:00Z");
     await getDb()
       .update(schema.userEmails)
       .set({ verifiedAt: at })
@@ -463,6 +463,6 @@ describe("claim integration (db-level invariants)", () => {
     const row = await getDb().query.userEmails.findFirst({
       where: eq(schema.userEmails.userId, userId),
     });
-    expect(row?.verifiedAt?.getTime()).toBe(at.getTime());
+    expect(row?.verifiedAt?.epochMilliseconds).toBe(at.epochMilliseconds);
   });
 });

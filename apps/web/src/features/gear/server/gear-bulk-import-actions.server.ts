@@ -195,7 +195,10 @@ export async function bulkImportGearAction(
         // Bulk import doesn't support thumbnails — officers can upload
         // per-piece via the singular Add/Edit sheet after the fact.
         thumbnailKey: null,
-        acquiredAt: row.acquiredAt === null ? null : new Date(row.acquiredAt),
+        acquiredAt:
+          row.acquiredAt === null
+            ? null
+            : Temporal.Instant.fromEpochMilliseconds(row.acquiredAt),
         acquisitionCostCents: row.acquisitionCostCents,
         msrpCents: row.msrpCents ?? null,
         manufacturer: normalizeOptional(row.manufacturer),

@@ -24,9 +24,23 @@ export const MAX_LOAN_DURATION_DAYS = 90;
  *   - A 7-day loan checked out at 9am Monday is due end-of-Monday a
  *     week later, not 9am — matches the borrower's mental model.
  */
-export function computeDueAt(checkedOutAt: Date, durationDays: number): Date {
-  const due = new Date(checkedOutAt);
-  due.setDate(due.getDate() + durationDays);
-  due.setHours(23, 59, 59, 999);
-  return due;
+export function computeDueAt(
+  checkedOutAt: Temporal.Instant,
+  durationDays: number,
+): Temporal.Instant {
+  // UTC for now — Phase 2 switches the due-day to the club zone so
+  // "end of day" lands at 23:59 local instead of 23:59 UTC. This step
+  // mirrors the prior local-time `setDate`/`setHours` on a UTC worker.
+  return checkedOutAt
+    .toZonedDateTimeISO("UTC")
+    .add({ days: durationDays })
+    .with({
+      hour: 23,
+      minute: 59,
+      second: 59,
+      millisecond: 999,
+      microsecond: 999,
+      nanosecond: 999,
+    })
+    .toInstant();
 }

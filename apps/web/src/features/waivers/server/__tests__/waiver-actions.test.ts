@@ -49,7 +49,7 @@ async function seedUser(
     status: opts?.status ?? "approved",
     approvedAt:
       opts?.status === "approved" || opts?.status === undefined
-        ? new Date()
+        ? Temporal.Now.instant()
         : null,
   });
   await attachPrimaryEmail(id, email);
@@ -59,7 +59,7 @@ async function seedUser(
     preferredName: "Test",
     phone: "+15135551212",
     ucAffiliation: "student",
-    updatedAt: new Date(),
+    updatedAt: Temporal.Now.instant(),
   });
   return id;
 }
