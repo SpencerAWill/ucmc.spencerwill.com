@@ -33,6 +33,7 @@
  */
 import { and, asc, eq } from "drizzle-orm";
 
+import { CLUB_TIME_ZONE } from "#/config/time";
 import { getDb, schema } from "#/server/db";
 
 export interface ArchiveOfficersResult {
@@ -51,9 +52,10 @@ export function schoolYearForArchiveFire(now: Temporal.Instant): {
   schoolYear: string;
   startYear: number;
 } {
-  // UTC for now — Phase 2 switches the cron's calendar reasoning to the
-  // club zone alongside the waiver cycle.
-  const fireYear = now.toZonedDateTimeISO("UTC").year;
+  // The March-1 fire is a Cincinnati-local calendar date, so resolve the
+  // year in the club zone (a UTC read would flip the year for fires in the
+  // late-Dec/early-Jan window — not this schedule, but correct by design).
+  const fireYear = now.toZonedDateTimeISO(CLUB_TIME_ZONE).year;
   const startYear = fireYear - 1;
   const endTwoDigit = (fireYear % 100).toString().padStart(2, "0");
   return { schoolYear: `${startYear}-${endTwoDigit}`, startYear };

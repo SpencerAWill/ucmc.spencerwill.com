@@ -3,7 +3,7 @@ import { Download, FileText, Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import {
-  formatPublishedAtUtc,
+  formatPublishedAt,
   gazettePdfFilename,
   gazettePdfUrl,
 } from "#/features/gazette/lib/pdf-url";
@@ -44,7 +44,7 @@ export function IssueCard({
             {issue.schoolYear} · Issue {issue.issueNumber}
             {issue.editor ? ` · edited by ${issue.editor}` : null}
             {issue.publishedAt
-              ? ` · ${formatPublishedAtUtc(issue.publishedAt)}`
+              ? ` · ${formatPublishedAt(issue.publishedAt)}`
               : null}
           </p>
         </div>

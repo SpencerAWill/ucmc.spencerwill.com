@@ -1,3 +1,5 @@
+import { CLUB_TIME_ZONE } from "#/config/time";
+
 /**
  * Default loan duration for a new gear checkout, in days. The officer
  * may override per-row in the gear-desk checkout pane; this is the
@@ -28,11 +30,11 @@ export function computeDueAt(
   checkedOutAt: Temporal.Instant,
   durationDays: number,
 ): Temporal.Instant {
-  // UTC for now — Phase 2 switches the due-day to the club zone so
-  // "end of day" lands at 23:59 local instead of 23:59 UTC. This step
-  // mirrors the prior local-time `setDate`/`setHours` on a UTC worker.
+  // "End of the due day" is the end of the *Cincinnati* day (23:59:59.999
+  // local), so the loan reads as a calendar event for the borrower rather
+  // than flipping overdue at 23:59 UTC (~8pm local).
   return checkedOutAt
-    .toZonedDateTimeISO("UTC")
+    .toZonedDateTimeISO(CLUB_TIME_ZONE)
     .add({ days: durationDays })
     .with({
       hour: 23,

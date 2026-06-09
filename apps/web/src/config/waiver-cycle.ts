@@ -3,13 +3,15 @@
  * semester; the cycle identifier (`"YYYY-YY"`) ties an attestation row to
  * the academic year it covers.
  *
- * Rollover happens at midnight UTC on Aug 21. Members attested under the
- * prior cycle stop satisfying the `requireCurrentWaiver` guard from that
- * moment — they need a fresh paper waiver and a new attestation.
+ * Rollover happens at midnight **Cincinnati-local** (America/New_York) on
+ * Aug 21 — see {@link CLUB_TIME_ZONE}. Members attested under the prior
+ * cycle stop satisfying the `requireCurrentWaiver` guard from that moment;
+ * they need a fresh paper waiver and a new attestation.
  *
  * Pure module so it's safe to import from server fns, route loaders, and
  * tests. Does not read any environment, db, or request state.
  */
+import { CLUB_TIME_ZONE } from "#/config/time";
 
 /**
  * Cutoff at which a new cycle begins. Stored as 1-indexed month + day to
@@ -32,10 +34,9 @@ export const WAIVER_CYCLE_CUTOFF = { month: 8, day: 21 } as const;
 export function currentWaiverCycle(
   now: Temporal.Instant = Temporal.Now.instant(),
 ): string {
-  // UTC for now — Phase 2 switches the rollover to the club zone
-  // (America/New_York). The ZonedDateTime fields below mirror the prior
-  // getUTC* reads exactly so this step is behavior-preserving.
-  const zoned = now.toZonedDateTimeISO("UTC");
+  // Rollover is a Cincinnati-local calendar boundary, so read the
+  // year/month/day in the club zone rather than UTC.
+  const zoned = now.toZonedDateTimeISO(CLUB_TIME_ZONE);
   const year = zoned.year;
   const month = zoned.month;
   const day = zoned.day;

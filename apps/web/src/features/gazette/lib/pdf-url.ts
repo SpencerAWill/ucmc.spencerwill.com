@@ -18,6 +18,7 @@
  * `apps/web/src/server/r2/gazette.server.ts` and always start with
  * `gazette/`.
  */
+import { CLUB_TIME_ZONE } from "#/config/time";
 import { env } from "#/config/env";
 
 const GAZETTE_PREFIX = "gazette/";
@@ -66,10 +67,10 @@ const MONTH_NAMES = [
  * not UTC). Hand-formatting from `getUTC*()` is deterministic on
  * both sides.
  */
-export function formatPublishedAtUtc(instant: Temporal.Instant): string {
-  // UTC for now — Phase 2 switches this to the club zone, which is also
-  // deterministic across server/client (so the hydration concern above
-  // still holds: the zone is fixed, never the runtime-local one).
-  const d = instant.toZonedDateTimeISO("UTC");
+export function formatPublishedAt(instant: Temporal.Instant): string {
+  // The publish date is a club-local calendar date. The club zone is a
+  // fixed IANA zone (never the runtime-local one), so server (UTC) and
+  // client agree on the same day — no hydration mismatch.
+  const d = instant.toZonedDateTimeISO(CLUB_TIME_ZONE);
   return `${MONTH_NAMES[d.month - 1]} ${d.day}, ${d.year}`;
 }
