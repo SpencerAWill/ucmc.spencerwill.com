@@ -1,3 +1,7 @@
+// workerd (the vitest workers pool runtime) has no native Temporal;
+// install the polyfill before any test module touches it (mirrors the
+// worker server entry).
+import "temporal-polyfill/global";
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll } from "vitest";
 

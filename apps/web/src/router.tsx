@@ -2,6 +2,11 @@
 // reaches a `.parse()` call. See `./lib/zod-config` for the rationale.
 import "./lib/zod-config";
 
+// Installs the TC39 Temporal global on the client. Safari < 17 and other
+// not-yet-native browsers have no `Temporal`; this patches it in before
+// any component or query touches a Temporal value.
+import "temporal-polyfill/global";
+
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 
