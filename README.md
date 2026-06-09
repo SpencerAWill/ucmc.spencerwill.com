@@ -137,7 +137,7 @@ Notable vars: `VITE_TURNSTILE_SITE_KEY` (client-side — leave unset to skip the
 
 #### Worker secrets (deployed envs)
 
-Non-secret runtime vars are injected at deploy time from Pulumi stack outputs. Secrets can't ride along in `--var` — they're uploaded separately via `wrangler secret put`, automated per deploy by the `web-deploy.yml` workflow through `cloudflare/wrangler-action`'s `secrets:` field. That means **secrets live in GitHub Actions environment secrets**, not in Cloudflare directly: set them once under the `dev` and `prod` GitHub environments and every deploy re-applies them to the Worker.
+Non-secret runtime vars are injected at deploy time from Pulumi stack outputs. Secrets can't ride along in `--var` — they're uploaded separately via `wrangler secret put`, automated per deploy by the `deploy.yml` workflow through `cloudflare/wrangler-action`'s `secrets:` field. That means **secrets live in GitHub Actions environment secrets**, not in Cloudflare directly: set them once under the `dev` and `prod` GitHub environments and every deploy re-applies them to the Worker.
 
 Required per-environment secrets (repo Settings → Environments → `dev` / `prod` → Environment secrets):
 
@@ -169,11 +169,11 @@ pulumi up         # apply changes
 #### Required GitHub setup
 
 - **Environments**: Create `dev` (no protection) and `prod` (required reviewers) in repo Settings > Environments
-- **Repo-level secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `web-deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Workers R2 Storage (Edit), Workers KV Storage (Edit), D1 (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
-- **Per-environment secrets**: `SESSION_SECRET` and `RESEND_API_KEY` live on the `dev` and `prod` environments (Settings > Environments > `{env}` > Environment secrets). `web-deploy.yml` uploads them to the corresponding Worker via `wrangler secret put` on every deploy. See **Worker secrets (deployed envs)** above for details.
+- **Repo-level secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Workers R2 Storage (Edit), Workers KV Storage (Edit), D1 (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
+- **Per-environment secrets**: `SESSION_SECRET` and `RESEND_API_KEY` live on the `dev` and `prod` environments (Settings > Environments > `{env}` > Environment secrets). `deploy.yml` uploads them to the corresponding Worker via `wrangler secret put` on every deploy. See **Worker secrets (deployed envs)** above for details.
 - **Stack init** (one-time): `cd infra && pulumi stack init dev && pulumi stack init prod`
 - **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/Pulumi.dev.yaml` and `infra/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
-- **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. Trigger `web-deploy.yml` for dev first, then `infra-deploy.yml` for dev; repeat for prod. After bootstrap, either workflow can run independently.
+- **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. From `deploy.yml` (workflow_dispatch), bootstrap requires running the web job before the infra job — for the first dev deploy, manually dispatch with `environment=dev` after temporarily commenting out the `needs: infra-dev` line on `web-dev`; restore after the worker exists. Repeat for prod. After bootstrap the standard infra → web order applies on every push and dispatch.
 
 ### Wiki
 

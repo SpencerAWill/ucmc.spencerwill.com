@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  # Computes once per run which side of the monorepo changed; downstream
+  # jobs use these outputs as their `if:` gate. Replaces the workflow-level
+  # `paths:` filters from the prior split `web-ci.yml` / `infra-ci.yml`.
+  paths:
+    name: Detect changed paths
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            web:
+              - 'apps/web/**'
+              - 'libs/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.github/workflows/ci.yml'
+            infra:
+              - 'infra/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.github/workflows/ci.yml'
+
+  # Workspace-level supply-chain audit. Runs once regardless of which
+  # side changed — pnpm audit walks the whole lockfile, so splitting it
+  # by path gave no additional coverage.
+  audit:
+    name: Audit
+    if: github.event.pull_request.draft == false
+    needs: paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm audit --audit-level high --prod
+
+  web-lint-test:
+    name: Web — lint, typecheck, test
+    if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
+    needs: paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter ucmc-web lint
+
+      - name: Type check
+        run: pnpm --filter ucmc-web typecheck
+
+      - name: Test
+        run: pnpm --filter ucmc-web test
+
+  infra-lint:
+    name: Infra — lint, typecheck
+    if: github.event.pull_request.draft == false && needs.paths.outputs.infra == 'true'
+    needs: paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter @ucmc/infra lint
+
+      - name: Type check
+        run: pnpm --filter @ucmc/infra exec tsc --noEmit
+
+  a11y:
+    name: Accessibility (axe-core)
+    if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
+    needs: paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium
+
+      # Apply Drizzle migrations to the Miniflare-backed local D1 before
+      # the dev server boots. Without this, the home-page loader queries
+      # `landingContentQueryOptions` which selects from tables that
+      # don't exist yet — Vite returns 500 on every request, and
+      # Playwright's webServer probe treats every 500 as "not ready" and
+      # times out after 120 s. Local dev applies migrations once via
+      # `db:migrate:local`; CI starts from zero state on each runner.
+      - name: Apply local D1 migrations
+        run: pnpm --filter ucmc-web db:migrate:local
+
+      # Runs axe-core against every public + auth-entry route. Fails the
+      # job on any `serious` or `critical` violation (WCAG 2.1 AA gate
+      # per UC EIT 9.2.1). The spec doesn't need Mailpit, so no sidecar
+      # is required.
+      #
+      # Worker env vars are passthrough placeholders — the dev server's
+      # first SSR request crashes without APP_BASE_URL / SESSION_SECRET
+      # / WEBAUTHN_RP_ID populated. None of these are secrets in the
+      # test environment; they exist only to satisfy module-load
+      # assertions on a transient runner.
+      - name: Run axe-core specs
+        env:
+          # CLOUDFLARE_INCLUDE_PROCESS_ENV makes wrangler v4 forward
+          # process env into the worker. The devcontainer sets this in
+          # docker-compose; CI has to opt in explicitly.
+          CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+          APP_BASE_URL: http://localhost:3000
+          WEBAUTHN_RP_ID: localhost
+          WEBAUTHN_RP_NAME: UCMC (ci)
+          RESEND_FROM: noreply@localhost
+          RESEND_FROM_NAME: UCMC (ci)
+          SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
+          MAILPIT_URL: ""
+        run: pnpm --filter ucmc-web e2e a11y.spec.ts
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-a11y
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+  pulumi-preview:
+    name: Pulumi Preview
+    if: github.event.pull_request.draft == false && needs.paths.outputs.infra == 'true'
+    needs: [paths, infra-lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: pulumi-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: pulumi/actions@v7
+        with:
+          command: preview
+          stack-name: dev
+          work-dir: infra
+          comment-on-pr: true
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RESEND_MANAGEMENT_API_KEY: ${{ secrets.RESEND_MANAGEMENT_API_KEY }}
