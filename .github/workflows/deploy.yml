@@ -28,12 +28,12 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
 
       - id: filter
         # dorny/paths-filter on `push` events compares HEAD against the
         # previous commit on the branch.
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             web:
@@ -65,9 +65,9 @@ jobs:
       group: deploy-dev
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.8
 
       - uses: actions/setup-node@v6
         with:
@@ -110,9 +110,9 @@ jobs:
       group: deploy-dev
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.8
 
       - uses: actions/setup-node@v6
         with:
@@ -228,9 +228,9 @@ jobs:
       group: deploy-prod
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.8
 
       - uses: actions/setup-node@v6
         with:
@@ -262,9 +262,9 @@ jobs:
       group: deploy-prod
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.8
 
       - uses: actions/setup-node@v6
         with:
