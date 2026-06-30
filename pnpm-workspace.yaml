@@ -33,6 +33,9 @@ allowBuilds:
 # quarantine exception (`minimumReleaseAgeExclude`) — we never bypass the
 # supply-chain delay. All of these advisories live in dev/build tooling;
 # none reaches the deployed Worker, but we patch what has a mature fix:
+#   - @babel/core <7.29.6  GHSA-4x5r-pxfx-6jf8 (arbitrary file read via sourceMappingURL; via the
+#               TanStack build plugins). Babel jumped 7.29.0 -> 7.29.6, so this is a same-minor patch —
+#               capped <8 to avoid the unrelated 8.x major.
 #   - @grpc/grpc-js <1.14.4  GHSA-5375-pq7m-f5r2 / -99f4-grh7-6pcq (malformed-request DoS; via Pulumi)
 #   - @sigstore/core <3.2.1  GHSA-jfc7-64v2-mr8c (DSSE payloadType type-binding confusion)
 #   - esbuild   <0.28.1  GHSA-g7r4-m6w7-qqqr (dev-server file read; supersedes the old <0.25.0 CORS pin)
@@ -51,9 +54,10 @@ allowBuilds:
 #               reaches us only via Cloudflare dev tooling. Capped <8 to stay on the major miniflare
 #               and wrangler expect (the tooling versions that bundle 7.28.0 natively are still fresh).
 #   - ws        <8.21.0  GHSA-96hv-2xvq-fx4p (memory-exhaustion DoS; via miniflare. Supersedes <8.20.1)
-# Deferred — no mature, non-breaking fix, all dev-only: @babel/core (only fix is 7.x→8.x, which breaks
-# the TanStack build pipeline) and @opentelemetry/core (1.x→2.x breaks Pulumi's coordinated exporter set).
+# Deferred — no mature, non-breaking fix, all dev-only: @opentelemetry/core (only fix is the 1.x→2.x
+# major, which breaks Pulumi's coordinated 0.57.x exporter set — the 1.x line has no patched release).
 overrides:
+  "@babel/core@<7.29.6": ">=7.29.6 <8.0.0"
   "@grpc/grpc-js@<1.14.4": ">=1.14.4"
   "@sigstore/core@<3.2.1": ">=3.2.1 <4.0.0"
   "esbuild@<0.28.1": ">=0.28.1"
