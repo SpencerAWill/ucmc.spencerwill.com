@@ -28,23 +28,54 @@ allowBuilds:
 
 # Security overrides. pnpm 11 requires these in pnpm-workspace.yaml
 # (the `package.json` location stopped being read). Pin transitive
-# versions above the known-bad range for these CVEs:
-#   - esbuild   <0.25.0  GHSA-67mh-4wv8-2f99 (dev-server CORS)
+# versions above the known-bad range for each CVE. Every target below has
+# already cleared the 7-day `minimumReleaseAge` window, so NONE needs a
+# quarantine exception (`minimumReleaseAgeExclude`) — we never bypass the
+# supply-chain delay. All of these advisories live in dev/build tooling;
+# none reaches the deployed Worker, but we patch what has a mature fix:
+#   - @babel/core <7.29.6  GHSA-4x5r-pxfx-6jf8 (arbitrary file read via sourceMappingURL; via the
+#               TanStack build plugins). Babel jumped 7.29.0 -> 7.29.6, so this is a same-minor patch —
+#               capped <8 to avoid the unrelated 8.x major.
+#   - @grpc/grpc-js <1.14.4  GHSA-5375-pq7m-f5r2 / -99f4-grh7-6pcq (malformed-request DoS; via Pulumi)
+#   - @sigstore/core <3.2.1  GHSA-jfc7-64v2-mr8c (DSSE payloadType type-binding confusion)
+#   - esbuild   <0.28.1  GHSA-g7r4-m6w7-qqqr (dev-server file read; supersedes the old <0.25.0 CORS pin)
 #   - fast-uri  <3.1.2   ReDoS
 #   - ip-address <10.1.1 ReDoS
-#   - protobufjs <8.2.0  GHSA-jggg-4jg4-v7c6 (DoS via unbounded recursive JSON descriptor expansion)
-#   - ws        <8.20.1  GHSA-58qx-3vcg-4xpx (uninitialized memory disclosure; reaches us via miniflare)
+#   - js-yaml   4.0.0–4.1.1  GHSA-h67p-54hq-rp68 (merge-key quadratic DoS) — 4.x line only; Pulumi's
+#               3.14.2 has no published fix (the advisory's "3.15.0" was never released) and 4.x is a
+#               breaking API change for it, so that copy is left as-is.
+#   - launch-editor <2.14.1  GHSA-v6wh-96g9-6wx3 (NTLMv2 hash disclosure via UNC path)
+#   - linkify-it <5.0.1  GHSA-22p9-wv53-3rq4 (quadratic scan-loop DoS; markdown-it dep)
+#   - markdown-it <14.2.0  GHSA-6v5v-wf23-fmfq (smartquotes quadratic DoS; via tiptap-markdown)
+#   - protobufjs <8.6.0  GHSA-jggg-4jg4-v7c6 + -wcpc-wj8m-hjx6 + -94rc-8x27-4472 + -f38q-mgvj-vph7
+#   - tar       <7.5.16  GHSA-vmf3-w455-68vh (PAX size override on intermediary GNU entries)
+#   - undici    <7.28.0  multiple (TLS cert-validation bypass, cross-origin request routing, header
+#               injection, Set-Cookie SameSite downgrade, response-queue poisoning, WebSocket DoS);
+#               reaches us only via Cloudflare dev tooling. Capped <8 to stay on the major miniflare
+#               and wrangler expect (the tooling versions that bundle 7.28.0 natively are still fresh).
+#   - ws        <8.21.0  GHSA-96hv-2xvq-fx4p (memory-exhaustion DoS; via miniflare. Supersedes <8.20.1)
+# Deferred — no mature, non-breaking fix, all dev-only: @opentelemetry/core (only fix is the 1.x→2.x
+# major, which breaks Pulumi's coordinated 0.57.x exporter set — the 1.x line has no patched release).
 overrides:
-  "esbuild@<0.25.0": ">=0.25.0"
+  "@babel/core@<7.29.6": ">=7.29.6 <8.0.0"
+  "@grpc/grpc-js@<1.14.4": ">=1.14.4"
+  "@sigstore/core@<3.2.1": ">=3.2.1 <4.0.0"
+  "esbuild@<0.28.1": ">=0.28.1"
   "fast-uri@<3.1.2": ">=3.1.2"
   "ip-address@<10.1.1": ">=10.1.1"
-  "protobufjs@<8.2.0": ">=8.2.0"
+  "js-yaml@>=4.0.0 <4.2.0": ">=4.2.0 <5.0.0"
+  "launch-editor@<2.14.1": ">=2.14.1"
+  "linkify-it@<5.0.1": ">=5.0.1"
+  "markdown-it@<14.2.0": ">=14.2.0"
+  "protobufjs@<8.6.0": ">=8.6.0"
+  "tar@<7.5.16": ">=7.5.16"
   "tmp@<0.2.6": ">=0.2.6"
-  "ws@<8.20.1": ">=8.20.1"
+  "undici@<7.28.0": ">=7.28.0 <8.0.0"
+  "ws@<8.21.0": ">=8.21.0"
   # Pin @tanstack/query-core to match our pinned react-query so the
   # auto-installed peer dep stays in lockstep (otherwise pnpm picks
   # the latest matching version, which can be quarantined).
-  "@tanstack/query-core": "5.100.9"
+  "@tanstack/query-core": "5.101.1"
 
 peerDependencyRules:
   allowedVersions:
