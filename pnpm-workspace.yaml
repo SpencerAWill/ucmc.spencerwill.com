@@ -71,7 +71,7 @@ overrides:
   # Pin @tanstack/query-core to match our pinned react-query so the
   # auto-installed peer dep stays in lockstep (otherwise pnpm picks
   # the latest matching version, which can be quarantined).
-  "@tanstack/query-core": "5.100.9"
+  "@tanstack/query-core": "5.101.1"
 
 peerDependencyRules:
   allowedVersions:
