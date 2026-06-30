@@ -16,7 +16,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.3",
-    "@commitlint/config-pnpm-scopes": "^20.5.2",
+    "@commitlint/config-pnpm-scopes": "^21.0.2",
     "@eslint/js": "^10.0.1",
     "czg": "^1.13.1",
     "eslint": "^10.4.0",
