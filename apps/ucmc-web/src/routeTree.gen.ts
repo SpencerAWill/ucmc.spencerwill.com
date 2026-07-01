@@ -413,7 +413,7 @@ export interface FileRoutesByFullPath {
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
-  '/feedback': typeof FeedbackTabsRouteWithChildren
+  '/feedback': typeof FeedbackRouteWithChildren
   '/gallery': typeof GalleryRoute
   '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
@@ -421,7 +421,7 @@ export interface FileRoutesByFullPath {
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
   '/legal': typeof LegalRoute
-  '/members': typeof MembersTabsRouteWithChildren
+  '/members': typeof MembersRouteWithChildren
   '/membership': typeof MembershipRoute
   '/my': typeof MyRouteWithChildren
   '/nondiscrimination': typeof NondiscriminationRoute
