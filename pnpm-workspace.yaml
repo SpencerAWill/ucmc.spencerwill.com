@@ -1,5 +1,5 @@
 packages:
-  - "apps/web"
+  - "apps/ucmc-web"
   - "infra"
 
 # Quarantine window for newly published versions — refuses to install

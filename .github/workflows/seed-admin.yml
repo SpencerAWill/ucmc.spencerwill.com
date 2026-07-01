@@ -102,7 +102,7 @@ jobs:
           esac
 
       - name: Inject D1 UUID into wrangler.jsonc
-        run: sed -i "s/${{ steps.env.outputs.placeholder }}/${{ steps.pulumi.outputs.database_id }}/" apps/web/wrangler.jsonc
+        run: sed -i "s/${{ steps.env.outputs.placeholder }}/${{ steps.pulumi.outputs.database_id }}/" apps/ucmc-web/wrangler.jsonc
 
       # Generate the seed SQL in /tmp with shell-level escaping (double
       # any embedded single quotes — the stricter regex above means this
@@ -118,7 +118,7 @@ jobs:
           PUBLIC_ID="$(LC_ALL=C tr -dc '0-9a-z' </dev/urandom | head -c 12)"
           NOW_MS=$(($(date +%s%N) / 1000000))
           # Email lives in `user_emails`, not `users`. Mirrors the local
-          # `apps/web/drizzle/seed.ts` four-step idempotent shape:
+          # `apps/ucmc-web/drizzle/seed.ts` four-step idempotent shape:
           #   1. INSERT INTO users …WHERE NOT EXISTS user_emails.email
           #      — only create the user row when the email is unclaimed,
           #      otherwise the random USER_ID would orphan a duplicate
@@ -150,7 +150,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/web
+          workingDirectory: apps/ucmc-web
           command: d1 execute ${{ steps.env.outputs.db_name }} ${{ steps.env.outputs.env_flag }} --remote --file /tmp/seed-admin.sql
 
       # Write the verify query to a file so wrangler-action's argv
@@ -172,5 +172,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/web
+          workingDirectory: apps/ucmc-web
           command: d1 execute ${{ steps.env.outputs.db_name }} ${{ steps.env.outputs.env_flag }} --remote --file /tmp/verify-admin.sql
