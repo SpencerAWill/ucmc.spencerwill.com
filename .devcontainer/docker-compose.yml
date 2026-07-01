@@ -6,10 +6,10 @@ services:
     environment:
       # Merge host process env into Worker dev bindings so host-exported
       # vars reach `pnpm --filter ucmc-web dev` through the
-      # @cloudflare/vite-plugin. Host values win over apps/web/.env*.
+      # @cloudflare/vite-plugin. Host values win over apps/ucmc-web/.env*.
       CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
       # Host-shell passthroughs for local Worker secrets. `${VAR:-}` means
-      # "empty if unset on host" — apps/web/.env.local then fills in.
+      # "empty if unset on host" — apps/ucmc-web/.env.local then fills in.
       SESSION_SECRET: "${SESSION_SECRET:-}"
       RESEND_API_KEY: "${RESEND_API_KEY:-}"
     volumes:
@@ -32,7 +32,7 @@ services:
   # inbox UI (http://localhost:8025) instead of the wrangler terminal.
   # The web app POSTs messages to Mailpit's HTTP send API
   # (`POST /api/v1/send`) when MAILPIT_URL is set; see
-  # apps/web/src/server/email/resend.ts. The SMTP listener on 1025 is
+  # apps/ucmc-web/src/server/email/resend.ts. The SMTP listener on 1025 is
   # unused today but exposed for future tooling that speaks SMTP.
   # Playwright e2e tests poll Mailpit's REST API to retrieve magic-link
   # tokens during sign-in flows.

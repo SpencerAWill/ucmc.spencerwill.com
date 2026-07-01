@@ -7,7 +7,7 @@ The University of Cincinnati Mountaineering Club's software system.
 This is a polyglot pnpm monorepo with the following workspace layout:
 
 - `apps/` — Applications
-  - `apps/web/` — UCMC web app (TanStack Start on Cloudflare Workers)
+  - `apps/ucmc-web/` — UCMC web app (TanStack Start on Cloudflare Workers)
 - `libs/` — Shared libraries
 - `infra/` — Pulumi infrastructure-as-code
 - `.devcontainer/` — Dev container configuration
@@ -94,7 +94,7 @@ pnpm exec prettier --write .
 
 ### Web App
 
-The web app lives in `apps/web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Custom domains are provisioned by Pulumi (see Infrastructure below); dev auto-deploys on merge to main, prod is a manual dispatch with environment approval.
+The web app lives in `apps/ucmc-web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Custom domains are provisioned by Pulumi (see Infrastructure below); dev auto-deploys on merge to main, prod is a manual dispatch with environment approval.
 
 Dates and times use the TC39 [Temporal](https://tc39.es/proposal-temporal/docs/) API (via `temporal-polyfill`, since workerd and Safari < 17 lack it natively) rather than `Date`. Calendar-shaped rules (waiver cycle, gear due dates) reason in the club's `America/New_York` zone; see the "Dates & time" section of [`CLAUDE.md`](CLAUDE.md) for the invariants.
 
@@ -129,7 +129,7 @@ The app uses a two-path authentication system:
 
 #### Local env (`.env.local`)
 
-Copy `apps/web/.env.example` to `apps/web/.env.local` and fill in the values. Wrangler v4 (via `@cloudflare/vite-plugin`) loads this automatically during `pnpm --filter ucmc-web dev`. It is gitignored — never commit it.
+Copy `apps/ucmc-web/.env.example` to `apps/ucmc-web/.env.local` and fill in the values. Wrangler v4 (via `@cloudflare/vite-plugin`) loads this automatically during `pnpm --filter ucmc-web dev`. It is gitignored — never commit it.
 
 The full precedence chain (most → least specific, merged) is `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env`. The devcontainer also sets `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` in `docker-compose.yml`, so exporting a var in your host shell (e.g. `export SESSION_SECRET=…`) overrides whatever is in `.env.local` — useful for keeping per-developer secrets out of the workspace entirely.
 

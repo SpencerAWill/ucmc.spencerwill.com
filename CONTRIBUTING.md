@@ -16,7 +16,7 @@ cd ucmc.spencerwill.com
 pnpm install            # installs deps and registers husky hooks
 ```
 
-Then copy `apps/web/.env.example` to `apps/web/.env.local` and fill in the values (see the README's [Local env section](./README.md#local-env-envlocal)).
+Then copy `apps/ucmc-web/.env.example` to `apps/ucmc-web/.env.local` and fill in the values (see the README's [Local env section](./README.md#local-env-envlocal)).
 
 Common workspace commands (all run from the repo root):
 
@@ -66,19 +66,19 @@ Examples:
 - `const` over `let`/`var`. Strict equality (`===`/`!==`). Always brace control flow.
 - TypeScript `strict: true` everywhere. No `any` without a justified comment.
 - ESLint + Prettier run on every commit via `lint-staged`. Don't disable rules without approval — if a rule is wrong for a real reason, raise it in the PR.
-- Path alias for the web app: `#/*` → `apps/web/src/*` (also mirrored in `package.json` `imports`).
+- Path alias for the web app: `#/*` → `apps/ucmc-web/src/*` (also mirrored in `package.json` `imports`).
 
 ## Architectural invariants (web app)
 
-`apps/web/CLAUDE.md` and the root [`CLAUDE.md`](./CLAUDE.md) describe the load-bearing patterns. The ones contributors break most often:
+`apps/ucmc-web/CLAUDE.md` and the root [`CLAUDE.md`](./CLAUDE.md) describe the load-bearing patterns. The ones contributors break most often:
 
 - **Bulletproof feature layout.** Features live under `src/features/<name>/` with `components/`, `api/`, `server/`. Features cannot import each other (enforced by `import/no-restricted-paths`); shared code cannot import features.
 - **No inline `useMutation` in routes/components.** Every mutation gets a `use-*.ts` hook under the feature's `api/` directory, with its own cache-invalidation contract.
 - **Server-only modules** end in `*.server.ts` and must not be imported from the client graph. Server functions follow the three-layer pattern (leaf helper / action / shell). See the "Server-only module boundary" section in `CLAUDE.md`.
 - **Cloudflare bindings** (`DB`, `KV`, `BUCKET_*`) are accessed via `getDb()` / `getKv()` / `getPrivateBucket()` / `getPublicBucket()` only — never at module scope.
-- **Email normalization.** Every read/write of an email address goes through `apps/web/src/server/auth/email-normalize.ts`.
-- **Waiver cycle.** Always compute via `currentWaiverCycle()` from `apps/web/src/config/waiver-cycle.ts`. Never inline the math.
-- **Legal copy** in `apps/web/src/config/legal.ts` must match the canonical PDF byte-for-byte. Treat edits to disclaimer/nondiscrimination/anti-hazing/waiver/privacy/terms copy as legal review, not word-smithing. Bumping `WAIVER_VERSION` invalidates every existing attestation.
+- **Email normalization.** Every read/write of an email address goes through `apps/ucmc-web/src/server/auth/email-normalize.ts`.
+- **Waiver cycle.** Always compute via `currentWaiverCycle()` from `apps/ucmc-web/src/config/waiver-cycle.ts`. Never inline the math.
+- **Legal copy** in `apps/ucmc-web/src/config/legal.ts` must match the canonical PDF byte-for-byte. Treat edits to disclaimer/nondiscrimination/anti-hazing/waiver/privacy/terms copy as legal review, not word-smithing. Bumping `WAIVER_VERSION` invalidates every existing attestation.
 
 If your change crosses one of these boundaries, call it out in the PR description.
 
@@ -89,7 +89,7 @@ The web app has two Vitest pools:
 - **`workers`** — `*.test.ts` runs in real workerd via `@cloudflare/vitest-pool-workers`. D1 migrations are applied once per file; **storage isolation is per file, not per test**, so any test that writes to D1 must clear the relevant tables in `beforeEach`.
 - **`dom`** — `*.test.tsx` runs in jsdom + Testing Library + user-event.
 
-E2E lives in `apps/web/e2e/` and runs against a freshly-spawned dev server. Currently only `a11y.spec.ts` runs in CI; full suite locally with `pnpm --filter ucmc-web e2e`.
+E2E lives in `apps/ucmc-web/e2e/` and runs against a freshly-spawned dev server. Currently only `a11y.spec.ts` runs in CI; full suite locally with `pnpm --filter ucmc-web e2e`.
 
 When you fix a bug, add a regression test in the same PR.
 

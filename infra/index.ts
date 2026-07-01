@@ -26,7 +26,7 @@ const resendManagementApiKey = pulumi.secret(
 );
 
 // D1 database for the web app. Wrangler binds to it by UUID
-// (see `apps/web/wrangler.jsonc`); the UUID is exported below and
+// (see `apps/ucmc-web/wrangler.jsonc`); the UUID is exported below and
 // injected into the wrangler config by the web-deploy workflow.
 //
 // `protect: true` — replacing a D1 database wipes all data. To
@@ -44,7 +44,7 @@ const database = new cloudflare.D1Database(
 );
 
 // R2 bucket for user-uploaded content (trip photos, profile images, etc.).
-// Wrangler binds by name (see `apps/web/wrangler.jsonc`), so unlike D1 there
+// Wrangler binds by name (see `apps/ucmc-web/wrangler.jsonc`), so unlike D1 there
 // is no UUID to inject at deploy time.
 //
 // `protect: true` — replacing an R2 bucket deletes every object in it. To
@@ -100,7 +100,7 @@ const publicBucketDomain = new cloudflare.R2CustomDomain(
 );
 
 // Workers KV namespace for the web app. Wrangler binds by namespace UUID
-// (see `apps/web/wrangler.jsonc`); the UUID is exported below and injected
+// (see `apps/ucmc-web/wrangler.jsonc`); the UUID is exported below and injected
 // into the wrangler config by the web-deploy workflow, mirroring D1.
 //
 // KV is globally replicated — no regional placement hint.
@@ -141,13 +141,13 @@ export const d1DatabaseId = database.uuid;
 export const d1DatabaseNameOutput = database.name;
 
 // R2 bucket name — wrangler binds by name (not UUID), and the value is
-// already static in `apps/web/wrangler.jsonc`, so this export is for drift
+// already static in `apps/ucmc-web/wrangler.jsonc`, so this export is for drift
 // detection / reference rather than being consumed by any workflow today.
 export const r2BucketNameOutput = bucket.name;
 
 // Public R2 bucket name — same drift-detection role as the private
 // bucket above. Wrangler will bind to it by name once the public binding
-// lands in `apps/web/wrangler.jsonc`.
+// lands in `apps/ucmc-web/wrangler.jsonc`.
 export const r2PublicBucketNameOutput = publicBucket.name;
 
 // CDN hostname for the public bucket. Consumed by `web-deploy.yml` and
@@ -156,7 +156,7 @@ export const r2PublicBucketNameOutput = publicBucket.name;
 export const r2PublicHost = publicBucketDomain.domain;
 
 // KV namespace UUID — wrangler needs this for `kv_namespaces[].id`. The
-// web-deploy workflow injects it into `apps/web/wrangler.jsonc` before
+// web-deploy workflow injects it into `apps/ucmc-web/wrangler.jsonc` before
 // build, mirroring the D1 UUID flow.
 export const kvNamespaceId = kvNamespace.id;
 export const kvNamespaceTitleOutput = kvNamespace.title;
@@ -174,7 +174,7 @@ export { webauthnRpName };
 // on whitespace before wrangler sees it, so a value containing spaces
 // or `<>` gets chopped into separate argv entries and only the prefix
 // reaches the Worker — Resend then 422s because the `from` field isn't
-// a valid address. Composition happens in `apps/web/src/server/email/resend.ts`.
+// a valid address. Composition happens in `apps/ucmc-web/src/server/email/resend.ts`.
 //
 // `resendFromEmail` is exported below alongside the Resend resources,
 // because its value depends on which stack owns the verified domain.

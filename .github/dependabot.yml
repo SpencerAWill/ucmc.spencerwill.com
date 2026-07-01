@@ -7,7 +7,7 @@
 # PRs for versions younger than that — the lockfile update would fail.
 version: 2
 updates:
-  # ── npm (whole pnpm workspace: root + apps/web + infra via the root lock)
+  # ── npm (whole pnpm workspace: root + apps/ucmc-web + infra via the root lock)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:

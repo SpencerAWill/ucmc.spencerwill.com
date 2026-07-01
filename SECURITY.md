@@ -40,7 +40,7 @@ You can expect:
 In scope:
 
 - The deployed web app (`ucmc.spencerwill.com`, `dev.ucmc.spencerwill.com`) and any subdomain backed by this repository (e.g. `cdn.ucmc.spencerwill.com`, `cdn.dev.ucmc.spencerwill.com`).
-- Source code in this repository, including `apps/web/`, `infra/`, and `libs/`.
+- Source code in this repository, including `apps/ucmc-web/`, `infra/`, and `libs/`.
 - Authentication and session handling (magic link, WebAuthn / passkeys, the `__Host-ucmc_*` cookies, proof cookies).
 - Authorization / RBAC bypasses (e.g. crossing the `members:manage`, `gear:manage`, or `system_admin` line as a less-privileged user).
 - Data exposure across users (one member reading another's profile, waiver attestations, audit log, etc.).
@@ -72,13 +72,13 @@ If in doubt about whether something is in scope or safe to test, ask first via t
 
 Most security-relevant invariants live in [`CLAUDE.md`](./CLAUDE.md). The ones to keep front-of-mind when writing code:
 
-- **Email normalization** is centralized in `apps/web/src/server/auth/email-normalize.ts`. Every read or write of an email address must go through it.
+- **Email normalization** is centralized in `apps/ucmc-web/src/server/auth/email-normalize.ts`. Every read or write of an email address must go through it.
 - **`/verify-email`** must assert `session.userId === magicLink.target_user_id` before grafting a new address onto an account.
 - **Magic-link requests** pad to ≥500ms + jitter to flatten the registered/not-registered timing oracle. Do not short-circuit this.
 - **WebAuthn ceremonies** are single-use: the KV entry under `webauthn:ceremony:<id>` must be deleted (and the `__Host-ucmc_webauthn` cookie cleared) on every branch — success, failure, and timeout.
 - **Server-fn shells** must not import from `*.server.ts` at runtime; use dynamic `import()` inside the handler. Module-scope server imports leak into the client bundle.
 - **Markdown rendering** uses `react-markdown` without `rehype-raw`. Do not re-enable raw HTML pass-through.
 - **R2 private bucket** is the default for new media. Public bucket entries must use content-hashed or opaque keys — never a guessable identifier — and must set `httpMetadata.cacheControl` at upload time (the custom domain serves stored metadata, not Worker headers).
-- **Rate limit wrappers** in `apps/web/src/server/rate-limit.server.ts` fail _open_ — keep them that way, but pair every public endpoint with the appropriate budget (`HEALTH_RATE_LIMITER` or `AUTH_RATE_LIMITER`, the latter keyed independently on `ip:` and `email:`).
+- **Rate limit wrappers** in `apps/ucmc-web/src/server/rate-limit.server.ts` fail _open_ — keep them that way, but pair every public endpoint with the appropriate budget (`HEALTH_RATE_LIMITER` or `AUTH_RATE_LIMITER`, the latter keyed independently on `ip:` and `email:`).
 
 Dependabot keeps dependencies patched, and `web-ci.yml` runs `pnpm audit` on every PR. If you bump a dep specifically to fix a CVE, mention the advisory ID in the commit body.

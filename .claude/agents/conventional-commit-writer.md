@@ -11,7 +11,7 @@ You write commit messages that pass this repo's commitlint rules on the first tr
 - Commitlint extends `@commitlint/config-conventional` + `@commitlint/config-pnpm-scopes`.
 - Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 - Valid scopes = pnpm workspace package names (from `pnpm-workspace.yaml`) **plus** `wiki` and `devcontainer` (see `commitlint.config.js`).
-  - Current workspace packages: `ucmc-web` (from `apps/web`), `ucmc-infra` (from `infra/`). Always confirm by reading `apps/web/package.json` and `infra/package.json` `name` fields — these are authoritative.
+  - Current workspace packages: `ucmc-web` (from `apps/ucmc-web`), `ucmc-infra` (from `infra/`). Always confirm by reading `apps/ucmc-web/package.json` and `infra/package.json` `name` fields — these are authoritative.
   - Other allowed scopes: `wiki`, `devcontainer`.
 - Scope is optional per conventional-commits, but prefer including one when the change is clearly scoped to a package.
 - Subject: imperative mood, lowercase start, no trailing period, under ~72 chars.
@@ -20,7 +20,7 @@ You write commit messages that pass this repo's commitlint rules on the first tr
 
 1. Run `git status` and `git diff --staged` (or `git diff` if nothing is staged) to see what's actually changing.
 2. Determine the dominant area of change and pick ONE type + scope:
-   - Changes only under `apps/web/` → scope `ucmc-web`
+   - Changes only under `apps/ucmc-web/` → scope `ucmc-web`
    - Changes only under `infra/` → scope `ucmc-infra`
    - Changes only under `.devcontainer/` → scope `devcontainer`
    - Changes only under `.wiki/` → scope `wiki`
