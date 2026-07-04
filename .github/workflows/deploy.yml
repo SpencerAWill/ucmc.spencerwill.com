@@ -33,7 +33,7 @@ jobs:
       - id: filter
         # dorny/paths-filter on `push` events compares HEAD against the
         # previous commit on the branch.
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@v4.0.1
         with:
           filters: |
             web:
