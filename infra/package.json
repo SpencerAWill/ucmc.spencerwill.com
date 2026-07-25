@@ -15,9 +15,9 @@
     "@pulumi/pulumi": "^3.247.0"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.1",
     "globals": "^17.7.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.0"
+    "typescript-eslint": "^8.64.0"
   }
 }
