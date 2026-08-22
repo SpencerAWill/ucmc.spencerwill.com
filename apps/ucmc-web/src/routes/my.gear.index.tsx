@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { MyGearList } from "#/features/gear/components/my-gear-list";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 /**
  * `/my/gear` — the member's loan list. Parent `/my` route guards on
@@ -11,6 +12,9 @@ import { MyGearList } from "#/features/gear/components/my-gear-list";
  * the loader doesn't throw.
  */
 export const Route = createFileRoute("/my/gear/")({
+  beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "my_gear");
+  },
   component: MyGearPage,
 });
 

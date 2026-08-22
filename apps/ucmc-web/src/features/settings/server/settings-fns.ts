@@ -15,6 +15,7 @@ import {
   updateSettingInputSchema,
 } from "#/server/settings/settings-registry";
 import type {
+  PageFlagKey,
   SettingKey,
   SettingValue,
   UpdateSettingInput,
@@ -77,24 +78,14 @@ export const getPublicSiteContactFn = createServerFn({
  * it publicly.
  */
 export type PublicFlags = {
-  announcements: boolean;
+  // Submission kill switches (distinct from page reachability): whether
+  // each feedback surface accepts NEW submissions.
   websiteFeedback: boolean;
   clubFeedback: boolean;
-  // Per-page toggles for the public-site sidebar section (Gear Cave →
-  // History). Each gates both the sidebar entry and its route.
-  gearCave: boolean;
-  scholarships: boolean;
-  policies: boolean;
-  resources: boolean;
-  gallery: boolean;
-  gazette: boolean;
-  history: boolean;
-  blog: boolean;
-  volunteer: boolean;
-  calendar: boolean;
-  forum: boolean;
-  analytics: boolean;
-  reports: boolean;
+  // Per-page kill switches, keyed by the `pages.*` suffix. Each gates both
+  // the page's route (via `requirePageFlag`) and its nav/tab entry. See
+  // the registry's `pages` category for the full set.
+  pages: Record<PageFlagKey, boolean>;
 };
 
 export const getPublicFlagsFn = createServerFn({

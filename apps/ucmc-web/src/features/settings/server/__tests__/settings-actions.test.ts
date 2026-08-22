@@ -205,29 +205,33 @@ describe("getPublicSiteContactAction", () => {
 });
 
 describe("getPublicFlagsAction", () => {
-  // Every page flag defaults ON, so a cold DB (no site_settings rows)
-  // keeps existing pages visible/accessible. This is the fail-open
-  // contract the sidebar + route guards rely on.
-  it("defaults every page flag ON with no auth gate on a cold DB", async () => {
+  // Page flags come back as a map keyed by the `pages.*` suffix. Most
+  // default ON so a cold DB (no site_settings rows) keeps existing pages
+  // reachable — the fail-open contract the sidebar + route guards rely on.
+  it("returns page flags at their schema defaults with no auth gate", async () => {
     cookieJar.clear();
     const flags = await getPublicFlagsAction();
     for (const key of [
-      "gearCave",
+      "home",
+      "gear_cave",
       "scholarships",
       "policies",
       "resources",
       "gallery",
       "gazette",
       "history",
+      "members",
+      "gear",
+      "feedback",
+      "my_account",
       "blog",
-      "volunteer",
-      "calendar",
-      "forum",
-      "analytics",
       "reports",
     ] as const) {
-      expect(flags[key]).toBe(true);
+      expect(flags.pages[key]).toBe(true);
     }
+    // Announcements is the exception — the feature isn't launched, so it
+    // ships default OFF.
+    expect(flags.pages.announcements).toBe(false);
   });
 
   it("reflects an overridden page flag", async () => {
@@ -235,9 +239,9 @@ describe("getPublicFlagsAction", () => {
     await updateSettingAction({ key: "pages.gear_cave", value: false });
     cookieJar.clear();
     const flags = await getPublicFlagsAction();
-    expect(flags.gearCave).toBe(false);
+    expect(flags.pages.gear_cave).toBe(false);
     // Siblings stay ON — one toggle doesn't leak across pages.
-    expect(flags.history).toBe(true);
+    expect(flags.pages.history).toBe(true);
   });
 });
 
@@ -336,11 +340,11 @@ describe("listSettingHistoryAction", () => {
     });
 
     // Two edits on a boolean setting → both audit rows carry value.
-    await updateSettingAction({ key: "announcements.enabled", value: true });
-    await updateSettingAction({ key: "announcements.enabled", value: false });
+    await updateSettingAction({ key: "pages.announcements", value: true });
+    await updateSettingAction({ key: "pages.announcements", value: false });
 
     const history = await listSettingHistoryAction({
-      key: "announcements.enabled",
+      key: "pages.announcements",
     });
     expect(history).toHaveLength(2);
     expect(history[0].booleanValue).toBe(false); // newest first

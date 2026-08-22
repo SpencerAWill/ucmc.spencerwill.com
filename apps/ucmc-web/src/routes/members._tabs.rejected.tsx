@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { LifecycleTab } from "#/features/members/components/lifecycle-tab";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 const rejectedSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
@@ -12,6 +13,7 @@ const rejectedSearchSchema = z.object({
 export const Route = createFileRoute("/members/_tabs/rejected")({
   validateSearch: rejectedSearchSchema,
   beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "members_rejected");
     await requirePermissionOrNotFound(context.queryClient, "members:manage");
   },
   component: RejectedRoute,

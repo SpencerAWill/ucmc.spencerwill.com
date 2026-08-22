@@ -11,12 +11,12 @@ import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 export function AnnouncementsBell() {
   const { hasPermission, isAuthenticated } = useAuth();
   const canRead = hasPermission("announcements:read");
-  // Kill switch: when `announcements.enabled` is off, the bell disappears
+  // Kill switch: when `pages.announcements` is off, the bell disappears
   // even for officers with the permission. The route + server actions
   // refuse independently as defense-in-depth.
   const flagsOptions = publicFlagsQueryOptions();
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
-  const featureEnabled = flags.announcements;
+  const featureEnabled = flags.pages.announcements;
 
   const { data } = useQuery(
     announcementsUnreadQueryOptions({

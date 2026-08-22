@@ -6,6 +6,7 @@ import type {
   ApprovedSortOption,
   ApprovedViewMode,
 } from "#/features/members/components/approved-tab";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 const approvedSearchSchema = z.object({
   q: z.string().optional(),
@@ -20,6 +21,9 @@ const approvedSearchSchema = z.object({
 // `requireApproved` is enforced by the `_tabs` layout parent — no need
 // to re-check here.
 export const Route = createFileRoute("/members/_tabs/")({
+  beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "members");
+  },
   validateSearch: approvedSearchSchema,
   component: ApprovedRoute,
 });

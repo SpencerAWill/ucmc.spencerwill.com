@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { UnclaimedTab } from "#/features/members/components/unclaimed-tab";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 const unclaimedSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
@@ -12,6 +13,7 @@ const unclaimedSearchSchema = z.object({
 export const Route = createFileRoute("/members/_tabs/unclaimed")({
   validateSearch: unclaimedSearchSchema,
   beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "members_unclaimed");
     await requirePermissionOrNotFound(context.queryClient, "members:manage");
   },
   component: UnclaimedRoute,

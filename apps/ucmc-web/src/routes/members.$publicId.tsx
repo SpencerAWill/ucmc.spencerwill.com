@@ -37,10 +37,12 @@ import { Separator } from "#/components/ui/separator";
 import { RouteErrorFallback } from "#/components/error-page";
 import { requireApproved } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 import type { MemberDetail } from "#/features/members/server/member-fns";
 
 export const Route = createFileRoute("/members/$publicId")({
   beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "members_detail");
     await requireApproved(context.queryClient);
   },
   component: MemberDetailPage,

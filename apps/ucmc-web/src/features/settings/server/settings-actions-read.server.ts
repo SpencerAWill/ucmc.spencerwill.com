@@ -16,7 +16,12 @@ import {
   readAllSettings,
   readSetting,
 } from "#/server/settings/settings-repo.server";
-import { isSettingKey, SETTINGS } from "#/server/settings/settings-registry";
+import {
+  isSettingKey,
+  pageFlagKeyOf,
+  PAGE_SETTING_KEYS,
+  SETTINGS,
+} from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
 import type {
   PublicFlags,
@@ -49,59 +54,15 @@ export async function getPublicSiteContactAction(): Promise<PublicSiteContact> {
  * feature is off" is the same answer the gated route already returns.
  */
 export async function getPublicFlagsAction(): Promise<PublicFlags> {
-  const [
-    announcements,
-    websiteFeedback,
-    clubFeedback,
-    gearCave,
-    scholarships,
-    policies,
-    resources,
-    gallery,
-    gazette,
-    history,
-    blog,
-    volunteer,
-    calendar,
-    forum,
-    analytics,
-    reports,
-  ] = await Promise.all([
-    readSetting("announcements.enabled"),
+  const [websiteFeedback, clubFeedback, pageValues] = await Promise.all([
     readSetting("feedback.website_enabled"),
     readSetting("feedback.club_enabled"),
-    readSetting("pages.gear_cave"),
-    readSetting("pages.scholarships"),
-    readSetting("pages.policies"),
-    readSetting("pages.resources"),
-    readSetting("pages.gallery"),
-    readSetting("pages.gazette"),
-    readSetting("pages.history"),
-    readSetting("pages.blog"),
-    readSetting("pages.volunteer"),
-    readSetting("pages.calendar"),
-    readSetting("pages.forum"),
-    readSetting("pages.analytics"),
-    readSetting("pages.reports"),
+    Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
   ]);
-  return {
-    announcements,
-    websiteFeedback,
-    clubFeedback,
-    gearCave,
-    scholarships,
-    policies,
-    resources,
-    gallery,
-    gazette,
-    history,
-    blog,
-    volunteer,
-    calendar,
-    forum,
-    analytics,
-    reports,
-  };
+  const pages = Object.fromEntries(
+    PAGE_SETTING_KEYS.map((key, i) => [pageFlagKeyOf(key), pageValues[i]]),
+  ) as PublicFlags["pages"];
+  return { websiteFeedback, clubFeedback, pages };
 }
 
 /**

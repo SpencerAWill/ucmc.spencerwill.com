@@ -1,6 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 
 import { RouteErrorFallback } from "#/components/error-page";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
+import type { PageFlagKey } from "#/server/settings/settings-registry";
 
 /**
  * Account hub layout: a page-level container with a horizontal tab bar
@@ -22,14 +25,28 @@ export const Route = createFileRoute("/my/account")({
 });
 
 const TABS = [
-  { to: "/my/account", label: "Profile" },
-  { to: "/my/account/details", label: "Details" },
-  { to: "/my/account/waiver", label: "Waiver" },
-  { to: "/my/account/security", label: "Sign-in" },
-  { to: "/my/account/preferences", label: "Preferences" },
-] as const;
+  { to: "/my/account", label: "Profile", flag: "my_account" },
+  { to: "/my/account/details", label: "Details", flag: "my_account_details" },
+  { to: "/my/account/waiver", label: "Waiver", flag: "my_account_waiver" },
+  { to: "/my/account/security", label: "Sign-in", flag: "my_account_security" },
+  {
+    to: "/my/account/preferences",
+    label: "Preferences",
+    flag: "my_account_preferences",
+  },
+] as const satisfies ReadonlyArray<{
+  to: string;
+  label: string;
+  flag: PageFlagKey;
+}>;
 
 function AccountLayout() {
+  // Per-page kill switches: hide any tab whose page has been switched off
+  // from /settings. Each route also 404s independently.
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  const pages = flags.pages;
+  const visibleTabs = TABS.filter((tab) => pages[tab.flag]);
   return (
     <div className="mx-auto w-full max-w-4xl p-6">
       <h1 className="mb-4 text-2xl font-semibold">Account</h1>
@@ -42,7 +59,7 @@ function AccountLayout() {
        */}
       <div className="mb-6 -mx-6 border-b border-border">
         <nav className="flex gap-1 overflow-x-auto px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <Link
               key={tab.to}
               to={tab.to}

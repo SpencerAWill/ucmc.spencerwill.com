@@ -12,14 +12,27 @@ import {
 } from "#/features/members/components/members-tabs-bar";
 
 // The bar reads `useAuth().hasPermission` and `useLocation()` from the
-// router; we stub both so the test stays focused on the gate behavior.
-// Replacing `Link` with a plain `<a>` lets accessible-name queries find
-// the tabs without spinning up a router or context.
+// router plus the public-flags snapshot via `useQuery`; we stub all three
+// so the test stays focused on the gate behavior. Replacing `Link` with a
+// plain `<a>` lets accessible-name queries find the tabs without spinning
+// up a router or context.
 const useAuthMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
+const flagsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("#/features/auth/api/use-auth", () => ({
   useAuth: useAuthMock,
+}));
+
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: flagsMock() }),
+}));
+
+vi.mock("#/features/settings/api/queries", () => ({
+  publicFlagsQueryOptions: () => ({
+    queryKey: ["public-flags"],
+    placeholderData: { pages: {} },
+  }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -51,10 +64,24 @@ function setPathname(pathname: string) {
   );
 }
 
+const ALL_MEMBER_PAGES_ON = {
+  members: true,
+  members_pending: true,
+  members_unclaimed: true,
+  members_rejected: true,
+  members_deactivated: true,
+} as const;
+
+function setPageFlags(pages: Record<string, boolean>) {
+  flagsMock.mockReturnValue({ pages });
+}
+
 describe("MembersTabsBar", () => {
   beforeEach(() => {
     useAuthMock.mockReset();
     useLocationMock.mockReset();
+    flagsMock.mockReset();
+    setPageFlags({ ...ALL_MEMBER_PAGES_ON });
   });
 
   it("renders nothing when the caller lacks members:manage", () => {
@@ -81,6 +108,18 @@ describe("MembersTabsBar", () => {
     ]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
+  });
+
+  it("hides a tab whose page kill switch is off", () => {
+    setAuth(true);
+    setPathname("/members");
+    setPageFlags({ ...ALL_MEMBER_PAGES_ON, members_rejected: false });
+
+    render(<MembersTabsBar />);
+
+    expect(screen.queryByRole("link", { name: "Rejected" })).toBeNull();
+    // The others remain.
+    expect(screen.getByRole("link", { name: "Pending" })).toBeInTheDocument();
   });
 
   // Active-tab styling rides on the Button `variant`; shadcn `secondary`

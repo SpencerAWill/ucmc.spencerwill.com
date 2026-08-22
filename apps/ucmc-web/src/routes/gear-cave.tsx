@@ -25,7 +25,7 @@ export const Route = createFileRoute("/gear-cave")({
   beforeLoad: async ({ context }) => {
     await requirePageEnabled(
       context.queryClient,
-      "gearCave",
+      "gear_cave",
       "public_gear_cave:view",
     );
   },

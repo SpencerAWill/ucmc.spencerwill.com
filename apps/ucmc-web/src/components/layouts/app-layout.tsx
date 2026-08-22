@@ -216,27 +216,31 @@ function SidebarNav() {
   // keeps the entry hidden.
   const flagsOptions = publicFlagsQueryOptions();
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  const pages = flags.pages;
+  // Nav gates compose: the viewer must hold the entry's permission AND the
+  // page's kill switch must be on. `placeholderData` returns the schema
+  // defaults until the query resolves, so a fresh-DB / pre-hydration
+  // render matches the server. Route-less "coming soon" placeholders
+  // (Blog, Volunteer, etc.) have only their flag as the gate.
   const canReadAnnouncements =
-    hasPermission("announcements:read") && flags.announcements;
-  const canManageRoles = hasPermission("roles:manage");
-  const canVerifyWaivers = hasPermission("waivers:verify");
-  const canReadGear = hasPermission("gear:read");
-  const canLoanGear = hasPermission("gear:loan");
-  // Public-page entries compose the same way announcements does: the
-  // viewer must hold the page's view permission AND the page's kill
-  // switch must be on. Blog and Volunteer are route-less "coming soon"
-  // placeholders, so their flag is the only gate.
-  const canViewHistory = hasPermission("history:view") && flags.history;
+    hasPermission("announcements:read") && pages.announcements;
+  const canManageRoles = hasPermission("roles:manage") && pages.members_roles;
+  const canVerifyWaivers =
+    hasPermission("waivers:verify") && pages.members_waivers;
+  const canReadMembers = isApproved && pages.members;
+  const canReadGear = hasPermission("gear:read") && pages.gear;
+  const canLoanGear = hasPermission("gear:loan") && pages.gear_loans;
+  const canViewHistory = hasPermission("history:view") && pages.history;
   const canViewPolicies =
-    hasPermission("public_policies:view") && flags.policies;
+    hasPermission("public_policies:view") && pages.policies;
   const canViewScholarships =
-    hasPermission("public_scholarships:view") && flags.scholarships;
+    hasPermission("public_scholarships:view") && pages.scholarships;
   const canViewGearCave =
-    hasPermission("public_gear_cave:view") && flags.gearCave;
+    hasPermission("public_gear_cave:view") && pages.gear_cave;
   const canViewResources =
-    hasPermission("public_resources:view") && flags.resources;
-  const canViewGazette = hasPermission("public_gazette:view") && flags.gazette;
-  const canViewGallery = hasPermission("public_gallery:view") && flags.gallery;
+    hasPermission("public_resources:view") && pages.resources;
+  const canViewGazette = hasPermission("public_gazette:view") && pages.gazette;
+  const canViewGallery = hasPermission("public_gallery:view") && pages.gallery;
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -298,7 +302,7 @@ function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          {flags.blog ? (
+          {pages.blog ? (
             <SidebarMenuItem>
               <SidebarMenuButton
                 aria-disabled
@@ -320,7 +324,7 @@ function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          {flags.volunteer ? (
+          {pages.volunteer ? (
             <SidebarMenuItem>
               <SidebarMenuButton
                 aria-disabled
@@ -348,7 +352,7 @@ function SidebarNav() {
       {canReadAnnouncements || isApproved ? (
         <SidebarGroup>
           <SidebarMenu>
-            {flags.calendar ? (
+            {pages.calendar ? (
               <SidebarMenuItem>
                 <SidebarMenuButton
                   aria-disabled
@@ -374,7 +378,7 @@ function SidebarNav() {
 
             {isApproved ? (
               <>
-                {flags.forum ? (
+                {pages.forum ? (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       aria-disabled
@@ -386,61 +390,77 @@ function SidebarNav() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ) : null}
-                <SidebarMenuItem>
-                  {/*
-                   * Collapsible sits inside SidebarMenuItem (not the
-                   * other way around) so the <ul> only has <li> direct
-                   * children — axe-core's `list` rule rejects a <ul>
-                   * with a <div> child, which is what Radix Collapsible
-                   * renders as.
-                   */}
-                  <Collapsible defaultOpen className="group/collapsible">
-                    {/* Main button navigates to /members */}
-                    <SidebarMenuButton asChild tooltip="Members">
-                      <Link to="/members">
-                        <Users />
-                        <span>Members</span>
-                      </Link>
-                    </SidebarMenuButton>
+                {canReadMembers || hasSubItems ? (
+                  <SidebarMenuItem>
+                    {/*
+                     * Collapsible sits inside SidebarMenuItem (not the
+                     * other way around) so the <ul> only has <li> direct
+                     * children — axe-core's `list` rule rejects a <ul>
+                     * with a <div> child, which is what Radix Collapsible
+                     * renders as.
+                     */}
+                    <Collapsible defaultOpen className="group/collapsible">
+                      {/* Main button navigates to /members. When the
+                       * directory page itself is switched off but a sub-page
+                       * (Roles / Waivers) is still enabled, the label stays
+                       * as an inert group header so those sub-items remain
+                       * reachable. */}
+                      {canReadMembers ? (
+                        <SidebarMenuButton asChild tooltip="Members">
+                          <Link to="/members">
+                            <Users />
+                            <span>Members</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      ) : (
+                        <SidebarMenuButton
+                          tooltip="Members"
+                          className="cursor-default"
+                        >
+                          <Users />
+                          <span>Members</span>
+                        </SidebarMenuButton>
+                      )}
 
-                    {/* Chevron toggles sub-items — separate from the link */}
-                    {hasSubItems ? (
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuAction className="data-[state=open]:rotate-90">
-                          <ChevronRight />
-                          <span className="sr-only">Toggle sub-menu</span>
-                        </SidebarMenuAction>
-                      </CollapsibleTrigger>
-                    ) : null}
+                      {/* Chevron toggles sub-items — separate from the link */}
+                      {hasSubItems ? (
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuAction className="data-[state=open]:rotate-90">
+                            <ChevronRight />
+                            <span className="sr-only">Toggle sub-menu</span>
+                          </SidebarMenuAction>
+                        </CollapsibleTrigger>
+                      ) : null}
 
-                    {hasSubItems ? (
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {canVerifyWaivers ? (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link to="/members/waivers">
-                                  <ScrollText />
-                                  <span>Waivers</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ) : null}
-                          {canManageRoles ? (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link to="/members/roles">
-                                  <Shield />
-                                  <span>Roles</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ) : null}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    ) : null}
-                  </Collapsible>
-                </SidebarMenuItem>
+                      {hasSubItems ? (
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {canVerifyWaivers ? (
+                              <SidebarMenuSubItem>
+                                <SidebarMenuSubButton asChild>
+                                  <Link to="/members/waivers">
+                                    <ScrollText />
+                                    <span>Waivers</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ) : null}
+                            {canManageRoles ? (
+                              <SidebarMenuSubItem>
+                                <SidebarMenuSubButton asChild>
+                                  <Link to="/members/roles">
+                                    <Shield />
+                                    <span>Roles</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ) : null}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      ) : null}
+                    </Collapsible>
+                  </SidebarMenuItem>
+                ) : null}
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     aria-disabled
@@ -451,7 +471,7 @@ function SidebarNav() {
                     <span>Trips</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {canReadGear ? (
+                {canReadGear || canLoanGear ? (
                   <SidebarMenuItem>
                     {/* Same Collapsible-inside-MenuItem pattern as the
                      * Members entry so the <ul> only contains <li>
@@ -464,12 +484,25 @@ function SidebarNav() {
                       defaultOpen={canLoanGear}
                       className="group/collapsible"
                     >
-                      <SidebarMenuButton asChild tooltip="Gear">
-                        <Link to="/gear">
+                      {/* Inert group header when the inventory page itself
+                       * is switched off but the Loans sub-page is still
+                       * enabled. */}
+                      {canReadGear ? (
+                        <SidebarMenuButton asChild tooltip="Gear">
+                          <Link to="/gear">
+                            <Package />
+                            <span>Gear</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      ) : (
+                        <SidebarMenuButton
+                          tooltip="Gear"
+                          className="cursor-default"
+                        >
                           <Package />
                           <span>Gear</span>
-                        </Link>
-                      </SidebarMenuButton>
+                        </SidebarMenuButton>
+                      )}
                       {canLoanGear ? (
                         <>
                           <CollapsibleTrigger asChild>
@@ -589,22 +622,27 @@ function SidebarNav() {
 
 function SidebarUtilityNav() {
   const { isApproved, hasPermission } = useAuth();
-  // Page kill switches for the route-less "coming soon" placeholders in
-  // this group (Analytics, Reports). `placeholderData` is the schema
-  // default (on) until the query resolves.
+  // Page kill switches for entries in this group. `placeholderData` is the
+  // schema default (on) until the query resolves.
   const flagsOptions = publicFlagsQueryOptions();
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
-  // Sidebar entry is one link to `/feedback`; the tab layout decides
-  // which surfaces to show inside. So we render the link if the user
-  // can submit to *either* surface. Managers also see it via their
-  // `*:manage` permission (system_admin auto-grants both via the
-  // principal bypass).
+  const pages = flags.pages;
+  // Sidebar entry is one link into the feedback surface; the tab layout
+  // decides which surfaces to show inside. Render the link if the user can
+  // submit to *either* surface AND that surface's page is enabled. Managers
+  // also see it via their `*:manage` permission (system_admin auto-grants
+  // both via the principal bypass). Point the link at whichever surface is
+  // actually enabled so it never lands on a switched-off /feedback.
+  const canWebsiteFeedback =
+    (hasPermission("feedback:submit") || hasPermission("feedback:manage")) &&
+    pages.feedback;
+  const canClubFeedback =
+    (hasPermission("club_feedback:submit") ||
+      hasPermission("club_feedback:manage")) &&
+    pages.feedback_club;
   const canSubmitFeedback =
-    isApproved &&
-    (hasPermission("feedback:submit") ||
-      hasPermission("club_feedback:submit") ||
-      hasPermission("feedback:manage") ||
-      hasPermission("club_feedback:manage"));
+    isApproved && (canWebsiteFeedback || canClubFeedback);
+  const feedbackTarget = canWebsiteFeedback ? "/feedback" : "/feedback/club";
   const canViewAudit = hasPermission("audit:view");
   const canManageSettings = hasPermission("settings:manage");
   return (
@@ -623,14 +661,14 @@ function SidebarUtilityNav() {
         {canSubmitFeedback ? (
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Feedback">
-              <Link to="/feedback">
+              <Link to={feedbackTarget}>
                 <MessageSquare />
                 <span>Feedback</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : null}
-        {flags.analytics ? (
+        {pages.analytics ? (
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled
@@ -642,7 +680,7 @@ function SidebarUtilityNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : null}
-        {flags.reports ? (
+        {pages.reports ? (
           <SidebarMenuItem>
             <SidebarMenuButton
               aria-disabled

@@ -9,8 +9,12 @@ import { HowToJoin } from "#/features/landing/components/how-to-join";
 import { MeetingInfo } from "#/features/landing/components/meeting-info";
 import { Officers } from "#/features/landing/components/officers";
 import { PhotoCarousel } from "#/features/landing/components/photo-carousel";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "home");
+  },
   // Prefetch the landing-content bundle so SSR has the data baked in and
   // every section component reads from a hot cache on first render.
   loader: async ({ context }) => {

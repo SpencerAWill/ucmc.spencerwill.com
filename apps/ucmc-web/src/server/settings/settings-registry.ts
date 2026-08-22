@@ -30,7 +30,6 @@ import { z } from "zod";
 export const SETTING_CATEGORIES = [
   "contact",
   "pages",
-  "announcements",
   "feedback",
   "integrations",
   "appearance",
@@ -41,7 +40,6 @@ export type SettingCategory = (typeof SETTING_CATEGORIES)[number];
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
   contact: "Contact",
   pages: "Pages",
-  announcements: "Announcements",
   feedback: "Feedback",
   integrations: "Integrations",
   appearance: "Appearance",
@@ -251,24 +249,231 @@ export const SETTINGS = {
     createdAt: "2026-08-21",
   }),
 
-  // Kill switch for the in-progress announcements feature. Defaults to
-  // off so a fresh DB keeps the feature hidden — the bell in the header,
-  // the sidebar entry, AND the /announcements route are all gated; the
-  // server actions also refuse independently as defense-in-depth.
-  // Officers with `announcements:*` still don't see anything until this
-  // flag flips on, so the gate composes (flag-on AND permission). Public
-  // (exposed via getPublicFlagsFn) because "is this feature visible?"
-  // isn't sensitive — anyone hitting /announcements gets the same answer.
-  "announcements.enabled": z.boolean().default(false).register(registry, {
-    label: "Enabled",
+  // Kill switch for the in-progress announcements feature. Unlike the
+  // other page flags it defaults OFF (feature not yet launched) and also
+  // gates the header bell + the server write actions (defense-in-depth in
+  // announcements-actions.server.ts), not just page reachability. Lives in
+  // the `pages` category so it toggles from the same screen as every other
+  // page.
+  "pages.announcements": z.boolean().default(false).register(registry, {
+    label: "Announcements enabled",
     description:
       "Hides the announcement bell, sidebar entry, and /announcements route while off. Toggle on once the feature is ready.",
-    category: "announcements",
+    category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-05-13",
     confirm:
       "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
+  }),
+
+  // Home / landing page.
+  "pages.home": z.boolean().default(true).register(registry, {
+    label: "Home page enabled",
+    description:
+      "When off, the / landing page returns notFound. Auth, registration, and legal pages stay reachable regardless.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+
+  // Members surfaces. The directory (`pages.members`) plus each officer
+  // management tab and the member-detail page, individually toggleable.
+  "pages.members": z.boolean().default(true).register(registry, {
+    label: "Members directory enabled",
+    description:
+      "When off, the Members sidebar entry is hidden and the /members directory returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.members_pending": z.boolean().default(true).register(registry, {
+    label: "Members · Pending tab enabled",
+    description:
+      "When off, the Pending tab is hidden and /members/pending returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.members_unclaimed": z.boolean().default(true).register(registry, {
+    label: "Members · Unclaimed tab enabled",
+    description:
+      "When off, the Unclaimed tab is hidden and /members/unclaimed returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.members_rejected": z.boolean().default(true).register(registry, {
+    label: "Members · Rejected tab enabled",
+    description:
+      "When off, the Rejected tab is hidden and /members/rejected returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.members_deactivated": z.boolean().default(true).register(registry, {
+    label: "Members · Deactivated tab enabled",
+    description:
+      "When off, the Deactivated tab is hidden and /members/deactivated returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.members_detail": z.boolean().default(true).register(registry, {
+    label: "Member detail page enabled",
+    description:
+      "When off, individual member profile pages (/members/$id) return notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.members_roles": z.boolean().default(true).register(registry, {
+    label: "Members · Roles page enabled",
+    description:
+      "When off, the Roles sidebar sub-item is hidden and /members/roles returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.members_waivers": z.boolean().default(true).register(registry, {
+    label: "Members · Waivers page enabled",
+    description:
+      "When off, the Waivers sidebar sub-item is hidden and /members/waivers returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+
+  // Gear surfaces.
+  "pages.gear": z.boolean().default(true).register(registry, {
+    label: "Gear inventory enabled",
+    description:
+      "When off, the Gear sidebar entry is hidden and the /gear inventory returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.gear_detail": z.boolean().default(true).register(registry, {
+    label: "Gear detail page enabled",
+    description: "When off, individual gear pages (/gear/$id) return notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.gear_loans": z.boolean().default(true).register(registry, {
+    label: "Gear loans desk enabled",
+    description:
+      "When off, the Loans sidebar sub-item is hidden and /gear/loans returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.gear_loans_detail": z.boolean().default(true).register(registry, {
+    label: "Gear loan detail page enabled",
+    description:
+      "When off, individual loan pages (/gear/loans/$id) return notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+
+  // Feedback surfaces. These gate page reachability; the separate
+  // `feedback.*_enabled` flags gate whether new submissions are accepted.
+  "pages.feedback": z.boolean().default(true).register(registry, {
+    label: "Website feedback page enabled",
+    description:
+      "When off, the Feedback sidebar entry is hidden and /feedback returns notFound. Separate from the submission kill switch below.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.feedback_club": z.boolean().default(true).register(registry, {
+    label: "Club feedback page enabled",
+    description:
+      "When off, the club-feedback tab is hidden and /feedback/club returns notFound. Separate from the submission kill switch below.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+
+  // Personal / user-menu pages.
+  "pages.my_account": z.boolean().default(true).register(registry, {
+    label: "My Account · Profile enabled",
+    description:
+      "When off, the My Account link is hidden and /my/account returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_account_details": z.boolean().default(true).register(registry, {
+    label: "My Account · Details tab enabled",
+    description:
+      "When off, the Details tab is hidden and /my/account/details returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_account_preferences": z.boolean().default(true).register(registry, {
+    label: "My Account · Preferences tab enabled",
+    description:
+      "When off, the Preferences tab is hidden and /my/account/preferences returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_account_security": z.boolean().default(true).register(registry, {
+    label: "My Account · Sign-in tab enabled",
+    description:
+      "When off, the Sign-in tab is hidden and /my/account/security returns notFound. Turning this off can strand members who manage passkeys here.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_account_waiver": z.boolean().default(true).register(registry, {
+    label: "My Account · Waiver tab enabled",
+    description:
+      "When off, the Waiver tab is hidden and /my/account/waiver returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_gear": z.boolean().default(true).register(registry, {
+    label: "My Gear enabled",
+    description:
+      "When off, the My Gear link is hidden and /my/gear returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_gear_cart": z.boolean().default(true).register(registry, {
+    label: "My Gear · Cart enabled",
+    description:
+      "When off, the pre-checkout cart is hidden and /my/gear/cart returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
   }),
 
   // Submission gates for the two feedback surfaces. Each flag controls
@@ -317,12 +522,31 @@ export function getMeta<TKey extends SettingKey>(key: TKey): SettingMeta {
 
 export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 
+// ── Page flags ──────────────────────────────────────────────────────────
+//
+// Every `pages.*` boolean is a per-page kill switch. The public-flags
+// snapshot exposes them as a map keyed by the suffix after `pages.` so
+// adding a page is one registry entry — the map, its type, the reader,
+// and the client fallback are all derived, no per-page edits elsewhere.
+export type PageSettingKey = Extract<SettingKey, `pages.${string}`>;
+export type PageFlagKey = PageSettingKey extends `pages.${infer TSuffix}`
+  ? TSuffix
+  : never;
+
+export const PAGE_SETTING_KEYS = SETTING_KEYS.filter(
+  (key): key is PageSettingKey => key.startsWith("pages."),
+);
+
+/** Strip the `pages.` prefix to get the public-flags map key. */
+export function pageFlagKeyOf(key: PageSettingKey): PageFlagKey {
+  return key.slice("pages.".length) as PageFlagKey;
+}
+
 // ── Group keys by category for UI iteration ────────────────────────────
 export function keysByCategory(): Record<SettingCategory, SettingKey[]> {
   const out: Record<SettingCategory, SettingKey[]> = {
     contact: [],
     pages: [],
-    announcements: [],
     feedback: [],
     integrations: [],
     appearance: [],
