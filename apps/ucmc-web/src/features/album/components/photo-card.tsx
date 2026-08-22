@@ -1,11 +1,11 @@
 import { Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
-import { galleryImageUrl } from "#/features/gallery/lib/image-url";
-import type { GalleryPhotoSummary } from "#/features/gallery/server/gallery-fns";
+import { albumImageUrl } from "#/features/album/lib/image-url";
+import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
 
 /**
- * One tile in the Trip Gallery grid. Renders the cropped 4:3 WebP
+ * One tile in the Album grid. Renders the cropped 4:3 WebP
  * with the photo's alt text. A semi-transparent overlay surfaces
  * the caption + tag on hover (or always on touch devices, where the
  * hover state isn't reliable).
@@ -22,13 +22,13 @@ export function PhotoCard({
   onEdit,
   onDelete,
 }: {
-  photo: GalleryPhotoSummary;
-  onClick: (photo: GalleryPhotoSummary) => void;
+  photo: AlbumPhotoSummary;
+  onClick: (photo: AlbumPhotoSummary) => void;
   canManage?: boolean;
-  onEdit?: (photo: GalleryPhotoSummary) => void;
-  onDelete?: (photo: GalleryPhotoSummary) => void;
+  onEdit?: (photo: AlbumPhotoSummary) => void;
+  onDelete?: (photo: AlbumPhotoSummary) => void;
 }) {
-  const imageUrl = galleryImageUrl(photo.imageKey);
+  const imageUrl = albumImageUrl(photo.imageKey);
   return (
     <button
       type="button"

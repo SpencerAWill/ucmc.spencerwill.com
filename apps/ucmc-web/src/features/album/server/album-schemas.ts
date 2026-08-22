@@ -1,5 +1,5 @@
 /**
- * Zod schemas for /gallery mutation inputs. Shared by the server-fn
+ * Zod schemas for /album mutation inputs. Shared by the server-fn
  * `validator` (server side) and the typed mutation hooks
  * (client side). The image payload is a base64 dataUrl; size + magic-
  * byte validation lives here as a first defense, with R2 + worker
@@ -11,9 +11,9 @@
  */
 import { z } from "zod";
 
-export const GALLERY_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-export const GALLERY_IMAGE_DATA_URL_MAX = Math.ceil(
-  (GALLERY_IMAGE_MAX_BYTES * 4) / 3 + 100, // base64 overhead + dataUrl prefix
+export const ALBUM_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const ALBUM_IMAGE_DATA_URL_MAX = Math.ceil(
+  (ALBUM_IMAGE_MAX_BYTES * 4) / 3 + 100, // base64 overhead + dataUrl prefix
 );
 
 const WEBP_DATA_URL_RE = /^data:image\/webp;base64,([A-Za-z0-9+/]+=*)$/;
@@ -30,45 +30,39 @@ const photoFields = {
 
 const imageDataUrl = z
   .string()
-  .max(GALLERY_IMAGE_DATA_URL_MAX, {
-    message: `Image exceeds the ${GALLERY_IMAGE_MAX_BYTES / (1024 * 1024)} MB cap`,
+  .max(ALBUM_IMAGE_DATA_URL_MAX, {
+    message: `Image exceeds the ${ALBUM_IMAGE_MAX_BYTES / (1024 * 1024)} MB cap`,
   })
   .regex(WEBP_DATA_URL_RE, {
     message: "Expected a base64 data URL with image/webp MIME type",
   });
 
-export const createGalleryPhotoInputSchema = z.object({
+export const createAlbumPhotoInputSchema = z.object({
   ...photoFields,
   imageDataUrl,
 });
-export type CreateGalleryPhotoInput = z.infer<
-  typeof createGalleryPhotoInputSchema
->;
+export type CreateAlbumPhotoInput = z.infer<typeof createAlbumPhotoInputSchema>;
 
 /**
  * Update accepts an optional `imageDataUrl`: omit to keep the existing
  * crop (metadata-only edit), include to swap the file. Action layer
  * deletes the previous R2 object best-effort after a successful swap.
  */
-export const updateGalleryPhotoInputSchema = z.object({
+export const updateAlbumPhotoInputSchema = z.object({
   publicId: z.string().min(1),
   ...photoFields,
   imageDataUrl: imageDataUrl.optional(),
 });
-export type UpdateGalleryPhotoInput = z.infer<
-  typeof updateGalleryPhotoInputSchema
->;
+export type UpdateAlbumPhotoInput = z.infer<typeof updateAlbumPhotoInputSchema>;
 
-export const deleteGalleryPhotoInputSchema = z.object({
+export const deleteAlbumPhotoInputSchema = z.object({
   publicId: z.string().min(1),
 });
-export type DeleteGalleryPhotoInput = z.infer<
-  typeof deleteGalleryPhotoInputSchema
->;
+export type DeleteAlbumPhotoInput = z.infer<typeof deleteAlbumPhotoInputSchema>;
 
-export const getGalleryPhotoByPublicIdInputSchema = z.object({
+export const getAlbumPhotoByPublicIdInputSchema = z.object({
   publicId: z.string().min(1),
 });
-export type GetGalleryPhotoByPublicIdInput = z.infer<
-  typeof getGalleryPhotoByPublicIdInputSchema
+export type GetAlbumPhotoByPublicIdInput = z.infer<
+  typeof getAlbumPhotoByPublicIdInputSchema
 >;

@@ -7,13 +7,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select";
-import { PhotoCard } from "#/features/gallery/components/photo-card";
-import type { GalleryPhotoSummary } from "#/features/gallery/server/gallery-fns";
+import { PhotoCard } from "#/features/album/components/photo-card";
+import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
 
 const ALL_VALUE = "__all__";
 
 /**
- * Trip Gallery grid + filter surface. Server returns photos
+ * Album grid + filter surface. Server returns photos
  * newest-first; this component layers two client-side filters on
  * top: year (from `takenAt`) and tag.
  *
@@ -33,11 +33,11 @@ export function PhotoGrid({
   onEditPhoto,
   onDeletePhoto,
 }: {
-  photos: GalleryPhotoSummary[];
+  photos: AlbumPhotoSummary[];
   canManage?: boolean;
-  onSelect: (photo: GalleryPhotoSummary) => void;
-  onEditPhoto?: (photo: GalleryPhotoSummary) => void;
-  onDeletePhoto?: (photo: GalleryPhotoSummary) => void;
+  onSelect: (photo: AlbumPhotoSummary) => void;
+  onEditPhoto?: (photo: AlbumPhotoSummary) => void;
+  onDeletePhoto?: (photo: AlbumPhotoSummary) => void;
 }) {
   // Distinct years from takenAt, in descending order.
   const years = Array.from(
@@ -85,13 +85,13 @@ export function PhotoGrid({
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <label
-            htmlFor="gallery-year"
+            htmlFor="album-year"
             className="text-sm font-medium text-muted-foreground"
           >
             Year
           </label>
           <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger id="gallery-year" className="w-[10rem]">
+            <SelectTrigger id="album-year" className="w-[10rem]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -106,13 +106,13 @@ export function PhotoGrid({
         </div>
         <div className="flex items-center gap-2">
           <label
-            htmlFor="gallery-tag"
+            htmlFor="album-tag"
             className="text-sm font-medium text-muted-foreground"
           >
             Tag
           </label>
           <Select value={selectedTag} onValueChange={setSelectedTag}>
-            <SelectTrigger id="gallery-tag" className="w-[10rem]">
+            <SelectTrigger id="album-tag" className="w-[10rem]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

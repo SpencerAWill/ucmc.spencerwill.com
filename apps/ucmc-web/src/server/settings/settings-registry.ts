@@ -220,10 +220,10 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.gallery": z.boolean().default(true).register(registry, {
-    label: "Trip Gallery enabled",
+  "pages.album": z.boolean().default(true).register(registry, {
+    label: "Album enabled",
     description:
-      "When off, the Trip Gallery sidebar entry is hidden and the /gallery route returns notFound for everyone.",
+      "When off, the Album sidebar entry is hidden and the /album route returns notFound for everyone.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",

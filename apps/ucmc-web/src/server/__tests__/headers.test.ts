@@ -69,7 +69,7 @@ describe("securityHeadersForPath / Permissions-Policy", () => {
   });
 
   it("allows blob: for img-src and worker-src (image cropper)", () => {
-    // The in-app image cropper (landing editors + /gallery) renders the
+    // The in-app image cropper (landing editors + /album) renders the
     // working photo via `URL.createObjectURL(blob)` and spins up the
     // compression worker from a blob URL. Both need explicit `blob:`
     // allowance in CSP — `worker-src` would otherwise inherit from

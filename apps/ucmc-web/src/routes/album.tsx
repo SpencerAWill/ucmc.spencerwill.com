@@ -18,61 +18,58 @@ import {
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePageEnabled } from "#/features/settings/api/page-guards";
-import { galleryListQueryOptions } from "#/features/gallery/api/queries";
-import { useDeleteGalleryPhoto } from "#/features/gallery/api/use-gallery-mutations";
-import { PhotoFormDialog } from "#/features/gallery/components/photo-form-dialog";
-import type { PhotoFormSeed } from "#/features/gallery/components/photo-form-dialog";
-import { PhotoGrid } from "#/features/gallery/components/photo-grid";
-import { PhotoLightbox } from "#/features/gallery/components/photo-lightbox";
-import type { GalleryPhotoSummary } from "#/features/gallery/server/gallery-fns";
+import { albumListQueryOptions } from "#/features/album/api/queries";
+import { useDeleteAlbumPhoto } from "#/features/album/api/use-album-mutations";
+import { PhotoFormDialog } from "#/features/album/components/photo-form-dialog";
+import type { PhotoFormSeed } from "#/features/album/components/photo-form-dialog";
+import { PhotoGrid } from "#/features/album/components/photo-grid";
+import { PhotoLightbox } from "#/features/album/components/photo-lightbox";
+import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
 
 /**
- * Search params for /gallery. Only `photo` lives in the URL — the
+ * Search params for /album. Only `photo` lives in the URL — the
  * lightbox is opened when this is set to a known publicId, so a
  * shared `?photo=abc` link reliably opens the lightbox at that
  * photo on first paint. Filter state (year / tag) is kept in
  * component-local `useState` inside PhotoGrid.
  */
-const gallerySearchSchema = z.object({
+const albumSearchSchema = z.object({
   photo: z.string().optional(),
 });
 
 /**
- * Public /gallery index. View gated by `public_gallery:view`
+ * Public /album index. View gated by `public_album:view`
  * (default-granted to role_anonymous + role_member). Manage UX
  * (Add Photo button + pencil / trash on each tile) gated by
- * `public_gallery:manage`. Clicking a tile opens the lightbox by
+ * `public_album:manage`. Clicking a tile opens the lightbox by
  * setting `?photo=$publicId` in the URL; the lightbox reads the
  * search param so a shared link reproduces the state.
  */
-export const Route = createFileRoute("/gallery")({
-  validateSearch: gallerySearchSchema,
+export const Route = createFileRoute("/album")({
+  validateSearch: albumSearchSchema,
   beforeLoad: async ({ context }) => {
-    await requirePageEnabled(
-      context.queryClient,
-      "gallery",
-      "public_gallery:view",
-    );
+    await requirePageEnabled(context.queryClient, "album", "public_album:view");
   },
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(galleryListQueryOptions());
+    await context.queryClient.ensureQueryData(albumListQueryOptions());
   },
-  component: GalleryPage,
+  component: AlbumPage,
 });
 
-function GalleryPage() {
-  const { data } = useSuspenseQuery(galleryListQueryOptions());
+function AlbumPage() {
+  const { data } = useSuspenseQuery(albumListQueryOptions());
   const { hasPermission } = useAuth();
-  const canManage = hasPermission("public_gallery:manage");
+  const canManage = hasPermission("public_album:manage");
   const { photo: activePublicId } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
   const [formSeed, setFormSeed] = useState<PhotoFormSeed | null>(null);
-  const [deletingPhoto, setDeletingPhoto] =
-    useState<GalleryPhotoSummary | null>(null);
-  const deleteMut = useDeleteGalleryPhoto();
+  const [deletingPhoto, setDeletingPhoto] = useState<AlbumPhotoSummary | null>(
+    null,
+  );
+  const deleteMut = useDeleteAlbumPhoto();
 
-  function openLightbox(photo: GalleryPhotoSummary) {
+  function openLightbox(photo: AlbumPhotoSummary) {
     void navigate({
       search: (prev) => ({ ...prev, photo: photo.publicId }),
       replace: false,
@@ -121,9 +118,7 @@ function GalleryPage() {
     <main id="main" className="mx-auto w-full max-w-5xl space-y-6 px-6 py-12">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Trip Gallery
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Album</h1>
           <p className="text-sm text-muted-foreground">
             Photos from UCMC trips, by year and tag. Click a tile to see it
             larger.
@@ -134,7 +129,7 @@ function GalleryPage() {
             variant="outline"
             size="sm"
             onClick={() => setFormSeed({ mode: "create" })}
-            aria-label="Add Gallery photo"
+            aria-label="Add Album photo"
           >
             <Plus className="size-4" />
             Add photo
@@ -177,7 +172,7 @@ function GalleryPage() {
                 <AlertDialogTitle>Delete this photo?</AlertDialogTitle>
                 <AlertDialogDescription>
                   This removes the row, the cropped image on R2, and the tile
-                  from /gallery. You can re-upload from a fresh file later, but
+                  from /album. You can re-upload from a fresh file later, but
                   the row's publicId won't be the same.
                 </AlertDialogDescription>
               </AlertDialogHeader>

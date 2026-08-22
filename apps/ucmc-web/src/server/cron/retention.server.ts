@@ -46,6 +46,11 @@ const R2_BATCH_DELETE_LIMIT = 1000;
 
 // R2 prefixes the cron is allowed to GC. Any object outside these
 // prefixes (e.g. a future `static/` bucket layout) is left alone.
+// `gallery/` holds Album photos — the prefix predates the Trip Gallery
+// → Album rename and was deliberately left alone (see
+// `ALBUM_R2_PREFIX`), so do NOT "fix" it to `album/`: that would stop
+// the sweep from ever seeing album objects, and orphans would
+// accumulate silently rather than failing loudly.
 const GC_PREFIXES = ["avatars/", "landing/", "gazette/", "gallery/"] as const;
 
 // Settings keys whose JSON value is an R2 image key. `landingSettings`
@@ -202,7 +207,7 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
   // Five independent reads against five separate tables — bundle into
   // one `db.batch` so the cron's D1 wait is a single HTTP request.
   // Order doesn't matter; everything funnels into the same Set.
-  const [avatars, heroes, activities, settings, gazette, gallery] =
+  const [avatars, heroes, activities, settings, gazette, album] =
     await db.batch([
       db
         .select({ key: schema.profiles.avatarKey })
@@ -225,9 +230,7 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
       db
         .select({ key: schema.gazetteIssues.pdfKey })
         .from(schema.gazetteIssues),
-      db
-        .select({ key: schema.galleryPhotos.imageKey })
-        .from(schema.galleryPhotos),
+      db.select({ key: schema.albumPhotos.imageKey }).from(schema.albumPhotos),
     ]);
 
   for (const row of avatars) {
@@ -260,7 +263,7 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
   for (const row of gazette) {
     live.add(row.key);
   }
-  for (const row of gallery) {
+  for (const row of album) {
     live.add(row.key);
   }
 

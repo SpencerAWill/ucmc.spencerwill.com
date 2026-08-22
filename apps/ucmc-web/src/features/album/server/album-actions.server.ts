@@ -1,8 +1,8 @@
 /**
- * Trip Gallery CRUD actions. Reads (`getGalleryPhotosAction`,
- * `getGalleryPhotoByPublicIdAction`) are gated at the route layer by
- * `public_gallery:view`; writes gate on `public_gallery:manage` here
- * via `requireGalleryManager()` and record one audit event per
+ * Album CRUD actions. Reads (`getAlbumPhotosAction`,
+ * `getAlbumPhotoByPublicIdAction`) are gated at the route layer by
+ * `public_album:view`; writes gate on `public_album:manage` here
+ * via `requireAlbumManager()` and record one audit event per
  * mutation.
  *
  * Image flow:
@@ -10,7 +10,8 @@
  *      via `useImageCrop()`, emits a base64 WebP data URL.
  *   2. Action decodes the base64, verifies the RIFF/WEBP magic
  *      bytes, checks the size cap, computes a content-hash, uploads
- *      to `BUCKET_PUBLIC` under `gallery/<id>/<hash>.webp`.
+ *      to `BUCKET_PUBLIC` under `gallery/<id>/<hash>.webp` (the
+ *      prefix is historical — see `albumImageKey()`).
  *   3. D1 row stores the key + file size + width/height. The CDN
  *      serves the bytes directly on subsequent reads.
  *
@@ -23,31 +24,31 @@
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
-import { requireGalleryManager } from "#/features/gallery/server/gallery-permissions.server";
+import { requireAlbumManager } from "#/features/album/server/album-permissions.server";
 import {
-  getGalleryPhotoByPublicId,
-  listGalleryPhotos,
-} from "#/features/gallery/server/gallery-repo.server";
+  getAlbumPhotoByPublicId,
+  listAlbumPhotos,
+} from "#/features/album/server/album-repo.server";
 import type {
-  CreateGalleryPhotoInput,
-  DeleteGalleryPhotoInput,
-  GetGalleryPhotoByPublicIdInput,
-  UpdateGalleryPhotoInput,
-} from "#/features/gallery/server/gallery-schemas";
+  CreateAlbumPhotoInput,
+  DeleteAlbumPhotoInput,
+  GetAlbumPhotoByPublicIdInput,
+  UpdateAlbumPhotoInput,
+} from "#/features/album/server/album-schemas";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { getDb, schema } from "#/server/db";
 import {
-  deleteGalleryImage,
-  galleryImageKey,
-  GALLERY_IMAGE_MAX_BYTES,
-  putGalleryImage,
-} from "#/server/r2/gallery-images.server";
+  deleteAlbumImage,
+  albumImageKey,
+  ALBUM_IMAGE_MAX_BYTES,
+  putAlbumImage,
+} from "#/server/r2/album-images.server";
 import { shortContentHash } from "#/server/r2/image-codec.server";
 
 // ── public shapes ───────────────────────────────────────────────────────
 
-export interface GalleryPhotoSummary {
+export interface AlbumPhotoSummary {
   id: string;
   publicId: string;
   caption: string | null;
@@ -63,10 +64,10 @@ export interface GalleryPhotoSummary {
 
 // ── reads ───────────────────────────────────────────────────────────────
 
-export async function getGalleryPhotosAction(): Promise<{
-  photos: GalleryPhotoSummary[];
+export async function getAlbumPhotosAction(): Promise<{
+  photos: AlbumPhotoSummary[];
 }> {
-  const rows = await listGalleryPhotos();
+  const rows = await listAlbumPhotos();
   return {
     photos: rows.map((r) => ({
       id: r.id,
@@ -84,10 +85,10 @@ export async function getGalleryPhotosAction(): Promise<{
   };
 }
 
-export async function getGalleryPhotoByPublicIdAction(
-  input: GetGalleryPhotoByPublicIdInput,
-): Promise<GalleryPhotoSummary | null> {
-  const row = await getGalleryPhotoByPublicId(input.publicId);
+export async function getAlbumPhotoByPublicIdAction(
+  input: GetAlbumPhotoByPublicIdInput,
+): Promise<AlbumPhotoSummary | null> {
+  const row = await getAlbumPhotoByPublicId(input.publicId);
   if (!row) {
     return null;
   }
@@ -106,7 +107,7 @@ export async function getGalleryPhotoByPublicIdAction(
   };
 }
 
-// ── mutations (public_gallery:manage) ──────────────────────────────────
+// ── mutations (public_album:manage) ──────────────────────────────────
 
 const WEBP_DATA_URL_RE = /^data:image\/webp;base64,([A-Za-z0-9+/]+={0,2})$/;
 // "RIFF" + 4-byte size (unchecked) + "WEBP"
@@ -123,9 +124,9 @@ function decodeWebpDataUrl(dataUrl: string): ArrayBuffer {
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  if (bytes.byteLength > GALLERY_IMAGE_MAX_BYTES) {
+  if (bytes.byteLength > ALBUM_IMAGE_MAX_BYTES) {
     throw new Error(
-      `Image exceeds ${GALLERY_IMAGE_MAX_BYTES} bytes (got ${bytes.byteLength})`,
+      `Image exceeds ${ALBUM_IMAGE_MAX_BYTES} bytes (got ${bytes.byteLength})`,
     );
   }
   // Magic-byte check: an attacker who skips the client could lie
@@ -147,22 +148,22 @@ function decodeWebpDataUrl(dataUrl: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-export async function createGalleryPhotoAction(
-  input: CreateGalleryPhotoInput,
+export async function createAlbumPhotoAction(
+  input: CreateAlbumPhotoInput,
 ): Promise<{ publicId: string }> {
-  const principal = await requireGalleryManager();
+  const principal = await requireAlbumManager();
 
   const bytes = decodeWebpDataUrl(input.imageDataUrl);
   const id = uuidv7();
   const publicId = generatePublicId();
   const hash = await shortContentHash(bytes);
-  const imageKey = galleryImageKey(id, hash);
+  const imageKey = albumImageKey(id, hash);
 
-  await putGalleryImage(imageKey, bytes);
+  await putAlbumImage(imageKey, bytes);
 
   try {
     await getDb()
-      .insert(schema.galleryPhotos)
+      .insert(schema.albumPhotos)
       .values({
         id,
         publicId,
@@ -185,14 +186,14 @@ export async function createGalleryPhotoAction(
     // Insert failed — clean up the orphan image so we don't leak
     // storage. Best-effort; the orphan-GC sweep catches anything we
     // miss.
-    void deleteGalleryImage(imageKey).catch(() => {});
+    void deleteAlbumImage(imageKey).catch(() => {});
     throw err;
   }
 
   await recordAuditEvent({
     actorUserId: principal.userId,
-    action: "gallery_photo.created",
-    targetType: "gallery_photo",
+    action: "album_photo.created",
+    targetType: "album_photo",
     targetId: id,
     metadata: {
       caption: input.caption,
@@ -203,14 +204,14 @@ export async function createGalleryPhotoAction(
   return { publicId };
 }
 
-export async function updateGalleryPhotoAction(
-  input: UpdateGalleryPhotoInput,
+export async function updateAlbumPhotoAction(
+  input: UpdateAlbumPhotoInput,
 ): Promise<{ ok: true }> {
-  const principal = await requireGalleryManager();
+  const principal = await requireAlbumManager();
 
-  const existing = await getGalleryPhotoByPublicId(input.publicId);
+  const existing = await getAlbumPhotoByPublicId(input.publicId);
   if (!existing) {
-    throw new Error("Gallery photo not found");
+    throw new Error("Album photo not found");
   }
 
   let imageKey = existing.imageKey;
@@ -220,10 +221,10 @@ export async function updateGalleryPhotoAction(
   if (input.imageDataUrl) {
     const bytes = decodeWebpDataUrl(input.imageDataUrl);
     const hash = await shortContentHash(bytes);
-    const newKey = galleryImageKey(existing.id, hash);
+    const newKey = albumImageKey(existing.id, hash);
     // Only swap if the content actually changed (hash differs).
     if (newKey !== existing.imageKey) {
-      await putGalleryImage(newKey, bytes);
+      await putAlbumImage(newKey, bytes);
       oldKeyToDelete = existing.imageKey;
       imageKey = newKey;
       imageBytes = bytes.byteLength;
@@ -232,7 +233,7 @@ export async function updateGalleryPhotoAction(
 
   try {
     await getDb()
-      .update(schema.galleryPhotos)
+      .update(schema.albumPhotos)
       .set({
         caption: input.caption,
         credit: input.credit,
@@ -249,26 +250,26 @@ export async function updateGalleryPhotoAction(
         updatedAt: Temporal.Now.instant(),
         updatedBy: principal.userId,
       })
-      .where(eq(schema.galleryPhotos.id, existing.id));
+      .where(eq(schema.albumPhotos.id, existing.id));
   } catch (err) {
     // UPDATE failed. If we already PUT a replacement image, that
     // fresh key is now orphaned — clean it up to mirror the
     // symmetric handling on insert. The old image is still
     // referenced by the row, so leave it alone.
     if (imageKey !== existing.imageKey) {
-      void deleteGalleryImage(imageKey).catch(() => {});
+      void deleteAlbumImage(imageKey).catch(() => {});
     }
     throw err;
   }
 
   if (oldKeyToDelete) {
-    void deleteGalleryImage(oldKeyToDelete).catch(() => {});
+    void deleteAlbumImage(oldKeyToDelete).catch(() => {});
   }
 
   await recordAuditEvent({
     actorUserId: principal.userId,
-    action: "gallery_photo.updated",
-    targetType: "gallery_photo",
+    action: "album_photo.updated",
+    targetType: "album_photo",
     targetId: existing.id,
     metadata: {
       caption: input.caption,
@@ -279,26 +280,26 @@ export async function updateGalleryPhotoAction(
   return { ok: true };
 }
 
-export async function deleteGalleryPhotoAction(
-  input: DeleteGalleryPhotoInput,
+export async function deleteAlbumPhotoAction(
+  input: DeleteAlbumPhotoInput,
 ): Promise<{ ok: true }> {
-  const principal = await requireGalleryManager();
+  const principal = await requireAlbumManager();
 
-  const existing = await getGalleryPhotoByPublicId(input.publicId);
+  const existing = await getAlbumPhotoByPublicId(input.publicId);
   if (!existing) {
-    throw new Error("Gallery photo not found");
+    throw new Error("Album photo not found");
   }
 
   await getDb()
-    .delete(schema.galleryPhotos)
-    .where(eq(schema.galleryPhotos.id, existing.id));
+    .delete(schema.albumPhotos)
+    .where(eq(schema.albumPhotos.id, existing.id));
 
-  void deleteGalleryImage(existing.imageKey).catch(() => {});
+  void deleteAlbumImage(existing.imageKey).catch(() => {});
 
   await recordAuditEvent({
     actorUserId: principal.userId,
-    action: "gallery_photo.deleted",
-    targetType: "gallery_photo",
+    action: "album_photo.deleted",
+    targetType: "album_photo",
     targetId: existing.id,
     metadata: {
       caption: existing.caption,

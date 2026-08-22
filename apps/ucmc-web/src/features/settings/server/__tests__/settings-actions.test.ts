@@ -264,7 +264,7 @@ describe("getPublicFlagsAction", () => {
       "scholarships",
       "policies",
       "resources",
-      "gallery",
+      "album",
       "gazette",
       "history",
       "members",

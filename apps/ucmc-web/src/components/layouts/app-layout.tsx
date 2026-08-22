@@ -235,7 +235,7 @@ function SidebarNav() {
   const canViewResources =
     hasPermission("public_resources:view") && pages.resources;
   const canViewGazette = hasPermission("public_gazette:view") && pages.gazette;
-  const canViewGallery = hasPermission("public_gallery:view") && pages.gallery;
+  const canViewAlbum = hasPermission("public_album:view") && pages.album;
 
   // Waivers is the Members entry's only sub-item, so `canVerifyWaivers`
   // doubles as "does this entry get a collapsible chevron". Member
@@ -287,12 +287,12 @@ function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          {canViewGallery ? (
+          {canViewAlbum ? (
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Trip Gallery">
-                <Link to="/gallery">
+              <SidebarMenuButton asChild tooltip="Album">
+                <Link to="/album">
                   <Images />
-                  <span>Trip Gallery</span>
+                  <span>Album</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

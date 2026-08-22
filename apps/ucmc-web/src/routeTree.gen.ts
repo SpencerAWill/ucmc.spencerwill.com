@@ -29,13 +29,13 @@ import { Route as HealthRouteImport } from './routes/health'
 import { Route as GearCaveRouteImport } from './routes/gear-cave'
 import { Route as GearRouteImport } from './routes/gear'
 import { Route as GazetteRouteImport } from './routes/gazette'
-import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as ConstitutionRouteImport } from './routes/constitution'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
+import { Route as AlbumRouteImport } from './routes/album'
 import { Route as AccessRouteImport } from './routes/access'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -74,8 +74,8 @@ import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.cl
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
-import { Route as ApiGalleryImageSplatRouteImport } from './routes/api/gallery-image.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
+import { Route as ApiAlbumImageSplatRouteImport } from './routes/api/album-image.$'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
 
 const WaiverRoute = WaiverRouteImport.update({
@@ -178,11 +178,6 @@ const GazetteRoute = GazetteRouteImport.update({
   path: '/gazette',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GalleryRoute = GalleryRouteImport.update({
-  id: '/gallery',
-  path: '/gallery',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FeedbackRoute = FeedbackRouteImport.update({
   id: '/feedback',
   path: '/feedback',
@@ -211,6 +206,11 @@ const AuditRoute = AuditRouteImport.update({
 const AntiHazingRoute = AntiHazingRouteImport.update({
   id: '/anti-hazing',
   path: '/anti-hazing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlbumRoute = AlbumRouteImport.update({
+  id: '/album',
+  path: '/album',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccessRoute = AccessRouteImport.update({
@@ -400,14 +400,14 @@ const ApiGazettePdfSplatRoute = ApiGazettePdfSplatRouteImport.update({
   path: '/api/gazette-pdf/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiGalleryImageSplatRoute = ApiGalleryImageSplatRouteImport.update({
-  id: '/api/gallery-image/$',
-  path: '/api/gallery-image/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   id: '/api/avatars/$',
   path: '/api/avatars/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAlbumImageSplatRoute = ApiAlbumImageSplatRouteImport.update({
+  id: '/api/album-image/$',
+  path: '/api/album-image/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
@@ -420,13 +420,13 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/access': typeof AccessRoute
+  '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackRouteWithChildren
-  '/gallery': typeof GalleryRoute
   '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/gear-cave': typeof GearCaveRoute
@@ -460,8 +460,8 @@ export interface FileRoutesByFullPath {
   '/gear/': typeof GearIndexRoute
   '/my/': typeof MyIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
+  '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
-  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -487,13 +487,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/access': typeof AccessRoute
+  '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackTabsIndexRoute
-  '/gallery': typeof GalleryRoute
   '/gear-cave': typeof GearCaveRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
@@ -523,8 +523,8 @@ export interface FileRoutesByTo {
   '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
+  '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
-  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -549,13 +549,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/access': typeof AccessRoute
+  '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
   '/feedback': typeof FeedbackRouteWithChildren
-  '/gallery': typeof GalleryRoute
   '/gazette': typeof GazetteRouteWithChildren
   '/gear': typeof GearRouteWithChildren
   '/gear-cave': typeof GearCaveRoute
@@ -592,8 +592,8 @@ export interface FileRoutesById {
   '/gear/': typeof GearIndexRoute
   '/my/': typeof MyIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
+  '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
-  '/api/gallery-image/$': typeof ApiGalleryImageSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -621,13 +621,13 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/access'
+    | '/album'
     | '/anti-hazing'
     | '/audit'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
-    | '/gallery'
     | '/gazette'
     | '/gear'
     | '/gear-cave'
@@ -661,8 +661,8 @@ export interface FileRouteTypes {
     | '/gear/'
     | '/my/'
     | '/api/account/export'
+    | '/api/album-image/$'
     | '/api/avatars/$'
-    | '/api/gallery-image/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -688,13 +688,13 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/access'
+    | '/album'
     | '/anti-hazing'
     | '/audit'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
-    | '/gallery'
     | '/gear-cave'
     | '/health'
     | '/history'
@@ -724,8 +724,8 @@ export interface FileRouteTypes {
     | '/gazette'
     | '/gear'
     | '/api/account/export'
+    | '/api/album-image/$'
     | '/api/avatars/$'
-    | '/api/gallery-image/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -749,13 +749,13 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/access'
+    | '/album'
     | '/anti-hazing'
     | '/audit'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
     | '/feedback'
-    | '/gallery'
     | '/gazette'
     | '/gear'
     | '/gear-cave'
@@ -792,8 +792,8 @@ export interface FileRouteTypes {
     | '/gear/'
     | '/my/'
     | '/api/account/export'
+    | '/api/album-image/$'
     | '/api/avatars/$'
-    | '/api/gallery-image/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -820,13 +820,13 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AccessRoute: typeof AccessRoute
+  AlbumRoute: typeof AlbumRoute
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
   ConstitutionRoute: typeof ConstitutionRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
-  GalleryRoute: typeof GalleryRoute
   GazetteRoute: typeof GazetteRouteWithChildren
   GearRoute: typeof GearRouteWithChildren
   GearCaveRoute: typeof GearCaveRoute
@@ -852,8 +852,8 @@ export interface RootRouteChildren {
   RegisterProfileRoute: typeof RegisterProfileRoute
   AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
+  ApiAlbumImageSplatRoute: typeof ApiAlbumImageSplatRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
-  ApiGalleryImageSplatRoute: typeof ApiGalleryImageSplatRoute
   ApiGazettePdfSplatRoute: typeof ApiGazettePdfSplatRoute
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
@@ -1001,13 +1001,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GazetteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/gallery': {
-      id: '/gallery'
-      path: '/gallery'
-      fullPath: '/gallery'
-      preLoaderRoute: typeof GalleryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/feedback': {
       id: '/feedback'
       path: '/feedback'
@@ -1048,6 +1041,13 @@ declare module '@tanstack/react-router' {
       path: '/anti-hazing'
       fullPath: '/anti-hazing'
       preLoaderRoute: typeof AntiHazingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/album': {
+      id: '/album'
+      path: '/album'
+      fullPath: '/album'
+      preLoaderRoute: typeof AlbumRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/access': {
@@ -1316,18 +1316,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGazettePdfSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/gallery-image/$': {
-      id: '/api/gallery-image/$'
-      path: '/api/gallery-image/$'
-      fullPath: '/api/gallery-image/$'
-      preLoaderRoute: typeof ApiGalleryImageSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/avatars/$': {
       id: '/api/avatars/$'
       path: '/api/avatars/$'
       fullPath: '/api/avatars/$'
       preLoaderRoute: typeof ApiAvatarsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/album-image/$': {
+      id: '/api/album-image/$'
+      path: '/api/album-image/$'
+      fullPath: '/api/album-image/$'
+      preLoaderRoute: typeof ApiAlbumImageSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/account/export': {
@@ -1482,13 +1482,13 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AccessRoute: AccessRoute,
+  AlbumRoute: AlbumRoute,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
   ConstitutionRoute: ConstitutionRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
-  GalleryRoute: GalleryRoute,
   GazetteRoute: GazetteRouteWithChildren,
   GearRoute: GearRouteWithChildren,
   GearCaveRoute: GearCaveRoute,
@@ -1514,8 +1514,8 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterProfileRoute: RegisterProfileRoute,
   AnnouncementsIndexRoute: AnnouncementsIndexRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
+  ApiAlbumImageSplatRoute: ApiAlbumImageSplatRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
-  ApiGalleryImageSplatRoute: ApiGalleryImageSplatRoute,
   ApiGazettePdfSplatRoute: ApiGazettePdfSplatRoute,
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,

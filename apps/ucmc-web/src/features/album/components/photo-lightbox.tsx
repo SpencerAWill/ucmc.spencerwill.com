@@ -3,12 +3,12 @@ import { useEffect } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 
 import { Button } from "#/components/ui/button";
-import { galleryImageUrl } from "#/features/gallery/lib/image-url";
-import type { GalleryPhotoSummary } from "#/features/gallery/server/gallery-fns";
+import { albumImageUrl } from "#/features/album/lib/image-url";
+import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
 import { cn } from "#/lib/utils";
 
 /**
- * Click-to-zoom modal for the Trip Gallery grid. Built directly on
+ * Click-to-zoom modal for the Album grid. Built directly on
  * Radix Dialog (rather than the shadcn `<Dialog>` wrapper) so the
  * content surface can render with our own padding / chrome instead
  * of the wrapper's stock dialog shell.
@@ -37,7 +37,7 @@ export function PhotoLightbox({
   onClose,
   onChange,
 }: {
-  photos: GalleryPhotoSummary[];
+  photos: AlbumPhotoSummary[];
   activePublicId: string | null;
   onClose: () => void;
   /** Called when the user navigates to a different photo (← / →). */
@@ -93,7 +93,7 @@ export function PhotoLightbox({
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogPrimitive.Title className="sr-only">
-            {active?.caption ?? active?.altText ?? "Gallery photo"}
+            {active?.caption ?? active?.altText ?? "Album photo"}
           </DialogPrimitive.Title>
 
           {/* Top bar: counter + close */}
@@ -124,7 +124,7 @@ export function PhotoLightbox({
             {active ? (
               <img
                 key={active.publicId}
-                src={galleryImageUrl(active.imageKey)}
+                src={albumImageUrl(active.imageKey)}
                 alt={active.altText}
                 className="max-h-full max-w-full object-contain"
               />

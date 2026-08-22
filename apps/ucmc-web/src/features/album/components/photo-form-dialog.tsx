@@ -17,11 +17,11 @@ import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
 import {
-  useCreateGalleryPhoto,
-  useUpdateGalleryPhoto,
-} from "#/features/gallery/api/use-gallery-mutations";
-import { galleryImageUrl } from "#/features/gallery/lib/image-url";
-import type { GalleryPhotoSummary } from "#/features/gallery/server/gallery-fns";
+  useCreateAlbumPhoto,
+  useUpdateAlbumPhoto,
+} from "#/features/album/api/use-album-mutations";
+import { albumImageUrl } from "#/features/album/lib/image-url";
+import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
 import { useImageCrop } from "#/features/landing/lib/use-image-crop";
 import { toDateInputValue } from "#/lib/date-format";
 
@@ -33,10 +33,10 @@ import { toDateInputValue } from "#/lib/date-format";
  */
 export type PhotoFormSeed =
   | { mode: "create" }
-  | { mode: "edit"; photo: GalleryPhotoSummary };
+  | { mode: "edit"; photo: AlbumPhotoSummary };
 
-const GALLERY_OUTPUT_WIDTH = 1600;
-const GALLERY_OUTPUT_HEIGHT = 1200;
+const ALBUM_OUTPUT_WIDTH = 1600;
+const ALBUM_OUTPUT_HEIGHT = 1200;
 
 interface FormState {
   caption: string;
@@ -74,14 +74,14 @@ export function PhotoFormDialog({
   onClose: () => void;
   knownTags?: string[];
 }) {
-  const createMut = useCreateGalleryPhoto();
-  const updateMut = useUpdateGalleryPhoto();
+  const createMut = useCreateAlbumPhoto();
+  const updateMut = useUpdateAlbumPhoto();
   const [form, setForm] = useState<FormState | null>(null);
 
   const crop = useImageCrop({
     aspect: 4 / 3,
-    outputWidth: GALLERY_OUTPUT_WIDTH,
-    outputHeight: GALLERY_OUTPUT_HEIGHT,
+    outputWidth: ALBUM_OUTPUT_WIDTH,
+    outputHeight: ALBUM_OUTPUT_HEIGHT,
   });
 
   // `useImageCrop()` returns a fresh object literal every render, so
@@ -138,8 +138,8 @@ export function PhotoFormDialog({
       takenAt,
       tag,
       altText,
-      widthPx: GALLERY_OUTPUT_WIDTH,
-      heightPx: GALLERY_OUTPUT_HEIGHT,
+      widthPx: ALBUM_OUTPUT_WIDTH,
+      heightPx: ALBUM_OUTPUT_HEIGHT,
     };
 
     try {
@@ -169,7 +169,7 @@ export function PhotoFormDialog({
   }
 
   const existingImageUrl =
-    seed?.mode === "edit" ? galleryImageUrl(seed.photo.imageKey) : null;
+    seed?.mode === "edit" ? albumImageUrl(seed.photo.imageKey) : null;
 
   return (
     <Dialog
@@ -193,7 +193,7 @@ export function PhotoFormDialog({
         </DialogHeader>
         {form !== null ? (
           <form
-            id="gallery-photo-form"
+            id="album-photo-form"
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
@@ -252,9 +252,9 @@ export function PhotoFormDialog({
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="gallery-alt">Alt text (required)</Label>
+                <Label htmlFor="album-alt">Alt text (required)</Label>
                 <Input
-                  id="gallery-alt"
+                  id="album-alt"
                   value={form.altText}
                   onChange={(e) =>
                     setForm({ ...form, altText: e.target.value })
@@ -264,9 +264,9 @@ export function PhotoFormDialog({
                 />
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="gallery-caption">Caption (optional)</Label>
+                <Label htmlFor="album-caption">Caption (optional)</Label>
                 <Textarea
-                  id="gallery-caption"
+                  id="album-caption"
                   value={form.caption}
                   onChange={(e) =>
                     setForm({ ...form, caption: e.target.value })
@@ -276,9 +276,9 @@ export function PhotoFormDialog({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="gallery-credit">Credit (optional)</Label>
+                <Label htmlFor="album-credit">Credit (optional)</Label>
                 <Input
-                  id="gallery-credit"
+                  id="album-credit"
                   value={form.credit}
                   onChange={(e) => setForm({ ...form, credit: e.target.value })}
                   placeholder="Photographer's name"
@@ -286,9 +286,9 @@ export function PhotoFormDialog({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="gallery-taken-at">Date taken (optional)</Label>
+                <Label htmlFor="album-taken-at">Date taken (optional)</Label>
                 <Input
-                  id="gallery-taken-at"
+                  id="album-taken-at"
                   type="date"
                   value={form.takenAt}
                   onChange={(e) =>
@@ -297,17 +297,17 @@ export function PhotoFormDialog({
                 />
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="gallery-tag">Tag (optional)</Label>
+                <Label htmlFor="album-tag">Tag (optional)</Label>
                 <Input
-                  id="gallery-tag"
+                  id="album-tag"
                   value={form.tag}
                   onChange={(e) => setForm({ ...form, tag: e.target.value })}
                   placeholder="climbing, paddling, caving, etc."
-                  list="gallery-tag-suggestions"
+                  list="album-tag-suggestions"
                   maxLength={50}
                 />
                 {knownTags.length > 0 ? (
-                  <datalist id="gallery-tag-suggestions">
+                  <datalist id="album-tag-suggestions">
                     {knownTags.map((t) => (
                       <option key={t} value={t} />
                     ))}
@@ -328,7 +328,7 @@ export function PhotoFormDialog({
           </Button>
           <Button
             type="submit"
-            form="gallery-photo-form"
+            form="album-photo-form"
             disabled={submitting || form === null}
           >
             {submitting ? "Saving…" : "Save"}

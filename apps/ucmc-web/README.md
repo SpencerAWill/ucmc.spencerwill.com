@@ -77,6 +77,7 @@ The footer also shows the registration disclaimer text **on every page** (not ju
   - `/members/deactivated` — reactivate deactivated members
 - `/members/waivers` — officer attestation queue (`waivers:verify`; held by Treasurer + President)
 - `/access` — roles and permissions editor (`roles:manage`). Root-level, not under `/members`: roles govern every feature, not just membership, so it sits next to Settings in the sidebar's bottom group.
+- `/album` — club photo archive (`public_album:view`; granted to anonymous visitors and members). Upload/edit/delete needs `public_album:manage`. Renamed from "Trip Gallery" in migration `0059`; R2 object keys deliberately kept their historical `gallery/` prefix.
 - `/settings` — runtime platform configuration (`settings:manage`), driven entirely by the Zod registry in `src/server/settings/settings-registry.ts`. This is where the club email, the Instagram / Facebook / YouTube links, and the per-page kill switches are edited. The footer and the landing page's "Where to find us" block both read the contact values from here, so neither surface hardcodes them.
 
 ## Compliance conventions
