@@ -528,7 +528,7 @@ export interface SubmitProfileResult {
    * (first-time registrant, or returning user without a profile), but
    * the unclaimed-claim path flips straight to `"approved"`. The form
    * uses this to pick the post-submit destination — pending users see
-   * `/register/pending`, approved users go to `/my/account`.
+   * `/register/pending`, approved users go to `/my/profile`.
    */
   status: schema.UserStatus;
 }

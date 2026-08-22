@@ -10,30 +10,26 @@ import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-sha
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 import { PublicProfileFields } from "#/components/profile/public-profile-fields";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requireEnabledPages } from "#/features/settings/api/page-guards";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
 import type { PublicProfileInput } from "#/server/profile/profile-schemas";
 
 /**
- * Default `/my/account` tab — shows the public-ish profile fields
- * (preferred name, UC affiliation) that fellow members can see in the
- * directory. Private fields (legal name, M-number, phone, emergency
- * contacts) live on the sibling `/my/account/details` route, mirroring
- * the server-side `members:view_private` projection split.
+ * `/my/profile` — the public-ish profile fields (preferred name, UC
+ * affiliation, bio) that fellow members can see in the directory.
+ * Private fields (legal name, phone) live on the sibling `/my/details`
+ * route and emergency contacts on `/my/contacts`, mirroring the
+ * server-side `members:view_private` projection split.
  */
-export const Route = createFileRoute("/my/account/")({
-  staticData: { pageFlag: "my_account" },
-  beforeLoad: async ({ context, matches }) => {
-    await requireEnabledPages(context.queryClient, matches);
+export const Route = createFileRoute("/my/_tabs/profile")({
+  staticData: { pageFlag: "my_profile" },
+  beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "my_profile");
   },
   component: AccountProfilePage,
 });
-
-// Re-exported so existing importers (e.g. account.details.tsx) keep
-// working; canonical location is `#/features/auth/api/query-keys`.
-export { PROFILE_QUERY_KEY as ACCOUNT_PROFILE_QUERY_KEY } from "#/features/auth/api/query-keys";
 
 function AccountProfilePage() {
   const { principal, refresh } = useAuth();
@@ -92,12 +88,15 @@ function AccountProfilePage() {
         />
       )}
       <p className="text-xs text-muted-foreground">
-        Looking for your phone, legal name, or emergency contacts? Those live on
-        the{" "}
-        <Link to="/my/account/details" className="underline">
+        Looking for your phone or legal name? Those live on the{" "}
+        <Link to="/my/details" className="underline">
           Details
         </Link>{" "}
-        tab.
+        tab, and emergency contacts on{" "}
+        <Link to="/my/contacts" className="underline">
+          Contacts
+        </Link>
+        .
       </p>
     </div>
   );

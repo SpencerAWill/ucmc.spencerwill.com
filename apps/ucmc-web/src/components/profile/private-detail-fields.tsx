@@ -5,7 +5,7 @@ import { PROFILE_LIMITS } from "#/server/profile/profile-schemas";
 /**
  * Private/PII profile fields: legal name and phone. These are the columns
  * nullified server-side for non-`members:view_private` callers in
- * `member-actions.server.ts`, so they live on the `/account/details` tab
+ * `member-actions.server.ts`, so they live on the `/my/details` tab
  * (and on the combined registration form).
  */
 export const PrivateDetailFields = withForm({

@@ -3,36 +3,37 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
-import { PrivateDetailFields } from "#/components/profile/private-detail-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useSubmitDetails } from "#/features/auth/api/use-submit-details";
-import { requireEnabledPages } from "#/features/settings/api/page-guards";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
 
 /**
- * `/my/account/details` — private profile fields (legal name, phone)
- * plus emergency contacts. Mirrors the server-side
- * `members:view_private` projection: only the user themselves and
- * admins ever see these values.
+ * `/my/contacts` — the member's emergency contacts, split out of the
+ * Details tab onto their own page. They're the one part of a profile an
+ * officer reads in an actual emergency (Bylaw 1.3 trip safety), so they
+ * get a URL that can be pointed at directly instead of being buried
+ * below legal name and phone.
  *
- * Email addresses moved to the Sign-in tab because they're an
- * authentication identifier (magic-link target) rather than personal
- * contact info. Account deletion / data export moved to Preferences.
+ * Same privacy class as Details: `members:view_private` only. Writes go
+ * through the shared `submitDetailsFn`, so this page passes `fullName`
+ * and `phone` through unchanged from the loaded profile — see the
+ * comment on `ContactsEditor`.
  */
-export const Route = createFileRoute("/my/account/details")({
-  staticData: { pageFlag: "my_account_details" },
-  beforeLoad: async ({ context, matches }) => {
-    await requireEnabledPages(context.queryClient, matches);
+export const Route = createFileRoute("/my/_tabs/contacts")({
+  staticData: { pageFlag: "my_contacts" },
+  beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "my_contacts");
   },
-  component: AccountDetailsPage,
+  component: AccountContactsPage,
 });
 
-function AccountDetailsPage() {
+function AccountContactsPage() {
   const { principal } = useAuth();
   const { data, isLoading } = useQuery(profileQueryOptions());
 
@@ -43,17 +44,17 @@ function AccountDetailsPage() {
   return (
     <div className="space-y-4">
       <header>
-        <h2 className="text-lg font-medium">Details</h2>
+        <h2 className="text-lg font-medium">Emergency contacts</h2>
         <p className="text-sm text-muted-foreground">
-          Private information only you and UCMC execs can see. Changes save
-          immediately.
+          Who UCMC should call if something happens to you on a trip. Only you
+          and UCMC execs can see these. Changes save immediately.
         </p>
       </header>
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <DetailsEditor
+        <ContactsEditor
           key={data?.profile?.updatedAt.toString()}
           defaults={
             data?.profile
@@ -75,9 +76,9 @@ function AccountDetailsPage() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Looking to manage your email addresses? Those live on the{" "}
-        <Link to="/my/account/security" className="underline">
-          Sign-in
+        Looking for your own phone number or legal name? Those live on the{" "}
+        <Link to="/my/details" className="underline">
+          Details
         </Link>{" "}
         tab.
       </p>
@@ -85,13 +86,20 @@ function AccountDetailsPage() {
   );
 }
 
-function DetailsEditor({ defaults }: { defaults: ProfileFormShape }) {
+function ContactsEditor({ defaults }: { defaults: ProfileFormShape }) {
   const mutation = useSubmitDetails();
 
-  // Same full-form validation pattern as the Profile tab — see comment
-  // there. The form holds every profile field (populated from saved
-  // values), but only the Details fields below are editable. Submit
-  // picks just the private columns and calls `submitDetailsFn`.
+  // The form holds the whole shared profile shape (see
+  // `profile-form-shape.ts` — `withForm`'s generics are invariant, so
+  // every profile form declares the same shape). Only the emergency
+  // contacts below are editable here.
+  //
+  // `fullName` and `phone` are submitted unchanged from `defaults`
+  // because `submitDetailsFn` takes the whole `detailsInputSchema`
+  // shape — dropping them would blank the member's legal name and phone
+  // on every save from this page. They come from the saved profile via
+  // the same `profileQueryOptions` cache the Details tab writes to, so
+  // they're already valid and current.
   const form = useAppForm({
     defaultValues: defaults,
     validators: {
@@ -109,12 +117,12 @@ function DetailsEditor({ defaults }: { defaults: ProfileFormShape }) {
         },
         {
           onSuccess: () => {
-            toast.success("Details saved");
+            toast.success("Emergency contacts saved");
             // See profile-form.tsx for why this synchronous reset is needed.
             form.reset(form.state.values);
           },
           onError: () => {
-            toast.error("Couldn’t save your details. Please try again.");
+            toast.error("Couldn’t save your contacts. Please try again.");
           },
         },
       );
@@ -135,7 +143,6 @@ function DetailsEditor({ defaults }: { defaults: ProfileFormShape }) {
       <form.Subscribe selector={(s) => s.isSubmitting}>
         {(isSubmitting) => (
           <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
-            <PrivateDetailFields form={form} />
             <EmergencyContactFields form={form} />
             <form.AppForm>
               <form.SubscribeButton label="Save changes" />

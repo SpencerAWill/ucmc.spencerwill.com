@@ -6,7 +6,7 @@ import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { WAIVER_PDF_PATH, WAIVER_VERSION } from "#/config/legal";
 import { formatDate } from "#/lib/date-format";
-import { requireEnabledPages } from "#/features/settings/api/page-guards";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 import {
   myWaiverHistoryQueryOptions,
   myWaiverStatusQueryOptions,
@@ -25,10 +25,10 @@ import type { WaiverAttestationSummary } from "#/features/waivers/server/waiver-
  * No file upload, no medical PII storage — the signed paper lives
  * with the Treasurer per Bylaw 1.3.
  */
-export const Route = createFileRoute("/my/account/waiver")({
-  staticData: { pageFlag: "my_account_waiver" },
-  beforeLoad: async ({ context, matches }) => {
-    await requireEnabledPages(context.queryClient, matches);
+export const Route = createFileRoute("/my/_tabs/waiver")({
+  staticData: { pageFlag: "my_waiver" },
+  beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "my_waiver");
   },
   loader: ({ context }) =>
     Promise.all([

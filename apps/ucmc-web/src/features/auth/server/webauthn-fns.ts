@@ -67,8 +67,12 @@ export type RemovePasskeyResult =
 export interface PasskeySummary {
   credentialId: string;
   nickname: string | null;
-  createdAt: string;
-  lastUsedAt: string | null;
+  /** Temporal crosses the server-fn wire via the serialization adapters
+   *  registered in `src/start.ts`, so these stay Instants rather than
+   *  pre-stringified dates — matching `MyEmailSummary` and letting the
+   *  UI format them through `#/lib/date-format`. */
+  createdAt: Temporal.Instant;
+  lastUsedAt: Temporal.Instant | null;
 }
 
 // ── register (session-gated) ─────────────────────────────────────────────

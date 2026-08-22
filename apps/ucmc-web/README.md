@@ -68,8 +68,8 @@ The footer also shows the registration disclaimer text **on every page** (not ju
 
 ### Auth-gated routes
 
-- `/my/account` (public profile), `/my/account/details` (private PII + emergency contacts), `/my/account/security` (Sign-in tab: emails + passkeys), `/my/account/preferences` (theme + data export + hard delete) — the member's own account surface
-- `/my/account/waiver` — read-only view of the member's paper-waiver attestation status
+- `/my/profile` (public profile), `/my/details` (private PII + email addresses), `/my/contacts` (emergency contacts), `/my/security` (passkeys), `/my/preferences` (theme + data export + hard delete) — the member's own account surface, sharing a greeting + tab bar via the pathless `my._tabs` layout. `/my` itself redirects to `/my/profile`.
+- `/my/waiver` — read-only view of the member's paper-waiver attestation status
 - `/members` — directory (auth-gated, robots-disallowed). Approved members see only the approved tab; officers with `members:manage` see a tab bar with four additional siblings:
   - `/members/pending` — approve pending registrations
   - `/members/unclaimed` — pre-add unclaimed members (off-platform stubs)

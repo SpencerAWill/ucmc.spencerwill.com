@@ -222,7 +222,7 @@ describe("getPublicFlagsAction", () => {
       "members",
       "gear",
       "feedback",
-      "my_account",
+      "my_profile",
       "blog",
       "reports",
     ] as const) {

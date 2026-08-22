@@ -400,47 +400,57 @@ export const SETTINGS = {
     createdAt: "2026-08-21",
   }),
 
-  // Personal / user-menu pages.
-  "pages.my_account": z.boolean().default(true).register(registry, {
+  // Personal / user-menu pages. Each is a tab on the `/my/_tabs`
+  // account layout; `my_profile` additionally gates the user-menu link.
+  "pages.my_profile": z.boolean().default(true).register(registry, {
     label: "My Account · Profile enabled",
     description:
-      "When off, the My Account link is hidden and /my/account returns notFound.",
+      "When off, the My Account link is hidden and /my/profile returns notFound.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.my_account_details": z.boolean().default(true).register(registry, {
+  "pages.my_details": z.boolean().default(true).register(registry, {
     label: "My Account · Details tab enabled",
     description:
-      "When off, the Details tab is hidden and /my/account/details returns notFound.",
+      "When off, the Details tab is hidden and /my/details returns notFound. Turning this off also hides the email-address manager, which lives on that tab.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.my_account_preferences": z.boolean().default(true).register(registry, {
-    label: "My Account · Preferences tab enabled",
+  "pages.my_contacts": z.boolean().default(true).register(registry, {
+    label: "My Account · Contacts tab enabled",
     description:
-      "When off, the Preferences tab is hidden and /my/account/preferences returns notFound.",
+      "When off, the Contacts tab is hidden and /my/contacts returns notFound. Members can no longer edit their own emergency contacts while it is off.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.my_account_security": z.boolean().default(true).register(registry, {
-    label: "My Account · Sign-in tab enabled",
-    description:
-      "When off, the Sign-in tab is hidden and /my/account/security returns notFound. Turning this off can strand members who manage passkeys here.",
-    category: "pages",
-    flagKind: "release",
-    owner: "system_admin",
-    createdAt: "2026-08-21",
-  }),
-  "pages.my_account_waiver": z.boolean().default(true).register(registry, {
+  "pages.my_waiver": z.boolean().default(true).register(registry, {
     label: "My Account · Waiver tab enabled",
     description:
-      "When off, the Waiver tab is hidden and /my/account/waiver returns notFound.",
+      "When off, the Waiver tab is hidden and /my/waiver returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_security": z.boolean().default(true).register(registry, {
+    label: "My Account · Security tab enabled",
+    description:
+      "When off, the Security tab is hidden and /my/security returns notFound. Turning this off can strand members who manage passkeys here.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_preferences": z.boolean().default(true).register(registry, {
+    label: "My Account · Preferences tab enabled",
+    description:
+      "When off, the Preferences tab is hidden and /my/preferences returns notFound.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",

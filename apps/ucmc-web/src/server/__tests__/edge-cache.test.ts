@@ -111,7 +111,7 @@ describe("isCacheablePublicPageRequest", () => {
     "/sign-in",
     "/announcements",
     "/feedback",
-    "/my/account",
+    "/my/profile",
     "/members",
     "/foo",
     "/about/extra",

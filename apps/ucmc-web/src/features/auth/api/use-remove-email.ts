@@ -8,7 +8,7 @@ import { removeEmailFn } from "#/features/auth/server/email-fns";
 
 /**
  * Remove an email from the user's account. Invalidates both the email
- * list (so the row disappears from `/my/account/security`) and the
+ * list (so the row disappears from `/my/details`) and the
  * session (so `principal.emails` reflects the removal — the cached
  * principal would otherwise still list the deleted address until the
  * next navigation forced a refetch).

@@ -17,9 +17,10 @@ import {
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useDeleteMyAccount } from "#/features/auth/api/use-delete-my-account";
-import { requireEnabledPages } from "#/features/settings/api/page-guards";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 /**
  * Preferences tab. Theme toggle plus the privacy controls (data export
@@ -31,10 +32,10 @@ import { requireEnabledPages } from "#/features/settings/api/page-guards";
  * visibility, etc.) will persist to D1 and slot in under new section
  * headers above the danger zone.
  */
-export const Route = createFileRoute("/my/account/preferences")({
-  staticData: { pageFlag: "my_account_preferences" },
-  beforeLoad: async ({ context, matches }) => {
-    await requireEnabledPages(context.queryClient, matches);
+export const Route = createFileRoute("/my/_tabs/preferences")({
+  staticData: { pageFlag: "my_preferences" },
+  beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "my_preferences");
   },
   component: PreferencesPage,
 });
@@ -53,19 +54,42 @@ function PreferencesPage() {
       </header>
 
       <section className="space-y-2">
-        <p className="text-sm font-medium">Theme</p>
-        <div className="flex gap-2">
+        <p className="text-sm font-medium" id="theme-label">
+          Theme
+        </p>
+        {/*
+         * ToggleGroup rather than three Buttons whose `variant` flips on
+         * the selected value: this is a single-choice control, and the
+         * radiogroup semantics come for free — arrow keys move between
+         * options, `aria-checked` reports the active one, and the group
+         * is one tab stop instead of three. `type="single"` with a
+         * non-empty `value` also makes "nothing selected" unrepresentable,
+         * where the old version relied on `theme` happening to match one
+         * of the three literals.
+         */}
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          aria-labelledby="theme-label"
+          value={theme}
+          onValueChange={(next) => {
+            // Radix hands back a plain string, and fires "" when the
+            // active item is re-pressed. Narrowing through `find` keeps
+            // `setTheme` fed a real `Theme` without a cast, and makes the
+            // deselect case a no-op.
+            const picked = THEME_OPTIONS.find((mode) => mode === next);
+            if (picked) {
+              setTheme(picked);
+            }
+          }}
+        >
           {THEME_OPTIONS.map((mode) => (
-            <Button
-              key={mode}
-              variant={theme === mode ? "default" : "outline"}
-              size="sm"
-              onClick={() => setTheme(mode)}
-            >
+            <ToggleGroupItem key={mode} value={mode}>
               {mode[0].toUpperCase() + mode.slice(1)}
-            </Button>
+            </ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
       </section>
 
       <DataAndDeletionSection />

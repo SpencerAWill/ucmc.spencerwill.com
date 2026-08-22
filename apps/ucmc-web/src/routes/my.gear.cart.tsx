@@ -4,20 +4,20 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "#/components/ui/button";
 import { requireCurrentWaiver } from "#/features/auth/guards";
 import { MyCartList } from "#/features/gear/components/my-cart-list";
-import { requireEnabledPages } from "#/features/settings/api/page-guards";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 /**
  * Member's gear cart at `/my/gear/cart`. The parent `/my` guard already
  * requires approved + profile-complete; we layer `requireCurrentWaiver`
  * here so a waiver-lapsed member can't sit in this route and build a
  * cart they couldn't act on at the desk. The route guard bounces them
- * to /my/account/waiver; the server-fn gate ([requireCartMember])
+ * to /my/waiver; the server-fn gate ([requireCartMember])
  * catches direct calls.
  */
 export const Route = createFileRoute("/my/gear/cart")({
   staticData: { pageFlag: "my_gear_cart" },
-  beforeLoad: async ({ context, location, matches }) => {
-    await requireEnabledPages(context.queryClient, matches);
+  beforeLoad: async ({ context, location }) => {
+    await requirePageFlag(context.queryClient, "my_gear_cart");
     await requireCurrentWaiver(context.queryClient, location.href);
   },
   component: MyCartPage,

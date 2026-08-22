@@ -38,7 +38,7 @@ export function ProfileForm({
    */
   email: string;
   defaults?: ProfileFormDefaults;
-  redirectTo?: "/register/pending" | "/" | "/my/account";
+  redirectTo?: "/register/pending" | "/" | "/my/profile";
 }) {
   const navigate = useNavigate();
 
@@ -84,11 +84,11 @@ export function ProfileForm({
           form.reset(form.state.values);
           // Officer-pre-added users who claim land on this submit with
           // status flipped straight to "approved" (no pending wait).
-          // Send them to /my/account instead of the registration
+          // Send them to /my/profile instead of the registration
           // funnel's pending page so they don't see a misleading
           // "we're reviewing your account" interstitial.
           const destination =
-            result.status === "approved" ? "/my/account" : redirectTo;
+            result.status === "approved" ? "/my/profile" : redirectTo;
           await navigate({ to: destination });
         },
         onError: () => {

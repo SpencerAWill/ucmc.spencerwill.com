@@ -48,7 +48,7 @@ export interface EmailRow {
   // claimed"). This action is only callable by an authenticated user;
   // approved users always have non-null `verifiedAt` on every row,
   // because the only path that inserts NULL is officer pre-add and
-  // those users can't reach the Sign-in tab (/my/account/security)
+  // those users can't reach the email manager (/my/details)
   // that consumes this. The type widening keeps the contract honest.
   verifiedAt: Temporal.Instant | null;
   createdAt: Temporal.Instant;

@@ -66,6 +66,31 @@ export async function requirePageFlag(
  * re-run, still checks the new leaf), a disabled page 404s uniformly
  * regardless of who's asking. Both call sites read the same cached
  * snapshot, so the double-check is free.
+ *
+ * **The leaf half of that pair should call `requirePageFlag` with its own
+ * key, not this helper.** Two reasons, one correctness-neutral and one
+ * load-bearing:
+ *
+ *  1. Equivalence — the leaf's own `staticData.pageFlag` is the only
+ *     gated entry in its match chain whenever the layouts above it are
+ *     flag-less (true for `/my`, `/gear`, `/members/_tabs`,
+ *     `/feedback/_tabs`), so walking `matches` there just re-finds the
+ *     key the leaf already knows statically. Ordering doesn't matter on
+ *     sibling-tab navigation because the parent's auth guard isn't
+ *     re-running.
+ *  2. Type-instantiation cost — `matches` on the `beforeLoad` argument is
+ *     typed `Array<RouteMatch<..., ResolveAllContext<TParentRoute, ...,
+ *     TBeforeLoadFn>, ...>>`, i.e. it depends on the very `beforeLoad`
+ *     being defined, and resolves every ancestor's context in turn.
+ *     TypeScript only pays for that when the property is actually
+ *     destructured, and at four levels deep (`/my/gear/`) touching it
+ *     pushed `createFileRoute` over the instantiation-depth limit with
+ *     TS2589. Reading `matches` in a shallow layout route is cheap;
+ *     reading it in a deep leaf is not.
+ *
+ * So: `matches` walks belong in the shallow parent layout, and leaves
+ * name their own flag. Do NOT "simplify" the leaves back to this helper —
+ * it reintroduces TS2589 on the deepest routes.
  */
 export async function requireEnabledPages(
   queryClient: QueryClient,
