@@ -2,9 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { requirePermission } from "#/features/auth/guards";
 import { RolesListEditor } from "#/features/members/components/roles-list-editor";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 export const Route = createFileRoute("/members/roles")({
   beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "members_roles");
     await requirePermission(context.queryClient, "roles:manage");
   },
   component: RolesPage,

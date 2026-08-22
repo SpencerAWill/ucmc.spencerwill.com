@@ -7,7 +7,7 @@ import { EditMarkdownSheet } from "#/components/markdown/edit-markdown-sheet";
 import { MarkdownContent } from "#/components/markdown/markdown-content";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requireViewPermission } from "#/features/auth/guards";
+import { requirePageEnabled } from "#/features/settings/api/page-guards";
 import { markdownPageQueryOptions } from "#/server/markdown-pages/queries";
 
 /**
@@ -24,7 +24,11 @@ import { markdownPageQueryOptions } from "#/server/markdown-pages/queries";
  */
 export const Route = createFileRoute("/resources")({
   beforeLoad: async ({ context }) => {
-    await requireViewPermission(context.queryClient, "public_resources:view");
+    await requirePageEnabled(
+      context.queryClient,
+      "resources",
+      "public_resources:view",
+    );
   },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(

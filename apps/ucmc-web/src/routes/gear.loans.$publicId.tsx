@@ -9,9 +9,12 @@ import { loanDetailQueryOptions } from "#/features/gear/api/queries";
 import { GearDeskTrigger } from "#/features/gear/components/gear-desk-trigger";
 import { LoanDetailCard } from "#/features/gear/components/loan-detail-card";
 import { LoanExtendDialog } from "#/features/gear/components/loan-extend-dialog";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 export const Route = createFileRoute("/gear/loans/$publicId")({
-  beforeLoad: async ({ context }) => {
+  staticData: { pageFlag: "gear_loans_detail" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
     await requirePermission(context.queryClient, "gear:loan");
   },
   component: LoanDetailPage,

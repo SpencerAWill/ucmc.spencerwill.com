@@ -14,6 +14,7 @@ import { WAIVER_VERSION } from "#/config/legal";
 import { formatDate } from "#/lib/date-format";
 import { currentWaiverCycle } from "#/config/waiver-cycle";
 import { requirePermission } from "#/features/auth/guards";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 import {
   useAttestWaiver,
   useBulkAttestWaivers,
@@ -34,6 +35,7 @@ import type { MemberNeedingAttestation } from "#/features/waivers/server/waiver-
  */
 export const Route = createFileRoute("/members/waivers")({
   beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "members_waivers");
     await requirePermission(context.queryClient, "waivers:verify");
   },
   loader: ({ context }) =>

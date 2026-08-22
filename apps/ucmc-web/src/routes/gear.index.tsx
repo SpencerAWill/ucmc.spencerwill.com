@@ -26,6 +26,7 @@ import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog"
 import { GearTagsManageDialog } from "#/features/gear/components/gear-tags-manage-dialog";
 import { GearTypesManageDialog } from "#/features/gear/components/gear-types-manage-dialog";
 import { useUnretireGear } from "#/features/gear/api/use-unretire-gear";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import {
   GEAR_CONDITION_VALUES,
   GEAR_LIFECYCLE_VALUES,
@@ -48,6 +49,10 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/gear/")({
+  staticData: { pageFlag: "gear" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
+  },
   validateSearch: searchSchema,
   component: GearIndexPage,
 });

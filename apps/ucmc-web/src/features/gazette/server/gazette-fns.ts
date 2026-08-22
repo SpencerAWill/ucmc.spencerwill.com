@@ -26,7 +26,7 @@ export const getGazetteIssuesFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const getGazetteIssueByPublicIdFn = createServerFn({ method: "GET" })
-  .inputValidator(getGazetteIssueByPublicIdInputSchema)
+  .validator(getGazetteIssueByPublicIdInputSchema)
   .handler(async ({ data }): Promise<GazetteIssueSummary | null> => {
     const { getGazetteIssueByPublicIdAction } =
       await import("#/features/gazette/server/gazette-actions.server");
@@ -36,7 +36,7 @@ export const getGazetteIssueByPublicIdFn = createServerFn({ method: "GET" })
 // ── mutations (gated at the action layer by public_gazette:manage) ─────
 
 export const createGazetteIssueFn = createServerFn({ method: "POST" })
-  .inputValidator(createGazetteIssueInputSchema)
+  .validator(createGazetteIssueInputSchema)
   .handler(async ({ data }): Promise<{ publicId: string }> => {
     const { createGazetteIssueAction } =
       await import("#/features/gazette/server/gazette-actions.server");
@@ -44,7 +44,7 @@ export const createGazetteIssueFn = createServerFn({ method: "POST" })
   });
 
 export const updateGazetteIssueFn = createServerFn({ method: "POST" })
-  .inputValidator(updateGazetteIssueInputSchema)
+  .validator(updateGazetteIssueInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateGazetteIssueAction } =
       await import("#/features/gazette/server/gazette-actions.server");
@@ -52,7 +52,7 @@ export const updateGazetteIssueFn = createServerFn({ method: "POST" })
   });
 
 export const deleteGazetteIssueFn = createServerFn({ method: "POST" })
-  .inputValidator(deleteGazetteIssueInputSchema)
+  .validator(deleteGazetteIssueInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteGazetteIssueAction } =
       await import("#/features/gazette/server/gazette-actions.server");

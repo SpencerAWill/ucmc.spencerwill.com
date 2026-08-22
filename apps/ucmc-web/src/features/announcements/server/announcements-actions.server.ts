@@ -27,7 +27,7 @@ import { readSetting } from "#/server/settings/settings-repo.server";
  * which means a fresh DB keeps the feature hidden (default is `false`).
  */
 async function requireAnnouncementsEnabled(): Promise<void> {
-  const enabled = await readSetting("announcements.enabled");
+  const enabled = await readSetting("pages.announcements");
   if (!enabled) {
     throw new Error("Forbidden: announcements feature is disabled");
   }

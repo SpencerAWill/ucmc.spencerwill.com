@@ -30,7 +30,7 @@ export const listAllFeedbackFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const submitFeedbackFn = createServerFn({ method: "POST" })
-  .inputValidator(feedbackInputSchema)
+  .validator(feedbackInputSchema)
   .handler(async ({ data }): Promise<{ id: string }> => {
     const { submitFeedbackAction } =
       await import("#/features/feedback/server/feedback-actions.server");
@@ -38,7 +38,7 @@ export const submitFeedbackFn = createServerFn({ method: "POST" })
   });
 
 export const updateFeedbackStatusFn = createServerFn({ method: "POST" })
-  .inputValidator(feedbackStatusUpdateSchema)
+  .validator(feedbackStatusUpdateSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateFeedbackStatusAction } =
       await import("#/features/feedback/server/feedback-actions.server");

@@ -16,7 +16,12 @@ import {
   readAllSettings,
   readSetting,
 } from "#/server/settings/settings-repo.server";
-import { isSettingKey, SETTINGS } from "#/server/settings/settings-registry";
+import {
+  isSettingKey,
+  pageFlagKeyOf,
+  PAGE_SETTING_KEYS,
+  SETTINGS,
+} from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
 import type {
   PublicFlags,
@@ -49,10 +54,15 @@ export async function getPublicSiteContactAction(): Promise<PublicSiteContact> {
  * feature is off" is the same answer the gated route already returns.
  */
 export async function getPublicFlagsAction(): Promise<PublicFlags> {
-  const announcements = await readSetting("announcements.enabled");
-  const websiteFeedback = await readSetting("feedback.website_enabled");
-  const clubFeedback = await readSetting("feedback.club_enabled");
-  return { announcements, websiteFeedback, clubFeedback };
+  const [websiteFeedback, clubFeedback, pageValues] = await Promise.all([
+    readSetting("feedback.website_enabled"),
+    readSetting("feedback.club_enabled"),
+    Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
+  ]);
+  const pages = Object.fromEntries(
+    PAGE_SETTING_KEYS.map((key, i) => [pageFlagKeyOf(key), pageValues[i]]),
+  ) as PublicFlags["pages"];
+  return { websiteFeedback, clubFeedback, pages };
 }
 
 /**

@@ -45,7 +45,7 @@ export const getLandingContentFn = createServerFn({ method: "GET" }).handler(
 // ── Settings ────────────────────────────────────────────────────────────
 
 export const updateLandingSettingFn = createServerFn({ method: "POST" })
-  .inputValidator(updateSettingInputSchema)
+  .validator(updateSettingInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateSettingAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -55,7 +55,7 @@ export const updateLandingSettingFn = createServerFn({ method: "POST" })
 // ── Hero slides ─────────────────────────────────────────────────────────
 
 export const createHeroSlideFn = createServerFn({ method: "POST" })
-  .inputValidator(createHeroSlideInputSchema)
+  .validator(createHeroSlideInputSchema)
   .handler(async ({ data }): Promise<{ id: string; imageKey: string }> => {
     const { createHeroSlideAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -63,7 +63,7 @@ export const createHeroSlideFn = createServerFn({ method: "POST" })
   });
 
 export const updateHeroSlideFn = createServerFn({ method: "POST" })
-  .inputValidator(updateHeroSlideInputSchema)
+  .validator(updateHeroSlideInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateHeroSlideAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -71,7 +71,7 @@ export const updateHeroSlideFn = createServerFn({ method: "POST" })
   });
 
 export const deleteHeroSlideFn = createServerFn({ method: "POST" })
-  .inputValidator(idInputSchema)
+  .validator(idInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteHeroSlideAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -79,7 +79,7 @@ export const deleteHeroSlideFn = createServerFn({ method: "POST" })
   });
 
 export const reorderHeroSlidesFn = createServerFn({ method: "POST" })
-  .inputValidator(reorderInputSchema)
+  .validator(reorderInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { reorderHeroSlidesAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -89,7 +89,7 @@ export const reorderHeroSlidesFn = createServerFn({ method: "POST" })
 // ── FAQ ─────────────────────────────────────────────────────────────────
 
 export const createFaqItemFn = createServerFn({ method: "POST" })
-  .inputValidator(faqInputSchema)
+  .validator(faqInputSchema)
   .handler(async ({ data }): Promise<{ id: string }> => {
     const { createFaqItemAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -97,7 +97,7 @@ export const createFaqItemFn = createServerFn({ method: "POST" })
   });
 
 export const updateFaqItemFn = createServerFn({ method: "POST" })
-  .inputValidator(faqUpdateInputSchema)
+  .validator(faqUpdateInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateFaqItemAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -105,7 +105,7 @@ export const updateFaqItemFn = createServerFn({ method: "POST" })
   });
 
 export const deleteFaqItemFn = createServerFn({ method: "POST" })
-  .inputValidator(idInputSchema)
+  .validator(idInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteFaqItemAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -113,7 +113,7 @@ export const deleteFaqItemFn = createServerFn({ method: "POST" })
   });
 
 export const reorderFaqItemsFn = createServerFn({ method: "POST" })
-  .inputValidator(reorderInputSchema)
+  .validator(reorderInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { reorderFaqItemsAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -123,7 +123,7 @@ export const reorderFaqItemsFn = createServerFn({ method: "POST" })
 // ── Activities ──────────────────────────────────────────────────────────
 
 export const createActivityFn = createServerFn({ method: "POST" })
-  .inputValidator(activityInputSchema)
+  .validator(activityInputSchema)
   .handler(
     async ({ data }): Promise<{ id: string; imageKey: string | null }> => {
       const { createActivityAction } =
@@ -135,7 +135,7 @@ export const createActivityFn = createServerFn({ method: "POST" })
 // ── Section-singleton images ────────────────────────────────────────────
 
 export const setAboutImageFn = createServerFn({ method: "POST" })
-  .inputValidator(setSectionImageInputSchema)
+  .validator(setSectionImageInputSchema)
   .handler(async ({ data }): Promise<{ ok: true; imageKey: string }> => {
     const { setAboutImageAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -151,7 +151,7 @@ export const removeAboutImageFn = createServerFn({ method: "POST" }).handler(
 );
 
 export const setMeetingImageFn = createServerFn({ method: "POST" })
-  .inputValidator(setSectionImageInputSchema)
+  .validator(setSectionImageInputSchema)
   .handler(async ({ data }): Promise<{ ok: true; imageKey: string }> => {
     const { setMeetingImageAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -167,7 +167,7 @@ export const removeMeetingImageFn = createServerFn({ method: "POST" }).handler(
 );
 
 export const updateActivityFn = createServerFn({ method: "POST" })
-  .inputValidator(activityUpdateInputSchema)
+  .validator(activityUpdateInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateActivityAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -175,7 +175,7 @@ export const updateActivityFn = createServerFn({ method: "POST" })
   });
 
 export const deleteActivityFn = createServerFn({ method: "POST" })
-  .inputValidator(idInputSchema)
+  .validator(idInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteActivityAction } =
       await import("#/features/landing/server/landing-actions.server");
@@ -183,7 +183,7 @@ export const deleteActivityFn = createServerFn({ method: "POST" })
   });
 
 export const reorderActivitiesFn = createServerFn({ method: "POST" })
-  .inputValidator(reorderInputSchema)
+  .validator(reorderInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { reorderActivitiesAction } =
       await import("#/features/landing/server/landing-actions.server");

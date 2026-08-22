@@ -14,8 +14,13 @@ import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import { GearInspectionsSection } from "#/features/gear/components/gear-inspections-section";
 import { GearLabelsDialog } from "#/features/gear/components/gear-labels-dialog";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 export const Route = createFileRoute("/gear/$publicId")({
+  staticData: { pageFlag: "gear_detail" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
+  },
   component: GearDetailPage,
 });
 

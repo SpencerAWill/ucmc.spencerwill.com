@@ -90,7 +90,7 @@ const registerFinishInput = z.object({
 });
 
 export const webauthnRegisterFinishFn = createServerFn({ method: "POST" })
-  .inputValidator(registerFinishInput)
+  .validator(registerFinishInput)
   .handler(async ({ data }): Promise<RegisterFinishResult> => {
     const { webauthnRegisterFinishAction } =
       await import("#/features/auth/server/webauthn-actions.server");
@@ -115,7 +115,7 @@ const authenticateFinishInput = z.object({
 });
 
 export const webauthnAuthenticateFinishFn = createServerFn({ method: "POST" })
-  .inputValidator(authenticateFinishInput)
+  .validator(authenticateFinishInput)
   .handler(async ({ data }): Promise<AuthenticateFinishResult> => {
     const { webauthnAuthenticateFinishAction } =
       await import("#/features/auth/server/webauthn-actions.server");
@@ -131,7 +131,7 @@ const removePasskeyInput = z.object({
 });
 
 export const removePasskeyFn = createServerFn({ method: "POST" })
-  .inputValidator(removePasskeyInput)
+  .validator(removePasskeyInput)
   .handler(async ({ data }): Promise<RemovePasskeyResult> => {
     const { removePasskeyAction } =
       await import("#/features/auth/server/webauthn-actions.server");

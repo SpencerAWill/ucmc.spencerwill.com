@@ -16,7 +16,7 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requireViewPermission } from "#/features/auth/guards";
+import { requirePageEnabled } from "#/features/settings/api/page-guards";
 import { gazetteListQueryOptions } from "#/features/gazette/api/queries";
 import { useDeleteGazetteIssue } from "#/features/gazette/api/use-gazette-mutations";
 import { GazetteList } from "#/features/gazette/components/gazette-list";
@@ -37,7 +37,11 @@ import type { GazetteIssueSummary } from "#/features/gazette/server/gazette-fns"
  */
 export const Route = createFileRoute("/gazette/")({
   beforeLoad: async ({ context }) => {
-    await requireViewPermission(context.queryClient, "public_gazette:view");
+    await requirePageEnabled(
+      context.queryClient,
+      "gazette",
+      "public_gazette:view",
+    );
   },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(gazetteListQueryOptions());

@@ -15,6 +15,7 @@ import {
   updateSettingInputSchema,
 } from "#/server/settings/settings-registry";
 import type {
+  PageFlagKey,
   SettingKey,
   SettingValue,
   UpdateSettingInput,
@@ -77,9 +78,14 @@ export const getPublicSiteContactFn = createServerFn({
  * it publicly.
  */
 export type PublicFlags = {
-  announcements: boolean;
+  // Submission kill switches (distinct from page reachability): whether
+  // each feedback surface accepts NEW submissions.
   websiteFeedback: boolean;
   clubFeedback: boolean;
+  // Per-page kill switches, keyed by the `pages.*` suffix. Each gates both
+  // the page's route (via `requirePageFlag`) and its nav/tab entry. See
+  // the registry's `pages` category for the full set.
+  pages: Record<PageFlagKey, boolean>;
 };
 
 export const getPublicFlagsFn = createServerFn({
@@ -109,7 +115,7 @@ const listSettingHistoryInputSchema = z.object({
 });
 
 export const listSettingHistoryFn = createServerFn({ method: "GET" })
-  .inputValidator(listSettingHistoryInputSchema)
+  .validator(listSettingHistoryInputSchema)
   .handler(async ({ data }): Promise<SettingHistoryEntry[]> => {
     const { listSettingHistoryAction } =
       await import("./settings-actions-read.server");
@@ -117,7 +123,7 @@ export const listSettingHistoryFn = createServerFn({ method: "GET" })
   });
 
 export const updateSettingFn = createServerFn({ method: "POST" })
-  .inputValidator(updateSettingInputSchema)
+  .validator(updateSettingInputSchema)
   .handler(async ({ data }): Promise<UpdateSettingResult> => {
     const { updateSettingAction } = await import("./settings-actions.server");
     return updateSettingAction(data);

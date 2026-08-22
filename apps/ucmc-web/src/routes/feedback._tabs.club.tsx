@@ -10,10 +10,13 @@ import {
 } from "#/features/club-feedback/api/queries";
 import { ClubFeedbackCard } from "#/features/club-feedback/components/club-feedback-card";
 import { ClubFeedbackForm } from "#/features/club-feedback/components/club-feedback-form";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export const Route = createFileRoute("/feedback/_tabs/club")({
-  beforeLoad: async ({ context }) => {
+  staticData: { pageFlag: "feedback_club" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);
     const canSeeClub =
       principal.permissions.includes("club_feedback:submit") ||

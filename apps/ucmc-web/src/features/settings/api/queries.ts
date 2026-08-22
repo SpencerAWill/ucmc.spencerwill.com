@@ -17,7 +17,11 @@ import type {
   PublicFlags,
   PublicSiteContact,
 } from "#/features/settings/server/settings-fns";
-import { SETTINGS } from "#/server/settings/settings-registry";
+import {
+  pageFlagKeyOf,
+  PAGE_SETTING_KEYS,
+  SETTINGS,
+} from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
 
 export function siteSettingsQueryOptions() {
@@ -51,10 +55,16 @@ export function publicSiteContactQueryOptions() {
  * cold DB — that means features default to off until proven on.
  */
 export function publicFlagsQueryOptions() {
+  const pages = Object.fromEntries(
+    PAGE_SETTING_KEYS.map((key) => [
+      pageFlagKeyOf(key),
+      SETTINGS[key].parse(undefined),
+    ]),
+  ) as PublicFlags["pages"];
   const fallback: PublicFlags = {
-    announcements: SETTINGS["announcements.enabled"].parse(undefined),
     websiteFeedback: SETTINGS["feedback.website_enabled"].parse(undefined),
     clubFeedback: SETTINGS["feedback.club_enabled"].parse(undefined),
+    pages,
   };
   return {
     queryKey: PUBLIC_FLAGS_QUERY_KEY,

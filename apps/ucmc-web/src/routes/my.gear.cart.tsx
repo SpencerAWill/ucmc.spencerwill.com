@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "#/components/ui/button";
 import { requireCurrentWaiver } from "#/features/auth/guards";
 import { MyCartList } from "#/features/gear/components/my-cart-list";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 /**
  * Member's gear cart at `/my/gear/cart`. The parent `/my` guard already
@@ -14,7 +15,9 @@ import { MyCartList } from "#/features/gear/components/my-cart-list";
  * catches direct calls.
  */
 export const Route = createFileRoute("/my/gear/cart")({
-  beforeLoad: async ({ context, location }) => {
+  staticData: { pageFlag: "my_gear_cart" },
+  beforeLoad: async ({ context, location, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
     await requireCurrentWaiver(context.queryClient, location.href);
   },
   component: MyCartPage,

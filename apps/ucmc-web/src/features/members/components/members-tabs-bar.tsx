@@ -9,6 +9,7 @@
  * description map next to the tab list ensures adding or renaming a
  * tab is a one-edit change.
  */
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
@@ -18,6 +19,7 @@ import {
   RETENTION_REJECTED_COPY,
 } from "#/config/legal";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export type MembersTabId =
   | "approved"
@@ -51,6 +53,11 @@ export function getMembersTabSubtitle(pathname: string): string {
 export function MembersTabsBar() {
   const { hasPermission } = useAuth();
   const pathname = useLocation({ select: (l) => l.pathname });
+  // Per-page kill switches: hide any tab whose page has been switched off
+  // from /settings. The route also 404s independently.
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  const pages = flags.pages;
 
   if (!hasPermission("members:manage")) {
     return null;
@@ -64,31 +71,41 @@ export function MembersTabsBar() {
     // 3+2 layout on mobile; from `sm` (640 px) on, fall back to a
     // single flex row.
     <div className="grid grid-cols-3 gap-1 rounded-md border p-1 sm:flex">
-      <TabLink active={active === "approved"}>
-        <Link to="/members" search={{}}>
-          Approved
-        </Link>
-      </TabLink>
-      <TabLink active={active === "pending"}>
-        <Link to="/members/pending" search={{}}>
-          Pending
-        </Link>
-      </TabLink>
-      <TabLink active={active === "unclaimed"}>
-        <Link to="/members/unclaimed" search={{}}>
-          Unclaimed
-        </Link>
-      </TabLink>
-      <TabLink active={active === "rejected"}>
-        <Link to="/members/rejected" search={{}}>
-          Rejected
-        </Link>
-      </TabLink>
-      <TabLink active={active === "deactivated"}>
-        <Link to="/members/deactivated" search={{}}>
-          Deactivated
-        </Link>
-      </TabLink>
+      {pages.members ? (
+        <TabLink active={active === "approved"}>
+          <Link to="/members" search={{}}>
+            Approved
+          </Link>
+        </TabLink>
+      ) : null}
+      {pages.members_pending ? (
+        <TabLink active={active === "pending"}>
+          <Link to="/members/pending" search={{}}>
+            Pending
+          </Link>
+        </TabLink>
+      ) : null}
+      {pages.members_unclaimed ? (
+        <TabLink active={active === "unclaimed"}>
+          <Link to="/members/unclaimed" search={{}}>
+            Unclaimed
+          </Link>
+        </TabLink>
+      ) : null}
+      {pages.members_rejected ? (
+        <TabLink active={active === "rejected"}>
+          <Link to="/members/rejected" search={{}}>
+            Rejected
+          </Link>
+        </TabLink>
+      ) : null}
+      {pages.members_deactivated ? (
+        <TabLink active={active === "deactivated"}>
+          <Link to="/members/deactivated" search={{}}>
+            Deactivated
+          </Link>
+        </TabLink>
+      ) : null}
     </div>
   );
 }

@@ -30,7 +30,7 @@ export const listAllClubFeedbackFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const submitClubFeedbackFn = createServerFn({ method: "POST" })
-  .inputValidator(clubFeedbackInputSchema)
+  .validator(clubFeedbackInputSchema)
   .handler(async ({ data }): Promise<{ id: string }> => {
     const { submitClubFeedbackAction } =
       await import("#/features/club-feedback/server/club-feedback-actions.server");
@@ -38,7 +38,7 @@ export const submitClubFeedbackFn = createServerFn({ method: "POST" })
   });
 
 export const updateClubFeedbackStatusFn = createServerFn({ method: "POST" })
-  .inputValidator(clubFeedbackStatusUpdateSchema)
+  .validator(clubFeedbackStatusUpdateSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateClubFeedbackStatusAction } =
       await import("#/features/club-feedback/server/club-feedback-actions.server");

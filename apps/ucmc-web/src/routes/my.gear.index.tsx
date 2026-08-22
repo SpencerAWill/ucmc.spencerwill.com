@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { MyGearList } from "#/features/gear/components/my-gear-list";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 /**
  * `/my/gear` — the member's loan list. Parent `/my` route guards on
@@ -11,6 +12,10 @@ import { MyGearList } from "#/features/gear/components/my-gear-list";
  * the loader doesn't throw.
  */
 export const Route = createFileRoute("/my/gear/")({
+  staticData: { pageFlag: "my_gear" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
+  },
   component: MyGearPage,
 });
 

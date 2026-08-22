@@ -7,6 +7,7 @@ import {
 } from "#/features/auth/api/queries";
 import { useRemovePasskey } from "#/features/auth/api/use-remove-passkey";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { EmailAddressesSection } from "#/features/auth/components/email-addresses-section";
 import { AddPasskeyButton } from "#/features/auth/components/passkey-button";
 import { Button } from "#/components/ui/button";
@@ -25,6 +26,10 @@ import { Button } from "#/components/ui/button";
  * stricter than the `requireAuth` this route used to call directly.
  */
 export const Route = createFileRoute("/my/account/security")({
+  staticData: { pageFlag: "my_account_security" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
+  },
   loader: async ({ context }) => {
     await Promise.all([
       context.queryClient.ensureQueryData(passkeyListQueryOptions()),

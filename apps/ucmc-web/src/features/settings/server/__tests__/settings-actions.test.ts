@@ -28,6 +28,7 @@ const { updateSettingAction } =
 const {
   listSiteSettingsAction,
   getPublicSiteContactAction,
+  getPublicFlagsAction,
   listSettingHistoryAction,
 } = await import("#/features/settings/server/settings-actions-read.server");
 const { readSetting } = await import("#/server/settings/settings-repo.server");
@@ -203,6 +204,46 @@ describe("getPublicSiteContactAction", () => {
   });
 });
 
+describe("getPublicFlagsAction", () => {
+  // Page flags come back as a map keyed by the `pages.*` suffix. Most
+  // default ON so a cold DB (no site_settings rows) keeps existing pages
+  // reachable — the fail-open contract the sidebar + route guards rely on.
+  it("returns page flags at their schema defaults with no auth gate", async () => {
+    cookieJar.clear();
+    const flags = await getPublicFlagsAction();
+    for (const key of [
+      "gear_cave",
+      "scholarships",
+      "policies",
+      "resources",
+      "gallery",
+      "gazette",
+      "history",
+      "members",
+      "gear",
+      "feedback",
+      "my_account",
+      "blog",
+      "reports",
+    ] as const) {
+      expect(flags.pages[key]).toBe(true);
+    }
+    // Announcements is the exception — the feature isn't launched, so it
+    // ships default OFF.
+    expect(flags.pages.announcements).toBe(false);
+  });
+
+  it("reflects an overridden page flag", async () => {
+    await signInAsManager();
+    await updateSettingAction({ key: "pages.gear_cave", value: false });
+    cookieJar.clear();
+    const flags = await getPublicFlagsAction();
+    expect(flags.pages.gear_cave).toBe(false);
+    // Siblings stay ON — one toggle doesn't leak across pages.
+    expect(flags.pages.history).toBe(true);
+  });
+});
+
 // ── update + audit ─────────────────────────────────────────────────────
 
 describe("updateSettingAction", () => {
@@ -298,11 +339,11 @@ describe("listSettingHistoryAction", () => {
     });
 
     // Two edits on a boolean setting → both audit rows carry value.
-    await updateSettingAction({ key: "announcements.enabled", value: true });
-    await updateSettingAction({ key: "announcements.enabled", value: false });
+    await updateSettingAction({ key: "pages.announcements", value: true });
+    await updateSettingAction({ key: "pages.announcements", value: false });
 
     const history = await listSettingHistoryAction({
-      key: "announcements.enabled",
+      key: "pages.announcements",
     });
     expect(history).toHaveLength(2);
     expect(history[0].booleanValue).toBe(false); // newest first

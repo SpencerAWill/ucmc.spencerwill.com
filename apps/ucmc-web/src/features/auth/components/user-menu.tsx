@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Backpack,
@@ -30,6 +31,7 @@ import {
 import { Switch } from "#/components/ui/switch";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useViewMode } from "#/features/auth/api/view-mode";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export function UserMenu() {
   const {
@@ -42,6 +44,11 @@ export function UserMenu() {
   } = useAuth();
   const { setEmulatedRole } = useViewMode();
   const navigate = useNavigate();
+  // Per-page kill switches for the personal menu items. Hooks run before
+  // the early returns below to satisfy the rules of hooks.
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  const pages = flags.pages;
 
   if (isLoading) {
     return (
@@ -108,12 +115,14 @@ export function UserMenu() {
           </DropdownMenuItem>
         ) : (
           <>
-            <DropdownMenuItem asChild>
-              <Link to="/my/account">
-                <UserIcon className="mr-2 size-4" />
-                My Account
-              </Link>
-            </DropdownMenuItem>
+            {pages.my_account ? (
+              <DropdownMenuItem asChild>
+                <Link to="/my/account">
+                  <UserIcon className="mr-2 size-4" />
+                  My Account
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem disabled>
               <LayoutDashboard className="mr-2 size-4" />
               My Dashboard
@@ -122,18 +131,22 @@ export function UserMenu() {
               <Map className="mr-2 size-4" />
               My Trips
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/my/gear">
-                <Backpack className="mr-2 size-4" />
-                My Gear
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/my/gear/cart">
-                <ShoppingCart className="mr-2 size-4" />
-                My Cart
-              </Link>
-            </DropdownMenuItem>
+            {pages.my_gear ? (
+              <DropdownMenuItem asChild>
+                <Link to="/my/gear">
+                  <Backpack className="mr-2 size-4" />
+                  My Gear
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
+            {pages.my_gear_cart ? (
+              <DropdownMenuItem asChild>
+                <Link to="/my/gear/cart">
+                  <ShoppingCart className="mr-2 size-4" />
+                  My Cart
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
           </>
         )}
         {/* Role emulation — sys admins get a full role select (any role

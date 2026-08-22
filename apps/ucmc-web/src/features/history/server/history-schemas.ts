@@ -1,6 +1,6 @@
 /**
  * Zod schemas for /history mutation inputs. Shared by the server-fn
- * `inputValidator` (server side) and the route-facing TypeScript types
+ * `validator` (server side) and the route-facing TypeScript types
  * consumed by mutation hooks (client side). Keeping them in one file
  * means the wire shape and the form shape can never drift.
  */

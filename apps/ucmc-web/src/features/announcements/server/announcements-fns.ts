@@ -39,7 +39,7 @@ export const markAnnouncementsReadFn = createServerFn({
 });
 
 export const createAnnouncementFn = createServerFn({ method: "POST" })
-  .inputValidator(announcementInputSchema)
+  .validator(announcementInputSchema)
   .handler(async ({ data }): Promise<{ id: string }> => {
     const { createAnnouncementAction } =
       await import("#/features/announcements/server/announcements-actions.server");
@@ -47,7 +47,7 @@ export const createAnnouncementFn = createServerFn({ method: "POST" })
   });
 
 export const updateAnnouncementFn = createServerFn({ method: "POST" })
-  .inputValidator(announcementUpdateInputSchema)
+  .validator(announcementUpdateInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateAnnouncementAction } =
       await import("#/features/announcements/server/announcements-actions.server");
@@ -55,7 +55,7 @@ export const updateAnnouncementFn = createServerFn({ method: "POST" })
   });
 
 export const deleteAnnouncementFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ id: z.string().min(1) }))
+  .validator(z.object({ id: z.string().min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteAnnouncementAction } =
       await import("#/features/announcements/server/announcements-actions.server");

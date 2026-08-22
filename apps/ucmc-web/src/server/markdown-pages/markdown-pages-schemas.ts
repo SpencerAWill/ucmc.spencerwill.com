@@ -1,6 +1,6 @@
 /**
  * Wire schemas for /markdown-pages server fns. Shared by the
- * `inputValidator` on the server side and the typed mutation hooks
+ * `validator` on the server side and the typed mutation hooks
  * on the client. The slug enum mirrors the constant in
  * `slugs.ts` so a typo can't write to an unknown page.
  */
