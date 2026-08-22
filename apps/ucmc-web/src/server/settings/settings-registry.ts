@@ -29,6 +29,7 @@ import { z } from "zod";
 // belong to a single feature.
 export const SETTING_CATEGORIES = [
   "contact",
+  "pages",
   "announcements",
   "feedback",
   "integrations",
@@ -39,6 +40,7 @@ export type SettingCategory = (typeof SETTING_CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
   contact: "Contact",
+  pages: "Pages",
   announcements: "Announcements",
   feedback: "Feedback",
   integrations: "Integrations",
@@ -118,6 +120,137 @@ export const SETTINGS = {
       category: "contact",
     }),
 
+  // Per-page kill switches for sidebar pages. Seeded with the public-site
+  // section (Gear Cave → History); intended to expand over time to cover
+  // most sidebar pages (a handful — e.g. Settings, Audit — stay
+  // permanently on and out of this category). Each flag composes with the
+  // page's existing view permission: the sidebar entry renders only when
+  // the flag is ON *and* the viewer holds the permission, and the route's
+  // `beforeLoad` throws `notFound()` when the flag is OFF regardless of
+  // permission — so a disabled page both disappears from the nav and 404s
+  // on direct navigation. Defaults are ON so existing live pages stay
+  // accessible after deploy; officers toggle individual pages off as
+  // needed. Exposed via `getPublicFlagsFn` so the sidebar and route guards
+  // can consult them synchronously. Blog and Volunteer have no route yet —
+  // their flags only hide the "coming soon" sidebar entry.
+  "pages.gear_cave": z.boolean().default(true).register(registry, {
+    label: "Gear Cave enabled",
+    description:
+      "When off, the Gear Cave sidebar entry is hidden and the /gear-cave route returns notFound for everyone.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.scholarships": z.boolean().default(true).register(registry, {
+    label: "Scholarships enabled",
+    description:
+      "When off, the Scholarships sidebar entry is hidden and the /scholarships route returns notFound for everyone.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.policies": z.boolean().default(true).register(registry, {
+    label: "Policies enabled",
+    description:
+      "When off, the Policies sidebar entry is hidden and the /policies route returns notFound for everyone.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.resources": z.boolean().default(true).register(registry, {
+    label: "Resources enabled",
+    description:
+      "When off, the Resources sidebar entry is hidden and the /resources route returns notFound for everyone.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.gallery": z.boolean().default(true).register(registry, {
+    label: "Trip Gallery enabled",
+    description:
+      "When off, the Trip Gallery sidebar entry is hidden and the /gallery route returns notFound for everyone.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.gazette": z.boolean().default(true).register(registry, {
+    label: "Goosedown Gazette enabled",
+    description:
+      "When off, the Goosedown Gazette sidebar entry is hidden and the /gazette routes return notFound for everyone.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.history": z.boolean().default(true).register(registry, {
+    label: "History enabled",
+    description:
+      "When off, the History sidebar entry is hidden and the /history route returns notFound for everyone.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.blog": z.boolean().default(true).register(registry, {
+    label: "Blog enabled",
+    description:
+      "When off, the Blog “coming soon” sidebar entry is hidden. The Blog has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.volunteer": z.boolean().default(true).register(registry, {
+    label: "Volunteer enabled",
+    description:
+      "When off, the Volunteer “coming soon” sidebar entry is hidden. Volunteer has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.calendar": z.boolean().default(true).register(registry, {
+    label: "Calendar enabled",
+    description:
+      "When off, the Calendar “coming soon” sidebar entry is hidden. Calendar has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.forum": z.boolean().default(true).register(registry, {
+    label: "Forum enabled",
+    description:
+      "When off, the Forum “coming soon” sidebar entry is hidden. Forum has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.analytics": z.boolean().default(true).register(registry, {
+    label: "Analytics enabled",
+    description:
+      "When off, the Analytics “coming soon” sidebar entry is hidden. Analytics has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.reports": z.boolean().default(true).register(registry, {
+    label: "Reports enabled",
+    description:
+      "When off, the Reports “coming soon” sidebar entry is hidden. Reports has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+
   // Kill switch for the in-progress announcements feature. Defaults to
   // off so a fresh DB keeps the feature hidden — the bell in the header,
   // the sidebar entry, AND the /announcements route are all gated; the
@@ -188,6 +321,7 @@ export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 export function keysByCategory(): Record<SettingCategory, SettingKey[]> {
   const out: Record<SettingCategory, SettingKey[]> = {
     contact: [],
+    pages: [],
     announcements: [],
     feedback: [],
     integrations: [],

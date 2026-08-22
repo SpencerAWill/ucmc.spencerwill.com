@@ -49,10 +49,59 @@ export async function getPublicSiteContactAction(): Promise<PublicSiteContact> {
  * feature is off" is the same answer the gated route already returns.
  */
 export async function getPublicFlagsAction(): Promise<PublicFlags> {
-  const announcements = await readSetting("announcements.enabled");
-  const websiteFeedback = await readSetting("feedback.website_enabled");
-  const clubFeedback = await readSetting("feedback.club_enabled");
-  return { announcements, websiteFeedback, clubFeedback };
+  const [
+    announcements,
+    websiteFeedback,
+    clubFeedback,
+    gearCave,
+    scholarships,
+    policies,
+    resources,
+    gallery,
+    gazette,
+    history,
+    blog,
+    volunteer,
+    calendar,
+    forum,
+    analytics,
+    reports,
+  ] = await Promise.all([
+    readSetting("announcements.enabled"),
+    readSetting("feedback.website_enabled"),
+    readSetting("feedback.club_enabled"),
+    readSetting("pages.gear_cave"),
+    readSetting("pages.scholarships"),
+    readSetting("pages.policies"),
+    readSetting("pages.resources"),
+    readSetting("pages.gallery"),
+    readSetting("pages.gazette"),
+    readSetting("pages.history"),
+    readSetting("pages.blog"),
+    readSetting("pages.volunteer"),
+    readSetting("pages.calendar"),
+    readSetting("pages.forum"),
+    readSetting("pages.analytics"),
+    readSetting("pages.reports"),
+  ]);
+  return {
+    announcements,
+    websiteFeedback,
+    clubFeedback,
+    gearCave,
+    scholarships,
+    policies,
+    resources,
+    gallery,
+    gazette,
+    history,
+    blog,
+    volunteer,
+    calendar,
+    forum,
+    analytics,
+    reports,
+  };
 }
 
 /**

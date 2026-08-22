@@ -7,7 +7,7 @@ import { EditMarkdownSheet } from "#/components/markdown/edit-markdown-sheet";
 import { MarkdownContent } from "#/components/markdown/markdown-content";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requireViewPermission } from "#/features/auth/guards";
+import { requirePageEnabled } from "#/features/settings/api/page-guards";
 import { markdownPageQueryOptions } from "#/server/markdown-pages/queries";
 
 /**
@@ -21,8 +21,9 @@ import { markdownPageQueryOptions } from "#/server/markdown-pages/queries";
  */
 export const Route = createFileRoute("/scholarships")({
   beforeLoad: async ({ context }) => {
-    await requireViewPermission(
+    await requirePageEnabled(
       context.queryClient,
+      "scholarships",
       "public_scholarships:view",
     );
   },

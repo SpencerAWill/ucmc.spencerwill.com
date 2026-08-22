@@ -222,13 +222,21 @@ function SidebarNav() {
   const canVerifyWaivers = hasPermission("waivers:verify");
   const canReadGear = hasPermission("gear:read");
   const canLoanGear = hasPermission("gear:loan");
-  const canViewHistory = hasPermission("history:view");
-  const canViewPolicies = hasPermission("public_policies:view");
-  const canViewScholarships = hasPermission("public_scholarships:view");
-  const canViewGearCave = hasPermission("public_gear_cave:view");
-  const canViewResources = hasPermission("public_resources:view");
-  const canViewGazette = hasPermission("public_gazette:view");
-  const canViewGallery = hasPermission("public_gallery:view");
+  // Public-page entries compose the same way announcements does: the
+  // viewer must hold the page's view permission AND the page's kill
+  // switch must be on. Blog and Volunteer are route-less "coming soon"
+  // placeholders, so their flag is the only gate.
+  const canViewHistory = hasPermission("history:view") && flags.history;
+  const canViewPolicies =
+    hasPermission("public_policies:view") && flags.policies;
+  const canViewScholarships =
+    hasPermission("public_scholarships:view") && flags.scholarships;
+  const canViewGearCave =
+    hasPermission("public_gear_cave:view") && flags.gearCave;
+  const canViewResources =
+    hasPermission("public_resources:view") && flags.resources;
+  const canViewGazette = hasPermission("public_gazette:view") && flags.gazette;
+  const canViewGallery = hasPermission("public_gallery:view") && flags.gallery;
 
   // Sub-items gated by permission. If none are visible, the Members
   // link still renders but without the collapsible chevron.
@@ -290,16 +298,18 @@ function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="Blog (coming soon)"
-            >
-              <Rss />
-              <span>Blog</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {flags.blog ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                aria-disabled
+                tabIndex={-1}
+                tooltip="Blog (coming soon)"
+              >
+                <Rss />
+                <span>Blog</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           {canViewGazette ? (
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip="Goosedown Gazette">
@@ -310,16 +320,18 @@ function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="Volunteer (coming soon)"
-            >
-              <HandHeart />
-              <span>Volunteer</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {flags.volunteer ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                aria-disabled
+                tabIndex={-1}
+                tooltip="Volunteer (coming soon)"
+              >
+                <HandHeart />
+                <span>Volunteer</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           {canViewHistory ? (
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip="History">
@@ -336,16 +348,18 @@ function SidebarNav() {
       {canReadAnnouncements || isApproved ? (
         <SidebarGroup>
           <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                aria-disabled
-                tabIndex={-1}
-                tooltip="Calendar (coming soon)"
-              >
-                <CalendarDays />
-                <span>Calendar</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {flags.calendar ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  aria-disabled
+                  tabIndex={-1}
+                  tooltip="Calendar (coming soon)"
+                >
+                  <CalendarDays />
+                  <span>Calendar</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
 
             {canReadAnnouncements ? (
               <SidebarMenuItem>
@@ -360,16 +374,18 @@ function SidebarNav() {
 
             {isApproved ? (
               <>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    aria-disabled
-                    tabIndex={-1}
-                    tooltip="Forum (coming soon)"
-                  >
-                    <MessagesSquare />
-                    <span>Forum</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {flags.forum ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      aria-disabled
+                      tabIndex={-1}
+                      tooltip="Forum (coming soon)"
+                    >
+                      <MessagesSquare />
+                      <span>Forum</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : null}
                 <SidebarMenuItem>
                   {/*
                    * Collapsible sits inside SidebarMenuItem (not the
@@ -573,6 +589,11 @@ function SidebarNav() {
 
 function SidebarUtilityNav() {
   const { isApproved, hasPermission } = useAuth();
+  // Page kill switches for the route-less "coming soon" placeholders in
+  // this group (Analytics, Reports). `placeholderData` is the schema
+  // default (on) until the query resolves.
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
   // Sidebar entry is one link to `/feedback`; the tab layout decides
   // which surfaces to show inside. So we render the link if the user
   // can submit to *either* surface. Managers also see it via their
@@ -609,26 +630,30 @@ function SidebarUtilityNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : null}
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            aria-disabled
-            tabIndex={-1}
-            tooltip="Analytics (coming soon)"
-          >
-            <BarChart3 />
-            <span>Analytics</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            aria-disabled
-            tabIndex={-1}
-            tooltip="Reports (coming soon)"
-          >
-            <FileText />
-            <span>Reports</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        {flags.analytics ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="Analytics (coming soon)"
+            >
+              <BarChart3 />
+              <span>Analytics</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
+        {flags.reports ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-disabled
+              tabIndex={-1}
+              tooltip="Reports (coming soon)"
+            >
+              <FileText />
+              <span>Reports</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
         {canViewAudit ? (
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Audit">

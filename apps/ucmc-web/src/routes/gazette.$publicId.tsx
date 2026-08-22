@@ -3,7 +3,7 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { ArrowLeft, Download } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
-import { requireViewPermission } from "#/features/auth/guards";
+import { requirePageEnabled } from "#/features/settings/api/page-guards";
 import { gazetteIssueQueryOptions } from "#/features/gazette/api/queries";
 import {
   formatPublishedAt,
@@ -31,7 +31,11 @@ import {
  */
 export const Route = createFileRoute("/gazette/$publicId")({
   beforeLoad: async ({ context }) => {
-    await requireViewPermission(context.queryClient, "public_gazette:view");
+    await requirePageEnabled(
+      context.queryClient,
+      "gazette",
+      "public_gazette:view",
+    );
   },
   loader: async ({ context, params }) => {
     const issue = await context.queryClient.ensureQueryData(

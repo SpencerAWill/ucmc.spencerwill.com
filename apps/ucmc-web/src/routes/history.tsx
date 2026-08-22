@@ -19,7 +19,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requireViewPermission } from "#/features/auth/guards";
+import { requirePageEnabled } from "#/features/settings/api/page-guards";
 import { historyContentQueryOptions } from "#/features/history/api/queries";
 import {
   useDeleteHistoricalOfficer,
@@ -62,7 +62,7 @@ import type {
  */
 export const Route = createFileRoute("/history")({
   beforeLoad: async ({ context }) => {
-    await requireViewPermission(context.queryClient, "history:view");
+    await requirePageEnabled(context.queryClient, "history", "history:view");
   },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(historyContentQueryOptions());

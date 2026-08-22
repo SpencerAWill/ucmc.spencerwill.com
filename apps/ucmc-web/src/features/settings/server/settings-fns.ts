@@ -80,6 +80,21 @@ export type PublicFlags = {
   announcements: boolean;
   websiteFeedback: boolean;
   clubFeedback: boolean;
+  // Per-page toggles for the public-site sidebar section (Gear Cave →
+  // History). Each gates both the sidebar entry and its route.
+  gearCave: boolean;
+  scholarships: boolean;
+  policies: boolean;
+  resources: boolean;
+  gallery: boolean;
+  gazette: boolean;
+  history: boolean;
+  blog: boolean;
+  volunteer: boolean;
+  calendar: boolean;
+  forum: boolean;
+  analytics: boolean;
+  reports: boolean;
 };
 
 export const getPublicFlagsFn = createServerFn({

@@ -17,7 +17,7 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requireViewPermission } from "#/features/auth/guards";
+import { requirePageEnabled } from "#/features/settings/api/page-guards";
 import { galleryListQueryOptions } from "#/features/gallery/api/queries";
 import { useDeleteGalleryPhoto } from "#/features/gallery/api/use-gallery-mutations";
 import { PhotoFormDialog } from "#/features/gallery/components/photo-form-dialog";
@@ -48,7 +48,11 @@ const gallerySearchSchema = z.object({
 export const Route = createFileRoute("/gallery")({
   validateSearch: gallerySearchSchema,
   beforeLoad: async ({ context }) => {
-    await requireViewPermission(context.queryClient, "public_gallery:view");
+    await requirePageEnabled(
+      context.queryClient,
+      "gallery",
+      "public_gallery:view",
+    );
   },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(galleryListQueryOptions());

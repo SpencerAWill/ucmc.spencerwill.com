@@ -28,6 +28,7 @@ const { updateSettingAction } =
 const {
   listSiteSettingsAction,
   getPublicSiteContactAction,
+  getPublicFlagsAction,
   listSettingHistoryAction,
 } = await import("#/features/settings/server/settings-actions-read.server");
 const { readSetting } = await import("#/server/settings/settings-repo.server");
@@ -200,6 +201,43 @@ describe("getPublicSiteContactAction", () => {
     const out = await getPublicSiteContactAction();
     expect(out).toHaveProperty("clubEmail");
     expect(typeof out.clubEmail).toBe("string");
+  });
+});
+
+describe("getPublicFlagsAction", () => {
+  // Every page flag defaults ON, so a cold DB (no site_settings rows)
+  // keeps existing pages visible/accessible. This is the fail-open
+  // contract the sidebar + route guards rely on.
+  it("defaults every page flag ON with no auth gate on a cold DB", async () => {
+    cookieJar.clear();
+    const flags = await getPublicFlagsAction();
+    for (const key of [
+      "gearCave",
+      "scholarships",
+      "policies",
+      "resources",
+      "gallery",
+      "gazette",
+      "history",
+      "blog",
+      "volunteer",
+      "calendar",
+      "forum",
+      "analytics",
+      "reports",
+    ] as const) {
+      expect(flags[key]).toBe(true);
+    }
+  });
+
+  it("reflects an overridden page flag", async () => {
+    await signInAsManager();
+    await updateSettingAction({ key: "pages.gear_cave", value: false });
+    cookieJar.clear();
+    const flags = await getPublicFlagsAction();
+    expect(flags.gearCave).toBe(false);
+    // Siblings stay ON — one toggle doesn't leak across pages.
+    expect(flags.history).toBe(true);
   });
 });
 
