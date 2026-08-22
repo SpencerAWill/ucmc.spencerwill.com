@@ -31,46 +31,75 @@ allowBuilds:
 # versions above the known-bad range for each CVE. Every target below has
 # already cleared the 7-day `minimumReleaseAge` window, so NONE needs a
 # quarantine exception (`minimumReleaseAgeExclude`) — we never bypass the
-# supply-chain delay. All of these advisories live in dev/build tooling;
-# none reaches the deployed Worker, but we patch what has a mature fix:
+# supply-chain delay. Nearly all of these advisories live in dev/build
+# tooling; none reaches the deployed Worker, but we patch what has a mature fix:
 #   - @babel/core <7.29.6  GHSA-4x5r-pxfx-6jf8 (arbitrary file read via sourceMappingURL; via the
 #               TanStack build plugins). Babel jumped 7.29.0 -> 7.29.6, so this is a same-minor patch —
 #               capped <8 to avoid the unrelated 8.x major.
 #   - @grpc/grpc-js <1.14.4  GHSA-5375-pq7m-f5r2 / -99f4-grh7-6pcq (malformed-request DoS; via Pulumi)
 #   - @sigstore/core <3.2.1  GHSA-jfc7-64v2-mr8c (DSSE payloadType type-binding confusion)
+#   - @sigstore/verify =3.1.0  GHSA-xgjw-pm74-86q4 (signature-verification bypass; via Pulumi's sigstore).
+#               3.1.1 is the same-minor patch; capped <4 to stay on the line sigstore 4.1.x pins.
+#   - brace-expansion  1.x <1.1.18 + 3.x/4.x/5.x <5.0.9  GHSA-3jxr-9vmj-r5cp / -mh99-v99m-4gvg /
+#               -rgw5-rvv9-x895 (ReDoS). Two selectors: the 1.x line (via legacy minimatch) lands on
+#               1.1.18; the 3.x–5.x line (the maintainer folds all its fixes into 5.x) lands on 5.0.9.
 #   - esbuild   <0.28.1  GHSA-g7r4-m6w7-qqqr (dev-server file read; supersedes the old <0.25.0 CORS pin)
-#   - fast-uri  <3.1.2   ReDoS
-#   - ip-address <10.1.1 ReDoS
-#   - js-yaml   4.0.0–4.1.1  GHSA-h67p-54hq-rp68 (merge-key quadratic DoS) — 4.x line only; Pulumi's
-#               3.14.2 has no published fix (the advisory's "3.15.0" was never released) and 4.x is a
-#               breaking API change for it, so that copy is left as-is.
+#   - fast-uri  <3.1.5   GHSA-7p8r-x3mc-p8w7 + -v2hh-gcrm-f6hx + -4c8g-83qw-93j6 (ReDoS); capped <4.
+#   - ip-address <10.3.1 GHSA-mwp4-54f8-5fhr + -4xrf-jv44-h6hh + -22jq-vg5j-6vgg (ReDoS)
+#   - js-yaml   3.x <3.15.1 + 4.x <4.3.1  GHSA-5p4m-2wfm-xmqj / -52cp-r559-cp3m (merge-key + anchor
+#               quadratic DoS). Two selectors: Pulumi's 3.14.2 lands on the backported 3.15.1 (the
+#               advisory's long-missing 3.15.x line finally shipped 2026-06/07); the 4.x line lands on 4.3.1.
 #   - launch-editor <2.14.1  GHSA-v6wh-96g9-6wx3 (NTLMv2 hash disclosure via UNC path)
-#   - linkify-it <5.0.1  GHSA-22p9-wv53-3rq4 (quadratic scan-loop DoS; markdown-it dep)
+#   - linkify-it <5.0.2  GHSA-v245-v573-v5vm + -22p9-wv53-3rq4 (quadratic scan-loop DoS; markdown-it dep)
 #   - markdown-it <14.2.0  GHSA-6v5v-wf23-fmfq (smartquotes quadratic DoS; via tiptap-markdown)
-#   - protobufjs <8.6.0  GHSA-jggg-4jg4-v7c6 + -wcpc-wj8m-hjx6 + -94rc-8x27-4472 + -f38q-mgvj-vph7
-#   - tar       <7.5.16  GHSA-vmf3-w455-68vh (PAX size override on intermediary GNU entries)
-#   - undici    <7.28.0  multiple (TLS cert-validation bypass, cross-origin request routing, header
+#   - nanoid   3.x <3.3.18 + 5.x <5.1.16  GHSA-2v37-7h3g-55p8 + -28wg-ghj8-5hjv (predictable IDs /
+#               modulo bias). Two selectors — postcss pulls the 3.x line, other tooling the 5.x line.
+#   - postcss  <8.5.23  GHSA-r28c-9q8g-f849 (line-return parsing) + -fxqj-rqcc-2cmp; capped <9.
+#   - protobufjs <8.6.6  GHSA-j3f2-48v5-ccww (prototype pollution) + the earlier -jggg/-wcpc/-94rc/-f38q set
+#   - sharp    <0.35.0  GHSA-f88m-g3jw-g9cj (heap overflow in bundled libvips; build-time image dep)
+#   - shell-quote <1.9.0  GHSA-395f-4hp3-45gv (command injection). The advisory lists 1.8.5 as fixed but
+#               that version was never published — 1.9.0 is the first release carrying the patch.
+#   - sigstore <4.1.1  GHSA-52v5-jr5w-gjxr (verification bypass; via Pulumi); capped <5.
+#   - tar       <7.5.21  GHSA-r292-9mhp-454m (uncatchable stack-overflow DoS) + -23hp-3jrh-7fpw (critical)
+#               + the earlier <7.5.16 PAX-override issue
+#   - undici    <7.29.0  multiple (TLS cert-validation bypass, cross-origin request routing, header
 #               injection, Set-Cookie SameSite downgrade, response-queue poisoning, WebSocket DoS);
 #               reaches us only via Cloudflare dev tooling. Capped <8 to stay on the major miniflare
-#               and wrangler expect (the tooling versions that bundle 7.28.0 natively are still fresh).
+#               and wrangler expect (the tooling versions that bundle 7.29.0 natively are still fresh).
 #   - ws        <8.21.0  GHSA-96hv-2xvq-fx4p (memory-exhaustion DoS; via miniflare. Supersedes <8.20.1)
-# Deferred — no mature, non-breaking fix, all dev-only: @opentelemetry/core (only fix is the 1.x→2.x
-# major, which breaks Pulumi's coordinated 0.57.x exporter set — the 1.x line has no patched release).
+# The @opentelemetry/* set (GHSA-8988-4f7v-96qf core, GHSA-45rx-2jwx-cxfr propagator-jaeger) is fixed
+# only on the OTel 2.x line — the whole graph must move majors in lockstep. Rather than force a
+# mismatched OTel major onto old Pulumi, we bump @pulumi/pulumi itself: 3.252.0+ migrated its entire
+# OTel dependency set to 2.9.x, so pinning every Pulumi copy (ours + the ones @pulumi/cloudflare and
+# @pulumi/command nest) to >=3.252.0 pulls the patched OTel 2.x graph and drops the vulnerable 0.57.x
+# exporter set. Providers declare @pulumi/pulumi ^3.142.0, so any 3.x runtime is supported. The
+# resolver lands on the newest 3.x that has cleared the 7-day quarantine.
 overrides:
   "@babel/core@<7.29.6": ">=7.29.6 <8.0.0"
   "@grpc/grpc-js@<1.14.4": ">=1.14.4"
+  "@pulumi/pulumi@<3.252.0": ">=3.252.0"
   "@sigstore/core@<3.2.1": ">=3.2.1 <4.0.0"
+  "@sigstore/verify@3.1.0": ">=3.1.1 <4.0.0"
+  "brace-expansion@<1.1.18": ">=1.1.18 <2.0.0"
+  "brace-expansion@>=3.0.0 <5.0.9": ">=5.0.9 <6.0.0"
   "esbuild@<0.28.1": ">=0.28.1"
-  "fast-uri@<3.1.2": ">=3.1.2"
-  "ip-address@<10.1.1": ">=10.1.1"
-  "js-yaml@>=4.0.0 <4.2.0": ">=4.2.0 <5.0.0"
+  "fast-uri@<3.1.5": ">=3.1.5 <4.0.0"
+  "ip-address@<10.3.1": ">=10.3.1"
+  "js-yaml@>=3.0.0 <3.15.1": ">=3.15.1 <4.0.0"
+  "js-yaml@>=4.0.0 <4.3.1": ">=4.3.1 <5.0.0"
   "launch-editor@<2.14.1": ">=2.14.1"
-  "linkify-it@<5.0.1": ">=5.0.1"
+  "linkify-it@<5.0.2": ">=5.0.2 <6.0.0"
   "markdown-it@<14.2.0": ">=14.2.0"
-  "protobufjs@<8.6.0": ">=8.6.0"
-  "tar@<7.5.16": ">=7.5.16"
+  "nanoid@<3.3.18": ">=3.3.18 <4.0.0"
+  "nanoid@>=4.0.0 <5.1.16": ">=5.1.16 <6.0.0"
+  "postcss@<8.5.23": ">=8.5.23 <9.0.0"
+  "protobufjs@<8.6.6": ">=8.6.6"
+  "sharp@<0.35.0": ">=0.35.0"
+  "shell-quote@<1.9.0": ">=1.9.0 <2.0.0"
+  "sigstore@<4.1.1": ">=4.1.1 <5.0.0"
+  "tar@<7.5.21": ">=7.5.21"
   "tmp@<0.2.6": ">=0.2.6"
-  "undici@<7.28.0": ">=7.28.0 <8.0.0"
+  "undici@<7.29.0": ">=7.29.0 <8.0.0"
   "ws@<8.21.0": ">=8.21.0"
   # Pin @tanstack/query-core to match our pinned react-query so the
   # auto-installed peer dep stays in lockstep (otherwise pnpm picks
