@@ -12,8 +12,18 @@
  * It also registers the Temporal serialization adapters so Temporal
  * values (returned from server fns / route loaders, now that DB
  * timestamps are `Temporal.Instant`) survive the SSR + server-fn wire.
+ *
+ * Server functions are same-origin RPC endpoints, so `createCsrfMiddleware`
+ * rejects cross-site requests to them (Origin / Sec-Fetch-Site checks with
+ * a Referer fallback — all framework defaults). The `filter` scopes it to
+ * `handlerType === "serverFn"` so ordinary router/document (GET page)
+ * requests, which are legitimately navigable cross-site, are left alone.
  */
-import { createMiddleware, createStart } from "@tanstack/react-start";
+import {
+  createCsrfMiddleware,
+  createMiddleware,
+  createStart,
+} from "@tanstack/react-start";
 import { getRequestUrl, setResponseHeader } from "@tanstack/react-start/server";
 
 import { securityHeadersForPath } from "#/server/headers.server";
@@ -35,8 +45,15 @@ const securityHeadersMiddleware = createMiddleware({
   return next();
 });
 
+const csrfMiddleware = createCsrfMiddleware({
+  filter: (ctx) => ctx.handlerType === "serverFn",
+});
+
+// Order matters: securityHeaders runs first so its response headers are set
+// even on a CSRF 403, then the CSRF check short-circuits cross-site
+// server-fn requests before any handler work.
 export const startInstance = createStart(() => ({
-  requestMiddleware: [securityHeadersMiddleware],
+  requestMiddleware: [securityHeadersMiddleware, csrfMiddleware],
   serializationAdapters: temporalSerializationAdapters,
 }));
 
