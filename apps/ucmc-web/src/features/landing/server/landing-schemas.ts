@@ -53,8 +53,11 @@ export const LANDING_SETTING_KEYS = {
   aboutImageKey: "about.image_key",
   meetingDayTime: "meeting.day_time",
   meetingLocation: "meeting.location",
-  meetingEmail: "meeting.email",
-  meetingInstagramUrl: "meeting.instagram_url",
+  // NOTE: `meeting.email` and `meeting.instagram_url` used to live here.
+  // Both are now site settings (`contact.clubEmail`,
+  // `contact.instagramUrl`) because the footer renders the same values
+  // and the landing CMS shouldn't be the owner of something two surfaces
+  // display. Migration 0058 carried the rows over and deleted them.
   meetingImageKey: "meeting.image_key",
 } as const;
 
@@ -89,15 +92,6 @@ export const meetingFieldSchema = trimmed(
   LANDING_LIMITS.meetingField.min,
   LANDING_LIMITS.meetingField.max,
 );
-const optionalUrl = z
-  .string()
-  .trim()
-  .max(LANDING_LIMITS.meetingField.max)
-  .refine(
-    (v) => v === "" || /^https?:\/\//i.test(v),
-    "Must start with http:// or https://",
-  );
-export const instagramUrlSchema = optionalUrl;
 
 // Discriminated input so a single update server-fn can validate any setting.
 export const updateSettingInputSchema = z.discriminatedUnion("key", [
@@ -120,14 +114,6 @@ export const updateSettingInputSchema = z.discriminatedUnion("key", [
   z.object({
     key: z.literal(LANDING_SETTING_KEYS.meetingLocation),
     value: meetingFieldSchema,
-  }),
-  z.object({
-    key: z.literal(LANDING_SETTING_KEYS.meetingEmail),
-    value: meetingFieldSchema,
-  }),
-  z.object({
-    key: z.literal(LANDING_SETTING_KEYS.meetingInstagramUrl),
-    value: instagramUrlSchema,
   }),
 ]);
 export type UpdateSettingInput = z.infer<typeof updateSettingInputSchema>;

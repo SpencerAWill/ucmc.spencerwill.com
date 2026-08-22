@@ -39,13 +39,9 @@ import {
 
 import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
 import { UserMenu } from "#/features/auth/components/user-menu";
-import {
-  FacebookIcon,
-  GitHubIcon,
-  InstagramIcon,
-  YouTubeIcon,
-} from "#/components/brand-icons";
+import { GitHubIcon } from "#/components/brand-icons";
 import { ModeToggle } from "#/components/mode-toggle";
+import { SocialIconLinks } from "#/components/social-icon-links";
 import {
   REGISTRATION_DISCLAIMER,
   SUBBRAND_DISAMBIGUATION,
@@ -731,33 +727,17 @@ function AppFooter() {
             University of Cincinnati Mountaineering Club
           </p>
           <div className="flex items-center gap-3">
-            <a
-              href="https://instagram.com/uc_mountaineering"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center transition-opacity hover:opacity-80"
-              aria-label="UCMC on Instagram"
-            >
-              <InstagramIcon className="size-5" />
-            </a>
-            <a
-              href="https://www.facebook.com/groups/19204046466/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center transition-opacity hover:opacity-80"
-              aria-label="UCMC on Facebook"
-            >
-              <FacebookIcon className="size-5" />
-            </a>
-            <a
-              href="https://www.youtube.com/channel/UC1zpNSpQI784F-zOtVHjUMQ"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center transition-opacity hover:opacity-80"
-              aria-label="UCMC on YouTube"
-            >
-              <YouTubeIcon className="size-5" />
-            </a>
+            {/* The three social URLs are `contact.*` site settings, not
+                hardcoded, so the footer and the landing page's "Follow
+                us" row always agree. GitHub and the mail icon stay
+                inline: the repo URL is a maintainer-identifying
+                constant, and the mail link is a mailto rather than a
+                profile. */}
+            <SocialIconLinks
+              instagramUrl={contact.instagramUrl}
+              facebookUrl={contact.facebookUrl}
+              youtubeUrl={contact.youtubeUrl}
+            />
             <a
               href={GITHUB_REPO_URL}
               target="_blank"

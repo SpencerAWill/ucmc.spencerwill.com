@@ -58,6 +58,11 @@ export const listSiteSettingsFn = createServerFn({ method: "GET" }).handler(
  */
 export type PublicSiteContact = {
   clubEmail: string;
+  /** Social profile URLs. Empty string means "no account" — every
+   *  consumer skips a blank rather than rendering a dead link. */
+  instagramUrl: string;
+  facebookUrl: string;
+  youtubeUrl: string;
 };
 
 export const getPublicSiteContactFn = createServerFn({

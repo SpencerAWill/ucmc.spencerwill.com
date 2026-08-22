@@ -23,7 +23,6 @@ export interface MeetingInfoEditorProps {
   values: {
     dayTime: string;
     location: string;
-    instagramUrl: string;
   };
   imageKey: string | null;
   onClose: () => void;
@@ -36,7 +35,6 @@ export function MeetingInfoEditor({
 }: MeetingInfoEditorProps) {
   const [dayTime, setDayTime] = useState(values.dayTime);
   const [location, setLocation] = useState(values.location);
-  const [instagramUrl, setInstagramUrl] = useState(values.instagramUrl);
   const update = useUpdateLandingSetting();
   const setImage = useSetMeetingImage();
   const removeImage = useRemoveMeetingImage();
@@ -57,10 +55,6 @@ export function MeetingInfoEditor({
       await update.mutateAsync({
         key: LANDING_SETTING_KEYS.meetingLocation,
         value: location.trim(),
-      });
-      await update.mutateAsync({
-        key: LANDING_SETTING_KEYS.meetingInstagramUrl,
-        value: instagramUrl.trim(),
       });
       toast.success("Meeting info saved");
     } catch (err) {
@@ -132,27 +126,14 @@ export function MeetingInfoEditor({
           />
         </div>
         <div className="rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
-          The club email shown here (and in the footer) is a site-wide setting.
-          Edit it at{" "}
+          The club email and the Instagram / Facebook / YouTube links shown here
+          are site-wide settings — the footer renders the same values, so
+          they&rsquo;re edited in one place rather than per-section. Change them
+          at{" "}
           <a href="/settings" className="underline hover:text-foreground">
             /settings
           </a>
           .
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="meeting-instagram">Instagram URL</Label>
-          <Input
-            id="meeting-instagram"
-            type="url"
-            value={instagramUrl}
-            maxLength={LANDING_LIMITS.meetingField.max}
-            onChange={(e) => setInstagramUrl(e.target.value)}
-            placeholder="https://instagram.com/..."
-            {...noPasswordManagerProps}
-          />
-          <p className="text-xs text-muted-foreground">
-            Leave blank to hide the Instagram link.
-          </p>
         </div>
         <div className="flex justify-end">
           <Button type="button" size="sm" onClick={saveText} disabled={busy}>

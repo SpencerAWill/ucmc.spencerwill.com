@@ -105,6 +105,21 @@ const registry = z.registry<SettingMeta>();
 // All schemas declare a `.default(...)` so `schema.parse(undefined)`
 // produces the fallback value when the D1 row is absent or malformed.
 // This is the fail-open contract documented in settings-repo.server.ts.
+
+// Shared shape for the social profile URLs below. An empty string is a
+// meaningful value ("no account / hide the icon"), so this can't just be
+// `z.string().url()` — that rejects "". The refine keeps the scheme
+// explicit rather than accepting a bare "instagram.com/..." that would
+// resolve as a same-origin relative path once dropped into an href.
+const socialUrl = z
+  .string()
+  .trim()
+  .max(300)
+  .refine(
+    (v) => v === "" || /^https:\/\//i.test(v),
+    "Must start with https:// (or be left blank)",
+  );
+
 export const SETTINGS = {
   "contact.clubEmail": z
     .string()
@@ -115,6 +130,44 @@ export const SETTINGS = {
       label: "Club email",
       description:
         "Public contact address for the club. Shown on the landing page meeting block and in the footer mail icon.",
+      category: "contact",
+    }),
+
+  // Social profile URLs. These were previously split across two homes —
+  // Instagram lived in the landing CMS (`meeting.instagram_url`) while
+  // Facebook and YouTube were hardcoded in the footer — so the same three
+  // links could drift apart. They live here for the same reason
+  // `contact.clubEmail` does: the footer and the landing "Where to find
+  // us" block both render them, and neither is the owner.
+  //
+  // `socialUrl` allows the empty string as an explicit "we don't have
+  // one / hide it" value; both surfaces skip a blank URL rather than
+  // rendering a dead icon. Defaults are the club's live accounts (the
+  // URLs the footer had been shipping), so a fresh DB is correct.
+  "contact.instagramUrl": socialUrl
+    .default("https://instagram.com/uc_mountaineering")
+    .register(registry, {
+      label: "Instagram URL",
+      description:
+        "Link behind the Instagram icon in the footer and in the landing page’s “Follow us” row. Leave blank to hide the icon.",
+      category: "contact",
+    }),
+
+  "contact.facebookUrl": socialUrl
+    .default("https://www.facebook.com/groups/19204046466/")
+    .register(registry, {
+      label: "Facebook URL",
+      description:
+        "Link behind the Facebook icon in the footer and in the landing page’s “Follow us” row. Leave blank to hide the icon.",
+      category: "contact",
+    }),
+
+  "contact.youtubeUrl": socialUrl
+    .default("https://www.youtube.com/channel/UC1zpNSpQI784F-zOtVHjUMQ")
+    .register(registry, {
+      label: "YouTube URL",
+      description:
+        "Link behind the YouTube icon in the footer and in the landing page’s “Follow us” row. Leave blank to hide the icon.",
       category: "contact",
     }),
 
