@@ -19,7 +19,7 @@ import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useDeleteMyAccount } from "#/features/auth/api/use-delete-my-account";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 /**
  * Preferences tab. Theme toggle plus the privacy controls (data export
@@ -32,8 +32,9 @@ import { requirePageFlag } from "#/features/settings/api/page-guards";
  * headers above the danger zone.
  */
 export const Route = createFileRoute("/my/account/preferences")({
-  beforeLoad: async ({ context }) => {
-    await requirePageFlag(context.queryClient, "my_account_preferences");
+  staticData: { pageFlag: "my_account_preferences" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
   },
   component: PreferencesPage,
 });

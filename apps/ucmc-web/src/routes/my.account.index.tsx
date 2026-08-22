@@ -10,7 +10,7 @@ import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-sha
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 import { PublicProfileFields } from "#/components/profile/public-profile-fields";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
@@ -24,8 +24,9 @@ import type { PublicProfileInput } from "#/server/profile/profile-schemas";
  * the server-side `members:view_private` projection split.
  */
 export const Route = createFileRoute("/my/account/")({
-  beforeLoad: async ({ context }) => {
-    await requirePageFlag(context.queryClient, "my_account");
+  staticData: { pageFlag: "my_account" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
   },
   component: AccountProfilePage,
 });

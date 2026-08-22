@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requirePermissionOrNotFound } from "#/features/auth/guards";
 import { PendingTab } from "#/features/members/components/pending-tab";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 const pendingSearchSchema = z.object({
   from: z.iso.date().optional(),
@@ -13,9 +13,10 @@ const pendingSearchSchema = z.object({
 });
 
 export const Route = createFileRoute("/members/_tabs/pending")({
+  staticData: { pageFlag: "members_pending" },
   validateSearch: pendingSearchSchema,
-  beforeLoad: async ({ context }) => {
-    await requirePageFlag(context.queryClient, "members_pending");
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
     await requirePermissionOrNotFound(context.queryClient, "members:manage");
   },
   component: PendingRoute,

@@ -2,6 +2,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 import { RouteErrorFallback } from "#/components/error-page";
 import { requireApproved } from "#/features/auth/guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 /**
  * Parent layout for the entire `/my/*` personal namespace. Runs the
@@ -20,7 +21,11 @@ import { requireApproved } from "#/features/auth/guards";
  * the passkey paths re-validate `startsWith("/")` before navigating.
  */
 export const Route = createFileRoute("/my")({
-  beforeLoad: async ({ context, location }) => {
+  beforeLoad: async ({ context, location, matches }) => {
+    // Enforce the leaf's `pages.*` kill switch before the approved-only
+    // guard so a disabled page 404s uniformly instead of redirecting an
+    // anonymous visitor to sign-in first.
+    await requireEnabledPages(context.queryClient, matches);
     await requireApproved(context.queryClient, location.href);
   },
   component: () => <Outlet />,

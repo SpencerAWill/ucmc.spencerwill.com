@@ -10,12 +10,13 @@ import {
 } from "#/features/feedback/api/queries";
 import { FeedbackCard } from "#/features/feedback/components/feedback-card";
 import { FeedbackForm } from "#/features/feedback/components/feedback-form";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export const Route = createFileRoute("/feedback/_tabs/")({
-  beforeLoad: async ({ context }) => {
-    await requirePageFlag(context.queryClient, "feedback");
+  staticData: { pageFlag: "feedback" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);
     const canWebsite =
       principal.permissions.includes("feedback:submit") ||

@@ -212,7 +212,6 @@ describe("getPublicFlagsAction", () => {
     cookieJar.clear();
     const flags = await getPublicFlagsAction();
     for (const key of [
-      "home",
       "gear_cave",
       "scholarships",
       "policies",

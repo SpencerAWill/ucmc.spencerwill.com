@@ -18,7 +18,7 @@ import { LoanCard } from "#/features/gear/components/loan-card";
 import { LoanFilterBar } from "#/features/gear/components/loan-filter-bar";
 import type { LoanFilterState } from "#/features/gear/components/loan-filter-bar";
 import { LoansBulkImportSheet } from "#/features/gear/components/loans-bulk-import-sheet";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 // Matches the perPage choices on /gear and /audit so the muscle
 // memory carries between officer-facing list pages. Defaults to 50.
@@ -43,9 +43,10 @@ const loansSearchSchema = z.object({
 });
 
 export const Route = createFileRoute("/gear/loans/")({
+  staticData: { pageFlag: "gear_loans" },
   validateSearch: loansSearchSchema,
-  beforeLoad: async ({ context }) => {
-    await requirePageFlag(context.queryClient, "gear_loans");
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
     // Gate on `gear:loan` so non-officers don't even see the loader
     // fire — the action layer would also reject, but the redirect
     // here keeps the URL clean.

@@ -9,7 +9,7 @@ import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useSubmitDetails } from "#/features/auth/api/use-submit-details";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import { profileInputSchema } from "#/server/profile/profile-schemas";
@@ -25,8 +25,9 @@ import { profileInputSchema } from "#/server/profile/profile-schemas";
  * contact info. Account deletion / data export moved to Preferences.
  */
 export const Route = createFileRoute("/my/account/details")({
-  beforeLoad: async ({ context }) => {
-    await requirePageFlag(context.queryClient, "my_account_details");
+  staticData: { pageFlag: "my_account_details" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
   },
   component: AccountDetailsPage,
 });

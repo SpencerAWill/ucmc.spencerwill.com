@@ -1,6 +1,7 @@
 import { Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 
 import { requireApproved } from "#/features/auth/guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import {
   MembersTabsBar,
   getMembersTabSubtitle,
@@ -20,7 +21,11 @@ import {
  * also hides on a lack of permission.
  */
 export const Route = createFileRoute("/members/_tabs")({
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, matches }) => {
+    // Enforce the active tab's `pages.*` kill switch before the
+    // approved-only guard so a disabled tab 404s uniformly instead of
+    // redirecting an anonymous visitor to sign-in first.
+    await requireEnabledPages(context.queryClient, matches);
     await requireApproved(context.queryClient);
   },
   component: MembersTabsLayout,

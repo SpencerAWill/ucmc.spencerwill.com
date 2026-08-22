@@ -6,7 +6,7 @@ import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { WAIVER_PDF_PATH, WAIVER_VERSION } from "#/config/legal";
 import { formatDate } from "#/lib/date-format";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import {
   myWaiverHistoryQueryOptions,
   myWaiverStatusQueryOptions,
@@ -26,8 +26,9 @@ import type { WaiverAttestationSummary } from "#/features/waivers/server/waiver-
  * with the Treasurer per Bylaw 1.3.
  */
 export const Route = createFileRoute("/my/account/waiver")({
-  beforeLoad: async ({ context }) => {
-    await requirePageFlag(context.queryClient, "my_account_waiver");
+  staticData: { pageFlag: "my_account_waiver" },
+  beforeLoad: async ({ context, matches }) => {
+    await requireEnabledPages(context.queryClient, matches);
   },
   loader: ({ context }) =>
     Promise.all([

@@ -267,17 +267,6 @@ export const SETTINGS = {
       "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
   }),
 
-  // Home / landing page.
-  "pages.home": z.boolean().default(true).register(registry, {
-    label: "Home page enabled",
-    description:
-      "When off, the / landing page returns notFound. Auth, registration, and legal pages stay reachable regardless.",
-    category: "pages",
-    flagKind: "release",
-    owner: "system_admin",
-    createdAt: "2026-08-21",
-  }),
-
   // Members surfaces. The directory (`pages.members`) plus each officer
   // management tab and the member-detail page, individually toggleable.
   "pages.members": z.boolean().default(true).register(registry, {
