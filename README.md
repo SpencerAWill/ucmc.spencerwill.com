@@ -11,7 +11,6 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 - `libs/` — Shared libraries
 - `infra/` — Pulumi infrastructure-as-code
 - `.devcontainer/` — Dev container configuration
-- `.wiki/` — GitHub wiki (git submodule, auto-synced)
 
 ## Development Setup
 
@@ -43,11 +42,9 @@ To use it, open the repo in VS Code and select **Reopen in Container** when prom
 #### Getting Started
 
 ```bash
-git clone --recurse-submodules <repo-url>
+git clone <repo-url>
 pnpm install
 ```
-
-If you already cloned without `--recurse-submodules`, `pnpm install` will initialize the wiki submodule automatically.
 
 This also sets up Git hooks via Husky.
 
@@ -70,7 +67,7 @@ type(scope): description
 
 Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
 
-Scopes are validated against workspace package names, plus `wiki` and `devcontainer` for cross-cutting changes.
+Scopes are validated against workspace package names, plus `devcontainer` for cross-cutting changes.
 
 To use the interactive commit helper:
 
@@ -179,12 +176,4 @@ pulumi up         # apply changes
 
 ### Wiki
 
-The GitHub wiki is included as a git submodule at `.wiki/`. It syncs automatically on pull, checkout, and install. A GitHub Action also keeps it updated.
-
-To push local wiki edits:
-
-```bash
-pnpm wiki:push
-```
-
-This also happens automatically when you `git push` the main repo (via the pre-push hook).
+Reference and compliance documentation lives in the [GitHub wiki](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki), which is edited on GitHub and is **not** checked out into this repo. Of particular note: the [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) maps each legal/policy obligation to the file or route that satisfies it.

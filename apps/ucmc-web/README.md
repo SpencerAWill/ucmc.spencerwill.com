@@ -2,7 +2,7 @@
 
 Member portal for the **University of Cincinnati Mountaineering Club** (UCMC), a Registered Student Organization. Deployed at <https://ucmc.spencerwill.com> with a dev twin at <https://dev.ucmc.spencerwill.com>.
 
-This file is the human-developer entry point. For the model's source of truth (every tooling, env, and test convention), see [`/CLAUDE.md`](../../CLAUDE.md). For the legal/policy obligation → site behavior matrix, see [`.wiki/Compliance.md`](../../.wiki/Compliance.md).
+This file is the human-developer entry point. For the model's source of truth (every tooling, env, and test convention), see [`/CLAUDE.md`](../../CLAUDE.md). For the legal/policy obligation → site behavior matrix, see the wiki's [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance).
 
 ## Stack
 
@@ -150,6 +150,6 @@ Auto-deploys to dev on merge to main; prod is manual via `workflow_dispatch` on 
 ## Where to read more
 
 - [`/CLAUDE.md`](../../CLAUDE.md) — full tooling/conventions reference
-- [`.wiki/Compliance.md`](../../.wiki/Compliance.md) — obligation → site behavior matrix
-- [`.wiki/Ohio Law and Student Organizations.md`](../../.wiki/Ohio%20Law%20and%20Student%20Organizations.md), [`.wiki/UC Trademark and Licensing for RSOs.md`](../../.wiki/UC%20Trademark%20and%20Licensing%20for%20RSOs.md), [`.wiki/UC RSO Resources.md`](../../.wiki/UC%20RSO%20Resources.md) — research that drove the compliance design
-- [`.wiki/UCMC Constitution & Bylaws.md`](../../.wiki/UCMC%20Constitution%20&%20Bylaws.md) — governance reference
+- [Compliance](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) (wiki) — obligation → site behavior matrix
+- [Ohio Law and Student Organizations](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Ohio-Law-and-Student-Organizations), [UC Trademark and Licensing for RSOs](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UC-Trademark-and-Licensing-for-RSOs), [UC RSO Resources](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UC-RSO-Resources) (wiki) — research that drove the compliance design
+- [UCMC Constitution & Bylaws](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UCMC-Constitution-%26-Bylaws) (wiki) — governance reference

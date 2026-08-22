@@ -8,14 +8,13 @@ UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (pnpm@11.1
 - `infra/` — Pulumi (TypeScript, two stacks: `dev`, `prod`)
 - `libs/` — shared libraries
 - `.devcontainer/` — Debian-based devcontainer with Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit sidecar
-- `.wiki/` — git submodule, auto-synced via husky hooks + CI
 
 ## Tooling
 
 - **Lint/format**: ESLint v10 flat config, Prettier, EditorConfig. Sub-apps extend root config.
-- **Hooks**: Husky — pre-commit (lint-staged), commit-msg (commitlint), post-merge/checkout/pre-push (wiki submodule).
-- **Commits**: Conventional Commits enforced. Scopes validated against pnpm workspace names + `wiki`, `devcontainer`. Use `pnpm commit`.
-- **CI**: `ci.yml` (per-PR — paths-filter gates web lint/typecheck/vitest + axe a11y and infra lint/typecheck + pulumi preview; workspace audit always runs), `deploy.yml` (push-to-main auto-deploys dev with infra-dev → web-dev chaining; prod via workflow_dispatch with environment approval). Also `seed-admin.yml` (manual sysadmin promotion), `sync-wiki.yml`, `lint-pr.yaml`.
+- **Hooks**: Husky — pre-commit (lint-staged), commit-msg (commitlint).
+- **Commits**: Conventional Commits enforced. Scopes validated against pnpm workspace names + `devcontainer`. Use `pnpm commit`.
+- **CI**: `ci.yml` (per-PR — paths-filter gates web lint/typecheck/vitest + axe a11y and infra lint/typecheck + pulumi preview; workspace audit always runs), `deploy.yml` (push-to-main auto-deploys dev with infra-dev → web-dev chaining; prod via workflow_dispatch with environment approval). Also `seed-admin.yml` (manual sysadmin promotion), `lint-pr.yaml`.
 - **pnpm config lives in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11 stopped reading the `pnpm.*` block in `package.json` — `overrides`, `peerDependencyRules`, `auditConfig`, `minimumReleaseAge`, and `allowBuilds` must all be in the workspace file or they silently no-op.
 - **Supply-chain hardening** (in `pnpm-workspace.yaml`):
   - `minimumReleaseAge: 10080` quarantines any version published in the last 7 days. Primary defense against publish-compromise incidents (e.g. the TanStack `latest`-tag hijack). **Never spec a dep as `"latest"`** — it bypasses the resolver's age check and is exactly what got hijacked. Every direct dep gets an exact version or caret pin where every in-range version is ≥7 days old.
@@ -70,7 +69,7 @@ TanStack Start's import-protection plugin blocks `*.server.*` from client graph 
 - **`apps/ucmc-web/src/config/legal.ts`** is the source-of-truth for every legal/policy string the site renders, plus `WAIVER_PDF_PATH`, `WAIVER_VERSION`, `POLICIES_VERSION`. **Site copy must match the canonical PDF byte-for-byte; treat copy edits to `/disclaimer`, `/nondiscrimination`, `/anti-hazing`, `/waiver`, `/privacy`, `/terms`, `/about`, `/membership`, `/legal`, `/open-source` as legal review, not word-smithing.**
 - **Bumping `WAIVER_VERSION` invalidates every existing attestation** (`requireCurrentWaiver` filters on `(userId, cycle, version)` together — non-revoked is not enough). `POLICIES_VERSION` is informational; no guard re-prompts.
 - **Waiver cycle**: `apps/ucmc-web/src/config/waiver-cycle.ts` exports `currentWaiverCycle(now: Temporal.Instant)` returning `"YYYY-YY"`. Rolls over **August 21** (`WAIVER_CYCLE_CUTOFF`) at **midnight Cincinnati-local** (`CLUB_TIME_ZONE`, `America/New_York`) — the worker runs UTC, so the helper converts the instant to the club zone before reading month/day. **Never compute the cycle ad-hoc — always import the helper.** Tests pin `now` (pass a `Temporal.Instant`, e.g. `Temporal.Instant.from("2025-08-21T00:00:00-04:00")`).
-- **Compliance matrix** in `.wiki/Compliance.md` maps each obligation (Ohio law, UC trademark, FERPA, Clery, EIT 9.2.1, bylaws) to the file/route satisfying it. Update it when adding compliance-shaped features.
+- **Compliance matrix** in the [GitHub wiki](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) maps each obligation (Ohio law, UC trademark, FERPA, Clery, EIT 9.2.1, bylaws) to the file/route satisfying it. The wiki is edited on GitHub and is not checked out into this repo. Update it when adding compliance-shaped features.
 - The registration disclaimer (UC Rule 40-03-01) uses inline-style font to survive Tailwind purging.
 
 ### Markdown surface
@@ -121,7 +120,7 @@ Email three-tier fallback (`src/server/email/resend.ts`): (1) Resend API if `RES
 
 ## Commands
 
-- `pnpm install`, `pnpm commit`, `pnpm exec eslint .`, `pnpm exec prettier --write .`, `pnpm wiki:push`
+- `pnpm install`, `pnpm commit`, `pnpm exec eslint .`, `pnpm exec prettier --write .`
 - `pnpm --filter ucmc-web {dev,build,test,typecheck,storybook,e2e,e2e:ui}`
 - `pnpm --filter ucmc-web {deploy:dev,deploy:prod}`
 - `pnpm --filter ucmc-web {db:generate,db:migrate:local,db:seed:local}` — remote sysadmin seeding is the `seed-admin.yml` GitHub Action, not a script
