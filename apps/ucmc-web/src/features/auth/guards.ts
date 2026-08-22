@@ -151,7 +151,7 @@ export async function requireViewPermission(
  *
  * Anyone else gets bounced:
  *   - no proof and no session  → /sign-in?register=true (start over)
- *   - signed-in user *with* a profile → /my/account (already registered)
+ *   - signed-in user *with* a profile → /my/profile (already registered)
  *
  * The shared shape exposes `email` regardless of source, so the form
  * can render its read-only field and the server's submit action (which
@@ -179,7 +179,7 @@ export async function getCurrentWaiverStatus(
  * future participation-gated actions). Layers on top of `requireApproved`
  * — no profile / not approved / deactivated all redirect first; an
  * approved member without a current attestation gets bounced to
- * `/my/account/waiver` so they see the "how to get attested" instructions.
+ * `/my/waiver` so they see the "how to get attested" instructions.
  *
  * Today no production route invokes this. It exists so the future
  * `/trips`-style features can drop it into their `beforeLoad` without
@@ -192,7 +192,7 @@ export async function requireCurrentWaiver(
   const principal = await requireApproved(queryClient, redirectFrom);
   const waiver = await getCurrentWaiverStatus(queryClient);
   if (!waiver.current) {
-    throw redirect({ to: "/my/account/waiver" });
+    throw redirect({ to: "/my/waiver" });
   }
   return { principal, waiver };
 }
@@ -211,7 +211,7 @@ export async function requireRegistrationContext(
     throw redirect({ to: "/sign-in", search: { register: true } });
   }
   if (principal.hasProfile) {
-    throw redirect({ to: "/my/account" });
+    throw redirect({ to: "/my/profile" });
   }
   return { source: "session", email: principal.primaryEmail };
 }

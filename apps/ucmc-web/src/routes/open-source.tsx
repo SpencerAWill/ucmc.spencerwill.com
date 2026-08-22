@@ -55,7 +55,7 @@ const SECTIONS: readonly LegalSection[] = [
     heading: "Third-party software & assets",
     paragraphs: [
       "The site builds on a stack of open-source projects (TanStack, React, Drizzle, Tailwind, shadcn/ui, Radix UI, Lucide, Zod, and many transitive dependencies — see package.json in the repository for the full set). Each is governed by its own license, retained in node_modules.",
-      "The Instagram, Facebook, YouTube, and GitHub mark glyphs in the footer were drawn from each platform's official brand guidelines and are used solely to identify links to those services. Lucide React icons are used under the ISC license.",
+      "The Instagram, Facebook, YouTube, and GitHub mark glyphs in the footer, and the social mark glyphs on the home page, were drawn from each platform's official brand guidelines and are used solely to identify links to those services. Lucide React icons are used under the ISC license.",
     ],
   },
   {

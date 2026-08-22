@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ExternalLink, Mail, MapPin } from "lucide-react";
+import { CalendarDays, Mail, MapPin, Share2 } from "lucide-react";
 
+import { SocialIconLinks } from "#/components/social-icon-links";
 import { Card, CardContent } from "#/components/ui/card";
 import { landingContentQueryOptions } from "#/features/landing/api/queries";
 import { EditAffordance } from "#/features/landing/components/edit-affordance";
@@ -23,7 +24,14 @@ export function MeetingInfo() {
   const dayTime = readString(settings["meeting.day_time"]);
   const location = readString(settings["meeting.location"]);
   const email = contact.clubEmail;
-  const instagramUrl = readString(settings["meeting.instagram_url"]);
+  // Social URLs are site settings alongside the club email, not landing
+  // CMS rows — the footer renders the same three links, so neither
+  // surface owns them. (`meeting.instagram_url` used to live in the
+  // landing CMS; migration 0058 moved its value here.)
+  const hasSocials =
+    contact.instagramUrl.length > 0 ||
+    contact.facebookUrl.length > 0 ||
+    contact.youtubeUrl.length > 0;
   const imageKey = readString(settings["meeting.image_key"]);
   const hasImage = imageKey.length > 0;
 
@@ -100,23 +108,20 @@ export function MeetingInfo() {
                 }
               />
             ) : null}
-            {instagramUrl ? (
+            {hasSocials ? (
               <Row
-                icon={<ExternalLink />}
-                label="Instagram"
+                icon={<Share2 />}
+                label="Follow us"
                 value={
-                  <a
-                    href={instagramUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-foreground"
-                  >
-                    {instagramUrl.replace(/^https?:\/\//, "")}
-                  </a>
+                  <SocialIconLinks
+                    instagramUrl={contact.instagramUrl}
+                    facebookUrl={contact.facebookUrl}
+                    youtubeUrl={contact.youtubeUrl}
+                  />
                 }
               />
             ) : null}
-            {!dayTime && !location && !email && !instagramUrl ? (
+            {!dayTime && !location && !email && !hasSocials ? (
               <p className="text-center text-sm text-muted-foreground">
                 Meeting info not set yet.
               </p>
@@ -127,7 +132,7 @@ export function MeetingInfo() {
       <EditAffordance label="Edit meeting info">
         {({ close }) => (
           <MeetingInfoEditor
-            values={{ dayTime, location, instagramUrl }}
+            values={{ dayTime, location }}
             imageKey={hasImage ? imageKey : null}
             onClose={close}
           />

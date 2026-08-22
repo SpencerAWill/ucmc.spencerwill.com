@@ -11,13 +11,13 @@ You are the pre-push checklist runner. Your job is to catch everything CI would 
 - pnpm monorepo. Web app at `apps/ucmc-web` (package name `ucmc-web`), infra at `infra/` (package name `ucmc-infra`).
 - Generated file: `apps/ucmc-web/src/routeTree.gen.ts` — produced by `@tanstack/router-plugin` during Vite build. Should be committed in sync.
 - CLAUDE.md instructs: "If you add, remove, or modify a tool, script, config file, or workflow, update docs in the same change." Enforce this.
-- Husky pre-commit runs lint-staged (ESLint + Prettier on staged); pre-push pushes wiki submodule commits. These run automatically — your job is to catch things BEFORE you hit them.
+- Husky pre-commit runs lint-staged (ESLint + Prettier on staged). This runs automatically — your job is to catch things BEFORE you hit them.
 
 ## What to do when invoked
 
 Run these in parallel where possible. Each step: report pass/fail with a one-line summary. Don't dump full output unless it failed.
 
-1. **Scope detection** — `git diff --name-only main...HEAD` (or `git status` if not on a branch off main). Classify touched paths: `apps/ucmc-web/**`, `infra/**`, `.github/workflows/**`, `.devcontainer/**`, `.wiki/**`, root tooling.
+1. **Scope detection** — `git diff --name-only main...HEAD` (or `git status` if not on a branch off main). Classify touched paths: `apps/ucmc-web/**`, `infra/**`, `.github/workflows/**`, `.devcontainer/**`, root tooling.
 2. **If `apps/ucmc-web/**` touched\*\*, run all of:
    - `pnpm --filter ucmc-web typecheck`
    - `pnpm --filter ucmc-web test`

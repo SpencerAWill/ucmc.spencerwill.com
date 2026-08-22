@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { MyGearList } from "#/features/gear/components/my-gear-list";
-import { requireEnabledPages } from "#/features/settings/api/page-guards";
+import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 /**
  * `/my/gear` — the member's loan list. Parent `/my` route guards on
@@ -13,8 +13,8 @@ import { requireEnabledPages } from "#/features/settings/api/page-guards";
  */
 export const Route = createFileRoute("/my/gear/")({
   staticData: { pageFlag: "my_gear" },
-  beforeLoad: async ({ context, matches }) => {
-    await requireEnabledPages(context.queryClient, matches);
+  beforeLoad: async ({ context }) => {
+    await requirePageFlag(context.queryClient, "my_gear");
   },
   component: MyGearPage,
 });

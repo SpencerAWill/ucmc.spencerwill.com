@@ -15,6 +15,7 @@
  *   - webauthnAuthenticateBeginFn   (public; rate-limited)
  *   - webauthnAuthenticateFinishFn  (public; rate-limited)
  *   - removePasskeyFn               (session-gated)
+ *   - renamePasskeyFn               (session-gated)
  *   - listPasskeysFn                (session-gated GET)
  */
 import type {
@@ -64,11 +65,22 @@ export type RemovePasskeyResult =
   | { ok: true }
   | { ok: false; reason: "unauthorized" | "not_found" };
 
+/** `nickname` echoes the stored value so the client can reconcile
+ *  optimistic state with the server's trimming (and with an
+ *  all-whitespace name having been normalized to null). */
+export type RenamePasskeyResult =
+  | { ok: true; nickname: string | null }
+  | { ok: false; reason: "unauthorized" | "not_found" };
+
 export interface PasskeySummary {
   credentialId: string;
   nickname: string | null;
-  createdAt: string;
-  lastUsedAt: string | null;
+  /** Temporal crosses the server-fn wire via the serialization adapters
+   *  registered in `src/start.ts`, so these stay Instants rather than
+   *  pre-stringified dates — matching `MyEmailSummary` and letting the
+   *  UI format them through `#/lib/date-format`. */
+  createdAt: Temporal.Instant;
+  lastUsedAt: Temporal.Instant | null;
 }
 
 // ── register (session-gated) ─────────────────────────────────────────────
@@ -124,10 +136,19 @@ export const webauthnAuthenticateFinishFn = createServerFn({ method: "POST" })
     });
   });
 
-// ── remove / list (session-gated) ────────────────────────────────────────
+// ── remove / rename / list (session-gated) ──────────────────────────────
 
 const removePasskeyInput = z.object({
   credentialId: z.string().min(1).max(512),
+});
+
+const renamePasskeyInput = z.object({
+  credentialId: z.string().min(1).max(512),
+  // Same 60-char cap as the nickname on registration
+  // (`registerFinishInput`), so a label can't be longer than the field
+  // that created it. Not `.min(1)`: an empty string is the documented
+  // way to clear the label, which the action normalizes to null.
+  nickname: z.string().trim().max(60),
 });
 
 export const removePasskeyFn = createServerFn({ method: "POST" })
@@ -136,6 +157,17 @@ export const removePasskeyFn = createServerFn({ method: "POST" })
     const { removePasskeyAction } =
       await import("#/features/auth/server/webauthn-actions.server");
     return removePasskeyAction({ credentialId: data.credentialId });
+  });
+
+export const renamePasskeyFn = createServerFn({ method: "POST" })
+  .validator(renamePasskeyInput)
+  .handler(async ({ data }): Promise<RenamePasskeyResult> => {
+    const { renamePasskeyAction } =
+      await import("#/features/auth/server/webauthn-actions.server");
+    return renamePasskeyAction({
+      credentialId: data.credentialId,
+      nickname: data.nickname,
+    });
   });
 
 export const listPasskeysFn = createServerFn({ method: "GET" }).handler(

@@ -556,6 +556,24 @@ export const auditAction = [
   "email.added",
   "email.removed",
   "email.primary_changed",
+  // Passkey (WebAuthn) credential lifecycle. Self-service, so
+  // `actor_user_id` and `target_user_id` are the same user; `target_id`
+  // is the credential's `passkey_credentials.id` (NOT the raw
+  // `credential_id`, which is attacker-supplied base64url from the
+  // authenticator and has no business in a log we render).
+  //
+  // Renames are audited even though a nickname is a cosmetic label with
+  // no authentication effect — normally that would put them in the
+  // "deliberately NOT audited" bucket above. The nickname is how a
+  // member decides which credential to REVOKE, so someone holding a
+  // stolen session could silently relabel passkeys to steer the victim
+  // into deleting their own and keeping the attacker's. Metadata carries
+  // `{ before, after }` so that relabelling is reconstructable. A
+  // nickname is user-authored free text, not PII we derived, and it's
+  // capped at 60 chars.
+  "passkey.added",
+  "passkey.removed",
+  "passkey.renamed",
   // RBAC.
   "role.created",
   "role.updated",
@@ -668,12 +686,12 @@ export const auditAction = [
   "gazette_issue.created",
   "gazette_issue.updated",
   "gazette_issue.deleted",
-  // Trip Gallery photo CRUD via /gallery manage affordances.
+  // Album photo CRUD via /album manage affordances.
   // Metadata carries { caption, tag } so the audit row stays
   // informative even after the photo row is deleted.
-  "gallery_photo.created",
-  "gallery_photo.updated",
-  "gallery_photo.deleted",
+  "album_photo.created",
+  "album_photo.updated",
+  "album_photo.deleted",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -1336,7 +1354,7 @@ export const gazetteIssues = sqliteTable(
 export type GazetteIssue = typeof gazetteIssues.$inferSelect;
 
 /**
- * Trip Gallery — UCMC's photo archive. Photos are cropped to a fixed
+ * Album — UCMC's photo archive. Photos are cropped to a fixed
  * 4:3 ratio at upload time (`useImageCrop()` in the dialog → canvas
  * → WebP), so every grid tile is uniform. The cropped WebP is what
  * gets stored; the original is discarded after crop.
@@ -1347,13 +1365,13 @@ export type GazetteIssue = typeof gazetteIssues.$inferSelect;
  *
  * Layout: flat collection — no albums/trips entity in v1. Each photo
  * has caption, credit, `takenAt`, optional `tag`, and required
- * `altText` for accessibility (every gallery `<img>` MUST have alt
+ * `altText` for accessibility (every album `<img>` MUST have alt
  * text; this is the SQL guard for it). Width/height columns are
  * stored even though the aspect is fixed so a future masonry layout
  * doesn't need a column-add migration.
  */
-export const galleryPhotos = sqliteTable(
-  "gallery_photos",
+export const albumPhotos = sqliteTable(
+  "album_photos",
   {
     id: text("id").primaryKey(),
     publicId: text("public_id").notNull().unique(),
@@ -1386,8 +1404,8 @@ export const galleryPhotos = sqliteTable(
     // serve from an index on `taken_at` alone (it would need an
     // expression index). Club-scale photo counts (<1k) sort
     // unindexed in microseconds either way.
-    index("gallery_photos_tag_idx").on(t.tag),
+    index("album_photos_tag_idx").on(t.tag),
   ],
 );
 
-export type GalleryPhoto = typeof galleryPhotos.$inferSelect;
+export type AlbumPhoto = typeof albumPhotos.$inferSelect;

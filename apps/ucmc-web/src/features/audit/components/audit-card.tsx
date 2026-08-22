@@ -39,6 +39,13 @@ const USER_TARGETED_ACTIONS = new Set<AuditAction>([
   "email.added",
   "email.removed",
   "email.primary_changed",
+  // Passkey events are self-service on the acting user, same shape as
+  // the email lifecycle above: both FKs point at that one member, so a
+  // hard-deleted user leaves a row that should still read as having had
+  // a target.
+  "passkey.added",
+  "passkey.removed",
+  "passkey.renamed",
   "role.assigned",
   "role.unassigned",
   "waiver.attested",

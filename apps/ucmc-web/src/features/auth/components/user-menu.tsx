@@ -115,9 +115,9 @@ export function UserMenu() {
           </DropdownMenuItem>
         ) : (
           <>
-            {pages.my_account ? (
+            {pages.my_profile ? (
               <DropdownMenuItem asChild>
-                <Link to="/my/account">
+                <Link to="/my/profile">
                   <UserIcon className="mr-2 size-4" />
                   My Account
                 </Link>

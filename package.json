@@ -4,9 +4,7 @@
   "description": "The software system for the University of Cincinnati's Mountaineering Club",
   "scripts": {
     "prepare": "husky",
-    "postinstall": "git submodule update --init --remote --merge",
-    "commit": "czg",
-    "wiki:push": "git -C .wiki push"
+    "commit": "czg"
   },
   "keywords": [],
   "author": "Spencer Will",

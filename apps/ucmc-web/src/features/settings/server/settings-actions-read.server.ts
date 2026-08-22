@@ -42,8 +42,13 @@ export async function listSiteSettingsAction(): Promise<SiteSettingsSnapshot> {
  * leak publicly.
  */
 export async function getPublicSiteContactAction(): Promise<PublicSiteContact> {
-  const clubEmail = await readSetting("contact.clubEmail");
-  return { clubEmail };
+  const [clubEmail, instagramUrl, facebookUrl, youtubeUrl] = await Promise.all([
+    readSetting("contact.clubEmail"),
+    readSetting("contact.instagramUrl"),
+    readSetting("contact.facebookUrl"),
+    readSetting("contact.youtubeUrl"),
+  ]);
+  return { clubEmail, instagramUrl, facebookUrl, youtubeUrl };
 }
 
 /**

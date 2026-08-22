@@ -199,8 +199,56 @@ describe("getPublicSiteContactAction", () => {
   it("returns the curated subset with no auth gate", async () => {
     cookieJar.clear();
     const out = await getPublicSiteContactAction();
-    expect(out).toHaveProperty("clubEmail");
-    expect(typeof out.clubEmail).toBe("string");
+    // Every field the footer and the landing "Where to find us" card
+    // read. A missing key here renders as a dropped icon rather than a
+    // crash, so it wouldn't fail loudly anywhere else.
+    expect(out).toEqual({
+      clubEmail: SETTINGS["contact.clubEmail"].parse(undefined),
+      instagramUrl: SETTINGS["contact.instagramUrl"].parse(undefined),
+      facebookUrl: SETTINGS["contact.facebookUrl"].parse(undefined),
+      youtubeUrl: SETTINGS["contact.youtubeUrl"].parse(undefined),
+    });
+  });
+
+  it("reflects an edited social URL", async () => {
+    await signInAsManager();
+    await updateSettingAction({
+      key: "contact.instagramUrl",
+      value: "https://instagram.com/somewhere_else",
+    });
+    cookieJar.clear();
+    const out = await getPublicSiteContactAction();
+    expect(out.instagramUrl).toBe("https://instagram.com/somewhere_else");
+  });
+
+  it("keeps a blank social URL blank rather than falling back to the default", async () => {
+    // Blank is a real value — "the club has no such account" — and both
+    // surfaces drop the icon for it. If the fail-open read treated "" as
+    // absent, clearing a link would silently restore the seeded URL.
+    await signInAsManager();
+    await updateSettingAction({
+      key: "contact.facebookUrl",
+      value: "",
+    });
+    cookieJar.clear();
+    const out = await getPublicSiteContactAction();
+    expect(out.facebookUrl).toBe("");
+  });
+
+  it("rejects a social URL without an https:// scheme", async () => {
+    // A bare "instagram.com/..." in an href resolves as a same-origin
+    // relative path, so the scheme check is load-bearing, not cosmetic.
+    await signInAsManager();
+    const result = await updateSettingAction({
+      key: "contact.instagramUrl",
+      value: "instagram.com/uc_mountaineering",
+    });
+    expect(result).toEqual({ ok: false, reason: "invalid_value" });
+    // And the rejection left the stored value alone rather than writing
+    // a partially-validated one.
+    expect(await readSetting("contact.instagramUrl")).toBe(
+      SETTINGS["contact.instagramUrl"].parse(undefined),
+    );
   });
 });
 
@@ -216,13 +264,13 @@ describe("getPublicFlagsAction", () => {
       "scholarships",
       "policies",
       "resources",
-      "gallery",
+      "album",
       "gazette",
       "history",
       "members",
       "gear",
       "feedback",
-      "my_account",
+      "my_profile",
       "blog",
       "reports",
     ] as const) {

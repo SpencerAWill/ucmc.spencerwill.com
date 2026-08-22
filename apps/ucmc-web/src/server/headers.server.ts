@@ -20,7 +20,7 @@
 const CSP_VALUE = [
   "default-src 'self'",
   // `blob:` is required by the in-app image cropper (landing editors,
-  // /gallery photo upload): `browser-image-compression` returns a Blob
+  // /album photo upload): `browser-image-compression` returns a Blob
   // wrapped in `URL.createObjectURL`, and `react-image-crop` displays
   // that blob URL via `<img src>`.
   "img-src 'self' data: https: blob:",

@@ -11,8 +11,7 @@ import {
  * Pathless layout for the five status tabs that share the same page
  * chrome: Approved (`/members`), Pending, Unclaimed, Rejected,
  * Deactivated. Lives under `_tabs` so its tab bar doesn't leak into
- * sibling routes like `/members/$publicId`, `/members/roles`, or
- * `/members/waivers`.
+ * sibling routes like `/members/$publicId` or `/members/waivers`.
  *
  * Gating is intentionally just `requireApproved` here — the approved
  * tab is for any approved member. Each management child route stacks

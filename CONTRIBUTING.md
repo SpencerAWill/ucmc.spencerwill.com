@@ -11,7 +11,7 @@ The fastest path is the included dev container — it provisions Node 22, pnpm, 
 Manual setup:
 
 ```bash
-git clone --recurse-submodules <repo-url>
+git clone <repo-url>
 cd ucmc.spencerwill.com
 pnpm install            # installs deps and registers husky hooks
 ```
@@ -45,7 +45,7 @@ type(scope): description
 ```
 
 - **Valid types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-- **Valid scopes**: any pnpm workspace name (e.g. `ucmc-web`), plus `wiki` and `devcontainer` for cross-cutting changes. The list is validated against `pnpm-workspace.yaml` at commit time.
+- **Valid scopes**: any pnpm workspace name (e.g. `ucmc-web`), plus `devcontainer` for cross-cutting changes. The list is validated against `pnpm-workspace.yaml` at commit time.
 - Use the imperative mood in the subject ("add", not "added"/"adds"). Keep it under ~70 characters.
 
 You can use the interactive helper:
@@ -96,8 +96,8 @@ When you fix a bug, add a regression test in the same PR.
 ## Documentation
 
 - **Update `README.md` and `CLAUDE.md` in the same PR** whenever you change tooling, scripts, workflows, the workspace layout, or any load-bearing invariant. CI does not detect doc drift, so reviewers will.
-- Compliance-shaped features: update `.wiki/Compliance.md` to map the new obligation → file/route.
-- The wiki (`.wiki/`) is a git submodule, auto-synced on pull/checkout. To push wiki edits: `pnpm wiki:push` (also runs automatically via the pre-push hook).
+- Compliance-shaped features: update the [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) in the wiki to map the new obligation → file/route.
+- The [wiki](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki) is edited on GitHub and is not checked out into this repo.
 
 ## Infrastructure changes
 

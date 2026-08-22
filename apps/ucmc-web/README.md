@@ -2,7 +2,7 @@
 
 Member portal for the **University of Cincinnati Mountaineering Club** (UCMC), a Registered Student Organization. Deployed at <https://ucmc.spencerwill.com> with a dev twin at <https://dev.ucmc.spencerwill.com>.
 
-This file is the human-developer entry point. For the model's source of truth (every tooling, env, and test convention), see [`/CLAUDE.md`](../../CLAUDE.md). For the legal/policy obligation → site behavior matrix, see [`.wiki/Compliance.md`](../../.wiki/Compliance.md).
+This file is the human-developer entry point. For the model's source of truth (every tooling, env, and test convention), see [`/CLAUDE.md`](../../CLAUDE.md). For the legal/policy obligation → site behavior matrix, see the wiki's [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance).
 
 ## Stack
 
@@ -68,15 +68,17 @@ The footer also shows the registration disclaimer text **on every page** (not ju
 
 ### Auth-gated routes
 
-- `/my/account` (public profile), `/my/account/details` (private PII + emergency contacts), `/my/account/security` (Sign-in tab: emails + passkeys), `/my/account/preferences` (theme + data export + hard delete) — the member's own account surface
-- `/my/account/waiver` — read-only view of the member's paper-waiver attestation status
+- `/my/profile` (public profile), `/my/details` (private PII + email addresses), `/my/contacts` (emergency contacts), `/my/security` (passkeys), `/my/preferences` (theme + data export + hard delete) — the member's own account surface, sharing a greeting + tab bar via the pathless `my._tabs` layout. `/my` itself redirects to `/my/profile`.
+- `/my/waiver` — read-only view of the member's paper-waiver attestation status
 - `/members` — directory (auth-gated, robots-disallowed). Approved members see only the approved tab; officers with `members:manage` see a tab bar with four additional siblings:
   - `/members/pending` — approve pending registrations
   - `/members/unclaimed` — pre-add unclaimed members (off-platform stubs)
   - `/members/rejected` — un-reject rejected registrations
   - `/members/deactivated` — reactivate deactivated members
 - `/members/waivers` — officer attestation queue (`waivers:verify`; held by Treasurer + President)
-- `/members/roles` — RBAC editor (`roles:manage`)
+- `/access` — roles and permissions editor (`roles:manage`). Root-level, not under `/members`: roles govern every feature, not just membership, so it sits next to Settings in the sidebar's bottom group.
+- `/album` — club photo archive (`public_album:view`; granted to anonymous visitors and members). Upload/edit/delete needs `public_album:manage`. Renamed from "Trip Gallery" in migration `0059`; R2 object keys deliberately kept their historical `gallery/` prefix.
+- `/settings` — runtime platform configuration (`settings:manage`), driven entirely by the Zod registry in `src/server/settings/settings-registry.ts`. This is where the club email, the Instagram / Facebook / YouTube links, and the per-page kill switches are edited. The footer and the landing page's "Where to find us" block both read the contact values from here, so neither surface hardcodes them.
 
 ## Compliance conventions
 
@@ -150,6 +152,6 @@ Auto-deploys to dev on merge to main; prod is manual via `workflow_dispatch` on 
 ## Where to read more
 
 - [`/CLAUDE.md`](../../CLAUDE.md) — full tooling/conventions reference
-- [`.wiki/Compliance.md`](../../.wiki/Compliance.md) — obligation → site behavior matrix
-- [`.wiki/Ohio Law and Student Organizations.md`](../../.wiki/Ohio%20Law%20and%20Student%20Organizations.md), [`.wiki/UC Trademark and Licensing for RSOs.md`](../../.wiki/UC%20Trademark%20and%20Licensing%20for%20RSOs.md), [`.wiki/UC RSO Resources.md`](../../.wiki/UC%20RSO%20Resources.md) — research that drove the compliance design
-- [`.wiki/UCMC Constitution & Bylaws.md`](../../.wiki/UCMC%20Constitution%20&%20Bylaws.md) — governance reference
+- [Compliance](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) (wiki) — obligation → site behavior matrix
+- [Ohio Law and Student Organizations](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Ohio-Law-and-Student-Organizations), [UC Trademark and Licensing for RSOs](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UC-Trademark-and-Licensing-for-RSOs), [UC RSO Resources](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UC-RSO-Resources) (wiki) — research that drove the compliance design
+- [UCMC Constitution & Bylaws](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UCMC-Constitution-%26-Bylaws) (wiki) — governance reference

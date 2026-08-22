@@ -510,7 +510,7 @@ export async function listRolesAction(): Promise<RoleOption[]> {
     columns: { id: true, name: true, description: true },
     // Match the canonical role ordering used by the RBAC editor
     // (`listRolesDetailedAction`) so the directory's role-filter
-    // popover reflects whatever the operator dragged in `/members/roles`.
+    // popover reflects whatever the operator dragged in `/access`.
     orderBy: (roles, { asc: a }) => [a(roles.position), a(roles.name)],
   });
 }

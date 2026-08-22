@@ -105,6 +105,21 @@ const registry = z.registry<SettingMeta>();
 // All schemas declare a `.default(...)` so `schema.parse(undefined)`
 // produces the fallback value when the D1 row is absent or malformed.
 // This is the fail-open contract documented in settings-repo.server.ts.
+
+// Shared shape for the social profile URLs below. An empty string is a
+// meaningful value ("no account / hide the icon"), so this can't just be
+// `z.string().url()` — that rejects "". The refine keeps the scheme
+// explicit rather than accepting a bare "instagram.com/..." that would
+// resolve as a same-origin relative path once dropped into an href.
+const socialUrl = z
+  .string()
+  .trim()
+  .max(300)
+  .refine(
+    (v) => v === "" || /^https:\/\//i.test(v),
+    "Must start with https:// (or be left blank)",
+  );
+
 export const SETTINGS = {
   "contact.clubEmail": z
     .string()
@@ -115,6 +130,44 @@ export const SETTINGS = {
       label: "Club email",
       description:
         "Public contact address for the club. Shown on the landing page meeting block and in the footer mail icon.",
+      category: "contact",
+    }),
+
+  // Social profile URLs. These were previously split across two homes —
+  // Instagram lived in the landing CMS (`meeting.instagram_url`) while
+  // Facebook and YouTube were hardcoded in the footer — so the same three
+  // links could drift apart. They live here for the same reason
+  // `contact.clubEmail` does: the footer and the landing "Where to find
+  // us" block both render them, and neither is the owner.
+  //
+  // `socialUrl` allows the empty string as an explicit "we don't have
+  // one / hide it" value; both surfaces skip a blank URL rather than
+  // rendering a dead icon. Defaults are the club's live accounts (the
+  // URLs the footer had been shipping), so a fresh DB is correct.
+  "contact.instagramUrl": socialUrl
+    .default("https://instagram.com/uc_mountaineering")
+    .register(registry, {
+      label: "Instagram URL",
+      description:
+        "Link behind the Instagram icon in the footer and in the landing page’s “Follow us” row. Leave blank to hide the icon.",
+      category: "contact",
+    }),
+
+  "contact.facebookUrl": socialUrl
+    .default("https://www.facebook.com/groups/19204046466/")
+    .register(registry, {
+      label: "Facebook URL",
+      description:
+        "Link behind the Facebook icon in the footer and in the landing page’s “Follow us” row. Leave blank to hide the icon.",
+      category: "contact",
+    }),
+
+  "contact.youtubeUrl": socialUrl
+    .default("https://www.youtube.com/channel/UC1zpNSpQI784F-zOtVHjUMQ")
+    .register(registry, {
+      label: "YouTube URL",
+      description:
+        "Link behind the YouTube icon in the footer and in the landing page’s “Follow us” row. Leave blank to hide the icon.",
       category: "contact",
     }),
 
@@ -167,10 +220,10 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.gallery": z.boolean().default(true).register(registry, {
-    label: "Trip Gallery enabled",
+  "pages.album": z.boolean().default(true).register(registry, {
+    label: "Album enabled",
     description:
-      "When off, the Trip Gallery sidebar entry is hidden and the /gallery route returns notFound for everyone.",
+      "When off, the Album sidebar entry is hidden and the /album route returns notFound for everyone.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
@@ -243,6 +296,15 @@ export const SETTINGS = {
     label: "Reports enabled",
     description:
       "When off, the Reports “coming soon” sidebar entry is hidden. Reports has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.access": z.boolean().default(true).register(registry, {
+    label: "Access page enabled",
+    description:
+      "When off, the Access sidebar entry is hidden and /access returns notFound. Role and permission delegation stays reachable by switching this back on from Settings.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
@@ -323,15 +385,6 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.members_roles": z.boolean().default(true).register(registry, {
-    label: "Members · Roles page enabled",
-    description:
-      "When off, the Roles sidebar sub-item is hidden and /members/roles returns notFound.",
-    category: "pages",
-    flagKind: "release",
-    owner: "system_admin",
-    createdAt: "2026-08-21",
-  }),
   "pages.members_waivers": z.boolean().default(true).register(registry, {
     label: "Members · Waivers page enabled",
     description:
@@ -400,47 +453,57 @@ export const SETTINGS = {
     createdAt: "2026-08-21",
   }),
 
-  // Personal / user-menu pages.
-  "pages.my_account": z.boolean().default(true).register(registry, {
+  // Personal / user-menu pages. Each is a tab on the `/my/_tabs`
+  // account layout; `my_profile` additionally gates the user-menu link.
+  "pages.my_profile": z.boolean().default(true).register(registry, {
     label: "My Account · Profile enabled",
     description:
-      "When off, the My Account link is hidden and /my/account returns notFound.",
+      "When off, the My Account link is hidden and /my/profile returns notFound.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.my_account_details": z.boolean().default(true).register(registry, {
+  "pages.my_details": z.boolean().default(true).register(registry, {
     label: "My Account · Details tab enabled",
     description:
-      "When off, the Details tab is hidden and /my/account/details returns notFound.",
+      "When off, the Details tab is hidden and /my/details returns notFound. Turning this off also hides the email-address manager, which lives on that tab.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.my_account_preferences": z.boolean().default(true).register(registry, {
-    label: "My Account · Preferences tab enabled",
+  "pages.my_contacts": z.boolean().default(true).register(registry, {
+    label: "My Account · Contacts tab enabled",
     description:
-      "When off, the Preferences tab is hidden and /my/account/preferences returns notFound.",
+      "When off, the Contacts tab is hidden and /my/contacts returns notFound. Members can no longer edit their own emergency contacts while it is off.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
-  "pages.my_account_security": z.boolean().default(true).register(registry, {
-    label: "My Account · Sign-in tab enabled",
-    description:
-      "When off, the Sign-in tab is hidden and /my/account/security returns notFound. Turning this off can strand members who manage passkeys here.",
-    category: "pages",
-    flagKind: "release",
-    owner: "system_admin",
-    createdAt: "2026-08-21",
-  }),
-  "pages.my_account_waiver": z.boolean().default(true).register(registry, {
+  "pages.my_waiver": z.boolean().default(true).register(registry, {
     label: "My Account · Waiver tab enabled",
     description:
-      "When off, the Waiver tab is hidden and /my/account/waiver returns notFound.",
+      "When off, the Waiver tab is hidden and /my/waiver returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_security": z.boolean().default(true).register(registry, {
+    label: "My Account · Security tab enabled",
+    description:
+      "When off, the Security tab is hidden and /my/security returns notFound. Turning this off can strand members who manage passkeys here.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
+  "pages.my_preferences": z.boolean().default(true).register(registry, {
+    label: "My Account · Preferences tab enabled",
+    description:
+      "When off, the Preferences tab is hidden and /my/preferences returns notFound.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",

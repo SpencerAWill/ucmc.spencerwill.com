@@ -39,6 +39,9 @@ export function siteSettingsQueryOptions() {
 export function publicSiteContactQueryOptions() {
   const fallback: PublicSiteContact = {
     clubEmail: SETTINGS["contact.clubEmail"].parse(undefined),
+    instagramUrl: SETTINGS["contact.instagramUrl"].parse(undefined),
+    facebookUrl: SETTINGS["contact.facebookUrl"].parse(undefined),
+    youtubeUrl: SETTINGS["contact.youtubeUrl"].parse(undefined),
   };
   return {
     queryKey: PUBLIC_SITE_CONTACT_QUERY_KEY,

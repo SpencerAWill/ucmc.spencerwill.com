@@ -1,6 +1,5 @@
 node_modules/
 .git/
-.wiki/
 dist/
 .next/
 .nuxt/

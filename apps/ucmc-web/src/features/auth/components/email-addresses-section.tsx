@@ -25,8 +25,8 @@ const addEmailSchema = z.object({
 });
 
 /**
- * "Email addresses" section on the Sign-in tab
- * (`/my/account/security`). Lists every
+ * "Email addresses" section on the Details tab (`/my/details`).
+ * Lists every
  * verified address attached to the user, with a Primary badge, a
  * "Make primary" button on non-primary rows, and a "Remove" button
  * (disabled on the primary row and when only one row exists). Below
@@ -60,7 +60,8 @@ export function EmailAddressesSection({
           </p>
         </header>
         <ItemGroup className="gap-2">
-          <Item variant="outline" size="sm">
+          {/* `ItemGroup` is a `role="list"` div — children need `listitem`. */}
+          <Item variant="outline" size="sm" role="listitem">
             <ItemContent className="min-w-0">
               <ItemTitle className="w-full min-w-0">
                 <span className="min-w-0 flex-1 truncate">{primaryEmail}</span>
@@ -100,7 +101,7 @@ function ApprovedEmailAddressesSection() {
       ) : (
         <ItemGroup className="gap-2">
           {emails.map((row) => (
-            <Item key={row.id} variant="outline" size="sm">
+            <Item key={row.id} variant="outline" size="sm" role="listitem">
               {/*
                * `min-w-0` on ItemContent + `w-full min-w-0` on ItemTitle
                * are needed for the inner `truncate` span to actually

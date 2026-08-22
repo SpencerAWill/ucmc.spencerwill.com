@@ -39,13 +39,9 @@ import {
 
 import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
 import { UserMenu } from "#/features/auth/components/user-menu";
-import {
-  FacebookIcon,
-  GitHubIcon,
-  InstagramIcon,
-  YouTubeIcon,
-} from "#/components/brand-icons";
+import { GitHubIcon } from "#/components/brand-icons";
 import { ModeToggle } from "#/components/mode-toggle";
+import { SocialIconLinks } from "#/components/social-icon-links";
 import {
   REGISTRATION_DISCLAIMER,
   SUBBRAND_DISAMBIGUATION,
@@ -224,7 +220,6 @@ function SidebarNav() {
   // (Blog, Volunteer, etc.) have only their flag as the gate.
   const canReadAnnouncements =
     hasPermission("announcements:read") && pages.announcements;
-  const canManageRoles = hasPermission("roles:manage") && pages.members_roles;
   const canVerifyWaivers =
     hasPermission("waivers:verify") && pages.members_waivers;
   const canReadMembers = isApproved && pages.members;
@@ -240,13 +235,13 @@ function SidebarNav() {
   const canViewResources =
     hasPermission("public_resources:view") && pages.resources;
   const canViewGazette = hasPermission("public_gazette:view") && pages.gazette;
-  const canViewGallery = hasPermission("public_gallery:view") && pages.gallery;
+  const canViewAlbum = hasPermission("public_album:view") && pages.album;
 
-  // Sub-items gated by permission. If none are visible, the Members
-  // link still renders but without the collapsible chevron.
-  // (Member management is reached via the tab bar inside /members
-  // itself for officers, so it doesn't need its own sub-link.)
-  const hasSubItems = canManageRoles || canVerifyWaivers;
+  // Waivers is the Members entry's only sub-item, so `canVerifyWaivers`
+  // doubles as "does this entry get a collapsible chevron". Member
+  // management is reached via the tab bar inside /members itself, and
+  // Roles moved out to the root-level /access control, so neither needs
+  // a sub-link here.
 
   return (
     <>
@@ -292,12 +287,12 @@ function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          {canViewGallery ? (
+          {canViewAlbum ? (
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Trip Gallery">
-                <Link to="/gallery">
+              <SidebarMenuButton asChild tooltip="Album">
+                <Link to="/album">
                   <Images />
-                  <span>Trip Gallery</span>
+                  <span>Album</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -390,7 +385,7 @@ function SidebarNav() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ) : null}
-                {canReadMembers || hasSubItems ? (
+                {canReadMembers || canVerifyWaivers ? (
                   <SidebarMenuItem>
                     {/*
                      * Collapsible sits inside SidebarMenuItem (not the
@@ -401,9 +396,9 @@ function SidebarNav() {
                      */}
                     <Collapsible defaultOpen className="group/collapsible">
                       {/* Main button navigates to /members. When the
-                       * directory page itself is switched off but a sub-page
-                       * (Roles / Waivers) is still enabled, the label stays
-                       * as an inert group header so those sub-items remain
+                       * directory page itself is switched off but the
+                       * Waivers sub-page is still enabled, the label stays
+                       * as an inert group header so that sub-item remains
                        * reachable. */}
                       {canReadMembers ? (
                         <SidebarMenuButton asChild tooltip="Members">
@@ -423,19 +418,16 @@ function SidebarNav() {
                       )}
 
                       {/* Chevron toggles sub-items — separate from the link */}
-                      {hasSubItems ? (
-                        <CollapsibleTrigger asChild>
-                          <SidebarMenuAction className="data-[state=open]:rotate-90">
-                            <ChevronRight />
-                            <span className="sr-only">Toggle sub-menu</span>
-                          </SidebarMenuAction>
-                        </CollapsibleTrigger>
-                      ) : null}
-
-                      {hasSubItems ? (
-                        <CollapsibleContent>
-                          <SidebarMenuSub>
-                            {canVerifyWaivers ? (
+                      {canVerifyWaivers ? (
+                        <>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuAction className="data-[state=open]:rotate-90">
+                              <ChevronRight />
+                              <span className="sr-only">Toggle sub-menu</span>
+                            </SidebarMenuAction>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub>
                               <SidebarMenuSubItem>
                                 <SidebarMenuSubButton asChild>
                                   <Link to="/members/waivers">
@@ -444,19 +436,9 @@ function SidebarNav() {
                                   </Link>
                                 </SidebarMenuSubButton>
                               </SidebarMenuSubItem>
-                            ) : null}
-                            {canManageRoles ? (
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild>
-                                  <Link to="/members/roles">
-                                    <Shield />
-                                    <span>Roles</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            ) : null}
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </>
                       ) : null}
                     </Collapsible>
                   </SidebarMenuItem>
@@ -645,8 +627,25 @@ function SidebarUtilityNav() {
   const feedbackTarget = canWebsiteFeedback ? "/feedback" : "/feedback/club";
   const canViewAudit = hasPermission("audit:view");
   const canManageSettings = hasPermission("settings:manage");
+  // The permission is still `roles:manage` — the page is named for the
+  // umbrella concern (access), the permission for the object it edits.
+  const canManageAccess = hasPermission("roles:manage") && pages.access;
   return (
-    <SidebarGroup>
+    /*
+     * `mt-auto` bottom-aligns this group: it soaks up whatever vertical
+     * space the nav groups above leave over, so there's no dead gap
+     * between the last nav item and Settings.
+     *
+     * Deliberately an auto margin rather than a sticky/fixed footer or a
+     * `SidebarFooter` (which lives outside `SidebarContent`, and so
+     * outside its scroll container). When the nav is tall enough to
+     * overflow, the flex free space goes negative and the auto margin
+     * resolves to 0 — this group scrolls away with everything else
+     * instead of staying pinned. `justify-end` on the parent would do
+     * the alignment too, but clips the first item on overflow; auto
+     * margins don't.
+     */
+    <SidebarGroup className="mt-auto">
       <SidebarMenu>
         {canManageSettings ? (
           <SidebarMenuItem>
@@ -654,6 +653,16 @@ function SidebarUtilityNav() {
               <Link to="/settings">
                 <Settings />
                 <span>Settings</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
+        {canManageAccess ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Access">
+              <Link to="/access">
+                <Shield />
+                <span>Access</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -718,33 +727,17 @@ function AppFooter() {
             University of Cincinnati Mountaineering Club
           </p>
           <div className="flex items-center gap-3">
-            <a
-              href="https://instagram.com/uc_mountaineering"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center transition-opacity hover:opacity-80"
-              aria-label="UCMC on Instagram"
-            >
-              <InstagramIcon className="size-5" />
-            </a>
-            <a
-              href="https://www.facebook.com/groups/19204046466/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center transition-opacity hover:opacity-80"
-              aria-label="UCMC on Facebook"
-            >
-              <FacebookIcon className="size-5" />
-            </a>
-            <a
-              href="https://www.youtube.com/channel/UC1zpNSpQI784F-zOtVHjUMQ"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center transition-opacity hover:opacity-80"
-              aria-label="UCMC on YouTube"
-            >
-              <YouTubeIcon className="size-5" />
-            </a>
+            {/* The three social URLs are `contact.*` site settings, not
+                hardcoded, so the footer and the landing page's "Follow
+                us" row always agree. GitHub and the mail icon stay
+                inline: the repo URL is a maintainer-identifying
+                constant, and the mail link is a mailto rather than a
+                profile. */}
+            <SocialIconLinks
+              instagramUrl={contact.instagramUrl}
+              facebookUrl={contact.facebookUrl}
+              youtubeUrl={contact.youtubeUrl}
+            />
             <a
               href={GITHUB_REPO_URL}
               target="_blank"

@@ -135,12 +135,17 @@ export async function updateCredentialCounter(args: {
 /**
  * Delete a credential. Scoped by userId so a caller can only remove
  * passkeys they own — even if they guess another user's credential ID.
- * Returns true iff a row was deleted.
+ *
+ * Returns the deleted row's surrogate `id` and its nickname, or null if
+ * nothing matched. The caller needs both to write the `passkey.removed`
+ * audit event: the `id` because that's what the log records as
+ * `target_id`, and the nickname because after the delete there is no row
+ * left to join against.
  */
 export async function deleteCredentialForUser(args: {
   userId: string;
   credentialId: string;
-}): Promise<boolean> {
+}): Promise<{ id: string; nickname: string | null } | null> {
   const rows = await getDb()
     .delete(schema.passkeyCredentials)
     .where(
@@ -149,6 +154,61 @@ export async function deleteCredentialForUser(args: {
         eq(schema.passkeyCredentials.credentialId, args.credentialId),
       ),
     )
+    .returning({
+      id: schema.passkeyCredentials.id,
+      nickname: schema.passkeyCredentials.nickname,
+    });
+  // `length` for the same reason as `renameCredentialForUser` below: with
+  // `noUncheckedIndexedAccess` off, `rows[0]` is typed as present even
+  // when the delete matched nothing.
+  return rows.length === 0 ? null : rows[0];
+}
+
+/**
+ * Rename a credential. Scoped by userId for the same reason as the
+ * delete above — a caller can only relabel passkeys they own.
+ *
+ * Returns the row's surrogate `id` plus the nickname it had beforehand
+ * (so the caller can audit `{ before, after }`), or null if no row
+ * matched. The pre-read is what supplies `before`; the scoped UPDATE's
+ * `.returning()` is what proves a row actually changed, so a credential
+ * deleted in the gap yields null rather than a phantom audit row.
+ *
+ * `nickname: null` clears the label, which is the state a passkey
+ * registered without a nickname is already in.
+ */
+export async function renameCredentialForUser(args: {
+  userId: string;
+  credentialId: string;
+  nickname: string | null;
+}): Promise<{ id: string; previousNickname: string | null } | null> {
+  const db = getDb();
+  const existing = await db.query.passkeyCredentials.findFirst({
+    where: and(
+      eq(schema.passkeyCredentials.userId, args.userId),
+      eq(schema.passkeyCredentials.credentialId, args.credentialId),
+    ),
+    columns: { nickname: true },
+  });
+  if (!existing) {
+    return null;
+  }
+  const rows = await db
+    .update(schema.passkeyCredentials)
+    .set({ nickname: args.nickname })
+    .where(
+      and(
+        eq(schema.passkeyCredentials.userId, args.userId),
+        eq(schema.passkeyCredentials.credentialId, args.credentialId),
+      ),
+    )
     .returning({ id: schema.passkeyCredentials.id });
-  return rows.length > 0;
+  // Test `length`, not `rows[0]`: `noUncheckedIndexedAccess` is off, so
+  // the element type lies about a 0-row UPDATE (which is reachable —
+  // the credential can be deleted between the read above and this
+  // write) and a `!rows[0]` guard reads as provably dead code.
+  if (rows.length === 0) {
+    return null;
+  }
+  return { id: rows[0].id, previousNickname: existing.nickname };
 }

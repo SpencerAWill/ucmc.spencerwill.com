@@ -12,7 +12,7 @@ import { expect, test } from "./fixtures/mailpit";
  *    and confirm we land on /register/profile with the on-file email
  *    pre-populated.
  * 3. Fill the profile form, tick the policies checkbox, submit, and
- *    assert the post-claim destination is /my/account (auto-approved,
+ *    assert the post-claim destination is /my/profile (auto-approved,
  *    no pending wait).
  *
  * Step 3 catches a regression that the workers-pool unit tests can't:
@@ -111,7 +111,7 @@ test("officer-pre-added unclaimed member can claim their account", async ({
   // submitProfileAction's claim branch flips status straight to
   // "approved" (officer pre-add IS the approval signal) and NULLs the
   // placeholder columns. Approved users with profiles land on
-  // /my/account, not /register/pending.
+  // /my/profile, not /register/pending.
   await page.waitForURL(/\/my\/account/, { timeout: 15_000 });
   await expect(page).toHaveURL(/\/my\/account/);
 });
