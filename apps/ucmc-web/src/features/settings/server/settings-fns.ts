@@ -115,7 +115,7 @@ const listSettingHistoryInputSchema = z.object({
 });
 
 export const listSettingHistoryFn = createServerFn({ method: "GET" })
-  .inputValidator(listSettingHistoryInputSchema)
+  .validator(listSettingHistoryInputSchema)
   .handler(async ({ data }): Promise<SettingHistoryEntry[]> => {
     const { listSettingHistoryAction } =
       await import("./settings-actions-read.server");
@@ -123,7 +123,7 @@ export const listSettingHistoryFn = createServerFn({ method: "GET" })
   });
 
 export const updateSettingFn = createServerFn({ method: "POST" })
-  .inputValidator(updateSettingInputSchema)
+  .validator(updateSettingInputSchema)
   .handler(async ({ data }): Promise<UpdateSettingResult> => {
     const { updateSettingAction } = await import("./settings-actions.server");
     return updateSettingAction(data);

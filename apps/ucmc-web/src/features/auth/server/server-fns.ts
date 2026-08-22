@@ -56,7 +56,7 @@ export type ConsumeMagicLinkResult =
 const emailSchema = z.email().trim().toLowerCase().max(254);
 
 export const requestMagicLinkFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       email: emailSchema,
       // Turnstile challenge token. Empty string when the widget isn't
@@ -87,7 +87,7 @@ export const requestMagicLinkFn = createServerFn({ method: "POST" })
   });
 
 export const consumeMagicLinkFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       // Tokens are base64url(32 random bytes) → 43 chars. Bounds are
       // generous for headroom; the hash check inside `consumeMagicLink`
@@ -204,7 +204,7 @@ export const getProfileFn = createServerFn({ method: "GET" }).handler(
 export type { SubmitProfileResult } from "#/features/auth/server/magic-link-actions.server";
 
 export const submitProfileFn = createServerFn({ method: "POST" })
-  .inputValidator(registrationInputSchema)
+  .validator(registrationInputSchema)
   .handler(async ({ data }) => {
     const { submitProfileAction } =
       await import("#/features/auth/server/magic-link-actions.server");
@@ -218,7 +218,7 @@ export const submitProfileFn = createServerFn({ method: "POST" })
  * not touch the user row, status, or emergency contacts.
  */
 export const submitPublicProfileFn = createServerFn({ method: "POST" })
-  .inputValidator(publicProfileInputSchema)
+  .validator(publicProfileInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { submitPublicProfileAction } =
       await import("#/features/auth/server/magic-link-actions.server");
@@ -231,7 +231,7 @@ export const submitPublicProfileFn = createServerFn({ method: "POST" })
  * Requires an authenticated principal.
  */
 export const submitDetailsFn = createServerFn({ method: "POST" })
-  .inputValidator(detailsInputSchema)
+  .validator(detailsInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { submitDetailsAction } =
       await import("#/features/auth/server/magic-link-actions.server");
@@ -260,7 +260,7 @@ export type AvatarUploadInput = z.infer<typeof avatarUploadInputSchema>;
  * the previous R2 object on replacement.
  */
 export const uploadAvatarFn = createServerFn({ method: "POST" })
-  .inputValidator(avatarUploadInputSchema)
+  .validator(avatarUploadInputSchema)
   .handler(async ({ data }): Promise<{ ok: true; avatarKey: string }> => {
     const { uploadAvatarAction } =
       await import("#/features/auth/server/avatar-actions.server");

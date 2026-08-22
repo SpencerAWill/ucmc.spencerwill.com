@@ -26,7 +26,7 @@ export const listRolesDetailedFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const getRoleFn = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ roleId: z.string().min(1) }))
+  .validator(z.object({ roleId: z.string().min(1) }))
   .handler(async ({ data }): Promise<RoleDetail> => {
     const { getRoleAction } =
       await import("#/features/members/server/rbac-actions.server");
@@ -52,7 +52,7 @@ const displayNameSchema = z
   .max(80, "At most 80 characters");
 
 export const createRoleFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       name: roleNameSchema,
       displayName: displayNameSchema,
@@ -67,7 +67,7 @@ export const createRoleFn = createServerFn({ method: "POST" })
   });
 
 export const updateRoleFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       roleId: z.string().min(1),
       description: z.string().trim().max(200).nullable().optional(),
@@ -82,7 +82,7 @@ export const updateRoleFn = createServerFn({ method: "POST" })
   });
 
 export const deleteRoleFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ roleId: z.string().min(1) }))
+  .validator(z.object({ roleId: z.string().min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteRoleAction } =
       await import("#/features/members/server/rbac-actions.server");
@@ -102,7 +102,7 @@ export const listPermissionsFn = createServerFn({ method: "GET" }).handler(
 // ── role <-> permission grants ─────────────────────────────────────────
 
 export const setRolePermissionsFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       roleId: z.string().min(1),
       permissionIds: z.array(z.string().min(1)),
@@ -117,7 +117,7 @@ export const setRolePermissionsFn = createServerFn({ method: "POST" })
 // ── user <-> role assignments ──────────────────────────────────────────
 
 export const getUserRolesFn = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ userId: z.string().min(1) }))
+  .validator(z.object({ userId: z.string().min(1) }))
   .handler(async ({ data }): Promise<{ roleId: string; name: string }[]> => {
     const { getUserRolesAction } =
       await import("#/features/members/server/rbac-actions.server");
@@ -125,7 +125,7 @@ export const getUserRolesFn = createServerFn({ method: "GET" })
   });
 
 export const setUserRolesFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       userId: z.string().min(1),
       roleIds: z.array(z.string().min(1)),
@@ -140,7 +140,7 @@ export const setUserRolesFn = createServerFn({ method: "POST" })
 // ── role reordering ────────────────────────────────────────────────────
 
 export const reorderRolesFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       orderedRoleIds: z.array(z.string().min(1)),
     }),

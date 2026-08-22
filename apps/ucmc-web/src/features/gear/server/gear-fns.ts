@@ -463,7 +463,7 @@ const gearByCodeInputSchema = z.object({
 // ── server fn handlers ──────────────────────────────────────────────────
 
 export const listGearFn = createServerFn({ method: "GET" })
-  .inputValidator(listGearInputSchema)
+  .validator(listGearInputSchema)
   .handler(async ({ data }): Promise<ListGearActionResult> => {
     const { listGearAction } =
       await import("#/features/gear/server/gear-actions.server");
@@ -471,7 +471,7 @@ export const listGearFn = createServerFn({ method: "GET" })
   });
 
 export const listGearLabelsFn = createServerFn({ method: "GET" })
-  .inputValidator(listGearLabelsInputSchema)
+  .validator(listGearLabelsInputSchema)
   .handler(async ({ data }): Promise<GearLabel[]> => {
     const { listGearLabelsAction } =
       await import("#/features/gear/server/gear-actions.server");
@@ -479,7 +479,7 @@ export const listGearLabelsFn = createServerFn({ method: "GET" })
   });
 
 export const getGearDetailFn = createServerFn({ method: "GET" })
-  .inputValidator(gearDetailInputSchema)
+  .validator(gearDetailInputSchema)
   .handler(async ({ data }): Promise<GearDetail> => {
     const { getGearDetailAction } =
       await import("#/features/gear/server/gear-actions.server");
@@ -487,7 +487,7 @@ export const getGearDetailFn = createServerFn({ method: "GET" })
   });
 
 export const createGearFn = createServerFn({ method: "POST" })
-  .inputValidator(createGearInputSchema)
+  .validator(createGearInputSchema)
   .handler(async ({ data }): Promise<CreateGearResult> => {
     const { createGearAction } =
       await import("#/features/gear/server/gear-actions.server");
@@ -495,7 +495,7 @@ export const createGearFn = createServerFn({ method: "POST" })
   });
 
 export const editGearFn = createServerFn({ method: "POST" })
-  .inputValidator(editGearInputSchema)
+  .validator(editGearInputSchema)
   .handler(async ({ data }): Promise<EditGearResult> => {
     const { editGearAction } =
       await import("#/features/gear/server/gear-actions.server");
@@ -503,7 +503,7 @@ export const editGearFn = createServerFn({ method: "POST" })
   });
 
 export const retireGearFn = createServerFn({ method: "POST" })
-  .inputValidator(retireGearInputSchema)
+  .validator(retireGearInputSchema)
   .handler(async ({ data }): Promise<RetireGearResult> => {
     const { retireGearAction } =
       await import("#/features/gear/server/gear-actions.server");
@@ -511,7 +511,7 @@ export const retireGearFn = createServerFn({ method: "POST" })
   });
 
 export const unretireGearFn = createServerFn({ method: "POST" })
-  .inputValidator(unretireGearInputSchema)
+  .validator(unretireGearInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { unretireGearAction } =
       await import("#/features/gear/server/gear-actions.server");
@@ -519,7 +519,7 @@ export const unretireGearFn = createServerFn({ method: "POST" })
   });
 
 export const suggestCodeForTypeFn = createServerFn({ method: "GET" })
-  .inputValidator(suggestCodeInputSchema)
+  .validator(suggestCodeInputSchema)
   .handler(async ({ data }): Promise<{ suggestion: string }> => {
     const { suggestCodeForTypeAction } =
       await import("#/features/gear/server/gear-actions.server");
@@ -535,7 +535,7 @@ export const listGearTypesFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const createGearTypeFn = createServerFn({ method: "POST" })
-  .inputValidator(gearTypeInputSchema)
+  .validator(gearTypeInputSchema)
   .handler(async ({ data }): Promise<CreateGearTypeResult> => {
     const { createGearTypeAction } =
       await import("#/features/gear/server/gear-types-actions.server");
@@ -543,7 +543,7 @@ export const createGearTypeFn = createServerFn({ method: "POST" })
   });
 
 export const editGearTypeFn = createServerFn({ method: "POST" })
-  .inputValidator(editGearTypeInputSchema)
+  .validator(editGearTypeInputSchema)
   .handler(async ({ data }): Promise<EditGearTypeResult> => {
     const { editGearTypeAction } =
       await import("#/features/gear/server/gear-types-actions.server");
@@ -551,7 +551,7 @@ export const editGearTypeFn = createServerFn({ method: "POST" })
   });
 
 export const deleteGearTypeFn = createServerFn({ method: "POST" })
-  .inputValidator(deleteGearTypeInputSchema)
+  .validator(deleteGearTypeInputSchema)
   .handler(async ({ data }): Promise<DeleteGearTypeResult> => {
     const { deleteGearTypeAction } =
       await import("#/features/gear/server/gear-types-actions.server");
@@ -567,7 +567,7 @@ export const listGearTagsFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const createGearTagFn = createServerFn({ method: "POST" })
-  .inputValidator(gearTagInputSchema)
+  .validator(gearTagInputSchema)
   .handler(async ({ data }): Promise<CreateGearTagResult> => {
     const { createGearTagAction } =
       await import("#/features/gear/server/gear-tags-actions.server");
@@ -575,7 +575,7 @@ export const createGearTagFn = createServerFn({ method: "POST" })
   });
 
 export const editGearTagFn = createServerFn({ method: "POST" })
-  .inputValidator(editGearTagInputSchema)
+  .validator(editGearTagInputSchema)
   .handler(async ({ data }): Promise<EditGearTagResult> => {
     const { editGearTagAction } =
       await import("#/features/gear/server/gear-tags-actions.server");
@@ -583,7 +583,7 @@ export const editGearTagFn = createServerFn({ method: "POST" })
   });
 
 export const deleteGearTagFn = createServerFn({ method: "POST" })
-  .inputValidator(deleteGearTagInputSchema)
+  .validator(deleteGearTagInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteGearTagAction } =
       await import("#/features/gear/server/gear-tags-actions.server");
@@ -593,7 +593,7 @@ export const deleteGearTagFn = createServerFn({ method: "POST" })
 export type { BulkResult };
 
 export const bulkRetireGearFn = createServerFn({ method: "POST" })
-  .inputValidator(bulkRetireInputSchema)
+  .validator(bulkRetireInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
     const { bulkRetireGearAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
@@ -601,7 +601,7 @@ export const bulkRetireGearFn = createServerFn({ method: "POST" })
   });
 
 export const bulkUnretireGearFn = createServerFn({ method: "POST" })
-  .inputValidator(bulkUnretireInputSchema)
+  .validator(bulkUnretireInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
     const { bulkUnretireGearAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
@@ -609,7 +609,7 @@ export const bulkUnretireGearFn = createServerFn({ method: "POST" })
   });
 
 export const bulkSetGearConditionFn = createServerFn({ method: "POST" })
-  .inputValidator(bulkSetConditionInputSchema)
+  .validator(bulkSetConditionInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
     const { bulkSetGearConditionAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
@@ -617,7 +617,7 @@ export const bulkSetGearConditionFn = createServerFn({ method: "POST" })
   });
 
 export const bulkAddGearTagsFn = createServerFn({ method: "POST" })
-  .inputValidator(bulkAddTagsInputSchema)
+  .validator(bulkAddTagsInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
     const { bulkAddGearTagsAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
@@ -625,7 +625,7 @@ export const bulkAddGearTagsFn = createServerFn({ method: "POST" })
   });
 
 export const listGearInspectionsFn = createServerFn({ method: "GET" })
-  .inputValidator(listGearInspectionsInputSchema)
+  .validator(listGearInspectionsInputSchema)
   .handler(async ({ data }): Promise<GearInspectionSummary[]> => {
     const { listGearInspectionsAction } =
       await import("#/features/gear/server/gear-inspections-actions.server");
@@ -633,7 +633,7 @@ export const listGearInspectionsFn = createServerFn({ method: "GET" })
   });
 
 export const recordGearInspectionFn = createServerFn({ method: "POST" })
-  .inputValidator(recordGearInspectionInputSchema)
+  .validator(recordGearInspectionInputSchema)
   .handler(async ({ data }): Promise<RecordGearInspectionResult> => {
     const { recordGearInspectionAction } =
       await import("#/features/gear/server/gear-inspections-actions.server");
@@ -641,7 +641,7 @@ export const recordGearInspectionFn = createServerFn({ method: "POST" })
   });
 
 export const bulkImportGearFn = createServerFn({ method: "POST" })
-  .inputValidator(bulkImportInputSchema)
+  .validator(bulkImportInputSchema)
   .handler(async ({ data }): Promise<BulkImportResult> => {
     const { bulkImportGearAction } =
       await import("#/features/gear/server/gear-bulk-import-actions.server");
@@ -651,7 +651,7 @@ export const bulkImportGearFn = createServerFn({ method: "POST" })
 // ── loan shells ────────────────────────────────────────────────────────
 
 export const checkoutLoansFn = createServerFn({ method: "POST" })
-  .inputValidator(checkoutLoansInputSchema)
+  .validator(checkoutLoansInputSchema)
   .handler(async ({ data }): Promise<CheckoutLoansResult> => {
     const { checkoutLoansAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -659,7 +659,7 @@ export const checkoutLoansFn = createServerFn({ method: "POST" })
   });
 
 export const checkinLoansFn = createServerFn({ method: "POST" })
-  .inputValidator(checkinLoansInputSchema)
+  .validator(checkinLoansInputSchema)
   .handler(async ({ data }): Promise<CheckinLoansResult> => {
     const { checkinLoansAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -667,7 +667,7 @@ export const checkinLoansFn = createServerFn({ method: "POST" })
   });
 
 export const bulkImportLoansFn = createServerFn({ method: "POST" })
-  .inputValidator(bulkImportLoansInputSchema)
+  .validator(bulkImportLoansInputSchema)
   .handler(async ({ data }): Promise<BulkImportLoansResult> => {
     const { bulkImportLoansAction } =
       await import("#/features/gear/server/loans-bulk-import-actions.server");
@@ -675,7 +675,7 @@ export const bulkImportLoansFn = createServerFn({ method: "POST" })
   });
 
 export const extendLoanFn = createServerFn({ method: "POST" })
-  .inputValidator(extendLoanInputSchema)
+  .validator(extendLoanInputSchema)
   .handler(async ({ data }): Promise<ExtendLoanResult> => {
     const { extendLoanAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -683,7 +683,7 @@ export const extendLoanFn = createServerFn({ method: "POST" })
   });
 
 export const listLoansFn = createServerFn({ method: "GET" })
-  .inputValidator(listLoansInputSchema)
+  .validator(listLoansInputSchema)
   .handler(async ({ data }): Promise<ListLoansActionResult> => {
     const { listLoansAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -691,7 +691,7 @@ export const listLoansFn = createServerFn({ method: "GET" })
   });
 
 export const getLoanDetailFn = createServerFn({ method: "GET" })
-  .inputValidator(loanDetailInputSchema)
+  .validator(loanDetailInputSchema)
   .handler(async ({ data }): Promise<LoanDetail> => {
     const { getLoanDetailAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -707,7 +707,7 @@ export const listMyLoansFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const searchMembersForLoanFn = createServerFn({ method: "GET" })
-  .inputValidator(memberSearchInputSchema)
+  .validator(memberSearchInputSchema)
   .handler(async ({ data }): Promise<MemberSearchResult[]> => {
     const { searchMembersForLoanAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -715,7 +715,7 @@ export const searchMembersForLoanFn = createServerFn({ method: "GET" })
   });
 
 export const getMemberForLoanFn = createServerFn({ method: "GET" })
-  .inputValidator(memberByPublicIdInputSchema)
+  .validator(memberByPublicIdInputSchema)
   .handler(async ({ data }): Promise<MemberSearchResult | null> => {
     const { getMemberForLoanAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -723,7 +723,7 @@ export const getMemberForLoanFn = createServerFn({ method: "GET" })
   });
 
 export const searchGearByCodeFn = createServerFn({ method: "GET" })
-  .inputValidator(gearCodeSearchInputSchema)
+  .validator(gearCodeSearchInputSchema)
   .handler(async ({ data }): Promise<GearLookupRow[]> => {
     const { searchGearByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -731,7 +731,7 @@ export const searchGearByCodeFn = createServerFn({ method: "GET" })
   });
 
 export const getGearByCodeFn = createServerFn({ method: "GET" })
-  .inputValidator(gearByCodeInputSchema)
+  .validator(gearByCodeInputSchema)
   .handler(async ({ data }): Promise<GearLookupRow | null> => {
     const { getGearByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
@@ -760,7 +760,7 @@ export const getMyCartFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const addToCartFn = createServerFn({ method: "POST" })
-  .inputValidator(cartGearInputSchema)
+  .validator(cartGearInputSchema)
   .handler(async ({ data }): Promise<AddToCartResult> => {
     const { addToCartAction } =
       await import("#/features/gear/server/cart-actions.server");
@@ -768,7 +768,7 @@ export const addToCartFn = createServerFn({ method: "POST" })
   });
 
 export const removeFromCartFn = createServerFn({ method: "POST" })
-  .inputValidator(cartGearInputSchema)
+  .validator(cartGearInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { removeFromCartAction } =
       await import("#/features/gear/server/cart-actions.server");
@@ -792,7 +792,7 @@ export const mintCartTokenFn = createServerFn({ method: "POST" }).handler(
 );
 
 export const resolveCartTokenFn = createServerFn({ method: "POST" })
-  .inputValidator(resolveCartTokenInputSchema)
+  .validator(resolveCartTokenInputSchema)
   .handler(async ({ data }): Promise<ResolveCartTokenResult> => {
     const { resolveCartTokenAction } =
       await import("#/features/gear/server/cart-actions.server");

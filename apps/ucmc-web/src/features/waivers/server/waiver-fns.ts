@@ -59,7 +59,7 @@ export const listMembersNeedingAttestationFn = createServerFn({
 });
 
 export const listWaiverHistoryForUserFn = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ userId: z.string().min(1) }))
+  .validator(z.object({ userId: z.string().min(1) }))
   .handler(async ({ data }): Promise<WaiverAttestationSummary[]> => {
     const { listWaiverHistoryForUserAction } =
       await import("#/features/waivers/server/waiver-actions.server");
@@ -69,7 +69,7 @@ export const listWaiverHistoryForUserFn = createServerFn({ method: "GET" })
 // Officer-only writes.
 
 export const attestWaiverFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       userId: z.string().min(1),
       notes: z.string().max(NOTES_MAX).optional(),
@@ -82,7 +82,7 @@ export const attestWaiverFn = createServerFn({ method: "POST" })
   });
 
 export const bulkAttestWaiversFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       userIds: z.array(z.string().min(1)).min(1).max(BULK_ATTEST_MAX),
       notes: z.string().max(NOTES_MAX).optional(),
@@ -95,7 +95,7 @@ export const bulkAttestWaiversFn = createServerFn({ method: "POST" })
   });
 
 export const revokeWaiverAttestationFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       attestationId: z.string().min(1),
       reason: z.string().min(1).max(NOTES_MAX),

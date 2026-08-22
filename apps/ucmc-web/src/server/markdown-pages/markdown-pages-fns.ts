@@ -12,7 +12,7 @@ import {
 import type { MarkdownPageSlug } from "#/server/markdown-pages/slugs";
 
 export const getMarkdownPageFn = createServerFn({ method: "GET" })
-  .inputValidator(getMarkdownPageInputSchema)
+  .validator(getMarkdownPageInputSchema)
   .handler(
     async ({ data }): Promise<{ slug: MarkdownPageSlug; markdown: string }> => {
       const { getMarkdownPageAction } =
@@ -22,7 +22,7 @@ export const getMarkdownPageFn = createServerFn({ method: "GET" })
   );
 
 export const updateMarkdownPageFn = createServerFn({ method: "POST" })
-  .inputValidator(updateMarkdownPageInputSchema)
+  .validator(updateMarkdownPageInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateMarkdownPageAction } =
       await import("#/server/markdown-pages/markdown-pages-actions.server");

@@ -549,7 +549,7 @@ export function keysByCategory(): Record<SettingCategory, SettingKey[]> {
 
 // ── Discriminated union for the wire validator ──────────────────────────
 //
-// Used by `updateSettingFn`'s `.inputValidator(...)`. Auto-derived from
+// Used by `updateSettingFn`'s `.validator(...)`. Auto-derived from
 // the registry — adding a setting to `SETTINGS` above extends this union
 // without any other edit.
 export type UpdateSettingInput = {

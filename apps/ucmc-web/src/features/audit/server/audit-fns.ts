@@ -98,7 +98,7 @@ export const listAuditEventsInputSchema = z.object({
 });
 
 export const listAuditEventsFn = createServerFn({ method: "GET" })
-  .inputValidator(listAuditEventsInputSchema)
+  .validator(listAuditEventsInputSchema)
   .handler(async ({ data }): Promise<ListAuditEventsResult> => {
     const { listAuditEventsAction } = await import("./audit-actions.server");
     return listAuditEventsAction(data);

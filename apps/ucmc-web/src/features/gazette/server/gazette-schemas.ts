@@ -1,6 +1,6 @@
 /**
  * Zod schemas for /gazette mutation inputs. Shared by the server-fn
- * `inputValidator` (server side) and the typed mutation hooks
+ * `validator` (server side) and the typed mutation hooks
  * (client side). The PDF payload is a base64 dataUrl; size validation
  * lives here as a first defense against oversized uploads, with R2
  * + worker enforcement as defense-in-depth.

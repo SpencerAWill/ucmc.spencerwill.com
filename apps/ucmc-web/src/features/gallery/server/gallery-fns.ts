@@ -26,7 +26,7 @@ export const getGalleryPhotosFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const getGalleryPhotoByPublicIdFn = createServerFn({ method: "GET" })
-  .inputValidator(getGalleryPhotoByPublicIdInputSchema)
+  .validator(getGalleryPhotoByPublicIdInputSchema)
   .handler(async ({ data }): Promise<GalleryPhotoSummary | null> => {
     const { getGalleryPhotoByPublicIdAction } =
       await import("#/features/gallery/server/gallery-actions.server");
@@ -36,7 +36,7 @@ export const getGalleryPhotoByPublicIdFn = createServerFn({ method: "GET" })
 // ── mutations (gated at the action layer by public_gallery:manage) ─────
 
 export const createGalleryPhotoFn = createServerFn({ method: "POST" })
-  .inputValidator(createGalleryPhotoInputSchema)
+  .validator(createGalleryPhotoInputSchema)
   .handler(async ({ data }): Promise<{ publicId: string }> => {
     const { createGalleryPhotoAction } =
       await import("#/features/gallery/server/gallery-actions.server");
@@ -44,7 +44,7 @@ export const createGalleryPhotoFn = createServerFn({ method: "POST" })
   });
 
 export const updateGalleryPhotoFn = createServerFn({ method: "POST" })
-  .inputValidator(updateGalleryPhotoInputSchema)
+  .validator(updateGalleryPhotoInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateGalleryPhotoAction } =
       await import("#/features/gallery/server/gallery-actions.server");
@@ -52,7 +52,7 @@ export const updateGalleryPhotoFn = createServerFn({ method: "POST" })
   });
 
 export const deleteGalleryPhotoFn = createServerFn({ method: "POST" })
-  .inputValidator(deleteGalleryPhotoInputSchema)
+  .validator(deleteGalleryPhotoInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteGalleryPhotoAction } =
       await import("#/features/gallery/server/gallery-actions.server");

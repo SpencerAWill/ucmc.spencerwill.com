@@ -40,7 +40,7 @@ export const listMyEmailsFn = createServerFn({ method: "GET" }).handler(
 );
 
 export const requestAddEmailFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: emailSchema }))
+  .validator(z.object({ email: emailSchema }))
   .handler(async ({ data }): Promise<RequestAddEmailResult> => {
     const { requestAddEmailAction } =
       await import("#/features/auth/server/email-actions.server");
@@ -48,7 +48,7 @@ export const requestAddEmailFn = createServerFn({ method: "POST" })
   });
 
 export const consumeAddEmailFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ token: z.string().min(16).max(128) }))
+  .validator(z.object({ token: z.string().min(16).max(128) }))
   .handler(async ({ data }): Promise<ConsumeAddEmailResult> => {
     const { consumeAddEmailAction } =
       await import("#/features/auth/server/email-actions.server");
@@ -56,7 +56,7 @@ export const consumeAddEmailFn = createServerFn({ method: "POST" })
   });
 
 export const removeEmailFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ emailId: z.string().min(1).max(64) }))
+  .validator(z.object({ emailId: z.string().min(1).max(64) }))
   .handler(async ({ data }): Promise<RemoveEmailResult> => {
     const { removeEmailAction } =
       await import("#/features/auth/server/email-actions.server");
@@ -64,7 +64,7 @@ export const removeEmailFn = createServerFn({ method: "POST" })
   });
 
 export const setPrimaryEmailFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ emailId: z.string().min(1).max(64) }))
+  .validator(z.object({ emailId: z.string().min(1).max(64) }))
   .handler(async ({ data }): Promise<SetPrimaryEmailResult> => {
     const { setPrimaryEmailAction } =
       await import("#/features/auth/server/email-actions.server");

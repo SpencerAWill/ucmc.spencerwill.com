@@ -41,7 +41,7 @@ export const getHistoryContentFn = createServerFn({ method: "GET" }).handler(
 // ── historical officers ─────────────────────────────────────────────────
 
 export const createHistoricalOfficerFn = createServerFn({ method: "POST" })
-  .inputValidator(createHistoricalOfficerInputSchema)
+  .validator(createHistoricalOfficerInputSchema)
   .handler(async ({ data }): Promise<{ id: number }> => {
     const { createHistoricalOfficerAction } =
       await import("#/features/history/server/history-actions.server");
@@ -49,7 +49,7 @@ export const createHistoricalOfficerFn = createServerFn({ method: "POST" })
   });
 
 export const updateHistoricalOfficerFn = createServerFn({ method: "POST" })
-  .inputValidator(updateHistoricalOfficerInputSchema)
+  .validator(updateHistoricalOfficerInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateHistoricalOfficerAction } =
       await import("#/features/history/server/history-actions.server");
@@ -57,7 +57,7 @@ export const updateHistoricalOfficerFn = createServerFn({ method: "POST" })
   });
 
 export const deleteHistoricalOfficerFn = createServerFn({ method: "POST" })
-  .inputValidator(deleteByIdInputSchema)
+  .validator(deleteByIdInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteHistoricalOfficerAction } =
       await import("#/features/history/server/history-actions.server");
@@ -67,7 +67,7 @@ export const deleteHistoricalOfficerFn = createServerFn({ method: "POST" })
 export const deleteHistoricalOfficersByYearFn = createServerFn({
   method: "POST",
 })
-  .inputValidator(deleteOfficersByYearInputSchema)
+  .validator(deleteOfficersByYearInputSchema)
   .handler(
     async ({
       data,
@@ -81,7 +81,7 @@ export const deleteHistoricalOfficersByYearFn = createServerFn({
 // ── honorary members ────────────────────────────────────────────────────
 
 export const createHonoraryMemberFn = createServerFn({ method: "POST" })
-  .inputValidator(createHonoraryMemberInputSchema)
+  .validator(createHonoraryMemberInputSchema)
   .handler(async ({ data }): Promise<{ id: number }> => {
     const { createHonoraryMemberAction } =
       await import("#/features/history/server/history-actions.server");
@@ -89,7 +89,7 @@ export const createHonoraryMemberFn = createServerFn({ method: "POST" })
   });
 
 export const updateHonoraryMemberFn = createServerFn({ method: "POST" })
-  .inputValidator(updateHonoraryMemberInputSchema)
+  .validator(updateHonoraryMemberInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { updateHonoraryMemberAction } =
       await import("#/features/history/server/history-actions.server");
@@ -97,7 +97,7 @@ export const updateHonoraryMemberFn = createServerFn({ method: "POST" })
   });
 
 export const deleteHonoraryMemberFn = createServerFn({ method: "POST" })
-  .inputValidator(deleteByIdInputSchema)
+  .validator(deleteByIdInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deleteHonoraryMemberAction } =
       await import("#/features/history/server/history-actions.server");
@@ -105,7 +105,7 @@ export const deleteHonoraryMemberFn = createServerFn({ method: "POST" })
   });
 
 export const reorderHonoraryMembersFn = createServerFn({ method: "POST" })
-  .inputValidator(reorderHonoraryMembersInputSchema)
+  .validator(reorderHonoraryMembersInputSchema)
   .handler(async ({ data }): Promise<{ ok: true; count: number }> => {
     const { reorderHonoraryMembersAction } =
       await import("#/features/history/server/history-actions.server");

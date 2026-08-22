@@ -1,6 +1,6 @@
 /**
  * Zod schemas for /gallery mutation inputs. Shared by the server-fn
- * `inputValidator` (server side) and the typed mutation hooks
+ * `validator` (server side) and the typed mutation hooks
  * (client side). The image payload is a base64 dataUrl; size + magic-
  * byte validation lives here as a first defense, with R2 + worker
  * enforcement as defense-in-depth.

@@ -75,7 +75,7 @@ export interface MembersPage {
 }
 
 export const listMembersFn = createServerFn({ method: "GET" })
-  .inputValidator(listMembersInputSchema)
+  .validator(listMembersInputSchema)
   .handler(async ({ data }): Promise<MembersPage> => {
     const { listMembersAction } =
       await import("#/features/members/server/member-actions.server");
@@ -93,7 +93,7 @@ export const listMembersFn = createServerFn({ method: "GET" })
 // ── member detail ───────────────────────────────────────────────────────
 
 export const getMemberDetailFn = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ publicId: z.string().min(1) }))
+  .validator(z.object({ publicId: z.string().min(1) }))
   .handler(async ({ data }): Promise<MemberDetail> => {
     const { getMemberDetailAction } =
       await import("#/features/members/server/member-actions.server");
@@ -108,7 +108,7 @@ export interface PendingRegistrationsPage {
 }
 
 export const listPendingRegistrationsFn = createServerFn({ method: "GET" })
-  .inputValidator(listPendingRegistrationsInputSchema)
+  .validator(listPendingRegistrationsInputSchema)
   .handler(async ({ data }): Promise<PendingRegistrationsPage> => {
     const { listPendingRegistrationsAction } =
       await import("#/features/members/server/member-actions.server");
@@ -121,7 +121,7 @@ export const listPendingRegistrationsFn = createServerFn({ method: "GET" })
   });
 
 export const approveRegistrationsFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
+  .validator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { approveRegistrationsAction } =
       await import("#/features/members/server/member-actions.server");
@@ -129,7 +129,7 @@ export const approveRegistrationsFn = createServerFn({ method: "POST" })
   });
 
 export const rejectRegistrationsFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
+  .validator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { rejectRegistrationsAction } =
       await import("#/features/members/server/member-actions.server");
@@ -139,7 +139,7 @@ export const rejectRegistrationsFn = createServerFn({ method: "POST" })
 // ── member lifecycle ────────────────────────────────────────────────────
 
 export const deactivateMembersFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
+  .validator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { deactivateMembersAction } =
       await import("#/features/members/server/member-actions.server");
@@ -147,7 +147,7 @@ export const deactivateMembersFn = createServerFn({ method: "POST" })
   });
 
 export const reactivateMembersFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
+  .validator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { reactivateMembersAction } =
       await import("#/features/members/server/member-actions.server");
@@ -155,7 +155,7 @@ export const reactivateMembersFn = createServerFn({ method: "POST" })
   });
 
 export const unrejectMembersFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
+  .validator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { unrejectMembersAction } =
       await import("#/features/members/server/member-actions.server");
@@ -165,7 +165,7 @@ export const unrejectMembersFn = createServerFn({ method: "POST" })
 // ── session revocation ──────────────────────────────────────────────────
 
 export const revokeUserSessionsFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ userId: z.string().min(1) }))
+  .validator(z.object({ userId: z.string().min(1) }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { revokeUserSessionsAction } =
       await import("#/features/members/server/member-actions.server");
@@ -184,7 +184,7 @@ export const listUnclaimedInputSchema = z.object({
 export type ListUnclaimedInput = z.infer<typeof listUnclaimedInputSchema>;
 
 export const listUnclaimedFn = createServerFn({ method: "GET" })
-  .inputValidator(listUnclaimedInputSchema)
+  .validator(listUnclaimedInputSchema)
   .handler(async ({ data }): Promise<UnclaimedMembersPage> => {
     const { listUnclaimedAction } =
       await import("#/features/members/server/unclaimed-actions.server");
@@ -203,7 +203,7 @@ export const preAddUnclaimedInputSchema = z.object({
 export type PreAddUnclaimedInput = z.infer<typeof preAddUnclaimedInputSchema>;
 
 export const preAddUnclaimedFn = createServerFn({ method: "POST" })
-  .inputValidator(preAddUnclaimedInputSchema)
+  .validator(preAddUnclaimedInputSchema)
   .handler(async ({ data }): Promise<PreAddResult> => {
     const { preAddUnclaimedMembersAction } =
       await import("#/features/members/server/unclaimed-actions.server");
@@ -219,7 +219,7 @@ export const editUnclaimedInputSchema = z.object({
 export type EditUnclaimedInput = z.infer<typeof editUnclaimedInputSchema>;
 
 export const editUnclaimedFn = createServerFn({ method: "POST" })
-  .inputValidator(editUnclaimedInputSchema)
+  .validator(editUnclaimedInputSchema)
   .handler(async ({ data }): Promise<EditUnclaimedResult> => {
     const { editUnclaimedMemberAction } =
       await import("#/features/members/server/unclaimed-actions.server");
@@ -227,7 +227,7 @@ export const editUnclaimedFn = createServerFn({ method: "POST" })
   });
 
 export const deleteUnclaimedFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
+  .validator(z.object({ userIds: z.array(z.string().min(1)).min(1) }))
   .handler(async ({ data }): Promise<{ deletedIds: string[] }> => {
     const { deleteUnclaimedMembersAction } =
       await import("#/features/members/server/unclaimed-actions.server");
@@ -242,7 +242,7 @@ export const deleteUnclaimedFn = createServerFn({ method: "POST" })
 // the profiles insert/update spread (the column doesn't exist; spreading
 // it would surface as a runtime SQL/Drizzle error).
 export const adminUpdateProfileFn = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     profileInputSchema
       .omit({ policiesAck: true })
       .extend({ userId: z.string().min(1) }),
