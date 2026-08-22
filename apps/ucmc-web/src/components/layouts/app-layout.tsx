@@ -222,6 +222,10 @@ function SidebarNav() {
     hasPermission("announcements:read") && pages.announcements;
   const canVerifyWaivers =
     hasPermission("waivers:verify") && pages.members_waivers;
+  // `pages.members` is the section switch, which is the right gate for
+  // the sidebar entry — and because the flags map carries *effective*
+  // values, switching the section off has already zeroed every
+  // `members_*` child, so the sub-items and tabs vanish with it.
   const canReadMembers = isApproved && pages.members;
   const canReadGear = hasPermission("gear:read") && pages.gear;
   const canLoanGear = hasPermission("gear:loan") && pages.gear_loans;
@@ -443,16 +447,18 @@ function SidebarNav() {
                     </Collapsible>
                   </SidebarMenuItem>
                 ) : null}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    aria-disabled
-                    tabIndex={-1}
-                    tooltip="Trips (coming soon)"
-                  >
-                    <Compass />
-                    <span>Trips</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {pages.trips ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      aria-disabled
+                      tabIndex={-1}
+                      tooltip="Trips (coming soon)"
+                    >
+                      <Compass />
+                      <span>Trips</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : null}
                 {canReadGear || canLoanGear ? (
                   <SidebarMenuItem>
                     {/* Same Collapsible-inside-MenuItem pattern as the
@@ -510,89 +516,98 @@ function SidebarNav() {
                     </Collapsible>
                   </SidebarMenuItem>
                 ) : null}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    aria-disabled
-                    tabIndex={-1}
-                    tooltip="Elections (coming soon)"
-                  >
-                    <Vote />
-                    <span>Elections</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  {/*
-                   * Executive: workflow tools for the exec board
-                   * (meeting agendas + minutes, quarterly goals,
-                   * accountability tasks). Currently gated on
-                   * `isApproved` like the other placeholder items;
-                   * when these features ship, swap to a proper
-                   * `executive:read`-style permission so non-officer
-                   * members don't see the section.
-                   */}
-                  <Collapsible className="group/collapsible">
+                {pages.elections ? (
+                  <SidebarMenuItem>
                     <SidebarMenuButton
                       aria-disabled
                       tabIndex={-1}
-                      tooltip="Executive (coming soon)"
+                      tooltip="Elections (coming soon)"
                     >
-                      <Briefcase />
-                      <span>Executive</span>
+                      <Vote />
+                      <span>Elections</span>
                     </SidebarMenuButton>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuAction className="data-[state=open]:rotate-90">
-                        <ChevronRight />
-                        <span className="sr-only">Toggle sub-menu</span>
-                      </SidebarMenuAction>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Crown />
-                            <span>Board</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <CalendarClock />
-                            <span>Meetings</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Gavel />
-                            <span>Decisions</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Target />
-                            <span>Goals</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <ListChecks />
-                            <span>Tasks</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Wallet />
-                            <span>Budget</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Handshake />
-                            <span>Handoff</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </SidebarMenuItem>
+                  </SidebarMenuItem>
+                ) : null}
+                {pages.executive ? (
+                  <SidebarMenuItem>
+                    {/*
+                     * Executive: workflow tools for the exec board
+                     * (meeting agendas + minutes, quarterly goals,
+                     * accountability tasks). Currently gated on
+                     * `isApproved` like the other placeholder items;
+                     * when these features ship, swap to a proper
+                     * `executive:read`-style permission so non-officer
+                     * members don't see the section.
+                     *
+                     * `pages.executive` covers the parent AND all seven
+                     * sub-items, since none of them is independently
+                     * reachable. Give the children their own flags when
+                     * they become real routes.
+                     */}
+                    <Collapsible className="group/collapsible">
+                      <SidebarMenuButton
+                        aria-disabled
+                        tabIndex={-1}
+                        tooltip="Executive (coming soon)"
+                      >
+                        <Briefcase />
+                        <span>Executive</span>
+                      </SidebarMenuButton>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuAction className="data-[state=open]:rotate-90">
+                          <ChevronRight />
+                          <span className="sr-only">Toggle sub-menu</span>
+                        </SidebarMenuAction>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Crown />
+                              <span>Board</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <CalendarClock />
+                              <span>Meetings</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Gavel />
+                              <span>Decisions</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Target />
+                              <span>Goals</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <ListChecks />
+                              <span>Tasks</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Wallet />
+                              <span>Budget</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Handshake />
+                              <span>Handoff</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </SidebarMenuItem>
+                ) : null}
               </>
             ) : null}
           </SidebarMenu>

@@ -18,6 +18,7 @@ import type {
   PublicSiteContact,
 } from "#/features/settings/server/settings-fns";
 import {
+  effectivePageFlags,
   pageFlagKeyOf,
   PAGE_SETTING_KEYS,
   SETTINGS,
@@ -58,12 +59,16 @@ export function publicSiteContactQueryOptions() {
  * cold DB — that means features default to off until proven on.
  */
 export function publicFlagsQueryOptions() {
-  const pages = Object.fromEntries(
-    PAGE_SETTING_KEYS.map((key) => [
-      pageFlagKeyOf(key),
-      SETTINGS[key].parse(undefined),
-    ]),
-  ) as PublicFlags["pages"];
+  // Same cascade the server applies, so the pre-hydration fallback can't
+  // disagree with the fetched snapshot about whether a page is reachable.
+  const pages = effectivePageFlags(
+    Object.fromEntries(
+      PAGE_SETTING_KEYS.map((key) => [
+        pageFlagKeyOf(key),
+        SETTINGS[key].parse(undefined),
+      ]),
+    ) as PublicFlags["pages"],
+  );
   const fallback: PublicFlags = {
     websiteFeedback: SETTINGS["feedback.website_enabled"].parse(undefined),
     clubFeedback: SETTINGS["feedback.club_enabled"].parse(undefined),

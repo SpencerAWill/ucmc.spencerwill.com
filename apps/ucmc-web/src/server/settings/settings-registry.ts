@@ -74,6 +74,24 @@ export type SettingMeta = {
   flagKind?: "ops" | "release" | "experiment" | "permission";
   /** ISO date (YYYY-MM-DD). Informational. */
   createdAt?: string;
+  /**
+   * For `pages.*` flags only: the flag key of the section this page
+   * belongs to. A page is *effectively* on only when its own flag AND
+   * every ancestor's are on — see `effectivePageFlags`.
+   *
+   * Declared, never inferred from the key name. The keys look
+   * hierarchical but aren't: `pages.gear_cave` is the public `/gear-cave`
+   * page, NOT a child of `pages.gear`, and `pages.members_detail` /
+   * `pages.gear_loans_detail` name route params (`$publicId`) rather than
+   * URL segments. Splitting on `_` would silently reparent all three.
+   *
+   * Typed as a plain string rather than `PageFlagKey`: that type is
+   * derived from `SETTINGS`, whose entries are typed by this very
+   * metadata, so naming it here is a circular reference (TS2502 /
+   * TS2615). `pageParentOf()` is the narrowing accessor and validates
+   * membership at runtime.
+   */
+  parent?: string;
   /** ISO date. When past, page surfaces a "Stale — review" badge. */
   expiresAt?: string;
   /**
@@ -265,6 +283,40 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
+  "pages.trips": z.boolean().default(true).register(registry, {
+    label: "Trips enabled",
+    description:
+      "When off, the Trips “coming soon” sidebar entry is hidden. Trips has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-22",
+  }),
+  "pages.elections": z.boolean().default(true).register(registry, {
+    label: "Elections enabled",
+    description:
+      "When off, the Elections “coming soon” sidebar entry is hidden. Elections has no route yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-22",
+  }),
+  // One flag for the whole Executive section, not eight. Its seven
+  // sub-items (Board, Meetings, Decisions, Goals, Tasks, Budget,
+  // Handoff) aren't independently reachable — they're `aria-disabled`
+  // placeholders inside the parent's Collapsible — so eight rows on
+  // /settings would be noise for a section that doesn't exist yet. Split
+  // them when the children become real routes, alongside the
+  // `executive:read`-style permission the sidebar comment anticipates.
+  "pages.executive": z.boolean().default(true).register(registry, {
+    label: "Executive enabled",
+    description:
+      "When off, the Executive “coming soon” sidebar section and all of its sub-items are hidden. Executive has no routes yet.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-22",
+  }),
   "pages.calendar": z.boolean().default(true).register(registry, {
     label: "Calendar enabled",
     description:
@@ -329,16 +381,34 @@ export const SETTINGS = {
       "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
   }),
 
-  // Members surfaces. The directory (`pages.members`) plus each officer
-  // management tab and the member-detail page, individually toggleable.
+  // Members surfaces. `pages.members` is the SECTION — a grouping node
+  // with no page of its own; switching it off takes the whole /members
+  // area with it, because every child declares it as `parent` and the
+  // effective value is the AND down the chain. The approved directory has
+  // its own `pages.members_approved` flag so "hide the directory" and
+  // "hide the whole members area" stay separable (they used to be the
+  // same key, which meant switching off "Members" hid the directory while
+  // leaving every officer queue reachable).
   "pages.members": z.boolean().default(true).register(registry, {
-    label: "Members directory enabled",
+    label: "Members section enabled",
     description:
-      "When off, the Members sidebar entry is hidden and the /members directory returns notFound.",
+      "Master switch for the whole /members area. When off, the sidebar entry disappears and every page under /members returns notFound — including the officer tabs, regardless of their own switches.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-22",
+    confirm:
+      "This is the master switch for the entire Members area — the directory, every officer queue (Pending, Unclaimed, Rejected, Deactivated), member detail pages, and the waiver queue. Their individual switches keep their values and take effect again when this is switched back on.",
+  }),
+  "pages.members_approved": z.boolean().default(true).register(registry, {
+    label: "Members · Approved directory enabled",
+    description:
+      "When off, the Approved tab is hidden and /members returns notFound. The officer tabs stay reachable — use the section switch above to take down the whole area.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "members",
   }),
   "pages.members_pending": z.boolean().default(true).register(registry, {
     label: "Members · Pending tab enabled",
@@ -348,6 +418,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "members",
   }),
   "pages.members_unclaimed": z.boolean().default(true).register(registry, {
     label: "Members · Unclaimed tab enabled",
@@ -357,6 +428,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "members",
   }),
   "pages.members_rejected": z.boolean().default(true).register(registry, {
     label: "Members · Rejected tab enabled",
@@ -366,6 +438,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "members",
   }),
   "pages.members_deactivated": z.boolean().default(true).register(registry, {
     label: "Members · Deactivated tab enabled",
@@ -375,6 +448,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "members",
   }),
   "pages.members_detail": z.boolean().default(true).register(registry, {
     label: "Member detail page enabled",
@@ -384,6 +458,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "members",
   }),
   "pages.members_waivers": z.boolean().default(true).register(registry, {
     label: "Members · Waivers page enabled",
@@ -393,6 +468,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "members",
   }),
 
   // Gear surfaces.
@@ -592,6 +668,64 @@ export const PAGE_SETTING_KEYS = SETTING_KEYS.filter(
 /** Strip the `pages.` prefix to get the public-flags map key. */
 export function pageFlagKeyOf(key: PageSettingKey): PageFlagKey {
   return key.slice("pages.".length) as PageFlagKey;
+}
+
+/**
+ * The declared section a page sits under, or null for a root page.
+ *
+ * Also the validation boundary for `SettingMeta.parent`, which is a bare
+ * string for the circularity reason documented there: a value that isn't
+ * an actual page key comes back as null, so a typo degrades to "root
+ * page" rather than switching a live page off.
+ */
+export function pageParentOf(key: PageFlagKey): PageFlagKey | null {
+  const declared = getMeta(`pages.${key}` as PageSettingKey).parent;
+  if (!declared) {
+    return null;
+  }
+  const asSettingKey = `pages.${declared}`;
+  return PAGE_SETTING_KEYS.some((candidate) => candidate === asSettingKey)
+    ? (declared as PageFlagKey)
+    : null;
+}
+
+/**
+ * Collapse raw page-flag values into *effective* ones: a page is on only
+ * when its own switch AND every ancestor section's are on.
+ *
+ * This is the single place the cascade happens, and that's deliberate.
+ * Every consumer — the sidebar, both tab bars, and every route guard —
+ * already reads `flags.pages[key]`, so folding ancestry into that map
+ * gives all of them cascade with no call-site changes, and no way for one
+ * of them to forget.
+ *
+ * `/settings` must NOT use this: it edits and displays RAW values (via
+ * `listSiteSettingsFn`). Showing a child as off because its parent is off
+ * would be indistinguishable from the admin having switched the child
+ * off, and re-enabling the parent would look like the child's setting had
+ * been lost.
+ *
+ * A `parent` naming a key that isn't in the registry is treated as absent
+ * rather than as "off" (see `pageParentOf`) — a typo shouldn't silently
+ * 404 a live page.
+ */
+export function effectivePageFlags(
+  raw: Record<PageFlagKey, boolean>,
+): Record<PageFlagKey, boolean> {
+  const out = {} as Record<PageFlagKey, boolean>;
+  for (const key of PAGE_SETTING_KEYS) {
+    const own = pageFlagKeyOf(key);
+    let on = raw[own];
+    let ancestor = pageParentOf(own);
+    // `hops` bounds the walk so a mis-declared cycle degrades to a wrong
+    // answer instead of hanging the request.
+    for (let hops = 0; ancestor && hops <= PAGE_SETTING_KEYS.length; hops++) {
+      on = on && raw[ancestor];
+      ancestor = pageParentOf(ancestor);
+    }
+    out[own] = on;
+  }
+  return out;
 }
 
 // ── Group keys by category for UI iteration ────────────────────────────

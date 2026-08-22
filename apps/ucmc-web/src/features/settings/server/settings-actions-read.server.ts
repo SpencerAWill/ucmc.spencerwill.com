@@ -17,6 +17,7 @@ import {
   readSetting,
 } from "#/server/settings/settings-repo.server";
 import {
+  effectivePageFlags,
   isSettingKey,
   pageFlagKeyOf,
   PAGE_SETTING_KEYS,
@@ -64,10 +65,16 @@ export async function getPublicFlagsAction(): Promise<PublicFlags> {
     readSetting("feedback.club_enabled"),
     Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
   ]);
-  const pages = Object.fromEntries(
+  const raw = Object.fromEntries(
     PAGE_SETTING_KEYS.map((key, i) => [pageFlagKeyOf(key), pageValues[i]]),
   ) as PublicFlags["pages"];
-  return { websiteFeedback, clubFeedback, pages };
+  // Effective, not raw: a page is on only when its own switch and every
+  // ancestor section's are on. Folding the cascade in here is what gives
+  // the sidebar, the tab bars, and every route guard the same answer —
+  // they all read this map, so none of them can forget to check the
+  // parent. `/settings` deliberately reads raw values via
+  // `listSiteSettingsAction` instead.
+  return { websiteFeedback, clubFeedback, pages: effectivePageFlags(raw) };
 }
 
 /**

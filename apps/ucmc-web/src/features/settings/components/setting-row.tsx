@@ -13,16 +13,6 @@ import { formatRelative } from "#/lib/date-format";
 import { History, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "#/components/ui/alert-dialog";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
@@ -33,7 +23,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "#/components/ui/tooltip";
-import { useUpdateSetting } from "#/features/settings/api/use-update-setting";
+import { useSettingSaver } from "#/features/settings/api/use-setting-saver";
+import { SettingConfirmDialog } from "#/features/settings/components/setting-confirm-dialog";
 import type { SiteSettingEntry } from "#/features/settings/server/settings-fns";
 import {
   getMeta,
@@ -60,13 +51,11 @@ export function SettingRow<TKey extends SettingKey>({
   const formType = autoFormType(SETTINGS[settingKey]);
   const value = entry.value;
   const [draft, setDraft] = useState<SettingValue<TKey>>(value);
-  const [error, setError] = useState<string | null>(null);
-  // When `meta.confirm` is set, every save routes through an AlertDialog
-  // first. `pending` carries the proposed value across the open → confirm
-  // hop; clearing it on cancel/confirm closes the dialog.
-  const [pending, setPending] = useState<SettingValue<TKey> | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const mutation = useUpdateSetting();
+  // Write path (including the `meta.confirm` gate) is shared with the
+  // compact page-flag rows so the two can't diverge on when a change is
+  // confirmed. See `useSettingSaver`.
+  const saver = useSettingSaver(settingKey);
 
   // When the canonical value changes from outside (another tab edited;
   // post-save invalidate re-read), reset the draft.
@@ -80,34 +69,6 @@ export function SettingRow<TKey extends SettingKey>({
   const defaultValue = SETTINGS[settingKey].parse(undefined) as SettingValue<
     typeof settingKey
   >;
-
-  async function persist(nextValue: SettingValue<TKey>) {
-    setError(null);
-    const result = await mutation.mutateAsync({
-      key: settingKey,
-      value: nextValue,
-    } as Parameters<ReturnType<typeof useUpdateSetting>["mutateAsync"]>[0]);
-    if (!result.ok) {
-      setError(
-        result.reason === "invalid_value"
-          ? "Value failed validation. Check the format and try again."
-          : "Unknown setting key. The registry may be out of sync.",
-      );
-    }
-  }
-
-  /**
-   * Save entry point: gates through the confirm dialog when the
-   * setting's metadata requires it. The reset and toggle/save flows
-   * both feed through this so the gate is consistent.
-   */
-  function requestSave(nextValue: SettingValue<TKey>) {
-    if (meta.confirm) {
-      setPending(nextValue);
-      return;
-    }
-    void persist(nextValue);
-  }
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-4">
@@ -126,15 +87,15 @@ export function SettingRow<TKey extends SettingKey>({
             // the user confirms (or cancels) in the dialog. Otherwise
             // we'd briefly show a state the user hasn't agreed to.
             checked={draft as boolean}
-            disabled={mutation.isPending}
+            disabled={saver.isPending}
             onCheckedChange={(checked) => {
               const next = checked as SettingValue<TKey>;
               if (meta.confirm) {
-                requestSave(next);
+                saver.requestSave(next);
                 return;
               }
               setDraft(next);
-              void persist(next);
+              void saver.persist(next);
             }}
           />
         ) : null}
@@ -152,61 +113,36 @@ export function SettingRow<TKey extends SettingKey>({
                 setDraft(raw as SettingValue<TKey>);
               }
             }}
-            disabled={mutation.isPending}
+            disabled={saver.isPending}
             className="flex-1"
           />
           <Button
             type="button"
-            disabled={!isDirty || mutation.isPending}
-            onClick={() => requestSave(draft)}
+            disabled={!isDirty || saver.isPending}
+            onClick={() => saver.requestSave(draft)}
           >
-            {mutation.isPending ? "Saving..." : "Save"}
+            {saver.isPending ? "Saving..." : "Save"}
           </Button>
         </div>
       ) : null}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {saver.error ? (
+        <p className="text-xs text-destructive">{saver.error}</p>
+      ) : null}
       <RowFooter
         entry={entry}
         isCustomized={isCustomized}
-        canReset={isCustomized && !mutation.isPending}
-        onReset={() => requestSave(defaultValue)}
+        canReset={isCustomized && !saver.isPending}
+        onReset={() => saver.requestSave(defaultValue)}
         onOpenHistory={() => setHistoryOpen(true)}
       />
 
-      {meta.confirm ? (
-        <AlertDialog
-          open={pending !== null}
-          onOpenChange={(open) => {
-            if (!open) setPending(null);
-          }}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                Confirm change to {meta.label}
-              </AlertDialogTitle>
-              <AlertDialogDescription>{meta.confirm}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={mutation.isPending}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                disabled={mutation.isPending}
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (pending !== null) {
-                    setDraft(pending);
-                    void persist(pending).finally(() => setPending(null));
-                  }
-                }}
-              >
-                {mutation.isPending ? "Saving..." : "Confirm"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      ) : null}
+      <SettingConfirmDialog
+        meta={meta}
+        pending={saver.pending}
+        setPending={saver.setPending}
+        persist={saver.persist}
+        isPending={saver.isPending}
+      />
 
       <SettingHistoryDialog
         settingKey={settingKey}

@@ -71,7 +71,7 @@ export function MembersTabsBar() {
     // 3+2 layout on mobile; from `sm` (640 px) on, fall back to a
     // single flex row.
     <div className="grid grid-cols-3 gap-1 rounded-md border p-1 sm:flex">
-      {pages.members ? (
+      {pages.members_approved ? (
         <TabLink active={active === "approved"}>
           <Link to="/members" search={{}}>
             Approved
