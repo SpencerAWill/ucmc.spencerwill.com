@@ -1,7 +1,7 @@
 /**
  * Permission gate for the /settings admin page. system_admin auto-grants
  * every permission via the bypass in `principal.server.ts`; other roles
- * pick this up at runtime via /members/roles when delegated.
+ * pick this up at runtime via /access when delegated.
  */
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";

@@ -76,7 +76,7 @@ The footer also shows the registration disclaimer text **on every page** (not ju
   - `/members/rejected` — un-reject rejected registrations
   - `/members/deactivated` — reactivate deactivated members
 - `/members/waivers` — officer attestation queue (`waivers:verify`; held by Treasurer + President)
-- `/members/roles` — RBAC editor (`roles:manage`)
+- `/access` — roles and permissions editor (`roles:manage`). Root-level, not under `/members`: roles govern every feature, not just membership, so it sits next to Settings in the sidebar's bottom group.
 
 ## Compliance conventions
 

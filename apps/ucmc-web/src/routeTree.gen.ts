@@ -36,6 +36,7 @@ import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as ConstitutionRouteImport } from './routes/constitution'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
+import { Route as AccessRouteImport } from './routes/access'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GearIndexRouteImport } from './routes/gear.index'
@@ -46,7 +47,6 @@ import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as MyGearRouteImport } from './routes/my.gear'
 import { Route as MyAccountRouteImport } from './routes/my.account'
 import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
-import { Route as MembersRolesRouteImport } from './routes/members.roles'
 import { Route as MembersTabsRouteImport } from './routes/members._tabs'
 import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
@@ -211,6 +211,11 @@ const AntiHazingRoute = AntiHazingRouteImport.update({
   path: '/anti-hazing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccessRoute = AccessRouteImport.update({
+  id: '/access',
+  path: '/access',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -259,11 +264,6 @@ const MyAccountRoute = MyAccountRouteImport.update({
 const MembersWaiversRoute = MembersWaiversRouteImport.update({
   id: '/waivers',
   path: '/waivers',
-  getParentRoute: () => MembersRoute,
-} as any)
-const MembersRolesRoute = MembersRolesRouteImport.update({
-  id: '/roles',
-  path: '/roles',
   getParentRoute: () => MembersRoute,
 } as any)
 const MembersTabsRoute = MembersTabsRouteImport.update({
@@ -408,6 +408,7 @@ const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/access': typeof AccessRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/constitution': typeof ConstitutionRoute
@@ -439,7 +440,6 @@ export interface FileRoutesByFullPath {
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
-  '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my/account': typeof MyAccountRouteWithChildren
   '/my/gear': typeof MyGearRouteWithChildren
@@ -474,6 +474,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/access': typeof AccessRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/constitution': typeof ConstitutionRoute
@@ -503,7 +504,6 @@ export interface FileRoutesByTo {
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
-  '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
@@ -535,6 +535,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/access': typeof AccessRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/constitution': typeof ConstitutionRoute
@@ -568,7 +569,6 @@ export interface FileRoutesById {
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/_tabs': typeof MembersTabsRouteWithChildren
-  '/members/roles': typeof MembersRolesRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my/account': typeof MyAccountRouteWithChildren
   '/my/gear': typeof MyGearRouteWithChildren
@@ -605,6 +605,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/access'
     | '/anti-hazing'
     | '/audit'
     | '/constitution'
@@ -636,7 +637,6 @@ export interface FileRouteTypes {
     | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
-    | '/members/roles'
     | '/members/waivers'
     | '/my/account'
     | '/my/gear'
@@ -671,6 +671,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/access'
     | '/anti-hazing'
     | '/audit'
     | '/constitution'
@@ -700,7 +701,6 @@ export interface FileRouteTypes {
     | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
-    | '/members/roles'
     | '/members/waivers'
     | '/register/pending'
     | '/register/profile'
@@ -731,6 +731,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/about'
+    | '/access'
     | '/anti-hazing'
     | '/audit'
     | '/constitution'
@@ -764,7 +765,6 @@ export interface FileRouteTypes {
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/_tabs'
-    | '/members/roles'
     | '/members/waivers'
     | '/my/account'
     | '/my/gear'
@@ -800,6 +800,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  AccessRoute: typeof AccessRoute
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
   ConstitutionRoute: typeof ConstitutionRoute
@@ -1030,6 +1031,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AntiHazingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/access': {
+      id: '/access'
+      path: '/access'
+      fullPath: '/access'
+      preLoaderRoute: typeof AccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/about': {
       id: '/about'
       path: '/about'
@@ -1098,13 +1106,6 @@ declare module '@tanstack/react-router' {
       path: '/waivers'
       fullPath: '/members/waivers'
       preLoaderRoute: typeof MembersWaiversRouteImport
-      parentRoute: typeof MembersRoute
-    }
-    '/members/roles': {
-      id: '/members/roles'
-      path: '/roles'
-      fullPath: '/members/roles'
-      preLoaderRoute: typeof MembersRolesRouteImport
       parentRoute: typeof MembersRoute
     }
     '/members/_tabs': {
@@ -1384,14 +1385,12 @@ const MembersTabsRouteWithChildren = MembersTabsRoute._addFileChildren(
 interface MembersRouteChildren {
   MembersPublicIdRoute: typeof MembersPublicIdRoute
   MembersTabsRoute: typeof MembersTabsRouteWithChildren
-  MembersRolesRoute: typeof MembersRolesRoute
   MembersWaiversRoute: typeof MembersWaiversRoute
 }
 
 const MembersRouteChildren: MembersRouteChildren = {
   MembersPublicIdRoute: MembersPublicIdRoute,
   MembersTabsRoute: MembersTabsRouteWithChildren,
-  MembersRolesRoute: MembersRolesRoute,
   MembersWaiversRoute: MembersWaiversRoute,
 }
 
@@ -1446,6 +1445,7 @@ const MyRouteWithChildren = MyRoute._addFileChildren(MyRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  AccessRoute: AccessRoute,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
   ConstitutionRoute: ConstitutionRoute,

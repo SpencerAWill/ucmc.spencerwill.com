@@ -248,6 +248,15 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
+  "pages.access": z.boolean().default(true).register(registry, {
+    label: "Access page enabled",
+    description:
+      "When off, the Access sidebar entry is hidden and /access returns notFound. Role and permission delegation stays reachable by switching this back on from Settings.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-21",
+  }),
 
   // Kill switch for the in-progress announcements feature. Unlike the
   // other page flags it defaults OFF (feature not yet launched) and also
@@ -318,15 +327,6 @@ export const SETTINGS = {
     label: "Member detail page enabled",
     description:
       "When off, individual member profile pages (/members/$id) return notFound.",
-    category: "pages",
-    flagKind: "release",
-    owner: "system_admin",
-    createdAt: "2026-08-21",
-  }),
-  "pages.members_roles": z.boolean().default(true).register(registry, {
-    label: "Members · Roles page enabled",
-    description:
-      "When off, the Roles sidebar sub-item is hidden and /members/roles returns notFound.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",

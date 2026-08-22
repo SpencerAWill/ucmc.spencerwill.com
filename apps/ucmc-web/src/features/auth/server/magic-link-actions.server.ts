@@ -448,7 +448,7 @@ export async function exportMyDataAction(): Promise<{
  * refuse — deleting the last admin would leave the platform with no
  * way to grant `system_admin` to anyone else without a manual D1
  * intervention. Officers in that position should promote a successor
- * via /members/roles before deleting their own account.
+ * via /access before deleting their own account.
  */
 export async function deleteMyAccountAction(): Promise<{ ok: true }> {
   const principal = await loadCurrentPrincipal();
@@ -470,7 +470,7 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
       .where(eq(schema.userRoles.roleId, "role_system_admin"));
     if (rows.length === 1 && rows[0]?.userId === principal.userId) {
       throw new Error(
-        "Cannot delete the only remaining system_admin. Promote a successor via /members/roles first.",
+        "Cannot delete the only remaining system_admin. Promote a successor via /access first.",
       );
     }
   }

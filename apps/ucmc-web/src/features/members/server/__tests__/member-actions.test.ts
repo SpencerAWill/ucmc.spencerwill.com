@@ -959,7 +959,7 @@ describe("audit log: bulk lifecycle audits transitions, not requests", () => {
 // Every server query that loads a role list must order by
 // `(position, name)` so client renderers (role badges, role-filter
 // popover, user-menu emulation list) reflect the operator-controlled
-// ordering set in `/members/roles`. Regression: previously these
+// ordering set in `/access`. Regression: previously these
 // queries used `name`-only or no ordering, drifting from the RBAC
 // editor.
 
