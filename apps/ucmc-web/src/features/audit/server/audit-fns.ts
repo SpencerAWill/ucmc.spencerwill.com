@@ -83,6 +83,9 @@ export const AUDIT_ACTIONS = [
   "gallery_photo.created",
   "gallery_photo.updated",
   "gallery_photo.deleted",
+  "passkey.added",
+  "passkey.removed",
+  "passkey.renamed",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

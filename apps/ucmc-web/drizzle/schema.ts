@@ -556,6 +556,24 @@ export const auditAction = [
   "email.added",
   "email.removed",
   "email.primary_changed",
+  // Passkey (WebAuthn) credential lifecycle. Self-service, so
+  // `actor_user_id` and `target_user_id` are the same user; `target_id`
+  // is the credential's `passkey_credentials.id` (NOT the raw
+  // `credential_id`, which is attacker-supplied base64url from the
+  // authenticator and has no business in a log we render).
+  //
+  // Renames are audited even though a nickname is a cosmetic label with
+  // no authentication effect — normally that would put them in the
+  // "deliberately NOT audited" bucket above. The nickname is how a
+  // member decides which credential to REVOKE, so someone holding a
+  // stolen session could silently relabel passkeys to steer the victim
+  // into deleting their own and keeping the attacker's. Metadata carries
+  // `{ before, after }` so that relabelling is reconstructable. A
+  // nickname is user-authored free text, not PII we derived, and it's
+  // capped at 60 chars.
+  "passkey.added",
+  "passkey.removed",
+  "passkey.renamed",
   // RBAC.
   "role.created",
   "role.updated",

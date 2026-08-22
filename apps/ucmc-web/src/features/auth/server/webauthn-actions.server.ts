@@ -17,8 +17,10 @@ import {
   findCredentialByCredentialId,
   insertCredential,
   listCredentialsForUser,
+  renameCredentialForUser,
   updateCredentialCounter,
 } from "#/features/auth/server/passkey-credentials.server";
+import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { loadPrincipal } from "#/server/auth/principal.server";
 import {
   loadCurrentPrincipal,
@@ -49,6 +51,7 @@ import type {
   RegisterBeginResult,
   RegisterFinishResult,
   RemovePasskeyResult,
+  RenamePasskeyResult,
 } from "#/features/auth/server/webauthn-fns";
 import { checkAuthRateLimitByIp } from "#/server/rate-limit.server";
 
@@ -125,13 +128,28 @@ export async function webauthnRegisterFinishAction(args: {
   }
 
   const info = verification.registrationInfo;
-  await insertCredential({
+  const created = await insertCredential({
     userId: principal.userId,
     credentialId: info.credential.id,
     publicKey: info.credential.publicKey,
     counter: info.credential.counter,
     transports: args.response.response.transports,
     nickname: args.nickname,
+  });
+
+  // Sequential rather than batched with the insert: the audit row can
+  // only be written once the WebAuthn verification above has passed, and
+  // the insert is owned by the repo layer (which has no business
+  // building audit statements). `recordAuditEvent` throws on failure, so
+  // a dropped audit row surfaces to the caller rather than passing
+  // silently — see the escape-hatch note in audit-log.server.ts.
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "passkey.added",
+    targetUserId: principal.userId,
+    targetType: "passkey",
+    targetId: created.id,
+    metadata: { nickname: created.nickname },
   });
 
   // Privilege boundary — replace the cookie so a stolen pre-enrollment
@@ -248,7 +266,69 @@ export async function removePasskeyAction(args: {
   if (!deleted) {
     return { ok: false, reason: "not_found" };
   }
+  // The scoped delete's `.returning()` is what proves a row actually
+  // went away, so the audit write has to follow it — batching the two
+  // would insert an audit row even when the delete matched nothing.
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "passkey.removed",
+    targetUserId: principal.userId,
+    targetType: "passkey",
+    targetId: deleted.id,
+    metadata: { nickname: deleted.nickname },
+  });
   return { ok: true };
+}
+
+// ── rename (session-gated) ──────────────────────────────────────────────
+
+/**
+ * Relabel one of the caller's own passkeys.
+ *
+ * A nickname is a cosmetic local label — it never reaches the
+ * authenticator, isn't part of the credential, and carries no
+ * authentication weight. It is, however, the only thing distinguishing
+ * one row from another when a member decides which passkey to revoke,
+ * which is why the change is audited: an attacker holding a stolen
+ * session could otherwise silently relabel credentials to steer the
+ * victim into deleting their own and keeping the attacker's.
+ *
+ * An empty / whitespace-only name clears the label rather than storing
+ * `""`, so the row falls back to the same "Unnamed passkey" rendering as
+ * a passkey registered without one. Length is capped by the zod
+ * validator in the shell (60 chars, matching registration).
+ */
+export async function renamePasskeyAction(args: {
+  credentialId: string;
+  nickname: string;
+}): Promise<RenamePasskeyResult> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    return { ok: false, reason: "unauthorized" };
+  }
+  const nickname = args.nickname.trim() || null;
+  const renamed = await renameCredentialForUser({
+    userId: principal.userId,
+    credentialId: args.credentialId,
+    nickname,
+  });
+  if (!renamed) {
+    return { ok: false, reason: "not_found" };
+  }
+  // No-op renames aren't audited — submitting the same label back is a
+  // UI artifact, not a state change, and logging it would bury the
+  // relabels that actually matter.
+  if (renamed.previousNickname !== nickname) {
+    await recordAuditEvent({
+      actorUserId: principal.userId,
+      action: "passkey.renamed",
+      targetUserId: principal.userId,
+      targetType: "passkey",
+      targetId: renamed.id,
+      metadata: { before: renamed.previousNickname, after: nickname },
+    });
+  }
+  return { ok: true, nickname };
 }
 
 // ── listing (session-gated) ──────────────────────────────────────────────

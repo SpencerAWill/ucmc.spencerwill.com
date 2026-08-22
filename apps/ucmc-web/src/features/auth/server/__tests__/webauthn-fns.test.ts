@@ -4,6 +4,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
 } from "@simplewebauthn/server";
+import { asc, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Principal } from "#/server/auth/principal.server";
@@ -99,6 +100,7 @@ const {
   webauthnAuthenticateBeginAction,
   webauthnAuthenticateFinishAction,
   removePasskeyAction,
+  renamePasskeyAction,
   listPasskeysAction,
 } = await import("#/features/auth/server/webauthn-actions.server");
 const { insertCredential, listCredentialsForUser } =
@@ -120,6 +122,19 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
     rolePermissionMap: {},
     ...overrides,
   };
+}
+
+/**
+ * Audit rows for one action, oldest first. `audit_log.id` is a uuidv7,
+ * so lexical order on the primary key is creation order — no need to
+ * sort on `created_at`, whose millisecond resolution can tie for two
+ * writes in the same test.
+ */
+async function auditRows(action: schema.AuditAction) {
+  return getDb().query.auditLog.findMany({
+    where: eq(schema.auditLog.action, action),
+    orderBy: asc(schema.auditLog.id),
+  });
 }
 
 async function seedUser(args: {
@@ -174,6 +189,10 @@ beforeEach(async () => {
   await db.delete(schema.passkeyCredentials);
   await db.delete(schema.profiles);
   await db.delete(schema.magicLinks);
+  // Passkey add / remove / rename all write audit rows, and storage
+  // isolation in the workers pool is per FILE, not per test — without
+  // this the audit assertions below would see the previous test's rows.
+  await db.delete(schema.auditLog);
   await db.delete(schema.users);
 });
 
@@ -277,6 +296,13 @@ describe("webauthnRegisterFinishAction", () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]?.credentialId).toBe("cred-id-1");
     expect(saved[0]?.nickname).toBe("My iPhone");
+
+    const events = await auditRows("passkey.added");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.actorUserId).toBe(currentPrincipal.userId);
+    expect(events[0]?.targetUserId).toBe(currentPrincipal.userId);
+    expect(events[0]?.targetType).toBe("passkey");
+    expect(events[0]?.targetId).toBe(saved[0]?.id);
 
     // Ceremony is single-use.
     expect(await getChallenge(ceremonyId)).toBeNull();
@@ -480,6 +506,188 @@ describe("removePasskeyAction", () => {
     expect(result).toEqual({ ok: true });
 
     expect(await listCredentialsForUser(userId)).toEqual([]);
+
+    const events = await auditRows("passkey.removed");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.actorUserId).toBe(userId);
+    expect(events[0]?.targetUserId).toBe(userId);
+    expect(events[0]?.targetType).toBe("passkey");
+  });
+
+  it("does not audit a removal that matched nothing", async () => {
+    const userId = "user_rm_miss";
+    await seedUser({ id: userId, email: "rmmiss@example.com" });
+    currentPrincipal = makePrincipal({
+      userId,
+      primaryEmail: "rmmiss@example.com",
+      emails: ["rmmiss@example.com"],
+    });
+    expect(await removePasskeyAction({ credentialId: "nope" })).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+    expect(await auditRows("passkey.removed")).toHaveLength(0);
+  });
+});
+
+// ── rename ───────────────────────────────────────────────────────────────
+
+describe("renamePasskeyAction", () => {
+  it("rejects unauthorized callers", async () => {
+    const result = await renamePasskeyAction({
+      credentialId: "cred-id-1",
+      nickname: "Laptop",
+    });
+    expect(result).toEqual({ ok: false, reason: "unauthorized" });
+  });
+
+  it("only renames a credential owned by the caller", async () => {
+    const ownerId = "user_owner";
+    const thiefId = "user_thief";
+    await seedUser({ id: ownerId, email: "owner@example.com" });
+    await seedUser({ id: thiefId, email: "thief@example.com" });
+    await insertCredential({
+      userId: ownerId,
+      credentialId: "cred-id-1",
+      publicKey: new Uint8Array([1]),
+      counter: 0,
+      nickname: "iPhone",
+    });
+
+    currentPrincipal = makePrincipal({
+      userId: thiefId,
+      primaryEmail: "thief@example.com",
+      emails: ["thief@example.com"],
+    });
+    const result = await renamePasskeyAction({
+      credentialId: "cred-id-1",
+      nickname: "Pwned",
+    });
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+
+    // Untouched for the real owner, and nothing audited.
+    const owned = await listCredentialsForUser(ownerId);
+    expect(owned[0]?.nickname).toBe("iPhone");
+    expect(await auditRows("passkey.renamed")).toHaveLength(0);
+  });
+
+  it("renames the credential and audits before/after", async () => {
+    const userId = "user_rn";
+    await seedUser({ id: userId, email: "rn@example.com" });
+    await insertCredential({
+      userId,
+      credentialId: "cred-id-1",
+      publicKey: new Uint8Array([1]),
+      counter: 0,
+      nickname: "iPhone",
+    });
+
+    currentPrincipal = makePrincipal({
+      userId,
+      primaryEmail: "rn@example.com",
+      emails: ["rn@example.com"],
+    });
+    const result = await renamePasskeyAction({
+      credentialId: "cred-id-1",
+      nickname: "Work laptop",
+    });
+    expect(result).toEqual({ ok: true, nickname: "Work laptop" });
+
+    const stored = await listCredentialsForUser(userId);
+    expect(stored[0]?.nickname).toBe("Work laptop");
+
+    const events = await auditRows("passkey.renamed");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.actorUserId).toBe(userId);
+    expect(events[0]?.targetUserId).toBe(userId);
+    expect(events[0]?.targetType).toBe("passkey");
+    // `target_id` is the surrogate row id, never the authenticator's
+    // attacker-supplied credential ID.
+    expect(events[0]?.targetId).toBe(stored[0]?.id);
+    expect(JSON.parse(events[0]?.metadataJson ?? "null")).toEqual({
+      before: "iPhone",
+      after: "Work laptop",
+    });
+  });
+
+  it("trims the name, and clears it when only whitespace is given", async () => {
+    const userId = "user_ws";
+    await seedUser({ id: userId, email: "ws@example.com" });
+    await insertCredential({
+      userId,
+      credentialId: "cred-id-1",
+      publicKey: new Uint8Array([1]),
+      counter: 0,
+      nickname: "iPhone",
+    });
+    currentPrincipal = makePrincipal({
+      userId,
+      primaryEmail: "ws@example.com",
+      emails: ["ws@example.com"],
+    });
+
+    expect(
+      await renamePasskeyAction({
+        credentialId: "cred-id-1",
+        nickname: "  Padded  ",
+      }),
+    ).toEqual({ ok: true, nickname: "Padded" });
+
+    // An all-whitespace name clears the label rather than storing "",
+    // so the row falls back to the same "Unnamed passkey" rendering as
+    // a passkey registered without one.
+    expect(
+      await renamePasskeyAction({ credentialId: "cred-id-1", nickname: "   " }),
+    ).toEqual({ ok: true, nickname: null });
+    const stored = await listCredentialsForUser(userId);
+    expect(stored[0]?.nickname).toBeNull();
+
+    const events = await auditRows("passkey.renamed");
+    expect(events).toHaveLength(2);
+    expect(JSON.parse(events[1]?.metadataJson ?? "null")).toEqual({
+      before: "Padded",
+      after: null,
+    });
+  });
+
+  it("does not audit a rename that changes nothing", async () => {
+    const userId = "user_noop";
+    await seedUser({ id: userId, email: "noop@example.com" });
+    await insertCredential({
+      userId,
+      credentialId: "cred-id-1",
+      publicKey: new Uint8Array([1]),
+      counter: 0,
+      nickname: "iPhone",
+    });
+    currentPrincipal = makePrincipal({
+      userId,
+      primaryEmail: "noop@example.com",
+      emails: ["noop@example.com"],
+    });
+
+    // Same label back — a UI artifact, not a state change.
+    const result = await renamePasskeyAction({
+      credentialId: "cred-id-1",
+      nickname: "iPhone",
+    });
+    expect(result).toEqual({ ok: true, nickname: "iPhone" });
+    expect(await auditRows("passkey.renamed")).toHaveLength(0);
+  });
+
+  it("reports not_found for a credential that doesn't exist", async () => {
+    const userId = "user_gone";
+    await seedUser({ id: userId, email: "gone@example.com" });
+    currentPrincipal = makePrincipal({
+      userId,
+      primaryEmail: "gone@example.com",
+      emails: ["gone@example.com"],
+    });
+    const result = await renamePasskeyAction({
+      credentialId: "nope",
+      nickname: "Whatever",
+    });
+    expect(result).toEqual({ ok: false, reason: "not_found" });
   });
 });
 

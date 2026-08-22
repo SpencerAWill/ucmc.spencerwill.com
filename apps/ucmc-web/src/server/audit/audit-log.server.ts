@@ -14,6 +14,16 @@
  * Reconstructing intent from order changes would also require a
  * before/after diff that we don't capture today.
  *
+ * `passkey.renamed` looks like it belongs in that bucket — a passkey
+ * nickname is a cosmetic label that never reaches the authenticator and
+ * carries no authentication weight — but it is deliberately audited.
+ * The nickname is the only thing distinguishing one credential row from
+ * another when a member decides which passkey to REVOKE, so an attacker
+ * holding a stolen session could silently relabel credentials to steer
+ * the victim into deleting their own and keeping the attacker's. That
+ * makes the relabel a security-relevant act, not a cosmetic one, and it
+ * carries `{ before, after }` so it's reconstructable.
+ *
  * **Strict, not best-effort.** A failed audit insert throws and
  * propagates back to the caller, which means the parent action fails
  * too. That's deliberate: silently dropping audit events would defeat
@@ -74,6 +84,13 @@
  *     IS the source of truth for "who pre-added whom and when"; if a
  *     future retention sweep purges abandoned stubs, both FKs cascade
  *     to NULL and the metadata is the only surviving identifier.
+ *
+ * Not an exception, but worth stating: `passkey.added` / `.removed` /
+ * `.renamed` put a passkey `nickname` in metadata. That's user-authored
+ * free text the member typed to label their own device ("Work laptop"),
+ * capped at 60 chars — not an identifier we derived about them, and not
+ * reversible to a person the way an email or phone is. It's the same
+ * category as the decision text on a rejection.
  *
  * No other event type follows this pattern; if you find yourself
  * adding one, the audit story for that flow is probably wrong. The
