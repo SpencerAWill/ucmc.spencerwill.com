@@ -35,7 +35,7 @@ export function activeFeedbackTabFromPath(pathname: string): FeedbackTabId {
 
 const TAB_SUBTITLES: Record<FeedbackTabId, string> = {
   site: "Found a bug, have an idea for the site, or want to share something about how it works? Send it here.",
-  club: "Have a suggestion, concern, or kudos for the exec board? This goes directly to club leadership — not website maintainers.",
+  club: "Have a suggestion, concern, or kudos for the exec board? This goes directly to club leadership — not site maintainers.",
 };
 
 export function getFeedbackTabSubtitle(pathname: string): string {

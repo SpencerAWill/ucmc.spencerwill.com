@@ -148,13 +148,13 @@ export async function submitFeedbackAction(
 ): Promise<{ id: string }> {
   const principal = await requireFeedbackSubmitter();
   // Runtime kill switch. Admins flip this off when they need to pause
-  // the website-feedback intake (e.g. while triaging a backlog) without
+  // the site-feedback intake (e.g. while triaging a backlog) without
   // also nuking the GitHub mirror or revoking everyone's permission.
   // The `*:manage` permission keeps managers' access to the triage view
   // intact regardless — this gate is on **submissions**, not reads.
   const enabled = await readSetting("feedback.site_enabled");
   if (!enabled) {
-    throw new Error("Website feedback submissions are currently disabled.");
+    throw new Error("Site feedback submissions are currently disabled.");
   }
   const allowed = await checkFeedbackRateLimit(principal.userId);
   if (!allowed) {

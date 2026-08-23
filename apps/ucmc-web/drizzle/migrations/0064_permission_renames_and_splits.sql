@@ -79,3 +79,14 @@ INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES
 UPDATE OR IGNORE site_settings
    SET key = 'feedback.site_enabled'
  WHERE key = 'feedback.website_enabled';
+--> statement-breakpoint
+
+-- Carry the setting's history across with it. `settings_updated` audit
+-- rows key on the setting name (`target_id = <key>`), so without this the
+-- per-setting history panel in /settings comes back empty for a switch
+-- that has in fact been toggled. Migrations 0061 and 0063 pair every
+-- `site_settings` key rename with exactly this statement.
+UPDATE audit_log
+   SET target_id = 'feedback.site_enabled'
+ WHERE action = 'settings_updated'
+   AND target_id = 'feedback.website_enabled';

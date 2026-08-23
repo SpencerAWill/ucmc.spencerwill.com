@@ -169,6 +169,7 @@ beforeEach(async () => {
     "role_test_members_manage",
     "role_test_members_view_private",
     "role_test_sessions_revoke",
+    "role_test_waivers_view",
   ]) {
     await db.delete(schema.roles).where(eq(schema.roles.id, id));
   }
@@ -1020,5 +1021,37 @@ describe("role list ordering matches reorderRolesAction", () => {
       .map((id) => idToName.get(id)!)
       .filter(Boolean);
     expect(principalRoleNames).toEqual(expectedPrincipalNames);
+  });
+});
+
+// ── waiver projection ─────────────────────────────────────────────────
+
+describe("getMemberDetailAction waiver status", () => {
+  it("includes waiver standing for an approved member when the viewer holds waivers:view", async () => {
+    await signInWithPermission("viewer@example.com", "waivers:view");
+    const targetId = await seedUser("target@example.com");
+    const publicId = await publicIdOf(targetId);
+
+    const detail = await getMemberDetailAction(publicId);
+
+    // No attestation row was seeded, so the read tier should still see
+    // the card — reporting the gap is the whole point of the queue.
+    expect(detail.waiverStatus).not.toBeNull();
+    expect(detail.waiverStatus?.attested).toBe(false);
+  });
+
+  it("omits waiver standing for a non-approved member", async () => {
+    // A pending member has never been able to reach /my/waiver (it lives
+    // under the approved-gated /my), so "no current attestation" would
+    // read as a compliance failure rather than a not-applicable state.
+    await signInWithPermission("viewer@example.com", "waivers:view");
+    const targetId = await seedUser("pending@example.com", {
+      status: "pending",
+    });
+    const publicId = await publicIdOf(targetId);
+
+    const detail = await getMemberDetailAction(publicId);
+
+    expect(detail.waiverStatus).toBeNull();
   });
 });

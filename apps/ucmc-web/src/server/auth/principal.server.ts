@@ -6,6 +6,7 @@
  */
 import { asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 
+import { withLegacyPermissionAliases } from "#/server/auth/permission-aliases";
 import { getDb, schema } from "#/server/db";
 import { getKv } from "#/server/kv";
 
@@ -213,6 +214,15 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     }
   }
 
+  // Migration 0064 renamed three permissions; a database that hasn't run
+  // it yet still returns the old names. Fold the current names in here so
+  // no gate needs its own compatibility check. Temporary — see
+  // `permission-aliases.ts`.
+  permissions = withLegacyPermissionAliases(permissions);
+  for (const [roleName, granted] of Object.entries(rolePermissionMap)) {
+    rolePermissionMap[roleName] = withLegacyPermissionAliases(granted);
+  }
+
   return {
     userId: user.id,
     primaryEmail: primaryRow.email,
@@ -260,7 +270,7 @@ export async function loadAnonymousPermissions(): Promise<string[]> {
     )
     .where(eq(schema.rolePermissions.roleId, ANONYMOUS_ROLE_ID));
 
-  const perms = rows.map((r) => r.name);
+  const perms = withLegacyPermissionAliases(rows.map((r) => r.name));
   await kv.put(ANONYMOUS_CACHE_KEY, JSON.stringify(perms), {
     expirationTtl: ANONYMOUS_CACHE_TTL,
   });

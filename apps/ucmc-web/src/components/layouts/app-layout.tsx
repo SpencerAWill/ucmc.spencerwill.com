@@ -658,7 +658,7 @@ function SidebarUtilityNav() {
   const canSubmitFeedback = isApproved && (canSiteFeedback || canClubFeedback);
   // Prefer club: it reaches the exec board and is the surface members are
   // more likely to want, which is also why it's the first tab. Falls back to
-  // the website surface when the viewer can't reach club at all.
+  // the site surface when the viewer can't reach club at all.
   const feedbackTarget = canClubFeedback ? "/feedback/club" : "/feedback/site";
   const canViewAudit = hasPermission("audit:view");
   const canManageSettings = hasPermission("settings:manage");

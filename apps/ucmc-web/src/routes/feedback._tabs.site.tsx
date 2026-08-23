@@ -18,7 +18,7 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
   beforeLoad: async ({ context, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);
-    const canWebsite =
+    const canSite =
       principal.permissions.includes("site_feedback:submit") ||
       principal.permissions.includes("site_feedback:manage");
     const canClub =
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
     // there rather than getting a notFound from a link or a stale
     // bookmark. With access to neither, fall through to notFound — the
     // sidebar entry doesn't render for them either.
-    if (!canWebsite) {
+    if (!canSite) {
       if (canClub) {
         throw redirect({ to: "/feedback/club" });
       }

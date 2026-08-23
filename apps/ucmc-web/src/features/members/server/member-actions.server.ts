@@ -480,7 +480,13 @@ export async function getMemberDetailAction(
             .from(schema.sessions)
             .where(eq(schema.sessions.userId, userId))
         : Promise.resolve<{ value: number }[]>([]),
-      canViewWaivers
+      // Approved-only, matching how the attestation queue scopes the
+      // same question. A pending / rejected / deactivated member has
+      // never had a route to `/my/waiver` (it lives under the
+      // approved-gated `/my`), so reporting "no current attestation"
+      // for them would read as a live compliance problem rather than
+      // the not-applicable state it is.
+      canViewWaivers && row.status === "approved"
         ? loadMemberWaiverStatus(userId)
         : Promise.resolve<MemberWaiverStatus | null>(null),
     ]);

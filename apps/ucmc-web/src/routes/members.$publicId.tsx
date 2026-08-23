@@ -202,9 +202,11 @@ function MemberDetailPage() {
       ) : null}
 
       {/* Waiver standing. Present only when the caller holds
-          `waivers:view` (or `waivers:verify`, which implies it) — the
-          server omits the field otherwise. Read-only here: attesting
-          lives on /members/waivers behind `waivers:verify`. */}
+          `waivers:view` (or `waivers:verify`, which implies it) AND the
+          member is approved — the server omits the field otherwise, so a
+          pending or deactivated member isn't flagged for an attestation
+          they were never able to give. Read-only here: attesting lives on
+          /members/waivers behind `waivers:verify`. */}
       {member.waiverStatus ? (
         <Card>
           <CardContent className="space-y-3">

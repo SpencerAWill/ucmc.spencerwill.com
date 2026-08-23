@@ -175,7 +175,7 @@ describe("feedback authorization", () => {
         title: "After hours",
         body: "Anyone home?",
       }),
-    ).rejects.toThrow("Website feedback submissions are currently disabled.");
+    ).rejects.toThrow("Site feedback submissions are currently disabled.");
     // No row written, no mirror attempted.
     expect(await getDb().select().from(schema.feedback)).toHaveLength(0);
     expect(mirrorToGithub).not.toHaveBeenCalled();
