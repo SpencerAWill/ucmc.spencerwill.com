@@ -64,8 +64,12 @@ function setPathname(pathname: string) {
   );
 }
 
+// `members` is the SECTION switch; `members_approved` is the Approved
+// directory tab. They used to be one key, which is why the Approved tab
+// reads `members_approved` here and not `members`.
 const ALL_MEMBER_PAGES_ON = {
   members: true,
+  members_approved: true,
   members_pending: true,
   members_unclaimed: true,
   members_rejected: true,
@@ -108,6 +112,22 @@ describe("MembersTabsBar", () => {
     ]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
+  });
+
+  it("hides the Approved tab via members_approved, not the section switch", () => {
+    // Regression guard for the rename: the tab bar must key the Approved
+    // tab off the directory's own flag. Reading the section key here would
+    // make "hide the directory" and "take down the whole area" the same
+    // control again — the bug the split was introduced to fix.
+    setAuth(true);
+    setPathname("/members");
+    setPageFlags({ ...ALL_MEMBER_PAGES_ON, members_approved: false });
+
+    render(<MembersTabsBar />);
+
+    expect(screen.queryByRole("link", { name: "Approved" })).toBeNull();
+    // The officer queues are unaffected.
+    expect(screen.getByRole("link", { name: "Pending" })).toBeInTheDocument();
   });
 
   it("hides a tab whose page kill switch is off", () => {

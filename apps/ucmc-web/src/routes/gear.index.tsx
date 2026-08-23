@@ -49,7 +49,7 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/gear/")({
-  staticData: { pageFlag: "gear" },
+  staticData: { pageFlag: "gear_inventory" },
   beforeLoad: async ({ context, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
   },

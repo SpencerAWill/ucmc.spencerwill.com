@@ -21,7 +21,7 @@ const approvedSearchSchema = z.object({
 // `requireApproved` is enforced by the `_tabs` layout parent — no need
 // to re-check here.
 export const Route = createFileRoute("/members/_tabs/")({
-  staticData: { pageFlag: "members" },
+  staticData: { pageFlag: "members_approved" },
   beforeLoad: async ({ context, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
   },

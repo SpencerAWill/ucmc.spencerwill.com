@@ -13,8 +13,8 @@ import { FeedbackForm } from "#/features/feedback/components/feedback-form";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
-export const Route = createFileRoute("/feedback/_tabs/")({
-  staticData: { pageFlag: "feedback" },
+export const Route = createFileRoute("/feedback/_tabs/site")({
+  staticData: { pageFlag: "feedback_site" },
   beforeLoad: async ({ context, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);
@@ -25,10 +25,10 @@ export const Route = createFileRoute("/feedback/_tabs/")({
       principal.permissions.includes("club_feedback:submit") ||
       principal.permissions.includes("club_feedback:manage");
 
-    // A user with no access to website feedback but who can see club
-    // feedback should land on /feedback/club rather than getting a
-    // notFound on their default tab. With access to neither, fall
-    // through to notFound — the sidebar entry doesn't render either.
+    // Someone who can't see site feedback but can see club feedback lands
+    // there rather than getting a notFound from a link or a stale
+    // bookmark. With access to neither, fall through to notFound — the
+    // sidebar entry doesn't render for them either.
     if (!canWebsite) {
       if (canClub) {
         throw redirect({ to: "/feedback/club" });
@@ -36,10 +36,10 @@ export const Route = createFileRoute("/feedback/_tabs/")({
       throw notFound();
     }
   },
-  component: WebsiteFeedbackPage,
+  component: SiteFeedbackPage,
 });
 
-function WebsiteFeedbackPage() {
+function SiteFeedbackPage() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission("feedback:manage");
   const canSubmit = hasPermission("feedback:submit");
@@ -59,8 +59,8 @@ function WebsiteFeedbackPage() {
         <FeedbackForm />
       ) : !submissionsEnabled && canSubmit ? (
         <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
-          Website feedback submissions are paused right now. Check back later,
-          or contact an officer if it&apos;s urgent.
+          Site feedback submissions are paused right now. Check back later, or
+          contact an officer if it&apos;s urgent.
         </div>
       ) : null}
 

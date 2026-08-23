@@ -204,7 +204,11 @@ function EmulationBanner() {
   );
 }
 
-function SidebarNav() {
+// Exported for `__tests__/sidebar-nav.test.tsx`: the nav's gates compose a
+// permission with a page kill switch, and getting the *wrong* flag on an
+// entry (the section's instead of the linked page's) is a silent bug — the
+// entry renders and 404s on click. Not part of the module's public API.
+export function SidebarNav() {
   const { isApproved, hasPermission } = useAuth();
   // Announcements gates compose: must have the permission AND the kill
   // switch must be on. `placeholderData` returns the schema default
@@ -219,11 +223,24 @@ function SidebarNav() {
   // render matches the server. Route-less "coming soon" placeholders
   // (Blog, Volunteer, etc.) have only their flag as the gate.
   const canReadAnnouncements =
-    hasPermission("announcements:read") && pages.announcements;
+    hasPermission("announcements:read") && flags.announcements;
   const canVerifyWaivers =
     hasPermission("waivers:verify") && pages.members_waivers;
-  const canReadMembers = isApproved && pages.members;
-  const canReadGear = hasPermission("gear:read") && pages.gear;
+  // Gate the *link* on the flag of the page it actually navigates to
+  // (`/members` is `pages.members_approved`), NOT on the `pages.members`
+  // section switch. Because the flags map carries *effective* values,
+  // `members_approved` is already false whenever the section is off, so
+  // this still hides the entry with the section — but it additionally
+  // stops the entry linking to a page that 404s when only the directory
+  // is switched off, and keeps the inert-group-header fallback below
+  // reachable for that case.
+  const canReadMembers = isApproved && pages.members_approved;
+  // Same as Members: gate on the flag of the page the link targets
+  // (`/gear` is `pages.gear_inventory`), not the `pages.gear` section
+  // switch. Effective flags mean switching the section off still hides
+  // this, while switching off only the inventory page leaves "Gear" as
+  // an inert header over the Loans sub-item instead of a 404 link.
+  const canReadGear = hasPermission("gear:read") && pages.gear_inventory;
   const canLoanGear = hasPermission("gear:loan") && pages.gear_loans;
   const canViewHistory = hasPermission("history:view") && pages.history;
   const canViewPolicies =
@@ -443,16 +460,18 @@ function SidebarNav() {
                     </Collapsible>
                   </SidebarMenuItem>
                 ) : null}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    aria-disabled
-                    tabIndex={-1}
-                    tooltip="Trips (coming soon)"
-                  >
-                    <Compass />
-                    <span>Trips</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {pages.trips ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      aria-disabled
+                      tabIndex={-1}
+                      tooltip="Trips (coming soon)"
+                    >
+                      <Compass />
+                      <span>Trips</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : null}
                 {canReadGear || canLoanGear ? (
                   <SidebarMenuItem>
                     {/* Same Collapsible-inside-MenuItem pattern as the
@@ -510,89 +529,98 @@ function SidebarNav() {
                     </Collapsible>
                   </SidebarMenuItem>
                 ) : null}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    aria-disabled
-                    tabIndex={-1}
-                    tooltip="Elections (coming soon)"
-                  >
-                    <Vote />
-                    <span>Elections</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  {/*
-                   * Executive: workflow tools for the exec board
-                   * (meeting agendas + minutes, quarterly goals,
-                   * accountability tasks). Currently gated on
-                   * `isApproved` like the other placeholder items;
-                   * when these features ship, swap to a proper
-                   * `executive:read`-style permission so non-officer
-                   * members don't see the section.
-                   */}
-                  <Collapsible className="group/collapsible">
+                {pages.elections ? (
+                  <SidebarMenuItem>
                     <SidebarMenuButton
                       aria-disabled
                       tabIndex={-1}
-                      tooltip="Executive (coming soon)"
+                      tooltip="Elections (coming soon)"
                     >
-                      <Briefcase />
-                      <span>Executive</span>
+                      <Vote />
+                      <span>Elections</span>
                     </SidebarMenuButton>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuAction className="data-[state=open]:rotate-90">
-                        <ChevronRight />
-                        <span className="sr-only">Toggle sub-menu</span>
-                      </SidebarMenuAction>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Crown />
-                            <span>Board</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <CalendarClock />
-                            <span>Meetings</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Gavel />
-                            <span>Decisions</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Target />
-                            <span>Goals</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <ListChecks />
-                            <span>Tasks</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Wallet />
-                            <span>Budget</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                            <Handshake />
-                            <span>Handoff</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </SidebarMenuItem>
+                  </SidebarMenuItem>
+                ) : null}
+                {pages.executive ? (
+                  <SidebarMenuItem>
+                    {/*
+                     * Executive: workflow tools for the exec board
+                     * (meeting agendas + minutes, quarterly goals,
+                     * accountability tasks). Currently gated on
+                     * `isApproved` like the other placeholder items;
+                     * when these features ship, swap to a proper
+                     * `executive:read`-style permission so non-officer
+                     * members don't see the section.
+                     *
+                     * `pages.executive` covers the parent AND all seven
+                     * sub-items, since none of them is independently
+                     * reachable. Give the children their own flags when
+                     * they become real routes.
+                     */}
+                    <Collapsible className="group/collapsible">
+                      <SidebarMenuButton
+                        aria-disabled
+                        tabIndex={-1}
+                        tooltip="Executive (coming soon)"
+                      >
+                        <Briefcase />
+                        <span>Executive</span>
+                      </SidebarMenuButton>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuAction className="data-[state=open]:rotate-90">
+                          <ChevronRight />
+                          <span className="sr-only">Toggle sub-menu</span>
+                        </SidebarMenuAction>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Crown />
+                              <span>Board</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <CalendarClock />
+                              <span>Meetings</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Gavel />
+                              <span>Decisions</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Target />
+                              <span>Goals</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <ListChecks />
+                              <span>Tasks</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Wallet />
+                              <span>Budget</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                              <Handshake />
+                              <span>Handoff</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </SidebarMenuItem>
+                ) : null}
               </>
             ) : null}
           </SidebarMenu>
@@ -615,16 +643,18 @@ function SidebarUtilityNav() {
   // also see it via their `*:manage` permission (system_admin auto-grants
   // both via the principal bypass). Point the link at whichever surface is
   // actually enabled so it never lands on a switched-off /feedback.
-  const canWebsiteFeedback =
+  const canSiteFeedback =
     (hasPermission("feedback:submit") || hasPermission("feedback:manage")) &&
-    pages.feedback;
+    pages.feedback_site;
   const canClubFeedback =
     (hasPermission("club_feedback:submit") ||
       hasPermission("club_feedback:manage")) &&
     pages.feedback_club;
-  const canSubmitFeedback =
-    isApproved && (canWebsiteFeedback || canClubFeedback);
-  const feedbackTarget = canWebsiteFeedback ? "/feedback" : "/feedback/club";
+  const canSubmitFeedback = isApproved && (canSiteFeedback || canClubFeedback);
+  // Prefer club: it reaches the exec board and is the surface members are
+  // more likely to want, which is also why it's the first tab. Falls back to
+  // the website surface when the viewer can't reach club at all.
+  const feedbackTarget = canClubFeedback ? "/feedback/club" : "/feedback/site";
   const canViewAudit = hasPermission("audit:view");
   const canManageSettings = hasPermission("settings:manage");
   // The permission is still `roles:manage` — the page is named for the

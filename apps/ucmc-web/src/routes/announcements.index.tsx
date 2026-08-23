@@ -25,7 +25,7 @@ import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { requirePermission } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
 import type { AnnouncementSummary } from "#/features/announcements/server/announcements-fns";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requireFeatureFlag } from "#/features/settings/api/page-guards";
 
 export const Route = createFileRoute("/announcements/")({
   beforeLoad: async ({ context }) => {
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/announcements/")({
     // regardless of permission. Check the page flag first so the notFound
     // is uniform across permission states. The server actions also block
     // independently — this just keeps the URL from rendering anything.
-    await requirePageFlag(context.queryClient, "announcements");
+    await requireFeatureFlag(context.queryClient, "announcements");
     await requirePermission(context.queryClient, "announcements:read");
   },
   component: AnnouncementsPage,

@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { requirePermission } from "#/features/auth/guards";
 import { siteSettingsQueryOptions } from "#/features/settings/api/queries";
+import { PageFlagsPanel } from "#/features/settings/components/page-flags-panel";
 import { SettingRow } from "#/features/settings/components/setting-row";
 import type { SiteSettingsSnapshot } from "#/features/settings/server/settings-fns";
 import {
@@ -47,6 +48,12 @@ function SettingsPage() {
       {SETTING_CATEGORIES.map((category) => {
         const keys = grouped[category];
         if (keys.length === 0) return null;
+        // The `pages` category is ~40 homogeneous booleans with a section
+        // hierarchy — it gets a compact tree instead of one card per row.
+        // See `PageFlagsPanel` for why.
+        if (category === "pages") {
+          return <PageFlagsPanel key={category} entries={query.data} />;
+        }
         return (
           <CategorySection
             key={category}

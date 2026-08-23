@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
@@ -21,7 +21,17 @@ export const Route = createFileRoute("/feedback/_tabs/club")({
     const canSeeClub =
       principal.permissions.includes("club_feedback:submit") ||
       principal.permissions.includes("club_feedback:manage");
+    // Mirror of the site route's fallback: someone without club access who
+    // can see site feedback lands there instead of a dead end. Neither ->
+    // notFound, and the two can't ping-pong because each only redirects
+    // toward a surface the viewer can actually see.
     if (!canSeeClub) {
+      const canSite =
+        principal.permissions.includes("feedback:submit") ||
+        principal.permissions.includes("feedback:manage");
+      if (canSite) {
+        throw redirect({ to: "/feedback/site" });
+      }
       throw notFound();
     }
   },
