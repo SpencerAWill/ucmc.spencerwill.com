@@ -536,10 +536,10 @@ export const SETTINGS = {
     confirm:
       "This is the master switch for the entire Feedback area — both the website and club surfaces. Members will have no way to reach either form. Individual switches keep their values.",
   }),
-  "pages.feedback_website": z.boolean().default(true).register(registry, {
-    label: "Feedback · Website tab reachable",
+  "pages.feedback_site": z.boolean().default(true).register(registry, {
+    label: "Feedback · Site tab reachable",
     description:
-      "When off, the Feedback sidebar entry is hidden and /feedback returns notFound. To stop new submissions while leaving the page open for managers to triage, use “Accept website feedback submissions” under Features instead.",
+      "When off, the Site tab is hidden and /feedback/site returns notFound. To stop new submissions while leaving the page open for managers to triage, use “Accept site feedback submissions” under Features instead.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
@@ -685,9 +685,9 @@ export const SETTINGS = {
       "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
   }),
   "feedback.website_enabled": z.boolean().default(true).register(registry, {
-    label: "Accept website feedback submissions",
+    label: "Accept site feedback submissions",
     description:
-      "Pauses NEW website-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Website tab page switch under Pages, which 404s the page for everyone. The GitHub mirror still fires for legacy in-flight rows.",
+      "Pauses NEW site-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Site tab page switch under Pages, which 404s the page for everyone. The GitHub mirror still fires for legacy in-flight rows.",
     category: "features",
     flagKind: "ops",
     owner: "system_admin",

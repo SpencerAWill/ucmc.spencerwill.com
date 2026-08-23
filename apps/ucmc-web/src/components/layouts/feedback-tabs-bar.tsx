@@ -1,6 +1,6 @@
 /**
  * Tab bar rendered by the `/feedback/_tabs` pathless layout. Bridges the
- * `features/feedback` (website) and `features/club-feedback` (governance)
+ * `features/feedback` (site) and `features/club-feedback` (governance)
  * surfaces — lives outside both features so neither has to cross-import
  * the other.
  *
@@ -21,16 +21,17 @@ import type { ReactNode } from "react";
 
 import { useAuth } from "#/features/auth/api/use-auth";
 
-export type FeedbackTabId = "website" | "club";
+export type FeedbackTabId = "site" | "club";
 
 export function activeFeedbackTabFromPath(pathname: string): FeedbackTabId {
-  if (pathname.startsWith("/feedback/club")) return "club";
-  return "website";
+  // `/feedback` itself redirects, so only the two surface paths reach here.
+  // Club is the fallback because it's the default surface.
+  if (pathname.startsWith("/feedback/site")) return "site";
+  return "club";
 }
 
 const TAB_SUBTITLES: Record<FeedbackTabId, string> = {
-  website:
-    "Found a bug, have an idea for the site, or want to share something about how it works? Send it here.",
+  site: "Found a bug, have an idea for the site, or want to share something about how it works? Send it here.",
   club: "Have a suggestion, concern, or kudos for the exec board? This goes directly to club leadership — not website maintainers.",
 };
 
@@ -42,14 +43,14 @@ export function FeedbackTabsBar() {
   const { hasPermission } = useAuth();
   const pathname = useLocation({ select: (l) => l.pathname });
 
-  const canSeeWebsite =
+  const canSeeSite =
     hasPermission("feedback:submit") || hasPermission("feedback:manage");
   const canSeeClub =
     hasPermission("club_feedback:submit") ||
     hasPermission("club_feedback:manage");
 
   // If the viewer only has access to one tab the bar is just noise.
-  if (!(canSeeWebsite && canSeeClub)) {
+  if (!(canSeeSite && canSeeClub)) {
     return null;
   }
 
@@ -69,8 +70,8 @@ export function FeedbackTabsBar() {
       <TabLink to="/feedback/club" active={active === "club"}>
         Club
       </TabLink>
-      <TabLink to="/feedback" active={active === "website"}>
-        Website
+      <TabLink to="/feedback/site" active={active === "site"}>
+        Site
       </TabLink>
     </nav>
   );
@@ -81,7 +82,7 @@ function TabLink({
   active,
   children,
 }: {
-  to: "/feedback" | "/feedback/club";
+  to: "/feedback/site" | "/feedback/club";
   active: boolean;
   children: ReactNode;
 }) {

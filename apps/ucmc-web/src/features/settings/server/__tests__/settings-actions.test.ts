@@ -275,7 +275,7 @@ describe("getPublicFlagsAction", () => {
       "gear",
       "gear_inventory",
       "feedback",
-      "feedback_website",
+      "feedback_site",
       "my",
       "my_profile",
       "blog",
