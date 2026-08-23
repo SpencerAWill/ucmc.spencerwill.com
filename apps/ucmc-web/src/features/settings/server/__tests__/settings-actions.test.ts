@@ -273,7 +273,10 @@ describe("getPublicFlagsAction", () => {
       "members",
       "members_approved",
       "gear",
+      "gear_inventory",
       "feedback",
+      "feedback_website",
+      "my",
       "my_profile",
       "blog",
       "reports",
@@ -282,7 +285,39 @@ describe("getPublicFlagsAction", () => {
     }
     // Announcements is the exception — the feature isn't launched, so it
     // ships default OFF.
-    expect(flags.pages.announcements).toBe(false);
+    // Announcements is a FEATURE flag, not a page flag — it also gates
+    // the header bell and the server write actions, so it sits at the
+    // top level of the snapshot rather than in the pages map.
+    expect(flags.announcements).toBe(false);
+  });
+
+  it("cascades a section switch to its children in the public snapshot", async () => {
+    // The whole point of doing the cascade in the read action: the sidebar,
+    // the tab bars, and every route guard consume this map, so they all get
+    // the sectioned answer without asking about parents themselves.
+    await signInAsManager();
+    await updateSettingAction({ key: "pages.gear", value: false });
+    cookieJar.clear();
+    const flags = await getPublicFlagsAction();
+    expect(flags.pages.gear).toBe(false);
+    expect(flags.pages.gear_inventory).toBe(false);
+    expect(flags.pages.gear_loans).toBe(false);
+    // Two levels down — /gear/loans/$id sits under the loans desk.
+    expect(flags.pages.gear_loans_detail).toBe(false);
+    // The public Gear Cave is a separate root page, NOT part of /gear.
+    expect(flags.pages.gear_cave).toBe(true);
+  });
+
+  it("leaves a child's stored value intact when its section is off", async () => {
+    // /settings edits raw values; only the public snapshot cascades. If the
+    // cascade leaked into storage, switching the section back on would come
+    // back with the child silently off.
+    await signInAsManager();
+    await updateSettingAction({ key: "pages.my", value: false });
+    const raw = await readSetting("pages.my_profile");
+    expect(raw).toBe(true);
+    cookieJar.clear();
+    expect((await getPublicFlagsAction()).pages.my_profile).toBe(false);
   });
 
   it("reflects an overridden page flag", async () => {
@@ -391,11 +426,11 @@ describe("listSettingHistoryAction", () => {
     });
 
     // Two edits on a boolean setting → both audit rows carry value.
-    await updateSettingAction({ key: "pages.announcements", value: true });
-    await updateSettingAction({ key: "pages.announcements", value: false });
+    await updateSettingAction({ key: "features.announcements", value: true });
+    await updateSettingAction({ key: "features.announcements", value: false });
 
     const history = await listSettingHistoryAction({
-      key: "pages.announcements",
+      key: "features.announcements",
     });
     expect(history).toHaveLength(2);
     expect(history[0].booleanValue).toBe(false); // newest first

@@ -14,7 +14,7 @@ import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export const Route = createFileRoute("/feedback/_tabs/")({
-  staticData: { pageFlag: "feedback" },
+  staticData: { pageFlag: "feedback_website" },
   beforeLoad: async ({ context, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);

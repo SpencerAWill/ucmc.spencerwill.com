@@ -91,7 +91,7 @@ async function signInAsBareUser(email = "bare@example.com"): Promise<string> {
 // ── setup ──────────────────────────────────────────────────────────────
 
 /**
- * Override the `pages.announcements` kill switch. Default is OFF in
+ * Override the `features.announcements` kill switch. Default is OFF in
  * the registry, so existing tests (which assert auth gates) need this
  * on to reach the auth checks; the flag-off behavior gets its own
  * describe block below.
@@ -100,7 +100,7 @@ async function setAnnouncementsFlag(enabled: boolean): Promise<void> {
   await getDb()
     .insert(schema.siteSettings)
     .values({
-      key: "pages.announcements",
+      key: "features.announcements",
       valueJson: JSON.stringify(enabled),
     })
     .onConflictDoUpdate({

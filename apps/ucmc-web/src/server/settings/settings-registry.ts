@@ -22,15 +22,29 @@
 import { z } from "zod";
 
 // ── Categories: groups rendered as sections on /settings ────────────────
-// Categories double as section headings on /settings. The convention is
-// per-feature scoping (`announcements`, `gear`, etc. — one section per
-// feature that has any runtime config), with `contact` / `integrations` /
-// `appearance` / `legal` reserved for cross-cutting concerns that don't
-// belong to a single feature.
+// Categories double as section headings on /settings, and each one answers
+// a different question:
+//
+//   contact  — values the site displays (email, social URLs).
+//   pages    — *reachability*: is this page in the nav and does it resolve?
+//              Uniform meaning across ~43 booleans, which is what lets the
+//              route guards and the flags map be generic.
+//   features — *behaviour*: does this feature accept writes / render its
+//              affordances? These are NOT page flags. `announcements` lives
+//              here (not in `pages`) because it also gates the header bell
+//              and the server write actions, and the feedback switches live
+//              here because they pause new submissions while deliberately
+//              leaving the page reachable so managers can still triage.
+//
+// `integrations` / `appearance` / `legal` are reserved for cross-cutting
+// concerns that don't belong to a single feature.
+//
+// Keep the meanings honest: a boolean that does more than hide-and-404 a
+// page does not belong in `pages`, however page-shaped it looks.
 export const SETTING_CATEGORIES = [
   "contact",
   "pages",
-  "feedback",
+  "features",
   "integrations",
   "appearance",
   "legal",
@@ -40,7 +54,7 @@ export type SettingCategory = (typeof SETTING_CATEGORIES)[number];
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
   contact: "Contact",
   pages: "Pages",
-  feedback: "Feedback",
+  features: "Features",
   integrations: "Integrations",
   appearance: "Appearance",
   legal: "Legal",
@@ -363,24 +377,6 @@ export const SETTINGS = {
     createdAt: "2026-08-21",
   }),
 
-  // Kill switch for the in-progress announcements feature. Unlike the
-  // other page flags it defaults OFF (feature not yet launched) and also
-  // gates the header bell + the server write actions (defense-in-depth in
-  // announcements-actions.server.ts), not just page reachability. Lives in
-  // the `pages` category so it toggles from the same screen as every other
-  // page.
-  "pages.announcements": z.boolean().default(false).register(registry, {
-    label: "Announcements enabled",
-    description:
-      "Hides the announcement bell, sidebar entry, and /announcements route while off. Toggle on once the feature is ready.",
-    category: "pages",
-    flagKind: "release",
-    owner: "system_admin",
-    createdAt: "2026-05-13",
-    confirm:
-      "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
-  }),
-
   // Members surfaces. `pages.members` is the SECTION — a grouping node
   // with no page of its own; switching it off takes the whole /members
   // area with it, because every child declares it as `parent` and the
@@ -472,14 +468,30 @@ export const SETTINGS = {
   }),
 
   // Gear surfaces.
+  // `/gear` section. Like `members`, this is a grouping node with no page
+  // of its own — the inventory list it used to gate now has its own
+  // `pages.gear_inventory`. NOTE: `pages.gear_cave` is the separate public
+  // `/gear-cave` page and is deliberately NOT a child of this.
   "pages.gear": z.boolean().default(true).register(registry, {
+    label: "Gear section enabled",
+    description:
+      "Master switch for the whole /gear area. When off, the sidebar entry disappears and every page under /gear returns notFound, whatever the individual switches say. Does not affect the public Gear Cave page.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-22",
+    confirm:
+      "This is the master switch for the entire Gear area — the inventory list, item detail pages, and the loans desk. Individual switches keep their values and take effect again when this is switched back on.",
+  }),
+  "pages.gear_inventory": z.boolean().default(true).register(registry, {
     label: "Gear inventory enabled",
     description:
-      "When off, the Gear sidebar entry is hidden and the /gear inventory returns notFound.",
+      "When off, the /gear inventory list returns notFound. Detail, loans, and the rest of the section stay reachable — use the section switch to take down all of /gear.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "gear",
   }),
   "pages.gear_detail": z.boolean().default(true).register(registry, {
     label: "Gear detail page enabled",
@@ -488,6 +500,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "gear",
   }),
   "pages.gear_loans": z.boolean().default(true).register(registry, {
     label: "Gear loans desk enabled",
@@ -497,6 +510,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "gear",
   }),
   "pages.gear_loans_detail": z.boolean().default(true).register(registry, {
     label: "Gear loan detail page enabled",
@@ -506,29 +520,62 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "gear_loans",
   }),
 
   // Feedback surfaces. These gate page reachability; the separate
   // `feedback.*_enabled` flags gate whether new submissions are accepted.
   "pages.feedback": z.boolean().default(true).register(registry, {
-    label: "Website feedback page enabled",
+    label: "Feedback section enabled",
     description:
-      "When off, the Feedback sidebar entry is hidden and /feedback returns notFound. Separate from the submission kill switch below.",
+      "Master switch for the whole /feedback area. When off, the sidebar entry disappears and both the website and club surfaces return notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-22",
+    confirm:
+      "This is the master switch for the entire Feedback area — both the website and club surfaces. Members will have no way to reach either form. Individual switches keep their values.",
+  }),
+  "pages.feedback_website": z.boolean().default(true).register(registry, {
+    label: "Feedback · Website tab reachable",
+    description:
+      "When off, the Feedback sidebar entry is hidden and /feedback returns notFound. To stop new submissions while leaving the page open for managers to triage, use “Accept website feedback submissions” under Features instead.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "feedback",
   }),
   "pages.feedback_club": z.boolean().default(true).register(registry, {
-    label: "Club feedback page enabled",
+    label: "Club feedback page reachable",
     description:
-      "When off, the club-feedback tab is hidden and /feedback/club returns notFound. Separate from the submission kill switch below.",
+      "When off, the club-feedback tab is hidden and /feedback/club returns notFound. To stop new submissions while leaving the page open for managers to triage, use “Accept club feedback submissions” under Features instead.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "feedback",
   }),
 
+  // `/my` section — every member's own account surface. Purely additive:
+  // there was no `pages.my` before, so nothing is renamed here.
+  //
+  // The `confirm` is deliberately blunt. Unlike the other sections this one
+  // gates *self-service*: with it off, members can't reach their own
+  // profile, emergency contacts, waiver status, or passkeys, and the
+  // waiver guard's redirect to /my/waiver 404s. That's a support incident,
+  // not a feature toggle.
+  "pages.my": z.boolean().default(true).register(registry, {
+    label: "My Account section enabled",
+    description:
+      "Master switch for the whole /my area — every member's own profile, details, contacts, waiver, security, preferences, and gear. When off, all of them return notFound regardless of their individual switches.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-08-22",
+    confirm:
+      "This switches off EVERY member's own account area — profile, contact details, emergency contacts, waiver status, passkeys, and preferences. Members will have no way to view or correct their own data, and anyone sent to /my/waiver by the waiver guard will get a 404 instead. Only do this during a deliberate maintenance window.",
+  }),
   // Personal / user-menu pages. Each is a tab on the `/my/_tabs`
   // account layout; `my_profile` additionally gates the user-menu link.
   "pages.my_profile": z.boolean().default(true).register(registry, {
@@ -539,6 +586,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my",
   }),
   "pages.my_details": z.boolean().default(true).register(registry, {
     label: "My Account · Details tab enabled",
@@ -548,6 +596,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my",
   }),
   "pages.my_contacts": z.boolean().default(true).register(registry, {
     label: "My Account · Contacts tab enabled",
@@ -557,6 +606,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my",
   }),
   "pages.my_waiver": z.boolean().default(true).register(registry, {
     label: "My Account · Waiver tab enabled",
@@ -566,6 +616,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my",
   }),
   "pages.my_security": z.boolean().default(true).register(registry, {
     label: "My Account · Security tab enabled",
@@ -575,6 +626,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my",
   }),
   "pages.my_preferences": z.boolean().default(true).register(registry, {
     label: "My Account · Preferences tab enabled",
@@ -584,6 +636,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my",
   }),
   "pages.my_gear": z.boolean().default(true).register(registry, {
     label: "My Gear enabled",
@@ -593,6 +646,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my",
   }),
   "pages.my_gear_cart": z.boolean().default(true).register(registry, {
     label: "My Gear · Cart enabled",
@@ -602,6 +656,7 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my_gear",
   }),
 
   // Submission gates for the two feedback surfaces. Each flag controls
@@ -611,11 +666,29 @@ export const SETTINGS = {
   // fresh DB / new deploy keeps both forms open. Exposed publicly via
   // `getPublicFlagsFn` so the route guards and tab bar can decide
   // synchronously whether to render the submit UI for non-managers.
+  // Kill switch for the in-progress announcements feature. Defaults OFF
+  // (not yet launched). This is a FEATURE flag, not a page flag: besides
+  // hiding /announcements it also hides the header bell and rejects the
+  // server write actions (defense-in-depth in
+  // announcements-actions.server.ts). It lived in `pages` until the
+  // `features` category existed, which made it look like every other
+  // reachability switch — it never was one.
+  "features.announcements": z.boolean().default(false).register(registry, {
+    label: "Announcements enabled",
+    description:
+      "Hides the announcement bell, sidebar entry, and /announcements route while off. Toggle on once the feature is ready.",
+    category: "features",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-05-13",
+    confirm:
+      "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
+  }),
   "feedback.website_enabled": z.boolean().default(true).register(registry, {
     label: "Accept website feedback submissions",
     description:
-      "When off, the website-feedback submit form and endpoint are disabled. Managers still see existing submissions in the triage view, and the GitHub mirror still fires for legacy in-flight rows.",
-    category: "feedback",
+      "Pauses NEW website-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Website tab page switch under Pages, which 404s the page for everyone. The GitHub mirror still fires for legacy in-flight rows.",
+    category: "features",
     flagKind: "ops",
     owner: "system_admin",
     createdAt: "2026-05-16",
@@ -623,8 +696,8 @@ export const SETTINGS = {
   "feedback.club_enabled": z.boolean().default(true).register(registry, {
     label: "Accept club feedback submissions",
     description:
-      "When off, the club-feedback submit form and endpoint are disabled. Managers still see existing submissions in the triage view.",
-    category: "feedback",
+      "Pauses NEW club-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Club feedback page switch under Pages, which 404s the page for everyone.",
+    category: "features",
     flagKind: "ops",
     owner: "system_admin",
     createdAt: "2026-05-16",
@@ -733,7 +806,7 @@ export function keysByCategory(): Record<SettingCategory, SettingKey[]> {
   const out: Record<SettingCategory, SettingKey[]> = {
     contact: [],
     pages: [],
-    feedback: [],
+    features: [],
     integrations: [],
     appearance: [],
     legal: [],

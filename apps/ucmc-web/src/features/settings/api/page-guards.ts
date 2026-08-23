@@ -19,7 +19,13 @@ import { notFound } from "@tanstack/react-router";
 import { requireViewPermission } from "#/features/auth/guards";
 import type { Principal } from "#/server/auth/principal.server";
 import type { PageFlagKey } from "#/server/settings/settings-registry";
+import type { PublicFlags } from "#/features/settings/server/settings-fns";
 import { publicFlagsQueryOptions } from "./queries";
+
+/** The boolean, non-page fields of the public flags snapshot. */
+type FeatureFlagField = {
+  [K in keyof PublicFlags]: PublicFlags[K] extends boolean ? K : never;
+}[keyof PublicFlags];
 
 /**
  * Type a route's `staticData.pageFlag` so a route can declare which page
@@ -106,6 +112,27 @@ export async function requireEnabledPages(
     if (key && !flags.pages[key]) {
       throw notFound();
     }
+  }
+}
+
+/**
+ * Throw `notFound()` when a *feature* flag is off.
+ *
+ * The sibling of {@link requirePageFlag} for the `features.*` category.
+ * Kept separate rather than widening `requirePageFlag`, because the two
+ * categories mean different things and the type should say so: a page flag
+ * only ever hides-and-404s a page, while a feature flag also governs
+ * behaviour (the header bell, server write actions). Feature flags are also
+ * flat — no section cascade — so they read the snapshot's top-level fields
+ * rather than its `pages` map.
+ */
+export async function requireFeatureFlag(
+  queryClient: QueryClient,
+  feature: FeatureFlagField,
+): Promise<void> {
+  const flags = await queryClient.ensureQueryData(publicFlagsQueryOptions());
+  if (!flags[feature]) {
+    throw notFound();
   }
 }
 

@@ -219,7 +219,7 @@ function SidebarNav() {
   // render matches the server. Route-less "coming soon" placeholders
   // (Blog, Volunteer, etc.) have only their flag as the gate.
   const canReadAnnouncements =
-    hasPermission("announcements:read") && pages.announcements;
+    hasPermission("announcements:read") && flags.announcements;
   const canVerifyWaivers =
     hasPermission("waivers:verify") && pages.members_waivers;
   // `pages.members` is the section switch, which is the right gate for
@@ -227,6 +227,10 @@ function SidebarNav() {
   // values, switching the section off has already zeroed every
   // `members_*` child, so the sub-items and tabs vanish with it.
   const canReadMembers = isApproved && pages.members;
+  // `pages.gear` is the section switch — the right gate for the sidebar
+  // entry. The flags map carries effective values, so switching the
+  // section off has already zeroed `gear_loans`, taking the Loans
+  // sub-item with it.
   const canReadGear = hasPermission("gear:read") && pages.gear;
   const canLoanGear = hasPermission("gear:loan") && pages.gear_loans;
   const canViewHistory = hasPermission("history:view") && pages.history;
@@ -632,7 +636,7 @@ function SidebarUtilityNav() {
   // actually enabled so it never lands on a switched-off /feedback.
   const canWebsiteFeedback =
     (hasPermission("feedback:submit") || hasPermission("feedback:manage")) &&
-    pages.feedback;
+    pages.feedback_website;
   const canClubFeedback =
     (hasPermission("club_feedback:submit") ||
       hasPermission("club_feedback:manage")) &&

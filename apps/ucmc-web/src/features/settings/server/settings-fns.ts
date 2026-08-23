@@ -87,6 +87,10 @@ export type PublicFlags = {
   // each feedback surface accepts NEW submissions.
   websiteFeedback: boolean;
   clubFeedback: boolean;
+  /** `features.announcements`. Not in `pages` — besides page reachability
+   *  it gates the header bell and the server write actions, so it can't
+   *  share the uniform "hide and 404" meaning the page flags have. */
+  announcements: boolean;
   // Per-page kill switches, keyed by the `pages.*` suffix. Each gates both
   // the page's route (via `requirePageFlag`) and its nav/tab entry. See
   // the registry's `pages` category for the full set.

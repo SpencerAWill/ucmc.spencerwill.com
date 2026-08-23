@@ -428,6 +428,20 @@
       "when": 1779477596937,
       "tag": "0060_members_section_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "6",
+      "when": 1779477596938,
+      "tag": "0061_gear_feedback_sections",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1779477596939,
+      "tag": "0062_features_category",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { ChevronRight, History, RotateCcw, Search } from "lucide-react";
+import { ChevronRight, Info, RotateCcw, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Badge } from "#/components/ui/badge";
@@ -9,21 +9,25 @@ import {
   CollapsibleTrigger,
 } from "#/components/ui/collapsible";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "#/components/ui/hover-card";
+import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from "#/components/ui/input-group";
 import { Label } from "#/components/ui/label";
 import { Switch } from "#/components/ui/switch";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "#/components/ui/tooltip";
 import { useSettingSaver } from "#/features/settings/api/use-setting-saver";
 import { SettingConfirmDialog } from "#/features/settings/components/setting-confirm-dialog";
 import { SettingHistoryDialog } from "#/features/settings/components/setting-history-dialog";
-import type { SiteSettingsSnapshot } from "#/features/settings/server/settings-fns";
+import type {
+  SiteSettingEntry,
+  SiteSettingsSnapshot,
+} from "#/features/settings/server/settings-fns";
+import { formatRelative } from "#/lib/date-format";
 import {
   getMeta,
   isDefault,
@@ -36,31 +40,33 @@ import {
 import type {
   PageFlagKey,
   PageSettingKey,
+  SettingMeta,
 } from "#/server/settings/settings-registry";
 
 /**
- * The `pages` category, rendered as a compact tree instead of one bordered
- * card per setting.
+ * The `pages` category, rendered as a single-column tree instead of one
+ * bordered card per setting.
  *
- * There are ~40 page flags. The generic `SettingRow` is a ~80px card with a
- * description, lifecycle badges, and a footer, which is right for a dozen
- * heterogeneous settings and unusable for forty homogeneous booleans — it's
- * several screens of scrolling to find one switch. These rows are single-line
- * and the sections collapse, so the whole category fits in roughly one screen.
+ * There are ~45 page flags. The generic `SettingRow` is an ~80px card with a
+ * description, lifecycle badges, and a footer — right for a dozen
+ * heterogeneous settings, unusable for forty-odd homogeneous booleans, where
+ * finding one switch meant several screens of scrolling.
  *
- * Three things do the compacting:
- *   - Sections (a flag with `parent` children) collapse to one summary row.
- *   - Standalone pages flow into a multi-column grid rather than a tall list.
- *   - The filter box narrows ~40 rows to the handful you came for.
+ * Structure mirrors the URL tree, because that is what the flags describe:
+ * `/members`, `/gear`, `/feedback`, and `/my` are sections whose children
+ * collapse underneath them, nested to whatever depth the registry declares
+ * (`/gear/loans/$id` under `/gear/loans` under `/gear`). Every page is one
+ * line, so a collapsed tree is short enough to take in at once.
  *
- * Switches sit on the LEFT so they align into a scannable column, the way a
- * permission checklist reads.
+ * Deliberately ONE column, not a grid: a page's meaning comes from its
+ * position in the tree, and columns break the parent-to-child reading order
+ * that carries it.
  *
- * Values shown here are RAW, straight from `listSiteSettingsFn` — never the
+ * Values here are RAW, straight from `listSiteSettingsFn` — never the
  * cascaded values from `effectivePageFlags`. A child switched on under a
- * switched-off section must keep showing as on, or switching the section back
- * on would look like it had lost the child's setting. The "off with section"
- * hint carries that distinction instead.
+ * switched-off section must keep showing as on, or switching the section
+ * back on would look like it had lost the child's setting. The struck-through
+ * treatment carries "off anyway" instead.
  */
 export function PageFlagsPanel({
   entries,
@@ -68,60 +74,34 @@ export function PageFlagsPanel({
   entries: SiteSettingsSnapshot | undefined;
 }) {
   const [filter, setFilter] = useState("");
-
-  // Built from the registry, so a new page flag appears here with no edit
-  // to this file — same contract as the rest of the flag plumbing.
-  const { sections, standalone } = useMemo(() => {
-    const childrenOf = new Map<PageFlagKey, PageFlagKey[]>();
-    const roots: PageFlagKey[] = [];
-    for (const settingKey of PAGE_SETTING_KEYS) {
-      const key = pageFlagKeyOf(settingKey);
-      const parent = pageParentOf(key);
-      if (parent) {
-        const list = childrenOf.get(parent) ?? [];
-        list.push(key);
-        childrenOf.set(parent, list);
-      } else {
-        roots.push(key);
-      }
-    }
-    return {
-      sections: roots
-        .filter((key) => childrenOf.has(key))
-        .map((key) => ({ key, children: childrenOf.get(key) ?? [] })),
-      standalone: roots.filter((key) => !childrenOf.has(key)),
-    };
-  }, []);
+  const tree = usePageFlagTree();
 
   const needle = filter.trim().toLowerCase();
-  const matches = (key: PageFlagKey) =>
-    needle.length === 0 ||
-    key.toLowerCase().includes(needle) ||
-    getMeta(settingKeyOf(key)).label.toLowerCase().includes(needle);
-
-  const visibleSections = sections
-    .map((section) => ({
-      ...section,
-      // A section stays visible when it matches itself, showing all its
-      // children — searching "members" should surface the whole area.
-      children: matches(section.key)
-        ? section.children
-        : section.children.filter(matches),
-    }))
-    .filter((section) => matches(section.key) || section.children.length > 0);
-  const visibleStandalone = standalone.filter(matches);
+  const visible = useMemo(() => {
+    if (needle.length === 0) {
+      return tree;
+    }
+    return tree
+      .map((node) => pruneToMatches(node, needle))
+      .filter((node): node is PageNode => node !== null);
+  }, [tree, needle]);
 
   const offCount = entries
-    ? PAGE_SETTING_KEYS.filter((k) => entries[k].value === false).length
+    ? PAGE_SETTING_KEYS.filter((key) => entries[key].value === false).length
     : 0;
+  // Pages that are on themselves but dark because an ancestor is off. Worth
+  // stating separately: the raw off-count alone makes a switched-off section
+  // look like only one page is hidden.
+  const inheritedOff = entries ? countInheritedOff(entries) : 0;
 
   return (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <h2 className="text-lg font-semibold">Pages</h2>
         <p className="text-xs text-muted-foreground">
           {PAGE_SETTING_KEYS.length} pages
           {offCount > 0 ? ` · ${offCount} off` : null}
+          {inheritedOff > 0 ? ` · ${inheritedOff} off with a section` : null}
         </p>
         <InputGroup className="ml-auto w-full sm:w-56">
           <InputGroupAddon>
@@ -138,125 +118,232 @@ export function PageFlagsPanel({
 
       <p className="text-xs text-muted-foreground">
         Switching a page off hides it from the nav and makes it return 404 for
-        everyone, whatever their permissions. A section switch also takes down
-        every page under it.
+        everyone, whatever their permissions. A section takes down every page
+        under it. Hover or focus the info button on any row for its description
+        and history.
       </p>
 
       {entries === undefined ? (
-        <div className="space-y-1">
-          {Array.from({ length: 8 }, (_, i) => (
-            <div key={i} className="h-8 animate-pulse rounded-md bg-muted/40" />
+        <div className="space-y-1 rounded-md border p-2">
+          {Array.from({ length: 10 }, (_, i) => (
+            <div key={i} className="h-7 animate-pulse rounded bg-muted/40" />
           ))}
         </div>
+      ) : visible.length === 0 ? (
+        <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+          No pages match “{filter}”.
+        </p>
       ) : (
-        <div className="space-y-2">
-          {visibleSections.map((section) => (
-            <SectionGroup
-              key={section.key}
-              sectionKey={section.key}
-              childKeys={section.children}
+        <div className="rounded-md border p-1">
+          {visible.map((node) => (
+            <PageNodeRow
+              key={node.key}
+              node={node}
               entries={entries}
-              defaultOpen={needle.length > 0}
+              depth={0}
+              ancestorOff={false}
+              forceOpen={needle.length > 0}
             />
           ))}
-
-          {visibleStandalone.length > 0 ? (
-            <div className="grid gap-x-4 gap-y-0.5 rounded-md border p-2 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleStandalone.map((key) => (
-                <FlagRow key={key} flagKey={key} entries={entries} />
-              ))}
-            </div>
-          ) : null}
-
-          {visibleSections.length === 0 && visibleStandalone.length === 0 ? (
-            <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-              No pages match “{filter}”.
-            </p>
-          ) : null}
         </div>
       )}
     </section>
   );
 }
 
-/** One collapsible section: the master switch plus its child pages. */
-function SectionGroup({
-  sectionKey,
-  childKeys,
+// ── tree shape ──────────────────────────────────────────────────────────
+
+interface PageNode {
+  key: PageFlagKey;
+  children: PageNode[];
+}
+
+/**
+ * Build the flag tree from declared `parent` metadata. Derived from
+ * `PAGE_SETTING_KEYS`, so a new page appears here with no edit to this file
+ * — the same contract the rest of the flag plumbing has.
+ */
+function usePageFlagTree(): PageNode[] {
+  return useMemo(() => {
+    const nodes = new Map<PageFlagKey, PageNode>();
+    for (const settingKey of PAGE_SETTING_KEYS) {
+      const key = pageFlagKeyOf(settingKey);
+      nodes.set(key, { key, children: [] });
+    }
+    const roots: PageNode[] = [];
+    for (const node of nodes.values()) {
+      const parent = pageParentOf(node.key);
+      const parentNode = parent ? nodes.get(parent) : undefined;
+      if (parentNode) {
+        parentNode.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+    // Sections first, then standalone pages. Registry order is preserved
+    // within each group, so related pages stay adjacent.
+    return [
+      ...roots.filter((node) => node.children.length > 0),
+      ...roots.filter((node) => node.children.length === 0),
+    ];
+  }, []);
+}
+
+/** Keep a node when it matches, or when any descendant does. */
+function pruneToMatches(node: PageNode, needle: string): PageNode | null {
+  const self = matchesNeedle(node.key, needle);
+  // A matching section shows all its children — filtering "gear" should
+  // surface the whole area, not only the row whose label says "Gear".
+  const children = self
+    ? node.children
+    : node.children
+        .map((child) => pruneToMatches(child, needle))
+        .filter((child): child is PageNode => child !== null);
+  if (!self && children.length === 0) {
+    return null;
+  }
+  return { key: node.key, children };
+}
+
+function matchesNeedle(key: PageFlagKey, needle: string): boolean {
+  return (
+    key.toLowerCase().includes(needle) ||
+    getMeta(settingKeyOf(key)).label.toLowerCase().includes(needle)
+  );
+}
+
+function countInheritedOff(entries: SiteSettingsSnapshot): number {
+  return PAGE_SETTING_KEYS.filter((settingKey) => {
+    if (entries[settingKey].value === false) {
+      return false;
+    }
+    for (
+      let ancestor = pageParentOf(pageFlagKeyOf(settingKey));
+      ancestor;
+      ancestor = pageParentOf(ancestor)
+    ) {
+      if (entries[settingKeyOf(ancestor)].value === false) {
+        return true;
+      }
+    }
+    return false;
+  }).length;
+}
+
+// ── rows ────────────────────────────────────────────────────────────────
+
+function PageNodeRow({
+  node,
   entries,
-  defaultOpen,
+  depth,
+  ancestorOff,
+  forceOpen,
 }: {
-  sectionKey: PageFlagKey;
-  childKeys: PageFlagKey[];
+  node: PageNode;
   entries: SiteSettingsSnapshot;
-  defaultOpen: boolean;
+  depth: number;
+  ancestorOff: boolean;
+  forceOpen: boolean;
 }) {
-  const sectionOn = entries[settingKeyOf(sectionKey)].value !== false;
-  const childrenOff = childKeys.filter(
-    (key) => entries[settingKeyOf(key)].value === false,
-  ).length;
+  const isSection = node.children.length > 0;
+  const own = entries[settingKeyOf(node.key)].value === true;
+
+  const row = (
+    <FlagRow
+      flagKey={node.key}
+      entries={entries}
+      depth={depth}
+      isSection={isSection}
+      offAnyway={ancestorOff}
+      trailing={
+        isSection ? <SubtreeSummary node={node} entries={entries} /> : null
+      }
+    />
+  );
+
+  if (!isSection) {
+    return row;
+  }
 
   return (
-    <Collapsible
-      defaultOpen={defaultOpen}
-      className="group/section rounded-md border"
-    >
-      <div className="flex items-center gap-2 px-2 py-1.5">
-        <FlagRow flagKey={sectionKey} entries={entries} emphasize />
-        <div className="ml-auto flex items-center gap-1.5">
-          <span className="text-[11px] text-muted-foreground">
-            {childKeys.length} pages
-            {childrenOff > 0 ? ` · ${childrenOff} off` : null}
-          </span>
-          <CollapsibleTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-6"
-              aria-label={`Show pages in ${getMeta(settingKeyOf(sectionKey)).label}`}
-            >
-              <ChevronRight className="size-3.5 transition-transform group-data-[state=open]/section:rotate-90" />
-            </Button>
-          </CollapsibleTrigger>
-        </div>
+    <Collapsible defaultOpen={forceOpen} className="group/section">
+      <div className="flex items-center">
+        <div className="min-w-0 flex-1">{row}</div>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="mr-1 size-6 shrink-0"
+            aria-label={`Show pages in ${getMeta(settingKeyOf(node.key)).label}`}
+          >
+            <ChevronRight className="size-3.5 transition-transform group-data-[state=open]/section:rotate-90" />
+          </Button>
+        </CollapsibleTrigger>
       </div>
       <CollapsibleContent>
-        {/* Indent + rule so the parent relationship is visible without
-            drawing an actual tree. */}
-        <div className="ml-6 space-y-0.5 border-l pb-1.5 pl-3">
-          {childKeys.map((key) => (
-            <FlagRow
-              key={key}
-              flagKey={key}
-              entries={entries}
-              sectionOff={!sectionOn}
-              sectionLabel={getMeta(settingKeyOf(sectionKey)).label}
-            />
-          ))}
-        </div>
+        {node.children.map((child) => (
+          <PageNodeRow
+            key={child.key}
+            node={child}
+            entries={entries}
+            depth={depth + 1}
+            // A child is dark when any ancestor is off — this node included.
+            ancestorOff={ancestorOff || !own}
+            forceOpen={forceOpen}
+          />
+        ))}
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
+/** "7 pages · 2 off" on a section header. Counts the whole subtree. */
+function SubtreeSummary({
+  node,
+  entries,
+}: {
+  node: PageNode;
+  entries: SiteSettingsSnapshot;
+}) {
+  const descendants: PageFlagKey[] = [];
+  const walk = (current: PageNode) => {
+    for (const child of current.children) {
+      descendants.push(child.key);
+      walk(child);
+    }
+  };
+  walk(node);
+  const off = descendants.filter(
+    (key) => entries[settingKeyOf(key)].value === false,
+  ).length;
+  return (
+    <span className="shrink-0 text-[11px] whitespace-nowrap text-muted-foreground">
+      {descendants.length} {descendants.length === 1 ? "page" : "pages"}
+      {off > 0 ? ` · ${off} off` : null}
+    </span>
+  );
+}
+
 /**
- * One page's switch. Single line by construction: the description moves
- * into a tooltip on the label, and history / reset are icon buttons that
- * only appear on hover or focus.
+ * One page's switch. Single line by construction: the description and every
+ * other scrap of registry metadata move into the info popover, and reset only
+ * appears once the value differs from the default.
  */
 function FlagRow({
   flagKey,
   entries,
-  emphasize = false,
-  sectionOff = false,
-  sectionLabel,
+  depth,
+  isSection,
+  offAnyway,
+  trailing,
 }: {
   flagKey: PageFlagKey;
   entries: SiteSettingsSnapshot;
-  emphasize?: boolean;
-  sectionOff?: boolean;
-  sectionLabel?: string;
+  depth: number;
+  isSection: boolean;
+  offAnyway: boolean;
+  trailing: React.ReactNode;
 }) {
   const settingKey = settingKeyOf(flagKey);
   const meta = getMeta(settingKey);
@@ -270,79 +357,66 @@ function FlagRow({
   const defaultValue = SETTINGS[settingKey].parse(undefined);
 
   return (
-    <div className="group/row flex min-w-0 items-center gap-2 py-0.5">
+    <div
+      className="group/row flex min-w-0 items-center gap-2 rounded py-1 pr-1 hover:bg-muted/40"
+      // Indent by nesting depth. Inline because depth is data-driven, and
+      // Tailwind can't purge arbitrary values out of a computed class string.
+      style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }}
+    >
       <Switch
         // Renders the canonical value, never the proposal — a `confirm`-gated
         // switch must not appear flipped before the user confirms.
         checked={value}
         disabled={saver.isPending}
         aria-label={meta.label}
-        onCheckedChange={(checked) => {
-          saver.requestSave(checked);
-        }}
+        onCheckedChange={(checked) => saver.requestSave(checked)}
       />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Label
-            className={[
-              "min-w-0 flex-1 cursor-default truncate text-sm font-normal",
-              emphasize ? "font-medium" : "",
-              // Dimmed, not disabled: the raw value stays editable so you
-              // can set a child up before switching its section back on.
-              sectionOff ? "text-muted-foreground line-through" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {compactLabel(meta.label)}
-          </Label>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-xs">
-          {meta.description}
-          {sectionOff && sectionLabel ? (
-            <span className="mt-1 block font-medium">
-              Currently off anyway — “{sectionLabel}” is switched off.
-            </span>
-          ) : null}
-        </TooltipContent>
-      </Tooltip>
+      <Label
+        className={[
+          "min-w-0 flex-1 cursor-default truncate text-sm",
+          isSection ? "font-medium" : "font-normal",
+          // Dimmed, not disabled: the raw value stays editable so a child can
+          // be set up before its section comes back on.
+          offAnyway ? "text-muted-foreground line-through" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {compactLabel(meta.label)}
+      </Label>
+
+      <FlagInfo
+        flagKey={flagKey}
+        meta={meta}
+        entry={entry}
+        defaultValue={defaultValue}
+        isCustomized={isCustomized}
+        stale={stale}
+        offAnyway={offAnyway}
+        onOpenHistory={() => setHistoryOpen(true)}
+      />
 
       {stale ? (
         <Badge variant="destructive" className="shrink-0 text-[10px]">
           Stale
         </Badge>
       ) : null}
-      {isCustomized ? (
-        <Badge variant="secondary" className="shrink-0 text-[10px]">
-          Custom
-        </Badge>
-      ) : null}
 
-      <div className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100">
-        {isCustomized ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6"
-            aria-label={`Reset ${meta.label} to default`}
-            disabled={saver.isPending}
-            onClick={() => saver.requestSave(defaultValue)}
-          >
-            <RotateCcw className="size-3" />
-          </Button>
-        ) : null}
+      {isCustomized ? (
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="size-6"
-          aria-label={`Edit history for ${meta.label}`}
-          onClick={() => setHistoryOpen(true)}
+          className="size-6 shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100"
+          aria-label={`Reset ${meta.label} to default`}
+          disabled={saver.isPending}
+          onClick={() => saver.requestSave(defaultValue)}
         >
-          <History className="size-3" />
+          <RotateCcw className="size-3" />
         </Button>
-      </div>
+      ) : null}
+
+      {trailing}
 
       {saver.error ? (
         <span className="shrink-0 text-[11px] text-destructive">
@@ -367,19 +441,147 @@ function FlagRow({
   );
 }
 
+/**
+ * The info popover: everything the compact row can't show inline.
+ *
+ * A HoverCard rather than a Tooltip because the content is structured (a
+ * definition list plus a button), and a tooltip is the wrong role for
+ * anything interactive. The trigger is a real button so it's keyboard- and
+ * touch-reachable — HoverCard opens on focus as well as hover, and a bare
+ * icon would leave this metadata unreachable without a mouse.
+ */
+function FlagInfo({
+  flagKey,
+  meta,
+  entry,
+  defaultValue,
+  isCustomized,
+  stale,
+  offAnyway,
+  onOpenHistory,
+}: {
+  flagKey: PageFlagKey;
+  meta: SettingMeta;
+  entry: SiteSettingEntry<PageSettingKey>;
+  defaultValue: boolean;
+  isCustomized: boolean;
+  stale: boolean;
+  offAnyway: boolean;
+  onOpenHistory: () => void;
+}) {
+  const parent = pageParentOf(flagKey);
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-6 shrink-0 text-muted-foreground"
+          aria-label={`About ${meta.label}`}
+        >
+          <Info className="size-3.5" />
+        </Button>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="w-80 space-y-2 text-xs">
+        <div className="space-y-1">
+          <p className="text-sm leading-tight font-medium">{meta.label}</p>
+          <code className="text-[11px] text-muted-foreground">
+            pages.{flagKey}
+          </code>
+        </div>
+        <p className="text-muted-foreground">{meta.description}</p>
+
+        {offAnyway && parent ? (
+          <p className="rounded border border-dashed px-2 py-1.5 font-medium">
+            Off right now regardless: “
+            {compactLabel(getMeta(settingKeyOf(parent)).label)}” is switched
+            off. This switch keeps its value and applies again when the section
+            comes back on.
+          </p>
+        ) : null}
+
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-muted-foreground">
+          <dt>Default</dt>
+          <dd className="text-foreground">{defaultValue ? "On" : "Off"}</dd>
+          {isCustomized ? (
+            <>
+              <dt>Now</dt>
+              <dd className="text-foreground">Changed from the default</dd>
+            </>
+          ) : null}
+          {parent ? (
+            <>
+              <dt>Section</dt>
+              <dd className="text-foreground">
+                {compactLabel(getMeta(settingKeyOf(parent)).label)}
+              </dd>
+            </>
+          ) : null}
+          {meta.flagKind ? (
+            <>
+              <dt>Kind</dt>
+              <dd className="text-foreground uppercase">{meta.flagKind}</dd>
+            </>
+          ) : null}
+          {meta.owner ? (
+            <>
+              <dt>Owner</dt>
+              <dd className="text-foreground">{meta.owner}</dd>
+            </>
+          ) : null}
+          {meta.createdAt ? (
+            <>
+              <dt>Added</dt>
+              <dd className="text-foreground">{meta.createdAt}</dd>
+            </>
+          ) : null}
+          {meta.expiresAt ? (
+            <>
+              <dt>Review by</dt>
+              <dd className={stale ? "text-destructive" : "text-foreground"}>
+                {meta.expiresAt}
+                {stale ? " — overdue" : null}
+              </dd>
+            </>
+          ) : null}
+          {entry.updatedAtMs !== null ? (
+            <>
+              <dt>Edited</dt>
+              <dd className="text-foreground">
+                {formatRelative(
+                  Temporal.Instant.fromEpochMilliseconds(entry.updatedAtMs),
+                )}{" "}
+                by {entry.updatedByName ?? "an officer"}
+              </dd>
+            </>
+          ) : null}
+        </dl>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 w-full text-xs"
+          onClick={onOpenHistory}
+        >
+          Edit history
+        </Button>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
 function settingKeyOf(key: PageFlagKey): PageSettingKey {
   return `pages.${key}` as PageSettingKey;
 }
 
 /**
- * Registry labels are written to stand alone in the generic row ("Members ·
- * Pending tab enabled"). In this panel the section header and the "Pages"
- * heading already supply that context, so the redundant parts are trimmed
- * to keep rows on one line at narrow widths.
+ * Registry labels are written to stand alone in the generic settings row
+ * ("Members · Pending tab enabled"). In the tree, position already supplies
+ * that context, so the redundant halves are trimmed to keep rows on one line.
  */
 function compactLabel(label: string): string {
-  return label
-    .replace(/^.*? · /, "")
-    .replace(/ enabled$/, "")
-    .replace(/^(.)/, (c) => c.toUpperCase());
+  const trimmed = label.replace(/^.*? · /, "").replace(/ enabled$/, "");
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
