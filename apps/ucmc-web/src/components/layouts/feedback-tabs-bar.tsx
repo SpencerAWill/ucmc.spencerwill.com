@@ -19,7 +19,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 
 export type FeedbackTabId = "website" | "club";
@@ -57,32 +56,51 @@ export function FeedbackTabsBar() {
   const active = activeFeedbackTabFromPath(pathname);
 
   return (
-    <div className="flex gap-1 rounded-md border p-1">
-      <TabLink active={active === "website"}>
-        <Link to="/feedback">Website</Link>
+    // A `<nav>` of links, not a tablist of buttons: these are two URLs, so
+    // right-click, middle-click, and copy-link all have to keep working.
+    // `aria-current` is what conveys the selected one — the styling alone
+    // wouldn't.
+    <nav
+      aria-label="Feedback surface"
+      className="inline-flex shrink-0 gap-0.5 rounded-md border bg-muted/40 p-0.5"
+    >
+      {/* Club first: it goes to the exec board and is the one members are
+          more likely to want. */}
+      <TabLink to="/feedback/club" active={active === "club"}>
+        Club
       </TabLink>
-      <TabLink active={active === "club"}>
-        <Link to="/feedback/club">Club</Link>
+      <TabLink to="/feedback" active={active === "website"}>
+        Website
       </TabLink>
-    </div>
+    </nav>
   );
 }
 
 function TabLink({
+  to,
   active,
   children,
 }: {
+  to: "/feedback" | "/feedback/club";
   active: boolean;
   children: ReactNode;
 }) {
   return (
-    <Button
-      asChild
-      variant={active ? "secondary" : "ghost"}
-      size="sm"
-      className="flex-1"
+    <Link
+      to={to}
+      // Sized to sit on the heading's baseline rather than as a full-width
+      // bar: two options don't need the width, and at h-7 the control reads
+      // as a view switch instead of primary page navigation.
+      className={[
+        "inline-flex h-7 items-center rounded px-2.5 text-xs font-medium transition-colors",
+        "focus-visible:ring-ring/50 outline-none focus-visible:ring-2",
+        active
+          ? "bg-background text-foreground shadow-xs"
+          : "text-muted-foreground hover:text-foreground",
+      ].join(" ")}
+      aria-current={active ? "page" : undefined}
     >
       {children}
-    </Button>
+    </Link>
   );
 }

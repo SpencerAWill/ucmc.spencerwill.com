@@ -36,11 +36,16 @@ function FeedbackTabsLayout() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Feedback</h1>
+        {/* The surface switcher sits on the heading's row, right-aligned:
+            two options don't warrant a full-width bar under the header, and
+            keeping it up here leaves the subtitle the full column width to
+            explain whichever surface is active. */}
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold">Feedback</h1>
+          <FeedbackTabsBar />
+        </div>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </header>
-
-      <FeedbackTabsBar />
 
       <Outlet />
     </div>
