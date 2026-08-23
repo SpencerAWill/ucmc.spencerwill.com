@@ -204,7 +204,11 @@ function EmulationBanner() {
   );
 }
 
-function SidebarNav() {
+// Exported for `__tests__/sidebar-nav.test.tsx`: the nav's gates compose a
+// permission with a page kill switch, and getting the *wrong* flag on an
+// entry (the section's instead of the linked page's) is a silent bug — the
+// entry renders and 404s on click. Not part of the module's public API.
+export function SidebarNav() {
   const { isApproved, hasPermission } = useAuth();
   // Announcements gates compose: must have the permission AND the kill
   // switch must be on. `placeholderData` returns the schema default
@@ -222,16 +226,21 @@ function SidebarNav() {
     hasPermission("announcements:read") && flags.announcements;
   const canVerifyWaivers =
     hasPermission("waivers:verify") && pages.members_waivers;
-  // `pages.members` is the section switch, which is the right gate for
-  // the sidebar entry — and because the flags map carries *effective*
-  // values, switching the section off has already zeroed every
-  // `members_*` child, so the sub-items and tabs vanish with it.
-  const canReadMembers = isApproved && pages.members;
-  // `pages.gear` is the section switch — the right gate for the sidebar
-  // entry. The flags map carries effective values, so switching the
-  // section off has already zeroed `gear_loans`, taking the Loans
-  // sub-item with it.
-  const canReadGear = hasPermission("gear:read") && pages.gear;
+  // Gate the *link* on the flag of the page it actually navigates to
+  // (`/members` is `pages.members_approved`), NOT on the `pages.members`
+  // section switch. Because the flags map carries *effective* values,
+  // `members_approved` is already false whenever the section is off, so
+  // this still hides the entry with the section — but it additionally
+  // stops the entry linking to a page that 404s when only the directory
+  // is switched off, and keeps the inert-group-header fallback below
+  // reachable for that case.
+  const canReadMembers = isApproved && pages.members_approved;
+  // Same as Members: gate on the flag of the page the link targets
+  // (`/gear` is `pages.gear_inventory`), not the `pages.gear` section
+  // switch. Effective flags mean switching the section off still hides
+  // this, while switching off only the inventory page leaves "Gear" as
+  // an inert header over the Loans sub-item instead of a 404 link.
+  const canReadGear = hasPermission("gear:read") && pages.gear_inventory;
   const canLoanGear = hasPermission("gear:loan") && pages.gear_loans;
   const canViewHistory = hasPermission("history:view") && pages.history;
   const canViewPolicies =

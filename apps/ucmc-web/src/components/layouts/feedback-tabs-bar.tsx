@@ -4,22 +4,25 @@
  * surfaces — lives outside both features so neither has to cross-import
  * the other.
  *
- * Per-tab visibility: a user sees a tab if they hold *either* its
- * `*:submit` or `*:manage` permission. The corresponding setting flag
- * (`feedback.website_enabled` / `feedback.club_enabled`) does NOT hide
- * the tab for a manager — they still need access to the triage view of
- * existing rows while submissions are paused. For a plain submitter, a
- * disabled flag is enforced server-side (the action throws); the route
- * guard separately decides whether to surface the tab at all.
+ * Per-tab visibility composes the same two gates every other nav surface
+ * does — `permission && flags.pages.<key>` — so a tab never links to a
+ * page that would 404. Note which flag: the `pages.*` kill switch decides
+ * *reachability*, while the `features.*` submission switches
+ * (`features.feedback_website_enabled` / `features.feedback_club_enabled`)
+ * only pause new submissions and deliberately do NOT hide the tab, because
+ * a manager still needs the triage view of existing rows. A plain
+ * submitter hitting a paused surface is refused server-side by the action.
  *
  * If a viewer has neither feedback nor club-feedback access, this
  * component returns `null` (the layout will have already redirected
  * them away — this is defense in depth).
  */
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { useAuth } from "#/features/auth/api/use-auth";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export type FeedbackTabId = "site" | "club";
 
@@ -42,12 +45,17 @@ export function getFeedbackTabSubtitle(pathname: string): string {
 export function FeedbackTabsBar() {
   const { hasPermission } = useAuth();
   const pathname = useLocation({ select: (l) => l.pathname });
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  const pages = flags.pages;
 
   const canSeeSite =
-    hasPermission("feedback:submit") || hasPermission("feedback:manage");
+    (hasPermission("feedback:submit") || hasPermission("feedback:manage")) &&
+    pages.feedback_site;
   const canSeeClub =
-    hasPermission("club_feedback:submit") ||
-    hasPermission("club_feedback:manage");
+    (hasPermission("club_feedback:submit") ||
+      hasPermission("club_feedback:manage")) &&
+    pages.feedback_club;
 
   // If the viewer only has access to one tab the bar is just noise.
   if (!(canSeeSite && canSeeClub)) {

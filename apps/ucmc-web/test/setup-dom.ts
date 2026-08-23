@@ -41,6 +41,31 @@ if (typeof Element !== "undefined") {
   }
 }
 
+// jsdom doesn't implement `matchMedia`, which the sidebar's `useIsMobile`
+// hook (and anything else keying off a media query) calls in an effect.
+// Reports "not matching" and accepts listeners so components settle on
+// their desktop branch; tests that need a specific viewport should stub
+// `window.matchMedia` themselves.
+// The `as unknown` cast is the same idiom as the Element stubs above:
+// lib.dom declares `matchMedia` as always present, so a plain falsy check
+// is flagged as an impossible condition.
+if (
+  typeof window !== "undefined" &&
+  (window.matchMedia as unknown) === undefined
+) {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+}
+
 // Testing Library appends rendered output to document.body for each test;
 // without explicit cleanup, queries from one test leak into the next.
 afterEach(() => {

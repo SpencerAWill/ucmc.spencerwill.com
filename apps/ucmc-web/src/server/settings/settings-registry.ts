@@ -788,17 +788,39 @@ export function effectivePageFlags(
   const out = {} as Record<PageFlagKey, boolean>;
   for (const key of PAGE_SETTING_KEYS) {
     const own = pageFlagKeyOf(key);
-    let on = raw[own];
-    let ancestor = pageParentOf(own);
-    // `hops` bounds the walk so a mis-declared cycle degrades to a wrong
-    // answer instead of hanging the request.
-    for (let hops = 0; ancestor && hops <= PAGE_SETTING_KEYS.length; hops++) {
-      on = on && raw[ancestor];
-      ancestor = pageParentOf(ancestor);
-    }
-    out[own] = on;
+    out[own] =
+      raw[own] && pageAncestorsOf(own).every((ancestor) => raw[ancestor]);
   }
   return out;
+}
+
+/**
+ * The declared ancestors of a page flag, nearest first.
+ *
+ * The single implementation of the parent walk — every consumer that needs
+ * ancestry (the cascade above, the `/settings` "inherited off" count) goes
+ * through this rather than looping on `pageParentOf` itself, so the cycle
+ * bound below can't be forgotten at one call site.
+ *
+ * The walk is bounded and cycle-guarded: `parent` is a plain string
+ * validated only for registry membership, so nothing stops a future edit
+ * from declaring `a → b → a`. A mis-declared cycle has to degrade to a
+ * wrong answer, never to a hung request or a blown stack — and the page
+ * that would hang is `/settings`, the one place the bad flag could be
+ * fixed. `page-flag-cascade.test.ts` pins this.
+ */
+export function pageAncestorsOf(key: PageFlagKey): PageFlagKey[] {
+  const chain: PageFlagKey[] = [];
+  const seen = new Set<PageFlagKey>([key]);
+  for (
+    let ancestor = pageParentOf(key);
+    ancestor && !seen.has(ancestor);
+    ancestor = pageParentOf(ancestor)
+  ) {
+    chain.push(ancestor);
+    seen.add(ancestor);
+  }
+  return chain;
 }
 
 // ── Group keys by category for UI iteration ────────────────────────────

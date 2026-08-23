@@ -33,6 +33,7 @@ import {
   isDefault,
   isStale,
   PAGE_SETTING_KEYS,
+  pageAncestorsOf,
   pageFlagKeyOf,
   pageParentOf,
   SETTINGS,
@@ -217,16 +218,12 @@ function countInheritedOff(entries: SiteSettingsSnapshot): number {
     if (entries[settingKey].value === false) {
       return false;
     }
-    for (
-      let ancestor = pageParentOf(pageFlagKeyOf(settingKey));
-      ancestor;
-      ancestor = pageParentOf(ancestor)
-    ) {
-      if (entries[settingKeyOf(ancestor)].value === false) {
-        return true;
-      }
-    }
-    return false;
+    // `pageAncestorsOf` owns the walk (and its cycle bound) — don't loop
+    // on `pageParentOf` here, or a mis-declared cycle hangs this render,
+    // which is the one screen that could fix the bad flag.
+    return pageAncestorsOf(pageFlagKeyOf(settingKey)).some(
+      (ancestor) => entries[settingKeyOf(ancestor)].value === false,
+    );
   }).length;
 }
 
@@ -247,6 +244,7 @@ function PageNodeRow({
 }) {
   const isSection = node.children.length > 0;
   const own = entries[settingKeyOf(node.key)].value === true;
+  const [userOpen, setUserOpen] = useState(false);
 
   const row = (
     <FlagRow
@@ -266,7 +264,17 @@ function PageNodeRow({
   }
 
   return (
-    <Collapsible defaultOpen={forceOpen} className="group/section">
+    // Controlled, not `defaultOpen` — `defaultOpen` is read once at mount
+    // (Radix seeds `useState` with it), and these rows stay mounted while
+    // the filter changes. So a section that mounted collapsed would stay
+    // collapsed when a filter narrowed the tree to one of its children,
+    // hiding the very row being searched for. `forceOpen` therefore has to
+    // override the user's toggle for as long as a filter is active.
+    <Collapsible
+      open={forceOpen || userOpen}
+      onOpenChange={setUserOpen}
+      className="group/section"
+    >
       <div className="flex items-center">
         <div className="min-w-0 flex-1">{row}</div>
         <CollapsibleTrigger asChild>

@@ -1,13 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   effectivePageFlags,
+  getMeta,
+  pageAncestorsOf,
   PAGE_SETTING_KEYS,
   pageFlagKeyOf,
   pageParentOf,
   SETTINGS,
 } from "#/server/settings/settings-registry";
-import type { PageFlagKey } from "#/server/settings/settings-registry";
+import type {
+  PageFlagKey,
+  PageSettingKey,
+} from "#/server/settings/settings-registry";
 
 /**
  * `effectivePageFlags` is the single place the section → page cascade
@@ -100,5 +105,65 @@ describe("effectivePageFlags", () => {
     // `undefined` — falsy, i.e. a page silently 404ing.
     const out = effectivePageFlags(allOn());
     expect(Object.keys(out).sort()).toEqual([...ALL_KEYS].sort());
+  });
+});
+
+describe("pageAncestorsOf", () => {
+  // The tests below reach into the live registry metadata to fabricate a
+  // cycle, so every one of them has to put it back.
+  const patched: Array<{ key: PageSettingKey; parent: string | undefined }> =
+    [];
+
+  function setParent(key: PageSettingKey, parent: string | undefined) {
+    const meta = getMeta(key) as { parent?: string };
+    patched.push({ key, parent: meta.parent });
+    meta.parent = parent;
+  }
+
+  afterEach(() => {
+    while (patched.length > 0) {
+      const entry = patched.pop()!;
+      (getMeta(entry.key) as { parent?: string }).parent = entry.parent;
+    }
+  });
+
+  it("returns the declared chain nearest-first", () => {
+    expect(pageAncestorsOf("gear_loans_detail")).toEqual([
+      "gear_loans",
+      "gear",
+    ]);
+    expect(pageAncestorsOf("gear")).toEqual([]);
+  });
+
+  it("every chain in the real registry terminates and is acyclic", () => {
+    for (const key of ALL_KEYS) {
+      const chain = pageAncestorsOf(key);
+      expect(new Set(chain).size).toBe(chain.length);
+      expect(chain).not.toContain(key);
+    }
+  });
+
+  it("terminates on a mis-declared cycle instead of hanging", () => {
+    // `parent` is a bare string that `pageParentOf` validates only for
+    // registry *membership*, so nothing stops a future edit from closing a
+    // loop: here `gear` is pointed back at its own grandchild. This must
+    // degrade to a wrong answer, never a hung request or a blown stack —
+    // and the screen that would hang is `/settings`, the one place the bad
+    // flag could be fixed.
+    setParent("pages.gear", "gear_loans_detail");
+
+    const chain = pageAncestorsOf("gear_loans_detail");
+    expect(new Set(chain).size).toBe(chain.length);
+    expect(chain).not.toContain("gear_loans_detail");
+    expect(chain).toEqual(["gear_loans", "gear"]);
+
+    // The consumer of the walk has to survive it too.
+    expect(() => effectivePageFlags(allOn())).not.toThrow();
+  });
+
+  it("survives a self-referential parent", () => {
+    setParent("pages.album", "album");
+    expect(pageAncestorsOf("album")).toEqual([]);
+    expect(effectivePageFlags(allOn()).album).toBe(true);
   });
 });
