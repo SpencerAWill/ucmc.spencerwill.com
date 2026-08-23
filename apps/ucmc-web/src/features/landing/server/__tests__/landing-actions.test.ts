@@ -186,7 +186,7 @@ describe("getLandingContentAction (read)", () => {
   });
 });
 
-// ── writes are gated on landing:edit ───────────────────────────────────
+// ── writes are gated on landing:manage ───────────────────────────────────
 
 describe("write authorization", () => {
   it("updateSettingAction rejects unauthenticated", async () => {
@@ -195,28 +195,28 @@ describe("write authorization", () => {
     ).rejects.toThrow("Not signed in");
   });
 
-  it("updateSettingAction rejects users without landing:edit", async () => {
+  it("updateSettingAction rejects users without landing:manage", async () => {
     await signInAsMember();
     await expect(
       updateSettingAction({ key: "hero.heading", value: "x" }),
-    ).rejects.toThrow("Forbidden: missing landing:edit");
+    ).rejects.toThrow("Forbidden: missing landing:manage");
   });
 
-  it("createHeroSlideAction rejects users without landing:edit", async () => {
+  it("createHeroSlideAction rejects users without landing:manage", async () => {
     await signInAsMember();
     await expect(
       createHeroSlideAction({ alt: "trip", dataUrl: makeWebpDataUrl() }),
-    ).rejects.toThrow("Forbidden: missing landing:edit");
+    ).rejects.toThrow("Forbidden: missing landing:manage");
   });
 
-  it("createFaqItemAction rejects users without landing:edit", async () => {
+  it("createFaqItemAction rejects users without landing:manage", async () => {
     await signInAsMember();
     await expect(
       createFaqItemAction({ question: "q?", answer: "a" }),
-    ).rejects.toThrow("Forbidden: missing landing:edit");
+    ).rejects.toThrow("Forbidden: missing landing:manage");
   });
 
-  it("createActivityAction rejects users without landing:edit", async () => {
+  it("createActivityAction rejects users without landing:manage", async () => {
     await signInAsMember();
     await expect(
       createActivityAction({
@@ -224,7 +224,7 @@ describe("write authorization", () => {
         title: "Climb",
         blurb: "Send",
       }),
-    ).rejects.toThrow("Forbidden: missing landing:edit");
+    ).rejects.toThrow("Forbidden: missing landing:manage");
   });
 });
 

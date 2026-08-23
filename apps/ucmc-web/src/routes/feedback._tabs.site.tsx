@@ -19,8 +19,8 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
     await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);
     const canWebsite =
-      principal.permissions.includes("feedback:submit") ||
-      principal.permissions.includes("feedback:manage");
+      principal.permissions.includes("site_feedback:submit") ||
+      principal.permissions.includes("site_feedback:manage");
     const canClub =
       principal.permissions.includes("club_feedback:submit") ||
       principal.permissions.includes("club_feedback:manage");
@@ -41,11 +41,11 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
 
 function SiteFeedbackPage() {
   const { hasPermission } = useAuth();
-  const canManage = hasPermission("feedback:manage");
-  const canSubmit = hasPermission("feedback:submit");
+  const canManage = hasPermission("site_feedback:manage");
+  const canSubmit = hasPermission("site_feedback:submit");
 
   const flagsQuery = useQuery(publicFlagsQueryOptions());
-  const submissionsEnabled = flagsQuery.data?.websiteFeedback ?? true;
+  const submissionsEnabled = flagsQuery.data?.siteFeedback ?? true;
 
   const myQuery = useQuery(myFeedbackQueryOptions());
   const adminQuery = useQuery(allFeedbackQueryOptions({ enabled: canManage }));

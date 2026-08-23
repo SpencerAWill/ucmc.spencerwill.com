@@ -26,6 +26,8 @@ import {
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
+import { loadMemberWaiverStatus } from "#/server/waivers/current-attestation.server";
+import type { MemberWaiverStatus } from "#/server/waivers/current-attestation.server";
 import { requireMembersManager } from "#/features/members/server/permissions.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
@@ -383,6 +385,9 @@ export interface MemberDetail {
   emergencyContacts: EmergencyContactSummary[];
   // Session count — null when caller lacks sessions:revoke.
   activeSessions: number | null;
+  // Current-cycle waiver standing — null when the caller holds neither
+  // `waivers:view` nor `waivers:verify`.
+  waiverStatus: MemberWaiverStatus | null;
 }
 
 export async function getMemberDetailAction(
@@ -392,6 +397,13 @@ export async function getMemberDetailAction(
   const db = getDb();
   const canViewPrivate = principal.permissions.includes("members:view_private");
   const canRevokeSessions = principal.permissions.includes("sessions:revoke");
+  // Read-side waiver gate. `waivers:verify` implies the read (see
+  // `requireWaiverViewer` in features/waivers) — the OR is repeated here
+  // because this is a projection decision, not an authorization gate:
+  // lacking the permission omits the field rather than throwing.
+  const canViewWaivers =
+    principal.permissions.includes("waivers:view") ||
+    principal.permissions.includes("waivers:verify");
 
   const row = await db
     .select({
@@ -444,30 +456,34 @@ export async function getMemberDetailAction(
   // queries unconditionally, which is wasted work for the common
   // regular-member caller). Permission gates above decide whether to
   // fetch private contacts and the session count.
-  const [roleRows, contacts, sessionCountRows] = await Promise.all([
-    db
-      .select({ roleName: schema.roles.name })
-      .from(schema.userRoles)
-      .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
-      .where(eq(schema.userRoles.userId, userId))
-      .orderBy(asc(schema.roles.position), asc(schema.roles.name)),
-    canViewPrivate
-      ? db
-          .select({
-            name: schema.emergencyContacts.name,
-            phone: schema.emergencyContacts.phone,
-            relationship: schema.emergencyContacts.relationship,
-          })
-          .from(schema.emergencyContacts)
-          .where(eq(schema.emergencyContacts.userId, userId))
-      : Promise.resolve<EmergencyContactSummary[]>([]),
-    canRevokeSessions
-      ? db
-          .select({ value: count() })
-          .from(schema.sessions)
-          .where(eq(schema.sessions.userId, userId))
-      : Promise.resolve<{ value: number }[]>([]),
-  ]);
+  const [roleRows, contacts, sessionCountRows, waiverStatus] =
+    await Promise.all([
+      db
+        .select({ roleName: schema.roles.name })
+        .from(schema.userRoles)
+        .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
+        .where(eq(schema.userRoles.userId, userId))
+        .orderBy(asc(schema.roles.position), asc(schema.roles.name)),
+      canViewPrivate
+        ? db
+            .select({
+              name: schema.emergencyContacts.name,
+              phone: schema.emergencyContacts.phone,
+              relationship: schema.emergencyContacts.relationship,
+            })
+            .from(schema.emergencyContacts)
+            .where(eq(schema.emergencyContacts.userId, userId))
+        : Promise.resolve<EmergencyContactSummary[]>([]),
+      canRevokeSessions
+        ? db
+            .select({ value: count() })
+            .from(schema.sessions)
+            .where(eq(schema.sessions.userId, userId))
+        : Promise.resolve<{ value: number }[]>([]),
+      canViewWaivers
+        ? loadMemberWaiverStatus(userId)
+        : Promise.resolve<MemberWaiverStatus | null>(null),
+    ]);
 
   const activeSessions = canRevokeSessions
     ? (sessionCountRows[0]?.value ?? 0)
@@ -490,6 +506,7 @@ export async function getMemberDetailAction(
     phone: canViewPrivate ? row.phone : null,
     emergencyContacts: contacts,
     activeSessions,
+    waiverStatus,
   };
 }
 

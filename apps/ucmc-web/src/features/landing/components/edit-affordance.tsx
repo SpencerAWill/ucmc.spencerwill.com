@@ -1,6 +1,6 @@
 /**
  * Pencil button + dialog wrapper for inline landing-page editing. Renders
- * `null` for users who lack `landing:edit` so the public DOM is identical
+ * `null` for users who lack `landing:manage` so the public DOM is identical
  * to what unauthenticated visitors see — no permission-gated affordances
  * leak into the static HTML.
  *
@@ -54,7 +54,7 @@ export function EditAffordance({
   const { hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
 
-  if (!hasPermission("landing:edit")) {
+  if (!hasPermission("landing:manage")) {
     return null;
   }
 

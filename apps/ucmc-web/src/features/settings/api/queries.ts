@@ -70,7 +70,7 @@ export function publicFlagsQueryOptions() {
     ) as PublicFlags["pages"],
   );
   const fallback: PublicFlags = {
-    websiteFeedback: SETTINGS["feedback.website_enabled"].parse(undefined),
+    siteFeedback: SETTINGS["feedback.site_enabled"].parse(undefined),
     clubFeedback: SETTINGS["feedback.club_enabled"].parse(undefined),
     announcements: SETTINGS["features.announcements"].parse(undefined),
     pages,

@@ -8,7 +8,7 @@
  * does — `permission && flags.pages.<key>` — so a tab never links to a
  * page that would 404. Note which flag: the `pages.*` kill switch decides
  * *reachability*, while the `features.*` submission switches
- * (`features.feedback_website_enabled` / `features.feedback_club_enabled`)
+ * (`features.feedback_site_enabled` / `features.feedback_club_enabled`)
  * only pause new submissions and deliberately do NOT hide the tab, because
  * a manager still needs the triage view of existing rows. A plain
  * submitter hitting a paused surface is refused server-side by the action.
@@ -50,7 +50,8 @@ export function FeedbackTabsBar() {
   const pages = flags.pages;
 
   const canSeeSite =
-    (hasPermission("feedback:submit") || hasPermission("feedback:manage")) &&
+    (hasPermission("site_feedback:submit") ||
+      hasPermission("site_feedback:manage")) &&
     pages.feedback_site;
   const canSeeClub =
     (hasPermission("club_feedback:submit") ||

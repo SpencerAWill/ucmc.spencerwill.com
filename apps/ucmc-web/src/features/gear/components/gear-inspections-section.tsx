@@ -31,10 +31,12 @@ const RESULT_VARIANT: Record<
 
 export function GearInspectionsSection({
   gear,
-  canManage,
+  canInspect,
 }: {
   gear: GearSummary;
-  canManage: boolean;
+  /** Holder of `gear:inspect` or `gear:manage` — the inspection log is
+   *  delegable on its own, so it does NOT follow full inventory CRUD. */
+  canInspect: boolean;
 }) {
   const [logOpen, setLogOpen] = useState(false);
   const { data, isLoading } = useQuery(
@@ -49,7 +51,7 @@ export function GearInspectionsSection({
           <ClipboardCheck className="size-4 text-muted-foreground" />
           Inspection log
         </CardTitle>
-        {canManage ? (
+        {canInspect ? (
           <Button size="sm" variant="outline" onClick={() => setLogOpen(true)}>
             <Plus className="size-4" />
             Log inspection
@@ -71,7 +73,7 @@ export function GearInspectionsSection({
           </ul>
         )}
       </CardContent>
-      {canManage ? (
+      {canInspect ? (
         <GearInspectionFormDialog
           gear={gear}
           open={logOpen}

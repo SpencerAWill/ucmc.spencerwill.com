@@ -56,8 +56,8 @@ async function requireFeedbackSubmitter(): Promise<Principal> {
   if (!principal) {
     throw new Error("Not signed in");
   }
-  if (!principal.permissions.includes("feedback:submit")) {
-    throw new Error("Forbidden: missing feedback:submit");
+  if (!principal.permissions.includes("site_feedback:submit")) {
+    throw new Error("Forbidden: missing site_feedback:submit");
   }
   return principal;
 }
@@ -67,8 +67,8 @@ async function requireFeedbackManager(): Promise<Principal> {
   if (!principal) {
     throw new Error("Not signed in");
   }
-  if (!principal.permissions.includes("feedback:manage")) {
-    throw new Error("Forbidden: missing feedback:manage");
+  if (!principal.permissions.includes("site_feedback:manage")) {
+    throw new Error("Forbidden: missing site_feedback:manage");
   }
   return principal;
 }
@@ -152,7 +152,7 @@ export async function submitFeedbackAction(
   // also nuking the GitHub mirror or revoking everyone's permission.
   // The `*:manage` permission keeps managers' access to the triage view
   // intact regardless — this gate is on **submissions**, not reads.
-  const enabled = await readSetting("feedback.website_enabled");
+  const enabled = await readSetting("feedback.site_enabled");
   if (!enabled) {
     throw new Error("Website feedback submissions are currently disabled.");
   }

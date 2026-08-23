@@ -36,8 +36,8 @@ export const Route = createFileRoute("/feedback/")({
     }
     const canSite =
       flags.pages.feedback_site &&
-      (principal.permissions.includes("feedback:submit") ||
-        principal.permissions.includes("feedback:manage"));
+      (principal.permissions.includes("site_feedback:submit") ||
+        principal.permissions.includes("site_feedback:manage"));
     if (canSite) {
       throw redirect({ to: "/feedback/site" });
     }

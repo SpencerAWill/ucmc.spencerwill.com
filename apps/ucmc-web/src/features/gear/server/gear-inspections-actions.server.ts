@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import {
-  requireGearManager,
+  requireGearInspector,
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
 import {
@@ -78,7 +78,7 @@ async function loadActorName(userId: string): Promise<string> {
   // Snapshot the actor's display name at write time. We prefer the
   // profile's `fullName` (every approved member has a profile row);
   // unclaimed-pre-add users would have a `placeholderName` on `users`
-  // instead, but they don't have `gear:manage` so we don't see them
+  // instead, but they can't record inspections so we don't see them
   // here. If for any reason the profile lookup misses, fall through
   // to the email — better than recording an empty string.
   const db = getDb();
@@ -100,7 +100,7 @@ async function loadActorName(userId: string): Promise<string> {
 export async function recordGearInspectionAction(
   input: RecordGearInspectionInput,
 ): Promise<RecordGearInspectionResult> {
-  const principal = await requireGearManager();
+  const principal = await requireGearInspector();
   const gear = await getGearByPublicId(input.gearPublicId);
   if (!gear) {
     throw new Error("Gear not found");

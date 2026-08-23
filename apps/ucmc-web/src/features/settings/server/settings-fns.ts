@@ -85,7 +85,7 @@ export const getPublicSiteContactFn = createServerFn({
 export type PublicFlags = {
   // Submission kill switches (distinct from page reachability): whether
   // each feedback surface accepts NEW submissions.
-  websiteFeedback: boolean;
+  siteFeedback: boolean;
   clubFeedback: boolean;
   /** `features.announcements`. Not in `pages` — besides page reachability
    *  it gates the header bell and the server write actions, so it can't

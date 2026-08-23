@@ -5,7 +5,7 @@
  *
  * Read action is anonymous-safe — the home page is public, so any visitor
  * (signed in or not) gets the same content bundle. Write actions all gate
- * on `landing:edit`.
+ * on `landing:manage`.
  */
 import { uuidv7 } from "uuidv7";
 
@@ -70,8 +70,8 @@ async function requireLandingEditor(): Promise<Principal> {
   if (!principal) {
     throw new Error("Not signed in");
   }
-  if (!principal.permissions.includes("landing:edit")) {
-    throw new Error("Forbidden: missing landing:edit");
+  if (!principal.permissions.includes("landing:manage")) {
+    throw new Error("Forbidden: missing landing:manage");
   }
   return principal;
 }

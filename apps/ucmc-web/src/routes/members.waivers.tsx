@@ -13,7 +13,8 @@ import { Label } from "#/components/ui/label";
 import { WAIVER_VERSION } from "#/config/legal";
 import { formatDate } from "#/lib/date-format";
 import { currentWaiverCycle } from "#/config/waiver-cycle";
-import { requirePermission } from "#/features/auth/guards";
+import { requireAnyPermission } from "#/features/auth/guards";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 import {
   useAttestWaiver,
@@ -29,6 +30,11 @@ import type { MemberNeedingAttestation } from "#/features/waivers/server/waiver-
  * at meetings, then come here to mark members attested. Bulk-select +
  * "Attest selected" handles the start-of-season stack of papers.
  *
+ * Two permission tiers share this page: `waivers:view` sees the queue
+ * read-only (exec who need to answer "is this member covered?" without
+ * holding the attestation power), `waivers:verify` additionally gets the
+ * selection checkboxes, the bulk bar, and the per-row Attest button.
+ *
  * The signed PDF is never uploaded — only the metadata that an officer
  * confirmed receipt is stored. See `waiver-actions.server.ts` for the
  * data model and rationale (Bylaw 1.3 keeps medical PII off-platform).
@@ -36,7 +42,12 @@ import type { MemberNeedingAttestation } from "#/features/waivers/server/waiver-
 export const Route = createFileRoute("/members/waivers")({
   beforeLoad: async ({ context }) => {
     await requirePageFlag(context.queryClient, "members_waivers");
-    await requirePermission(context.queryClient, "waivers:verify");
+    // `waivers:view` opens the queue read-only; the attest controls
+    // below are separately gated on `waivers:verify`.
+    await requireAnyPermission(context.queryClient, [
+      "waivers:view",
+      "waivers:verify",
+    ]);
   },
   loader: ({ context }) =>
     context.queryClient.ensureQueryData(waiverPendingQueueQueryOptions()),
@@ -45,6 +56,8 @@ export const Route = createFileRoute("/members/waivers")({
 
 function WaiversQueuePage() {
   const cycle = currentWaiverCycle();
+  const { hasPermission } = useAuth();
+  const canVerify = hasPermission("waivers:verify");
   const { data: queue } = useSuspenseQuery(waiverPendingQueueQueryOptions());
 
   return (
@@ -52,8 +65,10 @@ function WaiversQueuePage() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Waiver attestations</h1>
         <p className="text-sm text-muted-foreground">
-          Members below are approved but lack a current-cycle attestation. Mark
-          a member attested after you receive their signed paper waiver.
+          Members below are approved but lack a current-cycle attestation.
+          {canVerify
+            ? " Mark a member attested after you receive their signed paper waiver."
+            : " Read-only view — attesting requires the waivers:verify permission."}
         </p>
         <p className="text-xs text-muted-foreground">
           Cycle <code>{cycle}</code> · Waiver version{" "}
@@ -68,13 +83,19 @@ function WaiversQueuePage() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <QueueTable queue={queue} />
+        <QueueTable queue={queue} canVerify={canVerify} />
       )}
     </div>
   );
 }
 
-function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
+function QueueTable({
+  queue,
+  canVerify,
+}: {
+  queue: MemberNeedingAttestation[];
+  canVerify: boolean;
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkNotes, setBulkNotes] = useState("");
 
@@ -206,12 +227,18 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
       <CardContent className="space-y-4">
         {queueExceedsCap ? (
           <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            {queue.length} members are pending attestation. &quot;Select
-            all&quot; will pick the {BULK_ATTEST_MAX} oldest entries; bulk
-            attestations are capped at {BULK_ATTEST_MAX} per request.
+            {queue.length} members are pending attestation.{" "}
+            {canVerify ? (
+              <>
+                &quot;Select all&quot; will pick the {BULK_ATTEST_MAX} oldest
+                entries; bulk attestations are capped at {BULK_ATTEST_MAX} per
+                request.
+              </>
+            ) : null}
           </p>
         ) : null}
-        {/* Bulk action bar — visible only when something is selected. */}
+        {/* Bulk action bar — visible only when something is selected, which
+            can only happen for verifiers (the checkboxes are theirs). */}
         {someSelected ? (
           <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-3 sm:flex-row sm:items-end">
             <div className="flex-1 space-y-1">
@@ -238,13 +265,15 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
           <table className="w-full text-sm">
             <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th scope="col" className="w-10 px-2 py-2 text-left">
-                  <Checkbox
-                    aria-label="Select all"
-                    checked={allSelected}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
+                {canVerify ? (
+                  <th scope="col" className="w-10 px-2 py-2 text-left">
+                    <Checkbox
+                      aria-label="Select all"
+                      checked={allSelected}
+                      onCheckedChange={toggleAll}
+                    />
+                  </th>
+                ) : null}
                 <th scope="col" className="px-2 py-2 text-left">
                   Name
                 </th>
@@ -254,9 +283,11 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
                 <th scope="col" className="px-2 py-2 text-left">
                   Approved
                 </th>
-                <th scope="col" className="px-2 py-2 text-right">
-                  Action
-                </th>
+                {canVerify ? (
+                  <th scope="col" className="px-2 py-2 text-right">
+                    Action
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -265,13 +296,15 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
                   member.preferredName ?? member.fullName ?? member.email;
                 return (
                   <tr key={member.userId} className="border-b last:border-0">
-                    <td className="px-2 py-3">
-                      <Checkbox
-                        aria-label={`Select ${label}`}
-                        checked={selected.has(member.userId)}
-                        onCheckedChange={() => toggle(member.userId)}
-                      />
-                    </td>
+                    {canVerify ? (
+                      <td className="px-2 py-3">
+                        <Checkbox
+                          aria-label={`Select ${label}`}
+                          checked={selected.has(member.userId)}
+                          onCheckedChange={() => toggle(member.userId)}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-2 py-3">
                       <div className="font-medium">{label}</div>
                       <div className="text-xs text-muted-foreground">
@@ -286,16 +319,18 @@ function QueueTable({ queue }: { queue: MemberNeedingAttestation[] }) {
                     <td className="px-2 py-3 text-muted-foreground">
                       {member.approvedAt ? formatDate(member.approvedAt) : "—"}
                     </td>
-                    <td className="px-2 py-3 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onAttestOne(member.userId, label)}
-                        disabled={attest.isPending}
-                      >
-                        Attest
-                      </Button>
-                    </td>
+                    {canVerify ? (
+                      <td className="px-2 py-3 text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onAttestOne(member.userId, label)}
+                          disabled={attest.isPending}
+                        >
+                          Attest
+                        </Button>
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}

@@ -85,6 +85,27 @@ export async function requirePermission(
 }
 
 /**
+ * Require a signed-in, approved user who holds AT LEAST ONE of
+ * `permissions`. Same redirect behaviour as `requirePermission`.
+ *
+ * Exists for read/write permission pairs where the write permission
+ * implies the read one — `waivers:view` / `waivers:verify` today. There
+ * is no permission-implication mechanism in the RBAC tables, so the OR
+ * has to be expressed at the gate; doing it here keeps route guards from
+ * hand-rolling `includes() || includes()` chains that drift apart.
+ */
+export async function requireAnyPermission(
+  queryClient: QueryClient,
+  permissions: readonly string[],
+): Promise<Principal> {
+  const principal = await requireApproved(queryClient);
+  if (!permissions.some((p) => principal.permissions.includes(p))) {
+    throw redirect({ to: "/" });
+  }
+  return principal;
+}
+
+/**
  * Variant of `requirePermission` that throws `notFound()` instead of
  * redirecting when an approved user lacks the permission. Use this for
  * routes that should be invisible to non-holders — direct navigation

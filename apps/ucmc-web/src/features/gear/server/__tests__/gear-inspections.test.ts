@@ -87,6 +87,41 @@ async function signInAsRegularMember(): Promise<string> {
   return userId;
 }
 
+/**
+ * A member holding `gear:inspect` and NOT `gear:manage` — the delegable
+ * inspector tier migration 0064 added. Ad-hoc role so the test pins the
+ * permission rather than a seeded role's evolving grants.
+ */
+async function signInAsInspector(fullName = "Ivy Inspector"): Promise<string> {
+  const db = getDb();
+  await db
+    .insert(schema.roles)
+    .values({
+      id: "role_test_gear_inspector",
+      name: "test_gear_inspector",
+      displayName: "Test gear inspector",
+      description: "Holds gear:inspect without gear:manage",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.rolePermissions)
+    .values({
+      roleId: "role_test_gear_inspector",
+      permissionId: "perm_gear_inspect",
+    })
+    .onConflictDoNothing();
+  // gear:read is what the list-side gate wants; the inspector role
+  // gets it from role_member, which every member holds anyway.
+  const userId = await seedUser(
+    `inspector-${crypto.randomUUID()}@example.com`,
+    fullName,
+  );
+  await assignRole(userId, "role_member");
+  await assignRole(userId, "role_test_gear_inspector");
+  await signInAs(userId);
+  return userId;
+}
+
 async function createGearOk(): Promise<string> {
   const typeResult = await createGearTypeAction({
     name: `Harness ${crypto.randomUUID()}`,
@@ -147,7 +182,28 @@ describe("authorization", () => {
         result: "pass",
         notes: null,
       }),
-    ).rejects.toThrow("Forbidden: missing gear:manage");
+    ).rejects.toThrow("Forbidden: missing gear:inspect");
+  });
+
+  it("lets a gear:inspect holder record an inspection without gear:manage", async () => {
+    await signInAsManager();
+    const gearPublicId = await createGearOk();
+
+    const inspectorId = await signInAsInspector();
+    const result = await recordGearInspectionAction({
+      gearPublicId,
+      inspectedAt: Date.now(),
+      result: "fail",
+      notes: "Sheath core-shot at 3m.",
+    });
+    expect(result.ok).toBe(true);
+
+    // The inspection landed and snapshotted the inspector's name.
+    const rows = await listGearInspectionsAction({ gearPublicId });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].result).toBe("fail");
+    expect(rows[0].inspectorName).toBe("Ivy Inspector");
+    expect(inspectorId).toBeTruthy();
   });
 
   it("lets regular members read the inspection log", async () => {

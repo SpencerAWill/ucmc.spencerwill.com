@@ -28,6 +28,9 @@ function GearDetailPage() {
   const { publicId } = Route.useParams();
   const { hasPermission } = useAuth();
   const canManage = hasPermission("gear:manage");
+  // Inspections are delegable independently of catalog CRUD — a trip
+  // leader can log a failed rope without the power to retire gear.
+  const canInspect = canManage || hasPermission("gear:inspect");
   const { data, isLoading, error } = useQuery(gearDetailQueryOptions(publicId));
   const [editOpen, setEditOpen] = useState(false);
   const [retiring, setRetiring] = useState(false);
@@ -119,7 +122,7 @@ function GearDetailPage() {
         ) : null}
       </div>
       <GearDetailCard gear={data} canManage={canManage} />
-      <GearInspectionsSection gear={data} canManage={canManage} />
+      <GearInspectionsSection gear={data} canInspect={canInspect} />
       {canManage ? (
         <>
           <GearLabelsDialog

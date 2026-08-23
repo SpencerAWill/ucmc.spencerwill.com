@@ -65,7 +65,7 @@ function setPageFlags(pages: Record<string, boolean>) {
   flagsMock.mockReturnValue({ pages });
 }
 
-const BOTH_PERMISSIONS = ["feedback:submit", "club_feedback:submit"];
+const BOTH_PERMISSIONS = ["site_feedback:submit", "club_feedback:submit"];
 
 describe("FeedbackTabsBar", () => {
   beforeEach(() => {
