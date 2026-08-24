@@ -74,6 +74,29 @@ export const getPublicSiteContactFn = createServerFn({
 });
 
 /**
+ * Public-safe header masthead strings. No auth gate — this text renders
+ * in the header for signed-out visitors on every page. Allowlisted in
+ * the action like the contact subset, so reclassifying a setting into
+ * `appearance` can't surface it here by accident.
+ *
+ * `tagline` is the raw stored value and may still contain the
+ * `{year}` token; expansion happens at render, not here, so the value
+ * can't go stale in a cached payload.
+ */
+export type PublicBranding = {
+  headerTitle: string;
+  headerTagline: string;
+};
+
+export const getPublicBrandingFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<PublicBranding> => {
+  const { getPublicBrandingAction } =
+    await import("./settings-actions-read.server");
+  return getPublicBrandingAction();
+});
+
+/**
  * Public read of feature-flag state. No auth gate — "is this feature
  * visible?" isn't sensitive (anyone hitting the gated URL would get the
  * same answer back), and the sidebar / header bell need this synchronously

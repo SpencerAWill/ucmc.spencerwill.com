@@ -2,18 +2,21 @@
  * Query options factories for the /settings admin surface.
  */
 import {
+  PUBLIC_BRANDING_QUERY_KEY,
   PUBLIC_FLAGS_QUERY_KEY,
   PUBLIC_SITE_CONTACT_QUERY_KEY,
   settingHistoryQueryKey,
   SITE_SETTINGS_QUERY_KEY,
 } from "./query-keys";
 import {
+  getPublicBrandingFn,
   getPublicFlagsFn,
   getPublicSiteContactFn,
   listSettingHistoryFn,
   listSiteSettingsFn,
 } from "#/features/settings/server/settings-fns";
 import type {
+  PublicBranding,
   PublicFlags,
   PublicSiteContact,
 } from "#/features/settings/server/settings-fns";
@@ -47,6 +50,24 @@ export function publicSiteContactQueryOptions() {
   return {
     queryKey: PUBLIC_SITE_CONTACT_QUERY_KEY,
     queryFn: () => getPublicSiteContactFn(),
+    placeholderData: fallback,
+  } as const;
+}
+
+/**
+ * Header masthead text. `placeholderData` is the schema default, so the
+ * header renders its real title pre-hydration and before the query
+ * resolves — the strings sit in fixed-height chrome on every page, and a
+ * blank-then-populate would jump the layout on every cold load.
+ */
+export function publicBrandingQueryOptions() {
+  const fallback: PublicBranding = {
+    headerTitle: SETTINGS["appearance.headerTitle"].parse(undefined),
+    headerTagline: SETTINGS["appearance.headerTagline"].parse(undefined),
+  };
+  return {
+    queryKey: PUBLIC_BRANDING_QUERY_KEY,
+    queryFn: () => getPublicBrandingFn(),
     placeholderData: fallback,
   } as const;
 }

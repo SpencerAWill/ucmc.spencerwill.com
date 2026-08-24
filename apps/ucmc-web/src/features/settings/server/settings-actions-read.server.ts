@@ -25,6 +25,7 @@ import {
 } from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
 import type {
+  PublicBranding,
   PublicFlags,
   PublicSiteContact,
   SettingHistoryEntry,
@@ -50,6 +51,20 @@ export async function getPublicSiteContactAction(): Promise<PublicSiteContact> {
     readSetting("contact.youtubeUrl"),
   ]);
   return { clubEmail, instagramUrl, facebookUrl, youtubeUrl };
+}
+
+/**
+ * Curated public-read of the header masthead strings. No auth — this
+ * text is on every page for everyone. Allowlisted here rather than
+ * derived from the `appearance` category, same as the contact subset:
+ * a category typo must not be able to change what leaks publicly.
+ */
+export async function getPublicBrandingAction(): Promise<PublicBranding> {
+  const [headerTitle, headerTagline] = await Promise.all([
+    readSetting("appearance.headerTitle"),
+    readSetting("appearance.headerTagline"),
+  ]);
+  return { headerTitle, headerTagline };
 }
 
 /**

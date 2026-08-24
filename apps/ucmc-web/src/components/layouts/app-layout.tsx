@@ -40,6 +40,7 @@ import {
 import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
 import { UserMenu } from "#/features/auth/components/user-menu";
 import { GitHubIcon } from "#/components/brand-icons";
+import { HeaderMasthead } from "#/components/layouts/header-masthead";
 import { ModeToggle } from "#/components/mode-toggle";
 import { SocialIconLinks } from "#/components/social-icon-links";
 import {
@@ -130,11 +131,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex-1">
             <SidebarTriggerWithTooltip />
           </div>
-          <div className="flex flex-1 flex-nowrap justify-center">
-            <Link to="/" className="text-center" aria-label="UCMC home">
-              <img src="/logo192.png" alt="" className="h-8 w-auto" />
-            </Link>
-          </div>
+          <HeaderMasthead />
           <div className="flex flex-1 flex-nowrap flex-row-reverse gap-x-2">
             <UserMenu />
             <AnnouncementsBell />

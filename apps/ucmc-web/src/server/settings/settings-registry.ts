@@ -36,8 +36,12 @@ import { z } from "zod";
 //              here because they pause new submissions while deliberately
 //              leaving the page reachable so managers can still triage.
 //
-// `integrations` / `appearance` / `legal` are reserved for cross-cutting
-// concerns that don't belong to a single feature.
+//   appearance — how the site presents itself: the header masthead text.
+//              Site identity rather than a way to reach anyone, which is
+//              what separates it from `contact`.
+//
+// `integrations` / `legal` are reserved for cross-cutting concerns that
+// don't belong to a single feature.
 //
 // Keep the meanings honest: a boolean that does more than hide-and-404 a
 // page does not belong in `pages`, however page-shaped it looks.
@@ -152,7 +156,46 @@ const socialUrl = z
     "Must start with https:// (or be left blank)",
   );
 
+/**
+ * Token the header tagline expands at render time, so "Est. 1971–{year}"
+ * keeps its own end date current without an admin editing it every
+ * January. Exported so the renderer and the settings copy can't drift
+ * on the spelling.
+ */
+export const CURRENT_YEAR_TOKEN = "{year}";
+
 export const SETTINGS = {
+  // ── Header masthead ──────────────────────────────────────────────────
+  // The two text halves flanking the logo badge in the app header. Both
+  // are `appearance` rather than `contact`: they're site identity, not a
+  // way to reach anyone. Blank hides that half — the same "empty string
+  // means absent" convention the social URLs use, which is why neither
+  // is `.min(1)`. The caps are tight on purpose: this is fixed-height
+  // chrome on every page, and anything longer truncates rather than
+  // wrapping, so a long value is a worse outcome than a rejected one.
+  "appearance.headerTitle": z
+    .string()
+    .trim()
+    .max(60, "At most 60 characters")
+    .default("UC Mountaineering Club")
+    .register(registry, {
+      label: "Header title",
+      description:
+        "Text left of the logo in the site header. Hidden below the md breakpoint, where only the logo shows. Leave blank to show no title.",
+      category: "appearance",
+    }),
+
+  "appearance.headerTagline": z
+    .string()
+    .trim()
+    .max(40, "At most 40 characters")
+    .default(`Est. 1971\u2013${CURRENT_YEAR_TOKEN}`)
+    .register(registry, {
+      label: "Header tagline",
+      description: `Text right of the logo in the site header. "${CURRENT_YEAR_TOKEN}" is replaced with the current year in the club's time zone, so a range like "Est. 1971\u2013${CURRENT_YEAR_TOKEN}" stays current on its own. Hidden below the lg breakpoint. Leave blank to show no tagline.`,
+      category: "appearance",
+    }),
+
   "contact.clubEmail": z
     .string()
     .trim()

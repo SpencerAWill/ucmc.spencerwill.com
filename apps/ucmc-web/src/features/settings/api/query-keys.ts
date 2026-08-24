@@ -27,5 +27,18 @@ export const PUBLIC_FLAGS_QUERY_KEY = [
   "public-flags",
 ] as const;
 
+/**
+ * Public-read header-masthead strings. Its own key rather than a couple
+ * of extra fields on the contact payload: the contact read is genuinely
+ * contact information, consumed by the footer and the landing page, and
+ * widening it to carry chrome text would make the name a lie. Every
+ * public key shares the `["site-settings"]` prefix, so one
+ * `useUpdateSetting` write invalidates all of them.
+ */
+export const PUBLIC_BRANDING_QUERY_KEY = [
+  "site-settings",
+  "public-branding",
+] as const;
+
 export const settingHistoryQueryKey = (key: string) =>
   ["site-settings", "history", key] as const;
