@@ -89,6 +89,36 @@ describe("HeaderMasthead", () => {
     expect(link.querySelector("img")).not.toBeNull();
   });
 
+  it("keeps the mark the only in-flow child, so it stays centred", () => {
+    // The invariant behind "logo dead centre": the mark is centred by
+    // its container, and both strings are taken out of flow so they
+    // cannot push it. Put either string back in flow and the mark
+    // shifts by their difference in width — content-sizing the link
+    // moved it ~39px right at 1280, and equal-width flex/grid tracks
+    // fixed that only by truncating the title at half the column.
+    //
+    // Asserted on class tokens because jsdom applies no Tailwind, so
+    // `getComputedStyle` can't report the positioning. Brittle to a
+    // rename, which is the trade for catching a silent re-centring.
+    renderWith("UC Mountaineering Club", "Est. 1971–2026");
+
+    const title = screen.getByText("UC Mountaineering Club");
+    const tagline = screen.getByText("Est. 1971–2026");
+    expect(title.className).toContain("absolute");
+    expect(tagline.className).toContain("absolute");
+
+    // Both hang off the same containing block, which also holds the
+    // mark — that's what `right-full` / `left-full` resolve against.
+    const anchor = title.parentElement;
+    expect(anchor).not.toBeNull();
+    expect(anchor).toBe(tagline.parentElement);
+    expect(anchor!.className).toContain("relative");
+
+    const img = anchor!.querySelector("img");
+    expect(img).not.toBeNull();
+    expect(img!.className).not.toContain("absolute");
+  });
+
   it("expands the {year} token to the current club-zone year", () => {
     renderWith("UC Mountaineering Club", "Est. 1971–{year}");
 
