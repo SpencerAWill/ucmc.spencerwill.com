@@ -73,24 +73,47 @@ export type HeroPage = keyof typeof HERO_PAGES;
 
 export const HERO_PAGE_KEYS = Object.keys(HERO_PAGES) as HeroPage[];
 
-/** Runtime narrowing for a value off the wire or out of the database. */
+/**
+ * Runtime narrowing for a value off the wire or out of the database.
+ *
+ * `Object.hasOwn`, not `in`: `in` walks the prototype chain, so `"toString"`
+ * and `"constructor"` would both narrow to `HeroPage` and then index the
+ * registry to a function.
+ */
 export function isHeroPage(value: string): value is HeroPage {
-  return value in HERO_PAGES;
+  return Object.hasOwn(HERO_PAGES, value);
 }
+
+export type HeroHeadingKey = `hero.${HeroPage}.heading`;
+export type HeroTaglineKey = `hero.${HeroPage}.tagline`;
 
 /**
  * `hero.<page>.heading` / `hero.<page>.tagline` — the `landing_settings`
  * keys holding a page's overlay copy. Built here rather than written out
  * so the registry stays the only place a page is named.
+ *
+ * The return types are template literals over the *specific* page rather
+ * than `string`, and that is load-bearing: `HERO_HEADING_KEYS` is what
+ * `updateSettingInputSchema` feeds to `z.enum` for its discriminator, so
+ * widening either return to `string` collapses the whole discriminated
+ * union — every `key` accepts any string and per-key value typing goes
+ * with it. Runtime validation stays correct either way, which is exactly
+ * why the loss is invisible without a type-level test.
  */
-export function heroHeadingKey(page: HeroPage): string {
+export function heroHeadingKey<TPage extends HeroPage>(
+  page: TPage,
+): `hero.${TPage}.heading` {
   return `hero.${page}.heading`;
 }
 
-export function heroTaglineKey(page: HeroPage): string {
+export function heroTaglineKey<TPage extends HeroPage>(
+  page: TPage,
+): `hero.${TPage}.tagline` {
   return `hero.${page}.tagline`;
 }
 
 /** Every hero setting key, for validators and allowlists. */
-export const HERO_HEADING_KEYS = HERO_PAGE_KEYS.map(heroHeadingKey);
-export const HERO_TAGLINE_KEYS = HERO_PAGE_KEYS.map(heroTaglineKey);
+export const HERO_HEADING_KEYS: HeroHeadingKey[] =
+  HERO_PAGE_KEYS.map(heroHeadingKey);
+export const HERO_TAGLINE_KEYS: HeroTaglineKey[] =
+  HERO_PAGE_KEYS.map(heroTaglineKey);

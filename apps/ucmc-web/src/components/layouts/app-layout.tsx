@@ -81,7 +81,11 @@ import {
 } from "#/components/ui/tooltip";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useViewMode } from "#/features/auth/api/view-mode";
-import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
+import {
+  CLUB_FEEDBACK_PERMISSIONS,
+  SITE_FEEDBACK_PERMISSIONS,
+  WAIVER_VIEW_PERMISSIONS,
+} from "#/features/auth/guards";
 
 const HEADER_HEIGHT = "3.5rem";
 
@@ -651,7 +655,7 @@ export function SidebarNav() {
 }
 
 function SidebarUtilityNav() {
-  const { isApproved, hasPermission } = useAuth();
+  const { isApproved, hasPermission, hasAnyPermission } = useAuth();
   // Page kill switches for entries in this group. `placeholderData` is the
   // schema default (on) until the query resolves.
   const flagsOptions = publicFlagsQueryOptions();
@@ -664,13 +668,9 @@ function SidebarUtilityNav() {
   // both via the principal bypass). Point the link at whichever surface is
   // actually enabled so it never lands on a switched-off /feedback.
   const canSiteFeedback =
-    (hasPermission("site_feedback:submit") ||
-      hasPermission("site_feedback:manage")) &&
-    pages.feedback_site;
+    hasAnyPermission(SITE_FEEDBACK_PERMISSIONS) && pages.feedback_site;
   const canClubFeedback =
-    (hasPermission("club_feedback:submit") ||
-      hasPermission("club_feedback:manage")) &&
-    pages.feedback_club;
+    hasAnyPermission(CLUB_FEEDBACK_PERMISSIONS) && pages.feedback_club;
   const canSubmitFeedback = isApproved && (canSiteFeedback || canClubFeedback);
   // Prefer club: it reaches the exec board and is the surface members are
   // more likely to want, which is also why it's the first tab. Falls back to

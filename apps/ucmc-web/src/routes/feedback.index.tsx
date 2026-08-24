@@ -1,6 +1,11 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
-import { requireApproved } from "#/features/auth/guards";
+import {
+  CLUB_FEEDBACK_PERMISSIONS,
+  SITE_FEEDBACK_PERMISSIONS,
+  effectivePermissionsFor,
+  requireApproved,
+} from "#/features/auth/guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 /**
@@ -27,17 +32,23 @@ export const Route = createFileRoute("/feedback/")({
     const flags = await context.queryClient.ensureQueryData(
       publicFlagsQueryOptions(),
     );
+    // Effective (preview-aware) permissions, not `principal.permissions`:
+    // a role preview has to pick the same surface the sidebar entry and
+    // the tab bar do, or previewing a member redirects to a surface the
+    // chrome has already hidden.
+    const granted = await effectivePermissionsFor(
+      context.queryClient,
+      principal,
+    );
     const canClub =
       flags.pages.feedback_club &&
-      (principal.permissions.includes("club_feedback:submit") ||
-        principal.permissions.includes("club_feedback:manage"));
+      CLUB_FEEDBACK_PERMISSIONS.some((p) => granted.includes(p));
     if (canClub) {
       throw redirect({ to: "/feedback/club" });
     }
     const canSite =
       flags.pages.feedback_site &&
-      (principal.permissions.includes("site_feedback:submit") ||
-        principal.permissions.includes("site_feedback:manage"));
+      SITE_FEEDBACK_PERMISSIONS.some((p) => granted.includes(p));
     if (canSite) {
       throw redirect({ to: "/feedback/site" });
     }

@@ -68,6 +68,25 @@ describe("resolveEmulatedRole", () => {
   });
 });
 
+describe("prototype keys", () => {
+  // The cookie is client-written and lasts a year, so a value that
+  // resolves to something off `Object.prototype` isn't a transient
+  // annoyance: `effectivePermissions` would return a *function*, and
+  // every consumer calls `.includes()` on the result — in render and in
+  // server-side `beforeLoad` alike.
+  const protoKeys = ["constructor", "toString", "valueOf", "__proto__"];
+
+  it.each(protoKeys)("ignores %s as a requested role", (key) => {
+    expect(resolveEmulatedRole(sysAdmin, key)).toBeNull();
+  });
+
+  it.each(protoKeys)("keeps %s from yielding a non-array", (key) => {
+    const granted = effectivePermissions(sysAdmin, key);
+    expect(Array.isArray(granted)).toBe(true);
+    expect(granted).toEqual(sysAdmin.permissions);
+  });
+});
+
 describe("effectivePermissions", () => {
   it("returns the real set when nothing is being previewed", () => {
     expect(effectivePermissions(sysAdmin, null)).toEqual(sysAdmin.permissions);

@@ -53,7 +53,7 @@ async function getPrincipal(
  * preview doesn't change. Keeping them on the real principal is what
  * stops a preview from locking an admin out of their own `/my/*` pages.
  */
-async function effectivePermissionsFor(
+export async function effectivePermissionsFor(
   queryClient: QueryClient,
   principal: Principal,
 ): Promise<string[]> {
@@ -133,6 +133,27 @@ export async function requirePermission(
 export const WAIVER_VIEW_PERMISSIONS = [
   "waivers:view",
   "waivers:verify",
+] as const;
+
+/**
+ * The submit/manage pairs that grant access to each feedback surface.
+ *
+ * Same rationale as `WAIVER_VIEW_PERMISSIONS`: `*:manage` implies `*:submit`
+ * for the purpose of *reaching* the surface (a manager triages a backlog
+ * they may never post to), there's no implication mechanism in the RBAC
+ * tables, and five places ask the question — the sidebar entry, the tab
+ * bar, and all three `/feedback` routes. Spelled out at each one, they
+ * drift; the club/site pair splitting out of a single `feedback:*` in
+ * migration 0064 is exactly the kind of change that does it.
+ */
+export const CLUB_FEEDBACK_PERMISSIONS = [
+  "club_feedback:submit",
+  "club_feedback:manage",
+] as const;
+
+export const SITE_FEEDBACK_PERMISSIONS = [
+  "site_feedback:submit",
+  "site_feedback:manage",
 ] as const;
 
 /**

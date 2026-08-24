@@ -20,7 +20,6 @@ function renderWithContent(content: Partial<LandingContent>) {
   });
   const fullContent: LandingContent = {
     settings: {},
-    heroSlides: [],
     faqItems: [],
     activities: [],
     officers: [],

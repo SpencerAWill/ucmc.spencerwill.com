@@ -49,7 +49,16 @@ export function resolveEmulatedRole(
   if (!principal || !requested) {
     return null;
   }
-  return requested in principal.rolePermissionMap ? requested : null;
+  // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so a
+  // forged cookie of `constructor` / `toString` / `__proto__` would
+  // resolve as a real role and `effectivePermissions` would hand back a
+  // function. Every consumer immediately calls `.includes()` on that,
+  // which throws in render *and* in server-side `beforeLoad` — and the
+  // cookie lasts a year, so it would be a persistent self-inflicted
+  // break rather than a transient one.
+  return Object.hasOwn(principal.rolePermissionMap, requested)
+    ? requested
+    : null;
 }
 
 /**

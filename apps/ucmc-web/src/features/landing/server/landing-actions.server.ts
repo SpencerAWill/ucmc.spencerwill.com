@@ -123,7 +123,6 @@ export interface PageHero {
 
 export interface LandingContent {
   settings: Record<string, LandingSettingValue>;
-  heroSlides: HeroSlideSummary[];
   faqItems: FaqItemSummary[];
   activities: ActivitySummary[];
   officers: LandingOfficerRole[];
@@ -132,14 +131,16 @@ export interface LandingContent {
 // ── read ────────────────────────────────────────────────────────────────
 
 export async function getLandingContentAction(): Promise<LandingContent> {
-  const [settingRows, heroSlides, faqItems, activities, officers] =
-    await Promise.all([
-      listSettings(),
-      listHeroSlides("home"),
-      listFaqItems(),
-      listActivities(),
-      listLandingOfficers(),
-    ]);
+  // No hero slides here: the hero reads through `getPageHeroAction`, which
+  // every page (home included) uses. Carrying a second copy of home's
+  // slides on this bundle was a spare D1 query per page load and a second
+  // projection that could drift from the one actually rendered.
+  const [settingRows, faqItems, activities, officers] = await Promise.all([
+    listSettings(),
+    listFaqItems(),
+    listActivities(),
+    listLandingOfficers(),
+  ]);
 
   const settings: Record<string, LandingSettingValue> = {};
   for (const row of settingRows) {
@@ -163,12 +164,6 @@ export async function getLandingContentAction(): Promise<LandingContent> {
 
   return {
     settings,
-    heroSlides: heroSlides.map((s) => ({
-      id: s.id,
-      imageKey: s.imageKey,
-      alt: s.alt,
-      sortOrder: s.sortOrder,
-    })),
     faqItems: faqItems.map((f) => ({
       id: f.id,
       question: f.question,

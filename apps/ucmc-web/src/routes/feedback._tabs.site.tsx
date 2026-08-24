@@ -3,7 +3,12 @@ import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requireApproved } from "#/features/auth/guards";
+import {
+  CLUB_FEEDBACK_PERMISSIONS,
+  SITE_FEEDBACK_PERMISSIONS,
+  effectivePermissionsFor,
+  requireApproved,
+} from "#/features/auth/guards";
 import {
   allFeedbackQueryOptions,
   myFeedbackQueryOptions,
@@ -18,12 +23,12 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
   beforeLoad: async ({ context, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);
-    const canSite =
-      principal.permissions.includes("site_feedback:submit") ||
-      principal.permissions.includes("site_feedback:manage");
-    const canClub =
-      principal.permissions.includes("club_feedback:submit") ||
-      principal.permissions.includes("club_feedback:manage");
+    const granted = await effectivePermissionsFor(
+      context.queryClient,
+      principal,
+    );
+    const canSite = SITE_FEEDBACK_PERMISSIONS.some((p) => granted.includes(p));
+    const canClub = CLUB_FEEDBACK_PERMISSIONS.some((p) => granted.includes(p));
 
     // Someone who can't see site feedback but can see club feedback lands
     // there rather than getting a notFound from a link or a stale

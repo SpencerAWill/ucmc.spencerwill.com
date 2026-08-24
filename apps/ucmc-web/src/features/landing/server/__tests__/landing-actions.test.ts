@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { HERO_PAGES } from "#/features/landing/lib/hero-pages";
+import type { UpdateSettingInput } from "#/features/landing/server/landing-schemas";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
@@ -159,7 +160,7 @@ beforeEach(async () => {
 describe("getLandingContentAction (read)", () => {
   it("returns an empty bundle for unauthenticated callers (no throw)", async () => {
     const content = await getLandingContentAction();
-    expect(content.heroSlides).toHaveLength(0);
+    expect(await getPageHeroAction("home")).toMatchObject({ slides: [] });
     expect(content.faqItems).toHaveLength(0);
     expect(content.activities).toHaveLength(0);
     expect(content.settings).toEqual({});
@@ -167,7 +168,7 @@ describe("getLandingContentAction (read)", () => {
 
   it("returns settings parsed by shape (string vs string[])", async () => {
     const adminId = await signInAsAdmin();
-    await updateSettingAction({ key: "hero.heading", value: "Welcome" });
+    await updateSettingAction({ key: "hero.home.heading", value: "Welcome" });
     await updateSettingAction({
       key: "about.paragraphs",
       value: ["Para one.", "Para two."],
@@ -175,14 +176,14 @@ describe("getLandingContentAction (read)", () => {
     cookieJar.clear();
 
     const content = await getLandingContentAction();
-    expect(content.settings["hero.heading"]).toBe("Welcome");
+    expect(content.settings["hero.home.heading"]).toBe("Welcome");
     expect(content.settings["about.paragraphs"]).toEqual([
       "Para one.",
       "Para two.",
     ]);
     // sanity: the action ran and wrote with the admin's id
     const row = await getDb().query.landingSettings.findFirst({
-      where: eq(schema.landingSettings.key, "hero.heading"),
+      where: eq(schema.landingSettings.key, "hero.home.heading"),
     });
     expect(row?.updatedBy).toBe(adminId);
   });
@@ -200,7 +201,7 @@ describe("write authorization", () => {
   it("updateSettingAction rejects users without landing:manage", async () => {
     await signInAsMember();
     await expect(
-      updateSettingAction({ key: "hero.heading", value: "x" }),
+      updateSettingAction({ key: "hero.home.heading", value: "x" }),
     ).rejects.toThrow("Forbidden: missing landing:manage");
   });
 
@@ -277,11 +278,9 @@ describe("hero slides", () => {
     });
     // Old image gone, new one present
     expect(await getPublicBucket().head(created.imageKey)).toBeNull();
-    const content = await getLandingContentAction();
-    expect(content.heroSlides[0].alt).toBe("v2");
-    expect(
-      await getPublicBucket().head(content.heroSlides[0].imageKey),
-    ).not.toBeNull();
+    const { slides } = await getPageHeroAction("home");
+    expect(slides[0].alt).toBe("v2");
+    expect(await getPublicBucket().head(slides[0].imageKey)).not.toBeNull();
   });
 
   it("reorder assigns contiguous sort_order from 0 in the given order", async () => {
@@ -303,13 +302,31 @@ describe("hero slides", () => {
     });
 
     await reorderHeroSlidesAction({ ids: [c.id, a.id, b.id] });
-    const content = await getLandingContentAction();
-    expect(content.heroSlides.map((s) => s.id)).toEqual([c.id, a.id, b.id]);
-    expect(content.heroSlides.map((s) => s.sortOrder)).toEqual([0, 1, 2]);
+    const { slides } = await getPageHeroAction("home");
+    expect(slides.map((s) => s.id)).toEqual([c.id, a.id, b.id]);
+    expect(slides.map((s) => s.sortOrder)).toEqual([0, 1, 2]);
   });
 });
 
 // ── FAQ ────────────────────────────────────────────────────────────────
+
+/**
+ * Type-level regression for the `updateSettingInputSchema` discriminated
+ * union. Widening `heroHeadingKey`'s return to `string` collapses the
+ * whole union — every `key` accepts any string and per-key value typing
+ * goes with it — while runtime validation stays correct, so nothing else
+ * in this file would notice. `@ts-expect-error` fails `tsc` when the line
+ * *stops* erroring, which is exactly the direction of the regression.
+ */
+// @ts-expect-error — pre-0065 key, must not typecheck
+const _staleHeroKey: UpdateSettingInput = { key: "hero.heading", value: "x" };
+// @ts-expect-error — `about.paragraphs` takes string[], not string
+const _wrongValueType: UpdateSettingInput = {
+  key: "about.paragraphs",
+  value: "not-an-array",
+};
+void _staleHeroKey;
+void _wrongValueType;
 
 describe("getPageHeroAction", () => {
   it("returns only the requested page's slides", async () => {

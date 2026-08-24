@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SidebarNav } from "#/components/layouts/app-layout";
 import { SidebarProvider } from "#/components/ui/sidebar";
+import { authStub } from "#/test-support/auth-stub";
 
 // The nav's own logic is the subject; its heavy children (the bell, the
 // user menu) are stubbed so this doesn't drag in the announcements and
@@ -78,15 +79,7 @@ function setFlags(pages: Record<string, boolean>) {
 }
 
 function setAuth(permissions: string[], isApproved = true) {
-  useAuthMock.mockReturnValue({
-    isApproved,
-    hasPermission: (name: string) => permissions.includes(name),
-    // Derived from the same list as `hasPermission` so the stub can't
-    // disagree with itself about what the viewer holds.
-    hasAnyPermission: (names: readonly string[]) =>
-      names.some((name) => permissions.includes(name)),
-    emulatedRole: null,
-  });
+  useAuthMock.mockReturnValue(authStub(permissions, { isApproved }));
 }
 
 function renderNav() {

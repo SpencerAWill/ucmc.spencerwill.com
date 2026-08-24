@@ -10,6 +10,7 @@ import {
   activeMembersTabFromPath,
   getMembersTabSubtitle,
 } from "#/features/members/components/members-tabs-bar";
+import { authStub } from "#/test-support/auth-stub";
 
 // The bar reads `useAuth().hasPermission` and `useLocation()` from the
 // router plus the public-flags snapshot via `useQuery`; we stub all three
@@ -52,9 +53,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 function setAuth(canManage: boolean) {
-  useAuthMock.mockReturnValue({
-    hasPermission: (name: string) => canManage && name === "members:manage",
-  });
+  useAuthMock.mockReturnValue(authStub(canManage ? ["members:manage"] : []));
 }
 
 function setPathname(pathname: string) {

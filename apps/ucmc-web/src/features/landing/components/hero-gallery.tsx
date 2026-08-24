@@ -90,24 +90,26 @@ export function HeroGallery({ slides }: HeroGalleryProps) {
     setMounted(true);
   }, []);
 
+  // Side effects stay *outside* the `setPaused` updater: React may call an
+  // updater more than once for a single dispatch (StrictMode's dev
+  // double-invoke, or a re-render during concurrent rendering), which
+  // would stop-and-restart the plugin and write storage twice per click.
   const togglePaused = useCallback(() => {
-    setPaused((wasPaused) => {
-      const next = !wasPaused;
-      if (next) {
-        autoplay.stop();
-      } else {
-        // `play(true)` would jump a slide immediately; the plain call
-        // restarts the timer so resuming gives a full interval.
-        autoplay.play();
-      }
-      try {
-        window.localStorage.setItem(PAUSED_STORAGE_KEY, String(next));
-      } catch {
-        // Storage unavailable — the toggle still works for this visit.
-      }
-      return next;
-    });
-  }, [autoplay]);
+    const next = !paused;
+    setPaused(next);
+    if (next) {
+      autoplay.stop();
+    } else {
+      // `play(true)` would jump a slide immediately; the plain call
+      // restarts the timer so resuming gives a full interval.
+      autoplay.play();
+    }
+    try {
+      window.localStorage.setItem(PAUSED_STORAGE_KEY, String(next));
+    } catch {
+      // Storage unavailable — the toggle still works for this visit.
+    }
+  }, [autoplay, paused]);
 
   const timeUntilNext = useCallback(() => autoplay.timeUntilNext(), [autoplay]);
 

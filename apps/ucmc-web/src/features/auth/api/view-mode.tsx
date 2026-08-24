@@ -15,8 +15,18 @@
  * and waiting on a refetch: the cache is what both the chrome and the
  * guards read, so updating it is what keeps them from disagreeing
  * mid-switch.
+ *
+ * It then invalidates the router, because patching the cache is not by
+ * itself enough: `beforeLoad` re-runs on navigation or explicit
+ * invalidation, so without it the guards never re-evaluate for the page
+ * you are *already* on. Switching to a narrower role while sitting on
+ * `/settings` would leave the settings page fully rendered — the exact
+ * symptom the guard change exists to fix, reached from a different
+ * direction — and "Exit preview" could never rescue you off a
+ * `notFound()` a preview had thrown.
  */
 import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { createContext, use } from "react";
 
 import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
@@ -47,6 +57,7 @@ function writeCookie(role: string | null) {
 
 export function ViewModeProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const setEmulatedRole = (role: string | null) => {
     writeCookie(role);
@@ -58,6 +69,11 @@ export function ViewModeProvider({ children }: { children: React.ReactNode }) {
       (prev: { emulatedRole: string | null } | undefined) =>
         prev ? { ...prev, emulatedRole: role } : prev,
     );
+    // Re-run `beforeLoad` for the current match tree against the patched
+    // session. Fire-and-forget: the guards throw redirect/notFound, which
+    // the router handles itself, and there's nothing for the caller to
+    // await.
+    void router.invalidate();
   };
 
   return (

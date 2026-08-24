@@ -236,7 +236,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
   // a label — a freshly created role with no grants still has to be
   // nameable in the switcher.
   for (const r of userRoleRows) {
-    if (!(r.name in rolePermissionMap)) {
+    if (!Object.hasOwn(rolePermissionMap, r.name)) {
       rolePermissionMap[r.name] = [];
     }
     roleDisplayNames[r.name] = r.displayName;

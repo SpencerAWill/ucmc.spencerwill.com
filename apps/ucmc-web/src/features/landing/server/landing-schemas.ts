@@ -5,7 +5,11 @@ import {
   HERO_PAGE_KEYS,
   HERO_TAGLINE_KEYS,
 } from "#/features/landing/lib/hero-pages";
-import type { HeroPage } from "#/features/landing/lib/hero-pages";
+import type {
+  HeroHeadingKey,
+  HeroPage,
+  HeroTaglineKey,
+} from "#/features/landing/lib/hero-pages";
 
 // ── Curated lucide icon allowlist for activity cards ────────────────────
 // Restricted set keeps the editor UX simple and prevents importing every
@@ -111,11 +115,11 @@ export const meetingFieldSchema = trimmed(
 // tagline stay separate because their length caps differ.
 export const updateSettingInputSchema = z.discriminatedUnion("key", [
   z.object({
-    key: z.enum(HERO_HEADING_KEYS as [string, ...string[]]),
+    key: z.enum(HERO_HEADING_KEYS as [HeroHeadingKey, ...HeroHeadingKey[]]),
     value: heroHeadingSchema,
   }),
   z.object({
-    key: z.enum(HERO_TAGLINE_KEYS as [string, ...string[]]),
+    key: z.enum(HERO_TAGLINE_KEYS as [HeroTaglineKey, ...HeroTaglineKey[]]),
     value: heroTaglineSchema,
   }),
   z.object({

@@ -12,6 +12,9 @@ import { describe, expect, it } from "vitest";
 
 import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
 import {
+  CLUB_FEEDBACK_PERMISSIONS,
+  SITE_FEEDBACK_PERMISSIONS,
+  effectivePermissionsFor,
   requireApproved,
   requirePermission,
   requirePermissionOrNotFound,
@@ -277,5 +280,46 @@ describe("role preview ('View as')", () => {
     if (!result.ok) {
       expect(isRedirect(result.thrown)).toBe(true);
     }
+  });
+});
+
+/**
+ * `effectivePermissionsFor` is exported because the three `/feedback`
+ * routes can't use `requirePermission` — they pick between two surfaces
+ * rather than gating on one permission — and they were reading
+ * `principal.permissions` directly, which is the one thing a preview
+ * can't reach. These pin that they now see the preview, and that the
+ * surface pairs are named rather than spelled out per call site.
+ */
+describe("effectivePermissionsFor", () => {
+  const admin = makePrincipal({
+    isSystemAdmin: true,
+    permissions: ["club_feedback:manage", "site_feedback:manage"],
+    rolePermissionMap: {
+      system_admin: ["club_feedback:manage", "site_feedback:manage"],
+      member: ["club_feedback:submit"],
+    },
+  });
+
+  it("returns the real permission set with no preview active", async () => {
+    const client = clientWithPrincipal(admin);
+    await expect(effectivePermissionsFor(client, admin)).resolves.toEqual(
+      admin.permissions,
+    );
+  });
+
+  it("narrows to the previewed role's grants", async () => {
+    const client = clientWithPrincipal(admin, "member");
+    const granted = await effectivePermissionsFor(client, admin);
+    expect(granted).toEqual(["club_feedback:submit"]);
+    // The consequence the /feedback routes depend on: previewing `member`
+    // keeps club (submit) but drops site, so `/feedback` redirects to the
+    // surface the chrome is also showing.
+    expect(CLUB_FEEDBACK_PERMISSIONS.some((x) => granted.includes(x))).toBe(
+      true,
+    );
+    expect(SITE_FEEDBACK_PERMISSIONS.some((x) => granted.includes(x))).toBe(
+      false,
+    );
   });
 });
