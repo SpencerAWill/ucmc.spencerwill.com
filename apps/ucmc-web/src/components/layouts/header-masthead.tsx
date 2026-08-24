@@ -21,6 +21,16 @@ import { CURRENT_YEAR_TOKEN } from "#/server/settings/settings-registry";
  * the whole reads as a masthead centred on the mark instead of an icon
  * with a caption. The logo's own lettering is illegible at 32px, which
  * is why the title next to it isn't redundant.
+ *
+ * The tagline is de-emphasised by size and weight only — **do not add a
+ * `text-primary-foreground/NN` opacity to it.** Against the light
+ * theme's `--primary`, the full-opacity foreground is 5.09:1, /95 is
+ * 4.76:1, and /90 is already 4.44:1 — so anything below full opacity
+ * either fails WCAG AA for 12px text or clears it by less than axe's
+ * own measurement error. `/75` shipped once and failed the axe job on
+ * all 13 audited routes at 3.3:1, because this header renders on every
+ * page. The dark theme passes at every alpha, so light is the binding
+ * constraint and eyeballing dark will mislead.
  */
 export function HeaderMasthead() {
   const options = publicBrandingQueryOptions();
@@ -65,7 +75,7 @@ export function HeaderMasthead() {
         ) : null}
         <img src="/logo192.png" alt="" className="h-8 w-auto shrink-0" />
         {tagline ? (
-          <span className="hidden whitespace-nowrap text-xs font-medium text-primary-foreground/75 lg:inline">
+          <span className="hidden whitespace-nowrap text-xs font-normal lg:inline">
             {tagline}
           </span>
         ) : null}
