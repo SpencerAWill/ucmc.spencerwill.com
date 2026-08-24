@@ -8,19 +8,9 @@
  * a concurrent second officer — the action layer's pre-check is just
  * for UX.
  */
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  like,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, likeContains, schema } from "#/server/db";
 
 // ── shared row shapes ──────────────────────────────────────────────────
 
@@ -181,10 +171,6 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PER_PAGE = 50;
 const MAX_PER_PAGE = 250;
 
-function escapeLikeNeedle(input: string): string {
-  return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
 export async function listLoans(
   options: ListLoansOptions = {},
 ): Promise<ListLoansResult> {
@@ -208,13 +194,13 @@ export async function listLoans(
     clauses.push(sql`${schema.gearLoans.dueAt} < (unixepoch() * 1000)`);
   }
   if (options.q && options.q.trim().length > 0) {
-    const needle = `%${escapeLikeNeedle(options.q.trim())}%`;
+    const q = options.q.trim();
     clauses.push(
       or(
-        like(schema.gear.code, needle),
-        like(schema.gear.description, needle),
-        like(schema.profiles.fullName, needle),
-        like(schema.userEmails.email, needle),
+        likeContains(schema.gear.code, q),
+        likeContains(schema.gear.description, q),
+        likeContains(schema.profiles.fullName, q),
+        likeContains(schema.userEmails.email, q),
       ),
     );
   }
@@ -395,7 +381,6 @@ export async function searchApprovedMembers(
   q: string,
   limit = 20,
 ): Promise<MemberSearchResult[]> {
-  const needle = `%${escapeLikeNeedle(q.trim())}%`;
   if (q.trim().length === 0) return [];
   const db = getDb();
   const rows = await db
@@ -418,8 +403,8 @@ export async function searchApprovedMembers(
       and(
         eq(schema.users.status, "approved"),
         or(
-          like(schema.profiles.fullName, needle),
-          like(schema.userEmails.email, needle),
+          likeContains(schema.profiles.fullName, q.trim()),
+          likeContains(schema.userEmails.email, q.trim()),
         ),
       ),
     )
@@ -633,7 +618,6 @@ export async function searchGearByCode(
   limit = 10,
 ): Promise<GearCodeSearchRow[]> {
   if (q.trim().length === 0) return [];
-  const needle = `%${escapeLikeNeedle(q.trim())}%`;
   const db = getDb();
   const rows = await db
     .select({
@@ -662,7 +646,10 @@ export async function searchGearByCode(
       eq(schema.profiles.userId, schema.gearLoans.memberUserId),
     )
     .where(
-      and(like(schema.gear.code, needle), sql`${schema.gear.code} IS NOT NULL`),
+      and(
+        likeContains(schema.gear.code, q.trim()),
+        sql`${schema.gear.code} IS NOT NULL`,
+      ),
     )
     .orderBy(asc(schema.gear.code))
     .limit(limit);

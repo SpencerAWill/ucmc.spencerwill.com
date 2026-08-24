@@ -1,5 +1,8 @@
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
+import type { SQL } from "drizzle-orm";
+import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 import { env } from "#/server/cloudflare-env";
 import * as schema from "../../../drizzle/schema.ts";
@@ -87,4 +90,26 @@ export function isForeignKeyViolation(err: unknown): boolean {
     cur = (cur as { cause?: unknown }).cause;
   }
   return false;
+}
+
+/**
+ * A `LIKE '%needle%'` condition with the wildcards in `query` escaped,
+ * so a search for `50%` matches that literal string instead of every
+ * row.
+ *
+ * The `ESCAPE` clause is the load-bearing part. SQLite only treats a
+ * character as an escape when the pattern carries an explicit `ESCAPE`,
+ * and Drizzle's `like()` never emits one — so escaping the needle
+ * *without* this template is worse than not escaping at all: `50%`
+ * becomes the pattern `%50\%%`, which matches a literal backslash and
+ * therefore nothing. Escaping and `ESCAPE` have to travel together,
+ * which is why this is one helper rather than a bare needle-builder.
+ *
+ * Lives here beside the other dialect-level helpers because three
+ * features search text columns and `import/no-restricted-paths` won't
+ * let any of them import the others.
+ */
+export function likeContains(column: AnySQLiteColumn, query: string): SQL {
+  const needle = `%${query.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  return sql`${column} LIKE ${needle} ESCAPE '\\'`;
 }

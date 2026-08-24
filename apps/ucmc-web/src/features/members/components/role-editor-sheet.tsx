@@ -48,6 +48,7 @@ import { useSetRolePermissions } from "#/features/members/api/use-set-role-permi
 import { useUpdateRole } from "#/features/members/api/use-update-role";
 import type { PickedMember } from "#/features/members/components/role-member-picker";
 import { RoleMemberPicker } from "#/features/members/components/role-member-picker";
+import { ROLE_MEMBERS_DIFF_MAX } from "#/features/members/server/rbac-fns";
 import type { PermissionSummary } from "#/features/members/server/rbac-fns";
 
 const UNSAVED_CHANGES_MESSAGE =
@@ -149,12 +150,16 @@ export function RoleEditorSheet({
   const isAnonymous = roleName === "anonymous";
   const isMemberRole = roleName === "member";
 
-  const { hasPermission } = useAuth();
+  const { hasPermission, principal } = useAuth();
   // Writing `user_roles` rows answers to `roles:assign`, not the
   // `roles:manage` that gates /access itself. The two only travel
   // together by seed (system_admin holds both); a role delegated just
   // `roles:manage` at /access gets a read-only Members tab.
   const canAssign = hasPermission("roles:assign");
+  // The server refuses to let an admin drop their own system_admin.
+  // Mirror it here so the affordance is absent rather than present and
+  // then rejected — the same reasoning as the read-only `member` role.
+  const selfUserId = principal?.userId ?? null;
 
   const {
     data: role,
@@ -300,6 +305,15 @@ export function RoleEditorSheet({
     setPendingMemberIds((prev) => new Set(prev).add(member.userId));
   }
 
+  /**
+   * True for the viewer's own row on the system_admin role — the one
+   * removal `setRoleMembersAction` rejects outright, so offering it
+   * would be an affordance that can only fail.
+   */
+  function isSelfAdminRow(userId: string): boolean {
+    return isAdmin && selfUserId !== null && userId === selfUserId;
+  }
+
   function removeMember(userId: string) {
     setPendingMemberIds((prev) => {
       const next = new Set(prev);
@@ -335,8 +349,12 @@ export function RoleEditorSheet({
 
   function handleSaveMembers() {
     const savedIds = new Set(pendingMemberIds);
+    // Send the diff, not the post-state: a save should touch only the
+    // rows the user acted on, so a member granted this role elsewhere
+    // while the sheet sat open survives instead of being unassigned by
+    // a stale baseline. See `setRoleMembersAction`.
     setRoleMembers.mutate(
-      { roleId, userIds: Array.from(savedIds) },
+      { roleId, add: addedIds, remove: removedIds },
       {
         onSuccess: () => {
           setBaselineMemberIds(savedIds);
@@ -405,12 +423,20 @@ export function RoleEditorSheet({
     );
   }, [pendingMemberIds, memberRows]);
 
-  const addedCount = [...pendingMemberIds].filter(
-    (id) => !baselineMemberIds.has(id),
-  ).length;
-  const removedCount = [...baselineMemberIds].filter(
-    (id) => !pendingMemberIds.has(id),
-  ).length;
+  // The staged diff, as ids rather than just counts — the save sends
+  // these two lists verbatim, and the confirm copy counts them.
+  const addedIds = useMemo(
+    () => [...pendingMemberIds].filter((id) => !baselineMemberIds.has(id)),
+    [pendingMemberIds, baselineMemberIds],
+  );
+  const removedIds = useMemo(
+    () => [...baselineMemberIds].filter((id) => !pendingMemberIds.has(id)),
+    [pendingMemberIds, baselineMemberIds],
+  );
+  const addedCount = addedIds.length;
+  const removedCount = removedIds.length;
+  const overDiffCap =
+    addedCount > ROLE_MEMBERS_DIFF_MAX || removedCount > ROLE_MEMBERS_DIFF_MAX;
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -519,14 +545,20 @@ export function RoleEditorSheet({
                                         variant="ghost"
                                         size="icon"
                                         className="size-8 shrink-0"
-                                        disabled={isPending}
+                                        disabled={
+                                          isPending || isSelfAdminRow(m.userId)
+                                        }
                                         onClick={() => removeMember(m.userId)}
                                         aria-label={`Remove ${memberLabel(m)} from this role`}
                                       >
                                         <Trash2 className="size-4" />
                                       </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent>Remove</TooltipContent>
+                                    <TooltipContent>
+                                      {isSelfAdminRow(m.userId)
+                                        ? "You can’t remove your own system_admin"
+                                        : "Remove"}
+                                    </TooltipContent>
                                   </Tooltip>
                                 ) : null}
                               </li>
@@ -553,6 +585,12 @@ export function RoleEditorSheet({
                               ? `${removedCount} to remove`
                               : null}
                             . Save to apply.
+                          </p>
+                        ) : null}
+                        {overDiffCap ? (
+                          <p className="text-sm text-destructive">
+                            One save can change at most {ROLE_MEMBERS_DIFF_MAX}{" "}
+                            members. Apply these in smaller batches.
                           </p>
                         ) : null}
                       </>
@@ -779,7 +817,12 @@ export function RoleEditorSheet({
                 }
                 handleSaveMembers();
               }}
-              disabled={!dirty.members || isPending || Boolean(loadFailed)}
+              disabled={
+                !dirty.members ||
+                isPending ||
+                Boolean(loadFailed) ||
+                overDiffCap
+              }
             >
               {setRoleMembers.isPending ? "Saving…" : "Save"}
             </Button>
@@ -830,6 +873,16 @@ export function RoleEditorSheet({
                 This is the highest level of access there is.
               </AlertDialogDescription>
             </AlertDialogHeader>
+            {/* The error has to render *inside* the dialog. Keeping the
+                dialog mounted through the mutation (below) means the
+                Members tab's own error line is behind the modal
+                overlay, so a rejected save would otherwise look like
+                Apply simply doing nothing. */}
+            {setRoleMembers.isError ? (
+              <p className="text-sm text-destructive">
+                {setRoleMembers.error.message}
+              </p>
+            ) : null}
             <AlertDialogFooter>
               <AlertDialogCancel disabled={setRoleMembers.isPending}>
                 Cancel
@@ -837,8 +890,8 @@ export function RoleEditorSheet({
               <AlertDialogAction
                 onClick={(e) => {
                   // Keep the dialog mounted while the mutation runs so
-                  // a failure surfaces on the tab behind it rather than
-                  // vanishing with the dialog.
+                  // the failure surfaces above rather than vanishing
+                  // with the dialog on an auto-close.
                   e.preventDefault();
                   handleSaveMembers();
                 }}

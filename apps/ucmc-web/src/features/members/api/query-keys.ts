@@ -23,8 +23,17 @@ export const MEMBERS_REGISTRATIONS_QUERY_KEY = [
  */
 export const MEMBERS_UNCLAIMED_QUERY_KEY = ["members", "unclaimed"] as const;
 
+/**
+ * Prefix for every per-member detail cache. The role-keyed
+ * `useSetRoleMembers` changes role assignments for users it knows only
+ * by userId, while these entries are keyed by `publicId`, so it
+ * invalidates this prefix wholesale rather than trying to map between
+ * the two id spaces.
+ */
+export const MEMBERS_DETAIL_QUERY_KEY = ["members", "detail"] as const;
+
 export const memberDetailQueryKey = (publicId: string) =>
-  ["members", "detail", publicId] as const;
+  [...MEMBERS_DETAIL_QUERY_KEY, publicId] as const;
 
 // RBAC queries
 export const ROLES_QUERY_KEY = ["rbac", "roles"] as const;

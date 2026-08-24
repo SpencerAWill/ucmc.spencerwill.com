@@ -593,14 +593,28 @@ export async function setUserRolesAction(input: {
 // ── role -> member assignments ─────────────────────────────────────────
 
 /**
- * Replace the full member set of one role. The role-keyed sibling of
+ * Add and remove members of one role. The role-keyed sibling of
  * `setUserRolesAction`, which is user-keyed: the `/access` role sheet
- * edits membership from the role's side and stages the whole set
- * behind a Save, exactly like its Permissions tab, so the action takes
- * the post-state rather than a stream of add/remove deltas. Replaying
- * that through the user-keyed action would mean N round trips plus a
- * read-modify-write race against any concurrent edit to those users'
- * *other* roles.
+ * edits membership from the role's side. Replaying that through the
+ * user-keyed action would mean N round trips plus a read-modify-write
+ * race against any concurrent edit to those users' *other* roles.
+ *
+ * Takes an explicit `add` / `remove` diff rather than the post-state,
+ * even though the sheet stages behind a Save like its sibling tabs.
+ * A post-state would delete every member absent from it, and the
+ * sheet's baseline is snapshotted when it opens — so a member granted
+ * the role by someone else while the sheet sat open would be silently
+ * unassigned by a save that never intended to touch them. Scoping the
+ * write to the rows the user actually acted on makes concurrent edits
+ * merge instead of clobber. (The Permissions tab keeps its post-state
+ * shape: `role_permissions` is edited from exactly one surface, so
+ * there is no second writer to lose.)
+ *
+ * `add` and `remove` are intersected against the current membership,
+ * so re-adding an existing member or removing an absent one is a
+ * no-op that writes neither a row nor an audit event. Overlap between
+ * the two lists is rejected as incoherent rather than silently
+ * resolved in one direction.
  *
  * Gated on `roles:assign` rather than `roles:manage` — this writes
  * `user_roles` rows, the same operation the member detail page
@@ -609,7 +623,8 @@ export async function setUserRolesAction(input: {
  */
 export async function setRoleMembersAction(input: {
   roleId: string;
-  userIds: string[];
+  add: string[];
+  remove: string[];
 }): Promise<{ ok: true }> {
   const principal = await requireRolesAssigner();
   const db = getDb();
@@ -632,11 +647,21 @@ export async function setRoleMembersAction(input: {
 
   // De-dupe before diffing so a repeated id can't produce a
   // primary-key violation on `(user_id, role_id)`.
-  const userIds = [...new Set(input.userIds)];
+  const addIds = [...new Set(input.add)];
+  const removeIds = new Set(input.remove);
+
+  // A caller asking to both add and remove the same member has a bug;
+  // picking a winner here would hide it.
+  const conflicting = addIds.filter((id) => removeIds.has(id));
+  if (conflicting.length > 0) {
+    throw new Error(
+      `Cannot add and remove the same member in one save: ${conflicting.join(", ")}`,
+    );
+  }
 
   // Role existence and the prior member set both key on `roleId`
   // alone, so they ride one D1 request. Target-user validation needs
-  // `userIds` and is skipped entirely when the save only removes.
+  // `addIds` and is skipped entirely when the save only removes.
   const [roleRows, prior] = await db.batch([
     db
       .select({ id: schema.roles.id, name: schema.roles.name })
@@ -656,13 +681,13 @@ export async function setRoleMembersAction(input: {
   // Validate every target exists and may hold roles at all. Unclaimed
   // (officer-pre-added) stubs must claim their account first — the
   // same rule the user-keyed path enforces.
-  if (userIds.length > 0) {
+  if (addIds.length > 0) {
     const targetUsers = await db
       .select({ id: schema.users.id, status: schema.users.status })
       .from(schema.users)
-      .where(inArray(schema.users.id, userIds));
+      .where(inArray(schema.users.id, addIds));
     const byId = new Map(targetUsers.map((u) => [u.id, u.status]));
-    for (const userId of userIds) {
+    for (const userId of addIds) {
       const status = byId.get(userId);
       if (status === undefined) {
         throw new Error(`User "${userId}" does not exist`);
@@ -674,21 +699,23 @@ export async function setRoleMembersAction(input: {
   }
 
   const priorIds = new Set(prior.map((r) => r.userId));
-  const nextIds = new Set(userIds);
+
+  // Intersect the requested diff with reality so a stale client view
+  // can't produce a spurious audit row: adding someone who already
+  // holds the role, or removing someone who no longer does, is a
+  // no-op rather than an event.
+  const assigned = addIds.filter((id) => !priorIds.has(id));
+  const unassigned = [...removeIds].filter((id) => priorIds.has(id));
 
   // Self-demotion guard, mirroring the user-keyed path: don't let an
   // admin drop their own system_admin and lock themselves out of the
   // surface they're standing on.
   if (
     input.roleId === SYSTEM_ADMIN_ROLE_ID &&
-    priorIds.has(principal.userId) &&
-    !nextIds.has(principal.userId)
+    unassigned.includes(principal.userId)
   ) {
     throw new Error("Cannot remove system_admin from yourself");
   }
-
-  const assigned = userIds.filter((id) => !priorIds.has(id));
-  const unassigned = [...priorIds].filter((id) => !nextIds.has(id));
 
   if (assigned.length === 0 && unassigned.length === 0) {
     return { ok: true };

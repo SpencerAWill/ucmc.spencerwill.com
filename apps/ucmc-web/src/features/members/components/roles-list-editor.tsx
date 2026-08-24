@@ -179,15 +179,20 @@ export function RolesListEditor() {
                         narrow tabular-nums badges scan down the column
                         in a way wrapped prose doesn't. Narrow enough to
                         survive on mobile, where the prose was hidden
-                        outright. The tooltip carries the wording; the
-                        aria-label carries it for screen readers, which
-                        don't reach a tooltip on a non-focusable badge. */}
+                        outright. The tooltip carries the wording for
+                        sighted users; `role="img"` + aria-label carries
+                        it for screen readers, which never reach a
+                        tooltip on a non-focusable badge. The role is
+                        load-bearing: `Badge` renders a bare <span>, and
+                        aria-label is ignored on an element left with the
+                        implicit `generic` role. */}
                     <div className="flex shrink-0 items-center gap-1">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Badge
                             variant="secondary"
                             className="gap-1 px-1.5 tabular-nums"
+                            role="img"
                             aria-label={
                               isAnonymous
                                 ? "Not applicable to members"
@@ -209,6 +214,7 @@ export function RolesListEditor() {
                           <Badge
                             variant="secondary"
                             className="gap-1 px-1.5 tabular-nums"
+                            role="img"
                             aria-label={
                               isAdmin
                                 ? "All permissions"

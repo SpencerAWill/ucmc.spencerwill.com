@@ -15,6 +15,7 @@ import {
   gte,
   inArray,
   lte,
+  or,
 } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
@@ -25,7 +26,7 @@ import {
 } from "#/server/audit/audit-log.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
-import { getDb, schema } from "#/server/db";
+import { getDb, likeContains, schema } from "#/server/db";
 import { loadMemberWaiverStatus } from "#/server/waivers/current-attestation.server";
 import type { MemberWaiverStatus } from "#/server/waivers/current-attestation.server";
 import { requireMembersManager } from "#/features/members/server/permissions.server";
@@ -240,7 +241,39 @@ export async function listMembersAction(opts: {
     );
   }
 
-  // TODO: wire opts.search to LIKE on name/email.
+  // Free-text search over the names a member is displayed under plus
+  // any of their verified emails.
+  //
+  // The email match is an EXISTS rather than a reference to the page
+  // query's `user_emails` join, for two reasons. First, the count
+  // query below joins only `profiles`, so a condition naming
+  // `user_emails` would be valid in one of the pair and a SQL error in
+  // the other — EXISTS keeps both on one condition set, the same
+  // reason the role filter above is an EXISTS. Second, it widens the
+  // match to secondary addresses: an officer who knows a member only
+  // by the alternate address they were reached at still finds the row
+  // (which then displays that member's primary email).
+  const search = opts.search?.trim() ?? "";
+  if (search.length > 0) {
+    const searchClause = or(
+      likeContains(schema.profiles.fullName, search),
+      likeContains(schema.profiles.preferredName, search),
+      exists(
+        db
+          .select({ one: schema.userEmails.userId })
+          .from(schema.userEmails)
+          .where(
+            and(
+              eq(schema.userEmails.userId, schema.users.id),
+              likeContains(schema.userEmails.email, search),
+            ),
+          ),
+      ),
+    );
+    if (searchClause) {
+      conditions.push(searchClause);
+    }
+  }
 
   const where = and(...conditions);
 

@@ -90,6 +90,12 @@ export function RoleMemberPicker({
         className="w-[min(28rem,calc(100vw-2rem))] p-0"
         align="start"
       >
+        {/* `shouldFilter={false}` because the server already filtered:
+            `listMembersAction` matches `search` against full name,
+            preferred name, and every verified email. Command's own
+            fuzzy pass on top would re-filter that result set by a
+            different rule and could drop a row the server considered a
+            match — an email hit whose visible label is a name, say. */}
         <Command shouldFilter={false}>
           <CommandInput
             value={input}

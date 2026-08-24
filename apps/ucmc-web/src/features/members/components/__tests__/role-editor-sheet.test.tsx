@@ -11,6 +11,7 @@ import {
   roleQueryKey,
 } from "#/features/members/api/query-keys";
 import { RoleEditorSheet } from "#/features/members/components/role-editor-sheet";
+import type * as RbacFns from "#/features/members/server/rbac-fns";
 import type {
   PermissionSummary,
   RoleDetail,
@@ -19,7 +20,12 @@ import type {
 // The sheet uses `useQuery` against `roleQueryOptions` + `permissionsQueryOptions`;
 // we seed the cache directly so the server fns are never called. Stub the
 // shell module so the import graph stays clean in the jsdom pool.
-vi.mock("#/features/members/server/rbac-fns", () => ({
+// Stub only the server-fn shells (they need a request context); keep
+// the module's real client-safe constants, so the cap the component
+// enforces stays the cap the server validates rather than a number
+// duplicated into this mock.
+vi.mock("#/features/members/server/rbac-fns", async (importOriginal) => ({
+  ...(await importOriginal<typeof RbacFns>()),
   getRoleFn: vi.fn(),
   listPermissionsFn: vi.fn(),
 }));
@@ -276,7 +282,7 @@ describe("RoleEditorSheet — Members tab", () => {
     expect(save).toBeEnabled();
     await userEvent.click(save);
     expect(setRoleMembersMutate).toHaveBeenCalledWith(
-      { roleId: "role_trip_leader", userIds: ["user_b"] },
+      { roleId: "role_trip_leader", add: [], remove: ["user_a"] },
       expect.anything(),
     );
   });
@@ -346,9 +352,65 @@ describe("RoleEditorSheet — Members tab", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /^apply$/i }));
     expect(setRoleMembersMutate).toHaveBeenCalledWith(
-      { roleId: "role_system_admin", userIds: ["user_b"] },
+      { roleId: "role_system_admin", add: [], remove: ["user_a"] },
       expect.anything(),
     );
+  });
+
+  it("won't let you stage removing your own system_admin", async () => {
+    // The server rejects this outright, so the affordance is absent
+    // rather than present-and-then-rejected.
+    renderWithRole(
+      makeRole({
+        id: "role_system_admin",
+        name: "system_admin",
+        members: [
+          ...members,
+          {
+            userId: "user_viewer",
+            email: "viewer@example.com",
+            preferredName: "Viewer",
+          },
+        ],
+        memberCount: 3,
+        isProtected: true,
+      }),
+      { initialTab: "members" },
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: /remove viewer from this role/i,
+      }),
+    ).toBeDisabled();
+    // Someone else's row stays removable.
+    expect(
+      screen.getByRole("button", { name: /remove ann from this role/i }),
+    ).toBeEnabled();
+  });
+
+  it("keeps a non-admin role's own row removable", async () => {
+    // The guard is scoped to system_admin — dropping yourself from a
+    // trip-leader role is a legitimate edit.
+    renderWithRole(
+      makeRole({
+        id: "role_trip_leader",
+        name: "trip_leader",
+        members: [
+          {
+            userId: "user_viewer",
+            email: "viewer@example.com",
+            preferredName: "Viewer",
+          },
+        ],
+        memberCount: 1,
+      }),
+      { initialTab: "members" },
+    );
+
+    expect(
+      screen.getByRole("button", { name: /remove viewer from this role/i }),
+    ).toBeEnabled();
   });
 
   it("hides the Members tab entirely for the anonymous role", () => {

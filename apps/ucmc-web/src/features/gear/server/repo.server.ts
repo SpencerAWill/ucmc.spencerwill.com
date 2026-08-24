@@ -7,9 +7,9 @@
  * matching gear IDs and merge in TypeScript. Two D1 round-trips total
  * per list request, but the shape is straightforward and easy to test.
  */
-import { and, asc, count, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, likeContains, schema } from "#/server/db";
 
 export interface GearRow {
   id: string;
@@ -54,10 +54,6 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PER_PAGE = 50;
 const MAX_PER_PAGE = 250;
 
-function escapeLike(input: string): string {
-  return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
 function gearWhere(filters: ListGearFilters) {
   const clauses = [] as Parameters<typeof and>;
   if (filters.typeId) {
@@ -70,12 +66,12 @@ function gearWhere(filters: ListGearFilters) {
     clauses.push(eq(schema.gear.condition, filters.condition));
   }
   if (filters.q && filters.q.trim().length > 0) {
-    const needle = `%${escapeLike(filters.q.trim())}%`;
+    const q = filters.q.trim();
     clauses.push(
       or(
-        like(schema.gear.code, needle),
-        like(schema.gear.description, needle),
-        like(schema.gear.notesMarkdown, needle),
+        likeContains(schema.gear.code, q),
+        likeContains(schema.gear.description, q),
+        likeContains(schema.gear.notesMarkdown, q),
       ),
     );
   }
