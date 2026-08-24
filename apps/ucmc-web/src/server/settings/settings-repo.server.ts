@@ -25,6 +25,23 @@ import { SETTINGS } from "./settings-registry";
 import type { SettingKey, SettingValue } from "./settings-registry";
 
 /**
+ * Keys renamed by migration `0064`, mapped current → pre-`0064`. The
+ * fail-open contract makes a rename dangerous in exactly the skew this
+ * covers: against a database that hasn't run `0064`, the new key finds no
+ * row and falls back to the registry default (`true` for the feedback
+ * gate), silently *reopening* an intake an admin had paused. Reading
+ * through to the old key keeps the stored value authoritative until the
+ * migration lands.
+ *
+ * Same reasoning and the same lifetime as
+ * `src/server/auth/permission-aliases.ts` — **delete both once `0064` is
+ * applied to dev and prod.**
+ */
+const LEGACY_SETTING_KEYS: Partial<Record<SettingKey, string>> = {
+  "feedback.site_enabled": "feedback.website_enabled",
+};
+
+/**
  * Read a setting from D1. Returns the schema's default whenever:
  *   - the row doesn't exist,
  *   - the stored JSON is unparseable,
@@ -41,11 +58,20 @@ export async function readSetting<TKey extends SettingKey>(
   const fallback = (): SettingValue<TKey> =>
     schemaForKey.parse(undefined) as SettingValue<TKey>;
   try {
-    const row = await getDb()
+    const db = getDb();
+    let row = await db
       .select()
       .from(schema.siteSettings)
       .where(eq(schema.siteSettings.key, key))
       .get();
+    const legacyKey = LEGACY_SETTING_KEYS[key];
+    if (!row && legacyKey !== undefined) {
+      row = await db
+        .select()
+        .from(schema.siteSettings)
+        .where(eq(schema.siteSettings.key, legacyKey))
+        .get();
+    }
     if (!row) return fallback();
     let raw: unknown;
     try {
@@ -123,7 +149,10 @@ export async function readAllSettings(): Promise<SiteSettingsEntries> {
   // We surface the typed result at the function boundary with `as`.
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(SETTINGS) as SettingKey[]) {
-    const stored = rowsByKey.get(k);
+    const legacyKey = LEGACY_SETTING_KEYS[k];
+    const stored =
+      rowsByKey.get(k) ??
+      (legacyKey === undefined ? undefined : rowsByKey.get(legacyKey));
     if (stored === undefined) {
       out[k] = {
         value: SETTINGS[k].parse(undefined),

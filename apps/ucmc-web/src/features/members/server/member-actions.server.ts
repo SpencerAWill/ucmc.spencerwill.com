@@ -385,8 +385,10 @@ export interface MemberDetail {
   emergencyContacts: EmergencyContactSummary[];
   // Session count — null when caller lacks sessions:revoke.
   activeSessions: number | null;
-  // Current-cycle waiver standing — null when the caller holds neither
-  // `waivers:view` nor `waivers:verify`.
+  // Current-cycle waiver standing. Null when the caller holds neither
+  // `waivers:view` nor `waivers:verify`, AND null for a pending or
+  // rejected member, who can't have an attestation to report — so a
+  // null here is not by itself a permission signal.
   waiverStatus: MemberWaiverStatus | null;
 }
 
@@ -480,13 +482,17 @@ export async function getMemberDetailAction(
             .from(schema.sessions)
             .where(eq(schema.sessions.userId, userId))
         : Promise.resolve<{ value: number }[]>([]),
-      // Approved-only, matching how the attestation queue scopes the
-      // same question. A pending / rejected / deactivated member has
-      // never had a route to `/my/waiver` (it lives under the
-      // approved-gated `/my`), so reporting "no current attestation"
-      // for them would read as a live compliance problem rather than
-      // the not-applicable state it is.
-      canViewWaivers && row.status === "approved"
+      // Skip only the statuses that provably can't hold an attestation:
+      // both `attestWaiverAction` and `bulkAttestWaiversAction` refuse
+      // non-approved targets, and `/my/waiver` lives under the
+      // approved-gated `/my`, so a pending or rejected member has never
+      // had any route to one — reporting "no current attestation" for
+      // them would read as a live compliance problem rather than the
+      // not-applicable state it is. `deactivated` is NOT in that set: a
+      // member who attested and was later deactivated still holds a
+      // live current-cycle row, and since `/members/waivers` filters to
+      // approved, this card is the only surface that shows it.
+      canViewWaivers && row.status !== "pending" && row.status !== "rejected"
         ? loadMemberWaiverStatus(userId)
         : Promise.resolve<MemberWaiverStatus | null>(null),
     ]);

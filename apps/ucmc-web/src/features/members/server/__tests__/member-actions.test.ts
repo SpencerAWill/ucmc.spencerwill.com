@@ -1040,7 +1040,22 @@ describe("getMemberDetailAction waiver status", () => {
     expect(detail.waiverStatus?.attested).toBe(false);
   });
 
-  it("omits waiver standing for a non-approved member", async () => {
+  it("keeps waiver standing for a deactivated member", async () => {
+    // A member who attested and was later deactivated still holds a live
+    // current-cycle row, and /members/waivers filters to approved — this
+    // card is the only surface that shows it.
+    await signInWithPermission("viewer@example.com", "waivers:view");
+    const targetId = await seedUser("former@example.com", {
+      status: "deactivated",
+    });
+    const publicId = await publicIdOf(targetId);
+
+    const detail = await getMemberDetailAction(publicId);
+
+    expect(detail.waiverStatus).not.toBeNull();
+  });
+
+  it("omits waiver standing for a pending member", async () => {
     // A pending member has never been able to reach /my/waiver (it lives
     // under the approved-gated /my), so "no current attestation" would
     // read as a compliance failure rather than a not-applicable state.

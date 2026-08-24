@@ -81,6 +81,16 @@ UPDATE OR IGNORE site_settings
  WHERE key = 'feedback.website_enabled';
 --> statement-breakpoint
 
+-- No-op in the normal case (the rename above left no old row). It only
+-- bites when `OR IGNORE` swallowed the rename because a
+-- `feedback.site_enabled` row already existed — an admin toggling the
+-- switch from a build that reads the new key against a pre-0064 database.
+-- The newer row is the one to keep; without this the stale row would sit
+-- there forever, read by nothing.
+DELETE FROM site_settings
+ WHERE key = 'feedback.website_enabled';
+--> statement-breakpoint
+
 -- Carry the setting's history across with it. `settings_updated` audit
 -- rows key on the setting name (`target_id = <key>`), so without this the
 -- per-setting history panel in /settings comes back empty for a switch

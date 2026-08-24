@@ -158,6 +158,55 @@ describe("readSetting fail-open", () => {
   });
 });
 
+// ── legacy key fallback (temporary, see settings-repo.server.ts) ───────
+
+describe("pre-0064 setting keys", () => {
+  it("reads feedback.site_enabled through to the old key when only it exists", async () => {
+    // The skew this covers: a build that asks for the new key against a
+    // database that hasn't run 0064. Without the fallback the read would
+    // miss and fail open to the registry default (true), silently
+    // reopening an intake an admin had paused.
+    await getDb()
+      .insert(schema.siteSettings)
+      .values({
+        key: "feedback.website_enabled",
+        valueJson: JSON.stringify(false),
+      });
+
+    expect(await readSetting("feedback.site_enabled")).toBe(false);
+  });
+
+  it("prefers the current key when both rows exist", async () => {
+    await getDb()
+      .insert(schema.siteSettings)
+      .values([
+        {
+          key: "feedback.website_enabled",
+          valueJson: JSON.stringify(false),
+        },
+        { key: "feedback.site_enabled", valueJson: JSON.stringify(true) },
+      ]);
+
+    expect(await readSetting("feedback.site_enabled")).toBe(true);
+  });
+
+  it("surfaces the old key's value in the /settings snapshot too", async () => {
+    // Otherwise the admin panel would render the toggle as ON while the
+    // stored pause is still in force — no signal that they disagree.
+    await signInAsManager();
+    await getDb()
+      .insert(schema.siteSettings)
+      .values({
+        key: "feedback.website_enabled",
+        valueJson: JSON.stringify(false),
+      });
+
+    const entries = await listSiteSettingsAction();
+
+    expect(entries["feedback.site_enabled"].value).toBe(false);
+  });
+});
+
 // ── public-read allowlist ──────────────────────────────────────────────
 
 describe("listSiteSettingsAction snapshot shape", () => {
