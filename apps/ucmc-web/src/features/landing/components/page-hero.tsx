@@ -36,9 +36,11 @@ export interface PageHeroProps {
    */
   children?: React.ReactNode;
   /**
-   * Shorter band for subpages. The home hero is the first thing a visitor
-   * sees and earns its height; an interior page's hero sits above real
-   * content and shouldn't push it below the fold.
+   * Type scale and inner padding, NOT height — every hero is the same
+   * height (see the `min-h` on the section). Interior pages get a
+   * slightly smaller heading so the page name doesn't read as a second
+   * front door, but the band itself matches home's so the site's public
+   * pages share one silhouette.
    */
   size?: "full" | "compact";
 }
@@ -71,9 +73,20 @@ export function PageHero({ page, children, size = "compact" }: PageHeroProps) {
         // off — the whole band is the hover target, not the strip of
         // image under a button.
         "group/hero relative isolate overflow-hidden border-b",
-        size === "full"
-          ? "min-h-[420px] md:min-h-[560px]"
-          : "min-h-[220px] md:min-h-[280px]",
+        // One height for every hero, home included — a subpage hero at
+        // the old 220/280px read as a thin strip beside the front door's.
+        "min-h-[420px] md:min-h-[560px]",
+        // Only the interior pages centre their content in that band.
+        // Their copy is much shorter than home's (no logo, no CTA pair)
+        // — measured 488px against a 560px band at 1280 — so
+        // top-aligned text would strand itself against the upper edge
+        // with a large dead area beneath.
+        //
+        // Home stays top-aligned on purpose: its content is also shorter
+        // than the band (by ~72px at 1280), so centring would shift the
+        // front door's copy down. Matching the subpages' height was the
+        // ask; restyling home was not.
+        size === "compact" && "flex flex-col justify-center",
       )}
     >
       {hasSlides ? (
