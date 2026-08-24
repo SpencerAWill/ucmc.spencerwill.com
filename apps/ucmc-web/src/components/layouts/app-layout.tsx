@@ -80,6 +80,7 @@ import {
   TooltipTrigger,
 } from "#/components/ui/tooltip";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
 
 const HEADER_HEIGHT = "3.5rem";
 
@@ -206,7 +207,7 @@ function EmulationBanner() {
 // entry (the section's instead of the linked page's) is a silent bug — the
 // entry renders and 404s on click. Not part of the module's public API.
 export function SidebarNav() {
-  const { isApproved, hasPermission } = useAuth();
+  const { isApproved, hasPermission, hasAnyPermission } = useAuth();
   // Announcements gates compose: must have the permission AND the kill
   // switch must be on. `placeholderData` returns the schema default
   // (off) until the query resolves, so a fresh-DB / pre-hydration render
@@ -225,8 +226,7 @@ export function SidebarNav() {
   // the read tier — the attest controls on the page gate separately on
   // `waivers:verify`.
   const canSeeWaivers =
-    (hasPermission("waivers:view") || hasPermission("waivers:verify")) &&
-    pages.members_waivers;
+    hasAnyPermission(WAIVER_VIEW_PERMISSIONS) && pages.members_waivers;
   // Gate the *link* on the flag of the page it actually navigates to
   // (`/members` is `pages.members_approved`), NOT on the `pages.members`
   // section switch. Because the flags map carries *effective* values,

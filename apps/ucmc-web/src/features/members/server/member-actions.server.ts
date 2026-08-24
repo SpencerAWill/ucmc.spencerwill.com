@@ -144,6 +144,26 @@ export interface EmergencyContactSummary {
   relationship: schema.ContactRelationship;
 }
 
+/**
+ * A role as the directory and detail surfaces render it. Carries both
+ * halves on purpose: `name` is the slug (stable, what the role filter
+ * puts in the URL and what `!== "member"` tests against), `displayName`
+ * is the operator-authored label from `/access` and the ONLY half that
+ * should ever reach the screen.
+ *
+ * These used to be a bare `string[]` of slugs that each badge
+ * prettified with `replace("_", " ")` + CSS `capitalize` — which is how
+ * "Gear Cave Manager" rendered as "Gear Cave_manager" (the non-global
+ * replace caught only the first underscore). Prettifying a slug can't
+ * be right in general: it can't recover intended casing, and
+ * `capitalize` mangles legitimate labels like "VP of Trips" into "VP Of
+ * Trips".
+ */
+export interface MemberRoleBadge {
+  name: string;
+  displayName: string;
+}
+
 // Directory + detail surfaces both filter `status = 'unclaimed'` out at
 // the SQL layer (officer-pre-added stubs aren't directory members),
 // so the projection types narrow accordingly. Callers that render
@@ -158,7 +178,7 @@ export interface MemberSummary {
   preferredName: string | null;
   ucAffiliation: string | null;
   avatarKey: string | null;
-  roles: string[];
+  roles: MemberRoleBadge[];
   status: DirectoryStatus;
   // Private fields — null/empty when the caller lacks members:view_private.
   phone: string | null;
@@ -338,6 +358,7 @@ export async function listMembersAction(opts: {
           .select({
             userId: schema.userRoles.userId,
             roleName: schema.roles.name,
+            roleDisplayName: schema.roles.displayName,
           })
           .from(schema.userRoles)
           .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
@@ -345,10 +366,10 @@ export async function listMembersAction(opts: {
           .orderBy(asc(schema.roles.position), asc(schema.roles.name))
       : [];
 
-  const rolesByUser = new Map<string, string[]>();
+  const rolesByUser = new Map<string, MemberRoleBadge[]>();
   for (const r of roleRows) {
     const list = rolesByUser.get(r.userId) ?? [];
-    list.push(r.roleName);
+    list.push({ name: r.roleName, displayName: r.roleDisplayName });
     rolesByUser.set(r.userId, list);
   }
 
@@ -412,7 +433,7 @@ export interface MemberDetail {
   ucAffiliation: string | null;
   avatarKey: string | null;
   bio: string | null;
-  roles: string[];
+  roles: MemberRoleBadge[];
   // Private fields — null/empty when caller lacks members:view_private.
   phone: string | null;
   emergencyContacts: EmergencyContactSummary[];
@@ -494,7 +515,10 @@ export async function getMemberDetailAction(
   const [roleRows, contacts, sessionCountRows, waiverStatus] =
     await Promise.all([
       db
-        .select({ roleName: schema.roles.name })
+        .select({
+          roleName: schema.roles.name,
+          roleDisplayName: schema.roles.displayName,
+        })
         .from(schema.userRoles)
         .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
         .where(eq(schema.userRoles.userId, userId))
@@ -547,7 +571,10 @@ export async function getMemberDetailAction(
     ucAffiliation: row.ucAffiliation,
     avatarKey: row.avatarKey,
     bio: row.bio,
-    roles: roleRows.map((r) => r.roleName),
+    roles: roleRows.map((r) => ({
+      name: r.roleName,
+      displayName: r.roleDisplayName,
+    })),
     phone: canViewPrivate ? row.phone : null,
     emergencyContacts: contacts,
     activeSessions,
@@ -559,7 +586,10 @@ export async function getMemberDetailAction(
 
 export interface RoleOption {
   id: string;
+  /** Slug — the filter's URL value and the server-side filter key. */
   name: string;
+  /** Operator-authored label; render this, never the slug. */
+  displayName: string;
   description: string | null;
 }
 
@@ -569,7 +599,12 @@ export async function listRolesAction(): Promise<RoleOption[]> {
     throw new Error("Not authorized");
   }
   return getDb().query.roles.findMany({
-    columns: { id: true, name: true, description: true },
+    columns: {
+      id: true,
+      name: true,
+      displayName: true,
+      description: true,
+    },
     // Match the canonical role ordering used by the RBAC editor
     // (`listRolesDetailedAction`) so the directory's role-filter
     // popover reflects whatever the operator dragged in `/access`.

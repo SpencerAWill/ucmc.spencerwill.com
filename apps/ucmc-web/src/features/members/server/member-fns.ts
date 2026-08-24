@@ -10,6 +10,7 @@ import { z } from "zod";
 import type {
   EmergencyContactSummary,
   MemberDetail,
+  MemberRoleBadge,
   MemberSummary,
   PendingRegistration,
   RoleOption,
@@ -25,6 +26,7 @@ import { profileInputSchema } from "#/server/profile/profile-schemas";
 export type {
   EmergencyContactSummary,
   MemberDetail,
+  MemberRoleBadge,
   MemberSummary,
   PendingRegistration,
   RoleOption,

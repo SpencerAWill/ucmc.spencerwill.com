@@ -81,6 +81,10 @@ function setAuth(permissions: string[], isApproved = true) {
   useAuthMock.mockReturnValue({
     isApproved,
     hasPermission: (name: string) => permissions.includes(name),
+    // Derived from the same list as `hasPermission` so the stub can't
+    // disagree with itself about what the viewer holds.
+    hasAnyPermission: (names: readonly string[]) =>
+      names.some((name) => permissions.includes(name)),
     emulatedRole: null,
   });
 }

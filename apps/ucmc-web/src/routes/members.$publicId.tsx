@@ -38,7 +38,10 @@ import { Separator } from "#/components/ui/separator";
 import { RouteErrorFallback } from "#/components/error-page";
 import { PhoneLink } from "#/components/phone-link";
 import { formatDate } from "#/lib/date-format";
-import { requireApproved } from "#/features/auth/guards";
+import {
+  requireApproved,
+  WAIVER_VIEW_PERMISSIONS,
+} from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 import type { MemberDetail } from "#/features/members/server/member-fns";
@@ -54,7 +57,7 @@ export const Route = createFileRoute("/members/$publicId")({
 
 function MemberDetailPage() {
   const { publicId } = Route.useParams();
-  const { hasPermission, principal } = useAuth();
+  const { hasPermission, hasAnyPermission, principal } = useAuth();
 
   const { data: member, isLoading } = useQuery(
     memberDetailQueryOptions(publicId),
@@ -64,6 +67,15 @@ function MemberDetailPage() {
   const canViewPrivate = hasPermission("members:view_private");
   const canRevokeSessions = hasPermission("sessions:revoke");
   const canAssignRoles = hasPermission("roles:assign");
+  // Waiver standing is a permissioned read, so the card follows the
+  // permission — NOT the mere presence of `member.waiverStatus` in the
+  // payload. The two agree for a real viewer (the server omits the
+  // field for anyone without the permission), but they diverge under
+  // role emulation: a sys admin emulating `member` still gets the
+  // field, because emulation is a UI-only filter over the real
+  // principal. Reading the flag here is what makes the emulated view
+  // honest.
+  const canViewWaivers = hasAnyPermission(WAIVER_VIEW_PERMISSIONS);
   const isSelf = principal?.userId === member?.userId;
 
   if (isLoading) {
@@ -121,14 +133,16 @@ function MemberDetailPage() {
                 {member.ucAffiliation}
               </span>
             ) : null}
+            {/* `displayName`, not the slug — and no `capitalize`, which
+                would mangle a label like "VP of Trips". */}
             {member.roles
-              .filter((r) => r !== "member")
+              .filter((r) => r.name !== "member")
               .map((role) => (
                 <span
-                  key={role}
-                  className="rounded bg-primary/10 px-1.5 py-0.5 text-xs capitalize text-primary"
+                  key={role.name}
+                  className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
                 >
-                  {role.replace(/_/g, " ")}
+                  {role.displayName}
                 </span>
               ))}
           </div>
@@ -204,13 +218,13 @@ function MemberDetailPage() {
         </Card>
       ) : null}
 
-      {/* Waiver standing. Present only when the caller holds
-          `waivers:view` (or `waivers:verify`, which implies it) and the
-          member could have an attestation at all — the server omits the
-          field for pending and rejected members, so they aren't flagged
-          for one they were never able to give. Read-only here: attesting
-          lives on /members/waivers behind `waivers:verify`. */}
-      {member.waiverStatus ? (
+      {/* Waiver standing. Shown only when the viewer holds one of
+          `WAIVER_VIEW_PERMISSIONS` and the member could have an
+          attestation at all — the server omits the field for pending and
+          rejected members, so they aren't flagged for one they were
+          never able to give. Read-only here: attesting lives on
+          /members/waivers behind `waivers:verify`. */}
+      {canViewWaivers && member.waiverStatus ? (
         <Card>
           <CardContent className="space-y-3">
             <h2 className="text-sm font-semibold">Waiver</h2>

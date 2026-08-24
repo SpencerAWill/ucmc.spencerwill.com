@@ -50,6 +50,26 @@ export function useAuth() {
       }
       return anonymousPermissions.includes(name);
     },
+    /**
+     * Client twin of `requireAnyPermission` for read/write permission
+     * pairs where the write implies the read (see
+     * `WAIVER_VIEW_PERMISSIONS`). Routes through `hasPermission`, so it
+     * respects role emulation for free — which is the point: a
+     * hand-rolled `includes() || includes()` against
+     * `principal.permissions` would bypass emulation silently.
+     */
+    hasAnyPermission: (names: readonly string[]) =>
+      names.some((name) => {
+        if (principal) {
+          if (activeEmulatedRole) {
+            return principal.rolePermissionMap[activeEmulatedRole].includes(
+              name,
+            );
+          }
+          return principal.permissions.includes(name);
+        }
+        return anonymousPermissions.includes(name);
+      }),
     emulatedRole: activeEmulatedRole,
     isElevated,
     isSystemAdmin,

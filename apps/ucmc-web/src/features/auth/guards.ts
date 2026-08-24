@@ -85,6 +85,24 @@ export async function requirePermission(
 }
 
 /**
+ * The permissions that grant read access to waiver standing —
+ * `waivers:verify` implies `waivers:view` and there is no
+ * implication mechanism in the RBAC tables, so the OR is expressed at
+ * every gate. Named once here so the server helper
+ * (`requireWaiverViewer`), the route guard, the sidebar entry, and the
+ * waiver card on `/members/$publicId` can't drift into disagreeing
+ * about who may read an attestation.
+ *
+ * Lives in `features/auth` rather than `features/waivers` because
+ * shared chrome (`components/layouts/app-layout.tsx`) has to reach it
+ * and this module is the exempted foundational auth surface.
+ */
+export const WAIVER_VIEW_PERMISSIONS = [
+  "waivers:view",
+  "waivers:verify",
+] as const;
+
+/**
  * Require a signed-in, approved user who holds AT LEAST ONE of
  * `permissions`. Same redirect behaviour as `requirePermission`.
  *

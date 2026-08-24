@@ -170,6 +170,7 @@ beforeEach(async () => {
     "role_test_members_view_private",
     "role_test_sessions_revoke",
     "role_test_waivers_view",
+    "role_gear_cave_manager",
   ]) {
     await db.delete(schema.roles).where(eq(schema.roles.id, id));
   }
@@ -822,7 +823,7 @@ describe("listMembersAction role filter", () => {
     expect(page.rows.length).toBe(2);
     expect(page.total).toBe(3);
     for (const row of page.rows) {
-      expect(row.roles).toContain("president");
+      expect(row.roles.map((r) => r.name)).toContain("president");
     }
   });
 });
@@ -842,12 +843,49 @@ describe("getMemberDetailAction", () => {
     expect(detail.email).toBe("target@example.com");
     expect(detail.status).toBe("approved");
     expect(detail.fullName).toBe("Test User");
-    expect(detail.roles).toContain("member");
+    expect(detail.roles.map((r) => r.name)).toContain("member");
     // Private fields should be null/empty.
     expect(detail.phone).toBeNull();
     expect(detail.emergencyContacts).toEqual([]);
     // Session count should be null.
     expect(detail.activeSessions).toBeNull();
+  });
+
+  it("carries each role's display name, not a prettified slug", async () => {
+    // Regression: role chips used to render the slug through
+    // `replace("_", " ")` + CSS `capitalize`, so a three-word role came
+    // out as "Gear Cave_manager" — the non-global replace caught only
+    // the first underscore. Both surfaces must ship the operator's
+    // label; `name` stays the slug for filtering and `!== "member"`.
+    const db = getDb();
+    await db
+      .insert(schema.roles)
+      .values({
+        id: "role_gear_cave_manager",
+        name: "gear_cave_manager",
+        displayName: "Gear Cave Manager",
+      })
+      .onConflictDoNothing();
+
+    await signInAsMember();
+    const targetId = await seedUser("cavekeeper@example.com");
+    await assignRole(targetId, "role_gear_cave_manager");
+
+    const detail = await getMemberDetailAction(await publicIdOf(targetId));
+    expect(detail.roles).toEqual(
+      expect.arrayContaining([
+        { name: "gear_cave_manager", displayName: "Gear Cave Manager" },
+      ]),
+    );
+
+    // Same shape on the directory row that renders the chips.
+    const page = await listMembersAction({ roles: "gear_cave_manager" });
+    expect(page.rows).toHaveLength(1);
+    expect(page.rows[0].roles).toEqual(
+      expect.arrayContaining([
+        { name: "gear_cave_manager", displayName: "Gear Cave Manager" },
+      ]),
+    );
   });
 
   it("includes private fields for members:view_private holders", async () => {
