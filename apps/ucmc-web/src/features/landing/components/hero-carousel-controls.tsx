@@ -75,12 +75,20 @@ const DIAL_SIZE = 26;
  * A clock-face dial that drains toward the next auto-advance, and the
  * pause/resume toggle for it.
  *
- * **The sweep alternates direction between slides.** Odd-indexed slides
- * render the complement of the progress, so the wedge fills 0→full on
- * one slide and drains full→0 on the next. Both handoffs then land on a
- * matching value (full→full, empty→empty) and the dial never snaps back
- * — the phases-of-the-moon behaviour, and the reason this isn't just a
- * progress ring.
+ * **The moving edge always sweeps clockwise; what alternates is which
+ * side of it is dark.** Progress is one unbroken 0→1 clockwise rotation
+ * every slide. On an even slide the dark arc grows *behind* the pointer
+ * (empty → full); on an odd slide the dark arc ahead of the pointer
+ * *shrinks* as the pointer eats into it (full → empty). Two pointers a
+ * full circle apart, chasing each other.
+ *
+ * So each handoff lands on a matching value — even ends full, odd starts
+ * full; odd ends empty, even starts empty — without the edge ever
+ * reversing. Inverting the *progress value* instead (`1 - elapsed`) also
+ * matches at the handoffs, but runs the edge counter-clockwise on every
+ * other slide, which reads as a bounce. The distinction is the whole
+ * point of this comment: the two look identical at the boundaries and
+ * completely different in motion.
  *
  * The wedge is driven by mutating a CSS custom property from a
  * `requestAnimationFrame` loop rather than React state: at 60fps a
@@ -99,15 +107,16 @@ export function HeroAutoplayDial({
 }: HeroAutoplayDialProps) {
   const { api } = useCarousel();
   const wedgeRef = React.useRef<HTMLSpanElement>(null);
-  // Parity of the current slide decides sweep direction. Read from the
-  // api and kept current via embla's own select event.
-  const [invert, setInvert] = React.useState(false);
+  // Parity of the current slide decides which arc is painted (not the
+  // direction — that's always clockwise). Read from the api and kept
+  // current via embla's own select event.
+  const [emptying, setEmptying] = React.useState(false);
 
   React.useEffect(() => {
     if (!api) {
       return;
     }
-    const sync = () => setInvert(api.selectedScrollSnap() % 2 === 1);
+    const sync = () => setEmptying(api.selectedScrollSnap() % 2 === 1);
     sync();
     api.on("select", sync);
     api.on("reInit", sync);
@@ -130,16 +139,17 @@ export function HeroAutoplayDial({
         // complement. Clamped because the plugin can briefly report a
         // value outside the delay around a manual scroll.
         const elapsed = Math.min(Math.max(1 - remaining / delayMs, 0), 1);
-        node.style.setProperty(
-          "--hero-dial",
-          String(invert ? 1 - elapsed : elapsed),
-        );
+        // Always the raw elapsed fraction: the pointer's angle is
+        // `elapsed * 360deg` on every slide, which is what keeps it
+        // clockwise. The fill/drain phase is a paint decision, made in
+        // the gradient below.
+        node.style.setProperty("--hero-dial", String(elapsed));
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [paused, invert, delayMs, timeUntilNext]);
+  }, [paused, delayMs, timeUntilNext]);
 
   return (
     <button
@@ -164,10 +174,20 @@ export function HeroAutoplayDial({
             width: DIAL_SIZE - 8,
             height: DIAL_SIZE - 8,
             // `--hero-dial` is a 0..1 fraction written by the rAF loop
-            // above. The hard stop (same angle twice) keeps the wedge a
-            // crisp pie slice instead of a gradient smear.
-            background:
-              "conic-gradient(currentColor calc(var(--hero-dial, 0) * 360deg), transparent 0)",
+            // above, and the stop sits at `dial * 360deg` in both
+            // phases — that shared, always-increasing angle is the
+            // clockwise pointer. Only the two colours swap:
+            //
+            //   filling  colour → stop → transparent   (dark behind)
+            //   emptying transparent → stop → colour   (dark ahead)
+            //
+            // The trailing `0` is a hard stop: per spec a stop position
+            // below the running maximum is clamped up to it, so the two
+            // colours meet at one angle and the wedge stays a crisp pie
+            // slice rather than a gradient smear.
+            background: emptying
+              ? "conic-gradient(transparent calc(var(--hero-dial, 0) * 360deg), currentColor 0)"
+              : "conic-gradient(currentColor calc(var(--hero-dial, 0) * 360deg), transparent 0)",
           }}
         />
       )}
