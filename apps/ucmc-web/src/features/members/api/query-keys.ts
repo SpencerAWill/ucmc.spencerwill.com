@@ -33,8 +33,16 @@ export const ROLES_DETAILED_QUERY_KEY = ["rbac", "roles", "detailed"] as const;
 
 export const PERMISSIONS_QUERY_KEY = ["rbac", "permissions"] as const;
 
+/**
+ * Prefix for every per-user role-assignment cache. The role-keyed
+ * `useSetRoleMembers` can change assignments for users it only knows
+ * the post-state of, so it invalidates this prefix wholesale rather
+ * than guessing the diff.
+ */
+export const USER_ROLES_QUERY_KEY = ["rbac", "userRoles"] as const;
+
 export const userRolesQueryKey = (userId: string) =>
-  ["rbac", "userRoles", userId] as const;
+  [...USER_ROLES_QUERY_KEY, userId] as const;
 
 export const roleQueryKey = (roleId: string) =>
   ["rbac", "role", roleId] as const;

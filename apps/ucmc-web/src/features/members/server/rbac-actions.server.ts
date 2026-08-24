@@ -590,6 +590,164 @@ export async function setUserRolesAction(input: {
   return { ok: true };
 }
 
+// ── role -> member assignments ─────────────────────────────────────────
+
+/**
+ * Replace the full member set of one role. The role-keyed sibling of
+ * `setUserRolesAction`, which is user-keyed: the `/access` role sheet
+ * edits membership from the role's side and stages the whole set
+ * behind a Save, exactly like its Permissions tab, so the action takes
+ * the post-state rather than a stream of add/remove deltas. Replaying
+ * that through the user-keyed action would mean N round trips plus a
+ * read-modify-write race against any concurrent edit to those users'
+ * *other* roles.
+ *
+ * Gated on `roles:assign` rather than `roles:manage` — this writes
+ * `user_roles` rows, the same operation the member detail page
+ * performs, so it answers to the same permission even though the
+ * surface it's reached from is gated on `roles:manage`.
+ */
+export async function setRoleMembersAction(input: {
+  roleId: string;
+  userIds: string[];
+}): Promise<{ ok: true }> {
+  const principal = await requireRolesAssigner();
+  const db = getDb();
+
+  // The anonymous role models signed-out visitors, so it has no
+  // members by construction — `setUserRolesAction` filters it out of
+  // every assignment. Reject rather than silently no-op.
+  if (input.roleId === ANONYMOUS_ROLE_ID) {
+    throw new Error("The anonymous role cannot be assigned to members");
+  }
+  // `setUserRolesAction` force-adds the member role back to every
+  // approved user, so honoring a removal here would either be undone
+  // by the next user-keyed save or leave the two paths disagreeing
+  // about what "approved" implies. Membership follows account status.
+  if (input.roleId === MEMBER_ROLE_ID) {
+    throw new Error(
+      "The member role follows account status and cannot be edited directly",
+    );
+  }
+
+  // De-dupe before diffing so a repeated id can't produce a
+  // primary-key violation on `(user_id, role_id)`.
+  const userIds = [...new Set(input.userIds)];
+
+  // Role existence and the prior member set both key on `roleId`
+  // alone, so they ride one D1 request. Target-user validation needs
+  // `userIds` and is skipped entirely when the save only removes.
+  const [roleRows, prior] = await db.batch([
+    db
+      .select({ id: schema.roles.id, name: schema.roles.name })
+      .from(schema.roles)
+      .where(eq(schema.roles.id, input.roleId))
+      .limit(1),
+    db
+      .select({ userId: schema.userRoles.userId })
+      .from(schema.userRoles)
+      .where(eq(schema.userRoles.roleId, input.roleId)),
+  ]);
+
+  if (roleRows.length === 0) {
+    throw new Error("Role not found");
+  }
+
+  // Validate every target exists and may hold roles at all. Unclaimed
+  // (officer-pre-added) stubs must claim their account first — the
+  // same rule the user-keyed path enforces.
+  if (userIds.length > 0) {
+    const targetUsers = await db
+      .select({ id: schema.users.id, status: schema.users.status })
+      .from(schema.users)
+      .where(inArray(schema.users.id, userIds));
+    const byId = new Map(targetUsers.map((u) => [u.id, u.status]));
+    for (const userId of userIds) {
+      const status = byId.get(userId);
+      if (status === undefined) {
+        throw new Error(`User "${userId}" does not exist`);
+      }
+      if (status === "unclaimed") {
+        throw new Error("Cannot assign roles to an unclaimed member");
+      }
+    }
+  }
+
+  const priorIds = new Set(prior.map((r) => r.userId));
+  const nextIds = new Set(userIds);
+
+  // Self-demotion guard, mirroring the user-keyed path: don't let an
+  // admin drop their own system_admin and lock themselves out of the
+  // surface they're standing on.
+  if (
+    input.roleId === SYSTEM_ADMIN_ROLE_ID &&
+    priorIds.has(principal.userId) &&
+    !nextIds.has(principal.userId)
+  ) {
+    throw new Error("Cannot remove system_admin from yourself");
+  }
+
+  const assigned = userIds.filter((id) => !priorIds.has(id));
+  const unassigned = [...priorIds].filter((id) => !nextIds.has(id));
+
+  if (assigned.length === 0 && unassigned.length === 0) {
+    return { ok: true };
+  }
+
+  // One audit row per added / removed member, matching the shape the
+  // user-keyed path writes, so the audit page answers "who granted X
+  // this role?" the same way regardless of which surface did it.
+  const auditStmt = buildBulkAuditEventStatement([
+    ...assigned.map((userId) => ({
+      actorUserId: principal.userId,
+      action: "role.assigned" as const,
+      targetUserId: userId,
+      targetType: "role",
+      targetId: input.roleId,
+    })),
+    ...unassigned.map((userId) => ({
+      actorUserId: principal.userId,
+      action: "role.unassigned" as const,
+      targetUserId: userId,
+      targetType: "role",
+      targetId: input.roleId,
+    })),
+  ]);
+
+  // Diff-based writes rather than the replace-all delete+insert the
+  // permissions path uses: `user_roles` rows for *this* role are the
+  // only ones in scope, and touching only the delta keeps the
+  // statement count flat when a role has many members and one changes.
+  const stmts = [
+    ...(unassigned.length > 0
+      ? [
+          db
+            .delete(schema.userRoles)
+            .where(
+              and(
+                eq(schema.userRoles.roleId, input.roleId),
+                inArray(schema.userRoles.userId, unassigned),
+              ),
+            ),
+        ]
+      : []),
+    ...(assigned.length > 0
+      ? [
+          db
+            .insert(schema.userRoles)
+            .values(
+              assigned.map((userId) => ({ userId, roleId: input.roleId })),
+            )
+            .onConflictDoNothing(),
+        ]
+      : []),
+    ...(auditStmt ? [auditStmt] : []),
+  ];
+  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+
+  return { ok: true };
+}
+
 // ── role reordering ────────────────────────────────────────────────────
 
 /**

@@ -137,6 +137,21 @@ export const setUserRolesFn = createServerFn({ method: "POST" })
     return setUserRolesAction(data);
   });
 
+// ── role -> member assignments ─────────────────────────────────────────
+
+export const setRoleMembersFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      roleId: z.string().min(1),
+      userIds: z.array(z.string().min(1)),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { setRoleMembersAction } =
+      await import("#/features/members/server/rbac-actions.server");
+    return setRoleMembersAction(data);
+  });
+
 // ── role reordering ────────────────────────────────────────────────────
 
 export const reorderRolesFn = createServerFn({ method: "POST" })
