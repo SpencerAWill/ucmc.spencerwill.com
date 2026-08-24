@@ -22,6 +22,7 @@ import { Switch as ShadcnSwitch } from "#/components/ui/switch";
 import { Textarea as ShadcnTextarea } from "#/components/ui/textarea";
 import { useFieldContext, useFormContext } from "#/lib/form/context";
 import { fieldValidationAttrs } from "#/lib/form/field-state";
+import { DEFAULT_PHONE_COUNTRY } from "#/lib/phone-format";
 
 import type { MarkdownEditorHandle } from "#/components/editor/markdown-editor";
 
@@ -414,8 +415,12 @@ export function Select({
 /**
  * Phone-number input that auto-formats as the user types and stores
  * the value as an E.164 string (e.g. `+15135551234`) in form state.
- * Defaults to US-national formatting — `(513) 555-1234` — so members
- * don't have to type the country code.
+ * Defaults to national formatting for `DEFAULT_PHONE_COUNTRY` —
+ * `(513) 555-1234` — so members don't have to type the country code.
+ * That constant is shared with `#/lib/phone-format`, which renders
+ * stored numbers on read-only surfaces; the two must agree about which
+ * numbers are local or a number formats one way on entry and another on
+ * the page.
  *
  * Uses `react-phone-number-input/input` (the bare input variant; the
  * full component adds a country-flag dropdown that we don't want for a
@@ -425,13 +430,13 @@ export function Select({
 export function PhoneField({
   label,
   description,
-  country = "US",
+  country = DEFAULT_PHONE_COUNTRY,
   autoComplete = "tel",
   placeholder,
 }: {
   label: string;
   description?: string;
-  country?: "US";
+  country?: typeof DEFAULT_PHONE_COUNTRY;
   autoComplete?: string;
   placeholder?: string;
 }) {

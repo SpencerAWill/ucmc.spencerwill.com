@@ -36,6 +36,7 @@ import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
 import { RouteErrorFallback } from "#/components/error-page";
+import { PhoneLink } from "#/components/phone-link";
 import { formatDate } from "#/lib/date-format";
 import { requireApproved } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
@@ -174,7 +175,9 @@ function MemberDetailPage() {
                 {member.phone ? (
                   <>
                     <dt className="text-muted-foreground">Phone</dt>
-                    <dd>{member.phone}</dd>
+                    <dd>
+                      <PhoneLink phone={member.phone} />
+                    </dd>
                   </>
                 ) : null}
                 {member.emergencyContacts.map((ec, i) => (
@@ -184,7 +187,7 @@ function MemberDetailPage() {
                       {member.emergencyContacts.length > 1 ? ` ${i + 1}` : ""}
                     </dt>
                     <dd>
-                      {ec.name} ({ec.phone})
+                      {ec.name} (<PhoneLink phone={ec.phone} />)
                       <span className="ml-1 text-xs text-muted-foreground">
                         — {ec.relationship.replace(/_/g, " ")}
                       </span>
