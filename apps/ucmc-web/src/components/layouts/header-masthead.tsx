@@ -49,36 +49,57 @@ export function HeaderMasthead() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-nowrap items-center justify-center">
-      {/* The whole masthead is one link — title, mark, and tagline —
-          so anywhere on the visible wordmark goes home, not just the
-          badge.
-          `inline-flex` rather than filling the column: the column is a
-          third of the header, and a link stretched across all of it
-          would turn a wide band of empty space either side of the logo
-          into a navigation target that fires on a mistaken thumb tap.
-          Sized to its content, the hit area is exactly the masthead.
+      {/* The whole middle column is one link — mark and both strings —
+          so anywhere in it goes home, not just the badge.
+
+          Centring: the *mark alone* is in normal flow, so
+          `justify-center` puts it at the exact centre of the middle
+          column, and since the header's three columns are equal
+          `flex-1` thirds, that is the centre of the page. The two
+          strings are absolutely positioned off the mark's own wrapper
+          (`right-full` / `left-full`), so they hang either side of it
+          without being able to move it.
+ 
+          That indirection is the point. Anything that puts the strings
+          in flow beside the mark shifts the mark by their difference in
+          width: content-sizing the link centres the *group*, which
+          pushed the mark ~39px right at 1280 because the title is wider
+          than the tagline. Equal-width flex or grid tracks fix the
+          centring but bill it to the title — each track is half the
+          column, so at 800px the title truncated to "UC Mountain…"
+          while the tagline's half sat empty. Out of flow, the title can
+          use the empty space in the left third instead, and the mark
+          still cannot move.
+
+          The caps stop a long title or tagline reaching the sidebar
+          trigger or the icon buttons in the outer thirds: at the
+          narrowest width each string renders at (768px / `md` for the
+          title, 1024px / `lg` for the tagline) there is more room than
+          the cap allows, so the cap bounds overlap while `truncate`
+          handles the pathological value the 60/40-char setting limits
+          still permit.
+
           An explicit aria-label names the link, which matters at narrow
-          widths where the title is `display: none` and the only child
-          left is an `alt=""` image. It leads with the visible title so
-          the accessible name contains it (WCAG 2.5.3, Label in Name). */}
+          widths where both strings are `display: none` and the only
+          child left is an `alt=""` image. It leads with the visible
+          title so the accessible name contains it (WCAG 2.5.3, Label in
+          Name). */}
       <Link
         to="/"
         aria-label={
           branding.headerTitle ? `${branding.headerTitle} — home` : "UCMC home"
         }
-        className="inline-flex min-w-0 items-center gap-x-2 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current lg:gap-x-3"
+        className="relative flex w-full items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
       >
-        {branding.headerTitle ? (
-          <span className="hidden truncate text-sm font-bold tracking-tight md:inline">
+        <span className="relative flex shrink-0 items-center">
+          <span className="absolute right-full top-1/2 mr-2 hidden max-w-72 -translate-y-1/2 truncate text-right text-sm font-bold tracking-tight md:block lg:mr-3">
             {branding.headerTitle}
           </span>
-        ) : null}
-        <img src="/logo192.png" alt="" className="h-8 w-auto shrink-0" />
-        {tagline ? (
-          <span className="hidden whitespace-nowrap text-xs font-normal lg:inline">
+          <img src="/logo192.png" alt="" className="h-8 w-auto" />
+          <span className="absolute left-full top-1/2 ml-2 hidden max-w-56 -translate-y-1/2 truncate text-left text-xs font-normal lg:block lg:ml-3">
             {tagline}
           </span>
-        ) : null}
+        </span>
       </Link>
     </div>
   );
