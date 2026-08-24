@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { LANDING_CONTENT_QUERY_KEY } from "#/features/landing/api/query-keys";
+import { LANDING_QUERY_PREFIX } from "#/features/landing/api/query-keys";
 import { reorderHeroSlidesFn } from "#/features/landing/server/landing-fns";
 
 export function useReorderHeroSlides() {
@@ -8,6 +8,6 @@ export function useReorderHeroSlides() {
   return useMutation({
     mutationFn: (data: { ids: string[] }) => reorderHeroSlidesFn({ data }),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: LANDING_CONTENT_QUERY_KEY }),
+      queryClient.invalidateQueries({ queryKey: LANDING_QUERY_PREFIX }),
   });
 }

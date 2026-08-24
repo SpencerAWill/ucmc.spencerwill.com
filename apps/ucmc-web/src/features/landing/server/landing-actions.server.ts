@@ -19,6 +19,7 @@ import {
   getActivity,
   getFaqItem,
   getHeroSlide,
+  getSetting,
   insertActivity,
   insertFaqItem,
   insertHeroSlide,
@@ -59,6 +60,12 @@ import type {
   UpdateHeroSlideInput,
   UpdateSettingInput,
 } from "#/features/landing/server/landing-schemas";
+import {
+  HERO_PAGES,
+  heroHeadingKey,
+  heroTaglineKey,
+} from "#/features/landing/lib/hero-pages";
+import type { HeroPage } from "#/features/landing/lib/hero-pages";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
@@ -106,6 +113,14 @@ export interface ActivitySummary {
 // value never 500s the page.
 export type LandingSettingValue = string | string[] | null;
 
+/** One page's hero: overlay copy plus its gallery, in display order. */
+export interface PageHero {
+  page: HeroPage;
+  heading: string;
+  tagline: string;
+  slides: HeroSlideSummary[];
+}
+
 export interface LandingContent {
   settings: Record<string, LandingSettingValue>;
   heroSlides: HeroSlideSummary[];
@@ -120,7 +135,7 @@ export async function getLandingContentAction(): Promise<LandingContent> {
   const [settingRows, heroSlides, faqItems, activities, officers] =
     await Promise.all([
       listSettings(),
-      listHeroSlides(),
+      listHeroSlides("home"),
       listFaqItems(),
       listActivities(),
       listLandingOfficers(),
@@ -200,14 +215,18 @@ export async function createHeroSlideAction(
   await putLandingImage(imageKey, bytes, contentType);
 
   const id = `hslide_${uuidv7()}`;
-  await insertHeroSlide({ id, imageKey, alt: input.alt });
+  await insertHeroSlide({ id, page: input.page, imageKey, alt: input.alt });
 
+  // `page` rides in the metadata on every hero write: the target is the
+  // slide id, which says nothing about which page's gallery changed, and
+  // that's the first question the audit viewer gets asked now that eight
+  // pages share the table.
   await recordAuditEvent({
     actorUserId: principal.userId,
-    action: "landing.hero_slide_edited",
-    targetType: "landing_hero_slide",
+    action: "hero_slide.edited",
+    targetType: "hero_slide",
     targetId: id,
-    metadata: { op: "create" },
+    metadata: { op: "create", page: input.page },
   });
   return { id, imageKey };
 }
@@ -246,10 +265,14 @@ export async function updateHeroSlideAction(
 
   await recordAuditEvent({
     actorUserId: principal.userId,
-    action: "landing.hero_slide_edited",
-    targetType: "landing_hero_slide",
+    action: "hero_slide.edited",
+    targetType: "hero_slide",
     targetId: input.id,
-    metadata: { op: "update", imageReplaced: Boolean(nextImageKey) },
+    metadata: {
+      op: "update",
+      page: existing.page,
+      imageReplaced: Boolean(nextImageKey),
+    },
   });
   return { ok: true };
 }
@@ -269,10 +292,10 @@ export async function deleteHeroSlideAction(input: {
   }
   await recordAuditEvent({
     actorUserId: principal.userId,
-    action: "landing.hero_slide_edited",
-    targetType: "landing_hero_slide",
+    action: "hero_slide.edited",
+    targetType: "hero_slide",
     targetId: input.id,
-    metadata: { op: "delete" },
+    metadata: { op: "delete", page: existing.page },
   });
   return { ok: true };
 }
@@ -283,6 +306,75 @@ export async function reorderHeroSlidesAction(
   await requireLandingEditor();
   await reorderHeroSlides(input.ids);
   return { ok: true };
+}
+
+/**
+ * The public read for one page's hero: overlay copy plus its slides.
+ *
+ * Separate from `getLandingContentAction` rather than a field on it. That
+ * one is the home page's whole CMS payload — FAQ, activities, officers,
+ * every setting row — and /album has no use for any of it. This fetches
+ * two things and is the only hero read the seven subpages make.
+ *
+ * Copy falls back to the registry defaults, so a page renders finished
+ * copy before anyone has edited it and a missing or corrupt row degrades
+ * to the shipped title rather than an empty hero.
+ */
+export async function getPageHeroAction(page: HeroPage): Promise<PageHero> {
+  const [heading, tagline, slides] = await Promise.all([
+    readHeroSetting(heroHeadingKey(page)),
+    readHeroSetting(heroTaglineKey(page)),
+    listHeroSlides(page),
+  ]);
+  const defaults = HERO_PAGES[page];
+  return {
+    page,
+    heading: heading ?? defaults.defaultHeading,
+    tagline: tagline ?? defaults.defaultTagline,
+    slides: slides.map((s) => ({
+      id: s.id,
+      imageKey: s.imageKey,
+      alt: s.alt,
+      sortOrder: s.sortOrder,
+    })),
+  };
+}
+
+/**
+ * Read one hero copy row as a string, or null when absent/unusable.
+ *
+ * Reads through to the pre-0065 unnamespaced key for the home page. Like
+ * `LEGACY_SETTING_KEYS` in the site-settings repo this is temporary: a
+ * build asking for `hero.home.heading` against a not-yet-migrated
+ * database would otherwise miss the row and silently show the shipped
+ * default in place of the copy an officer wrote. **Delete the fallback
+ * once 0065 is applied to dev and prod.**
+ */
+async function readHeroSetting(key: string): Promise<string | null> {
+  const direct = await readSettingString(key);
+  if (direct !== null) {
+    return direct;
+  }
+  const legacy = LEGACY_HERO_SETTING_KEYS[key];
+  return legacy ? readSettingString(legacy) : null;
+}
+
+const LEGACY_HERO_SETTING_KEYS: Record<string, string> = {
+  "hero.home.heading": "hero.heading",
+  "hero.home.tagline": "hero.tagline",
+};
+
+async function readSettingString(key: string): Promise<string | null> {
+  const row = await getSetting(key);
+  if (!row) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(row.valueJson);
+    return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── FAQ ─────────────────────────────────────────────────────────────────

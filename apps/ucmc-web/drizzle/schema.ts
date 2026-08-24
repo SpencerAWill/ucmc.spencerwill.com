@@ -421,10 +421,20 @@ export const siteSettings = sqliteTable("site_settings", {
   }),
 });
 
-export const landingHeroSlides = sqliteTable(
-  "landing_hero_slides",
+// Hero gallery slides for any page that renders a hero. Named
+// `landing_hero_slides` until migration 0065, when seven more public
+// pages gained one and the home page became just another `page` value —
+// see `HERO_PAGES` in `features/landing/lib/hero-pages.ts`, which is the
+// only place a page is named.
+export const heroSlides = sqliteTable(
+  "hero_slides",
   {
     id: text("id").primaryKey(),
+    // Page slug from the `HERO_PAGES` registry (`home`, `gear_cave`, …).
+    // Not a URL path, and not derived from one: it's persisted here and
+    // embedded in `hero.<page>.*` setting keys, so renaming a slug is a
+    // data migration.
+    page: text("page").notNull().default("home"),
     imageKey: text("image_key").notNull(),
     alt: text("alt").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -435,7 +445,9 @@ export const landingHeroSlides = sqliteTable(
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
   },
-  (t) => [index("landing_hero_slides_sort_idx").on(t.sortOrder)],
+  // Leads with `page`: every read is scoped to one page and then
+  // ordered, which a bare `sort_order` index can't serve.
+  (t) => [index("hero_slides_page_sort_idx").on(t.page, t.sortOrder)],
 );
 
 export const landingFaqItems = sqliteTable(
@@ -586,7 +598,7 @@ export const auditAction = [
   "waiver.revoked",
   // Landing-page edits — officer-published club voice; worth a record.
   "landing.settings_edited",
-  "landing.hero_slide_edited",
+  "hero_slide.edited",
   "landing.activity_edited",
   "landing.faq_edited",
   // Officer pre-adds a stub user (name + email) so off-platform
@@ -1168,7 +1180,7 @@ export type Session = typeof sessions.$inferSelect;
 export type MagicLink = typeof magicLinks.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
 export type LandingSetting = typeof landingSettings.$inferSelect;
-export type LandingHeroSlide = typeof landingHeroSlides.$inferSelect;
+export type HeroSlide = typeof heroSlides.$inferSelect;
 export type LandingFaqItem = typeof landingFaqItems.$inferSelect;
 export type LandingActivity = typeof landingActivities.$inferSelect;
 export type AuditLogEntry = typeof auditLog.$inferSelect;

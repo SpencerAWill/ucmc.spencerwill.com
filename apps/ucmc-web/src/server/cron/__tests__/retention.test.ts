@@ -71,7 +71,7 @@ afterEach(async () => {
   const db = getDb();
   await db.delete(schema.waiverAttestations);
   await db.delete(schema.profiles);
-  await db.delete(schema.landingHeroSlides);
+  await db.delete(schema.heroSlides);
   await db.delete(schema.landingActivities);
   await db.delete(schema.landingSettings);
   await db.delete(schema.users);
@@ -273,7 +273,7 @@ describe("sweepOrphanR2Keys", () => {
     await bucket.put(orphanKey, new Uint8Array([2]));
 
     await getDb()
-      .insert(schema.landingHeroSlides)
+      .insert(schema.heroSlides)
       .values({
         id: uid("hs"),
         imageKey: liveKey,

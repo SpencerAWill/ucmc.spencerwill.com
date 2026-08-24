@@ -213,9 +213,11 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
         .select({ key: schema.profiles.avatarKey })
         .from(schema.profiles)
         .where(isNotNull(schema.profiles.avatarKey)),
-      db
-        .select({ key: schema.landingHeroSlides.imageKey })
-        .from(schema.landingHeroSlides),
+      // Deliberately NOT page-scoped, unlike every other hero read:
+      // this builds the set of keys still referenced by *anything*, so
+      // narrowing it to one page would mark the other seven pages'
+      // images as orphans and delete them.
+      db.select({ key: schema.heroSlides.imageKey }).from(schema.heroSlides),
       db
         .select({ key: schema.landingActivities.imageKey })
         .from(schema.landingActivities)

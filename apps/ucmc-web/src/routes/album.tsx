@@ -1,4 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { pageHeroQueryOptions } from "#/features/landing/api/queries";
+import { PageHero } from "#/features/landing/components/page-hero";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
@@ -51,7 +53,14 @@ export const Route = createFileRoute("/album")({
     await requirePageEnabled(context.queryClient, "album", "public_album:view");
   },
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(albumListQueryOptions());
+    // The hero is the first thing painted, so it's prefetched
+    // alongside the page's own data rather than fetched after
+    // hydration — otherwise the band shows registry defaults and
+    // swaps once the query lands.
+    await Promise.all([
+      context.queryClient.ensureQueryData(albumListQueryOptions()),
+      context.queryClient.ensureQueryData(pageHeroQueryOptions("album")),
+    ]);
   },
   component: AlbumPage,
 });
@@ -115,83 +124,79 @@ function AlbumPage() {
   }
 
   return (
-    <main id="main" className="mx-auto w-full max-w-5xl space-y-6 px-6 py-12">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Album</h1>
-          <p className="text-sm text-muted-foreground">
-            Photos from UCMC trips, by year and tag. Click a tile to see it
-            larger.
-          </p>
-        </div>
+    <>
+      <PageHero page="album" />
+      <main id="main" className="mx-auto w-full max-w-5xl space-y-6 px-6 py-12">
         {canManage ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFormSeed({ mode: "create" })}
-            aria-label="Add Album photo"
-          >
-            <Plus className="size-4" />
-            Add photo
-          </Button>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFormSeed({ mode: "create" })}
+              aria-label="Add Album photo"
+            >
+              <Plus className="size-4" />
+              Add photo
+            </Button>
+          </div>
         ) : null}
-      </header>
 
-      <PhotoGrid
-        photos={data.photos}
-        canManage={canManage}
-        onSelect={openLightbox}
-        onEditPhoto={(photo) => setFormSeed({ mode: "edit", photo })}
-        onDeletePhoto={(photo) => setDeletingPhoto(photo)}
-      />
+        <PhotoGrid
+          photos={data.photos}
+          canManage={canManage}
+          onSelect={openLightbox}
+          onEditPhoto={(photo) => setFormSeed({ mode: "edit", photo })}
+          onDeletePhoto={(photo) => setDeletingPhoto(photo)}
+        />
 
-      <PhotoLightbox
-        photos={data.photos}
-        activePublicId={activePublicId ?? null}
-        onClose={closeLightbox}
-        onChange={changeLightboxPhoto}
-      />
+        <PhotoLightbox
+          photos={data.photos}
+          activePublicId={activePublicId ?? null}
+          onClose={closeLightbox}
+          onChange={changeLightboxPhoto}
+        />
 
-      {canManage ? (
-        <>
-          <PhotoFormDialog
-            seed={formSeed}
-            onClose={() => setFormSeed(null)}
-            knownTags={knownTags}
-          />
-          <AlertDialog
-            open={deletingPhoto !== null}
-            onOpenChange={(next) => {
-              if (!next) {
-                setDeletingPhoto(null);
-              }
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this photo?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes the row, the cropped image on R2, and the tile
-                  from /album. You can re-upload from a fresh file later, but
-                  the row's publicId won't be the same.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void confirmDelete();
-                  }}
-                  disabled={deleteMut.isPending}
-                >
-                  {deleteMut.isPending ? "Deleting…" : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
-      ) : null}
-    </main>
+        {canManage ? (
+          <>
+            <PhotoFormDialog
+              seed={formSeed}
+              onClose={() => setFormSeed(null)}
+              knownTags={knownTags}
+            />
+            <AlertDialog
+              open={deletingPhoto !== null}
+              onOpenChange={(next) => {
+                if (!next) {
+                  setDeletingPhoto(null);
+                }
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this photo?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes the row, the cropped image on R2, and the tile
+                    from /album. You can re-upload from a fresh file later, but
+                    the row's publicId won't be the same.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void confirmDelete();
+                    }}
+                    disabled={deleteMut.isPending}
+                  >
+                    {deleteMut.isPending ? "Deleting…" : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        ) : null}
+      </main>
+    </>
   );
 }

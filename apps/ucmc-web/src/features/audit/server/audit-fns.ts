@@ -43,7 +43,7 @@ export const AUDIT_ACTIONS = [
   "waiver.attested",
   "waiver.revoked",
   "landing.settings_edited",
-  "landing.hero_slide_edited",
+  "hero_slide.edited",
   "landing.activity_edited",
   "landing.faq_edited",
   "member.pre_added",

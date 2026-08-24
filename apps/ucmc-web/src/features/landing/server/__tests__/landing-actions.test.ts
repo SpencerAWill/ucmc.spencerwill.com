@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
+import { HERO_PAGES } from "#/features/landing/lib/hero-pages";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
@@ -32,6 +33,7 @@ const {
   deleteFaqItemAction,
   deleteHeroSlideAction,
   getLandingContentAction,
+  getPageHeroAction,
   removeAboutImageAction,
   removeMeetingImageAction,
   reorderHeroSlidesAction,
@@ -142,7 +144,7 @@ beforeEach(async () => {
   // Wipe everything writable. Settings + activities + FAQ are seeded by
   // 0013_landing_seed_initial_content.sql but tests want a clean slate.
   await db.delete(schema.auditLog);
-  await db.delete(schema.landingHeroSlides);
+  await db.delete(schema.heroSlides);
   await db.delete(schema.landingFaqItems);
   await db.delete(schema.landingActivities);
   await db.delete(schema.landingSettings);
@@ -191,7 +193,7 @@ describe("getLandingContentAction (read)", () => {
 describe("write authorization", () => {
   it("updateSettingAction rejects unauthenticated", async () => {
     await expect(
-      updateSettingAction({ key: "hero.heading", value: "x" }),
+      updateSettingAction({ key: "hero.home.heading", value: "x" }),
     ).rejects.toThrow("Not signed in");
   });
 
@@ -205,7 +207,11 @@ describe("write authorization", () => {
   it("createHeroSlideAction rejects users without landing:manage", async () => {
     await signInAsMember();
     await expect(
-      createHeroSlideAction({ alt: "trip", dataUrl: makeWebpDataUrl() }),
+      createHeroSlideAction({
+        page: "home",
+        alt: "trip",
+        dataUrl: makeWebpDataUrl(),
+      }),
     ).rejects.toThrow("Forbidden: missing landing:manage");
   });
 
@@ -234,6 +240,7 @@ describe("hero slides", () => {
   it("admin can create a slide and the image lands in R2", async () => {
     await signInAsAdmin();
     const result = await createHeroSlideAction({
+      page: "home",
       alt: "Trip in the Red",
       dataUrl: makeWebpDataUrl(),
     });
@@ -246,6 +253,7 @@ describe("hero slides", () => {
   it("delete removes the R2 object when no other slide references it", async () => {
     await signInAsAdmin();
     const { id, imageKey } = await createHeroSlideAction({
+      page: "home",
       alt: "Trip",
       dataUrl: makeWebpDataUrl(),
     });
@@ -258,6 +266,7 @@ describe("hero slides", () => {
   it("update replaces the image and deletes the old R2 object", async () => {
     await signInAsAdmin();
     const created = await createHeroSlideAction({
+      page: "home",
       alt: "v1",
       dataUrl: makeWebpDataUrl(0x08),
     });
@@ -278,14 +287,17 @@ describe("hero slides", () => {
   it("reorder assigns contiguous sort_order from 0 in the given order", async () => {
     await signInAsAdmin();
     const a = await createHeroSlideAction({
+      page: "home",
       alt: "a",
       dataUrl: makeWebpDataUrl(0x08),
     });
     const b = await createHeroSlideAction({
+      page: "home",
       alt: "b",
       dataUrl: makeWebpDataUrl(0x09),
     });
     const c = await createHeroSlideAction({
+      page: "home",
       alt: "c",
       dataUrl: makeWebpDataUrl(0x0a),
     });
@@ -298,6 +310,130 @@ describe("hero slides", () => {
 });
 
 // ── FAQ ────────────────────────────────────────────────────────────────
+
+describe("getPageHeroAction", () => {
+  it("returns only the requested page's slides", async () => {
+    // The load-bearing property of migration 0065: one table, eight
+    // pages. An unscoped read would put /album's photos on /policies.
+    await signInAsAdmin();
+    await createHeroSlideAction({
+      page: "home",
+      alt: "home slide",
+      dataUrl: makeWebpDataUrl(0x11),
+    });
+    await createHeroSlideAction({
+      page: "album",
+      alt: "album slide",
+      dataUrl: makeWebpDataUrl(0x12),
+    });
+
+    const home = await getPageHeroAction("home");
+    const album = await getPageHeroAction("album");
+    expect(home.slides.map((slide) => slide.alt)).toEqual(["home slide"]);
+    expect(album.slides.map((slide) => slide.alt)).toEqual(["album slide"]);
+  });
+
+  it("numbers sort_order per page, starting from zero each time", async () => {
+    // An unscoped MAX would sort a page's first slide after every slide
+    // ever added to any other page.
+    await signInAsAdmin();
+    await createHeroSlideAction({
+      page: "home",
+      alt: "h1",
+      dataUrl: makeWebpDataUrl(0x21),
+    });
+    await createHeroSlideAction({
+      page: "home",
+      alt: "h2",
+      dataUrl: makeWebpDataUrl(0x22),
+    });
+    await createHeroSlideAction({
+      page: "gazette",
+      alt: "g1",
+      dataUrl: makeWebpDataUrl(0x23),
+    });
+
+    const home = await getPageHeroAction("home");
+    const gazette = await getPageHeroAction("gazette");
+    expect(home.slides.map((slide) => slide.sortOrder)).toEqual([0, 1]);
+    expect(gazette.slides.map((slide) => slide.sortOrder)).toEqual([0]);
+  });
+
+  it("falls back to the registry copy when a page has no rows", async () => {
+    const hero = await getPageHeroAction("gear_cave");
+    expect(hero.heading).toBe(HERO_PAGES.gear_cave.defaultHeading);
+    expect(hero.tagline).toBe(HERO_PAGES.gear_cave.defaultTagline);
+    expect(hero.slides).toEqual([]);
+  });
+
+  it("prefers stored copy over the registry default", async () => {
+    await signInAsAdmin();
+    await updateSettingAction({
+      key: "hero.album.heading",
+      value: "Trip photos",
+    });
+    const hero = await getPageHeroAction("album");
+    expect(hero.heading).toBe("Trip photos");
+    // The tagline was never set, so it still comes from the registry.
+    expect(hero.tagline).toBe(HERO_PAGES.album.defaultTagline);
+  });
+
+  it("reads through to the pre-0065 unnamespaced home key", async () => {
+    // A build asking for `hero.home.heading` against a database that
+    // hasn't run 0065 would otherwise miss the row and silently show the
+    // shipped default in place of the copy an officer wrote. Temporary —
+    // delete with the fallback once the migration is everywhere.
+    await getDb()
+      .insert(schema.landingSettings)
+      .values({
+        key: "hero.heading",
+        valueJson: JSON.stringify("Legacy heading"),
+        updatedAt: Temporal.Now.instant(),
+      });
+    const hero = await getPageHeroAction("home");
+    expect(hero.heading).toBe("Legacy heading");
+  });
+
+  it("prefers the namespaced key when both exist", async () => {
+    await signInAsAdmin();
+    await getDb()
+      .insert(schema.landingSettings)
+      .values({
+        key: "hero.heading",
+        valueJson: JSON.stringify("Legacy heading"),
+        updatedAt: Temporal.Now.instant(),
+      });
+    await updateSettingAction({
+      key: "hero.home.heading",
+      value: "Current heading",
+    });
+    const hero = await getPageHeroAction("home");
+    expect(hero.heading).toBe("Current heading");
+  });
+
+  it("records the page on every hero audit row", async () => {
+    // The target is the slide id, which says nothing about which page's
+    // gallery changed — the first question the viewer gets asked now
+    // that eight pages share the table.
+    await signInAsAdmin();
+    const { id } = await createHeroSlideAction({
+      page: "resources",
+      alt: "r1",
+      dataUrl: makeWebpDataUrl(0x31),
+    });
+    const rows = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].action).toBe("hero_slide.edited");
+    expect(rows[0].targetType).toBe("hero_slide");
+    expect(JSON.parse(rows[0].metadataJson ?? "{}")).toMatchObject({
+      op: "create",
+      page: "resources",
+    });
+  });
+});
 
 describe("faq items", () => {
   it("admin can create / update / list", async () => {

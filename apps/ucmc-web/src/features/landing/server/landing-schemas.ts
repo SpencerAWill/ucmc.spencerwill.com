@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+import {
+  HERO_HEADING_KEYS,
+  HERO_PAGE_KEYS,
+  HERO_TAGLINE_KEYS,
+} from "#/features/landing/lib/hero-pages";
+import type { HeroPage } from "#/features/landing/lib/hero-pages";
+
 // ── Curated lucide icon allowlist for activity cards ────────────────────
 // Restricted set keeps the editor UX simple and prevents importing every
 // lucide icon into the client bundle.
@@ -44,8 +51,11 @@ export const HERO_IMAGE_MAX_BYTES = 800 * 1024;
 // Writers reference them by enum-ish constant; readers parse value_json
 // according to the per-key schema below.
 export const LANDING_SETTING_KEYS = {
-  heroHeading: "hero.heading",
-  heroTagline: "hero.tagline",
+  // NOTE: the hero's heading/tagline are no longer here. Migration 0065
+  // moved them under a per-page namespace (`hero.<page>.heading`), built
+  // by `heroHeadingKey` / `heroTaglineKey` from the `HERO_PAGES`
+  // registry — the keys are now derived from a list, so writing them out
+  // as constants would just be a second place to forget a page.
   aboutParagraphs: "about.paragraphs",
   // R2 key (`landing/<subdir>/<hash>.<ext>`) or empty string when no image.
   // Mutated only via dedicated set/remove server fns (which handle bytes
@@ -94,13 +104,18 @@ export const meetingFieldSchema = trimmed(
 );
 
 // Discriminated input so a single update server-fn can validate any setting.
+// The hero branches use `z.enum` over the registry-derived key lists
+// rather than one literal per page: eight pages x two keys is sixteen
+// branches that all validate identically, and every one of them would
+// have to be added by hand when a page joins `HERO_PAGES`. Heading and
+// tagline stay separate because their length caps differ.
 export const updateSettingInputSchema = z.discriminatedUnion("key", [
   z.object({
-    key: z.literal(LANDING_SETTING_KEYS.heroHeading),
+    key: z.enum(HERO_HEADING_KEYS as [string, ...string[]]),
     value: heroHeadingSchema,
   }),
   z.object({
-    key: z.literal(LANDING_SETTING_KEYS.heroTagline),
+    key: z.enum(HERO_TAGLINE_KEYS as [string, ...string[]]),
     value: heroTaglineSchema,
   }),
   z.object({
@@ -124,6 +139,10 @@ const heroSlideAltSchema = trimmed(
   LANDING_LIMITS.heroSlideAlt.max,
 );
 export const createHeroSlideInputSchema = z.object({
+  // Which page's gallery this slide joins. Validated against the
+  // registry so a hand-crafted request can't invent a page and orphan a
+  // row no editor can reach.
+  page: z.enum(HERO_PAGE_KEYS as [HeroPage, ...HeroPage[]]),
   alt: heroSlideAltSchema,
   // base64 data URL of the cropped image, mirrors avatar upload wire shape
   dataUrl: z.string().min(1).max(2_000_000),

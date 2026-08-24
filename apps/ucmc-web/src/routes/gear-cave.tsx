@@ -1,4 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { pageHeroQueryOptions } from "#/features/landing/api/queries";
+import { PageHero } from "#/features/landing/components/page-hero";
 import { createFileRoute } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -30,9 +32,15 @@ export const Route = createFileRoute("/gear-cave")({
     );
   },
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
-      markdownPageQueryOptions("gear_cave"),
-    );
+    // The hero is prefetched alongside the page's own data rather
+    // than fetched after hydration — otherwise the band paints
+    // registry defaults and swaps once the query lands.
+    await Promise.all([
+      context.queryClient.ensureQueryData(
+        markdownPageQueryOptions("gear_cave"),
+      ),
+      context.queryClient.ensureQueryData(pageHeroQueryOptions("gear_cave")),
+    ]);
   },
   component: GearCavePage,
 });
@@ -44,46 +52,40 @@ function GearCavePage() {
   const [editOpen, setEditOpen] = useState(false);
 
   return (
-    <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            The Gear Cave
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            UCMC's communal equipment library — what we own, how to borrow, and
-            what it costs.
-          </p>
-        </div>
+    <>
+      <PageHero page="gear_cave" />
+      <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
         {canManage ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditOpen(true)}
-            aria-label="Edit gear-cave page"
-          >
-            <Pencil className="size-4" />
-            Edit
-          </Button>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditOpen(true)}
+              aria-label="Edit gear-cave page"
+            >
+              <Pencil className="size-4" />
+              Edit
+            </Button>
+          </div>
         ) : null}
-      </header>
 
-      {data.markdown.length > 0 ? (
-        <MarkdownContent>{data.markdown}</MarkdownContent>
-      ) : null}
+        {data.markdown.length > 0 ? (
+          <MarkdownContent>{data.markdown}</MarkdownContent>
+        ) : null}
 
-      {canManage ? (
-        <EditMarkdownSheet
-          slug="gear_cave"
-          title="Edit gear-cave page"
-          description="The prospective-member overview of the gear library. Per-piece detail and live availability stay on the auth'd /gear inventory — this page is the public face."
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          initialMarkdown={data.markdown}
-          fieldLabel="Gear cave"
-          placeholder="Describe the gear-cave service…"
-        />
-      ) : null}
-    </main>
+        {canManage ? (
+          <EditMarkdownSheet
+            slug="gear_cave"
+            title="Edit gear-cave page"
+            description="The prospective-member overview of the gear library. Per-piece detail and live availability stay on the auth'd /gear inventory — this page is the public face."
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            initialMarkdown={data.markdown}
+            fieldLabel="Gear cave"
+            placeholder="Describe the gear-cave service…"
+          />
+        ) : null}
+      </main>
+    </>
   );
 }
