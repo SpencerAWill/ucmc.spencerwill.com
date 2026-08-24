@@ -5,13 +5,17 @@
  * fine — they're erased at compile time.
  */
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 
 import type {
   ActivitySummary,
   FaqItemSummary,
   HeroSlideSummary,
   LandingContent,
+  PageHero,
 } from "#/features/landing/server/landing-actions.server";
+import { HERO_PAGE_KEYS } from "#/features/landing/lib/hero-pages";
+import type { HeroPage } from "#/features/landing/lib/hero-pages";
 import {
   activityInputSchema,
   activityUpdateInputSchema,
@@ -30,6 +34,7 @@ export type {
   FaqItemSummary,
   HeroSlideSummary,
   LandingContent,
+  PageHero,
 };
 
 // ── Read (anonymous-safe) ───────────────────────────────────────────────
@@ -41,6 +46,23 @@ export const getLandingContentFn = createServerFn({ method: "GET" }).handler(
     return getLandingContentAction();
   },
 );
+
+/**
+ * One page's hero. Anonymous-safe like the landing read: a hero is
+ * public chrome, and the seven subpages that render one are gated by
+ * their own route guards rather than by this fn.
+ *
+ * The page is validated against the registry here rather than trusted
+ * from the wire — an unknown slug would otherwise reach
+ * `HERO_PAGES[page]` and read defaults off `undefined`.
+ */
+export const getPageHeroFn = createServerFn({ method: "GET" })
+  .validator(z.enum(HERO_PAGE_KEYS as [HeroPage, ...HeroPage[]]))
+  .handler(async ({ data }): Promise<PageHero> => {
+    const { getPageHeroAction } =
+      await import("#/features/landing/server/landing-actions.server");
+    return getPageHeroAction(data);
+  });
 
 // ── Settings ────────────────────────────────────────────────────────────
 

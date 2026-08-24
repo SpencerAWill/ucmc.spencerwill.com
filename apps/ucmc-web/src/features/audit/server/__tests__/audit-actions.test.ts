@@ -65,6 +65,7 @@ async function asViewer(
     isSystemAdmin: false,
     permissions,
     rolePermissionMap: {},
+    roleDisplayNames: {},
   });
   return userId;
 }

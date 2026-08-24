@@ -1,4 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { pageHeroQueryOptions } from "#/features/landing/api/queries";
+import { PageHero } from "#/features/landing/components/page-hero";
 import { createFileRoute } from "@tanstack/react-router";
 import { Info, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
@@ -65,7 +67,14 @@ export const Route = createFileRoute("/history")({
     await requirePageEnabled(context.queryClient, "history", "history:view");
   },
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(historyContentQueryOptions());
+    // The hero is the first thing painted, so it's prefetched
+    // alongside the page's own data rather than fetched after
+    // hydration — otherwise the band shows registry defaults and
+    // swaps once the query lands.
+    await Promise.all([
+      context.queryClient.ensureQueryData(historyContentQueryOptions()),
+      context.queryClient.ensureQueryData(pageHeroQueryOptions("history")),
+    ]);
   },
   component: HistoryPage,
 });
@@ -177,270 +186,268 @@ function HistoryPage() {
   }
 
   return (
-    <main id="main" className="mx-auto w-full max-w-2xl space-y-10 px-6 py-12">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            UCMC History
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            How the University of Cincinnati Mountaineering Club started, the
-            people who carried it through five decades, and the friends we've
-            lost along the way.
+    <>
+      <PageHero page="history" />
+      <main
+        id="main"
+        className="mx-auto w-full max-w-2xl space-y-10 px-6 py-12"
+      >
+        {canManageHistory ? (
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditNarrativeOpen(true)}
+              aria-label="Edit history narrative"
+            >
+              <Pencil className="size-4" />
+              Edit
+            </Button>
+          </div>
+        ) : null}
+
+        {data.narrativeMarkdown.length > 0 ? (
+          <MarkdownContent>{data.narrativeMarkdown}</MarkdownContent>
+        ) : null}
+
+        {canManageHistory ? (
+          <EditMarkdownSheet
+            slug="history.narrative"
+            title="Edit history narrative"
+            description="The founding story, decades-of-camaraderie overview, and Steve Must memorial. Renders as markdown — headings (##), bold, italic, links, and lists are all supported."
+            open={editNarrativeOpen}
+            onOpenChange={setEditNarrativeOpen}
+            initialMarkdown={data.narrativeMarkdown}
+            fieldLabel="Narrative"
+            placeholder="Tell the club's story…"
+          />
+        ) : null}
+
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold tracking-tight">
+              Past officers
+            </h2>
+            {canManageHistory ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setOfficerSeed({ mode: "create" })}
+                aria-label="Add past officer entry"
+              >
+                <Plus className="size-4" />
+                Add officer
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            A year-by-year archive of UCMC's elected leadership and equipment
+            managers, beginning with the 1973–74 academic year. Role names and
+            structures evolved over the decades — "Librarian" disappeared in the
+            1980s, "Trip Coordinator" was added in the mid-2000s, "Gear
+            Assistants" came in the 2010s — and the archive preserves each
+            year's actual roles rather than back-fitting today's structure.
+            Years marked "Unknown" reflect gaps in the historical record.
           </p>
-        </div>
-        {canManageHistory ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditNarrativeOpen(true)}
-            aria-label="Edit history narrative"
-          >
-            <Pencil className="size-4" />
-            Edit
-          </Button>
-        ) : null}
-      </header>
-
-      {data.narrativeMarkdown.length > 0 ? (
-        <MarkdownContent>{data.narrativeMarkdown}</MarkdownContent>
-      ) : null}
-
-      {canManageHistory ? (
-        <EditMarkdownSheet
-          slug="history.narrative"
-          title="Edit history narrative"
-          description="The founding story, decades-of-camaraderie overview, and Steve Must memorial. Renders as markdown — headings (##), bold, italic, links, and lists are all supported."
-          open={editNarrativeOpen}
-          onOpenChange={setEditNarrativeOpen}
-          initialMarkdown={data.narrativeMarkdown}
-          fieldLabel="Narrative"
-          placeholder="Tell the club's story…"
-        />
-      ) : null}
-
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold tracking-tight">
-            Past officers
-          </h2>
           {canManageHistory ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setOfficerSeed({ mode: "create" })}
-              aria-label="Add past officer entry"
-            >
-              <Plus className="size-4" />
-              Add officer
-            </Button>
+            <Alert>
+              <Info />
+              <AlertTitle>This archive auto-populates each March.</AlertTitle>
+              <AlertDescription>
+                A scheduled job runs every March 1 at 08:15 UTC and snapshots
+                the current officer board into this archive, encoded as the
+                school year of the just-completed term (e.g. a March 2027 run
+                writes the 2026-27 board). The job is idempotent — if a year is
+                already on file (manual entry or a previous cron run) it's left
+                untouched. You can still edit, delete, or backfill any year
+                manually with the affordances below.
+              </AlertDescription>
+            </Alert>
           ) : null}
-        </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          A year-by-year archive of UCMC's elected leadership and equipment
-          managers, beginning with the 1973–74 academic year. Role names and
-          structures evolved over the decades — "Librarian" disappeared in the
-          1980s, "Trip Coordinator" was added in the mid-2000s, "Gear
-          Assistants" came in the 2010s — and the archive preserves each year's
-          actual roles rather than back-fitting today's structure. Years marked
-          "Unknown" reflect gaps in the historical record.
-        </p>
+          <PastOfficers
+            groups={data.officersByYear}
+            canManage={canManageHistory}
+            onEditOfficer={(group, officer) =>
+              setOfficerSeed({
+                mode: "edit",
+                officer,
+                schoolYear: group.schoolYear,
+                startYear: group.startYear,
+              })
+            }
+            onDeleteOfficer={(officer) => setDeletingOfficer({ officer })}
+            onDeleteYear={(group: OfficerYearGroup) =>
+              setDeletingYear({
+                schoolYear: group.schoolYear,
+                startYear: group.startYear,
+                count: group.officers.length,
+              })
+            }
+          />
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold tracking-tight">
+              Honorary members
+            </h2>
+            {canManageHistory ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setHonorarySeed({
+                    mode: "create",
+                    defaultSortOrder: data.honoraryMembers.length + 1,
+                  })
+                }
+                aria-label="Add honorary member"
+              >
+                <Plus className="size-4" />
+                Add honorary
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Honorary membership is granted by majority vote of the voting
+            membership per Constitution §3.4, in recognition of long-running
+            service to UCMC or distinguished contributions to the outdoor
+            community.
+          </p>
+          <HonoraryMembers
+            members={data.honoraryMembers}
+            canManage={canManageHistory}
+            onEdit={(member) => {
+              // Look up the member's current slot from server-ordered
+              // data so the edit-mode dialog can preserve sort_order
+              // (DnD is the only path to change it).
+              const idx = data.honoraryMembers.findIndex(
+                (m) => m.id === member.id,
+              );
+              const sortOrder = idx >= 0 ? idx + 1 : 1;
+              setHonorarySeed({ mode: "edit", member, sortOrder });
+            }}
+            onDelete={(member) => setDeletingHonorary({ member })}
+          />
+        </section>
+
         {canManageHistory ? (
-          <Alert>
-            <Info />
-            <AlertTitle>This archive auto-populates each March.</AlertTitle>
-            <AlertDescription>
-              A scheduled job runs every March 1 at 08:15 UTC and snapshots the
-              current officer board into this archive, encoded as the school
-              year of the just-completed term (e.g. a March 2027 run writes the
-              2026-27 board). The job is idempotent — if a year is already on
-              file (manual entry or a previous cron run) it's left untouched.
-              You can still edit, delete, or backfill any year manually with the
-              affordances below.
-            </AlertDescription>
-          </Alert>
-        ) : null}
-        <PastOfficers
-          groups={data.officersByYear}
-          canManage={canManageHistory}
-          onEditOfficer={(group, officer) =>
-            setOfficerSeed({
-              mode: "edit",
-              officer,
-              schoolYear: group.schoolYear,
-              startYear: group.startYear,
-            })
-          }
-          onDeleteOfficer={(officer) => setDeletingOfficer({ officer })}
-          onDeleteYear={(group: OfficerYearGroup) =>
-            setDeletingYear({
-              schoolYear: group.schoolYear,
-              startYear: group.startYear,
-              count: group.officers.length,
-            })
-          }
-        />
-      </section>
+          <>
+            <OfficerFormDialog
+              seed={officerSeed}
+              onClose={() => setOfficerSeed(null)}
+            />
+            <HonoraryFormDialog
+              seed={honorarySeed}
+              onClose={() => setHonorarySeed(null)}
+            />
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold tracking-tight">
-            Honorary members
-          </h2>
-          {canManageHistory ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setHonorarySeed({
-                  mode: "create",
-                  defaultSortOrder: data.honoraryMembers.length + 1,
-                })
-              }
-              aria-label="Add honorary member"
+            <AlertDialog
+              open={deletingOfficer !== null}
+              onOpenChange={(next) => {
+                if (!next) {
+                  setDeletingOfficer(null);
+                }
+              }}
             >
-              <Plus className="size-4" />
-              Add honorary
-            </Button>
-          ) : null}
-        </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Honorary membership is granted by majority vote of the voting
-          membership per Constitution §3.4, in recognition of long-running
-          service to UCMC or distinguished contributions to the outdoor
-          community.
-        </p>
-        <HonoraryMembers
-          members={data.honoraryMembers}
-          canManage={canManageHistory}
-          onEdit={(member) => {
-            // Look up the member's current slot from server-ordered
-            // data so the edit-mode dialog can preserve sort_order
-            // (DnD is the only path to change it).
-            const idx = data.honoraryMembers.findIndex(
-              (m) => m.id === member.id,
-            );
-            const sortOrder = idx >= 0 ? idx + 1 : 1;
-            setHonorarySeed({ mode: "edit", member, sortOrder });
-          }}
-          onDelete={(member) => setDeletingHonorary({ member })}
-        />
-      </section>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Delete this officer entry?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes the historical record permanently. You can
+                    re-add it later if needed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void confirmDeleteOfficer();
+                    }}
+                    disabled={deleteOfficerMut.isPending}
+                  >
+                    {deleteOfficerMut.isPending ? "Deleting…" : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
-      {canManageHistory ? (
-        <>
-          <OfficerFormDialog
-            seed={officerSeed}
-            onClose={() => setOfficerSeed(null)}
-          />
-          <HonoraryFormDialog
-            seed={honorarySeed}
-            onClose={() => setHonorarySeed(null)}
-          />
+            <AlertDialog
+              open={deletingYear !== null}
+              onOpenChange={(next) => {
+                if (!next) {
+                  setDeletingYear(null);
+                }
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Delete the entire {deletingYear?.schoolYear} year?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes all {deletingYear?.count} officer{" "}
+                    {deletingYear?.count === 1 ? "entry" : "entries"} for{" "}
+                    {deletingYear?.schoolYear} from the archive. You can re-add
+                    entries individually later, but the bulk deletion can't be
+                    undone in one step.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void confirmDeleteYear();
+                    }}
+                    disabled={deleteYearMut.isPending}
+                  >
+                    {deleteYearMut.isPending
+                      ? "Deleting…"
+                      : `Delete ${deletingYear?.schoolYear ?? ""}`}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
-          <AlertDialog
-            open={deletingOfficer !== null}
-            onOpenChange={(next) => {
-              if (!next) {
-                setDeletingOfficer(null);
-              }
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this officer entry?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes the historical record permanently. You can re-add
-                  it later if needed.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void confirmDeleteOfficer();
-                  }}
-                  disabled={deleteOfficerMut.isPending}
-                >
-                  {deleteOfficerMut.isPending ? "Deleting…" : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          <AlertDialog
-            open={deletingYear !== null}
-            onOpenChange={(next) => {
-              if (!next) {
-                setDeletingYear(null);
-              }
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  Delete the entire {deletingYear?.schoolYear} year?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes all {deletingYear?.count} officer{" "}
-                  {deletingYear?.count === 1 ? "entry" : "entries"} for{" "}
-                  {deletingYear?.schoolYear} from the archive. You can re-add
-                  entries individually later, but the bulk deletion can't be
-                  undone in one step.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void confirmDeleteYear();
-                  }}
-                  disabled={deleteYearMut.isPending}
-                >
-                  {deleteYearMut.isPending
-                    ? "Deleting…"
-                    : `Delete ${deletingYear?.schoolYear ?? ""}`}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          <AlertDialog
-            open={deletingHonorary !== null}
-            onOpenChange={(next) => {
-              if (!next) {
-                setDeletingHonorary(null);
-              }
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  Delete this honorary member?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes the entry permanently. You can re-add it later if
-                  needed.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void confirmDeleteHonorary();
-                  }}
-                  disabled={deleteHonoraryMut.isPending}
-                >
-                  {deleteHonoraryMut.isPending ? "Deleting…" : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
-      ) : null}
-    </main>
+            <AlertDialog
+              open={deletingHonorary !== null}
+              onOpenChange={(next) => {
+                if (!next) {
+                  setDeletingHonorary(null);
+                }
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Delete this honorary member?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes the entry permanently. You can re-add it later
+                    if needed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void confirmDeleteHonorary();
+                    }}
+                    disabled={deleteHonoraryMut.isPending}
+                  >
+                    {deleteHonoraryMut.isPending ? "Deleting…" : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        ) : null}
+      </main>
+    </>
   );
 }

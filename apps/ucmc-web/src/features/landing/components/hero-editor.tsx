@@ -12,14 +12,19 @@ import { Separator } from "#/components/ui/separator";
 import { Textarea } from "#/components/ui/textarea";
 import { useUpdateLandingSetting } from "#/features/landing/api/use-update-setting";
 import { HeroSlidesManager } from "#/features/landing/components/hero-slides-manager";
+import {
+  heroHeadingKey,
+  heroTaglineKey,
+} from "#/features/landing/lib/hero-pages";
+import type { HeroPage } from "#/features/landing/lib/hero-pages";
 import { noPasswordManagerProps } from "#/features/landing/lib/no-password-manager";
 import type { HeroSlideSummary } from "#/features/landing/server/landing-fns";
-import {
-  LANDING_LIMITS,
-  LANDING_SETTING_KEYS,
-} from "#/features/landing/server/landing-schemas";
+import { LANDING_LIMITS } from "#/features/landing/server/landing-schemas";
 
 export interface HeroEditorProps {
+  /** Which page's hero is being edited. Scopes both the setting keys
+   *  written and the gallery the slide manager mutates. */
+  page: HeroPage;
   heading: string;
   tagline: string;
   slides: HeroSlideSummary[];
@@ -27,6 +32,7 @@ export interface HeroEditorProps {
 }
 
 export function HeroEditor({
+  page,
   heading,
   tagline,
   slides,
@@ -44,14 +50,8 @@ export function HeroEditor({
       return;
     }
     try {
-      await update.mutateAsync({
-        key: LANDING_SETTING_KEYS.heroHeading,
-        value: h,
-      });
-      await update.mutateAsync({
-        key: LANDING_SETTING_KEYS.heroTagline,
-        value: t,
-      });
+      await update.mutateAsync({ key: heroHeadingKey(page), value: h });
+      await update.mutateAsync({ key: heroTaglineKey(page), value: t });
       toast.success("Hero text saved");
     } catch (err) {
       toast.error(
@@ -103,7 +103,7 @@ export function HeroEditor({
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold">Slides</h3>
-        <HeroSlidesManager slides={slides} />
+        <HeroSlidesManager page={page} slides={slides} />
       </section>
 
       <div className="flex justify-end">

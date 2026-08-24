@@ -8,6 +8,8 @@ import ReactCrop from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { toast } from "sonner";
 
+import type { HeroPage } from "#/features/landing/lib/hero-pages";
+
 import { Button } from "#/components/ui/button";
 import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
@@ -20,6 +22,8 @@ import type { HeroSlideSummary } from "#/features/landing/server/landing-fns";
 import { LANDING_LIMITS } from "#/features/landing/server/landing-schemas";
 
 export interface HeroSlideEditorProps {
+  /** Which page's gallery this slide belongs to. */
+  page: HeroPage;
   /** Pass an existing slide to enter edit-mode; omit to create. */
   slide?: HeroSlideSummary;
   onSaved: () => void;
@@ -27,6 +31,7 @@ export interface HeroSlideEditorProps {
 }
 
 export function HeroSlideEditor({
+  page,
   slide,
   onSaved,
   onCancel,
@@ -71,6 +76,7 @@ export function HeroSlideEditor({
         toast.success("Slide updated");
       } else {
         await createMutation.mutateAsync({
+          page,
           alt: trimmedAlt,
           dataUrl: dataUrl as string,
         });

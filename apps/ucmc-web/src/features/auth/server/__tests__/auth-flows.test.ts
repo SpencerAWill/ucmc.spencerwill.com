@@ -138,6 +138,38 @@ async function seedMagicLink(args: {
   return token;
 }
 
+/** Grant `role_member` (with one permission, so the map entry is
+ *  non-empty) to `userId`. `beforeEach` wipes the RBAC tables, so the
+ *  role row has to be re-seeded alongside the assignment. */
+async function seedMemberRole(userId: string): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(schema.roles)
+    .values({
+      id: "role_member",
+      name: "member",
+      displayName: "Member",
+      description: "Member",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.permissions)
+    .values({
+      id: "perm_gear_read",
+      name: "gear:read",
+      description: "Read gear",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.rolePermissions)
+    .values({ roleId: "role_member", permissionId: "perm_gear_read" })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.userRoles)
+    .values({ userId, roleId: "role_member" })
+    .onConflictDoNothing();
+}
+
 async function seedApprover(): Promise<string> {
   const id = await seedUser({
     email: "exec@example.com",
@@ -277,6 +309,68 @@ describe("magic-link registration flow", () => {
     expect(principal!.primaryEmail).toBe(TEST_EMAIL);
     expect(principal!.status).toBe("pending");
     expect(principal!.hasProfile).toBe(true);
+  });
+});
+
+describe("getSessionAction — role preview cookie", () => {
+  /**
+   * The server half of the "View as" fix. Route guards run in
+   * `beforeLoad`, which executes here on a hard navigation, so the
+   * previewed role has to travel in the session payload — reading it
+   * from `localStorage` (as this used to) left the guard blind on
+   * exactly the path that surfaced the bug: typing a URL.
+   */
+  it("reports a previewed role the principal's map describes", async () => {
+    const userId = await seedUser({
+      email: TEST_EMAIL,
+      status: "approved",
+      withProfile: true,
+    });
+    // `beforeEach` wipes roles/permissions and `seedUser` writes no
+    // `user_roles`; real approval grants `role_member`, and
+    // `rolePermissionMap` is keyed off the roles actually held.
+    await seedMemberRole(userId);
+    const token = await seedMagicLink({ email: TEST_EMAIL, intent: "login" });
+    await consumeMagicLinkAction(token);
+
+    cookieJar.set("ucmc_view_as", "member");
+    const session = await getSessionAction();
+    expect(session.principal!.rolePermissionMap).toHaveProperty("member");
+    expect(session.emulatedRole).toBe("member");
+    // Every previewable role carries its operator-authored label, so the
+    // switcher and the banner never have to prettify a slug.
+    expect(session.principal!.roleDisplayNames.member).toBe("Member");
+  });
+
+  it("drops a forged role the principal's map doesn't describe", async () => {
+    const userId = await seedUser({
+      email: TEST_EMAIL,
+      status: "approved",
+      withProfile: true,
+    });
+    await seedMemberRole(userId);
+    const token = await seedMagicLink({ email: TEST_EMAIL, intent: "login" });
+    await consumeMagicLinkAction(token);
+
+    // A plain member hand-editing the cookie. The map holds only their
+    // own roles, so this resolves to null and every consumer falls back
+    // to the real permission set — a preview can only narrow.
+    cookieJar.set("ucmc_view_as", "system_admin");
+    const session = await getSessionAction();
+    expect(session.emulatedRole).toBeNull();
+  });
+
+  it("reports null with no cookie", async () => {
+    await seedUser({
+      email: TEST_EMAIL,
+      status: "approved",
+      withProfile: true,
+    });
+    const token = await seedMagicLink({ email: TEST_EMAIL, intent: "login" });
+    await consumeMagicLinkAction(token);
+
+    const session = await getSessionAction();
+    expect(session.emulatedRole).toBeNull();
   });
 });
 

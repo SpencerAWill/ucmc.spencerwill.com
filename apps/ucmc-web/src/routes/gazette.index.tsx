@@ -1,4 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { pageHeroQueryOptions } from "#/features/landing/api/queries";
+import { PageHero } from "#/features/landing/components/page-hero";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
@@ -44,7 +46,14 @@ export const Route = createFileRoute("/gazette/")({
     );
   },
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(gazetteListQueryOptions());
+    // The hero is the first thing painted, so it's prefetched
+    // alongside the page's own data rather than fetched after
+    // hydration — otherwise the band shows registry defaults and
+    // swaps once the query lands.
+    await Promise.all([
+      context.queryClient.ensureQueryData(gazetteListQueryOptions()),
+      context.queryClient.ensureQueryData(pageHeroQueryOptions("gazette")),
+    ]);
   },
   component: GazettePage,
 });
@@ -93,74 +102,73 @@ function GazettePage() {
   }
 
   return (
-    <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Goosedown Gazette
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            UCMC's club newsletter, by year and issue. Read inline or download a
-            copy.
-          </p>
-        </div>
+    <>
+      <PageHero page="gazette" />
+      <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
         {canManage ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={startCreate}
-            aria-label="Add Gazette issue"
-          >
-            <Plus className="size-4" />
-            Add issue
-          </Button>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={startCreate}
+              aria-label="Add Gazette issue"
+            >
+              <Plus className="size-4" />
+              Add issue
+            </Button>
+          </div>
         ) : null}
-      </header>
 
-      <GazetteList
-        issues={data.issues}
-        canManage={canManage}
-        onEditIssue={(issue) => setFormSeed({ mode: "edit", issue })}
-        onDeleteIssue={(issue) => setDeletingIssue(issue)}
-      />
+        <GazetteList
+          issues={data.issues}
+          canManage={canManage}
+          onEditIssue={(issue) => setFormSeed({ mode: "edit", issue })}
+          onDeleteIssue={(issue) => setDeletingIssue(issue)}
+        />
 
-      {canManage ? (
-        <>
-          <IssueFormDialog seed={formSeed} onClose={() => setFormSeed(null)} />
-          <AlertDialog
-            open={deletingIssue !== null}
-            onOpenChange={(next) => {
-              if (!next) {
-                setDeletingIssue(null);
-              }
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this Gazette issue?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes the row, the PDF on R2, and the issue card from
-                  /gazette. You can re-upload from a fresh file later, but the
-                  row's publicId won't be the same.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void confirmDelete();
-                  }}
-                  disabled={deleteMut.isPending}
-                >
-                  {deleteMut.isPending ? "Deleting…" : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
-      ) : null}
-    </main>
+        {canManage ? (
+          <>
+            <IssueFormDialog
+              seed={formSeed}
+              onClose={() => setFormSeed(null)}
+            />
+            <AlertDialog
+              open={deletingIssue !== null}
+              onOpenChange={(next) => {
+                if (!next) {
+                  setDeletingIssue(null);
+                }
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Delete this Gazette issue?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes the row, the PDF on R2, and the issue card from
+                    /gazette. You can re-upload from a fresh file later, but the
+                    row's publicId won't be the same.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void confirmDelete();
+                    }}
+                    disabled={deleteMut.isPending}
+                  >
+                    {deleteMut.isPending ? "Deleting…" : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        ) : null}
+      </main>
+    </>
   );
 }
 

@@ -5,6 +5,7 @@
  */
 import { asc, eq, inArray, sql } from "drizzle-orm";
 
+import type { HeroPage } from "#/features/landing/lib/hero-pages";
 import { getDb, schema } from "#/server/db";
 
 // ── Settings (singleton key/value) ──────────────────────────────────────
@@ -24,6 +25,25 @@ export async function listSettings(): Promise<SettingRow[]> {
       updatedAt: schema.landingSettings.updatedAt,
     })
     .from(schema.landingSettings);
+}
+
+/**
+ * One setting row, or null. Exists so a page-hero read fetches two keys
+ * instead of the whole `landing_settings` table — `getLandingContent`
+ * needs every row, a hero needs its own two.
+ */
+export async function getSetting(key: string): Promise<SettingRow | null> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      key: schema.landingSettings.key,
+      valueJson: schema.landingSettings.valueJson,
+      updatedAt: schema.landingSettings.updatedAt,
+    })
+    .from(schema.landingSettings)
+    .where(eq(schema.landingSettings.key, key))
+    .limit(1);
+  return rows.length > 0 ? rows[0] : null;
 }
 
 export async function upsertSetting(
@@ -52,25 +72,38 @@ export async function upsertSetting(
 
 // ── Hero slides ─────────────────────────────────────────────────────────
 
-export async function listHeroSlides() {
+/**
+ * Slides for one page, in display order.
+ *
+ * Always page-scoped — there is deliberately no "all slides" read. Since
+ * migration 0065 the table holds every page's slides, so an unscoped
+ * list would silently render /album's images on /policies.
+ */
+export async function listHeroSlides(page: HeroPage) {
   const db = getDb();
   return db
     .select()
-    .from(schema.landingHeroSlides)
+    .from(schema.heroSlides)
+    .where(eq(schema.heroSlides.page, page))
     .orderBy(
-      asc(schema.landingHeroSlides.sortOrder),
-      asc(schema.landingHeroSlides.createdAt),
+      asc(schema.heroSlides.sortOrder),
+      asc(schema.heroSlides.createdAt),
     );
 }
 
+/**
+ * One slide by id. Ids are globally unique, so this isn't page-scoped —
+ * callers that mutate read the row's own `page` back off it rather than
+ * trusting a page passed alongside the id.
+ */
 export async function getHeroSlide(
   id: string,
-): Promise<schema.LandingHeroSlide | null> {
+): Promise<schema.HeroSlide | null> {
   const db = getDb();
   const rows = await db
     .select()
-    .from(schema.landingHeroSlides)
-    .where(eq(schema.landingHeroSlides.id, id))
+    .from(schema.heroSlides)
+    .where(eq(schema.heroSlides.id, id))
     .limit(1);
   return rows.length > 0 ? rows[0] : null;
 }
@@ -90,16 +123,21 @@ export async function getHeroSlide(
 // (hero slides / FAQ items / activities) share this assumption.
 export async function insertHeroSlide(input: {
   id: string;
+  page: HeroPage;
   imageKey: string;
   alt: string;
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
-  await db.insert(schema.landingHeroSlides).values({
+  await db.insert(schema.heroSlides).values({
     id: input.id,
+    page: input.page,
     imageKey: input.imageKey,
     alt: input.alt,
-    sortOrder: sql<number>`COALESCE((SELECT MAX(${schema.landingHeroSlides.sortOrder}) FROM ${schema.landingHeroSlides}), -1) + 1`,
+    // The MAX subquery is scoped to the page, so each page's slides
+    // number from 0 independently — an unscoped MAX would make a new
+    // /album slide sort after every home slide ever added.
+    sortOrder: sql<number>`COALESCE((SELECT MAX(${schema.heroSlides.sortOrder}) FROM ${schema.heroSlides} WHERE ${schema.heroSlides.page} = ${input.page}), -1) + 1`,
     createdAt: now,
     updatedAt: now,
   });
@@ -119,16 +157,14 @@ export async function updateHeroSlide(input: {
     set.imageKey = input.imageKey;
   }
   await db
-    .update(schema.landingHeroSlides)
+    .update(schema.heroSlides)
     .set(set)
-    .where(eq(schema.landingHeroSlides.id, input.id));
+    .where(eq(schema.heroSlides.id, input.id));
 }
 
 export async function deleteHeroSlide(id: string): Promise<void> {
   const db = getDb();
-  await db
-    .delete(schema.landingHeroSlides)
-    .where(eq(schema.landingHeroSlides.id, id));
+  await db.delete(schema.heroSlides).where(eq(schema.heroSlides.id, id));
 }
 
 // Atomically reorder a contiguous batch of rows. Caller passes the new
@@ -144,9 +180,9 @@ export async function reorderHeroSlides(idsInOrder: string[]): Promise<void> {
   const now = Temporal.Now.instant();
   const stmts = idsInOrder.map((id, i) =>
     db
-      .update(schema.landingHeroSlides)
+      .update(schema.heroSlides)
       .set({ sortOrder: i, updatedAt: now })
-      .where(eq(schema.landingHeroSlides.id, id)),
+      .where(eq(schema.heroSlides.id, id)),
   );
   await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
 }
@@ -355,8 +391,8 @@ export async function countSlidesUsingImageKey(key: string): Promise<number> {
   const db = getDb();
   const rows = await db
     .select({ c: sql<number>`COUNT(*)` })
-    .from(schema.landingHeroSlides)
-    .where(eq(schema.landingHeroSlides.imageKey, key));
+    .from(schema.heroSlides)
+    .where(eq(schema.heroSlides.imageKey, key));
   return rows[0]?.c ?? 0;
 }
 
@@ -368,6 +404,6 @@ export async function findSlidesByImageKeys(keys: string[]) {
   const db = getDb();
   return db
     .select()
-    .from(schema.landingHeroSlides)
-    .where(inArray(schema.landingHeroSlides.imageKey, keys));
+    .from(schema.heroSlides)
+    .where(inArray(schema.heroSlides.imageKey, keys));
 }

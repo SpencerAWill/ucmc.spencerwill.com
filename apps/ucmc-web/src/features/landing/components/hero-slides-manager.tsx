@@ -10,11 +10,14 @@ import { SortableItem, SortableList } from "#/components/sortable-list";
 import { Button } from "#/components/ui/button";
 import { useDeleteHeroSlide } from "#/features/landing/api/use-delete-hero-slide";
 import { useReorderHeroSlides } from "#/features/landing/api/use-reorder-hero-slides";
+import type { HeroPage } from "#/features/landing/lib/hero-pages";
 import { HeroSlideEditor } from "#/features/landing/components/hero-slide-editor";
 import { landingImageUrlFor } from "#/features/landing/lib/image-url";
 import type { HeroSlideSummary } from "#/features/landing/server/landing-fns";
 
 export interface HeroSlidesManagerProps {
+  /** Scopes every add to this page's gallery. */
+  page: HeroPage;
   slides: HeroSlideSummary[];
 }
 
@@ -23,7 +26,7 @@ type Mode =
   | { kind: "create" }
   | { kind: "edit"; slide: HeroSlideSummary };
 
-export function HeroSlidesManager({ slides }: HeroSlidesManagerProps) {
+export function HeroSlidesManager({ page, slides }: HeroSlidesManagerProps) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const reorder = useReorderHeroSlides();
   const remove = useDeleteHeroSlide();
@@ -56,6 +59,7 @@ export function HeroSlidesManager({ slides }: HeroSlidesManagerProps) {
   if (mode.kind === "create") {
     return (
       <HeroSlideEditor
+        page={page}
         onSaved={() => setMode({ kind: "list" })}
         onCancel={() => setMode({ kind: "list" })}
       />
@@ -65,6 +69,7 @@ export function HeroSlidesManager({ slides }: HeroSlidesManagerProps) {
   if (mode.kind === "edit") {
     return (
       <HeroSlideEditor
+        page={page}
         slide={mode.slide}
         onSaved={() => setMode({ kind: "list" })}
         onCancel={() => setMode({ kind: "list" })}

@@ -48,6 +48,7 @@ import {
 } from "#/features/members/api/queries";
 import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
 import type {
+  MemberRoleBadge,
   MemberSummary,
   RoleOption,
 } from "#/features/members/server/member-fns";
@@ -242,9 +243,7 @@ export function ApprovedTab({
                     checked={roles.includes(role.name)}
                     onCheckedChange={() => toggleRole(role.name)}
                   />
-                  <span className="capitalize">
-                    {role.name.replace(/_/g, " ")}
-                  </span>
+                  <span>{role.displayName}</span>
                 </label>
               ))}
             </div>
@@ -341,20 +340,28 @@ export function ApprovedTab({
 
 // ── Shared helpers ────────────────────────────────────────────────────────
 
-function RoleBadges({ roles }: { roles: string[] }) {
-  const display = roles
-    .filter((r) => r !== "member")
-    .map((r) => r.replace("_", " "));
+/**
+ * Role chips for a directory row. Renders `displayName` — the label an
+ * operator typed at /access — and filters on the `name` slug, which is
+ * the half that's stable enough to compare against.
+ *
+ * No `capitalize` here: the label already carries its intended casing,
+ * and the CSS transform would uppercase every word ("VP of Trips" →
+ * "VP Of Trips").
+ */
+function RoleBadges({ roles }: { roles: MemberRoleBadge[] }) {
   return (
     <>
-      {display.map((role) => (
-        <span
-          key={role}
-          className="rounded bg-primary/10 px-1.5 py-0.5 text-xs capitalize text-primary"
-        >
-          {role}
-        </span>
-      ))}
+      {roles
+        .filter((r) => r.name !== "member")
+        .map((role) => (
+          <span
+            key={role.name}
+            className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
+          >
+            {role.displayName}
+          </span>
+        ))}
     </>
   );
 }

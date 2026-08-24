@@ -6,11 +6,13 @@ import {
   activeFeedbackTabFromPath,
   getFeedbackTabSubtitle,
 } from "#/components/layouts/feedback-tabs-bar";
+import { authStub } from "#/test-support/auth-stub";
 
 // Same stubbing shape as `members-tabs-bar.test.tsx`: the bar reads
-// `useAuth().hasPermission`, `useLocation()`, and the public-flags
-// snapshot, so all three are mocked and `Link` becomes a plain `<a>` so
-// accessible-name queries work without a router.
+// `useAuth()`, `useLocation()`, and the public-flags snapshot, so all
+// three are mocked and `Link` becomes a plain `<a>` so accessible-name
+// queries work without a router. The auth half comes from the shared
+// `authStub` rather than a local object literal — see its doc comment.
 const useAuthMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
 const flagsMock = vi.hoisted(() => vi.fn());
@@ -49,9 +51,7 @@ vi.mock("@tanstack/react-router", () => ({
 const BOTH_SURFACES_ON = { feedback_site: true, feedback_club: true } as const;
 
 function setPermissions(names: string[]) {
-  useAuthMock.mockReturnValue({
-    hasPermission: (name: string) => names.includes(name),
-  });
+  useAuthMock.mockReturnValue(authStub(names));
 }
 
 function setPathname(pathname: string) {

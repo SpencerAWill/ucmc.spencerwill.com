@@ -22,6 +22,10 @@ import { Link, useLocation } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { useAuth } from "#/features/auth/api/use-auth";
+import {
+  CLUB_FEEDBACK_PERMISSIONS,
+  SITE_FEEDBACK_PERMISSIONS,
+} from "#/features/auth/guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export type FeedbackTabId = "site" | "club";
@@ -43,20 +47,16 @@ export function getFeedbackTabSubtitle(pathname: string): string {
 }
 
 export function FeedbackTabsBar() {
-  const { hasPermission } = useAuth();
+  const { hasAnyPermission } = useAuth();
   const pathname = useLocation({ select: (l) => l.pathname });
   const flagsOptions = publicFlagsQueryOptions();
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
   const pages = flags.pages;
 
   const canSeeSite =
-    (hasPermission("site_feedback:submit") ||
-      hasPermission("site_feedback:manage")) &&
-    pages.feedback_site;
+    hasAnyPermission(SITE_FEEDBACK_PERMISSIONS) && pages.feedback_site;
   const canSeeClub =
-    (hasPermission("club_feedback:submit") ||
-      hasPermission("club_feedback:manage")) &&
-    pages.feedback_club;
+    hasAnyPermission(CLUB_FEEDBACK_PERMISSIONS) && pages.feedback_club;
 
   // If the viewer only has access to one tab the bar is just noise.
   if (!(canSeeSite && canSeeClub)) {

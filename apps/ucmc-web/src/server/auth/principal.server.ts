@@ -41,6 +41,14 @@ export interface Principal {
    *  for everyone else it's keyed by the user's own roles. Insertion
    *  order matches `roles.position` so iteration is stable. */
   rolePermissionMap: Record<string, string[]>;
+  /** Slug → operator-authored label for every role in
+   *  `rolePermissionMap`, so the "View as" switcher and the preview
+   *  banner can name a role the way `/access` does instead of
+   *  prettifying its slug (which can't recover casing: `gear_cave_manager`
+   *  is "Gear Cave Manager", not "Gear Cave Manager" by luck, and
+   *  "VP of Trips" survives). Same keys as `rolePermissionMap` — every
+   *  previewable role, not just the held ones. */
+  roleDisplayNames: Record<string, string>;
 }
 
 export async function loadPrincipal(userId: string): Promise<Principal | null> {
@@ -92,7 +100,11 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
         asc(schema.userEmails.id),
       ),
     db
-      .select({ roleId: schema.userRoles.roleId, name: schema.roles.name })
+      .select({
+        roleId: schema.userRoles.roleId,
+        name: schema.roles.name,
+        displayName: schema.roles.displayName,
+      })
       .from(schema.userRoles)
       .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
       .where(eq(schema.userRoles.userId, userId))
@@ -118,6 +130,10 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
 
   // Build the aggregated permission set and the per-role breakdown.
   const rolePermissionMap: Record<string, string[]> = {};
+  // Labels for every role the map ends up describing. Filled alongside
+  // it in both branches so a previewable role can never appear in one
+  // without the other.
+  const roleDisplayNames: Record<string, string> = {};
   let permissions: string[] = [];
 
   if (isSystemAdmin) {
@@ -149,6 +165,9 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
           // instead of role names — surfacing as "members:manage"
           // etc. in the view-as emulator dropdown.
           roleName: sql<string>`${schema.roles.name}`.as("role_name"),
+          roleDisplayName: sql<string>`${schema.roles.displayName}`.as(
+            "role_display_name",
+          ),
           permName: sql<string | null>`${schema.permissions.name}`.as(
             "perm_name",
           ),
@@ -172,6 +191,11 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     ]);
     permissions = allPerms.map((p) => p.name);
     rolePermissionMap["system_admin"] = permissions;
+    // Excluded from `allRoleGrants` (it's the "actual permissions"
+    // state), so its own label comes from the user's role rows.
+    roleDisplayNames["system_admin"] =
+      userRoleRows.find((r) => r.name === "system_admin")?.displayName ??
+      "System Admin";
 
     for (const row of allRoleGrants) {
       const list = rolePermissionMap[row.roleName] ?? [];
@@ -179,6 +203,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
         list.push(row.permName);
       }
       rolePermissionMap[row.roleName] = list;
+      roleDisplayNames[row.roleName] = row.roleDisplayName;
     }
   } else if (roleIds.length > 0) {
     const rows = await db
@@ -207,11 +232,14 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     permissions = Array.from(new Set(rows.map((r) => r.permName)));
   }
 
-  // Ensure every role the user holds has an entry (even if empty).
+  // Ensure every role the user holds has an entry (even if empty), and
+  // a label — a freshly created role with no grants still has to be
+  // nameable in the switcher.
   for (const r of userRoleRows) {
-    if (!(r.name in rolePermissionMap)) {
+    if (!Object.hasOwn(rolePermissionMap, r.name)) {
       rolePermissionMap[r.name] = [];
     }
+    roleDisplayNames[r.name] = r.displayName;
   }
 
   // Migration 0064 renamed three permissions; a database that hasn't run
@@ -234,6 +262,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     isSystemAdmin,
     permissions,
     rolePermissionMap,
+    roleDisplayNames,
   };
 }
 

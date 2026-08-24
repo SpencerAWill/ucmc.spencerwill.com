@@ -80,6 +80,12 @@ import {
   TooltipTrigger,
 } from "#/components/ui/tooltip";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { useViewMode } from "#/features/auth/api/view-mode";
+import {
+  CLUB_FEEDBACK_PERMISSIONS,
+  SITE_FEEDBACK_PERMISSIONS,
+  WAIVER_VIEW_PERMISSIONS,
+} from "#/features/auth/guards";
 
 const HEADER_HEIGHT = "3.5rem";
 
@@ -188,15 +194,33 @@ function CloseSidebarOnNavigate() {
   return null;
 }
 
+/**
+ * The preview's always-visible exit. Load-bearing now that route guards
+ * honour the preview: a previewed role that can't reach the current page
+ * lands on a 404 or gets bounced home, and the switcher lives inside the
+ * user menu — so without an exit right here you'd be hunting for the way
+ * out from a page that no longer renders its own chrome.
+ */
 function EmulationBanner() {
-  const { emulatedRole } = useAuth();
+  const { emulatedRole, principal } = useAuth();
+  const { setEmulatedRole } = useViewMode();
   if (!emulatedRole) {
     return null;
   }
+  // `roleDisplayNames` covers every previewable role, so this only falls
+  // back to the slug if the session payload predates the field.
+  const label = principal?.roleDisplayNames[emulatedRole] ?? emulatedRole;
   return (
     <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
       <Eye className="size-3.5" />
-      Viewing as {emulatedRole.replace(/_/g, " ")}
+      Viewing as {label}
+      <button
+        type="button"
+        onClick={() => setEmulatedRole(null)}
+        className="rounded px-1.5 py-0.5 font-semibold underline underline-offset-2 hover:bg-amber-200/60 dark:hover:bg-amber-800/40"
+      >
+        Exit preview
+      </button>
     </div>
   );
 }
@@ -206,7 +230,7 @@ function EmulationBanner() {
 // entry (the section's instead of the linked page's) is a silent bug — the
 // entry renders and 404s on click. Not part of the module's public API.
 export function SidebarNav() {
-  const { isApproved, hasPermission } = useAuth();
+  const { isApproved, hasPermission, hasAnyPermission } = useAuth();
   // Announcements gates compose: must have the permission AND the kill
   // switch must be on. `placeholderData` returns the schema default
   // (off) until the query resolves, so a fresh-DB / pre-hydration render
@@ -225,8 +249,7 @@ export function SidebarNav() {
   // the read tier — the attest controls on the page gate separately on
   // `waivers:verify`.
   const canSeeWaivers =
-    (hasPermission("waivers:view") || hasPermission("waivers:verify")) &&
-    pages.members_waivers;
+    hasAnyPermission(WAIVER_VIEW_PERMISSIONS) && pages.members_waivers;
   // Gate the *link* on the flag of the page it actually navigates to
   // (`/members` is `pages.members_approved`), NOT on the `pages.members`
   // section switch. Because the flags map carries *effective* values,
@@ -632,7 +655,7 @@ export function SidebarNav() {
 }
 
 function SidebarUtilityNav() {
-  const { isApproved, hasPermission } = useAuth();
+  const { isApproved, hasPermission, hasAnyPermission } = useAuth();
   // Page kill switches for entries in this group. `placeholderData` is the
   // schema default (on) until the query resolves.
   const flagsOptions = publicFlagsQueryOptions();
@@ -645,13 +668,9 @@ function SidebarUtilityNav() {
   // both via the principal bypass). Point the link at whichever surface is
   // actually enabled so it never lands on a switched-off /feedback.
   const canSiteFeedback =
-    (hasPermission("site_feedback:submit") ||
-      hasPermission("site_feedback:manage")) &&
-    pages.feedback_site;
+    hasAnyPermission(SITE_FEEDBACK_PERMISSIONS) && pages.feedback_site;
   const canClubFeedback =
-    (hasPermission("club_feedback:submit") ||
-      hasPermission("club_feedback:manage")) &&
-    pages.feedback_club;
+    hasAnyPermission(CLUB_FEEDBACK_PERMISSIONS) && pages.feedback_club;
   const canSubmitFeedback = isApproved && (canSiteFeedback || canClubFeedback);
   // Prefer club: it reaches the exec board and is the surface members are
   // more likely to want, which is also why it's the first tab. Falls back to

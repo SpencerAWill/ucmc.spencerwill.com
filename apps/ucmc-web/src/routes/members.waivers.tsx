@@ -13,7 +13,10 @@ import { Label } from "#/components/ui/label";
 import { WAIVER_VERSION } from "#/config/legal";
 import { formatDate } from "#/lib/date-format";
 import { currentWaiverCycle } from "#/config/waiver-cycle";
-import { requireAnyPermission } from "#/features/auth/guards";
+import {
+  requireAnyPermission,
+  WAIVER_VIEW_PERMISSIONS,
+} from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 import {
@@ -44,10 +47,7 @@ export const Route = createFileRoute("/members/waivers")({
     await requirePageFlag(context.queryClient, "members_waivers");
     // `waivers:view` opens the queue read-only; the attest controls
     // below are separately gated on `waivers:verify`.
-    await requireAnyPermission(context.queryClient, [
-      "waivers:view",
-      "waivers:verify",
-    ]);
+    await requireAnyPermission(context.queryClient, WAIVER_VIEW_PERMISSIONS);
   },
   loader: ({ context }) =>
     context.queryClient.ensureQueryData(waiverPendingQueueQueryOptions()),

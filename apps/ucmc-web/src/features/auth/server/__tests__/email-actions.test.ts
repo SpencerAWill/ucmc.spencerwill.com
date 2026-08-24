@@ -456,6 +456,7 @@ describe("removeEmailAction", () => {
         isSystemAdmin: false,
         permissions: [],
         rolePermissionMap: {},
+        roleDisplayNames: {},
       });
 
     try {

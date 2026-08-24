@@ -3,7 +3,12 @@ import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { requireApproved } from "#/features/auth/guards";
+import {
+  CLUB_FEEDBACK_PERMISSIONS,
+  SITE_FEEDBACK_PERMISSIONS,
+  effectivePermissionsFor,
+  requireApproved,
+} from "#/features/auth/guards";
 import {
   allClubFeedbackQueryOptions,
   myClubFeedbackQueryOptions,
@@ -18,17 +23,21 @@ export const Route = createFileRoute("/feedback/_tabs/club")({
   beforeLoad: async ({ context, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);
-    const canSeeClub =
-      principal.permissions.includes("club_feedback:submit") ||
-      principal.permissions.includes("club_feedback:manage");
+    const granted = await effectivePermissionsFor(
+      context.queryClient,
+      principal,
+    );
+    const canSeeClub = CLUB_FEEDBACK_PERMISSIONS.some((p) =>
+      granted.includes(p),
+    );
     // Mirror of the site route's fallback: someone without club access who
     // can see site feedback lands there instead of a dead end. Neither ->
     // notFound, and the two can't ping-pong because each only redirects
     // toward a surface the viewer can actually see.
     if (!canSeeClub) {
-      const canSite =
-        principal.permissions.includes("site_feedback:submit") ||
-        principal.permissions.includes("site_feedback:manage");
+      const canSite = SITE_FEEDBACK_PERMISSIONS.some((p) =>
+        granted.includes(p),
+      );
       if (canSite) {
         throw redirect({ to: "/feedback/site" });
       }

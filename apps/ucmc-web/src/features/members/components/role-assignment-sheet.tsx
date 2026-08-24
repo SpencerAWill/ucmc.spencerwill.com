@@ -140,8 +140,8 @@ export function RoleAssignmentSheet({
                       className="mt-0.5"
                     />
                     <div>
-                      <span className="text-sm font-medium capitalize">
-                        {role.name.replace(/_/g, " ")}
+                      <span className="text-sm font-medium">
+                        {role.displayName}
                       </span>
                       {role.description ? (
                         <p className="text-xs text-muted-foreground">

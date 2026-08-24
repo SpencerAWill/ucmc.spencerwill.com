@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { landingContentQueryOptions } from "#/features/landing/api/queries";
+import {
+  landingContentQueryOptions,
+  pageHeroQueryOptions,
+} from "#/features/landing/api/queries";
 import { About } from "#/features/landing/components/about";
 import { Activities } from "#/features/landing/components/activities";
 import { Faq } from "#/features/landing/components/faq";
@@ -19,7 +22,14 @@ export const Route = createFileRoute("/")({
   // Prefetch the landing-content bundle so SSR has the data baked in and
   // every section component reads from a hot cache on first render.
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(landingContentQueryOptions());
+    // Both: the bundled CMS payload for the page's sections, and the
+    // hero's own entry — `<PageHero>` reads the latter, so without it the
+    // home hero would paint registry defaults and swap after hydration
+    // while every other section arrived server-rendered.
+    await Promise.all([
+      context.queryClient.ensureQueryData(landingContentQueryOptions()),
+      context.queryClient.ensureQueryData(pageHeroQueryOptions("home")),
+    ]);
   },
   component: RouteComponent,
 });
