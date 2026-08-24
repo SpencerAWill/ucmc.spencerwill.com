@@ -120,6 +120,7 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
     isSystemAdmin: false,
     permissions: [],
     rolePermissionMap: {},
+    roleDisplayNames: {},
     ...overrides,
   };
 }

@@ -24,6 +24,7 @@ function principal(overrides: Partial<Principal> = {}): Principal {
     isSystemAdmin: false,
     permissions: ["gear:read"],
     rolePermissionMap: { member: ["gear:read"] },
+    roleDisplayNames: { member: "Member" },
     ...overrides,
   };
 }

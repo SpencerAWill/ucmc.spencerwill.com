@@ -337,6 +337,9 @@ describe("getSessionAction — role preview cookie", () => {
     const session = await getSessionAction();
     expect(session.principal!.rolePermissionMap).toHaveProperty("member");
     expect(session.emulatedRole).toBe("member");
+    // Every previewable role carries its operator-authored label, so the
+    // switcher and the banner never have to prettify a slug.
+    expect(session.principal!.roleDisplayNames.member).toBe("Member");
   });
 
   it("drops a forged role the principal's map doesn't describe", async () => {

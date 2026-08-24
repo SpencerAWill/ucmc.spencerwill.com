@@ -76,7 +76,7 @@ export function UserMenu() {
   const statusLabel =
     principal.status === "approved"
       ? emulatedRole
-        ? `viewing as ${emulatedRole.replace(/_/g, " ")}`
+        ? `viewing as ${principal.roleDisplayNames[emulatedRole] ?? emulatedRole}`
         : (principal.roles[0] ?? "member")
       : principal.status;
 
@@ -149,10 +149,12 @@ export function UserMenu() {
             ) : null}
           </>
         )}
-        {/* Role emulation — sys admins get a full role select (any role
-            on the site); non-admin officers get a Switch toggling to
-            member-view; single-role members get nothing. UI-only — route
-            guards still use the raw principal. */}
+        {/* Role preview — sys admins get a full role select (any role on
+            the site); non-admin officers get a Switch toggling to
+            member-view; single-role members get nothing. Route guards
+            honour the preview too, so this narrows what's reachable, not
+            just what's drawn — enforcement stays on the real principal
+            server-side. */}
         {isElevated && principal.status === "approved" ? (
           <>
             <DropdownMenuSeparator />
@@ -175,7 +177,7 @@ export function UserMenu() {
                       .filter((role) => role !== "system_admin")
                       .map((role) => (
                         <SelectItem key={role} value={role}>
-                          View as {role.replace(/_/g, " ")}
+                          View as {principal.roleDisplayNames[role] ?? role}
                         </SelectItem>
                       ))}
                   </SelectContent>

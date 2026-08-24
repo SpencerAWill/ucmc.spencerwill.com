@@ -198,15 +198,18 @@ function CloseSidebarOnNavigate() {
  * out from a page that no longer renders its own chrome.
  */
 function EmulationBanner() {
-  const { emulatedRole } = useAuth();
+  const { emulatedRole, principal } = useAuth();
   const { setEmulatedRole } = useViewMode();
   if (!emulatedRole) {
     return null;
   }
+  // `roleDisplayNames` covers every previewable role, so this only falls
+  // back to the slug if the session payload predates the field.
+  const label = principal?.roleDisplayNames[emulatedRole] ?? emulatedRole;
   return (
     <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
       <Eye className="size-3.5" />
-      Viewing as {emulatedRole.replace(/_/g, " ")}
+      Viewing as {label}
       <button
         type="button"
         onClick={() => setEmulatedRole(null)}
