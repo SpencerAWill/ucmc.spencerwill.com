@@ -234,4 +234,9 @@ export {
   CarouselItem,
   CarouselPrevious,
   CarouselNext,
+  // Exported beyond the shadcn default so callers can build their own
+  // controls against the same context the built-in Prev/Next use — the
+  // hero needs edge-positioned arrows and an autoplay dial, which the
+  // stock buttons don't cover.
+  useCarousel,
 };

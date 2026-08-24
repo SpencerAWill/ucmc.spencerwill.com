@@ -26,7 +26,7 @@ export function Hero() {
   const hasSlides = slides.length > 0;
 
   return (
-    <section className="relative isolate min-h-[420px] overflow-hidden border-b md:min-h-[560px]">
+    <section className="group/hero relative isolate min-h-[420px] overflow-hidden border-b md:min-h-[560px]">
       {hasSlides ? (
         <>
           <HeroGallery slides={slides} />
