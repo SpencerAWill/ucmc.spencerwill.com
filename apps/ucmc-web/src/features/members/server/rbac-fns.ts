@@ -137,6 +137,34 @@ export const setUserRolesFn = createServerFn({ method: "POST" })
     return setUserRolesAction(data);
   });
 
+// ── role -> member assignments ─────────────────────────────────────────
+
+/**
+ * Cap on the members one save may add or remove. Exported so the role
+ * sheet can enforce the same number client-side and never build a
+ * request the server is going to reject — the reason
+ * `BULK_ATTEST_MAX` is shared the same way.
+ *
+ * Each id becomes a bound parameter in an `IN (...)` plus a row in a
+ * multi-row insert, so an uncapped array turns an opaque D1 limit
+ * error into the user-visible failure mode.
+ */
+export const ROLE_MEMBERS_DIFF_MAX = 200;
+
+export const setRoleMembersFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      roleId: z.string().min(1),
+      add: z.array(z.string().min(1)).max(ROLE_MEMBERS_DIFF_MAX),
+      remove: z.array(z.string().min(1)).max(ROLE_MEMBERS_DIFF_MAX),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { setRoleMembersAction } =
+      await import("#/features/members/server/rbac-actions.server");
+    return setRoleMembersAction(data);
+  });
+
 // ── role reordering ────────────────────────────────────────────────────
 
 export const reorderRolesFn = createServerFn({ method: "POST" })

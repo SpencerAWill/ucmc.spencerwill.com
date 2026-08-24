@@ -595,6 +595,134 @@ describe("listMembersAction private data", () => {
   });
 });
 
+// ── free-text search in listMembersAction ───────────────────────────────
+
+describe("listMembersAction search", () => {
+  /**
+   * Seed an approved member with specific names, for matching against.
+   * `profiles.preferred_name` is NOT NULL, so it defaults to the first
+   * word of the full name rather than being nullable here.
+   */
+  async function seedNamed(
+    email: string,
+    fullName: string,
+    preferredName?: string,
+  ): Promise<string> {
+    const userId = await seedUser(email, { withProfile: false });
+    await assignRole(userId, "role_member");
+    await getDb()
+      .insert(schema.profiles)
+      .values({
+        userId,
+        fullName,
+        preferredName: preferredName ?? fullName.split(" ")[0],
+        phone: "+15135551212",
+        ucAffiliation: "student",
+        updatedAt: Temporal.Now.instant(),
+      });
+    return userId;
+  }
+
+  it("matches on full name", async () => {
+    await signInAsMember();
+    await seedNamed("zoe@example.com", "Zoe Zimmerman");
+    await seedNamed("aaron@example.com", "Aaron Abbott");
+
+    const result = await listMembersAction({ search: "zimmer" });
+    expect(result.rows.map((r) => r.email)).toEqual(["zoe@example.com"]);
+    // The count query has to agree with the page query, or pagination
+    // reports totals for an unfiltered set.
+    expect(result.total).toBe(1);
+  });
+
+  it("matches on preferred name", async () => {
+    await signInAsMember();
+    await seedNamed("zoe@example.com", "Zoe Zimmerman", "Zizi");
+    await seedNamed("aaron@example.com", "Aaron Abbott", "Ronnie");
+
+    const result = await listMembersAction({ search: "zizi" });
+    expect(result.rows.map((r) => r.email)).toEqual(["zoe@example.com"]);
+  });
+
+  it("matches on email", async () => {
+    await signInAsMember();
+    await seedNamed("zoe@example.com", "Zoe Zimmerman");
+    await seedNamed("aaron@example.com", "Aaron Abbott");
+
+    const result = await listMembersAction({ search: "aaron@" });
+    expect(result.rows.map((r) => r.email)).toEqual(["aaron@example.com"]);
+  });
+
+  it("matches a secondary verified email, returning the primary", async () => {
+    await signInAsMember();
+    const userId = await seedNamed("primary@example.com", "Zoe Z");
+    await getDb()
+      .insert(schema.userEmails)
+      .values({
+        id: `ue_${crypto.randomUUID()}`,
+        userId,
+        email: "alternate@example.com",
+        isPrimary: false,
+        verifiedAt: Temporal.Now.instant(),
+      });
+
+    const result = await listMembersAction({ search: "alternate@" });
+    expect(result.rows.map((r) => r.email)).toEqual(["primary@example.com"]);
+    expect(result.total).toBe(1);
+  });
+
+  it("is case-insensitive", async () => {
+    await signInAsMember();
+    await seedNamed("zoe@example.com", "Zoe Zimmerman");
+
+    const result = await listMembersAction({ search: "ZIMMERMAN" });
+    expect(result.rows).toHaveLength(1);
+  });
+
+  it("treats % and _ as literals, not wildcards", async () => {
+    // Escaping only works because `likeContains` emits an ESCAPE
+    // clause; without it these needles match everything.
+    await signInAsMember();
+    await seedNamed("literal@example.com", "Fifty% Off");
+    await seedNamed("other@example.com", "Aaron Abbott");
+
+    const pct = await listMembersAction({ search: "%" });
+    expect(pct.rows.map((r) => r.email)).toEqual(["literal@example.com"]);
+
+    const underscore = await listMembersAction({ search: "_" });
+    expect(underscore.rows).toEqual([]);
+  });
+
+  it("ignores a blank or whitespace-only search", async () => {
+    await signInAsMember();
+    await seedNamed("zoe@example.com", "Zoe Zimmerman");
+    await seedNamed("aaron@example.com", "Aaron Abbott");
+
+    const blank = await listMembersAction({ search: "   " });
+    expect(blank.rows.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("composes with the status filter rather than replacing it", async () => {
+    await signInWithPermission("mgr@example.com", "members:manage");
+    const deactivated = await seedNamed("zoe@example.com", "Zoe Z");
+    await getDb()
+      .update(schema.users)
+      .set({ status: "deactivated" })
+      .where(eq(schema.users.id, deactivated));
+    await seedNamed("zach@example.com", "Zach Z");
+
+    // Both match "z"; only the approved one is in the default scope.
+    const approved = await listMembersAction({ search: "Z" });
+    expect(approved.rows.map((r) => r.email)).toEqual(["zach@example.com"]);
+
+    const gone = await listMembersAction({
+      search: "Z",
+      statuses: "deactivated",
+    });
+    expect(gone.rows.map((r) => r.email)).toEqual(["zoe@example.com"]);
+  });
+});
+
 // ── status filtering in listMembersAction ───────────────────────────────
 
 describe("listMembersAction status filtering", () => {

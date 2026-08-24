@@ -1,7 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { GripVertical, Pencil, Plus, Shield, Star, Trash2 } from "lucide-react";
+import {
+  GripVertical,
+  KeyRound,
+  Pencil,
+  Star,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { z } from "zod";
 
 import {
   AlertDialog,
@@ -15,17 +21,6 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { Checkbox } from "#/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "#/components/ui/dialog";
-import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
 import {
   Sortable,
   SortableContent,
@@ -37,16 +32,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "#/components/ui/tooltip";
-import { Textarea } from "#/components/ui/textarea";
 import { rolesDetailedQueryOptions } from "#/features/members/api/queries";
-import { useCreateRole } from "#/features/members/api/use-create-role";
 import { useDeleteRole } from "#/features/members/api/use-delete-role";
 import { useReorderRoles } from "#/features/members/api/use-reorder-roles";
 import { RoleEditorSheet } from "#/features/members/components/role-editor-sheet";
 import type { RoleWithPermissions } from "#/features/members/server/rbac-fns";
 
 export function RolesListEditor() {
-  const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RoleWithPermissions | null>(
     null,
   );
@@ -117,18 +109,6 @@ export function RolesListEditor() {
 
   return (
     <>
-      <div className="flex items-center justify-between pb-4">
-        <p className="text-sm text-muted-foreground">
-          Drag to reorder. Click the pencil to edit members, permissions, or the
-          description.
-        </p>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 size-4" />
-          <span className="hidden sm:inline">Create role</span>
-          <span className="sm:hidden">New</span>
-        </Button>
-      </div>
-
       <Sortable
         value={order}
         onValueChange={setOrder}
@@ -144,6 +124,7 @@ export function RolesListEditor() {
                 return null;
               }
               const isAdmin = role.name === "system_admin";
+              const isAnonymous = role.name === "anonymous";
               return (
                 <SortableItem
                   key={id}
@@ -158,8 +139,6 @@ export function RolesListEditor() {
                     >
                       <GripVertical className="size-4" />
                     </SortableItemHandle>
-
-                    <Shield className="size-4 shrink-0 text-muted-foreground" />
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -194,13 +173,64 @@ export function RolesListEditor() {
                       </p>
                     </div>
 
-                    <div className="hidden shrink-0 items-center gap-4 text-xs text-muted-foreground sm:flex">
-                      <span>{role.memberCount} member(s)</span>
-                      <span>
-                        {isAdmin
-                          ? "All perms"
-                          : `${role.permissionIds.length} perm(s)`}
-                      </span>
+                    {/* Counts as icon + number badges rather than
+                        "7 member(s) / 11 perm(s)" prose: at a glance the
+                        list is a comparison between roles, and two
+                        narrow tabular-nums badges scan down the column
+                        in a way wrapped prose doesn't. Narrow enough to
+                        survive on mobile, where the prose was hidden
+                        outright. The tooltip carries the wording for
+                        sighted users; `role="img"` + aria-label carries
+                        it for screen readers, which never reach a
+                        tooltip on a non-focusable badge. The role is
+                        load-bearing: `Badge` renders a bare <span>, and
+                        aria-label is ignored on an element left with the
+                        implicit `generic` role. */}
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="secondary"
+                            className="gap-1 px-1.5 tabular-nums"
+                            role="img"
+                            aria-label={
+                              isAnonymous
+                                ? "Not applicable to members"
+                                : `${role.memberCount} member(s)`
+                            }
+                          >
+                            <Users className="size-3" />
+                            {isAnonymous ? "—" : role.memberCount}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isAnonymous
+                            ? "Applies to signed-out visitors, so it has no members"
+                            : `${role.memberCount} member(s) hold this role`}
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="secondary"
+                            className="gap-1 px-1.5 tabular-nums"
+                            role="img"
+                            aria-label={
+                              isAdmin
+                                ? "All permissions"
+                                : `${role.permissionIds.length} permission(s)`
+                            }
+                          >
+                            <KeyRound className="size-3" />
+                            {isAdmin ? "All" : role.permissionIds.length}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isAdmin
+                            ? "System admin automatically holds every permission"
+                            : `${role.permissionIds.length} permission(s) granted`}
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1">
@@ -271,8 +301,6 @@ export function RolesListEditor() {
         </div>
       ) : null}
 
-      <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} />
-
       {editorTarget ? (
         <RoleEditorSheet
           roleId={editorTarget.roleId}
@@ -321,169 +349,5 @@ export function RolesListEditor() {
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-const roleNameSchema = z
-  .string()
-  .trim()
-  .min(1, "Required")
-  .max(60, "At most 60 characters")
-  .regex(
-    /^[a-z][a-z0-9_]*$/,
-    "Lowercase letters, digits, and underscores only; must start with a letter",
-  );
-
-const displayNameSchema = z
-  .string()
-  .trim()
-  .min(1, "Required")
-  .max(80, "At most 80 characters");
-
-function CreateRoleDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [name, setName] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [description, setDescription] = useState("");
-  const [isOfficer, setIsOfficer] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const mutation = useCreateRole();
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const parsedName = roleNameSchema.safeParse(name);
-    if (!parsedName.success) {
-      setError(parsedName.error.issues[0]?.message ?? "Invalid name");
-      return;
-    }
-    const parsedDisplay = displayNameSchema.safeParse(displayName);
-    if (!parsedDisplay.success) {
-      setError(
-        parsedDisplay.error.issues[0]?.message ?? "Invalid display name",
-      );
-      return;
-    }
-    setError(null);
-    mutation.mutate(
-      {
-        name: parsedName.data,
-        displayName: parsedDisplay.data,
-        description: description.trim() || undefined,
-        isOfficer,
-      },
-      {
-        onSuccess: () => {
-          setName("");
-          setDisplayName("");
-          setDescription("");
-          setIsOfficer(false);
-          setError(null);
-          onOpenChange(false);
-        },
-        onError: (err: Error) => {
-          setError(err.message);
-        },
-      },
-    );
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) {
-          setError(null);
-        }
-        onOpenChange(v);
-      }}
-    >
-      <DialogContent onKeyDown={(e) => e.stopPropagation()}>
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create role</DialogTitle>
-            <DialogDescription>
-              Add a new role. You can assign permissions to it after creation.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="role-display-name">Display name</Label>
-              <Input
-                id="role-display-name"
-                placeholder="e.g. Trip Leader"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                maxLength={80}
-              />
-              <p className="text-xs text-muted-foreground">
-                Shown wherever this role is presented to members.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role-name">Identifier</Label>
-              <Input
-                id="role-name"
-                placeholder="e.g. trip_leader"
-                value={name}
-                onChange={(e) => setName(e.target.value.toLowerCase())}
-                maxLength={60}
-              />
-              <p className="text-xs text-muted-foreground">
-                Lowercase letters, digits, and underscores. Cannot be changed
-                after creation.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role-desc">Description (optional)</Label>
-              <Textarea
-                id="role-desc"
-                placeholder="What this role is for…"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                maxLength={200}
-                rows={2}
-              />
-            </div>
-            <label
-              htmlFor="role-is-officer"
-              className="flex items-start gap-3 rounded-md border px-3 py-2"
-            >
-              <Checkbox
-                id="role-is-officer"
-                checked={isOfficer}
-                onCheckedChange={(checked) => setIsOfficer(checked === true)}
-                className="mt-0.5"
-              />
-              <div>
-                <span className="text-sm font-medium">Officer position</span>
-                <p className="text-xs text-muted-foreground">
-                  Show members holding this role on the public &ldquo;Meet the
-                  officers&rdquo; section of the home page.
-                </p>
-              </div>
-            </label>
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          </div>
-          <DialogFooter className="mt-6">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? "Creating…" : "Create"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }

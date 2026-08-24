@@ -34,6 +34,7 @@ const {
   setRolePermissionsAction,
   getUserRolesAction,
   setUserRolesAction,
+  setRoleMembersAction,
   reorderRolesAction,
   PROTECTED_ROLE_IDS,
 } = await import("#/features/members/server/rbac-actions.server");
@@ -630,6 +631,329 @@ describe("getUserRolesAction / setUserRolesAction", () => {
         roleIds: ["role_member", "role_does_not_exist"],
       }),
     ).rejects.toThrow('Role "role_does_not_exist" does not exist');
+  });
+});
+
+describe("setRoleMembersAction", () => {
+  it("adds and removes members in one call, auditing the diff", async () => {
+    const adminId = await signInAsAdmin();
+    const keep = await seedUser("keep@example.com");
+    const drop = await seedUser("drop@example.com");
+    const add = await seedUser("add@example.com");
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+    await assignRole(keep, "role_test_trip_leader");
+    await assignRole(drop, "role_test_trip_leader");
+
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: [add],
+      remove: [drop],
+    });
+
+    const role = await getRoleAction("role_test_trip_leader");
+    expect(role.members.map((m) => m.userId).sort()).toEqual(
+      [keep, add].sort(),
+    );
+
+    const events = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, "role_test_trip_leader"));
+    const assigned = events.filter((e) => e.action === "role.assigned");
+    const unassigned = events.filter((e) => e.action === "role.unassigned");
+    expect(assigned.map((e) => e.targetUserId)).toEqual([add]);
+    expect(unassigned.map((e) => e.targetUserId)).toEqual([drop]);
+    expect(assigned[0].actorUserId).toBe(adminId);
+  });
+
+  it("is a no-op — no audit rows — when the diff is empty", async () => {
+    await signInAsAdmin();
+    const member = await seedUser("target@example.com");
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+    await assignRole(member, "role_test_trip_leader");
+
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: [],
+      remove: [],
+    });
+
+    const events = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, "role_test_trip_leader"));
+    expect(events.filter((e) => e.action.startsWith("role.assign"))).toEqual(
+      [],
+    );
+    expect(events.filter((e) => e.action.startsWith("role.unassign"))).toEqual(
+      [],
+    );
+  });
+
+  it("de-dupes repeated ids rather than violating the primary key", async () => {
+    await signInAsAdmin();
+    const member = await seedUser("target@example.com");
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: [member, member],
+      remove: [],
+    });
+
+    const role = await getRoleAction("role_test_trip_leader");
+    expect(role.members.map((m) => m.userId)).toEqual([member]);
+  });
+
+  it("removes every listed member", async () => {
+    await signInAsAdmin();
+    const member = await seedUser("target@example.com");
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+    await assignRole(member, "role_test_trip_leader");
+
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: [],
+      remove: [member],
+    });
+
+    const role = await getRoleAction("role_test_trip_leader");
+    expect(role.members).toEqual([]);
+  });
+
+  it("rejects the anonymous role", async () => {
+    await signInAsAdmin();
+    const member = await seedUser("target@example.com");
+
+    await expect(
+      setRoleMembersAction({
+        roleId: "role_anonymous",
+        add: [member],
+        remove: [],
+      }),
+    ).rejects.toThrow("cannot be assigned to members");
+  });
+
+  it("rejects the member role, which follows account status", async () => {
+    await signInAsAdmin();
+    const member = await seedUser("target@example.com");
+
+    await expect(
+      setRoleMembersAction({
+        roleId: "role_member",
+        add: [member],
+        remove: [],
+      }),
+    ).rejects.toThrow("follows account status");
+  });
+
+  it("rejects unclaimed users", async () => {
+    await signInAsAdmin();
+    const stub = await seedUser("unclaimed@example.com", {
+      status: "unclaimed",
+    });
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    await expect(
+      setRoleMembersAction({
+        roleId: "role_test_trip_leader",
+        add: [stub],
+        remove: [],
+      }),
+    ).rejects.toThrow("Cannot assign roles to an unclaimed member");
+  });
+
+  it("rejects nonexistent users", async () => {
+    await signInAsAdmin();
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    await expect(
+      setRoleMembersAction({
+        roleId: "role_test_trip_leader",
+        add: ["user_nope"],
+        remove: [],
+      }),
+    ).rejects.toThrow('User "user_nope" does not exist');
+  });
+
+  it("rejects a nonexistent role", async () => {
+    await signInAsAdmin();
+
+    await expect(
+      setRoleMembersAction({ roleId: "role_nope", add: [], remove: [] }),
+    ).rejects.toThrow("Role not found");
+  });
+
+  it("blocks dropping your own system_admin", async () => {
+    const adminId = await signInAsAdmin();
+
+    await expect(
+      setRoleMembersAction({
+        roleId: "role_system_admin",
+        add: [],
+        remove: [adminId],
+      }),
+    ).rejects.toThrow("Cannot remove system_admin from yourself");
+
+    // Still there.
+    const roles = await getUserRolesAction(adminId);
+    expect(roles.map((r) => r.name)).toContain("system_admin");
+  });
+
+  it("allows granting system_admin to someone else", async () => {
+    const adminId = await signInAsAdmin();
+    const target = await seedUser("target@example.com");
+
+    await setRoleMembersAction({
+      roleId: "role_system_admin",
+      add: [target],
+      remove: [],
+    });
+
+    const roles = await getUserRolesAction(target);
+    expect(roles.map((r) => r.name)).toContain("system_admin");
+    // Adding a second admin doesn't displace the first — the diff
+    // names only `target`.
+    const own = await getUserRolesAction(adminId);
+    expect(own.map((r) => r.name)).toContain("system_admin");
+  });
+
+  it("leaves a concurrently-added member alone", async () => {
+    // The reason this action takes a diff rather than the post-state.
+    // The sheet snapshots its baseline when it opens; if someone else
+    // grants the role in the meantime, a post-state save built from
+    // that stale baseline would delete their grant. A diff can't.
+    await signInAsAdmin();
+    const staged = await seedUser("staged@example.com");
+    const concurrent = await seedUser("concurrent@example.com");
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    // Someone else assigns `concurrent` while the sheet sits open.
+    await assignRole(concurrent, "role_test_trip_leader");
+
+    // The sheet saves the only change it knows about.
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: [staged],
+      remove: [],
+    });
+
+    const role = await getRoleAction("role_test_trip_leader");
+    expect(role.members.map((m) => m.userId).sort()).toEqual(
+      [staged, concurrent].sort(),
+    );
+
+    const events = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, "role_test_trip_leader"));
+    expect(events.filter((e) => e.action === "role.unassigned")).toEqual([]);
+  });
+
+  it("rejects adding and removing the same member in one save", async () => {
+    await signInAsAdmin();
+    const member = await seedUser("target@example.com");
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    await expect(
+      setRoleMembersAction({
+        roleId: "role_test_trip_leader",
+        add: [member],
+        remove: [member],
+      }),
+    ).rejects.toThrow("Cannot add and remove the same member");
+  });
+
+  it("writes no audit row for a stale remove", async () => {
+    // The client thought this member held the role; they no longer do.
+    // Intersecting the diff with reality keeps that from logging an
+    // unassignment that never happened.
+    await signInAsAdmin();
+    const gone = await seedUser("gone@example.com");
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: [],
+      remove: [gone],
+    });
+
+    const events = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, "role_test_trip_leader"));
+    expect(events.filter((e) => e.action === "role.unassigned")).toEqual([]);
+  });
+
+  it("writes no audit row for re-adding an existing member", async () => {
+    await signInAsAdmin();
+    const member = await seedUser("target@example.com");
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+    await assignRole(member, "role_test_trip_leader");
+
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: [member],
+      remove: [],
+    });
+
+    const role = await getRoleAction("role_test_trip_leader");
+    expect(role.members.map((m) => m.userId)).toEqual([member]);
+
+    const events = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, "role_test_trip_leader"));
+    expect(events.filter((e) => e.action === "role.assigned")).toEqual([]);
+  });
+
+  it("requires roles:assign, not just roles:manage", async () => {
+    // A role holding only roles:manage can reach /access but must not
+    // be able to write user_roles rows.
+    await signInAsAdmin();
+    await createRoleAction({ name: "another", displayName: "Manager" });
+    await setRolePermissionsAction({
+      roleId: "role_another",
+      permissionIds: ["perm_roles_manage"],
+    });
+
+    const managerId = await seedUser("manager@example.com");
+    await assignRole(managerId, "role_another");
+    await signInAs(managerId);
+
+    await expect(
+      setRoleMembersAction({ roleId: "role_test_custom", add: [], remove: [] }),
+    ).rejects.toThrow("Forbidden: missing roles:assign");
   });
 });
 

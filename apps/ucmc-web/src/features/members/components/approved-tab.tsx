@@ -155,7 +155,10 @@ export function ApprovedTab({
   return (
     <div className="flex flex-col gap-6">
       {/* Row 1: Search + view toggle */}
-      {/* TODO: wire search to LIKE query in listMembersAction */}
+      {/* TODO: wire this box to the route's search param.
+       * `listMembersAction` now honours `opts.search` (name,
+       * preferred name, or any verified email), so what's left is
+       * the URL-state plumbing, not the query. */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

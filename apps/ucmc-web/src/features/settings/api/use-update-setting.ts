@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
+  PUBLIC_BRANDING_QUERY_KEY,
   PUBLIC_FLAGS_QUERY_KEY,
   PUBLIC_SITE_CONTACT_QUERY_KEY,
   SITE_SETTINGS_QUERY_KEY,
@@ -20,6 +21,9 @@ export function useUpdateSetting() {
             queryKey: PUBLIC_SITE_CONTACT_QUERY_KEY,
           }),
           queryClient.invalidateQueries({ queryKey: PUBLIC_FLAGS_QUERY_KEY }),
+          queryClient.invalidateQueries({
+            queryKey: PUBLIC_BRANDING_QUERY_KEY,
+          }),
           // Refresh the per-setting history dialog if it's open — the
           // mutation just appended a new audit row for this key.
           queryClient.invalidateQueries({

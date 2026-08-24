@@ -23,8 +23,17 @@ export const MEMBERS_REGISTRATIONS_QUERY_KEY = [
  */
 export const MEMBERS_UNCLAIMED_QUERY_KEY = ["members", "unclaimed"] as const;
 
+/**
+ * Prefix for every per-member detail cache. The role-keyed
+ * `useSetRoleMembers` changes role assignments for users it knows only
+ * by userId, while these entries are keyed by `publicId`, so it
+ * invalidates this prefix wholesale rather than trying to map between
+ * the two id spaces.
+ */
+export const MEMBERS_DETAIL_QUERY_KEY = ["members", "detail"] as const;
+
 export const memberDetailQueryKey = (publicId: string) =>
-  ["members", "detail", publicId] as const;
+  [...MEMBERS_DETAIL_QUERY_KEY, publicId] as const;
 
 // RBAC queries
 export const ROLES_QUERY_KEY = ["rbac", "roles"] as const;
@@ -33,8 +42,16 @@ export const ROLES_DETAILED_QUERY_KEY = ["rbac", "roles", "detailed"] as const;
 
 export const PERMISSIONS_QUERY_KEY = ["rbac", "permissions"] as const;
 
+/**
+ * Prefix for every per-user role-assignment cache. The role-keyed
+ * `useSetRoleMembers` can change assignments for users it only knows
+ * the post-state of, so it invalidates this prefix wholesale rather
+ * than guessing the diff.
+ */
+export const USER_ROLES_QUERY_KEY = ["rbac", "userRoles"] as const;
+
 export const userRolesQueryKey = (userId: string) =>
-  ["rbac", "userRoles", userId] as const;
+  [...USER_ROLES_QUERY_KEY, userId] as const;
 
 export const roleQueryKey = (roleId: string) =>
   ["rbac", "role", roleId] as const;
