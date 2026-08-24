@@ -18,6 +18,7 @@ import {
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
 import { UnauthorizedError } from "#/server/auth/errors.server";
+import { resolveEmulatedRole } from "#/server/auth/emulation";
 import type { Principal } from "#/server/auth/principal.server";
 import {
   clearProofCookie,
@@ -246,14 +247,23 @@ export async function consumeMagicLinkAction(
 export async function getSessionAction(): Promise<{
   principal: Principal | null;
   anonymousPermissions: string[];
+  emulatedRole: string | null;
 }> {
   const { loadAnonymousPermissions } =
     await import("#/server/auth/principal.server");
+  const { readViewAsCookie } =
+    await import("#/server/auth/emulation-cookie.server");
   const [principal, anonymousPermissions] = await Promise.all([
     loadCurrentPrincipal(),
     loadAnonymousPermissions(),
   ]);
-  return { principal, anonymousPermissions };
+  // Read the "View as" cookie here so a hard navigation's server-side
+  // `beforeLoad` sees the preview too — `resolveEmulatedRole` drops
+  // anything the principal's `rolePermissionMap` doesn't describe, so a
+  // forged value can only narrow. Enforcement is unaffected: every
+  // server action keeps checking `principal.permissions`.
+  const emulatedRole = resolveEmulatedRole(principal, readViewAsCookie());
+  return { principal, anonymousPermissions, emulatedRole };
 }
 
 export async function getProofAction(): Promise<{

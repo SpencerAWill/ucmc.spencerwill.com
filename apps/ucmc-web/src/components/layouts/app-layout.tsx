@@ -80,6 +80,7 @@ import {
   TooltipTrigger,
 } from "#/components/ui/tooltip";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { useViewMode } from "#/features/auth/api/view-mode";
 import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
 
 const HEADER_HEIGHT = "3.5rem";
@@ -189,8 +190,16 @@ function CloseSidebarOnNavigate() {
   return null;
 }
 
+/**
+ * The preview's always-visible exit. Load-bearing now that route guards
+ * honour the preview: a previewed role that can't reach the current page
+ * lands on a 404 or gets bounced home, and the switcher lives inside the
+ * user menu — so without an exit right here you'd be hunting for the way
+ * out from a page that no longer renders its own chrome.
+ */
 function EmulationBanner() {
   const { emulatedRole } = useAuth();
+  const { setEmulatedRole } = useViewMode();
   if (!emulatedRole) {
     return null;
   }
@@ -198,6 +207,13 @@ function EmulationBanner() {
     <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
       <Eye className="size-3.5" />
       Viewing as {emulatedRole.replace(/_/g, " ")}
+      <button
+        type="button"
+        onClick={() => setEmulatedRole(null)}
+        className="rounded px-1.5 py-0.5 font-semibold underline underline-offset-2 hover:bg-amber-200/60 dark:hover:bg-amber-800/40"
+      >
+        Exit preview
+      </button>
     </div>
   );
 }

@@ -12,21 +12,53 @@ import {
   sessionQueryOptions,
 } from "#/features/auth/api/use-auth";
 import { getProofFn } from "#/features/auth/server/server-fns";
+import { effectivePermissions } from "#/server/auth/emulation";
 import type { Principal } from "#/server/auth/principal.server";
 import { myWaiverStatusQueryOptions } from "#/features/waivers/api/queries";
 import type { WaiverStatus } from "#/features/waivers/api/queries";
 
+interface CachedSession {
+  principal: Principal | null;
+  anonymousPermissions: string[];
+  emulatedRole: string | null;
+}
+
+async function getSession(queryClient: QueryClient): Promise<CachedSession> {
+  const cached = queryClient.getQueryData<CachedSession>(SESSION_QUERY_KEY);
+  if (cached) {
+    return cached;
+  }
+  return queryClient.ensureQueryData(sessionQueryOptions());
+}
+
 async function getPrincipal(
   queryClient: QueryClient,
 ): Promise<Principal | null> {
-  const cached = queryClient.getQueryData<{ principal: Principal | null }>(
-    SESSION_QUERY_KEY,
-  );
-  if (cached) {
-    return cached.principal;
-  }
-  const fresh = await queryClient.ensureQueryData(sessionQueryOptions());
-  return fresh.principal;
+  return (await getSession(queryClient)).principal;
+}
+
+/**
+ * The permissions a *route* should be gated on: the previewed role's
+ * grants while "View as" is active, the real set otherwise.
+ *
+ * Guards read the preview so a page hidden from the previewed role is
+ * also unreachable by URL — otherwise emulation only filters the nav and
+ * typing the path walks straight in, which is the whole reason this
+ * exists. Server actions are untouched and keep enforcing the real
+ * principal, so this is fidelity, not authorization: the preview can
+ * only ever narrow (see `#/server/auth/emulation`).
+ *
+ * Deliberately NOT applied to `requireAuth` / `requireApproved` /
+ * `requireCurrentWaiver`: those gate on account *status*, which a role
+ * preview doesn't change. Keeping them on the real principal is what
+ * stops a preview from locking an admin out of their own `/my/*` pages.
+ */
+async function effectivePermissionsFor(
+  queryClient: QueryClient,
+  principal: Principal,
+): Promise<string[]> {
+  const session = await getSession(queryClient);
+  return effectivePermissions(principal, session.emulatedRole);
 }
 
 /** Require a signed-in session. Redirects to /sign-in otherwise. */
@@ -78,7 +110,8 @@ export async function requirePermission(
   permission: string,
 ): Promise<Principal> {
   const principal = await requireApproved(queryClient);
-  if (!principal.permissions.includes(permission)) {
+  const granted = await effectivePermissionsFor(queryClient, principal);
+  if (!granted.includes(permission)) {
     throw redirect({ to: "/" });
   }
   return principal;
@@ -117,7 +150,8 @@ export async function requireAnyPermission(
   permissions: readonly string[],
 ): Promise<Principal> {
   const principal = await requireApproved(queryClient);
-  if (!permissions.some((p) => principal.permissions.includes(p))) {
+  const granted = await effectivePermissionsFor(queryClient, principal);
+  if (!permissions.some((p) => granted.includes(p))) {
     throw redirect({ to: "/" });
   }
   return principal;
@@ -138,7 +172,8 @@ export async function requirePermissionOrNotFound(
   permission: string,
 ): Promise<Principal> {
   const principal = await requireApproved(queryClient);
-  if (!principal.permissions.includes(permission)) {
+  const granted = await effectivePermissionsFor(queryClient, principal);
+  if (!granted.includes(permission)) {
     throw notFound();
   }
   return principal;
@@ -166,9 +201,13 @@ export async function requireViewPermission(
   queryClient: QueryClient,
   permission: string,
 ): Promise<Principal | null> {
-  const session = await queryClient.ensureQueryData(sessionQueryOptions());
+  const session = await getSession(queryClient);
   if (session.principal) {
-    if (session.principal.permissions.includes(permission)) {
+    const granted = effectivePermissions(
+      session.principal,
+      session.emulatedRole,
+    );
+    if (granted.includes(permission)) {
       return session.principal;
     }
     throw notFound();

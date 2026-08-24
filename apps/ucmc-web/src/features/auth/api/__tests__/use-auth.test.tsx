@@ -6,14 +6,18 @@ import { ViewModeProvider } from "#/features/auth/api/view-mode";
 import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
 
 // The permission resolution is the subject, so the session query is
-// stubbed rather than fetched. `ViewModeProvider` is real — the
-// emulated role comes out of localStorage, which is exactly the path
-// the bug travelled.
+// stubbed rather than fetched. The emulated role rides *in* that payload
+// now (the server resolves it from the `ucmc_view_as` cookie), which is
+// the same value the route guards read — so stubbing the payload is
+// stubbing the real source.
 const sessionMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: sessionMock(), isLoading: false }),
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    setQueryData: vi.fn(),
+  }),
 }));
 
 vi.mock("#/features/auth/api/queries", () => ({
@@ -29,8 +33,9 @@ vi.mock("#/features/auth/server/server-fns", () => ({
  * plus a `rolePermissionMap` that describes what each role *actually*
  * holds — including `member`, which has no waiver permissions.
  */
-function setSysAdminSession() {
+function setSysAdminSession(emulatedRole: string | null = null) {
   sessionMock.mockReturnValue({
+    emulatedRole,
     principal: {
       status: "approved",
       hasProfile: true,
@@ -71,37 +76,30 @@ function renderProbe() {
 describe("useAuth().hasAnyPermission", () => {
   beforeEach(() => {
     sessionMock.mockReset();
-    window.localStorage.clear();
     setSysAdminSession();
   });
 
-  it("is true when the viewer holds either half of the pair", async () => {
+  it("is true when the viewer holds either half of the pair", () => {
     renderProbe();
-    expect(await screen.findByText("any:true")).toBeInTheDocument();
+    expect(screen.getByText("any:true")).toBeInTheDocument();
   });
 
-  it("is false while emulating a role that holds neither half", async () => {
-    // The bug: the waiver card on /members/$publicId read the payload
-    // instead of the permission, so emulating `member` still showed
-    // another member's attestation. `hasAnyPermission` has to fall to
-    // the emulated role's own permission set, exactly as
-    // `hasPermission` does.
-    window.localStorage.setItem("ucmc-emulated-role", "member");
+  it("is false while previewing a role that holds neither half", () => {
+    // The bug this pins: the waiver card on /members/$publicId read the
+    // payload instead of the permission, so a sys admin previewing
+    // `member` still saw another member's attestation. Both predicates
+    // have to fall to the previewed role's own grants.
+    setSysAdminSession("member");
     renderProbe();
-    expect(await screen.findByText("any:false")).toBeInTheDocument();
+    expect(screen.getByText("any:false")).toBeInTheDocument();
     expect(screen.getByText("view:false")).toBeInTheDocument();
-  });
-
-  it("ignores an emulated role the principal's map doesn't describe", async () => {
-    window.localStorage.setItem("ucmc-emulated-role", "not_a_role");
-    renderProbe();
-    expect(await screen.findByText("any:true")).toBeInTheDocument();
   });
 
   it("falls back to the anonymous permission set with no principal", () => {
     sessionMock.mockReturnValue({
       principal: null,
       anonymousPermissions: ["public_album:view"],
+      emulatedRole: null,
     });
     renderProbe();
     expect(screen.getByText("any:false")).toBeInTheDocument();

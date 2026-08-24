@@ -113,6 +113,9 @@ export const getSessionFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<{
     principal: Principal | null;
     anonymousPermissions: string[];
+    /** Requested "View as" role, already validated against the
+     *  principal's `rolePermissionMap`. Null for real permissions. */
+    emulatedRole: string | null;
   }> => {
     const { getSessionAction } =
       await import("#/features/auth/server/magic-link-actions.server");

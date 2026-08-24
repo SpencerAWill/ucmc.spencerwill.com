@@ -2,8 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { sessionQueryOptions } from "#/features/auth/api/queries";
-import { useViewMode } from "#/features/auth/api/view-mode";
 import { signOutFn } from "#/features/auth/server/server-fns";
+import { effectivePermissions } from "#/server/auth/emulation";
 
 // Re-exported so legacy importers can keep their call sites unchanged.
 // Canonical location is `./query-keys`; canonical query options are in
@@ -12,7 +12,6 @@ export { SESSION_QUERY_KEY, sessionQueryOptions };
 
 export function useAuth() {
   const queryClient = useQueryClient();
-  const { emulatedRole } = useViewMode();
   const query = useQuery(sessionQueryOptions());
   const principal = query.data?.principal ?? null;
   const anonymousPermissions = query.data?.anonymousPermissions ?? [];
@@ -23,14 +22,18 @@ export function useAuth() {
   const isSystemAdmin = principal?.isSystemAdmin ?? false;
   const isElevated = isSystemAdmin || (principal?.roles.length ?? 0) > 1;
 
-  // Resolve emulated permissions from the live principal data (not a
-  // stale localStorage snapshot). Validate against `rolePermissionMap`
-  // rather than `roles` — for a sys admin emulating a role they don't
-  // hold, `roles.includes(emulatedRole)` would always be false.
-  const activeEmulatedRole =
-    emulatedRole && principal && emulatedRole in principal.rolePermissionMap
-      ? emulatedRole
-      : null;
+  // The preview comes from the session payload, which the server
+  // resolved from the `ucmc_view_as` cookie — the same value the route
+  // guards read, so the chrome and the guards can't disagree. It arrives
+  // already validated against `rolePermissionMap`.
+  const activeEmulatedRole = query.data?.emulatedRole ?? null;
+
+  // What this viewer should be *shown*. Server actions still enforce
+  // `principal.permissions`; a preview only narrows what's drawn and
+  // which routes the client-side guards allow.
+  const granted = principal
+    ? effectivePermissions(principal, activeEmulatedRole)
+    : anonymousPermissions;
 
   return {
     principal,
@@ -38,38 +41,17 @@ export function useAuth() {
     isAuthenticated: principal !== null,
     isApproved: principal?.status === "approved",
     hasProfile: principal?.hasProfile ?? false,
-    hasPermission: (name: string) => {
-      if (principal) {
-        // When emulating a role, check against that role's permissions
-        // resolved from the live principal. UI-only — route guards use
-        // the raw principal.
-        if (activeEmulatedRole) {
-          return principal.rolePermissionMap[activeEmulatedRole].includes(name);
-        }
-        return principal.permissions.includes(name);
-      }
-      return anonymousPermissions.includes(name);
-    },
+    hasPermission: (name: string) => granted.includes(name),
     /**
      * Client twin of `requireAnyPermission` for read/write permission
      * pairs where the write implies the read (see
-     * `WAIVER_VIEW_PERMISSIONS`). Routes through `hasPermission`, so it
-     * respects role emulation for free — which is the point: a
+     * `WAIVER_VIEW_PERMISSIONS`). Reads the same effective set as
+     * `hasPermission`, so it respects a preview for free — a
      * hand-rolled `includes() || includes()` against
-     * `principal.permissions` would bypass emulation silently.
+     * `principal.permissions` would bypass it silently.
      */
     hasAnyPermission: (names: readonly string[]) =>
-      names.some((name) => {
-        if (principal) {
-          if (activeEmulatedRole) {
-            return principal.rolePermissionMap[activeEmulatedRole].includes(
-              name,
-            );
-          }
-          return principal.permissions.includes(name);
-        }
-        return anonymousPermissions.includes(name);
-      }),
+      names.some((name) => granted.includes(name)),
     emulatedRole: activeEmulatedRole,
     isElevated,
     isSystemAdmin,
