@@ -8,7 +8,7 @@ import { requireApproved } from "#/features/auth/guards";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 /**
- * Pathless layout for the two feedback surfaces (Website + Club) that
+ * Pathless layout for the two feedback surfaces (Site + Club) that
  * share page chrome. Lives under `_tabs` so its tab bar doesn't leak
  * into sibling routes (currently none — but matches the `/members`
  * pattern so future siblings like `/feedback/$id` can opt out cleanly).

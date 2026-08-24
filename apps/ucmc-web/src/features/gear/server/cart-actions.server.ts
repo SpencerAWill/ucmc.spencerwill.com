@@ -15,10 +15,8 @@
  *   - Resolve (officer reads scanned QR)  → `gear:loan` permission, same
  *     as the rest of the checkout-desk surface.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import { WAIVER_VERSION } from "#/config/legal";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
 import {
   getCart,
@@ -39,6 +37,7 @@ import {
 import type { Principal } from "#/server/auth/principal.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import { hasCurrentAttestation } from "#/server/waivers/current-attestation.server";
 import { getDb, schema } from "#/server/db";
 
 // ── authorization helper ───────────────────────────────────────────────
@@ -58,20 +57,7 @@ async function requireCartMember(): Promise<Principal> {
   if (principal.status !== "approved") {
     throw new Error("Forbidden: not an approved member");
   }
-  const cycle = currentWaiverCycle();
-  const rows = await getDb()
-    .select({ id: schema.waiverAttestations.id })
-    .from(schema.waiverAttestations)
-    .where(
-      and(
-        eq(schema.waiverAttestations.userId, principal.userId),
-        eq(schema.waiverAttestations.cycle, cycle),
-        eq(schema.waiverAttestations.version, WAIVER_VERSION),
-        isNull(schema.waiverAttestations.revokedAt),
-      ),
-    )
-    .limit(1);
-  if (rows.length === 0) {
+  if (!(await hasCurrentAttestation(principal.userId))) {
     throw new Error("Forbidden: current-cycle waiver attestation required");
   }
   return principal;

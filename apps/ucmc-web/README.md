@@ -75,7 +75,7 @@ The footer also shows the registration disclaimer text **on every page** (not ju
   - `/members/unclaimed` — pre-add unclaimed members (off-platform stubs)
   - `/members/rejected` — un-reject rejected registrations
   - `/members/deactivated` — reactivate deactivated members
-- `/members/waivers` — officer attestation queue (`waivers:verify`; held by Treasurer + President)
+- `/members/waivers` — officer attestation queue. `waivers:view` opens it read-only (Treasurer, President, Advisor); `waivers:verify` adds the selection checkboxes, bulk bar, and per-row Attest button (Treasurer + President)
 - `/access` — roles and permissions editor (`roles:manage`). Root-level, not under `/members`: roles govern every feature, not just membership, so it sits next to Settings in the sidebar's bottom group.
 - `/album` — club photo archive (`public_album:view`; granted to anonymous visitors and members). Upload/edit/delete needs `public_album:manage`. Renamed from "Trip Gallery" in migration `0059`; R2 object keys deliberately kept their historical `gallery/` prefix.
 - `/settings` — runtime platform configuration (`settings:manage`), driven entirely by the Zod registry in `src/server/settings/settings-registry.ts`. This is where the club email, the Instagram / Facebook / YouTube links, and the per-page kill switches are edited. The footer and the landing page's "Where to find us" block both read the contact values from here, so neither surface hardcodes them.
@@ -90,7 +90,7 @@ UC's student/staff ID number is intentionally **not** stored anywhere — schema
 
 ### Waiver attestation is paper-in-hand, not digital upload
 
-Members print and sign the canonical PDF (`apps/ucmc-web/public/legal/ucmc-waiver-v1.pdf`), then physically hand it to an officer. The officer marks the member attested for the current cycle via `/members/waivers`. The signed paper lives off-platform with the Treasurer; **medical PII never touches Cloudflare**, no R2 PDFs, no signature images.
+Members print and sign the canonical PDF (`apps/ucmc-web/public/legal/ucmc-waiver-v1.pdf`), then physically hand it to an officer. The officer marks the member attested for the current cycle via `/members/waivers`. Waiver standing also shows on `/members/$publicId` for `waivers:view` holders. The signed paper lives off-platform with the Treasurer; **medical PII never touches Cloudflare**, no R2 PDFs, no signature images.
 
 The attestation row schema is `(userId, cycle, version)` together — the `requireCurrentWaiver` guard requires all three to match `currentWaiverCycle()` and `WAIVER_VERSION`. Re-attestation is required every fall semester; the cycle rolls over on August 15.
 

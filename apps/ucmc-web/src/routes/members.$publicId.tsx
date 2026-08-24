@@ -31,10 +31,12 @@ import {
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
 import { UserAvatar } from "#/components/user-avatar";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
 import { RouteErrorFallback } from "#/components/error-page";
+import { formatDate } from "#/lib/date-format";
 import { requireApproved } from "#/features/auth/guards";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
@@ -195,6 +197,50 @@ function MemberDetailPage() {
                 No private information on file.
               </p>
             )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Waiver standing. Present only when the caller holds
+          `waivers:view` (or `waivers:verify`, which implies it) and the
+          member could have an attestation at all — the server omits the
+          field for pending and rejected members, so they aren't flagged
+          for one they were never able to give. Read-only here: attesting
+          lives on /members/waivers behind `waivers:verify`. */}
+      {member.waiverStatus ? (
+        <Card>
+          <CardContent className="space-y-3">
+            <h2 className="text-sm font-semibold">Waiver</h2>
+            <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+              <dt className="text-muted-foreground">
+                Cycle {member.waiverStatus.cycle}
+              </dt>
+              <dd>
+                {member.waiverStatus.attested ? (
+                  <Badge variant="outline">Attested</Badge>
+                ) : (
+                  <Badge variant="destructive">No current attestation</Badge>
+                )}
+              </dd>
+              {member.waiverStatus.attestedAt ? (
+                <>
+                  <dt className="text-muted-foreground">Attested</dt>
+                  <dd>
+                    {formatDate(member.waiverStatus.attestedAt)}
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      {/* Null when the attesting officer has since
+                          deleted their account (FK is SET NULL). */}
+                      — by{" "}
+                      {member.waiverStatus.attestedByName ?? "(deleted user)"}
+                    </span>
+                  </dd>
+                </>
+              ) : null}
+              <dt className="text-muted-foreground">Waiver version</dt>
+              <dd>
+                <code className="text-xs">{member.waiverStatus.version}</code>
+              </dd>
+            </dl>
           </CardContent>
         </Card>
       ) : null}

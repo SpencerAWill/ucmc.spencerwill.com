@@ -132,7 +132,7 @@ describe("feedback authorization", () => {
     ).rejects.toThrow("Not signed in");
   });
 
-  it("submitFeedbackAction rejects users without feedback:submit", async () => {
+  it("submitFeedbackAction rejects users without site_feedback:submit", async () => {
     await signInAsBareUser();
     await expect(
       submitFeedbackAction({
@@ -142,30 +142,30 @@ describe("feedback authorization", () => {
         stepsToReproduce: "z",
         expectedBehavior: "w",
       }),
-    ).rejects.toThrow("Forbidden: missing feedback:submit");
+    ).rejects.toThrow("Forbidden: missing site_feedback:submit");
   });
 
-  it("listAllFeedbackAction rejects users without feedback:manage", async () => {
+  it("listAllFeedbackAction rejects users without site_feedback:manage", async () => {
     await signInAsMember();
     await expect(listAllFeedbackAction()).rejects.toThrow(
-      "Forbidden: missing feedback:manage",
+      "Forbidden: missing site_feedback:manage",
     );
   });
 
-  it("updateFeedbackStatusAction rejects users without feedback:manage", async () => {
+  it("updateFeedbackStatusAction rejects users without site_feedback:manage", async () => {
     await signInAsMember();
     await expect(
       updateFeedbackStatusAction({ id: "fb_x", status: "resolved" }),
-    ).rejects.toThrow("Forbidden: missing feedback:manage");
+    ).rejects.toThrow("Forbidden: missing site_feedback:manage");
   });
 
-  it("submitFeedbackAction rejects when feedback.website_enabled is off", async () => {
+  it("submitFeedbackAction rejects when feedback.site_enabled is off", async () => {
     await signInAsMember();
     // Set the kill switch to false. `readSetting` falls back to the
     // schema default (true) when the row is absent, so we have to
     // write an explicit false row here.
     await getDb().insert(schema.siteSettings).values({
-      key: "feedback.website_enabled",
+      key: "feedback.site_enabled",
       valueJson: "false",
       updatedBy: null,
     });
@@ -175,7 +175,7 @@ describe("feedback authorization", () => {
         title: "After hours",
         body: "Anyone home?",
       }),
-    ).rejects.toThrow("Website feedback submissions are currently disabled.");
+    ).rejects.toThrow("Site feedback submissions are currently disabled.");
     // No row written, no mirror attempted.
     expect(await getDb().select().from(schema.feedback)).toHaveLength(0);
     expect(mirrorToGithub).not.toHaveBeenCalled();

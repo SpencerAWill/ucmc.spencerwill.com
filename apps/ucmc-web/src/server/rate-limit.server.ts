@@ -137,10 +137,10 @@ export async function checkFeedbackRateLimit(userId: string): Promise<boolean> {
 
 /**
  * Parallel to `checkFeedbackRateLimit` for the club-feedback surface.
- * Distinct key namespace (`club_feedback:user:<id>`) so the website
- * + club budgets are independent — a member burning their website
+ * Distinct key namespace (`club_feedback:user:<id>`) so the site
+ * + club budgets are independent — a member burning their site
  * budget shouldn't lock them out of submitting governance feedback,
- * and vice versa. Same 10 req/60 s envelope as the website surface;
+ * and vice versa. Same 10 req/60 s envelope as the site surface;
  * same fail-open contract.
  */
 export async function checkClubFeedbackRateLimit(

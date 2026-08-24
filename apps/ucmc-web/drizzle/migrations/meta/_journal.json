@@ -449,6 +449,13 @@
       "when": 1779477596940,
       "tag": "0063_feedback_site_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1779477596941,
+      "tag": "0064_permission_renames_and_splits",
+      "breakpoints": true
     }
   ]
 }

@@ -31,6 +31,7 @@ const {
   revokeWaiverAttestationAction,
   listMyWaiverHistoryAction,
   listMembersNeedingAttestationAction,
+  listWaiverHistoryForUserAction,
   getMyCurrentWaiverStatusAction,
 } = await import("#/features/waivers/server/waiver-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
@@ -90,6 +91,36 @@ async function signInAsMember(): Promise<string> {
   return id;
 }
 
+/**
+ * A member holding `waivers:view` and NOT `waivers:verify` — the exec
+ * tier migration 0064 added. Built as an ad-hoc role rather than reusing
+ * a seeded one so the test pins the permission, not whatever grants
+ * president/treasurer happen to carry.
+ */
+async function signInAsWaiverViewer(): Promise<string> {
+  const db = getDb();
+  await db
+    .insert(schema.roles)
+    .values({
+      id: "role_test_waiver_viewer",
+      name: "test_waiver_viewer",
+      displayName: "Test waiver viewer",
+      description: "Holds waivers:view without waivers:verify",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.rolePermissions)
+    .values({
+      roleId: "role_test_waiver_viewer",
+      permissionId: "perm_waivers_view",
+    })
+    .onConflictDoNothing();
+  const id = await seedUser("waiver-viewer@example.com");
+  await assignRole(id, "role_test_waiver_viewer");
+  await signInAs(id);
+  return id;
+}
+
 beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
@@ -127,10 +158,87 @@ describe("waiver action authorization", () => {
     ).rejects.toThrow("Forbidden: missing waivers:verify");
   });
 
-  it("listMembersNeedingAttestationAction rejects members without waivers:verify", async () => {
+  it("listMembersNeedingAttestationAction rejects members without waivers:view", async () => {
     await signInAsMember();
     await expect(listMembersNeedingAttestationAction()).rejects.toThrow(
+      "Forbidden: missing waivers:view",
+    );
+  });
+
+  it("listWaiverHistoryForUserAction rejects members without waivers:view", async () => {
+    const target = await seedUser("target@example.com");
+    await signInAsMember();
+    await expect(
+      listWaiverHistoryForUserAction({ userId: target }),
+    ).rejects.toThrow("Forbidden: missing waivers:view");
+  });
+
+  // ── the waivers:view tier (migration 0064) ───────────────────────────
+
+  it("waivers:view alone can read the attestation queue", async () => {
+    const target = await seedUser("needs-waiver@example.com");
+    await signInAsWaiverViewer();
+    const queue = await listMembersNeedingAttestationAction();
+    expect(queue.map((m) => m.userId)).toContain(target);
+  });
+
+  it("waivers:view alone can read another member's history", async () => {
+    const target = await seedUser("target@example.com");
+    await signInAsWaiverViewer();
+    await expect(
+      listWaiverHistoryForUserAction({ userId: target }),
+    ).resolves.toEqual([]);
+  });
+
+  it("waivers:view alone cannot attest", async () => {
+    const target = await seedUser("target@example.com");
+    await signInAsWaiverViewer();
+    await expect(attestWaiverAction({ userId: target })).rejects.toThrow(
       "Forbidden: missing waivers:verify",
+    );
+  });
+
+  it("waivers:view alone cannot bulk-attest", async () => {
+    const target = await seedUser("target@example.com");
+    await signInAsWaiverViewer();
+    await expect(
+      bulkAttestWaiversAction({ userIds: [target] }),
+    ).rejects.toThrow("Forbidden: missing waivers:verify");
+  });
+
+  it("waivers:view alone cannot revoke", async () => {
+    await signInAsWaiverViewer();
+    await expect(
+      revokeWaiverAttestationAction({ attestationId: "wa_x", reason: "oops" }),
+    ).rejects.toThrow("Forbidden: missing waivers:verify");
+  });
+
+  it("waivers:verify implies the read side (no explicit view grant needed)", async () => {
+    // signInAsOfficer uses role_system_admin, which gets every
+    // permission via the principal bypass — so assert the OR-check with
+    // a role that holds verify and nothing else.
+    const db = getDb();
+    await db
+      .insert(schema.roles)
+      .values({
+        id: "role_test_verify_only",
+        name: "test_verify_only",
+        displayName: "Test verifier",
+        description: "Holds waivers:verify without waivers:view",
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(schema.rolePermissions)
+      .values({
+        roleId: "role_test_verify_only",
+        permissionId: "perm_waivers_verify",
+      })
+      .onConflictDoNothing();
+    const id = await seedUser("verifier@example.com");
+    await assignRole(id, "role_test_verify_only");
+    await signInAs(id);
+    await expect(listMembersNeedingAttestationAction()).resolves.toBeInstanceOf(
+      Array,
     );
   });
 });

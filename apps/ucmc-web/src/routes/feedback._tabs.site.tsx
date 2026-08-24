@@ -18,9 +18,9 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
   beforeLoad: async ({ context, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
     const principal = await requireApproved(context.queryClient);
-    const canWebsite =
-      principal.permissions.includes("feedback:submit") ||
-      principal.permissions.includes("feedback:manage");
+    const canSite =
+      principal.permissions.includes("site_feedback:submit") ||
+      principal.permissions.includes("site_feedback:manage");
     const canClub =
       principal.permissions.includes("club_feedback:submit") ||
       principal.permissions.includes("club_feedback:manage");
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
     // there rather than getting a notFound from a link or a stale
     // bookmark. With access to neither, fall through to notFound — the
     // sidebar entry doesn't render for them either.
-    if (!canWebsite) {
+    if (!canSite) {
       if (canClub) {
         throw redirect({ to: "/feedback/club" });
       }
@@ -41,11 +41,11 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
 
 function SiteFeedbackPage() {
   const { hasPermission } = useAuth();
-  const canManage = hasPermission("feedback:manage");
-  const canSubmit = hasPermission("feedback:submit");
+  const canManage = hasPermission("site_feedback:manage");
+  const canSubmit = hasPermission("site_feedback:submit");
 
   const flagsQuery = useQuery(publicFlagsQueryOptions());
-  const submissionsEnabled = flagsQuery.data?.websiteFeedback ?? true;
+  const submissionsEnabled = flagsQuery.data?.siteFeedback ?? true;
 
   const myQuery = useQuery(myFeedbackQueryOptions());
   const adminQuery = useQuery(allFeedbackQueryOptions({ enabled: canManage }));

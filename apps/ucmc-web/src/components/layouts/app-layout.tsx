@@ -224,8 +224,12 @@ export function SidebarNav() {
   // (Blog, Volunteer, etc.) have only their flag as the gate.
   const canReadAnnouncements =
     hasPermission("announcements:read") && flags.announcements;
-  const canVerifyWaivers =
-    hasPermission("waivers:verify") && pages.members_waivers;
+  // `waivers:view` reaches the queue read-only, so the nav entry follows
+  // the read tier — the attest controls on the page gate separately on
+  // `waivers:verify`.
+  const canSeeWaivers =
+    (hasPermission("waivers:view") || hasPermission("waivers:verify")) &&
+    pages.members_waivers;
   // Gate the *link* on the flag of the page it actually navigates to
   // (`/members` is `pages.members_approved`), NOT on the `pages.members`
   // section switch. Because the flags map carries *effective* values,
@@ -254,7 +258,7 @@ export function SidebarNav() {
   const canViewGazette = hasPermission("public_gazette:view") && pages.gazette;
   const canViewAlbum = hasPermission("public_album:view") && pages.album;
 
-  // Waivers is the Members entry's only sub-item, so `canVerifyWaivers`
+  // Waivers is the Members entry's only sub-item, so `canSeeWaivers`
   // doubles as "does this entry get a collapsible chevron". Member
   // management is reached via the tab bar inside /members itself, and
   // Roles moved out to the root-level /access control, so neither needs
@@ -402,7 +406,7 @@ export function SidebarNav() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ) : null}
-                {canReadMembers || canVerifyWaivers ? (
+                {canReadMembers || canSeeWaivers ? (
                   <SidebarMenuItem>
                     {/*
                      * Collapsible sits inside SidebarMenuItem (not the
@@ -435,7 +439,7 @@ export function SidebarNav() {
                       )}
 
                       {/* Chevron toggles sub-items — separate from the link */}
-                      {canVerifyWaivers ? (
+                      {canSeeWaivers ? (
                         <>
                           <CollapsibleTrigger asChild>
                             <SidebarMenuAction className="data-[state=open]:rotate-90">
@@ -644,7 +648,8 @@ function SidebarUtilityNav() {
   // both via the principal bypass). Point the link at whichever surface is
   // actually enabled so it never lands on a switched-off /feedback.
   const canSiteFeedback =
-    (hasPermission("feedback:submit") || hasPermission("feedback:manage")) &&
+    (hasPermission("site_feedback:submit") ||
+      hasPermission("site_feedback:manage")) &&
     pages.feedback_site;
   const canClubFeedback =
     (hasPermission("club_feedback:submit") ||
@@ -653,7 +658,7 @@ function SidebarUtilityNav() {
   const canSubmitFeedback = isApproved && (canSiteFeedback || canClubFeedback);
   // Prefer club: it reaches the exec board and is the surface members are
   // more likely to want, which is also why it's the first tab. Falls back to
-  // the website surface when the viewer can't reach club at all.
+  // the site surface when the viewer can't reach club at all.
   const feedbackTarget = canClubFeedback ? "/feedback/club" : "/feedback/site";
   const canViewAudit = hasPermission("audit:view");
   const canManageSettings = hasPermission("settings:manage");

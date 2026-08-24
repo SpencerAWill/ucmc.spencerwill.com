@@ -60,9 +60,9 @@ export async function getPublicSiteContactAction(): Promise<PublicSiteContact> {
  * feature is off" is the same answer the gated route already returns.
  */
 export async function getPublicFlagsAction(): Promise<PublicFlags> {
-  const [websiteFeedback, clubFeedback, announcements, pageValues] =
+  const [siteFeedback, clubFeedback, announcements, pageValues] =
     await Promise.all([
-      readSetting("feedback.website_enabled"),
+      readSetting("feedback.site_enabled"),
       readSetting("feedback.club_enabled"),
       readSetting("features.announcements"),
       Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
@@ -77,7 +77,7 @@ export async function getPublicFlagsAction(): Promise<PublicFlags> {
   // parent. `/settings` deliberately reads raw values via
   // `listSiteSettingsAction` instead.
   return {
-    websiteFeedback,
+    siteFeedback,
     clubFeedback,
     announcements,
     pages: effectivePageFlags(raw),

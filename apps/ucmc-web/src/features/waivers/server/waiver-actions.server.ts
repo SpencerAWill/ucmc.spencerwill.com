@@ -9,7 +9,7 @@
  * dynamic-imports each action so server-only code never reaches the
  * client bundle.
  */
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { WAIVER_VERSION } from "#/config/legal";
@@ -21,6 +21,10 @@ import {
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { getDb, schema } from "#/server/db";
+import {
+  currentAttestationFilter,
+  currentlyAttestedUserIds,
+} from "#/server/waivers/current-attestation.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
 
@@ -36,6 +40,28 @@ async function requireWaiverVerifier(): Promise<Principal> {
   }
   if (!principal.permissions.includes("waivers:verify")) {
     throw new Error("Forbidden: missing waivers:verify");
+  }
+  return principal;
+}
+
+/**
+ * Read-side gate. Accepts `waivers:view` OR `waivers:verify` — there is
+ * no permission-implication mechanism in this codebase, and an officer
+ * who can attest can obviously read, so the OR lives here (one place)
+ * rather than at every call site. Migration 0064 also grants
+ * `waivers:view` explicitly to the roles holding `waivers:verify` so
+ * /access shows the real grant rather than an invisible implication.
+ */
+async function requireWaiverViewer(): Promise<Principal> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+  const canRead =
+    principal.permissions.includes("waivers:view") ||
+    principal.permissions.includes("waivers:verify");
+  if (!canRead) {
+    throw new Error("Forbidden: missing waivers:view");
   }
   return principal;
 }
@@ -99,13 +125,14 @@ export async function listMyWaiverHistoryAction(): Promise<
 }
 
 /**
- * Officer-only equivalent for inspecting another member's history from
- * the `/members/waivers` side sheet.
+ * Officer-facing equivalent for inspecting another member's history from
+ * the `/members/waivers` side sheet or the member detail page. Read-only,
+ * so `waivers:view` is enough.
  */
 export async function listWaiverHistoryForUserAction(input: {
   userId: string;
 }): Promise<WaiverAttestationSummary[]> {
-  await requireWaiverVerifier();
+  await requireWaiverViewer();
   return loadAttestationHistory(input.userId);
 }
 
@@ -130,22 +157,13 @@ export async function getMyCurrentWaiverStatusAction(): Promise<WaiverStatus> {
 export async function listMembersNeedingAttestationAction(): Promise<
   MemberNeedingAttestation[]
 > {
-  await requireWaiverVerifier();
+  await requireWaiverViewer();
   const db = getDb();
   const cycle = currentWaiverCycle();
 
   // Subquery: users with a current, non-revoked attestation for this
   // cycle + version. We anti-join against this set.
-  const attestedSubquery = db
-    .select({ userId: schema.waiverAttestations.userId })
-    .from(schema.waiverAttestations)
-    .where(
-      and(
-        eq(schema.waiverAttestations.cycle, cycle),
-        eq(schema.waiverAttestations.version, WAIVER_VERSION),
-        isNull(schema.waiverAttestations.revokedAt),
-      ),
-    );
+  const attestedSubquery = currentlyAttestedUserIds(cycle);
 
   const rows = await db
     .select({
@@ -450,14 +468,7 @@ async function loadCurrentAttestation(
       ),
     )
     .leftJoin(profile, eq(profile.userId, att.attestedBy))
-    .where(
-      and(
-        eq(att.userId, userId),
-        eq(att.cycle, cycle),
-        eq(att.version, WAIVER_VERSION),
-        isNull(att.revokedAt),
-      ),
-    )
+    .where(and(eq(att.userId, userId), currentAttestationFilter(cycle)))
     .orderBy(desc(att.attestedAt))
     .limit(1)
     .get();

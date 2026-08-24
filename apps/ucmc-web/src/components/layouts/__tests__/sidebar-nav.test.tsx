@@ -103,6 +103,29 @@ describe("SidebarNav page-flag gates", () => {
     setAuth(OFFICER);
   });
 
+  it("shows the Waivers entry for waivers:view alone, not just waivers:verify", () => {
+    // The read tier (migration 0064) reaches the queue read-only; the
+    // attest controls on the page gate separately. If the nav kept
+    // gating on `waivers:verify`, a view-only exec would have no way
+    // to navigate to the page they're authorized to read.
+    setAuth(["waivers:view"]);
+
+    renderNav();
+
+    expect(screen.getByRole("link", { name: "Waivers" })).toHaveAttribute(
+      "href",
+      "/members/waivers",
+    );
+  });
+
+  it("hides the Waivers entry when the viewer holds neither waiver permission", () => {
+    setAuth(["gear:read"]);
+
+    renderNav();
+
+    expect(screen.queryByRole("link", { name: "Waivers" })).toBeNull();
+  });
+
   it("links Members and Gear when their index pages are on", () => {
     renderNav();
 

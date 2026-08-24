@@ -528,13 +528,13 @@ export const SETTINGS = {
   "pages.feedback": z.boolean().default(true).register(registry, {
     label: "Feedback section enabled",
     description:
-      "Master switch for the whole /feedback area. When off, the sidebar entry disappears and both the website and club surfaces return notFound.",
+      "Master switch for the whole /feedback area. When off, the sidebar entry disappears and both the site and club surfaces return notFound.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-22",
     confirm:
-      "This is the master switch for the entire Feedback area — both the website and club surfaces. Members will have no way to reach either form. Individual switches keep their values.",
+      "This is the master switch for the entire Feedback area — both the site and club surfaces. Members will have no way to reach either form. Individual switches keep their values.",
   }),
   "pages.feedback_site": z.boolean().default(true).register(registry, {
     label: "Feedback · Site tab reachable",
@@ -662,7 +662,7 @@ export const SETTINGS = {
   // Submission gates for the two feedback surfaces. Each flag controls
   // ONLY whether new submissions are accepted — managers always retain
   // access to the triage view of existing rows (gated separately by
-  // `feedback:manage` / `club_feedback:manage`). Defaults are ON so a
+  // `site_feedback:manage` / `club_feedback:manage`). Defaults are ON so a
   // fresh DB / new deploy keeps both forms open. Exposed publicly via
   // `getPublicFlagsFn` so the route guards and tab bar can decide
   // synchronously whether to render the submit UI for non-managers.
@@ -684,7 +684,7 @@ export const SETTINGS = {
     confirm:
       "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
   }),
-  "feedback.website_enabled": z.boolean().default(true).register(registry, {
+  "feedback.site_enabled": z.boolean().default(true).register(registry, {
     label: "Accept site feedback submissions",
     description:
       "Pauses NEW site-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Site tab page switch under Pages, which 404s the page for everyone. The GitHub mirror still fires for legacy in-flight rows.",
