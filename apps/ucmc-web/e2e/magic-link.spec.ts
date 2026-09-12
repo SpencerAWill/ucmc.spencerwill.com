@@ -21,7 +21,7 @@ test("magic-link sign-in sends an email and the consume link signs the user in",
   await page.goto("/sign-in");
   await waitForHydration(page);
 
-  await page.getByLabel(/email/i).fill(email);
+  await page.getByRole("textbox", { name: /email/i }).fill(email);
   const submit = page.getByRole("button", { name: /send sign-in link/i });
   await expect(submit).toBeEnabled();
   await submit.click();

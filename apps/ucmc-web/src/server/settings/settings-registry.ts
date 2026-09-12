@@ -343,7 +343,7 @@ export const SETTINGS = {
   "pages.trips": z.boolean().default(true).register(registry, {
     label: "Trips enabled",
     description:
-      "When off, the Trips “coming soon” sidebar entry is hidden. Trips has no route yet.",
+      "When off, the Trips sidebar entry is hidden and the /trips route returns notFound for everyone. /trips currently embeds the club's trip sign-up Google Form while the full trips feature is built.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",

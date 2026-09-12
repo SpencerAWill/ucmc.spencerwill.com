@@ -486,13 +486,16 @@ export function SidebarNav() {
                 ) : null}
                 {pages.trips ? (
                   <SidebarMenuItem>
-                    <SidebarMenuButton
-                      aria-disabled
-                      tabIndex={-1}
-                      tooltip="Trips (coming soon)"
-                    >
-                      <Compass />
-                      <span>Trips</span>
+                    {/* A real link now: /trips hosts the Google Form
+                     * sign-up stopgap until the trips feature ships.
+                     * Already inside the `isApproved` block, which
+                     * matches the route's `requireApproved` guard — no
+                     * `trips:*` permission exists yet. */}
+                    <SidebarMenuButton asChild tooltip="Trips">
+                      <Link to="/trips">
+                        <Compass />
+                        <span>Trips</span>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ) : null}

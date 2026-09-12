@@ -72,6 +72,7 @@ const PAGES_ON = {
   gear: true,
   gear_inventory: true,
   gear_loans: true,
+  trips: true,
 } as const;
 
 function setFlags(pages: Record<string, boolean>) {
@@ -121,6 +122,39 @@ describe("SidebarNav page-flag gates", () => {
     renderNav();
 
     expect(screen.queryByRole("link", { name: "Waivers" })).toBeNull();
+  });
+
+  it("links Trips to the sign-up route once it stops being a placeholder", () => {
+    // `pages.trips` predates the route as a "coming soon" placeholder
+    // flag, so the entry rendered as an inert `aria-disabled` button.
+    // /trips is now a real page (the Google Form stopgap); if this
+    // regresses to a placeholder the flag still hides it, but members
+    // silently lose the only in-app path to trip sign-ups.
+    renderNav();
+
+    expect(screen.getByRole("link", { name: "Trips" })).toHaveAttribute(
+      "href",
+      "/trips",
+    );
+  });
+
+  it("hides Trips when the page flag is off", () => {
+    setFlags({ ...PAGES_ON, trips: false });
+
+    renderNav();
+
+    expect(screen.queryByText("Trips")).toBeNull();
+  });
+
+  it("hides Trips from members who aren't approved", () => {
+    // The entry lives inside the `isApproved` block, matching the
+    // route's `requireApproved` guard — there is no `trips:*`
+    // permission to gate on.
+    setAuth([], false);
+
+    renderNav();
+
+    expect(screen.queryByText("Trips")).toBeNull();
   });
 
   it("links Members and Gear when their index pages are on", () => {

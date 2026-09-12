@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WaiverRouteImport } from './routes/waiver'
 import { Route as VolunteerRouteImport } from './routes/volunteer'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as TripsRouteImport } from './routes/trips'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -93,6 +94,11 @@ const VolunteerRoute = VolunteerRouteImport.update({
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TripsRoute = TripsRouteImport.update({
+  id: '/trips',
+  path: '/trips',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -457,6 +463,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
+  '/trips': typeof TripsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
@@ -522,6 +529,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
+  '/trips': typeof TripsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
@@ -590,6 +598,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
+  '/trips': typeof TripsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
@@ -664,6 +673,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/terms'
+    | '/trips'
     | '/verify-email'
     | '/volunteer'
     | '/waiver'
@@ -729,6 +739,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/terms'
+    | '/trips'
     | '/verify-email'
     | '/volunteer'
     | '/waiver'
@@ -796,6 +807,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/terms'
+    | '/trips'
     | '/verify-email'
     | '/volunteer'
     | '/waiver'
@@ -869,6 +881,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   TermsRoute: typeof TermsRoute
+  TripsRoute: typeof TripsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VolunteerRoute: typeof VolunteerRoute
   WaiverRoute: typeof WaiverRoute
@@ -905,6 +918,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trips': {
+      id: '/trips'
+      path: '/trips'
+      fullPath: '/trips'
+      preLoaderRoute: typeof TripsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -1548,6 +1568,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   TermsRoute: TermsRoute,
+  TripsRoute: TripsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VolunteerRoute: VolunteerRoute,
   WaiverRoute: WaiverRoute,

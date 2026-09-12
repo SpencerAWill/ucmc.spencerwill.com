@@ -49,8 +49,14 @@ const CSP_VALUE = [
   // 17+ doesn't actually execute any WASM, but the CSP directive
   // applies uniformly so the polyfill fallback works when needed.
   "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
-  // `frame-src` covers the Turnstile widget AND the inline PDF
-  // iframe on /gazette/$publicId.
+  // `frame-src` covers the Turnstile widget, the inline PDF
+  // iframe on /gazette/$publicId, AND the embedded Google Form on
+  // /trips.
+  //
+  // `https://docs.google.com` is a TEMPORARY allowance for the trip
+  // sign-up form embedded at /trips while the real trips feature is
+  // built. Delete it together with that route's embed — it is the only
+  // third-party frame source on the site that isn't Turnstile.
   //
   // `'self'` is required for the local-dev fallback route at
   // `/api/gazette-pdf/$` — Miniflare doesn't expose the R2 custom
@@ -62,7 +68,7 @@ const CSP_VALUE = [
   // `cdn.{dev.,}ucmc.spencerwill.com` (cross-origin from the app
   // even though same TLD); both hosts are listed unconditionally so
   // the same CSP string ships to dev + prod environments.
-  "frame-src 'self' https://challenges.cloudflare.com https://cdn.ucmc.spencerwill.com https://cdn.dev.ucmc.spencerwill.com",
+  "frame-src 'self' https://challenges.cloudflare.com https://docs.google.com https://cdn.ucmc.spencerwill.com https://cdn.dev.ucmc.spencerwill.com",
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
   "object-src 'none'",

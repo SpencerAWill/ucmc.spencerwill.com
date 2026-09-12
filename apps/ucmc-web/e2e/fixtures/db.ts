@@ -142,6 +142,53 @@ VALUES ('${userEmailId}', '${userId}', ${escapedEmail}, 1, NULL, ${nowMs});
 }
 
 /**
+ * Insert a `users` row with a verified primary email and **no
+ * `profiles` row** — the half-registered state the magic-link
+ * callback's "user without profile" branch has to handle.
+ *
+ * `status` is `pending` because that mirrors a real
+ * registered-but-not-yet-approved account; the route under test gates
+ * on the missing profile, not on status.
+ *
+ * This lives here rather than inline in the spec because a spec that
+ * hand-rolls its own INSERT drifts from the schema silently: the
+ * original copy still wrote `users.email`, a column migration 0025
+ * removed, so the spec failed at seed time with `table users has no
+ * column named email` long before it reached its assertion. Every seed
+ * in this file joins through `user_emails`, so a schema change breaks
+ * them all at once and gets fixed once.
+ */
+export function seedUserWithoutProfile(email: string): void {
+  const userId = `user_${randomUUID()}`;
+  const publicId = randomUUID().replace(/-/g, "").slice(0, 12);
+  const userEmailId = `uem_${randomUUID()}`;
+  const nowMs = Date.now();
+  const escapedEmail = `'${email.replace(/'/g, "''")}'`;
+
+  const sql = `
+DELETE FROM users WHERE id IN (SELECT user_id FROM user_emails WHERE email = ${escapedEmail});
+INSERT INTO users (id, public_id, status, created_at)
+VALUES ('${userId}', '${publicId}', 'pending', ${nowMs});
+INSERT INTO user_emails (id, user_id, email, is_primary, verified_at, created_at)
+VALUES ('${userEmailId}', '${userId}', ${escapedEmail}, 1, ${nowMs}, ${nowMs});
+`;
+  const tempFile = join(tmpdir(), `e2e-noprofile-${randomUUID()}.sql`);
+  writeFileSync(tempFile, sql, "utf8");
+  try {
+    execSync(
+      `pnpm exec wrangler d1 execute ucmc-web-dev --local --file ${tempFile}`,
+      { cwd: WEB_DIR, stdio: "pipe" },
+    );
+  } finally {
+    try {
+      unlinkSync(tempFile);
+    } catch {
+      // best-effort
+    }
+  }
+}
+
+/**
  * Run an arbitrary D1 SQL block on the local Miniflare DB. Used by
  * specs that need to assert post-action database state (e.g. that a
  * row really got inserted) or that need a custom seed beyond what

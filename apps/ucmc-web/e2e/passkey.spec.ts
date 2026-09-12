@@ -55,7 +55,7 @@ test("register a passkey and sign back in with it", async ({
   await page.goto("/sign-in");
   await waitForHydration(page);
 
-  await page.getByLabel(/email/i).fill(PASSKEY_USER_EMAIL);
+  await page.getByRole("textbox", { name: /email/i }).fill(PASSKEY_USER_EMAIL);
   const sendButton = page.getByRole("button", { name: /send sign-in link/i });
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
