@@ -13,7 +13,7 @@ import { useSetAboutImage } from "#/features/landing/api/use-set-about-image";
 import { useUpdateLandingSetting } from "#/features/landing/api/use-update-setting";
 import { landingImageUrlFor } from "#/features/landing/lib/image-url";
 import { noPasswordManagerProps } from "#/features/landing/lib/no-password-manager";
-import { useImageCrop } from "#/features/landing/lib/use-image-crop";
+import { useImageCrop } from "#/hooks/use-image-crop";
 import {
   LANDING_LIMITS,
   LANDING_SETTING_KEYS,

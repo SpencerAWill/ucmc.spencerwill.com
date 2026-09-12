@@ -43,7 +43,7 @@ Bulletproof React–aligned. Three features under `src/features/`:
 - `members/` — registration approval queue, member directory, admin profile editing, RBAC, paper-waiver attestation queue.
 - `announcements/` — admin-authored announcements feed with read-tracking.
 
-Plus `landing/` for the editable public homepage. Shared/foundational code stays outside features: `server/auth/`, `server/profile/`, `server/r2/`, `server/kv/`, `server/db/`, `components/`, `lib/`, `hooks/`, `config/`. Routes (`src/routes/`) compose features but never the reverse — enforced mechanically by `import/no-restricted-paths` in `eslint.config.js`.
+Plus `landing/` for the editable public homepage. Shared/foundational code stays outside features: `server/auth/`, `server/profile/`, `server/r2/`, `server/kv/`, `server/db/`, `components/`, `lib/`, `hooks/`, `config/`. Routes (`src/routes/`) compose features but never the reverse — enforced mechanically by `import/no-restricted-paths` in `eslint.config.js`, whose cross-feature zones are generated from the `FEATURES` array there (adding a feature is one entry).
 
 ## Routes worth knowing
 
@@ -77,7 +77,8 @@ The footer also shows the registration disclaimer text **on every page** (not ju
   - `/members/deactivated` — reactivate deactivated members
 - `/members/waivers` — officer attestation queue. `waivers:view` opens it read-only (Treasurer, President, Advisor); `waivers:verify` adds the selection checkboxes, bulk bar, and per-row Attest button (Treasurer + President)
 - `/access` — roles and permissions editor (`roles:manage`). Root-level, not under `/members`: roles govern every feature, not just membership, so it sits next to Settings in the sidebar's bottom group.
-- `/album` — club photo archive (`public_album:view`; granted to anonymous visitors and members). Upload/edit/delete needs `public_album:manage`. Renamed from "Trip Gallery" in migration `0059`; R2 object keys deliberately kept their historical `gallery/` prefix.
+- `/album` — club photo archive (`public_album:view`; granted to anonymous visitors and members). Upload/edit/delete needs `public_album:manage`. Renamed from "Trip Gallery" in migration `0059`; R2 object keys deliberately kept their historical `gallery/` prefix. The tag filter is URL-driven (`?tag=`) so a filtered view is shareable and `/volunteer` can link into it.
+- `/volunteer` — public stewardship page (`public_volunteer:view`; granted to anonymous visitors and members). Editable narrative, the standing volunteer programs, upcoming outings, and the service record, all behind one `public_volunteer:manage`. Upcoming vs past is derived from each outing's start date against the start of today in `CLUB_TIME_ZONE` — there is no status column to flip. Member sign-ups are deferred pending the trips work; outings link to the partner's own form or open a `mailto:` to the club.
 - `/settings` — runtime platform configuration (`settings:manage`), driven entirely by the Zod registry in `src/server/settings/settings-registry.ts`. This is where the club email, the Instagram / Facebook / YouTube links, and the per-page kill switches are edited. The footer and the landing page's "Where to find us" block both read the contact values from here, so neither surface hardcodes them.
 
 ## Compliance conventions

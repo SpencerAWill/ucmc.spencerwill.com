@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CURATED_ICONS } from "#/components/curated-icon/icon-names";
+
 import {
   HERO_HEADING_KEYS,
   HERO_PAGE_KEYS,
@@ -14,21 +16,13 @@ import type {
 // ── Curated lucide icon allowlist for activity cards ────────────────────
 // Restricted set keeps the editor UX simple and prevents importing every
 // lucide icon into the client bundle.
-export const ACTIVITY_ICONS = [
-  "Mountain",
-  "MountainSnow",
-  "Snowflake",
-  "TentTree",
-  "Backpack",
-  "Users",
-  "Compass",
-  "Map",
-  "Tent",
-  "Sun",
-  "Trees",
-  "Footprints",
-] as const;
-export type ActivityIcon = (typeof ACTIVITY_ICONS)[number];
+// The curated icon whitelist moved to `#/components/curated-icon/` when
+// /volunteer's program cards became a second consumer — features can't
+// import each other, so a list owned by features/landing was unreachable
+// from there. Re-exported under the old names so existing call sites and
+// the `z.enum` below keep reading the same way.
+export { CURATED_ICONS as ACTIVITY_ICONS } from "#/components/curated-icon/icon-names";
+export type { CuratedIconName as ActivityIcon } from "#/components/curated-icon/icon-names";
 
 // ── Limits ──────────────────────────────────────────────────────────────
 export const LANDING_LIMITS = {
@@ -187,7 +181,7 @@ export type FaqUpdateInput = z.infer<typeof faqUpdateInputSchema>;
 const optionalImageDataUrl = z.string().min(1).max(2_000_000).optional();
 
 export const activityInputSchema = z.object({
-  icon: z.enum(ACTIVITY_ICONS),
+  icon: z.enum(CURATED_ICONS),
   title: trimmed(
     LANDING_LIMITS.activityTitle.min,
     LANDING_LIMITS.activityTitle.max,

@@ -670,7 +670,7 @@ export const auditAction = [
   // Generalized public-page markdown edit. One event per save with
   // { slug, markdownLength } metadata. Slug is the row key in
   // markdown_pages (history.narrative, policies, scholarships,
-  // gear_cave, resources).
+  // gear_cave, resources, volunteer).
   "markdown_page.updated",
   "historical_officer.created",
   "historical_officer.updated",
@@ -704,6 +704,20 @@ export const auditAction = [
   "album_photo.created",
   "album_photo.updated",
   "album_photo.deleted",
+  // /volunteer manage affordances. Opportunities are the standing
+  // programs; events are dated outings. Metadata carries { title } (and
+  // { startsAt } for events) so the audit row stays informative after
+  // the row it points at has been deleted.
+  "volunteer_opportunity.created",
+  "volunteer_opportunity.updated",
+  "volunteer_opportunity.deleted",
+  // Bulk drag-reorder of the opportunity cards. One event per reorder
+  // with metadata { count } — each row's new sort_order is implicit in
+  // the index it landed at, same as `honorary_member.reordered`.
+  "volunteer_opportunity.reordered",
+  "volunteer_event.created",
+  "volunteer_event.updated",
+  "volunteer_event.deleted",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -1280,6 +1294,7 @@ export const markdownPageSlug = [
   "scholarships",
   "gear_cave",
   "resources",
+  "volunteer",
 ] as const;
 export type MarkdownPageSlug = (typeof markdownPageSlug)[number];
 
@@ -1421,3 +1436,108 @@ export const albumPhotos = sqliteTable(
 );
 
 export type AlbumPhoto = typeof albumPhotos.$inferSelect;
+
+/**
+ * The standing volunteer programs UCMC runs — trail work, crag
+ * cleanups, adopt-a-highway, gear drives. These are *kinds* of
+ * service, not dated instances; a dated instance is a
+ * {@link volunteerEvents} row.
+ *
+ * Shaped like `landing_activities` (curated icon + title + blurb,
+ * drag-reorderable) but deliberately a separate table rather than a
+ * reuse with a discriminator column: the home page's activity cards
+ * are climbing disciplines and these are service programs, and one
+ * list would put two unrelated editors in the same reorder surface.
+ * The `icon` string is validated against the shared curated whitelist
+ * in `src/components/curated-icon/` at write time.
+ */
+export const volunteerOpportunities = sqliteTable(
+  "volunteer_opportunities",
+  {
+    id: text("id").primaryKey(),
+    icon: text("icon").notNull(),
+    title: text("title").notNull(),
+    blurb: text("blurb").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("volunteer_opportunities_sort_idx").on(t.sortOrder)],
+);
+
+export type VolunteerOpportunity = typeof volunteerOpportunities.$inferSelect;
+
+/**
+ * One dated volunteer outing, past or future.
+ *
+ * **There is deliberately no status column.** Whether a row belongs in
+ * /volunteer's "Coming up" band or its "Our record" archive is derived
+ * from `starts_at`, so nothing has to be flipped by hand or by a cron
+ * and the two bands can never disagree about the same row. The
+ * predicate compares against the *start of today* in `CLUB_TIME_ZONE`
+ * (see `volunteer-repo.server.ts`), not `now` — a trail day that began
+ * at 09:00 shouldn't drop out of "Coming up" at noon while people are
+ * still driving to it. That's the same end-of-day convention gear
+ * due-dates use, and it keeps the comparison an indexed range scan on
+ * `starts_at`.
+ *
+ * `volunteers_count` / `service_hours` are nullable because an officer
+ * logs the event before it happens and fills the numbers in afterwards,
+ * if ever. The totals strip sums only recorded values and reports its
+ * own coverage, so a partially-filled archive reads as incomplete
+ * rather than as a small club.
+ *
+ * `album_tag` points a past event at photos that already live in
+ * `album_photos` (matched on that table's freeform `tag`) rather than
+ * introducing a second upload-and-crop path. It is a loose string
+ * match, not an FK — the Album's tags are freeform and an event may
+ * name a tag before any photo carries it.
+ *
+ * `public_id` is minted now so a future `/volunteer/$publicId` detail
+ * route and a future `volunteer_signups` table keyed on `id` cost
+ * nothing later; nothing links to it yet.
+ */
+export const volunteerEvents = sqliteTable(
+  "volunteer_events",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    title: text("title").notNull(),
+    partnerOrg: text("partner_org"),
+    location: text("location"),
+    startsAt: timestamp("starts_at").notNull(),
+    endsAt: timestamp("ends_at"),
+    description: text("description"),
+    // When the partner org runs its own registration form, the event's
+    // join affordance links there instead of opening a mailto.
+    signupUrl: text("signup_url"),
+    volunteersCount: integer("volunteers_count"),
+    serviceHours: integer("service_hours"),
+    albumTag: text("album_tag"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    // Snapshot of who logged / last touched the row, SET NULL on
+    // delete so the row survives an officer's account removal.
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    // Serves both reads: ascending for "Coming up", descending for the
+    // archive, each a range scan against the day-boundary bound.
+    index("volunteer_events_starts_at_idx").on(t.startsAt),
+  ],
+);
+
+export type VolunteerEvent = typeof volunteerEvents.$inferSelect;

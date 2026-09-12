@@ -58,6 +58,48 @@ describe("permission catalog", () => {
     ]);
   });
 
+  it("pins the volunteer permission ids to their names", async () => {
+    const rows = await getDb()
+      .select({ id: schema.permissions.id, name: schema.permissions.name })
+      .from(schema.permissions);
+    const nameById = new Map(rows.map((r) => [r.id, r.name]));
+    expect(nameById.get("perm_public_volunteer_view")).toBe(
+      "public_volunteer:view",
+    );
+    expect(nameById.get("perm_public_volunteer_manage")).toBe(
+      "public_volunteer:manage",
+    );
+  });
+
+  it("grants public_volunteer:view to anonymous AND member", async () => {
+    // Both, so revoking the anonymous grant to take the page private
+    // doesn't also lock members out of it.
+    const rows = await getDb()
+      .select({ roleId: schema.rolePermissions.roleId })
+      .from(schema.rolePermissions)
+      .where(
+        eq(schema.rolePermissions.permissionId, "perm_public_volunteer_view"),
+      )
+      .orderBy(asc(schema.rolePermissions.roleId));
+    expect(rows.map((r) => r.roleId)).toEqual([
+      "role_anonymous",
+      "role_member",
+    ]);
+  });
+
+  it("leaves public_volunteer:manage ungranted — it exists to be delegated", async () => {
+    // system_admin already holds it through the bypass in
+    // principal.server.ts, so a seeded grant would only duplicate an
+    // authority it has.
+    const rows = await getDb()
+      .select({ roleId: schema.rolePermissions.roleId })
+      .from(schema.rolePermissions)
+      .where(
+        eq(schema.rolePermissions.permissionId, "perm_public_volunteer_manage"),
+      );
+    expect(rows).toEqual([]);
+  });
+
   it("leaves gear:inspect ungranted — it exists to be delegated", async () => {
     // `gear:manage` holders can already inspect via the OR in
     // `requireGearInspector`, so seeding a default grant would only

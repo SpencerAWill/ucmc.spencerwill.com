@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { landingContentQueryOptions } from "#/features/landing/api/queries";
 import { ActivitiesEditor } from "#/features/landing/components/activities-editor";
-import { ActivityIcon } from "#/features/landing/components/activity-icon";
+import { CuratedIcon } from "#/components/curated-icon/curated-icon";
 import { EditAffordance } from "#/features/landing/components/edit-affordance";
 import { landingImageUrlFor } from "#/features/landing/lib/image-url";
 import type { ActivitySummary } from "#/features/landing/server/landing-fns";
@@ -67,7 +67,7 @@ function ActivityCard({ activity }: { activity: ActivitySummary }) {
   if (!hasImage) {
     return (
       <article className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
-        <ActivityIcon name={activity.icon} className="size-8 text-primary" />
+        <CuratedIcon name={activity.icon} className="size-8 text-primary" />
         <h3 className="mt-2 leading-none font-semibold">{activity.title}</h3>
         <p className="mt-3 text-sm text-muted-foreground">{activity.blurb}</p>
       </article>
@@ -112,7 +112,7 @@ function ActivityCard({ activity }: { activity: ActivitySummary }) {
 
       {/* Default content — switches to white type when revealed. */}
       <div className="relative flex h-full flex-col gap-3 p-6">
-        <ActivityIcon
+        <CuratedIcon
           name={activity.icon}
           className="size-8 text-primary transition-colors duration-300 group-hover:text-white group-data-[active=true]:text-white"
         />

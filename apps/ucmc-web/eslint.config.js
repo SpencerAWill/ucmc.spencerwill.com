@@ -5,6 +5,124 @@ import { tanstackConfig } from "@tanstack/eslint-config";
 import checkFile from "eslint-plugin-check-file";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 
+/**
+ * Anchor a zone path to this config file rather than to the process cwd.
+ *
+ * `import/no-restricted-paths` resolves a relative `target` / `from`
+ * against `process.cwd()`. The zones were written as `./src/features/...`,
+ * which is correct under `pnpm --filter ucmc-web lint` (cwd is this
+ * package, which is how CI runs it) but resolves to `<repo>/src/features/...`
+ * — a path that doesn't exist — under the `pnpm exec eslint .` documented
+ * in CLAUDE.md's Commands section. A zone whose paths match nothing fails
+ * open: the rule silently passes instead of erroring, so the boundary
+ * check appears to run and enforces nothing.
+ *
+ * The resolver's `project` path below has the same problem and has to be
+ * anchored too — an unresolvable `#/features/...` specifier also fails
+ * open. Both are needed for the rule to behave the same from either
+ * directory; fixing one alone changes nothing.
+ */
+const zonePath = (rel) => new URL(rel, import.meta.url).pathname;
+
+/**
+ * Every feature directory under `src/features/`. **This list is the whole
+ * change when a feature is added** — the pairwise `import/no-restricted-paths`
+ * zones below are generated from it.
+ *
+ * It used to be 62 hand-written zone objects, which drifted badly: by the
+ * time this was generated, `album`, `gazette`, `gear`, `history` and
+ * `settings` had no zones at all, so the cross-feature import rule that
+ * CLAUDE.md documents wasn't actually enforced for any feature added after
+ * `club-feedback`. Generating the pairs is what makes "add a feature, get
+ * the boundary" true rather than aspirational.
+ */
+const FEATURES = [
+  "album",
+  "announcements",
+  "audit",
+  "auth",
+  "club-feedback",
+  "feedback",
+  "gazette",
+  "gear",
+  "history",
+  "landing",
+  "members",
+  "settings",
+  "volunteer",
+  "waivers",
+];
+
+/**
+ * The surfaces a feature publishes to its siblings, keyed by the feature
+ * being imported *from*. Everything else under that feature stays private.
+ *
+ * Only two features have one, and both are foundational rather than
+ * convenient:
+ *
+ *   - `auth` answers "who is the user and what may they do". Every feature
+ *     legitimately asks that; the sign-in UI, magic-link and webauthn
+ *     internals behind it stay private. `guards.ts` is included because
+ *     route guards compose at the feature level.
+ *   - `settings` answers "what is this site configured to show" —
+ *     `publicFlagsQueryOptions` (page kill switches) and
+ *     `publicSiteContactQueryOptions` (club email, socials). Four features
+ *     already read it, and a nav entry that can't see a page flag renders
+ *     a link that 404s. Only `api/queries.ts` is public; the settings
+ *     registry, repo, and admin UI are not.
+ *
+ * Adding a third entry here is a signal to consider hoisting that surface
+ * out of `src/features/` entirely, the way `use-image-crop` went to
+ * `src/hooks/` and the curated icon registry went to `src/components/`.
+ */
+const FEATURE_PUBLIC_API = {
+  auth: ["./api/use-auth.ts", "./api/view-mode.tsx", "./guards.ts"],
+  settings: ["./api/queries.ts"],
+};
+
+/**
+ * One-off carve-outs the blanket public API doesn't cover, keyed
+ * `"<target> <- <from>"` — i.e. "<target> may additionally import these
+ * paths from <from>". Each one is a deliberate, documented crack in the
+ * wall, not a convenience.
+ */
+const ZONE_EXCEPTIONS = {
+  // `requireCurrentWaiver` composes auth state with waiver state, so
+  // features/auth's guards.ts reads the waiver query options. The server-fn
+  // shell is deliberately NOT listed: `import/no-restricted-paths` can't
+  // tell `import type` from a value import, so allowlisting it would
+  // silently permit value-imports of runtime exports. Types ride along
+  // through api/queries.ts re-exports instead.
+  "auth <- waivers": ["./api/queries.ts"],
+  // The role-update hook invalidates the landing-content query cache when a
+  // role's displayName / isOfficer changes — those surface on the public
+  // home page. Carving out the key constant beats hand-rolling a brittle
+  // string literal in features/members.
+  "members <- landing": ["./api/query-keys.ts"],
+};
+
+/**
+ * Features don't import features. Compose at the route level.
+ *
+ * Generated as every ordered pair, so a new entry in FEATURES is
+ * immediately fenced in both directions with no further edits.
+ */
+const featureZones = FEATURES.flatMap((target) =>
+  FEATURES.filter((from) => from !== target).map((from) => {
+    // A named exception replaces the public API rather than extending it:
+    // the two that exist are for features with no public API of their own.
+    const except =
+      ZONE_EXCEPTIONS[`${target} <- ${from}`] ?? FEATURE_PUBLIC_API[from];
+    return {
+      target: zonePath(`src/features/${target}`),
+      from: zonePath(`src/features/${from}`),
+      // `except` entries stay relative — import-x resolves them against
+      // the zone's own `from`, not the cwd.
+      ...(except ? { except } : {}),
+    };
+  }),
+);
+
 export default [
   ...rootConfig,
   ...tanstackConfig,
@@ -60,12 +178,9 @@ export default [
     // Bulletproof React's unidirectional architecture, mechanically
     // enforced. Three rules:
     //   1. Features don't import other features. Compose at the route
-    //      level. The narrow exception is auth's public API
-    //      (api/use-auth, api/view-mode, guards.ts) — every feature
-    //      legitimately needs to ask "who is the user / what can they
-    //      do" and these surfaces are auth's contract for that. All
-    //      other features/auth/** internals — magic-link, webauthn,
-    //      sign-in UI, server-fns shells — stay private.
+    //      level. Generated from FEATURES / FEATURE_PUBLIC_API /
+    //      ZONE_EXCEPTIONS above — see those for the exceptions and
+    //      why each exists.
     //   2. Shared utilities can't reach into features. components/ui,
     //      lib, hooks, config are feature-blind primitives.
     //      components/layouts/ is intentionally NOT scoped here because
@@ -77,318 +192,45 @@ export default [
     // Settings: import-x's resolver follows tsconfig path aliases, so
     // `#/features/...` actually resolves to a path the zone matcher can
     // compare against. Without it, import-x just sees the literal
-    // alias string and the rule silently no-ops.
+    // alias string and the rule silently no-ops — which is a failure
+    // mode worth remembering, because it is indistinguishable from
+    // "the code is clean" in CI output.
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/**/*.test.{ts,tsx}", "src/**/__tests__/**"],
     settings: {
+      // Absolute, for the same reason the zone paths are: a
+      // cwd-relative "./tsconfig.json" resolves to <repo>/tsconfig.json
+      // under `pnpm exec eslint .`, the resolver then can't resolve
+      // `#/features/...`, and every zone silently stops matching.
       "import-x/resolver": {
-        typescript: { project: "./tsconfig.json" },
+        typescript: { project: zonePath("tsconfig.json") },
       },
       "import/resolver": {
-        typescript: { project: "./tsconfig.json" },
+        typescript: { project: zonePath("tsconfig.json") },
       },
     },
     rules: {
       "import/no-restricted-paths": [
         "error",
         {
-          // `except` paths are relative to the zone's `from` and carve
-          // out the foundational auth public API. Adding to this list
-          // is a flag to consider hoisting that surface to a truly
-          // shared location instead.
           zones: [
-            // 1. No cross-feature imports.
-            //    features/auth's public API (use-auth, view-mode,
-            //    guards) is exempted because it's the foundational
-            //    "who is the user" surface every feature needs.
-            //    features/waivers' public API (api/queries.ts) is
-            //    exempted only for features/auth, because the
-            //    `requireCurrentWaiver` route guard composes auth +
-            //    waiver state and lives in features/auth/guards.ts.
-            //    The server-fn shell is intentionally NOT on the
-            //    allowlist: `import/no-restricted-paths` can't tell
-            //    `import type` from value imports, so allowlisting it
-            //    would silently permit value-imports of runtime
-            //    exports. Types ride along through api/queries.ts
-            //    re-exports instead.
-            {
-              target: "./src/features/announcements",
-              from: "./src/features/auth",
-              except: [
-                "./api/use-auth.ts",
-                "./api/view-mode.tsx",
-                "./guards.ts",
-              ],
-            },
-            {
-              target: "./src/features/announcements",
-              from: "./src/features/members",
-            },
-            {
-              target: "./src/features/announcements",
-              from: "./src/features/waivers",
-            },
-            {
-              target: "./src/features/auth",
-              from: "./src/features/announcements",
-            },
-            {
-              target: "./src/features/auth",
-              from: "./src/features/members",
-            },
-            {
-              target: "./src/features/auth",
-              from: "./src/features/waivers",
-              except: ["./api/queries.ts"],
-            },
-            {
-              target: "./src/features/members",
-              from: "./src/features/auth",
-              except: [
-                "./api/use-auth.ts",
-                "./api/view-mode.tsx",
-                "./guards.ts",
-              ],
-            },
-            {
-              target: "./src/features/members",
-              from: "./src/features/announcements",
-            },
-            {
-              target: "./src/features/members",
-              from: "./src/features/waivers",
-            },
-            {
-              target: "./src/features/announcements",
-              from: "./src/features/feedback",
-            },
-            {
-              target: "./src/features/members",
-              from: "./src/features/feedback",
-            },
-            {
-              target: "./src/features/auth",
-              from: "./src/features/feedback",
-            },
-            {
-              target: "./src/features/feedback",
-              from: "./src/features/auth",
-              except: [
-                "./api/use-auth.ts",
-                "./api/view-mode.tsx",
-                "./guards.ts",
-              ],
-            },
-            {
-              target: "./src/features/feedback",
-              from: "./src/features/announcements",
-            },
-            {
-              target: "./src/features/feedback",
-              from: "./src/features/members",
-            },
-            // features/audit (audit-log viewer) is a fully-isolated
-            // admin-only feature: no other feature reads from it, and
-            // it doesn't depend on any other feature (the recorder
-            // it pairs with lives in src/server/audit/ — shared).
-            {
-              target: "./src/features/announcements",
-              from: "./src/features/audit",
-            },
-            {
-              target: "./src/features/auth",
-              from: "./src/features/audit",
-            },
-            {
-              target: "./src/features/feedback",
-              from: "./src/features/audit",
-            },
-            {
-              target: "./src/features/members",
-              from: "./src/features/audit",
-            },
-            {
-              target: "./src/features/waivers",
-              from: "./src/features/audit",
-            },
-            {
-              target: "./src/features/audit",
-              from: "./src/features/announcements",
-            },
-            {
-              target: "./src/features/audit",
-              from: "./src/features/auth",
-            },
-            {
-              target: "./src/features/audit",
-              from: "./src/features/feedback",
-            },
-            {
-              target: "./src/features/audit",
-              from: "./src/features/members",
-            },
-            {
-              target: "./src/features/audit",
-              from: "./src/features/waivers",
-            },
-            {
-              target: "./src/features/feedback",
-              from: "./src/features/waivers",
-            },
-            {
-              target: "./src/features/waivers",
-              from: "./src/features/announcements",
-            },
-            {
-              target: "./src/features/waivers",
-              from: "./src/features/auth",
-            },
-            {
-              target: "./src/features/waivers",
-              from: "./src/features/feedback",
-            },
-            {
-              target: "./src/features/waivers",
-              from: "./src/features/members",
-            },
-            // features/landing (homepage CMS) is fully isolated from
-            // every other feature except for read-access to auth's
-            // public API (the inline `<EditAffordance>` admin widget
-            // gates on `useAuth()`).
-            {
-              target: "./src/features/announcements",
-              from: "./src/features/landing",
-            },
-            {
-              target: "./src/features/audit",
-              from: "./src/features/landing",
-            },
-            {
-              target: "./src/features/auth",
-              from: "./src/features/landing",
-            },
-            {
-              target: "./src/features/feedback",
-              from: "./src/features/landing",
-            },
-            {
-              target: "./src/features/members",
-              from: "./src/features/landing",
-              // The role-update hook invalidates the landing-content
-              // query cache when a role's displayName / isOfficer
-              // changes — those fields surface on the public home page.
-              // Carve out the query-key constant so the hook doesn't
-              // hand-roll a brittle string literal.
-              except: ["./api/query-keys.ts"],
-            },
-            {
-              target: "./src/features/waivers",
-              from: "./src/features/landing",
-            },
-            {
-              target: "./src/features/landing",
-              from: "./src/features/announcements",
-            },
-            {
-              target: "./src/features/landing",
-              from: "./src/features/audit",
-            },
-            {
-              target: "./src/features/landing",
-              from: "./src/features/auth",
-              except: [
-                "./api/use-auth.ts",
-                "./api/view-mode.tsx",
-                "./guards.ts",
-              ],
-            },
-            {
-              target: "./src/features/landing",
-              from: "./src/features/feedback",
-            },
-            {
-              target: "./src/features/landing",
-              from: "./src/features/members",
-            },
-            {
-              target: "./src/features/landing",
-              from: "./src/features/waivers",
-            },
-            // features/club-feedback (governance feedback) is fully
-            // isolated from every other feature except for read access
-            // to auth's public API (the standard exception). It pairs
-            // with features/feedback but they intentionally do NOT
-            // depend on each other — the shared tab bar lives in
-            // src/components/layouts so neither feature has to.
-            {
-              target: "./src/features/announcements",
-              from: "./src/features/club-feedback",
-            },
-            {
-              target: "./src/features/audit",
-              from: "./src/features/club-feedback",
-            },
-            {
-              target: "./src/features/auth",
-              from: "./src/features/club-feedback",
-            },
-            {
-              target: "./src/features/feedback",
-              from: "./src/features/club-feedback",
-            },
-            {
-              target: "./src/features/landing",
-              from: "./src/features/club-feedback",
-            },
-            {
-              target: "./src/features/members",
-              from: "./src/features/club-feedback",
-            },
-            {
-              target: "./src/features/waivers",
-              from: "./src/features/club-feedback",
-            },
-            {
-              target: "./src/features/club-feedback",
-              from: "./src/features/announcements",
-            },
-            {
-              target: "./src/features/club-feedback",
-              from: "./src/features/audit",
-            },
-            {
-              target: "./src/features/club-feedback",
-              from: "./src/features/auth",
-              except: [
-                "./api/use-auth.ts",
-                "./api/view-mode.tsx",
-                "./guards.ts",
-              ],
-            },
-            {
-              target: "./src/features/club-feedback",
-              from: "./src/features/feedback",
-            },
-            {
-              target: "./src/features/club-feedback",
-              from: "./src/features/landing",
-            },
-            {
-              target: "./src/features/club-feedback",
-              from: "./src/features/members",
-            },
-            {
-              target: "./src/features/club-feedback",
-              from: "./src/features/waivers",
-            },
+            // 1. No cross-feature imports — see FEATURES,
+            //    FEATURE_PUBLIC_API and ZONE_EXCEPTIONS above.
+            ...featureZones,
             // 2. Shared can't import features
-            { target: "./src/components/ui", from: "./src/features" },
-            { target: "./src/components/profile", from: "./src/features" },
-            { target: "./src/lib", from: "./src/features" },
-            { target: "./src/hooks", from: "./src/features" },
-            { target: "./src/config", from: "./src/features" },
+            {
+              target: zonePath("src/components/ui"),
+              from: zonePath("src/features"),
+            },
+            {
+              target: zonePath("src/components/profile"),
+              from: zonePath("src/features"),
+            },
+            { target: zonePath("src/lib"), from: zonePath("src/features") },
+            { target: zonePath("src/hooks"), from: zonePath("src/features") },
+            { target: zonePath("src/config"), from: zonePath("src/features") },
             // 3. Features can't import routes
-            { target: "./src/features", from: "./src/routes" },
+            { target: zonePath("src/features"), from: zonePath("src/routes") },
           ],
         },
       ],

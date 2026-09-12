@@ -1,5 +1,13 @@
 /**
- * Headless image-crop logic shared by editors that upload landing images.
+ * Headless image-crop logic shared by every editor that uploads a
+ * cropped image — the landing CMS (hero slides, activities, about,
+ * meeting info) and the Album's photo form.
+ *
+ * It lived in features/landing until the import-boundary zones were
+ * generated rather than hand-enumerated, which surfaced that
+ * features/album had been reaching across for it. The hook is
+ * entirely feature-blind, so src/hooks/ is its real home.
+ *
  * The hook owns:
  *   - the hidden file input + the working object URL
  *   - the crop selection (state + handlers for ReactCrop)

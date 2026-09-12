@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WaiverRouteImport } from './routes/waiver'
+import { Route as VolunteerRouteImport } from './routes/volunteer'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SignInRouteImport } from './routes/sign-in'
@@ -82,6 +83,11 @@ import { Route as ApiAccountExportRouteImport } from './routes/api/account.expor
 const WaiverRoute = WaiverRouteImport.update({
   id: '/waiver',
   path: '/waiver',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VolunteerRoute = VolunteerRouteImport.update({
+  id: '/volunteer',
+  path: '/volunteer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -452,6 +458,7 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
@@ -516,6 +523,7 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/feedback': typeof FeedbackIndexRoute
@@ -583,6 +591,7 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
@@ -656,6 +665,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/terms'
     | '/verify-email'
+    | '/volunteer'
     | '/waiver'
     | '/auth/callback'
     | '/gazette/$publicId'
@@ -720,6 +730,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/terms'
     | '/verify-email'
+    | '/volunteer'
     | '/waiver'
     | '/auth/callback'
     | '/feedback'
@@ -786,6 +797,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/terms'
     | '/verify-email'
+    | '/volunteer'
     | '/waiver'
     | '/auth/callback'
     | '/feedback/_tabs'
@@ -858,6 +870,7 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  VolunteerRoute: typeof VolunteerRoute
   WaiverRoute: typeof WaiverRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
@@ -878,6 +891,13 @@ declare module '@tanstack/react-router' {
       path: '/waiver'
       fullPath: '/waiver'
       preLoaderRoute: typeof WaiverRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/volunteer': {
+      id: '/volunteer'
+      path: '/volunteer'
+      fullPath: '/volunteer'
+      preLoaderRoute: typeof VolunteerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/verify-email': {
@@ -1529,6 +1549,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  VolunteerRoute: VolunteerRoute,
   WaiverRoute: WaiverRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   RegisterPendingRoute: RegisterPendingRoute,

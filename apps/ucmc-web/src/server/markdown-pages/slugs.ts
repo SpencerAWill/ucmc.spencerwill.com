@@ -22,6 +22,7 @@ export const MARKDOWN_PAGE_SLUGS = [
   "scholarships",
   "gear_cave",
   "resources",
+  "volunteer",
 ] as const;
 export type MarkdownPageSlug = (typeof MARKDOWN_PAGE_SLUGS)[number];
 
@@ -52,6 +53,10 @@ export const MARKDOWN_PAGE_PERMISSIONS: Record<
   resources: {
     view: "public_resources:view",
     manage: "public_resources:manage",
+  },
+  volunteer: {
+    view: "public_volunteer:view",
+    manage: "public_volunteer:manage",
   },
 };
 
