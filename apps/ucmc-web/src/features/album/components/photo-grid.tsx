@@ -10,17 +10,28 @@ import {
 import { PhotoCard } from "#/features/album/components/photo-card";
 import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
 
-const ALL_VALUE = "__all__";
+/**
+ * Sentinel for "no filter". Exported because /album maps it to an
+ * absent `?tag=` search param — a Radix Select can't hold an empty
+ * string as an item value, so the sentinel has to be shared rather
+ * than re-spelled at the call site.
+ */
+export const ALL_VALUE = "__all__";
 
 /**
  * Album grid + filter surface. Server returns photos
  * newest-first; this component layers two client-side filters on
  * top: year (from `takenAt`) and tag.
  *
- * Filters live in component state, not URL search params, because
- * the lightbox already uses `?photo=$publicId` and we don't want to
- * juggle three search params for an MVP. If officers ask for
- * shareable filtered views, that's a small follow-up.
+ * The **tag** filter is URL-driven (`?tag=`), so a filtered view is
+ * shareable and a link from elsewhere in the site lands on it — the
+ * service record on /volunteer points at an outing's photos that way.
+ * It's a controlled prop rather than seeded local state on purpose:
+ * seeding only reads the URL at mount, so navigating from /album to
+ * /album?tag=X leaves the already-mounted grid unfiltered.
+ *
+ * The **year** filter stays in component state. Nothing links to a
+ * year, and two search params to juggle is worse than one.
  *
  * Manage affordances (pencil / trash on each tile) are gated by the
  * caller passing `canManage`; the callbacks bubble up to the parent
@@ -29,12 +40,17 @@ const ALL_VALUE = "__all__";
 export function PhotoGrid({
   photos,
   canManage = false,
+  selectedTag = ALL_VALUE,
+  onTagChange,
   onSelect,
   onEditPhoto,
   onDeletePhoto,
 }: {
   photos: AlbumPhotoSummary[];
   canManage?: boolean;
+  /** Current `?tag=` value, or ALL_VALUE for no tag filter. */
+  selectedTag?: string;
+  onTagChange: (next: string) => void;
   onSelect: (photo: AlbumPhotoSummary) => void;
   onEditPhoto?: (photo: AlbumPhotoSummary) => void;
   onDeletePhoto?: (photo: AlbumPhotoSummary) => void;
@@ -56,7 +72,6 @@ export function PhotoGrid({
   ).sort((a, b) => a.localeCompare(b));
 
   const [selectedYear, setSelectedYear] = useState<string>(ALL_VALUE);
-  const [selectedTag, setSelectedTag] = useState<string>(ALL_VALUE);
 
   if (photos.length === 0) {
     return (
@@ -111,7 +126,7 @@ export function PhotoGrid({
           >
             Tag
           </label>
-          <Select value={selectedTag} onValueChange={setSelectedTag}>
+          <Select value={selectedTag} onValueChange={onTagChange}>
             <SelectTrigger id="album-tag" className="w-[10rem]">
               <SelectValue />
             </SelectTrigger>

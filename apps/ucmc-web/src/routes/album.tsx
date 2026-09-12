@@ -24,19 +24,24 @@ import { albumListQueryOptions } from "#/features/album/api/queries";
 import { useDeleteAlbumPhoto } from "#/features/album/api/use-album-mutations";
 import { PhotoFormDialog } from "#/features/album/components/photo-form-dialog";
 import type { PhotoFormSeed } from "#/features/album/components/photo-form-dialog";
-import { PhotoGrid } from "#/features/album/components/photo-grid";
+import { ALL_VALUE, PhotoGrid } from "#/features/album/components/photo-grid";
 import { PhotoLightbox } from "#/features/album/components/photo-lightbox";
 import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
 
 /**
- * Search params for /album. Only `photo` lives in the URL — the
- * lightbox is opened when this is set to a known publicId, so a
- * shared `?photo=abc` link reliably opens the lightbox at that
- * photo on first paint. Filter state (year / tag) is kept in
- * component-local `useState` inside PhotoGrid.
+ * Search params for /album.
+ *
+ * `photo` opens the lightbox when set to a known publicId, so a shared
+ * `?photo=abc` link reliably opens at that photo on first paint.
+ *
+ * `tag` filters the grid, so a filtered view is shareable and other
+ * pages can link into it — /volunteer's service record points at an
+ * outing's photos this way. The year filter stays component-local
+ * inside PhotoGrid; nothing links to a year.
  */
 const albumSearchSchema = z.object({
   photo: z.string().optional(),
+  tag: z.string().optional(),
 });
 
 /**
@@ -69,7 +74,7 @@ function AlbumPage() {
   const { data } = useSuspenseQuery(albumListQueryOptions());
   const { hasPermission } = useAuth();
   const canManage = hasPermission("public_album:manage");
-  const { photo: activePublicId } = Route.useSearch();
+  const { photo: activePublicId, tag: activeTag } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
   const [formSeed, setFormSeed] = useState<PhotoFormSeed | null>(null);
@@ -88,6 +93,20 @@ function AlbumPage() {
     void navigate({
       search: (prev) => ({ ...prev, photo: undefined }),
       replace: false,
+    });
+  }
+  /**
+   * Drop the param entirely for "all tags" rather than writing
+   * `?tag=__all__`, so an unfiltered grid has a clean URL and the
+   * sentinel never leaks into a shared link.
+   */
+  function changeTagFilter(next: string) {
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        tag: next === ALL_VALUE ? undefined : next,
+      }),
+      replace: true,
     });
   }
   function changeLightboxPhoto(publicId: string) {
@@ -144,6 +163,8 @@ function AlbumPage() {
         <PhotoGrid
           photos={data.photos}
           canManage={canManage}
+          selectedTag={activeTag ?? ALL_VALUE}
+          onTagChange={changeTagFilter}
           onSelect={openLightbox}
           onEditPhoto={(photo) => setFormSeed({ mode: "edit", photo })}
           onDeletePhoto={(photo) => setDeletingPhoto(photo)}
