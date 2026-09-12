@@ -140,6 +140,7 @@ describe("<ServiceRecord />", () => {
   it("links an outing carrying an album tag to the filtered Album", () => {
     render(
       <ServiceRecord
+        canLinkToAlbum
         outings={[
           outing({
             startsAtMs: at("2026-05-01T12:00:00Z"),
@@ -154,9 +155,29 @@ describe("<ServiceRecord />", () => {
     );
   });
 
+  it("hides the photos link when the viewer can't reach the Album", () => {
+    // /album sits behind `public_album:view` AND the `pages.album` kill
+    // switch. A tag alone isn't enough to justify the link — showing it
+    // would send an anonymous visitor on a public page to a notFound.
+    render(
+      <ServiceRecord
+        outings={[
+          outing({
+            startsAtMs: at("2026-05-01T12:00:00Z"),
+            albumTag: "Trail Day 2026",
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.queryByRole("link", { name: /photos/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("offers no photos link when the outing has no album tag", () => {
     render(
       <ServiceRecord
+        canLinkToAlbum
         outings={[outing({ startsAtMs: at("2026-05-01T12:00:00Z") })]}
       />,
     );

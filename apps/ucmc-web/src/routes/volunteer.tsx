@@ -20,9 +20,13 @@ import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { pageHeroQueryOptions } from "#/features/landing/api/queries";
 import { PageHero } from "#/features/landing/components/page-hero";
-import { publicSiteContactQueryOptions } from "#/features/settings/api/queries";
+import {
+  publicFlagsQueryOptions,
+  publicSiteContactQueryOptions,
+} from "#/features/settings/api/queries";
 import { requirePageEnabled } from "#/features/settings/api/page-guards";
 import { volunteerContentQueryOptions } from "#/features/volunteer/api/queries";
+import { markdownPageQueryOptions } from "#/server/markdown-pages/queries";
 import { useDeleteEvent } from "#/features/volunteer/api/use-event-mutations";
 import { useDeleteOpportunity } from "#/features/volunteer/api/use-opportunity-mutations";
 import { OutingFormDialog } from "#/features/volunteer/components/outing-form-dialog";
@@ -70,6 +74,9 @@ export const Route = createFileRoute("/volunteer")({
     // shows registry defaults and swaps once the query lands.
     await Promise.all([
       context.queryClient.ensureQueryData(volunteerContentQueryOptions()),
+      context.queryClient.ensureQueryData(
+        markdownPageQueryOptions("volunteer"),
+      ),
       context.queryClient.ensureQueryData(pageHeroQueryOptions("volunteer")),
     ]);
   },
@@ -78,10 +85,25 @@ export const Route = createFileRoute("/volunteer")({
 
 function VolunteerPage() {
   const { data } = useSuspenseQuery(volunteerContentQueryOptions());
+  // The narrative is its own cache entry, not part of the bundle above:
+  // `useUpdateMarkdownPage` invalidates `["markdown-page", slug]` only, so
+  // a copy in the bundle would still render pre-save text after a save —
+  // and would then seed the sheet's next edit, overwriting it.
+  const { data: narrative } = useSuspenseQuery(
+    markdownPageQueryOptions("volunteer"),
+  );
   const contactOptions = publicSiteContactQueryOptions();
   const { data: contact } = useQuery(contactOptions);
   const { hasPermission } = useAuth();
   const canManage = hasPermission("public_volunteer:manage");
+  // The archive's per-outing "Photos" link targets /album, which is
+  // behind both its own permission and its kill switch. Gate the link on
+  // the flag of the page it actually navigates to, or a tagged row on a
+  // public page sends visitors to a notFound.
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  const canLinkToAlbum =
+    hasPermission("public_album:view") && flags.pages.album;
 
   const [editNarrativeOpen, setEditNarrativeOpen] = useState(false);
   const [programSeed, setProgramSeed] = useState<ProgramFormSeed | null>(null);
@@ -151,8 +173,8 @@ function VolunteerPage() {
           </div>
         ) : null}
 
-        {data.narrativeMarkdown.length > 0 ? (
-          <MarkdownContent>{data.narrativeMarkdown}</MarkdownContent>
+        {narrative.markdown.length > 0 ? (
+          <MarkdownContent>{narrative.markdown}</MarkdownContent>
         ) : null}
 
         {canManage ? (
@@ -162,7 +184,7 @@ function VolunteerPage() {
             description="Why the club volunteers and what a day out looks like. Renders as markdown — headings (##), bold, italic, links, and lists are all supported."
             open={editNarrativeOpen}
             onOpenChange={setEditNarrativeOpen}
-            initialMarkdown={data.narrativeMarkdown}
+            initialMarkdown={narrative.markdown}
             fieldLabel="Introduction"
             placeholder="Why we volunteer…"
           />
@@ -224,6 +246,7 @@ function VolunteerPage() {
           </p>
           <ServiceRecord
             outings={data.past}
+            canLinkToAlbum={canLinkToAlbum}
             canManage={canManage}
             onEdit={(outing) => setOutingSeed({ mode: "edit", outing })}
             onDelete={setDeletingOuting}

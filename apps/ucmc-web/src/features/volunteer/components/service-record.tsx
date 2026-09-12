@@ -16,14 +16,28 @@ import type { VolunteerEventEntry } from "#/features/volunteer/server/volunteer-
  * This is the band an outside organization reads before deciding
  * whether to ask — "have these people actually turned up before" — so
  * it leads with the totals rather than burying them under the list.
+ *
+ * The per-outing "Photos" link is gated on `canLinkToAlbum`, not merely
+ * on the row carrying an `albumTag`. /album is behind both
+ * `public_album:view` and the `pages.album` kill switch, so a link shown
+ * without checking those lands an anonymous visitor on a notFound — the
+ * exact failure the "gate a nav entry on the flag of the page it
+ * targets" rule exists to prevent.
  */
 export function ServiceRecord({
   outings,
+  canLinkToAlbum = false,
   canManage = false,
   onEdit,
   onDelete,
 }: {
   outings: VolunteerEventEntry[];
+  /**
+   * Whether the viewer can actually reach /album. Passed in rather than
+   * read here so the component stays query-free, the same arrangement
+   * `clubEmail` uses on the upcoming band.
+   */
+  canLinkToAlbum?: boolean;
   canManage?: boolean;
   onEdit?: (outing: VolunteerEventEntry) => void;
   onDelete?: (outing: VolunteerEventEntry) => void;
@@ -82,7 +96,7 @@ export function ServiceRecord({
                   </p>
                 </div>
                 <ContributionSummary outing={outing} />
-                {outing.albumTag ? (
+                {outing.albumTag && canLinkToAlbum ? (
                   <Button asChild variant="ghost" size="sm" className="h-7">
                     <Link to="/album" search={{ tag: outing.albumTag }}>
                       <Images className="size-3.5" />

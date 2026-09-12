@@ -6,6 +6,14 @@
  * `public_volunteer:manage` here at the action layer and records one
  * audit event.
  *
+ * The narrative markdown is deliberately NOT part of this bundle. It is
+ * read through `markdownPageQueryOptions("volunteer")` like every other
+ * markdown-backed public page, because `useUpdateMarkdownPage`
+ * invalidates `["markdown-page", slug]` and nothing else — a copy inside
+ * this bundle would still be showing pre-save text after an officer
+ * saves, and `EditMarkdownSheet` would then seed its next edit from that
+ * stale copy and silently overwrite the save.
+ *
  * The read resolves "now" exactly once and hands the same day boundary
  * to both event queries, so the upcoming and past lists are guaranteed
  * to partition the table — computing the bound twice could drop an
@@ -34,7 +42,6 @@ import {
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { getDb, schema } from "#/server/db";
-import { readMarkdownPage } from "#/server/markdown-pages/markdown-pages-repo.server";
 
 export interface VolunteerOpportunityEntry {
   id: string;
@@ -60,7 +67,6 @@ export interface VolunteerEventEntry {
 }
 
 export interface VolunteerContent {
-  narrativeMarkdown: string;
   opportunities: VolunteerOpportunityEntry[];
   upcoming: VolunteerEventEntry[];
   past: VolunteerEventEntry[];
@@ -89,14 +95,12 @@ export async function getVolunteerContentAction(
   now: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<VolunteerContent> {
   const dayStart = startOfClubDay(now);
-  const [narrativeMarkdown, opportunities, upcoming, past] = await Promise.all([
-    readMarkdownPage("volunteer"),
+  const [opportunities, upcoming, past] = await Promise.all([
     listOpportunities(),
     listUpcomingEvents(dayStart),
     listPastEvents(dayStart),
   ]);
   return {
-    narrativeMarkdown,
     opportunities: opportunities.map((o) => ({
       id: o.id,
       icon: o.icon,
