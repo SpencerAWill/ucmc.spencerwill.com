@@ -25,7 +25,7 @@
       "onAutoForward": "silent"
     }
   },
-  "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile && pnpm --filter ucmc-web exec playwright install chromium",
+  "postCreateCommand": "./.devcontainer/configure-git.sh && corepack enable && pnpm install --frozen-lockfile && pnpm --filter ucmc-web exec playwright install chromium",
   "customizations": {
     "vscode": {
       "settings": {
@@ -42,7 +42,6 @@
         "editorconfig.editorconfig",
         "bradlc.vscode-tailwindcss",
         "github.vscode-github-actions",
-        "github.vscode-pull-request-github",
         "vitest.explorer",
         "yoavbls.pretty-ts-errors",
         "usernamehw.errorlens",

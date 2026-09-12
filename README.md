@@ -10,7 +10,7 @@ This is a polyglot pnpm monorepo with the following workspace layout:
   - `apps/ucmc-web/` — UCMC web app (TanStack Start on Cloudflare Workers)
 - `libs/` — Shared libraries
 - `infra/` — Pulumi infrastructure-as-code
-- `.devcontainer/` — Dev container configuration
+- `.devcontainer/` — Dev container configuration (`configure-git.sh` runs on create; see CLAUDE.md on git index-lock contention on the virtiofs bind mount)
 
 ## Development Setup
 
