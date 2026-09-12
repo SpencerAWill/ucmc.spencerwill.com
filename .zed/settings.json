@@ -1,0 +1,62 @@
+// Zed settings for this repo, the counterpart to .vscode/settings.json.
+//
+// Both are committed because the toolchain has to behave the same whichever
+// editor is attached — and because the two do NOT overlap: several of the
+// mitigations in .vscode/settings.json are VS Code-specific and have no
+// effect here, and `file_scan_exclusions` below is their Zed equivalent.
+//
+// Indentation, line endings, final newlines and trailing whitespace are
+// governed by .editorconfig, which Zed reads natively with no setting
+// required — so none of that is repeated here.
+{
+  "format_on_save": "on",
+
+  // Prettier owns formatting and ESLint owns lint + autofix, matching what
+  // CI runs (`pnpm --filter ucmc-web lint`) and what lint-staged runs on
+  // commit. Zed ships Prettier, and picks up .prettierrc from the workspace
+  // root automatically.
+  "formatter": "prettier",
+
+  // The ESLint config is flat (eslint.config.js, ESLint v10). Fixable
+  // problems are resolved on save so the editor and the pre-commit hook
+  // don't disagree about what the file should look like.
+  "code_actions_on_format": {
+    "source.fixAll.eslint": true
+  },
+
+  "languages": {
+    "TypeScript": { "formatter": "prettier" },
+    "TSX": { "formatter": "prettier" },
+    "JavaScript": { "formatter": "prettier" },
+    "JSON": { "formatter": "prettier" },
+    "JSONC": { "formatter": "prettier" },
+    "CSS": { "formatter": "prettier" },
+    // Prettier reflows Markdown in ways that fight the prose in CLAUDE.md
+    // and the READMEs, and `prettier --check .` in CI covers them anyway.
+    "Markdown": { "format_on_save": "off" }
+  },
+
+  // Zed's equivalent of VS Code's `files.watcherExclude`, and load-bearing
+  // for the same reason: /workspace is a virtiofs bind mount (~20x slower
+  // per file operation than container-native storage), and scanning
+  // ~73,000 files across node_modules and the build outputs turns every
+  // install / build / test run into a file-event storm. That storm drives
+  // the editor's git integration to refresh, each refresh transiently takes
+  // .git/index.lock, and any concurrent `git add` / `git commit` has to win
+  // that race — losing it is the recurring
+  // "Unable to create '.git/index.lock': File exists", which has twice left
+  // a truncated index. See the matching comment in .vscode/settings.json.
+  //
+  // `**/.git` is excluded deliberately: there is nothing in there a human
+  // opens by hand, and it is the directory under contention.
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/node_modules",
+    "**/dist",
+    "**/.wrangler",
+    "**/test-results",
+    "**/playwright-report",
+    "**/.DS_Store",
+    "**/routeTree.gen.ts"
+  ]
+}

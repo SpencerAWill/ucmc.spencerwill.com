@@ -21,7 +21,29 @@
   "files.exclude": {
     "**/node_modules": true
   },
+  // Anything here is NOT watched for changes. This list is load-bearing
+  // for git, not just for editor noise: /workspace is a virtiofs bind
+  // mount (~20x slower than container-native storage), and without these
+  // exclusions VS Code watches ~73,000 files. Every `pnpm install`,
+  // build, or test run then fires a file-event storm, each event nudges
+  // the Git extension to refresh, and every refresh transiently takes
+  // `.git/index.lock` — which any concurrent `git add` / `git commit` /
+  // lint-staged run has to race. Losing that race is the
+  // "Unable to create '.git/index.lock': File exists" failure, and
+  // lint-staged losing it mid-sequence can leave a truncated index.
+  //
+  // `files.exclude` hides paths from the explorer but does NOT stop the
+  // watcher — the two settings are independent, so node_modules needs to
+  // appear in both.
   "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/.wrangler/**": true,
+    "**/dist/**": true,
+    "**/test-results/**": true,
+    "**/playwright-report/**": true,
+    "**/.pnpm-store/**": true,
     "**/routeTree.gen.ts": true
   },
   "search.exclude": {

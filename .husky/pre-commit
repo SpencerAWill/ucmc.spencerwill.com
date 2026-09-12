@@ -1,1 +1,19 @@
-pnpm exec lint-staged
+# `--no-stash` is deliberate, not a convenience.
+#
+# lint-staged's default backup stash performs a sequence of index writes
+# (stash create, write-tree, checkout-index, apply) on every commit. On
+# this devcontainer's virtiofs bind mount each of those is ~20x slower
+# than container-native, and VS Code's Git extension takes
+# `.git/index.lock` several times a second, so the sequence has to win
+# that race repeatedly. When it loses partway through it aborts *after*
+# partially writing the index, leaving a truncated index that reports
+# every tracked file as deleted — observed twice, once landing in a
+# commit that removed 827 files.
+#
+# The trade-off: if a task fails, the working tree keeps whatever the
+# formatters already wrote instead of being reverted. That is recoverable
+# (fix and re-commit); a corrupted index mid-commit is not, and the
+# backup stash is the mechanism that corrupts it. `--hide-partially-staged`
+# stays ON (the default) — disabling that would let formatters stage
+# changes you deliberately left unstaged.
+pnpm exec lint-staged --no-stash

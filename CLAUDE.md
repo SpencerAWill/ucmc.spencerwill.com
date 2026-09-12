@@ -7,7 +7,16 @@ UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (pnpm@11.1
 - `apps/ucmc-web/` — TanStack Start + React 19 + Vite 8 + Tailwind v4 + shadcn, deployed to Cloudflare Workers via Wrangler
 - `infra/` — Pulumi (TypeScript, two stacks: `dev`, `prod`)
 - `libs/` — shared libraries
-- `.devcontainer/` — Debian-based devcontainer with Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit sidecar
+- `.devcontainer/` — Debian-based devcontainer with Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit sidecar. `initialize.sh` runs on the **host** from `initializeCommand` (pre-creates the `~/.config/gh` bind source so Docker can't invent it root-owned); `configure-git.sh` runs in the container from `postCreateCommand` (`safe.directory`, `gc.auto 0`, git identity + credential helper derived from `gh`)
+- **Editors**: Zed is the primary IDE (`.zed/settings.json`); VS Code Server also attaches (`.vscode/settings.json`). Both configs are committed and both are load-bearing — see the index-lock note below.
+
+**Git index-lock contention is a known property of this devcontainer, and three settings exist to contain it.** `/workspace` is a **virtiofs bind mount** — measured ~20× slower per file operation than container-native storage — and VS Code's Git extension transiently takes `.git/index.lock` several times a second (222 acquisitions in 75 idle seconds, when measured). Any index-writing command has to win that race. The mitigations, all load-bearing:
+
+1. **Editor scan/watch exclusions — in BOTH `.vscode/settings.json` (`files.watcherExclude`) and `.zed/settings.json` (`file_scan_exclusions`).** Without them the editor scans ~73,000 files (`node_modules`, `dist`, `.wrangler`, `test-results`), so every install/build/test run is a file-event storm that drives the git-refresh rate far above idle. **Both files are committed and neither is redundant** — different keys for different editors, and Zed is the primary IDE while VS Code Server also attaches in this container. In the VS Code file, note that `files.exclude` does **not** stop the watcher: the two settings are independent, so `node_modules` must appear in both.
+2. **`lint-staged --no-stash`** in `.husky/pre-commit` — the default backup stash is a multi-step index write, and losing the lock partway through leaves a **truncated index that reports every tracked file as deleted**. That has reached a commit (827 spurious deletions). Recovery is `git reset` (mixed — never `--hard`; the worktree is fine).
+3. **`gc.auto 0`** — stops a background repack firing mid-commit into the same locks. Set by `.devcontainer/configure-git.sh`, which also derives a git identity from `gh` — **not optional under Zed**, which has no equivalent of VS Code's `dev.containers.copyGitConfig`, so without it every commit aborts with "Author identity unknown".
+
+If you still hit `Unable to create '.git/index.lock'`, it is almost always transient: re-run. Only delete the lock file by hand once `pgrep -a git` shows no live process holding it. **The structural fix is to move the checkout off virtiofs into a named Docker volume** — tracked separately, not done here.
 
 ## Tooling
 
