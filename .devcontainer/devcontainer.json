@@ -25,6 +25,9 @@
       "onAutoForward": "silent"
     }
   },
+  // Runs on the HOST before the container exists — pre-creates the bind
+  // source for ~/.config/gh so Docker doesn't invent it root-owned.
+  "initializeCommand": [".devcontainer/initialize.sh"],
   "postCreateCommand": "./.devcontainer/configure-git.sh && corepack enable && pnpm install --frozen-lockfile && pnpm --filter ucmc-web exec playwright install chromium",
   "customizations": {
     "vscode": {
