@@ -16,9 +16,12 @@ STAGE="${1:?usage: lifecycle.sh <on-create|update-content|post-create|post-start
 HOME_DIR="${HOME:-/home/vscode}"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME_DIR/.claude}"
 HISTORY_DIR=/commandhistory
-PNPM_STORE="$HOME_DIR/.local/share/pnpm/store"
 PULUMI_DIR="$HOME_DIR/.pulumi"
 PLAYWRIGHT_DIR="$HOME_DIR/.cache/ms-playwright"
+# node_modules is a named volume (see docker-compose.yml). A fresh volume
+# mounts root-owned, and on-create runs before update-content's pnpm
+# install, so it must be claimed here or the install fails on permissions.
+NODE_MODULES=/workspace/node_modules
 
 log() { printf '\033[1;34m[%s]\033[0m %s\n' "$STAGE" "$*"; }
 
@@ -29,7 +32,7 @@ log() { printf '\033[1;34m[%s]\033[0m %s\n' "$STAGE" "$*"; }
 # `-O` is "owned by the current user", so an already-correct volume is skipped.
 claim_volumes() {
   local d
-  for d in "$CLAUDE_DIR" "$HISTORY_DIR" "$PNPM_STORE" "$PULUMI_DIR" "$PLAYWRIGHT_DIR"; do
+  for d in "$CLAUDE_DIR" "$HISTORY_DIR" "$NODE_MODULES" "$PULUMI_DIR" "$PLAYWRIGHT_DIR"; do
     [ -d "$d" ] || continue
     [ -O "$d" ] && continue
     log "claiming $d"

@@ -14,7 +14,15 @@ services:
       RESEND_API_KEY: "${RESEND_API_KEY:-}"
     volumes:
       - ..:/workspace:cached
-      - pnpm-store:/home/vscode/.local/share/pnpm/store
+      # node_modules on a named (container-native) volume rather than the
+      # virtiofs bind mount. Bulk metadata on the bind mount is ~90x slower
+      # (72k files: `find` is ~1.5s vs ~17ms), which taxes every install,
+      # tsc, vitest, and esbuild run. pnpm's store lives INSIDE this volume
+      # (`storeDir: node_modules/.store` in pnpm-workspace.yaml) so its
+      # hardlinks stay on one filesystem. Source stays bind-mounted, so it
+      # remains host-visible; node_modules does not. Adopted from the
+      # www.spencerwill.com devcontainer.
+      - node-modules:/workspace/node_modules
       - pulumi-config:/home/vscode/.pulumi
       # Bind-mount host's gh auth so the container inherits `gh auth login`
       # from the host. Requires the token to live in ~/.config/gh/hosts.yml
@@ -52,7 +60,7 @@ services:
       - mailpit-data:/data
 
 volumes:
-  pnpm-store:
+  node-modules:
   pulumi-config:
   claude-data:
   command-history:

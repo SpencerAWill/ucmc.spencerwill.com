@@ -2,6 +2,16 @@ packages:
   - "apps/ucmc-web"
   - "infra"
 
+# Keep pnpm's content-addressable store INSIDE node_modules so it shares a
+# filesystem with the packages it hardlinks into. node_modules is a
+# container-native named volume (see .devcontainer/docker-compose.yml), so
+# this puts both the store and the linked tree on fast storage while
+# preserving hardlinks. A store on a different filesystem would force pnpm
+# to COPY instead of hardlink — slower and ~2x the disk. Relative, so it
+# resolves to <workspace>/node_modules/.store. Must live here, not .npmrc:
+# pnpm 11 no longer reads pnpm settings from .npmrc.
+storeDir: node_modules/.store
+
 # Quarantine window for newly published versions — refuses to install
 # anything released in the last 7 days. The primary supply-chain
 # defense: catches publish-compromise incidents (e.g. the TanStack

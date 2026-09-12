@@ -10,10 +10,12 @@ ENV CLAUDE_CONFIG_DIR=/home/vscode/.claude \
     PATH=/home/vscode/.pulumi/bin:${PATH}
 
 # Pre-create volume mount points with correct ownership so Docker
-# initializes named volumes as vscode instead of root. (.config/gh is
-# a host bind-mount, not a named volume, so it's omitted here.)
+# initializes named volumes as vscode instead of root, plus PNPM_HOME.
+# (.config/gh is a host bind-mount, not a named volume, so it's omitted.)
+# node_modules is a named volume too, but it mounts at /workspace (a bind
+# mount) so it can't be pre-created here — lifecycle.sh claims it instead.
 RUN for dir in \
-      .local/share/pnpm/store \
+      .local/share/pnpm \
       .pulumi \
       .claude \
       .cache/ms-playwright \
