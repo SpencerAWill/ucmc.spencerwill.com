@@ -1,0 +1,14 @@
+ALLOW	Edit a normal route	{"tool_name":"Edit","tool_input":{"file_path":"/w/src/routes/trips.tsx"}}
+DENY	Edit the generated route tree	{"tool_name":"Edit","tool_input":{"file_path":"/w/src/routeTree.gen.ts"}}
+DENY	Write the generated route tree	{"tool_name":"Write","tool_input":{"file_path":"/w/src/routeTree.gen.ts"}}
+ALLOW	git diff on the generated file	{"tool_name":"Bash","tool_input":{"command":"git diff --exit-code apps/ucmc-web/src/routeTree.gen.ts"}}
+ALLOW	grep the generated file	{"tool_name":"Bash","tool_input":{"command":"grep -n trips apps/ucmc-web/src/routeTree.gen.ts"}}
+ALLOW	cat the generated file	{"tool_name":"Bash","tool_input":{"command":"cat apps/ucmc-web/src/routeTree.gen.ts"}}
+ALLOW	the build that legitimately writes it	{"tool_name":"Bash","tool_input":{"command":"pnpm --filter ucmc-web build"}}
+ALLOW	prose about the guard inside a heredoc	{"tool_name":"Bash","tool_input":{"command":"python3 - <<PY\ns = 'never sed -i the routeTree.gen.ts file'\nPY"}}
+DENY	shell redirect into the generated file	{"tool_name":"Bash","tool_input":{"command":"echo hi > apps/ucmc-web/src/routeTree.gen.ts"}}
+DENY	append redirect into the generated file	{"tool_name":"Bash","tool_input":{"command":"echo hi >> apps/ucmc-web/src/routeTree.gen.ts"}}
+DENY	in-place editor on the generated file	{"tool_name":"Bash","tool_input":{"command":"sed -i s/a/b/ apps/ucmc-web/src/routeTree.gen.ts"}}
+DENY	chained cd then in-place editor	{"tool_name":"Bash","tool_input":{"command":"cd apps && sed -i s/a/b/ ucmc-web/src/routeTree.gen.ts"}}
+DENY	tee into the generated file	{"tool_name":"Bash","tool_input":{"command":"cat x | tee apps/ucmc-web/src/routeTree.gen.ts"}}
+DENY	heredoc write to the generated file	{"tool_name":"Bash","tool_input":{"command":"cat > apps/ucmc-web/src/routeTree.gen.ts <<EOF\nx\nEOF"}}
