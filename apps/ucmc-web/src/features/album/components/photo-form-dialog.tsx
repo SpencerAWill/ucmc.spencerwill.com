@@ -22,7 +22,7 @@ import {
 } from "#/features/album/api/use-album-mutations";
 import { albumImageUrl } from "#/features/album/lib/image-url";
 import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
-import { useImageCrop } from "#/features/landing/lib/use-image-crop";
+import { useImageCrop } from "#/hooks/use-image-crop";
 import { toDateInputValue } from "#/lib/date-format";
 
 /**

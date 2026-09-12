@@ -17,7 +17,7 @@ import { useCreateHeroSlide } from "#/features/landing/api/use-create-hero-slide
 import { useUpdateHeroSlide } from "#/features/landing/api/use-update-hero-slide";
 import { landingImageUrlFor } from "#/features/landing/lib/image-url";
 import { noPasswordManagerProps } from "#/features/landing/lib/no-password-manager";
-import { useImageCrop } from "#/features/landing/lib/use-image-crop";
+import { useImageCrop } from "#/hooks/use-image-crop";
 import type { HeroSlideSummary } from "#/features/landing/server/landing-fns";
 import { LANDING_LIMITS } from "#/features/landing/server/landing-schemas";
 

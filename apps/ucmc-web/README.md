@@ -43,7 +43,7 @@ Bulletproof React–aligned. Three features under `src/features/`:
 - `members/` — registration approval queue, member directory, admin profile editing, RBAC, paper-waiver attestation queue.
 - `announcements/` — admin-authored announcements feed with read-tracking.
 
-Plus `landing/` for the editable public homepage. Shared/foundational code stays outside features: `server/auth/`, `server/profile/`, `server/r2/`, `server/kv/`, `server/db/`, `components/`, `lib/`, `hooks/`, `config/`. Routes (`src/routes/`) compose features but never the reverse — enforced mechanically by `import/no-restricted-paths` in `eslint.config.js`.
+Plus `landing/` for the editable public homepage. Shared/foundational code stays outside features: `server/auth/`, `server/profile/`, `server/r2/`, `server/kv/`, `server/db/`, `components/`, `lib/`, `hooks/`, `config/`. Routes (`src/routes/`) compose features but never the reverse — enforced mechanically by `import/no-restricted-paths` in `eslint.config.js`, whose cross-feature zones are generated from the `FEATURES` array there (adding a feature is one entry).
 
 ## Routes worth knowing
 

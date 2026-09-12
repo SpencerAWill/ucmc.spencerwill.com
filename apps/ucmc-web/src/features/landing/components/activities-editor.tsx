@@ -25,7 +25,7 @@ import { ActivityIcon } from "#/features/landing/components/activity-icon";
 import { IconPicker } from "#/features/landing/components/icon-picker";
 import { landingImageUrlFor } from "#/features/landing/lib/image-url";
 import { noPasswordManagerProps } from "#/features/landing/lib/no-password-manager";
-import { useImageCrop } from "#/features/landing/lib/use-image-crop";
+import { useImageCrop } from "#/hooks/use-image-crop";
 import type { ActivitySummary } from "#/features/landing/server/landing-fns";
 import { LANDING_LIMITS } from "#/features/landing/server/landing-schemas";
 import type { ActivityIcon as ActivityIconName } from "#/features/landing/server/landing-schemas";
