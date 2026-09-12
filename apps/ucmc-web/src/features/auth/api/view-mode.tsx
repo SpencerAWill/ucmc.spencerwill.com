@@ -22,8 +22,8 @@
  * you are *already* on. Switching to a narrower role while sitting on
  * `/settings` would leave the settings page fully rendered — the exact
  * symptom the guard change exists to fix, reached from a different
- * direction — and "Exit preview" could never rescue you off a
- * `notFound()` a preview had thrown.
+ * direction — and the header's "View as" button could never rescue you
+ * off a `notFound()` a preview had thrown.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";

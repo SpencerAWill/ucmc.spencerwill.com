@@ -27,16 +27,27 @@
 export interface AuthStubOptions {
   isApproved?: boolean;
   emulatedRole?: string | null;
+  /** "System admin, or holds more than one role" — gates the "View as" control. */
+  isElevated?: boolean;
+  isSystemAdmin?: boolean;
   principal?: unknown;
 }
 
 export function authStub(
   permissions: readonly string[],
-  { isApproved = true, emulatedRole = null, principal }: AuthStubOptions = {},
+  {
+    isApproved = true,
+    emulatedRole = null,
+    isElevated = false,
+    isSystemAdmin = false,
+    principal,
+  }: AuthStubOptions = {},
 ) {
   return {
     isApproved,
     emulatedRole,
+    isElevated,
+    isSystemAdmin,
     principal: principal ?? null,
     hasPermission: (name: string) => permissions.includes(name),
     hasAnyPermission: (names: readonly string[]) =>
