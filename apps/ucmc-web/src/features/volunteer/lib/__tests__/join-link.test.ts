@@ -46,6 +46,30 @@ describe("outingJoinHref", () => {
     );
   });
 
+  it.each([
+    "javascript:alert(1)",
+    "JavaScript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "vbscript:msgbox(1)",
+  ])("refuses to render %s as an href", (hostile) => {
+    // zod's `.url()` accepts every one of these, so the render-time
+    // check is what actually protects the page — and it must hold for
+    // rows written before the schema's allowlist shipped.
+    const result = outingJoinHref(
+      outing({ signupUrl: hostile }),
+      "club@example.com",
+    );
+    expect(result?.href).not.toContain("script");
+    expect(result?.external).toBe(false);
+    expect(result?.href.startsWith("mailto:")).toBe(true);
+  });
+
+  it("still refuses when there is no club email to fall back to", () => {
+    expect(
+      outingJoinHref(outing({ signupUrl: "javascript:alert(1)" }), null),
+    ).toBeNull();
+  });
+
   it("returns nothing when there is no link and no club email", () => {
     // Rendering an href="" would resolve as a same-origin reload, which
     // is worse than offering no button at all.

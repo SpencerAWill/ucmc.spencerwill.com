@@ -8,6 +8,14 @@ import { z } from "zod";
 
 import { CURATED_ICONS } from "#/components/curated-icon/icon-names";
 
+/**
+ * The only schemes an officer-supplied link may use. Anchored and
+ * case-insensitive: `JavaScript:` and ` javascript:` must not slip past
+ * (the value is `.trim()`ed before this runs, so leading whitespace is
+ * already gone, but the anchor is what makes that irrelevant).
+ */
+export const HTTP_SCHEME = /^https?:\/\//i;
+
 export const VOLUNTEER_LIMITS = {
   opportunityTitle: { min: 1, max: 40 },
   opportunityBlurb: { min: 1, max: 200 },
@@ -95,11 +103,24 @@ const eventFields = {
   startsAtMs: z.number().int(),
   endsAtMs: z.number().int().nullable().default(null),
   description: nullableTrimmed(VOLUNTEER_LIMITS.description.max),
-  // Validated as a URL so the join affordance can't render an href that
-  // resolves as a same-origin path. Empty string is coerced to null by
-  // the form, matching the blank-means-absent convention the social
-  // URL settings use.
-  signupUrl: z.string().trim().url().nullable().default(null),
+  // **`z.url()` alone is not enough here.** Zod accepts any parseable
+  // URL, scheme included — `javascript:alert(1)`, `data:text/html,…` and
+  // `vbscript:` all pass — and this value is rendered straight into an
+  // `<a href>` on a page anonymous visitors can see. Since
+  // `public_volunteer:manage` is seeded ungranted specifically so it can
+  // be delegated to a non-admin role, an unrestricted scheme is a stored
+  // XSS handed to whoever holds that delegation. The protocol allowlist
+  // is the fix; `outingJoinHref` re-checks at render time, because a
+  // schema can only guard writes made after it shipped.
+  signupUrl: z
+    .string()
+    .trim()
+    .url()
+    .refine((v) => HTTP_SCHEME.test(v), {
+      message: "Enter an http:// or https:// link",
+    })
+    .nullable()
+    .default(null),
   volunteersCount: z
     .number()
     .int()

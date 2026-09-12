@@ -1,3 +1,4 @@
+import { HTTP_SCHEME } from "#/features/volunteer/server/volunteer-schemas";
 import type { VolunteerEventEntry } from "#/features/volunteer/server/volunteer-fns";
 
 /**
@@ -18,7 +19,13 @@ export function outingJoinHref(
   event: VolunteerEventEntry,
   clubEmail: string | null | undefined,
 ): { href: string; external: boolean } | null {
-  if (event.signupUrl) {
+  // Re-check the scheme at render time rather than trusting the stored
+  // value. The schema's allowlist only guards writes made after it
+  // shipped; a row written before it — or by a direct SQL edit — would
+  // otherwise put `javascript:` into an `<a href>` on a page anonymous
+  // visitors can see. Falling through to the mailto is the right
+  // degradation: the outing stays joinable.
+  if (event.signupUrl && HTTP_SCHEME.test(event.signupUrl)) {
     return { href: event.signupUrl, external: true };
   }
   if (clubEmail && clubEmail.length > 0) {
