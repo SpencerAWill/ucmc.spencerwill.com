@@ -78,10 +78,7 @@ describe("permission catalog", () => {
       .select({ roleId: schema.rolePermissions.roleId })
       .from(schema.rolePermissions)
       .where(
-        eq(
-          schema.rolePermissions.permissionId,
-          "perm_public_volunteer_view",
-        ),
+        eq(schema.rolePermissions.permissionId, "perm_public_volunteer_view"),
       )
       .orderBy(asc(schema.rolePermissions.roleId));
     expect(rows.map((r) => r.roleId)).toEqual([
@@ -98,10 +95,7 @@ describe("permission catalog", () => {
       .select({ roleId: schema.rolePermissions.roleId })
       .from(schema.rolePermissions)
       .where(
-        eq(
-          schema.rolePermissions.permissionId,
-          "perm_public_volunteer_manage",
-        ),
+        eq(schema.rolePermissions.permissionId, "perm_public_volunteer_manage"),
       );
     expect(rows).toEqual([]);
   });
