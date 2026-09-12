@@ -718,6 +718,16 @@ export const auditAction = [
   "volunteer_event.created",
   "volunteer_event.updated",
   "volunteer_event.deleted",
+  // /sponsors manage affordances. Metadata carries { name } so the row
+  // stays informative after the sponsor it points at has been deleted,
+  // and `logoReplaced` on an update so an audit reader can tell a copy
+  // edit from a new mark going up.
+  "sponsor.created",
+  "sponsor.updated",
+  "sponsor.deleted",
+  // Bulk drag-reorder of the sponsor grid. One event per reorder with
+  // metadata { count }, same shape as `volunteer_opportunity.reordered`.
+  "sponsor.reordered",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -1295,6 +1305,8 @@ export const markdownPageSlug = [
   "gear_cave",
   "resources",
   "volunteer",
+  "sponsors",
+  "sponsors_pitch",
 ] as const;
 export type MarkdownPageSlug = (typeof markdownPageSlug)[number];
 
@@ -1541,3 +1553,72 @@ export const volunteerEvents = sqliteTable(
 );
 
 export type VolunteerEvent = typeof volunteerEvents.$inferSelect;
+
+/**
+ * One organization that sponsors UCMC (issue #185).
+ *
+ * A **flat, curated list** — no `since` / `until` columns and no
+ * active-vs-past split. Sponsorship here is a standing relationship
+ * with a handful of local businesses rather than a per-season contract,
+ * so a date-derived "past supporters" band would mostly be an empty
+ * heading. `sort_order` is the officer's curation order (drag-reorder
+ * on the page), and `public_id` is minted now so a future
+ * `/sponsors/$publicId` detail route or a past-sponsor band costs
+ * nothing later; nothing links to it yet.
+ *
+ * **`member_perk` is the one non-public column.** A sponsor's discount
+ * code or how-to-claim instructions are a membership benefit, so the
+ * read action strips the column outright for anyone without
+ * `public_sponsors:perks` — hiding it client-side would still ship it
+ * in the SSR payload of a page anonymous visitors can load. See
+ * `sponsor-actions.server.ts`.
+ *
+ * `logo_key` is nullable: a sponsor can be listed before anyone has
+ * chased down a usable copy of their mark, and the card falls back to
+ * the name set in type. `logo_width_px` / `logo_height_px` are the
+ * *stored* pixel dimensions of the contained WebP — the card renders it
+ * `object-contain` in a fixed box, so these exist to reserve the right
+ * intrinsic ratio and avoid a layout shift, not to size the box.
+ *
+ * There is deliberately no `logo_alt` column, unlike `album_photos`.
+ * The card always renders `name` as visible text beside the mark, so
+ * the image is decorative and takes `alt=""` — an alt of the sponsor's
+ * name would make a screen reader announce it twice.
+ */
+export const sponsors = sqliteTable(
+  "sponsors",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    name: text("name").notNull(),
+    // http(s) only. Validated on write by `sponsor-schemas.ts` and
+    // re-checked at render by `sponsorWebsiteHref()`, because a schema
+    // only guards writes made after it shipped.
+    websiteUrl: text("website_url"),
+    /** What the sponsor does for the club — public. */
+    blurb: text("blurb").notNull(),
+    /** Member-only: discount, code, how to claim. Stripped server-side. */
+    memberPerk: text("member_perk"),
+    logoKey: text("logo_key"),
+    logoWidthPx: integer("logo_width_px"),
+    logoHeightPx: integer("logo_height_px"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    // Snapshot of who added / last touched the row, SET NULL on delete
+    // so the row survives an officer's account removal.
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [index("sponsors_sort_idx").on(t.sortOrder)],
+);
+
+export type Sponsor = typeof sponsors.$inferSelect;

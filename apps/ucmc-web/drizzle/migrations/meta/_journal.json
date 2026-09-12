@@ -470,6 +470,13 @@
       "when": 1779477596943,
       "tag": "0066_volunteer_page",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1779477596944,
+      "tag": "0067_sponsors_page",
+      "breakpoints": true
     }
   ]
 }
