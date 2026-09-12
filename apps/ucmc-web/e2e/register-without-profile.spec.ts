@@ -1,14 +1,6 @@
-import { execSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
+import { seedUserWithoutProfile } from "./fixtures/db";
 import { waitForHydration } from "./fixtures/hydration";
 import { expect, test } from "./fixtures/mailpit";
-
-const WEB_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 
 /**
  * Regression: a returning user with a `users` row but no `profiles` row
@@ -29,37 +21,14 @@ test("returning user with no profile can reach /register/profile via magic link"
 }) => {
   const email = `e2e-noprofile-${Date.now()}@example.com`;
 
-  // Pre-create the half-registered state: user row exists (status
-  // doesn't matter for this test, but pending mirrors a real
-  // post-registration-but-before-profile state), no profile row.
-  const userId = `user_${randomUUID()}`;
-  const publicId = `usr_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-  const nowMs = Date.now();
-  const escapedEmail = `'${email.replace(/'/g, "''")}'`;
-  const sql = `
-INSERT INTO users (id, public_id, email, status, created_at)
-VALUES ('${userId}', '${publicId}', ${escapedEmail}, 'pending', ${nowMs});
-`;
-  const tempFile = join(tmpdir(), `e2e-seed-${randomUUID()}.sql`);
-  writeFileSync(tempFile, sql, "utf8");
-  try {
-    execSync(
-      `pnpm exec wrangler d1 execute ucmc-web-dev --local --file ${tempFile}`,
-      { cwd: WEB_DIR, stdio: "pipe" },
-    );
-  } finally {
-    try {
-      unlinkSync(tempFile);
-    } catch {
-      // best-effort
-    }
-  }
+  // Pre-create the half-registered state: user row exists, no profile row.
+  seedUserWithoutProfile(email);
 
   // Standard magic-link sign-in.
   await page.goto("/sign-in");
   await waitForHydration(page);
 
-  await page.getByLabel(/email/i).fill(email);
+  await page.getByRole("textbox", { name: /email/i }).fill(email);
   const submit = page.getByRole("button", { name: /send sign-in link/i });
   await expect(submit).toBeEnabled();
   await submit.click();
