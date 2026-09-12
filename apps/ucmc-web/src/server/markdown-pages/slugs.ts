@@ -23,6 +23,14 @@ export const MARKDOWN_PAGE_SLUGS = [
   "gear_cave",
   "resources",
   "volunteer",
+  // /sponsors carries two independently-edited markdown bands under one
+  // permission: `sponsors` introduces the grid to a member or visitor,
+  // `sponsors_pitch` makes the case to a prospective sponsor. They're
+  // separate slugs rather than one long page because they're written for
+  // different readers and an officer edits one without touching the
+  // other — the same reason /history's narrative is its own slug.
+  "sponsors",
+  "sponsors_pitch",
 ] as const;
 export type MarkdownPageSlug = (typeof MARKDOWN_PAGE_SLUGS)[number];
 
@@ -57,6 +65,14 @@ export const MARKDOWN_PAGE_PERMISSIONS: Record<
   volunteer: {
     view: "public_volunteer:view",
     manage: "public_volunteer:manage",
+  },
+  sponsors: {
+    view: "public_sponsors:view",
+    manage: "public_sponsors:manage",
+  },
+  sponsors_pitch: {
+    view: "public_sponsors:view",
+    manage: "public_sponsors:manage",
   },
 };
 

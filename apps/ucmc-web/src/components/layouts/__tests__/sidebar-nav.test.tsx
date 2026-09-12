@@ -73,6 +73,7 @@ const PAGES_ON = {
   gear_inventory: true,
   gear_loans: true,
   trips: true,
+  sponsors: true,
 } as const;
 
 function setFlags(pages: Record<string, boolean>) {
@@ -155,6 +156,41 @@ describe("SidebarNav page-flag gates", () => {
     renderNav();
 
     expect(screen.queryByText("Trips")).toBeNull();
+  });
+
+  it("links Sponsors for a viewer holding public_sponsors:view", () => {
+    // /sponsors is anonymous-visible by seed, so the nav entry has to
+    // appear for a viewer whose only sponsor grant is `:view` — the
+    // manage and perks permissions gate what's *on* the page, not
+    // whether it can be navigated to.
+    setAuth(["public_sponsors:view"]);
+
+    renderNav();
+
+    expect(screen.getByRole("link", { name: "Sponsors" })).toHaveAttribute(
+      "href",
+      "/sponsors",
+    );
+  });
+
+  it("hides Sponsors when the page flag is off", () => {
+    setFlags({ ...PAGES_ON, sponsors: false });
+    setAuth(["public_sponsors:view"]);
+
+    renderNav();
+
+    expect(screen.queryByText("Sponsors")).toBeNull();
+  });
+
+  it("hides Sponsors when the viewer lacks public_sponsors:view", () => {
+    // Revoking the role_anonymous grant takes the page private; the nav
+    // entry has to follow, or signed-out visitors get a link to a
+    // notFound.
+    setAuth(["gear:read"]);
+
+    renderNav();
+
+    expect(screen.queryByText("Sponsors")).toBeNull();
   });
 
   it("links Members and Gear when their index pages are on", () => {

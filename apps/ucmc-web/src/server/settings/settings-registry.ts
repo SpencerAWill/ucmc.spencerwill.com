@@ -340,6 +340,15 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
+  "pages.sponsors": z.boolean().default(true).register(registry, {
+    label: "Sponsors enabled",
+    description:
+      "When off, the Sponsors sidebar entry is hidden and the /sponsors route returns notFound for everyone — including officers who hold public_sponsors:manage.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-09-12",
+  }),
   "pages.trips": z.boolean().default(true).register(registry, {
     label: "Trips enabled",
     description:

@@ -55,6 +55,12 @@ export const HERO_PAGES = {
     defaultTagline:
       "We climb, paddle, and hike on ground other people keep open. Here's the work we do to keep it that way — and how to join us or ask for a hand.",
   },
+  sponsors: {
+    label: "Sponsors",
+    defaultHeading: "Our sponsors",
+    defaultTagline:
+      "The businesses that back UCMC — what they do for the club, what they do for members, and how to join them.",
+  },
   history: {
     label: "History",
     defaultHeading: "UCMC History",

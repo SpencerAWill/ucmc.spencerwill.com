@@ -51,7 +51,13 @@ const R2_BATCH_DELETE_LIMIT = 1000;
 // `ALBUM_R2_PREFIX`), so do NOT "fix" it to `album/`: that would stop
 // the sweep from ever seeing album objects, and orphans would
 // accumulate silently rather than failing loudly.
-const GC_PREFIXES = ["avatars/", "landing/", "gazette/", "gallery/"] as const;
+const GC_PREFIXES = [
+  "avatars/",
+  "landing/",
+  "gazette/",
+  "gallery/",
+  "sponsors/",
+] as const;
 
 // Settings keys whose JSON value is an R2 image key. `landingSettings`
 // is a singleton key/value store; the about + meeting sections store
@@ -204,10 +210,10 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
   const db = getDb();
   const live = new Set<string>();
 
-  // Five independent reads against five separate tables — bundle into
+  // Seven independent reads against seven separate tables — bundle into
   // one `db.batch` so the cron's D1 wait is a single HTTP request.
   // Order doesn't matter; everything funnels into the same Set.
-  const [avatars, heroes, activities, settings, gazette, album] =
+  const [avatars, heroes, activities, settings, gazette, album, sponsorLogos] =
     await db.batch([
       db
         .select({ key: schema.profiles.avatarKey })
@@ -233,6 +239,10 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
         .select({ key: schema.gazetteIssues.pdfKey })
         .from(schema.gazetteIssues),
       db.select({ key: schema.albumPhotos.imageKey }).from(schema.albumPhotos),
+      db
+        .select({ key: schema.sponsors.logoKey })
+        .from(schema.sponsors)
+        .where(isNotNull(schema.sponsors.logoKey)),
     ]);
 
   for (const row of avatars) {
@@ -267,6 +277,11 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
   }
   for (const row of album) {
     live.add(row.key);
+  }
+  for (const row of sponsorLogos) {
+    if (row.key) {
+      live.add(row.key);
+    }
   }
 
   return live;
