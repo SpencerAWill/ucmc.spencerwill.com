@@ -70,7 +70,7 @@ Examples:
 
 ## Architectural invariants (web app)
 
-`apps/ucmc-web/CLAUDE.md` and the root [`CLAUDE.md`](./CLAUDE.md) describe the load-bearing patterns. The ones contributors break most often:
+The root [`CLAUDE.md`](./CLAUDE.md) carries the always-on invariants, and [`.claude/rules/`](./.claude/rules/) holds the per-area detail (each file lists the paths it applies to). The ones contributors break most often:
 
 - **Bulletproof feature layout.** Features live under `src/features/<name>/` with `components/`, `api/`, `server/`. Features cannot import each other (enforced by `import/no-restricted-paths`); shared code cannot import features.
 - **No inline `useMutation` in routes/components.** Every mutation gets a `use-*.ts` hook under the feature's `api/` directory, with its own cache-invalidation contract.
@@ -95,7 +95,7 @@ When you fix a bug, add a regression test in the same PR.
 
 ## Documentation
 
-- **Update `README.md` and `CLAUDE.md` in the same PR** whenever you change tooling, scripts, workflows, the workspace layout, or any load-bearing invariant. CI does not detect doc drift, so reviewers will.
+- **Update `README.md`, `CLAUDE.md`, and any affected `.claude/rules/` file in the same PR** whenever you change tooling, scripts, workflows, the workspace layout, or any load-bearing invariant. CI does not detect doc drift, so reviewers will.
 - Compliance-shaped features: update the [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) in the wiki to map the new obligation → file/route.
 - The [wiki](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki) is edited on GitHub and is not checked out into this repo.
 
@@ -113,7 +113,7 @@ When reviewing someone else's PR:
 
 - Check the PR template's test plan against the diff. Reject "n/a" without a reason.
 - For UI changes, pull the branch and click through the actual flow — typecheck and Vitest don't catch feature-level regressions.
-- For server-fn / auth / compliance changes, verify the invariants in `CLAUDE.md` still hold.
+- For server-fn / auth / compliance changes, verify the invariants in `CLAUDE.md` and the matching `.claude/rules/` file still hold.
 
 ## Questions
 
