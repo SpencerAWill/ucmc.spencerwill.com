@@ -49,6 +49,7 @@ const FEATURES = [
   "landing",
   "members",
   "settings",
+  "sponsors",
   "trips",
   "volunteer",
   "waivers",

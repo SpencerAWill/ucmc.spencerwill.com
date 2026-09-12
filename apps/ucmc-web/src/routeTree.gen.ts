@@ -14,6 +14,7 @@ import { Route as VolunteerRouteImport } from './routes/volunteer'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TripsRouteImport } from './routes/trips'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as SponsorsRouteImport } from './routes/sponsors'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ScholarshipsRouteImport } from './routes/scholarships'
@@ -74,6 +75,7 @@ import { Route as MembersTabsDeactivatedRouteImport } from './routes/members._ta
 import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publicId'
 import { Route as FeedbackTabsSiteRouteImport } from './routes/feedback._tabs.site'
 import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.club'
+import { Route as ApiSponsorLogoSplatRouteImport } from './routes/api/sponsor-logo.$'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
@@ -104,6 +106,11 @@ const TripsRoute = TripsRouteImport.update({
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SponsorsRoute = SponsorsRouteImport.update({
+  id: '/sponsors',
+  path: '/sponsors',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -403,6 +410,11 @@ const FeedbackTabsClubRoute = FeedbackTabsClubRouteImport.update({
   path: '/club',
   getParentRoute: () => FeedbackTabsRoute,
 } as any)
+const ApiSponsorLogoSplatRoute = ApiSponsorLogoSplatRouteImport.update({
+  id: '/api/sponsor-logo/$',
+  path: '/api/sponsor-logo/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
   id: '/api/landing/$',
   path: '/api/landing/$',
@@ -462,6 +474,7 @@ export interface FileRoutesByFullPath {
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sponsors': typeof SponsorsRoute
   '/terms': typeof TermsRoute
   '/trips': typeof TripsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -486,6 +499,7 @@ export interface FileRoutesByFullPath {
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/api/sponsor-logo/$': typeof ApiSponsorLogoSplatRoute
   '/feedback/club': typeof FeedbackTabsClubRoute
   '/feedback/site': typeof FeedbackTabsSiteRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
@@ -528,6 +542,7 @@ export interface FileRoutesByTo {
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sponsors': typeof SponsorsRoute
   '/terms': typeof TermsRoute
   '/trips': typeof TripsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -551,6 +566,7 @@ export interface FileRoutesByTo {
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/api/sponsor-logo/$': typeof ApiSponsorLogoSplatRoute
   '/feedback/club': typeof FeedbackTabsClubRoute
   '/feedback/site': typeof FeedbackTabsSiteRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
@@ -597,6 +613,7 @@ export interface FileRoutesById {
   '/scholarships': typeof ScholarshipsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sponsors': typeof SponsorsRoute
   '/terms': typeof TermsRoute
   '/trips': typeof TripsRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -624,6 +641,7 @@ export interface FileRoutesById {
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
+  '/api/sponsor-logo/$': typeof ApiSponsorLogoSplatRoute
   '/feedback/_tabs/club': typeof FeedbackTabsClubRoute
   '/feedback/_tabs/site': typeof FeedbackTabsSiteRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
@@ -672,6 +690,7 @@ export interface FileRouteTypes {
     | '/scholarships'
     | '/settings'
     | '/sign-in'
+    | '/sponsors'
     | '/terms'
     | '/trips'
     | '/verify-email'
@@ -696,6 +715,7 @@ export interface FileRouteTypes {
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/api/sponsor-logo/$'
     | '/feedback/club'
     | '/feedback/site'
     | '/gear/loans/$publicId'
@@ -738,6 +758,7 @@ export interface FileRouteTypes {
     | '/scholarships'
     | '/settings'
     | '/sign-in'
+    | '/sponsors'
     | '/terms'
     | '/trips'
     | '/verify-email'
@@ -761,6 +782,7 @@ export interface FileRouteTypes {
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/api/sponsor-logo/$'
     | '/feedback/club'
     | '/feedback/site'
     | '/gear/loans/$publicId'
@@ -806,6 +828,7 @@ export interface FileRouteTypes {
     | '/scholarships'
     | '/settings'
     | '/sign-in'
+    | '/sponsors'
     | '/terms'
     | '/trips'
     | '/verify-email'
@@ -833,6 +856,7 @@ export interface FileRouteTypes {
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
+    | '/api/sponsor-logo/$'
     | '/feedback/_tabs/club'
     | '/feedback/_tabs/site'
     | '/gear/loans/$publicId'
@@ -880,6 +904,7 @@ export interface RootRouteChildren {
   ScholarshipsRoute: typeof ScholarshipsRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
+  SponsorsRoute: typeof SponsorsRoute
   TermsRoute: typeof TermsRoute
   TripsRoute: typeof TripsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
@@ -895,6 +920,7 @@ export interface RootRouteChildren {
   ApiGazettePdfSplatRoute: typeof ApiGazettePdfSplatRoute
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
+  ApiSponsorLogoSplatRoute: typeof ApiSponsorLogoSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -932,6 +958,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sponsors': {
+      id: '/sponsors'
+      path: '/sponsors'
+      fullPath: '/sponsors'
+      preLoaderRoute: typeof SponsorsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -1354,6 +1387,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackTabsClubRouteImport
       parentRoute: typeof FeedbackTabsRoute
     }
+    '/api/sponsor-logo/$': {
+      id: '/api/sponsor-logo/$'
+      path: '/api/sponsor-logo/$'
+      fullPath: '/api/sponsor-logo/$'
+      preLoaderRoute: typeof ApiSponsorLogoSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/landing/$': {
       id: '/api/landing/$'
       path: '/api/landing/$'
@@ -1567,6 +1607,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScholarshipsRoute: ScholarshipsRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
+  SponsorsRoute: SponsorsRoute,
   TermsRoute: TermsRoute,
   TripsRoute: TripsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
@@ -1582,6 +1623,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGazettePdfSplatRoute: ApiGazettePdfSplatRoute,
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,
+  ApiSponsorLogoSplatRoute: ApiSponsorLogoSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

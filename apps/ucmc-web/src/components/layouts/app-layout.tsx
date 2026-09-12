@@ -269,6 +269,8 @@ export function SidebarNav() {
   const canViewHistory = hasPermission("history:view") && pages.history;
   const canViewVolunteer =
     hasPermission("public_volunteer:view") && pages.volunteer;
+  const canViewSponsors =
+    hasPermission("public_sponsors:view") && pages.sponsors;
   const canViewPolicies =
     hasPermission("public_policies:view") && pages.policies;
   const canViewScholarships =
@@ -368,6 +370,16 @@ export function SidebarNav() {
                 <Link to="/volunteer">
                   <HandHeart />
                   <span>Volunteer</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
+          {canViewSponsors ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Sponsors">
+                <Link to="/sponsors">
+                  <Handshake />
+                  <span>Sponsors</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
