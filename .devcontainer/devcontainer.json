@@ -28,7 +28,15 @@
   // Runs on the HOST before the container exists — pre-creates the bind
   // source for ~/.config/gh so Docker doesn't invent it root-owned.
   "initializeCommand": [".devcontainer/initialize.sh"],
-  "postCreateCommand": "./.devcontainer/configure-git.sh && corepack enable && pnpm install --frozen-lockfile && pnpm --filter ucmc-web exec playwright install chromium",
+  // Every in-container hook routes through lifecycle.sh so the ordering and
+  // the reason each step lives at its stage stay readable in one file.
+  // Dependency install is in `updateContentCommand`, not `postCreateCommand`
+  // — that hook also fires when prebuilt content refreshes, so a lockfile
+  // change is picked up without a full rebuild.
+  "onCreateCommand": ".devcontainer/lifecycle.sh on-create",
+  "updateContentCommand": ".devcontainer/lifecycle.sh update-content",
+  "postCreateCommand": ".devcontainer/lifecycle.sh post-create",
+  "postStartCommand": ".devcontainer/lifecycle.sh post-start",
   "customizations": {
     "vscode": {
       "settings": {
