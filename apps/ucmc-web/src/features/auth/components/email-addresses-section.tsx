@@ -65,12 +65,18 @@ export function EmailAddressesSection({
             <ItemContent className="min-w-0">
               <ItemTitle className="w-full min-w-0">
                 <span className="min-w-0 flex-1 truncate">{primaryEmail}</span>
-                <Badge variant="secondary" className="shrink-0">
-                  Primary
-                </Badge>
               </ItemTitle>
               <ItemDescription>Verified at registration</ItemDescription>
             </ItemContent>
+            {/*
+             * Sibling of ItemContent, not a child of ItemTitle: `Item`
+             * is `items-center`, so out here the badge centres against
+             * the whole two-line block. Inside the title it sat on the
+             * first line and read as top-aligned.
+             */}
+            <Badge variant="secondary" className="shrink-0">
+              Primary
+            </Badge>
           </Item>
         </ItemGroup>
       </section>
@@ -110,16 +116,12 @@ function ApprovedEmailAddressesSection() {
                * and ItemTitle ships with `w-fit` (shrink-to-content)
                * which similarly prevents truncation. Without these,
                * a 60-char email would widen the row instead of
-               * ellipsizing.
+               * ellipsizing. The badge's `shrink-0` is the other half:
+               * it keeps the label off the truncation budget.
                */}
               <ItemContent className="min-w-0">
                 <ItemTitle className="w-full min-w-0">
                   <span className="min-w-0 flex-1 truncate">{row.email}</span>
-                  {row.isPrimary ? (
-                    <Badge variant="secondary" className="shrink-0">
-                      Primary
-                    </Badge>
-                  ) : null}
                 </ItemTitle>
                 <ItemDescription>
                   {row.verifiedAt
@@ -127,6 +129,12 @@ function ApprovedEmailAddressesSection() {
                     : "Pending verification"}
                 </ItemDescription>
               </ItemContent>
+              {/* Outside ItemTitle so it centres on the row — see above. */}
+              {row.isPrimary ? (
+                <Badge variant="secondary" className="shrink-0">
+                  Primary
+                </Badge>
+              ) : null}
               <ItemActions>
                 {row.isPrimary ? null : (
                   <Button
