@@ -8,15 +8,28 @@ UCMC (University of Cincinnati Mountaineering Club) — pnpm monorepo (pnpm@11.1
 - `infra/` — Pulumi (TypeScript, two stacks: `dev`, `prod`)
 - `libs/` — shared libraries
 - `.devcontainer/` — Debian-based devcontainer with Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit sidecar. `initialize.sh` runs on the **host** from `initializeCommand` (pre-creates the `~/.config/gh` bind source so Docker can't invent it root-owned); `configure-git.sh` runs in the container from `postCreateCommand` (`safe.directory`, `gc.auto 0`, git identity + credential helper derived from `gh`)
-- **Editors**: Zed is the primary IDE (`.zed/settings.json`); VS Code Server also attaches (`.vscode/settings.json`). Both configs are committed and both are load-bearing — see the index-lock note below.
+- **Editors**: Zed is the primary IDE (`.zed/settings.json`). `.vscode/settings.json` is kept for anyone attaching VS Code, but **no VS Code Server runs in this container by default** — don't assume it when diagnosing behaviour here.
 
-**Git index-lock contention is a known property of this devcontainer, and three settings exist to contain it.** `/workspace` is a **virtiofs bind mount** — measured ~20× slower per file operation than container-native storage — and VS Code's Git extension transiently takes `.git/index.lock` several times a second (222 acquisitions in 75 idle seconds, when measured). Any index-writing command has to win that race. The mitigations, all load-bearing:
+**Git index-lock contention is a known property of this devcontainer.** `.git/index.lock` is present ~18% of wall-clock time, so an index-writing command (`git add`, `git commit`, `git mv`) collides that often; lint-staged makes several index writes per commit, giving roughly a 60% chance at least one collides. A lost race leaves a **truncated index that reports every tracked file as deleted** — that has reached a commit twice. **Recovery is `git reset` (mixed — never `--hard`; the worktree is fine).** When you hit `Unable to create '.git/index.lock'`, re-run; it is transient. Only delete the lock by hand once `pgrep -a git` shows no live process.
 
-1. **Editor scan/watch exclusions — in BOTH `.vscode/settings.json` (`files.watcherExclude`) and `.zed/settings.json` (`file_scan_exclusions`).** Without them the editor scans ~73,000 files (`node_modules`, `dist`, `.wrangler`, `test-results`), so every install/build/test run is a file-event storm that drives the git-refresh rate far above idle. **Both files are committed and neither is redundant** — different keys for different editors, and Zed is the primary IDE while VS Code Server also attaches in this container. In the VS Code file, note that `files.exclude` does **not** stop the watcher: the two settings are independent, so `node_modules` must appear in both.
-2. **`lint-staged --no-stash`** in `.husky/pre-commit` — the default backup stash is a multi-step index write, and losing the lock partway through leaves a **truncated index that reports every tracked file as deleted**. That has reached a commit (827 spurious deletions). Recovery is `git reset` (mixed — never `--hard`; the worktree is fine).
-3. **`gc.auto 0`** — stops a background repack firing mid-commit into the same locks. Set by `.devcontainer/configure-git.sh`, which also derives a git identity from `gh` — **not optional under Zed**, which has no equivalent of VS Code's `dev.containers.copyGitConfig`, so without it every commit aborts with "Author identity unknown".
+**Measured cause — two pollers, both spawning git every few hundred ms:**
 
-If you still hit `Unable to create '.git/index.lock'`, it is almost always transient: re-run. Only delete the lock file by hand once `pgrep -a git` shows no live process holding it. **The structural fix is to move the checkout off virtiofs into a named Docker volume** — tracked separately, not done here.
+|                     |                                       |
+| ------------------- | ------------------------------------- |
+| `zed-remote-server` | the primary IDE's git integration     |
+| the `claude` CLI    | Claude Code's own status/diff polling |
+
+Together they take the lock ~3×/second, held ~84 ms each, gap ~383 ms. **The rate is identical whether the repo is idle (224 acquisitions/75 s) or mid-build (217/75 s)** — it is fixed-interval polling, not file-event driven.
+
+**Three things that are NOT the cause, each previously believed and then measured:**
+
+1. **Not VS Code.** No `vscode-server` process runs here. The command flag signature (`-c core.fsmonitor=false --no-optional-locks`) is shared by several clients and is not an attribution.
+2. **Not the file watcher.** Scan/watch exclusions (`files.watcherExclude`, `file_scan_exclusions`) do not change the rate — it is the same idle and busy. They are still worth keeping for editor responsiveness, but they are not a fix for this.
+3. **Not virtiofs.** `/workspace` is a virtiofs bind mount, but for git's actual workload it is **not slower than container-native storage**: a real 107 KB index write is ~3 ms on both, and create+write+fsync+rename is 0.72 ms on virtiofs vs 0.86 ms on overlayfs. The oft-quoted "~20× slower" came from create+unlink of an _empty_ file — pure syscall overhead, unrepresentative. **Moving the checkout into a Docker volume would not fix this**; see the spike issue for the corrected framing.
+
+**What the mitigations in `.husky/pre-commit` and `configure-git.sh` actually buy:** `lint-staged --no-stash` removes the backup stash's extra index writes, cutting the number of chances to collide per commit; `gc.auto 0` stops a background repack contending for the same locks. Both reduce _exposure_, neither reduces the poll rate. The `gh` bind-mount guard (`initialize.sh`) and the git identity derived from `gh` (`configure-git.sh`) are unrelated bug fixes that happen to live in the same files — the identity one is **required under Zed**, which has no equivalent of VS Code's `dev.containers.copyGitConfig`.
+
+**The unexplored lever is the poll rate itself.** Zed's binary exposes a `git` settings block (`disable_git`, `enable_status`, `enable_diff`, `gutter_debounce`) and its file watcher polls on a compile-time `POLL_INTERVAL`. Setting `"git": { "disable_git": true }` in `.zed/settings.json` did **not** change the rate in testing — either the shape is wrong or it needs a full Zed restart, so **this is unverified; do not document it as a fix until someone measures it.**
 
 ## Tooling
 
