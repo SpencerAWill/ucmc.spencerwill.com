@@ -21,14 +21,14 @@ import { useCreateActivity } from "#/features/landing/api/use-create-activity";
 import { useDeleteActivity } from "#/features/landing/api/use-delete-activity";
 import { useReorderActivities } from "#/features/landing/api/use-reorder-activities";
 import { useUpdateActivity } from "#/features/landing/api/use-update-activity";
-import { ActivityIcon } from "#/features/landing/components/activity-icon";
-import { IconPicker } from "#/features/landing/components/icon-picker";
+import { CuratedIcon } from "#/components/curated-icon/curated-icon";
+import { IconPicker } from "#/components/curated-icon/icon-picker";
 import { landingImageUrlFor } from "#/features/landing/lib/image-url";
 import { noPasswordManagerProps } from "#/features/landing/lib/no-password-manager";
 import { useImageCrop } from "#/hooks/use-image-crop";
 import type { ActivitySummary } from "#/features/landing/server/landing-fns";
 import { LANDING_LIMITS } from "#/features/landing/server/landing-schemas";
-import type { ActivityIcon as ActivityIconName } from "#/features/landing/server/landing-schemas";
+import type { CuratedIconName } from "#/components/curated-icon/icon-names";
 
 export interface ActivitiesEditorProps {
   items: ActivitySummary[];
@@ -136,7 +136,7 @@ export function ActivitiesEditor({
                     >
                       <GripVertical className="size-4" />
                     </button>
-                    <ActivityIcon
+                    <CuratedIcon
                       name={item.icon}
                       className="mt-0.5 size-5 shrink-0 text-primary"
                     />
@@ -197,7 +197,7 @@ export function ActivitiesEditor({
 }
 
 interface ActivityFormSubmit {
-  icon: ActivityIconName;
+  icon: CuratedIconName;
   title: string;
   blurb: string;
   dataUrl?: string;
@@ -215,7 +215,7 @@ function ActivityForm({
   onCancel: () => void;
   busy: boolean;
 }) {
-  const [icon, setIcon] = useState<ActivityIconName>(
+  const [icon, setIcon] = useState<CuratedIconName>(
     initial?.icon ?? "Mountain",
   );
   const [title, setTitle] = useState(initial?.title ?? "");
