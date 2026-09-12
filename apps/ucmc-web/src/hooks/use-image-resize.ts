@@ -29,7 +29,7 @@
  * Layout of the picker and preview is left to the caller; this hook
  * supplies the ref, props, and the encoded result.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
 const OUTPUT_QUALITY = 0.92;
@@ -57,6 +57,20 @@ export interface ResizedImage {
   heightPx: number;
 }
 
+/**
+ * **Every function and props object on this result is referentially
+ * stable**, changing identity only when something it actually depends on
+ * changes — never merely because the component re-rendered.
+ *
+ * That is a contract, not an implementation detail, and this hook is
+ * where it was learned: `reset` shipped as a plain function, a consumer
+ * put it in a `useEffect` dep array, and opening the sponsor form looped
+ * until React threw #185. Keep new members `useCallback`/`useMemo`-wrapped.
+ * The same note is on {@link UseImageCropResult}.
+ *
+ * The *result object itself* is still a fresh literal each render, so
+ * depend on the member you need, not the whole object.
+ */
 export interface UseImageResizeResult {
   /** Object URL of the chosen source, for a preview. */
   previewUrl: string | null;
@@ -82,6 +96,9 @@ export interface UseImageResizeResult {
 export function useImageResize(
   options: UseImageResizeOptions,
 ): UseImageResizeResult {
+  // Destructured to a primitive up front: callers pass `options` as an
+  // object literal, so depending on it would defeat the memoization.
+  const { maxDimension } = options;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<ResizedImage | null>(null);
@@ -98,52 +115,65 @@ export function useImageResize(
     };
   }, [previewUrl]);
 
-  function reset() {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
+  /**
+   * **Stable across renders, and that is load-bearing.**
+   *
+   * This was a plain function in the hook body, so it got a fresh
+   * identity on every render. `SponsorFormDialog` listed it in a
+   * `useEffect` dep array and that effect calls `setForm(seedToForm(seed))`
+   * — a new object literal, which React can never bail out of — so
+   * opening the dialog looped: render → effect → setState → render → new
+   * `reset` identity → effect → … until React threw #185 ("Maximum
+   * update depth exceeded"). Any callback a hook hands back can end up in
+   * a consumer's dep array, so it has to be `useCallback`'d.
+   *
+   * The dep array is empty rather than `[previewUrl]`, which is what
+   * keeps the identity stable for the life of the hook. That means the
+   * revoke can't happen here — clearing `previewUrl` is enough, because
+   * the effect above revokes the previous URL as its cleanup whenever the
+   * value changes.
+   */
+  const reset = useCallback(() => {
     setPreviewUrl(null);
     setResult(null);
     setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }
+  }, []);
 
-  async function onFileChosen(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) {
-      return;
-    }
-    setError(null);
-    if (file.size > MAX_SOURCE_BYTES) {
-      setError("That image is too large. Pick one under 12 MB.");
-      return;
-    }
-    setIsProcessing(true);
-    const objectUrl = URL.createObjectURL(file);
-    try {
-      const resized = await resizeToFit(objectUrl, options.maxDimension);
-      setPreviewUrl(objectUrl);
-      setResult(resized);
-    } catch {
-      URL.revokeObjectURL(objectUrl);
-      setError("That file couldn't be read as an image.");
-    } finally {
-      setIsProcessing(false);
-    }
-  }
+  const onFileChosen = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) {
+        return;
+      }
+      setError(null);
+      if (file.size > MAX_SOURCE_BYTES) {
+        setError("That image is too large. Pick one under 12 MB.");
+        return;
+      }
+      setIsProcessing(true);
+      const objectUrl = URL.createObjectURL(file);
+      try {
+        const resized = await resizeToFit(objectUrl, maxDimension);
+        setPreviewUrl(objectUrl);
+        setResult(resized);
+      } catch {
+        URL.revokeObjectURL(objectUrl);
+        setError("That file couldn't be read as an image.");
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [maxDimension],
+  );
 
-  return {
-    previewUrl,
-    result,
-    error,
-    isProcessing,
-    fileInputRef,
-    openPicker: () => fileInputRef.current?.click(),
-    reset,
-    fileInputProps: {
-      type: "file",
+  const openPicker = useCallback(() => fileInputRef.current?.click(), []);
+
+  const fileInputProps = useMemo(
+    () => ({
+      type: "file" as const,
       // Narrower than `image/*`: the encode path accepts anything the
       // browser can decode, but SVG is deliberately excluded. It would
       // rasterize fine here, yet accepting it invites someone to wire a
@@ -152,7 +182,19 @@ export function useImageResize(
       accept: "image/png,image/jpeg,image/webp",
       className: "hidden",
       onChange: onFileChosen,
-    },
+    }),
+    [onFileChosen],
+  );
+
+  return {
+    previewUrl,
+    result,
+    error,
+    isProcessing,
+    fileInputRef,
+    openPicker,
+    reset,
+    fileInputProps,
   };
 }
 

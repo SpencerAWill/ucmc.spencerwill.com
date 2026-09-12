@@ -1,5 +1,5 @@
 import { Upload } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import ReactCrop from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { toast } from "sonner";
@@ -84,12 +84,11 @@ export function PhotoFormDialog({
     outputHeight: ALBUM_OUTPUT_HEIGHT,
   });
 
-  // `useImageCrop()` returns a fresh object literal every render, so
-  // we can't put `crop` in any dep array without triggering an infinite
-  // loop. Stash `reset` in a ref so the seed effect can call it
-  // without taking a dependency on `crop`.
-  const cropResetRef = useRef(crop.reset);
-  cropResetRef.current = crop.reset;
+  // `crop.reset` is referentially stable (see `UseImageCropResult`), so
+  // the seed effect below depends on it directly. This used to stash it
+  // in a ref, because the hook handed back a fresh function every render
+  // and depending on it looped.
+  const { reset: resetCrop } = crop;
 
   // Re-seed the form whenever the dialog opens / the seed changes.
   // Also reset the crop UI on close so the previous photo's working
@@ -97,9 +96,9 @@ export function PhotoFormDialog({
   useEffect(() => {
     setForm(seed === null ? null : seedToForm(seed));
     if (seed === null) {
-      cropResetRef.current();
+      resetCrop();
     }
-  }, [seed]);
+  }, [seed, resetCrop]);
 
   const submitting = createMut.isPending || updateMut.isPending;
 

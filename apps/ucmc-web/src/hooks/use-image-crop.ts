@@ -18,7 +18,7 @@
  * supplies the ref, props, and rendering function.
  */
 import imageCompression from "browser-image-compression";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, SyntheticEvent } from "react";
 import { centerCrop, makeAspectCrop } from "react-image-crop";
 import type { PercentCrop, PixelCrop } from "react-image-crop";
@@ -35,6 +35,24 @@ export interface UseImageCropOptions {
   outputHeight: number;
 }
 
+/**
+ * **Every function and props object on this result is referentially
+ * stable**, changing identity only when something it actually depends on
+ * changes — never merely because the component re-rendered.
+ *
+ * That is a contract, not an implementation detail. These callbacks end
+ * up in consumers' `useEffect` dep arrays, and an effect that calls
+ * `setState` with a fresh object will loop forever against a callback
+ * whose identity churns every render: render → effect → setState →
+ * render → new identity → effect → … until React throws #185, "Maximum
+ * update depth exceeded". That is precisely what `useImageResize` — this
+ * hook's contain-not-crop sibling — shipped and crashed on, and what
+ * `photo-form-dialog` had been working around by stashing `reset` in a
+ * ref. Keep new members `useCallback`/`useMemo`-wrapped.
+ *
+ * The *result object itself* is still a fresh literal each render, so
+ * depend on the member you need (`crop.reset`), not the whole object.
+ */
 export interface UseImageCropResult {
   workingUrl: string | null;
   crop: PercentCrop | undefined;
@@ -76,6 +94,10 @@ export interface UseImageCropResult {
 }
 
 export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
+  // Destructured to primitives up front. Callers pass `options` as an
+  // object literal, so it has a fresh identity every render — depending
+  // on it anywhere below would defeat every `useCallback` here.
+  const { aspect, outputWidth, outputHeight } = options;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [workingUrl, setWorkingUrl] = useState<string | null>(null);
@@ -92,19 +114,23 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
     };
   }, [workingUrl]);
 
-  function reset() {
-    if (workingUrl) {
-      URL.revokeObjectURL(workingUrl);
-    }
+  /**
+   * Stable for the life of the hook — see the note on the return value.
+   *
+   * The empty dep array is what buys that, which is why the revoke isn't
+   * here: clearing `workingUrl` is enough, because the effect above
+   * revokes the previous URL as its cleanup whenever the value changes.
+   */
+  const reset = useCallback(() => {
     setWorkingUrl(null);
     setCrop(undefined);
     setCompletedCrop(undefined);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }
+  }, []);
 
-  async function onFileChosen(e: ChangeEvent<HTMLInputElement>) {
+  const onFileChosen = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
       return;
@@ -115,25 +141,28 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
       fileType: "image/jpeg",
     });
     setWorkingUrl(URL.createObjectURL(normalized));
-  }
+  }, []);
 
-  function onImageLoad(e: SyntheticEvent<HTMLImageElement>) {
-    const { naturalWidth, naturalHeight } = e.currentTarget;
-    setCrop(
-      centerCrop(
-        makeAspectCrop(
-          { unit: "%", width: 90 },
-          options.aspect,
+  const onImageLoad = useCallback(
+    (e: SyntheticEvent<HTMLImageElement>) => {
+      const { naturalWidth, naturalHeight } = e.currentTarget;
+      setCrop(
+        centerCrop(
+          makeAspectCrop(
+            { unit: "%", width: 90 },
+            aspect,
+            naturalWidth,
+            naturalHeight,
+          ),
           naturalWidth,
           naturalHeight,
         ),
-        naturalWidth,
-        naturalHeight,
-      ),
-    );
-  }
+      );
+    },
+    [aspect],
+  );
 
-  async function getCroppedDataUrl(): Promise<string | null> {
+  const getCroppedDataUrl = useCallback(async (): Promise<string | null> => {
     const image = imgRef.current;
     if (!image || !completedCrop || completedCrop.width === 0) {
       return null;
@@ -146,24 +175,14 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
     const sh = completedCrop.height * scaleY;
 
     const canvas = document.createElement("canvas");
-    canvas.width = options.outputWidth;
-    canvas.height = options.outputHeight;
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       throw new Error("Canvas not available in this browser");
     }
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(
-      image,
-      sx,
-      sy,
-      sw,
-      sh,
-      0,
-      0,
-      options.outputWidth,
-      options.outputHeight,
-    );
+    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, outputWidth, outputHeight);
 
     const blob: Blob = await new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -178,30 +197,36 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
       reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(blob);
     });
-  }
+    // Identity changes only when the completed crop or the output size
+    // does, never on an unrelated render — a consumer can hold this in a
+    // dep array and get one re-run per actual crop change.
+  }, [completedCrop, outputWidth, outputHeight]);
 
-  return {
-    workingUrl,
-    crop,
-    imgRef,
-    fileInputRef,
-    hasCompletedCrop: Boolean(completedCrop && completedCrop.width > 0),
-    openPicker: () => fileInputRef.current?.click(),
-    reset,
-    fileInputProps: {
-      type: "file",
+  const openPicker = useCallback(() => fileInputRef.current?.click(), []);
+
+  const fileInputProps = useMemo(
+    () => ({
+      type: "file" as const,
       accept: "image/*",
       className: "hidden",
       onChange: onFileChosen,
-    },
-    reactCropProps: {
+    }),
+    [onFileChosen],
+  );
+
+  const reactCropProps = useMemo(
+    () => ({
       crop,
-      onChange: (_pixel, percent) => setCrop(percent),
-      onComplete: (pixel) => setCompletedCrop(pixel),
-      aspect: options.aspect,
-      keepSelection: true,
-    },
-    imgProps: {
+      onChange: (_pixel: PixelCrop, percent: PercentCrop) => setCrop(percent),
+      onComplete: (pixel: PixelCrop) => setCompletedCrop(pixel),
+      aspect,
+      keepSelection: true as const,
+    }),
+    [crop, aspect],
+  );
+
+  const imgProps = useMemo(
+    () => ({
       ref: imgRef,
       src: workingUrl ?? "",
       alt: "Image to crop",
@@ -212,7 +237,21 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
       // image push the form fields off-screen when the URL bar
       // appears.
       className: "max-h-[30dvh] max-w-full sm:max-h-[40vh]",
-    },
+    }),
+    [workingUrl, onImageLoad],
+  );
+
+  return {
+    workingUrl,
+    crop,
+    imgRef,
+    fileInputRef,
+    hasCompletedCrop: Boolean(completedCrop && completedCrop.width > 0),
+    openPicker,
+    reset,
+    fileInputProps,
+    reactCropProps,
+    imgProps,
     getCroppedDataUrl,
   };
 }
