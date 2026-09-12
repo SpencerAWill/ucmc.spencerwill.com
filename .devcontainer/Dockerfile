@@ -4,9 +4,16 @@ FROM mcr.microsoft.com/devcontainers/base:debian
 # the container is launched (VS Code devcontainer, `docker-compose up`,
 # `docker exec`, CI smoke-tests, etc.). Dynamic/per-host values like TZ
 # stay in devcontainer.json so they can read ${localEnv:...}.
+# COREPACK_ENABLE_DOWNLOAD_PROMPT=0: corepack otherwise prompts "Do you want
+# to continue?" before downloading the pnpm pinned in package.json's
+# packageManager field. Node comes from the node:2 feature with
+# pnpmVersion:"none", so corepack fetches pnpm on first use — meaning
+# update-content's `pnpm install` triggers that prompt and hangs an
+# unattended rebuild. 0 makes it download without asking.
 ENV CLAUDE_CONFIG_DIR=/home/vscode/.claude \
     NODE_OPTIONS=--max-old-space-size=4096 \
     DEVCONTAINER=true \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     PATH=/home/vscode/.pulumi/bin:${PATH}
 
 # Pre-create volume mount points with correct ownership so Docker
