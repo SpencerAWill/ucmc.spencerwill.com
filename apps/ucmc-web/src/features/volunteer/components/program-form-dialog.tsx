@@ -141,6 +141,7 @@ export function ProgramFormDialog({
                 />
                 <div className="min-w-0 flex-1">
                   <IconPicker
+                    id="program-icon"
                     value={form.icon}
                     onChange={(icon) => setForm({ ...form, icon })}
                   />

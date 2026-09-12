@@ -17,12 +17,19 @@ import type { CuratedIconName } from "#/components/curated-icon/icon-names";
 export interface IconPickerProps {
   value: CuratedIconName;
   onChange: (next: CuratedIconName) => void;
+  /**
+   * Forwarded to the trigger so a `<Label htmlFor>` actually resolves.
+   * Without it the label is inert on click and the combobox's accessible
+   * name falls back to the raw icon name ("HandHeart"), which tells a
+   * screen-reader user nothing about what the control selects.
+   */
+  id?: string;
 }
 
-export function IconPicker({ value, onChange }: IconPickerProps) {
+export function IconPicker({ value, onChange, id }: IconPickerProps) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as CuratedIconName)}>
-      <SelectTrigger className="w-full">
+      <SelectTrigger id={id} className="w-full">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

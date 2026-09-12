@@ -258,7 +258,7 @@ function ActivityForm({
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="activity-icon">Icon</Label>
-        <IconPicker value={icon} onChange={setIcon} />
+        <IconPicker id="activity-icon" value={icon} onChange={setIcon} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="activity-title">Title</Label>

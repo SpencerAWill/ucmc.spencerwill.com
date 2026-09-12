@@ -45,9 +45,6 @@ export function UpcomingOutings({
   return (
     <ul className="space-y-3">
       {outings.map((outing) => {
-        const startsAt = Temporal.Instant.fromEpochMilliseconds(
-          outing.startsAtMs,
-        );
         const join = outingJoinHref(outing, clubEmail);
         return (
           <li key={outing.id}>
@@ -97,12 +94,7 @@ export function UpcomingOutings({
                   <div className="flex items-center gap-1.5">
                     <dt className="sr-only">Starts</dt>
                     <CalendarDays className="size-4" aria-hidden="true" />
-                    <dd>
-                      {formatDateTime(startsAt, {
-                        dateStyle: "full",
-                        timeStyle: "short",
-                      })}
-                    </dd>
+                    <dd>{formatOutingWhen(outing)}</dd>
                   </div>
                   {outing.location ? (
                     <div className="flex items-center gap-1.5">
@@ -141,4 +133,35 @@ export function UpcomingOutings({
       })}
     </ul>
   );
+}
+
+/**
+ * "Saturday, 3 October 2026, 09:00 – 13:00" when an end time is on
+ * file, and just the start otherwise.
+ *
+ * The end time is collected and cross-validated against the start, so it
+ * has to be rendered somewhere or the officer who typed it watches it
+ * vanish. Only the clock is repeated for a same-day finish — restating
+ * the date reads as a second event. A multi-day outing gets the full
+ * date on both sides, because "09:00 – 13:00" across two days is a lie.
+ */
+function formatOutingWhen(outing: VolunteerEventEntry): string {
+  const startsAt = Temporal.Instant.fromEpochMilliseconds(outing.startsAtMs);
+  const start = formatDateTime(startsAt, {
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+  if (outing.endsAtMs === null) {
+    return start;
+  }
+  const endsAt = Temporal.Instant.fromEpochMilliseconds(outing.endsAtMs);
+  const zone = Temporal.Now.timeZoneId();
+  const sameDay = startsAt
+    .toZonedDateTimeISO(zone)
+    .toPlainDate()
+    .equals(endsAt.toZonedDateTimeISO(zone).toPlainDate());
+  const end = sameDay
+    ? formatDateTime(endsAt, { timeStyle: "short" })
+    : formatDateTime(endsAt, { dateStyle: "full", timeStyle: "short" });
+  return `${start} – ${end}`;
 }

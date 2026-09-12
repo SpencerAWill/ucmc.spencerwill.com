@@ -73,6 +73,13 @@ export function PhotoGrid({
 
   const [selectedYear, setSelectedYear] = useState<string>(ALL_VALUE);
 
+  // A `?tag=` naming a tag no photo carries is expected, not exceptional
+  // — /volunteer's outings may name an album tag before any photo is
+  // uploaded under it. Fall back to "All tags" so the trigger always
+  // shows the filter actually in effect; left as-is, Radix renders a
+  // blank trigger beside an empty grid and the viewer can't tell why.
+  const effectiveTag = tags.includes(selectedTag) ? selectedTag : ALL_VALUE;
+
   if (photos.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -89,7 +96,7 @@ export function PhotoGrid({
         return false;
       }
     }
-    if (selectedTag !== ALL_VALUE && p.tag !== selectedTag) {
+    if (effectiveTag !== ALL_VALUE && p.tag !== effectiveTag) {
       return false;
     }
     return true;
@@ -126,7 +133,7 @@ export function PhotoGrid({
           >
             Tag
           </label>
-          <Select value={selectedTag} onValueChange={onTagChange}>
+          <Select value={effectiveTag} onValueChange={onTagChange}>
             <SelectTrigger id="album-tag" className="w-[10rem]">
               <SelectValue />
             </SelectTrigger>
