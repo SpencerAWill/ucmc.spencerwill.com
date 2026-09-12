@@ -29,7 +29,7 @@
  * Layout of the picker and preview is left to the caller; this hook
  * supplies the ref, props, and the encoded result.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
 const OUTPUT_QUALITY = 0.92;
@@ -98,17 +98,32 @@ export function useImageResize(
     };
   }, [previewUrl]);
 
-  function reset() {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
+  /**
+   * **Stable across renders, and that is load-bearing.**
+   *
+   * This was a plain function in the hook body, so it got a fresh
+   * identity on every render. `SponsorFormDialog` listed it in a
+   * `useEffect` dep array and that effect calls `setForm(seedToForm(seed))`
+   * — a new object literal, which React can never bail out of — so
+   * opening the dialog looped: render → effect → setState → render → new
+   * `reset` identity → effect → … until React threw #185 ("Maximum
+   * update depth exceeded"). Any callback a hook hands back can end up in
+   * a consumer's dep array, so it has to be `useCallback`'d.
+   *
+   * The dep array is empty rather than `[previewUrl]`, which is what
+   * keeps the identity stable for the life of the hook. That means the
+   * revoke can't happen here — clearing `previewUrl` is enough, because
+   * the effect above revokes the previous URL as its cleanup whenever the
+   * value changes.
+   */
+  const reset = useCallback(() => {
     setPreviewUrl(null);
     setResult(null);
     setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }
+  }, []);
 
   async function onFileChosen(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
