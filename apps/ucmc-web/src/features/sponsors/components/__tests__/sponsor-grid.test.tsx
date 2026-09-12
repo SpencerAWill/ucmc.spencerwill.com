@@ -137,6 +137,21 @@ describe("SponsorGrid", () => {
     expect(screen.getAllByText("Roads Rivers and Trails")).toHaveLength(2);
   });
 
+  it("centres the manage row's controls against the text block", () => {
+    // The handle, the logo and the icon buttons are all fixed-height and
+    // the text block beside them is two or three lines tall, so a row
+    // aligned to `items-start` leaves them visibly high — measured at 8px
+    // of space above and 20px below. Every other sortable list in the app
+    // (`honorary-members`, `roles-list-editor`) centres its row; this one
+    // and /volunteer's shipped top-aligned.
+    const { container } = render(
+      <SponsorGrid sponsors={[sponsor()]} canSeePerks canManage />,
+    );
+    const row = container.querySelector("li");
+    expect(row?.className).toContain("items-center");
+    expect(row?.className).not.toContain("items-start");
+  });
+
   it("says so when there are no sponsors at all", () => {
     render(<SponsorGrid sponsors={[]} canSeePerks={false} />);
     expect(screen.getByText(/No sponsors listed yet/)).toBeInTheDocument();

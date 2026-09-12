@@ -196,7 +196,7 @@ function SortableSponsorList({
         <ul className="divide-y divide-border/60 rounded-md border border-border/60 bg-card/40">
           {items.map((sponsor) => (
             <SortableItem key={sponsor.id} value={sponsor.id} asChild>
-              <li className="flex items-start gap-3 px-3 py-3">
+              <li className="flex items-center gap-3 px-3 py-3">
                 <SortableItemHandle asChild>
                   <button
                     type="button"

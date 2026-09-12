@@ -133,7 +133,7 @@ function SortableProgramList({
         <ul className="divide-y divide-border/60 rounded-md border border-border/60 bg-card/40">
           {items.map((program) => (
             <SortableItem key={program.id} value={program.id} asChild>
-              <li className="flex items-start gap-2 px-3 py-2">
+              <li className="flex items-center gap-2 px-3 py-2">
                 <SortableItemHandle asChild>
                   <button
                     type="button"
