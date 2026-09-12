@@ -267,6 +267,8 @@ export function SidebarNav() {
   const canReadGear = hasPermission("gear:read") && pages.gear_inventory;
   const canLoanGear = hasPermission("gear:loan") && pages.gear_loans;
   const canViewHistory = hasPermission("history:view") && pages.history;
+  const canViewVolunteer =
+    hasPermission("public_volunteer:view") && pages.volunteer;
   const canViewPolicies =
     hasPermission("public_policies:view") && pages.policies;
   const canViewScholarships =
@@ -360,15 +362,13 @@ export function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          {pages.volunteer ? (
+          {canViewVolunteer ? (
             <SidebarMenuItem>
-              <SidebarMenuButton
-                aria-disabled
-                tabIndex={-1}
-                tooltip="Volunteer (coming soon)"
-              >
-                <HandHeart />
-                <span>Volunteer</span>
+              <SidebarMenuButton asChild tooltip="Volunteer">
+                <Link to="/volunteer">
+                  <HandHeart />
+                  <span>Volunteer</span>
+                </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}

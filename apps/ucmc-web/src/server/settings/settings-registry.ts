@@ -257,8 +257,8 @@ export const SETTINGS = {
   // on direct navigation. Defaults are ON so existing live pages stay
   // accessible after deploy; officers toggle individual pages off as
   // needed. Exposed via `getPublicFlagsFn` so the sidebar and route guards
-  // can consult them synchronously. Blog and Volunteer have no route yet —
-  // their flags only hide the "coming soon" sidebar entry.
+  // can consult them synchronously. Blog has no route yet — its flag only
+  // hides the "coming soon" sidebar entry.
   "pages.gear_cave": z.boolean().default(true).register(registry, {
     label: "Gear Cave enabled",
     description:
@@ -334,7 +334,7 @@ export const SETTINGS = {
   "pages.volunteer": z.boolean().default(true).register(registry, {
     label: "Volunteer enabled",
     description:
-      "When off, the Volunteer “coming soon” sidebar entry is hidden. Volunteer has no route yet.",
+      "When off, the Volunteer sidebar entry is hidden and the /volunteer route returns notFound for everyone.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",

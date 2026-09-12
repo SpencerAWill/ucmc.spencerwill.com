@@ -49,6 +49,12 @@ export const HERO_PAGES = {
     defaultTagline:
       "Trip-planning paperwork, packing guides, UC student support contacts, external training organizations, and a curated set of outdoor links.",
   },
+  volunteer: {
+    label: "Volunteer",
+    defaultHeading: "Volunteer with UCMC",
+    defaultTagline:
+      "We climb, paddle, and hike on ground other people keep open. Here's the work we do to keep it that way — and how to join us or ask for a hand.",
+  },
   history: {
     label: "History",
     defaultHeading: "UCMC History",
