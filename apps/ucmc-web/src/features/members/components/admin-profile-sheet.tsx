@@ -86,7 +86,6 @@ export function AdminProfileSheet({
     validators: {
       onMount: profileInputSchema,
       onChange: profileInputSchema,
-      onBlur: profileInputSchema,
       onSubmit: profileInputSchema,
     },
     onSubmit: ({ value }) => {

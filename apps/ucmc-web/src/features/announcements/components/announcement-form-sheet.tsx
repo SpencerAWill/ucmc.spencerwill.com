@@ -108,7 +108,6 @@ function AnnouncementForm({
     defaultValues: defaults,
     validators: {
       onChange: announcementInputSchema,
-      onBlur: announcementInputSchema,
       onSubmit: announcementInputSchema,
     },
     onSubmit: ({ value }) => {

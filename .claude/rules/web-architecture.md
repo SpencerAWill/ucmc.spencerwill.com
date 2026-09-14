@@ -35,6 +35,10 @@ Everything else under those features stays private. Two one-off `ZONE_EXCEPTIONS
 
 **Inline `useMutation` in routes/components is forbidden.** Each mutation has a `use-*.ts` hook with a fixed cache-invalidation contract; call sites pass `onSuccess`/`onError` to `mutate()`.
 
+## Forms (`src/lib/form/`)
+
+`useAppForm` / `withForm` come from `createFormHook`, with the shared field components in `fields.tsx`. Each form passes one Zod schema as **`onMount` + `onChange` + `onSubmit` — never `onBlur`.** TanStack Form stores errors per cause and a change re-runs only the change validator, so a form-level blur validator stamps `errorMap.onBlur` on every invalid field whenever any field blurs, and each entry clears only when that field itself blurs. On `/register/profile` that left the policies checkbox invalid after being ticked until it lost focus, holding `canSubmit` false. _When_ an error is shown is a separate question, answered by `meta.isBlurred` in `field-state.ts` — not `isTouched`, which flips on the first change.
+
 ## Server-only module boundary
 
 TanStack Start's import-protection plugin blocks `*.server.*` from the client graph and `*.client.*` from the server graph. Three layers for any server-fn module:

@@ -127,6 +127,21 @@ describe("ProfileForm", () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: "/my/profile" });
   });
 
+  it("enables submit as soon as the ack checkbox is checked, without blurring it", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    // Leave another field first: on this form that runs the form-level
+    // blur validator over every field while the box is still unchecked.
+    await user.click(screen.getByLabelText(/bio/i));
+    await user.tab();
+
+    await user.click(screen.getByLabelText(/acknowledge.*policies/i));
+    expect(
+      screen.getByRole("button", { name: /submit for review/i }),
+    ).toBeEnabled();
+  });
+
   it("does not submit when the policies-ack checkbox is left unchecked", async () => {
     const user = userEvent.setup();
     submitProfileFn.mockResolvedValue({ ok: true });

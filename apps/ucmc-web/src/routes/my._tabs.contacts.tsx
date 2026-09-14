@@ -105,7 +105,6 @@ function ContactsEditor({ defaults }: { defaults: ProfileFormShape }) {
     validators: {
       onMount: profileInputSchema,
       onChange: profileInputSchema,
-      onBlur: profileInputSchema,
       onSubmit: profileInputSchema,
     },
     onSubmit: ({ value }) => {
