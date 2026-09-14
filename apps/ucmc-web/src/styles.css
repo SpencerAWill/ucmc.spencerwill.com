@@ -148,7 +148,7 @@ body,
  * empty + invalid until blur, so the field never goes "valid green"
  * while typing. Triggering a 1ms named animation gives JS an
  * `animationstart` event it can listen for and sync the DOM value
- * back into form state. See `useFormAutofillSync` in lib/form. */
+ * back into form state. See `useNativeValueSync` in `lib/form/fields.tsx`. */
 @keyframes form-autofill-detect {
   to {
     background: transparent;

@@ -1,10 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { isValidPhoneNumber } from "react-phone-number-input";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { useAppForm } from "#/lib/form/form";
+import { isValidPhoneNumber } from "react-phone-number-input";
 
 const schema = z.object({
   fullName: z.string().trim().min(1, "Required"),
@@ -52,6 +53,39 @@ function TestForm({ onSubmit }: { onSubmit: (values: Values) => void }) {
 }
 
 describe("form fields", () => {
+  it("keeps text typed or autofilled before hydration", async () => {
+    const onSubmit = vi.fn();
+    const ui = <TestForm onSubmit={onSubmit} />;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = renderToString(ui);
+    // Simulate the user (or browser autofill) filling the SSR'd inputs
+    // before the JS bundle has hydrated.
+    (container.querySelector("#fullName") as HTMLInputElement).value =
+      "Pre Hydration";
+    (container.querySelector("#phone") as HTMLInputElement).value =
+      "(513) 555-1234";
+    (container.querySelector("#bio") as HTMLTextAreaElement).value =
+      "typed early";
+
+    render(ui, { container, hydrate: true });
+    const user = userEvent.setup();
+
+    // Force a re-render of every field after hydration.
+    await user.type(screen.getByLabelText("Bio"), "!");
+
+    expect(screen.getByLabelText("Full name")).toHaveValue("Pre Hydration");
+    expect(screen.getByLabelText("Phone")).toHaveValue("(513) 555-1234");
+    expect(screen.getByLabelText("Bio")).toHaveValue("typed early!");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      fullName: "Pre Hydration",
+      phone: "+15135551234",
+      bio: "typed early!",
+    });
+  });
+
   it("does not flag a field invalid until it has been blurred", async () => {
     const user = userEvent.setup();
     render(<TestForm onSubmit={vi.fn()} />);
