@@ -203,7 +203,6 @@ function AddEmailForm() {
     validators: {
       onMount: addEmailSchema,
       onChange: addEmailSchema,
-      onBlur: addEmailSchema,
       onSubmit: addEmailSchema,
     },
     onSubmit: ({ value }) => {

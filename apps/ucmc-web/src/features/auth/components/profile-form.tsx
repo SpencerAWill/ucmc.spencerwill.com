@@ -1,8 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
-import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
 import { PrivateDetailFields } from "#/components/profile/private-detail-fields";
+import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import { PublicProfileFields } from "#/components/profile/public-profile-fields";
 import { Checkbox } from "#/components/ui/checkbox";
 import { Input } from "#/components/ui/input";
@@ -10,19 +10,14 @@ import { Label } from "#/components/ui/label";
 import { useSubmitProfile } from "#/features/auth/api/use-submit-profile";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
-import type {
-  EmergencyContactInput,
-  RegistrationInput,
-} from "#/server/profile/profile-schemas";
+import type { RegistrationInput } from "#/server/profile/profile-schemas";
 import { registrationInputSchema } from "#/server/profile/profile-schemas";
 
 export interface ProfileFormDefaults {
   fullName?: string;
   preferredName?: string;
   phone?: string;
-  emergencyContacts?: EmergencyContactInput[];
   ucAffiliation?: "student" | "faculty" | "staff" | "alum" | "community" | "";
-  bio?: string;
 }
 
 export function ProfileForm({
@@ -45,28 +40,38 @@ export function ProfileForm({
   const mutation = useSubmitProfile();
 
   const form = useAppForm({
+    // Spread the shared empty shape first: this form renders only the
+    // required fields, but `registrationInputSchema` and
+    // `submitProfileFn` still take the whole thing. Bio and emergency
+    // contacts therefore submit empty, and /register/pending fills them
+    // in afterwards. `policiesAck` starts false on every path —
+    // registration requires the tick, and no other caller reads it.
     defaultValues: {
+      ...EMPTY_PROFILE_FORM_VALUES,
       fullName: defaults?.fullName ?? "",
       preferredName: defaults?.preferredName ?? "",
       phone: defaults?.phone ?? "",
-      emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",
-      bio: defaults?.bio ?? "",
-      // Always starts unchecked — registration requires the user to
-      // tick it before submit; non-registration paths never look at
-      // this field.
-      policiesAck: false,
     },
     // onMount validates once on load — if defaults are invalid (e.g.
     // empty required fields on the registration form), form-level
-    // errors are set. onBlur establishes the first visible validation
-    // per field; onChange re-runs on every keystroke so invalid → valid
-    // transitions flip red to green immediately. onSubmit is the final
-    // gate.
+    // errors are set so the submit gate starts closed. onChange re-runs
+    // the whole schema on every change, so every field's errors are
+    // always current and invalid → valid transitions flip red to green
+    // immediately. onSubmit is the final gate.
+    //
+    // No onBlur validator, deliberately. TanStack Form keeps errors per
+    // cause, and a change re-runs only the change validator. A
+    // form-level blur validator stamps `errorMap.onBlur` on *every*
+    // invalid field whenever *any* field blurs, and each entry clears
+    // only when that field itself blurs — so ticking the policies box
+    // left a stale blur error on it and the submit button stayed
+    // disabled until the box lost focus. When an error is *shown* is
+    // `meta.isBlurred` in `lib/form/field-state.ts`, which needs no
+    // blur validator.
     validators: {
       onMount: registrationInputSchema,
       onChange: registrationInputSchema,
-      onBlur: registrationInputSchema,
       onSubmit: registrationInputSchema,
     },
     onSubmit: ({ value }) => {
@@ -142,8 +147,6 @@ export function ProfileForm({
             <PublicProfileFields form={form} />
             <PrivateDetailFields form={form} />
 
-            <EmergencyContactFields form={form} />
-
             {/*
               Policies acknowledgment — required at registration to
               persist `policiesAcknowledgedAt` + `policiesVersion` on
@@ -212,24 +215,6 @@ export function ProfileForm({
                 );
               }}
             </form.AppField>
-
-            <div className="rounded-md border bg-muted/40 p-3 text-sm">
-              <p className="font-medium">After approval</p>
-              <p className="mt-1 text-muted-foreground">
-                You'll need to print and sign UCMC's{" "}
-                <a
-                  href="/waiver"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline underline-offset-4"
-                >
-                  paper waiver of liability
-                </a>{" "}
-                and bring the signed copy to a club meeting. The Treasurer or
-                President will mark you attested before you can participate in
-                club activities.
-              </p>
-            </div>
 
             <form.AppForm>
               <form.SubscribeButton label="Submit for review" />

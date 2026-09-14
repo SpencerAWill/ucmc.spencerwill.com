@@ -56,7 +56,6 @@ export function MagicLinkForm({
     validators: {
       onMount: magicLinkSchema,
       onChange: magicLinkSchema,
-      onBlur: magicLinkSchema,
       onSubmit: magicLinkSchema,
     },
     onSubmit: ({ value }) => {

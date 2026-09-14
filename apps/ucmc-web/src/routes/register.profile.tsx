@@ -15,6 +15,12 @@ import { requireRegistrationContext } from "#/features/auth/guards";
  *     route accepts that, submit upserts the profile against the
  *     existing user.
  *
+ * The form asks only for what an exec needs to review the account.
+ * Emergency contacts and the bio are optional, so they live on
+ * /register/pending where a member can add them while they wait —
+ * the dynamic contacts list is the worst thing on this page to
+ * operate on a phone, and nothing about it gates approval.
+ *
  * On submit, `submitProfileFn` either inserts or upserts the user,
  * upserts the profile, opens a session if one isn't already open,
  * clears the proof cookie if present, and the form navigates to
@@ -36,6 +42,7 @@ function ProfilePage() {
         <h1 className="text-2xl font-semibold">Finish registering</h1>
         <p className="text-sm text-muted-foreground">
           These details are shared only with UCMC execs for member verification.
+          You can add emergency contacts and a short bio on the next page.
         </p>
       </header>
       <ProfileForm email={reg.email} redirectTo="/register/pending" />

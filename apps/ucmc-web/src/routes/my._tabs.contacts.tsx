@@ -1,17 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { toast } from "sonner";
 
-import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
-import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { useSubmitDetails } from "#/features/auth/api/use-submit-details";
+import { ContactsEditor } from "#/features/auth/components/contacts-editor";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
-import { useAppForm } from "#/lib/form/form";
-import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
-import { profileInputSchema } from "#/server/profile/profile-schemas";
 
 /**
  * `/my/contacts` — the member's emergency contacts, split out of the
@@ -20,10 +14,10 @@ import { profileInputSchema } from "#/server/profile/profile-schemas";
  * get a URL that can be pointed at directly instead of being buried
  * below legal name and phone.
  *
- * Same privacy class as Details: `members:view_private` only. Writes go
- * through the shared `submitDetailsFn`, so this page passes `fullName`
- * and `phone` through unchanged from the loaded profile — see the
- * comment on `ContactsEditor`.
+ * Same privacy class as Details: `members:view_private` only. The form
+ * itself is `ContactsEditor`, shared with `/register/pending` so a
+ * member awaiting approval can fill in contacts they skipped at
+ * registration.
  */
 export const Route = createFileRoute("/my/_tabs/contacts")({
   staticData: { pageFlag: "my_contacts" },
@@ -83,73 +77,5 @@ function AccountContactsPage() {
         tab.
       </p>
     </div>
-  );
-}
-
-function ContactsEditor({ defaults }: { defaults: ProfileFormShape }) {
-  const mutation = useSubmitDetails();
-
-  // The form holds the whole shared profile shape (see
-  // `profile-form-shape.ts` — `withForm`'s generics are invariant, so
-  // every profile form declares the same shape). Only the emergency
-  // contacts below are editable here.
-  //
-  // `fullName` and `phone` are submitted unchanged from `defaults`
-  // because `submitDetailsFn` takes the whole `detailsInputSchema`
-  // shape — dropping them would blank the member's legal name and phone
-  // on every save from this page. They come from the saved profile via
-  // the same `profileQueryOptions` cache the Details tab writes to, so
-  // they're already valid and current.
-  const form = useAppForm({
-    defaultValues: defaults,
-    validators: {
-      onMount: profileInputSchema,
-      onChange: profileInputSchema,
-      onBlur: profileInputSchema,
-      onSubmit: profileInputSchema,
-    },
-    onSubmit: ({ value }) => {
-      mutation.mutate(
-        {
-          fullName: value.fullName,
-          phone: value.phone,
-          emergencyContacts: value.emergencyContacts,
-        },
-        {
-          onSuccess: () => {
-            toast.success("Emergency contacts saved");
-            // See profile-form.tsx for why this synchronous reset is needed.
-            form.reset(form.state.values);
-          },
-          onError: () => {
-            toast.error("Couldn’t save your contacts. Please try again.");
-          },
-        },
-      );
-    },
-  });
-
-  useUnsavedChangesGuard(form, { skip: () => mutation.isSuccess });
-
-  return (
-    <form
-      className="space-y-6"
-      onSubmit={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        void form.handleSubmit();
-      }}
-    >
-      <form.Subscribe selector={(s) => s.isSubmitting}>
-        {(isSubmitting) => (
-          <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
-            <EmergencyContactFields form={form} />
-            <form.AppForm>
-              <form.SubscribeButton label="Save changes" />
-            </form.AppForm>
-          </fieldset>
-        )}
-      </form.Subscribe>
-    </form>
   );
 }

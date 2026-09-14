@@ -135,7 +135,6 @@ export function FeedbackForm() {
     validators: {
       onMount: validateFeedback,
       onChange: validateFeedback,
-      onBlur: validateFeedback,
       onSubmit: validateFeedback,
     },
     onSubmit: ({ value, formApi }) => {
