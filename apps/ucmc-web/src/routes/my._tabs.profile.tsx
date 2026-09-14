@@ -6,6 +6,7 @@ import { PROFILE_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useSubmitPublicProfile } from "#/features/auth/api/use-submit-public-profile";
 import { AvatarEditor } from "#/features/auth/components/avatar-editor";
+import { BioFields } from "#/components/profile/bio-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 import { PublicProfileFields } from "#/components/profile/public-profile-fields";
@@ -157,6 +158,7 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
         {(isSubmitting) => (
           <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
             <PublicProfileFields form={form} />
+            <BioFields form={form} />
             <form.AppForm>
               <form.SubscribeButton label="Save changes" />
             </form.AppForm>

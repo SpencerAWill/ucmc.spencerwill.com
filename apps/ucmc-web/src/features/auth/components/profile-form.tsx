@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
+import { BioFields } from "#/components/profile/bio-fields";
 import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
 import { PrivateDetailFields } from "#/components/profile/private-detail-fields";
 import { PublicProfileFields } from "#/components/profile/public-profile-fields";
@@ -149,6 +150,7 @@ export function ProfileForm({
               </p>
             </div>
             <PublicProfileFields form={form} />
+            <BioFields form={form} />
             <PrivateDetailFields form={form} />
 
             <EmergencyContactFields form={form} />
