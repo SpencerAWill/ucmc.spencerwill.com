@@ -52,6 +52,22 @@ function TestForm({ onSubmit }: { onSubmit: (values: Values) => void }) {
 }
 
 describe("form fields", () => {
+  it("does not flag a field invalid until it has been blurred", async () => {
+    const user = userEvent.setup();
+    render(<TestForm onSubmit={vi.fn()} />);
+    const phone = screen.getByLabelText("Phone");
+
+    await user.type(phone, "5");
+    expect(phone).not.toHaveAttribute("aria-invalid");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    await user.tab();
+    expect(phone).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Enter a valid phone number",
+    );
+  });
+
   it("lets a soft keyboard erase the phone number past formatting punctuation", async () => {
     const user = userEvent.setup();
     render(<TestForm onSubmit={vi.fn()} />);

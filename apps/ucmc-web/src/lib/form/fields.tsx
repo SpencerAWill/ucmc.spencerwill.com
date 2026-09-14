@@ -2,10 +2,13 @@
 // for meta. Since they render inside `<AppField>` (which already
 // subscribes to all field state changes), `field.state.meta` and
 // `field.state.value` are always fresh at render time. Adding a
-// useStore call would create a competing subscription that only
-// triggers on meta changes — missing value changes needed for
-// validation-attribute computation (e.g. isDirty + hasValue → green).
+// useStore call on the *field* store would create a competing
+// subscription that only triggers on meta changes — missing value
+// changes needed for validation-attribute computation (e.g. isDirty +
+// hasValue → green). The one `useStore` below reads the *form* store
+// (`submissionAttempts`), which `<AppField>` does not subscribe to.
 import { lazy, Suspense, useEffect, useRef } from "react";
+import { useStore } from "@tanstack/react-form";
 import PhoneInputBase from "react-phone-number-input/input";
 
 import { Button } from "#/components/ui/button";
@@ -21,10 +24,11 @@ import { Slider as ShadcnSlider } from "#/components/ui/slider";
 import { Switch as ShadcnSwitch } from "#/components/ui/switch";
 import { Textarea as ShadcnTextarea } from "#/components/ui/textarea";
 import { useFieldContext, useFormContext } from "#/lib/form/context";
-import { fieldValidationAttrs } from "#/lib/form/field-state";
+import { fieldValidationAttrs, hasVisibleError } from "#/lib/form/field-state";
 import { DEFAULT_PHONE_COUNTRY } from "#/lib/phone-format";
 
 import type { MarkdownEditorHandle } from "#/components/editor/markdown-editor";
+import type { AnyFieldApi } from "@tanstack/react-form";
 
 // Matches the `@keyframes form-autofill-detect` rule in `styles.css`.
 const AUTOFILL_ANIMATION_NAME = "form-autofill-detect";
@@ -67,6 +71,35 @@ function describedById({
     ids.push(`${fieldName}-error`);
   }
   return ids.length > 0 ? ids.join(" ") : undefined;
+}
+
+/**
+ * The presentation state every field component derives the same way:
+ * whether to render the error node, the `aria-invalid` / `data-valid`
+ * attributes for the control, and the `aria-describedby` string.
+ *
+ * "Submitted" is read from the field's own form store rather than
+ * `useFormContext()` because `formContext` is only provided inside
+ * `<form.AppForm>`, and callers wrap just the submit button in that —
+ * the fields render outside it.
+ */
+function useFieldPresentation(field: AnyFieldApi, description?: string) {
+  const submitted = useStore(
+    field.form.store,
+    (state) => state.submissionAttempts > 0,
+  );
+  const { meta, value } = field.state;
+  const hasError = hasVisibleError(meta, submitted);
+  return {
+    hasError,
+    errors: toFieldErrors(meta.errors),
+    validation: fieldValidationAttrs(meta, value, submitted),
+    ariaDescribedBy: describedById({
+      fieldName: field.name,
+      hasDescription: Boolean(description),
+      hasError,
+    }),
+  };
 }
 
 export function SubscribeButton({ label }: { label: string }) {
@@ -124,8 +157,8 @@ export function TextField({
   readOnly?: boolean;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Browser autofill (esp. Chrome on autoComplete="name") sets the
@@ -157,13 +190,6 @@ export function TextField({
     return () => input.removeEventListener("animationstart", handler);
   }, [field]);
 
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
-
   return (
     <Field className="gap-1.5">
       <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
@@ -189,10 +215,7 @@ export function TextField({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -212,14 +235,8 @@ export function TextArea({
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
 
   return (
     <Field className="gap-1.5">
@@ -242,10 +259,7 @@ export function TextArea({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -284,14 +298,8 @@ export function MarkdownField({
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
   // The editor renders a contenteditable `<div>`, which `<label htmlFor>`
   // doesn't focus. Wire screen-reader association via aria-labelledby
   // and route mouse clicks on the label through an imperative focus
@@ -328,10 +336,7 @@ export function MarkdownField({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -358,14 +363,8 @@ export function Select({
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
 
   return (
     <Field className="gap-1.5">
@@ -403,10 +402,7 @@ export function Select({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -455,14 +451,8 @@ export function PhoneField({
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
 
   return (
     <Field className="gap-1.5">
@@ -487,10 +477,7 @@ export function PhoneField({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -504,7 +491,7 @@ export function Slider({
   description?: string;
 }) {
   const field = useFieldContext<number>();
-  const { meta } = field.state;
+  const { hasError, errors } = useFieldPresentation(field, description);
 
   return (
     <Field className="gap-1.5">
@@ -516,9 +503,7 @@ export function Slider({
         onValueChange={(v) => field.handleChange(v[0])}
       />
       {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {meta.isTouched ? (
-        <FieldError errors={toFieldErrors(meta.errors)} />
-      ) : null}
+      {hasError ? <FieldError errors={errors} /> : null}
     </Field>
   );
 }
@@ -531,7 +516,7 @@ export function Switch({
   description?: string;
 }) {
   const field = useFieldContext<boolean>();
-  const { meta } = field.state;
+  const { hasError, errors } = useFieldPresentation(field, description);
 
   return (
     <Field orientation="horizontal" className="gap-2">
@@ -544,9 +529,7 @@ export function Switch({
       />
       <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {meta.isTouched ? (
-        <FieldError errors={toFieldErrors(meta.errors)} />
-      ) : null}
+      {hasError ? <FieldError errors={errors} /> : null}
     </Field>
   );
 }
