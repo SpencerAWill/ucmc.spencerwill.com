@@ -426,6 +426,20 @@ export function Select({
  * full component adds a country-flag dropdown that we don't want for a
  * US-focused club app). The inner input renders with shadcn's Input
  * styling via the `inputComponent` prop.
+ *
+ * `smartCaret={false}` is deliberate. The default "smart" input
+ * intercepts Backspace/Delete on `keydown` by `keyCode` (8 / 46) so
+ * that erasing formatting punctuation erases the digit before it. Android
+ * soft keyboards report `keyCode 229` for those keys, so the interception
+ * never fires, the plain `input` event arrives with only the `)` gone,
+ * and the value re-formats straight back to `(513)` — the user cannot
+ * delete past the area code. The library also documents caret-position
+ * bugs with the smart input on Samsung keyboards, and its caret fix-ups
+ * "don't work for custom `inputComponent`s", which we use. The basic
+ * input handles the punctuation case by comparing parsed values instead
+ * of key codes and never moves the caret itself, at the cost of the
+ * caret jumping to the end when editing mid-number — an acceptable
+ * trade for a ten-digit field.
  */
 export function PhoneField({
   label,
@@ -457,6 +471,7 @@ export function PhoneField({
         id={field.name}
         name={field.name}
         country={country}
+        smartCaret={false}
         autoComplete={autoComplete}
         placeholder={placeholder ?? "(555) 555-5555"}
         value={field.state.value || undefined}
