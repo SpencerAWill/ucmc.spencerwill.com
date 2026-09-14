@@ -31,7 +31,7 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 ## Commits & PRs
 
 - **Conventional Commits**, enforced by commitlint (Husky `commit-msg`). Scopes are validated against pnpm workspace names plus `devcontainer`; use `global` for repo-wide changes. `pnpm commit` walks you through it.
-- Husky `pre-commit` runs lint-staged.
+- Husky `pre-commit` runs lint-staged, then `typecheck` for each package whose TypeScript changed (`apps/ucmc-web`, `infra`). Typecheck can't live inside lint-staged: `tsc` given explicit filenames ignores `tsconfig.json` entirely, so it has to run once per project, and lint-staged runs different globs concurrently — it would read files the formatters are still rewriting.
 - **Split multi-part work into sequenced commits that are each green and independently revertable.** Stage deliberately — `git add -A` sweeps up unrelated work in progress.
 - CI: `ci.yml` per-PR (paths-filtered), `deploy.yml` on push to main (dev auto, prod via `workflow_dispatch` + approval).
 

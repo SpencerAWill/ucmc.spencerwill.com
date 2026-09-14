@@ -82,11 +82,20 @@ On every commit, the following runs automatically via lint-staged:
 - **ESLint** — lints and fixes `*.js`, `*.ts`, `*.tsx` files
 - **Prettier** — formats all supported file types
 
+The `pre-commit` hook then runs **TypeScript** (`tsc --noEmit`) for each
+package whose TypeScript changed — `apps/ucmc-web` (~8s) or `infra` (~1s) —
+so a commit can't introduce a type error that only CI would catch. A commit
+touching neither package's TypeScript skips it entirely. Deletions, renames
+and `tsconfig.json` edits all count as changes, since removing a module
+breaks whatever imported it.
+
 To run manually:
 
 ```bash
 pnpm exec eslint .
 pnpm exec prettier --write .
+pnpm --filter ucmc-web typecheck
+cd infra && pnpm typecheck
 ```
 
 ### Web App
