@@ -36,4 +36,6 @@ They reach the client through `getPublicBrandingFn` / `publicBrandingQueryOption
 
 ## Tab bars
 
-Shared tab bars live in `src/components/layouts/` (e.g. `FeedbackTabsBar`) when two features would otherwise have to cross-import each other. Surface switchers between two URLs are **real `<Link>`s, not a tablist of buttons** — two URLs must keep right-click / middle-click / copy-link, with `aria-current` conveying the selection.
+Tab bars live in `src/components/layouts/` — `FeedbackTabsBar` because two features would otherwise have to cross-import each other, `AccountTabsBar` (the `/my/_tabs` bar) because a `createFileRoute` module can't be rendered without a router and the active-tab logic is exactly what's worth pinning in a test. Surface switchers between two URLs are **real `<Link>`s, not a tablist of buttons** — two URLs must keep right-click / middle-click / copy-link, with `aria-current` conveying the selection.
+
+**The selected tab is computed from `useLocation()` and resolved through `cn()`, not handed to `activeProps`.** The router concatenates `activeProps`' `className` onto the base one, so conflicting Tailwind utilities (`border-transparent` vs `border-primary`) are settled by stylesheet order rather than by the route; `twMerge` settles them deterministically instead. The active tab carries three signals — tinted panel, primary underline, weight/contrast bump — because a 2px underline alone is easy to miss on a row that scrolls horizontally on a phone.
