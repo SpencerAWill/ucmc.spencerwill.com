@@ -157,7 +157,24 @@ export interface ListGearItemFilters {
    *  TypeScript so paging and totals stay correct — filtering a page
    *  after the fact returns short pages and a lying count. */
   availability?: GearAvailability;
+  /** Facet filter, already resolved to ids and coerced to the storage
+   *  columns by the action — the repo never sees a raw form string. */
+  attributes?: AttributeFilter[];
   q?: string;
+}
+
+/**
+ * One facet: a definition and the values that satisfy it. Values within
+ * a facet are OR'd (a member picking "M or L" means either), and
+ * separate facets are AND'd (size M *and* dry-treated) — which is the
+ * opposite of how the tag filter behaves, and deliberately so. A tag is
+ * a label somebody chose to stick on; an attribute answers a fixed
+ * question, so two values of the same question are alternatives.
+ */
+export interface AttributeFilter {
+  defId: string;
+  texts: string[];
+  numbers: number[];
 }
 
 export type GearItemSortKey = "code" | "created_at" | "updated_at" | "model";
@@ -208,6 +225,31 @@ function itemWhere(filters: ListGearItemFilters) {
       ),
     );
   }
+  for (const facet of filters.attributes ?? []) {
+    const match = attributeValueMatch(facet);
+    if (match === null) {
+      continue;
+    }
+    // Both levels are checked because the repo is not told which one
+    // the definition lives at, and a def only ever has rows in its own
+    // level's table — so the union is exact, not a guess.
+    clauses.push(
+      sql`(
+        EXISTS (
+          SELECT 1 FROM ${schema.gearItemAttributeValues} iv
+          WHERE iv.item_id = ${schema.gearItems.id}
+            AND iv.def_id = ${facet.defId}
+            AND ${match}
+        )
+        OR EXISTS (
+          SELECT 1 FROM ${schema.gearModelAttributeValues} mv
+          WHERE mv.model_id = ${schema.gearItems.modelId}
+            AND mv.def_id = ${facet.defId}
+            AND ${match}
+        )
+      )`,
+    );
+  }
   if (filters.tagIds && filters.tagIds.length > 0) {
     const tagIds = filters.tagIds;
     clauses.push(
@@ -221,6 +263,38 @@ function itemWhere(filters: ListGearItemFilters) {
     );
   }
   return clauses.length === 0 ? undefined : and(...clauses);
+}
+
+/**
+ * The value test inside a facet's EXISTS, written once so the item and
+ * model halves can't drift. Column names are bare because the caller
+ * aliases both tables to `iv` / `mv` — and identical bare names is
+ * precisely why one fragment can serve both.
+ */
+function attributeValueMatch(facet: AttributeFilter) {
+  const parts = [];
+  if (facet.texts.length > 0) {
+    // Each value gets its own placeholder: handing drizzle the array
+    // whole binds one array-shaped parameter, which SQLite rejects.
+    parts.push(
+      sql`value_text IN (${sql.join(
+        facet.texts.map((t) => sql`${t}`),
+        sql`, `,
+      )})`,
+    );
+  }
+  if (facet.numbers.length > 0) {
+    parts.push(
+      sql`value_number IN (${sql.join(
+        facet.numbers.map((n) => sql`${n}`),
+        sql`, `,
+      )})`,
+    );
+  }
+  if (parts.length === 0) {
+    return null;
+  }
+  return sql`(${sql.join(parts, sql` OR `)})`;
 }
 
 /**

@@ -42,6 +42,11 @@ import {
   GEAR_STATUS_VALUES,
 } from "#/features/gear/server/gear-fns";
 import { GEAR_AVAILABILITY } from "#/features/gear/lib/availability";
+import {
+  parseAttributeSearchParams,
+  toAttributeFacets,
+  toAttributeSearchParams,
+} from "#/features/gear/lib/attributes";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
 const SORT_VALUES = ["code", "created_at", "updated_at"] as const;
@@ -51,6 +56,10 @@ const VIEW_VALUES = ["list", "grid", "table"] as const;
 const searchSchema = z.object({
   type: z.string().optional(),
   tag: z.array(z.string()).optional(),
+  // Facet selections, one repeated param per chosen value:
+  // `attr=<defPublicId>:<value>`. Flat and repeated because that is
+  // what survives a copied link and a browser Back without a codec.
+  attr: z.array(z.string()).optional(),
   status: z.enum(GEAR_STATUS_VALUES).optional(),
   availability: z.enum(GEAR_AVAILABILITY).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
@@ -86,6 +95,7 @@ const DEFAULT_DIR: Record<(typeof SORT_VALUES)[number], "asc" | "desc"> = {
 const RESULT_SET_KEYS = [
   "type",
   "tag",
+  "attr",
   "status",
   "availability",
   "condition",
@@ -117,6 +127,7 @@ function GearIndexPage() {
   const toolbarState: GearToolbarState = {
     typePublicId: value.type ?? null,
     tagPublicIds: value.tag ?? [],
+    attributes: parseAttributeSearchParams(value.attr),
     status: value.status ?? "active",
     availability: value.availability ?? null,
     condition: value.condition ?? null,
@@ -127,11 +138,22 @@ function GearIndexPage() {
   };
 
   const onToolbarChange = (next: Partial<GearToolbarState>) => {
+    // Attributes are scoped to a type, so a type change invalidates
+    // every facet selection. Left in place they'd AND against the new
+    // type's rows and return nothing, with no chip visible to explain
+    // it — the toolbar only renders facets for the current type.
+    const typeChanged =
+      "typePublicId" in next &&
+      (next.typePublicId ?? null) !== toolbarState.typePublicId;
     set({
       ...("typePublicId" in next
         ? { type: next.typePublicId ?? undefined }
         : {}),
+      ...(typeChanged ? { attr: undefined } : {}),
       ...("tagPublicIds" in next ? { tag: next.tagPublicIds } : {}),
+      ...("attributes" in next
+        ? { attr: toAttributeSearchParams(next.attributes ?? {}) }
+        : {}),
       ...("status" in next ? { status: next.status } : {}),
       ...("availability" in next
         ? { availability: next.availability ?? undefined }
@@ -204,8 +226,10 @@ function GearIndexPage() {
     onClear: clearSelection,
   });
 
+  const attributeFacets = toAttributeFacets(toolbarState.attributes);
   const listInput = {
     typePublicId: toolbarState.typePublicId ?? undefined,
+    attributes: attributeFacets.length > 0 ? attributeFacets : undefined,
     tagPublicIds:
       toolbarState.tagPublicIds.length > 0
         ? toolbarState.tagPublicIds

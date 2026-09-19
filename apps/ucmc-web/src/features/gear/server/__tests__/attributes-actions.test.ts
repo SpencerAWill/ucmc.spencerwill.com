@@ -28,8 +28,12 @@ const {
   listGearAttributeDefsAction,
   updateGearAttributeDefAction,
 } = await import("#/features/gear/server/attributes-actions.server");
-const { createGearAction, editGearAction, getGearDetailAction } =
-  await import("#/features/gear/server/gear-actions.server");
+const {
+  createGearAction,
+  editGearAction,
+  getGearDetailAction,
+  listGearAction,
+} = await import("#/features/gear/server/gear-actions.server");
 const { createGearModelAction } =
   await import("#/features/gear/server/models-actions.server");
 const { createGearTypeAction } =
@@ -578,5 +582,133 @@ describe("values on items and models", () => {
     // somebody archives the question makes the page quietly lie.
     const detail = await getGearDetailAction({ publicId: created.publicId });
     expect(detail.attributes.some((a) => a.text === "M")).toBe(true);
+  });
+});
+
+describe("filtering the gear list by attribute", () => {
+  async function seedTwoHarnesses() {
+    const typePublicId = await createType(`Harness ${crypto.randomUUID()}`);
+    const size = await createDef({
+      label: `Size ${crypto.randomUUID()}`,
+      kind: "select",
+      level: "item",
+      options: ["S", "M", "L"],
+      typePublicIds: [typePublicId],
+    });
+    const dry = await createDef({
+      label: `Dry ${crypto.randomUUID()}`,
+      kind: "boolean",
+      level: "model",
+      options: null,
+      typePublicIds: [typePublicId],
+    });
+    if (!size.ok || !dry.ok) throw new Error("def create failed");
+    const model = await createGearModelAction({
+      typePublicId,
+      name: `Corax ${crypto.randomUUID()}`,
+      manufacturer: null,
+      tracking: "coded",
+      description: null,
+      msrpCents: null,
+      serviceLifeYears: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+      attributes: [{ defPublicId: dry.publicId, value: "true" }],
+    });
+    if (!model.ok) throw new Error("model create failed");
+    const made: Record<string, string> = {};
+    for (const value of ["S", "M", "L"]) {
+      const item = await createGearAction({
+        modelPublicId: model.publicId,
+        code: `CH-${value}-${crypto.randomUUID().slice(0, 6)}`,
+        description: null,
+        thumbnailDataUrl: null,
+        acquiredAt: null,
+        acquisitionCostCents: null,
+        notesMarkdown: null,
+        condition: "serviceable",
+        tagPublicIds: [],
+        attributes: [{ defPublicId: size.publicId, value }],
+      });
+      if (!item.ok) throw new Error("gear create failed");
+      made[value] = item.publicId;
+    }
+    return { typePublicId, sizeDef: size.publicId, dryDef: dry.publicId, made };
+  }
+
+  it("ORs the values inside one facet", async () => {
+    await signInAsManager();
+    const seed = await seedTwoHarnesses();
+    const result = await listGearAction({
+      typePublicId: seed.typePublicId,
+      attributes: [{ defPublicId: seed.sizeDef, values: ["S", "L"] }],
+    });
+    // "M or L" as tags returns nothing, because tags AND. An attribute
+    // answers one question, so its values are alternatives.
+    expect(result.total).toBe(2);
+    expect(result.rows.map((r) => r.publicId).sort()).toEqual(
+      [seed.made.S, seed.made.L].sort(),
+    );
+  });
+
+  it("ANDs across facets, matching model-level and item-level together", async () => {
+    await signInAsManager();
+    const seed = await seedTwoHarnesses();
+    const result = await listGearAction({
+      typePublicId: seed.typePublicId,
+      attributes: [
+        { defPublicId: seed.sizeDef, values: ["M"] },
+        { defPublicId: seed.dryDef, values: ["true"] },
+      ],
+    });
+    // The size lives on the item, the dry flag on the model. One query
+    // has to satisfy both without the caller saying which is which.
+    expect(result.rows.map((r) => r.publicId)).toEqual([seed.made.M]);
+  });
+
+  it("returns nothing when a model-level facet doesn't match", async () => {
+    await signInAsManager();
+    const seed = await seedTwoHarnesses();
+    const result = await listGearAction({
+      typePublicId: seed.typePublicId,
+      attributes: [{ defPublicId: seed.dryDef, values: ["false"] }],
+    });
+    expect(result.total).toBe(0);
+  });
+
+  it("reports a total that matches the rows", async () => {
+    await signInAsManager();
+    const seed = await seedTwoHarnesses();
+    const result = await listGearAction({
+      typePublicId: seed.typePublicId,
+      attributes: [{ defPublicId: seed.sizeDef, values: ["S"] }],
+      perPage: 1,
+    });
+    // The count query mirrors the row query's joins and clauses; a
+    // narrower one reports a total the pages can't add up to.
+    expect(result.total).toBe(1);
+    expect(result.rows).toHaveLength(1);
+  });
+
+  it("ignores a facet naming a definition that no longer exists", async () => {
+    await signInAsManager();
+    const seed = await seedTwoHarnesses();
+    const result = await listGearAction({
+      typePublicId: seed.typePublicId,
+      attributes: [{ defPublicId: "gone", values: ["M"] }],
+    });
+    // A shared link outliving its definition should widen the list,
+    // not break the page.
+    expect(result.total).toBe(3);
+  });
+
+  it("ignores a value outside the definition's options", async () => {
+    await signInAsManager();
+    const seed = await seedTwoHarnesses();
+    const result = await listGearAction({
+      typePublicId: seed.typePublicId,
+      attributes: [{ defPublicId: seed.sizeDef, values: ["XXL", "M"] }],
+    });
+    expect(result.rows.map((r) => r.publicId)).toEqual([seed.made.M]);
   });
 });

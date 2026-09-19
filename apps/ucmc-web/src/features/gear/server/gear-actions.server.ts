@@ -32,9 +32,11 @@ import {
 } from "#/features/gear/server/repo.server";
 import { getGearModelByPublicId } from "#/features/gear/server/models-repo.server";
 import {
+  resolveAttributeFilters,
   resolveAttributeWrites,
   toValueDtos,
 } from "#/features/gear/server/attributes-actions.server";
+import type { AttributeFacetInput } from "#/features/gear/server/attributes-actions.server";
 import {
   listAttributeValuesForItems,
   listAttributeValuesForModels,
@@ -171,6 +173,9 @@ export interface ListGearActionInput {
   condition?: schema.GearCondition;
   whereabouts?: schema.GearWhereabouts;
   availability?: GearAvailability;
+  /** Facet selections — one entry per definition, values OR'd within
+   *  it and AND'd across entries. */
+  attributes?: AttributeFacetInput[];
   q?: string;
   sort?: "code" | "created_at" | "updated_at" | "model";
   dir?: "asc" | "desc";
@@ -304,6 +309,9 @@ export async function listGearAction(
     page: input.page,
     perPage: input.perPage,
   };
+  if (input.attributes && input.attributes.length > 0) {
+    repoOptions.attributes = await resolveAttributeFilters(input.attributes);
+  }
   if (input.typePublicId) {
     repoOptions.typeId = await resolveTypeId(input.typePublicId);
   }

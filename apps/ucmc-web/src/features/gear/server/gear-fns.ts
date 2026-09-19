@@ -239,6 +239,15 @@ export const listGearInputSchema = z.object({
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
   whereabouts: z.enum(GEAR_WHEREABOUTS_VALUES).optional(),
   availability: z.enum(GEAR_AVAILABILITY).optional(),
+  attributes: z
+    .array(
+      z.object({
+        defPublicId: z.string().min(1),
+        values: z.array(z.string().min(1).max(500)).min(1).max(50),
+      }),
+    )
+    .max(20)
+    .optional(),
   q: z.string().max(200).optional(),
   sort: z.enum(["code", "created_at", "updated_at", "model"]).optional(),
   dir: z.enum(["asc", "desc"]).optional(),

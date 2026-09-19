@@ -47,6 +47,7 @@ import {
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
 import { getGearTypesByPublicIds } from "#/features/gear/server/repo.server";
+import type { AttributeFilter } from "#/features/gear/server/repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { isUniqueViolation } from "#/server/db";
@@ -428,4 +429,58 @@ export function toValueDtos(
   return (rows ?? [])
     .map(toValueDto)
     .filter((dto) => formatAttributeValue(dto) !== null);
+}
+
+export interface AttributeFacetInput {
+  defPublicId: string;
+  values: string[];
+}
+
+/**
+ * Turns the facet selections in the URL into the repo's filter shape.
+ *
+ * Unknown, archived or unparseable selections are dropped rather than
+ * refused. A shared link outliving the definition it names should
+ * return a slightly wider list, not an error page — and the toolbar
+ * stops offering the facet at the same moment, so the chip disappears
+ * with it.
+ */
+export async function resolveAttributeFilters(
+  facets: AttributeFacetInput[],
+): Promise<AttributeFilter[]> {
+  if (facets.length === 0) {
+    return [];
+  }
+  const defs = await listGearAttributeDefs();
+  const byPublicId = new Map(defs.map((d) => [d.publicId, d]));
+  const out: AttributeFilter[] = [];
+  for (const facet of facets) {
+    const def = byPublicId.get(facet.defPublicId);
+    if (!def) {
+      continue;
+    }
+    const texts: string[] = [];
+    const numbers: number[] = [];
+    for (const raw of facet.values) {
+      const coerced = coerceAttributeValue(
+        // `required` is deliberately false here: this is a filter, not
+        // a save, and a blank selection means "don't filter".
+        { kind: def.kind, options: def.options, required: false },
+        raw,
+      );
+      if (!coerced.ok) {
+        continue;
+      }
+      if (coerced.text !== null) {
+        texts.push(coerced.text);
+      }
+      if (coerced.number !== null) {
+        numbers.push(coerced.number);
+      }
+    }
+    if (texts.length > 0 || numbers.length > 0) {
+      out.push({ defId: def.id, texts, numbers });
+    }
+  }
+  return out;
 }

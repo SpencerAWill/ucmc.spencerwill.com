@@ -169,3 +169,49 @@ export function attributeKeyFromLabel(label: string): string {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 }
+
+/**
+ * Facet selections in the URL, as repeated `attr=<defPublicId>:<value>`
+ * params.
+ *
+ * One flat repeated param rather than a nested object because that is
+ * what survives a copied link, a browser Back, and TanStack Router's
+ * search serialization without a custom codec. The separator is a colon
+ * and only the first one splits, so a value containing a colon (a
+ * "1:1 taper") round-trips intact.
+ */
+export function parseAttributeSearchParams(
+  params: string[] | undefined,
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const entry of params ?? []) {
+    const separator = entry.indexOf(":");
+    if (separator <= 0) {
+      continue;
+    }
+    const defPublicId = entry.slice(0, separator);
+    const value = entry.slice(separator + 1);
+    if (value.length === 0) {
+      continue;
+    }
+    out[defPublicId] = [...(out[defPublicId] ?? []), value];
+  }
+  return out;
+}
+
+export function toAttributeSearchParams(
+  selections: Record<string, string[]>,
+): string[] | undefined {
+  const out = Object.entries(selections).flatMap(([defPublicId, values]) =>
+    values.map((value) => `${defPublicId}:${value}`),
+  );
+  return out.length === 0 ? undefined : out;
+}
+
+/** The wire shape the list action takes. Empty facets are dropped so
+ *  an untouched filter never reaches the query. */
+export function toAttributeFacets(selections: Record<string, string[]>) {
+  return Object.entries(selections)
+    .filter(([, values]) => values.length > 0)
+    .map(([defPublicId, values]) => ({ defPublicId, values }));
+}

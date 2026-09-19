@@ -80,6 +80,16 @@ Officers manage definitions from the **Attributes** button on `/gear`, beside Ty
 - **Definitions mentioned but not attached to this type, or archived, are ignored rather than rejected.** A form submitted moments after somebody detached a type is stale, not malicious.
 - **`required` is enforced whether the field arrives blank or not at all**, so omitting it isn't a way around the rule. Validation runs **before** the insert and the thumbnail upload, so a refused value can't leave a half-made item behind.
 
+## Attribute facets on the gear page
+
+Once a type is selected, the toolbar grows one filter per `select` or `boolean` definition attached to it. **Free text and number kinds get no facet** — free text would list four hundred distinct answers, and a number wants a range, which belongs with the browse-by-model redesign.
+
+- **Values within one facet are OR'd; separate facets are AND'd.** This is the opposite of the tag filter, and deliberately: a tag is a label somebody chose to stick on, while an attribute answers a fixed question, so two values of the same question are alternatives. "M or L" works here and returns nothing as tags.
+- **Facets appear only with a type selected.** Unscoped, the list would be every question the club has ever asked, most of them meaningless for most rows.
+- **Changing the type clears the selections.** Left in place they would AND against the new type's rows and return nothing, with no chip visible to explain it.
+- The filter is one clause per facet, each an `EXISTS` against **both** value tables OR'd together. The repo isn't told which level a definition lives at, and since a def only ever has rows in its own level's table, the union is exact rather than a guess.
+- URL shape is a repeated `attr=<defPublicId>:<value>` param, split on the **first** colon so a value containing one ("1:1 taper") round-trips. Malformed or unknown entries are dropped, never refused: a shared link outliving its definition should widen the list, not break the page.
+
 **Bulk import does not enforce `required`** — it calls `insertGearItem` directly rather than going through `createGearAction`, and predates attributes entirely. A CSV of forty harnesses lands with no size answered even where size is required.
 
 ## Availability is the rollup members browse by

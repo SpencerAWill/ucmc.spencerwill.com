@@ -5,6 +5,9 @@ import {
   attributeValueToFormValue,
   coerceAttributeValue,
   formatAttributeValue,
+  parseAttributeSearchParams,
+  toAttributeFacets,
+  toAttributeSearchParams,
 } from "#/features/gear/lib/attributes";
 
 describe("coerceAttributeValue", () => {
@@ -178,5 +181,42 @@ describe("attributeKeyFromLabel", () => {
     expect(attributeKeyFromLabel("Rope diameter")).toBe("rope_diameter");
     expect(attributeKeyFromLabel("  Size (EU) ")).toBe("size_eu");
     expect(attributeKeyFromLabel("---")).toBe("");
+  });
+});
+
+describe("attribute search params", () => {
+  it("round-trips selections through the URL shape", () => {
+    const selections = { def1: ["S", "M"], def2: ["true"] };
+    const params = toAttributeSearchParams(selections);
+    expect(params).toEqual(["def1:S", "def1:M", "def2:true"]);
+    expect(parseAttributeSearchParams(params)).toEqual(selections);
+  });
+
+  it("splits on the first colon only", () => {
+    // A value may legitimately contain a colon — "1:1 taper" — and
+    // splitting on the last one would lose the def id.
+    expect(parseAttributeSearchParams(["def1:1:1 taper"])).toEqual({
+      def1: ["1:1 taper"],
+    });
+  });
+
+  it("drops malformed entries rather than throwing", () => {
+    // A hand-edited or truncated shared link should widen the list, not
+    // break the page.
+    expect(
+      parseAttributeSearchParams(["nocolon", ":orphan", "def1:", "def1:M"]),
+    ).toEqual({ def1: ["M"] });
+  });
+
+  it("omits the param entirely when nothing is selected", () => {
+    expect(toAttributeSearchParams({})).toBeUndefined();
+    expect(toAttributeSearchParams({ def1: [] })).toBeUndefined();
+    expect(parseAttributeSearchParams(undefined)).toEqual({});
+  });
+
+  it("drops empty facets on the way to the server", () => {
+    expect(toAttributeFacets({ def1: ["M"], def2: [] })).toEqual([
+      { defPublicId: "def1", values: ["M"] },
+    ]);
   });
 });

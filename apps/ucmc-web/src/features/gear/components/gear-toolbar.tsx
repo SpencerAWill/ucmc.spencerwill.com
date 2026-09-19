@@ -17,6 +17,7 @@ import type {
   DataToolbarViewOption,
   SortDirection,
 } from "#/components/data-toolbar";
+import { Checkbox } from "#/components/ui/checkbox";
 import { Label } from "#/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group";
 import {
@@ -27,6 +28,7 @@ import {
   SelectValue,
 } from "#/components/ui/select";
 import {
+  gearAttributeDefsQueryOptions,
   gearTagsQueryOptions,
   gearTypesQueryOptions,
 } from "#/features/gear/api/queries";
@@ -78,6 +80,10 @@ export const GEAR_VIEW_OPTIONS: DataToolbarViewOption<GearView>[] = [
 
 export interface GearToolbarState {
   typePublicId: string | null;
+  /** Facet selections, `defPublicId → chosen values`. Scoped to the
+   *  selected type, because a facet without one would have to merge
+   *  every definition in the club into a single unreadable list. */
+  attributes: Record<string, string[]>;
   tagPublicIds: string[];
   status: GearStatus;
   availability: GearAvailability | null;
@@ -104,6 +110,26 @@ export function GearToolbar({
 }) {
   const { data: types } = useQuery(gearTypesQueryOptions());
   const { data: tags } = useQuery(gearTagsQueryOptions());
+  // Only the enumerable kinds make facets: free text would list four
+  // hundred distinct answers, and a number wants a range, which the
+  // browse-by-model redesign is the right place for.
+  const { data: attributeDefs } = useQuery({
+    ...gearAttributeDefsQueryOptions({ typePublicId: state.typePublicId }),
+    enabled: state.typePublicId !== null,
+  });
+  const facetDefs = (attributeDefs ?? []).filter(
+    (def) => def.kind === "select" || def.kind === "boolean",
+  );
+
+  const setFacet = (defPublicId: string, values: string[]) => {
+    const next = { ...state.attributes };
+    if (values.length === 0) {
+      delete next[defPublicId];
+    } else {
+      next[defPublicId] = values;
+    }
+    onChange({ attributes: next });
+  };
 
   // Search, sort and view are excluded: search has its own box and its
   // own clear button, and the other two are display preferences, not
@@ -147,6 +173,21 @@ export function GearToolbar({
           },
         ]
       : []),
+    ...facetDefs.flatMap((def) =>
+      (state.attributes[def.publicId] ?? []).map((value) => ({
+        key: `attr:${def.publicId}:${value}`,
+        // The label names the question as well as the answer: "M"
+        // alone on a chip row beside "#outdoor" says nothing.
+        label: `${def.label}: ${
+          def.kind === "boolean" ? (value === "true" ? "Yes" : "No") : value
+        }`,
+        onRemove: () =>
+          setFacet(
+            def.publicId,
+            (state.attributes[def.publicId] ?? []).filter((v) => v !== value),
+          ),
+      })),
+    ),
     ...state.tagPublicIds.map((id) => ({
       key: `tag:${id}`,
       label: tags?.find((t) => t.publicId === id)?.name ?? "Tag",
@@ -163,6 +204,7 @@ export function GearToolbar({
       tagPublicIds: [],
       status: "active",
       condition: null,
+      attributes: {},
     });
 
   return (
@@ -288,6 +330,74 @@ export function GearToolbar({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Facets appear only once a type is chosen. Attributes
+             * are scoped to types by design, so an unscoped list would
+             * be every question the club has ever asked, most of them
+             * meaningless for most rows. */}
+            {facetDefs.map((def) => {
+              const selected = state.attributes[def.publicId] ?? [];
+              return (
+                <div key={def.publicId} className="space-y-1.5">
+                  <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                    {def.label}
+                  </Label>
+                  {def.kind === "boolean" ? (
+                    <RadioGroup
+                      value={selected[0] ?? "__any__"}
+                      onValueChange={(v) =>
+                        setFacet(def.publicId, v === "__any__" ? [] : [v])
+                      }
+                      className="flex flex-col gap-1.5 text-sm"
+                    >
+                      {(
+                        [
+                          ["__any__", "Any"],
+                          ["true", "Yes"],
+                          ["false", "No"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <label key={value} className="flex items-center gap-2">
+                          <RadioGroupItem
+                            value={value}
+                            id={`facet-${def.publicId}-${value}`}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </RadioGroup>
+                  ) : (
+                    /* Checkboxes, not a select: values within one
+                     * attribute are alternatives, so "M or L" has to be
+                     * expressible. The tag filter is AND-only for the
+                     * opposite reason. */
+                    <div className="flex flex-col gap-1.5 text-sm">
+                      {(def.options ?? []).map((option) => (
+                        <label
+                          key={option}
+                          className="flex items-center gap-2"
+                          htmlFor={`facet-${def.publicId}-${option}`}
+                        >
+                          <Checkbox
+                            id={`facet-${def.publicId}-${option}`}
+                            checked={selected.includes(option)}
+                            onCheckedChange={(checked) =>
+                              setFacet(
+                                def.publicId,
+                                checked === true
+                                  ? [...selected, option]
+                                  : selected.filter((v) => v !== option),
+                              )
+                            }
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
