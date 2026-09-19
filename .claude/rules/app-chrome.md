@@ -16,6 +16,51 @@ Nav gates compose **permission AND page flag**, and the flag must be the one bel
 
 **Wire the sidebar in the same change as any new public route.** A route that exists but has no nav entry is invisible; this has been caught repeatedly in review.
 
+## Theme tokens (`src/styles.css`)
+
+Surfaces are a **ladder, not a palette**, and both themes climb in the
+same direction — away from the page, toward the viewer:
+
+| Rung                           | Light   | Dark    |
+| ------------------------------ | ------- | ------- |
+| `--card`/popover               | `0.993` | `0.216` |
+| `--background`                 | `0.968` | `0.178` |
+| `--sidebar`                    | `0.947` | `0.238` |
+| `--muted`/`secondary`/`accent` | `0.933` | `0.288` |
+| `--border`/`input`             | `0.897` | `0.305` |
+
+Stock shadcn had `--background`, `--card` and `--popover` identical
+(pure white in light, `0.141` in dark), which is why nothing separated
+from anything. **Moving any one of these means re-checking its
+neighbours** — the rungs are only useful while they stay apart, and
+`--muted` at its old `0.967` would now sit _between_ the light card and
+the light background and vanish.
+
+Light surfaces carry a warm tint (oklch hue 85, C≈0.012–0.016); **text
+neutrals keep the cool zinc hue (286)** because at C≈0.016 the hue of
+the text is imperceptible and the warmth belongs to the surfaces.
+
+**`--muted-foreground` is the AA floor of the file.** It was 4.83:1 on
+pure white — a tenth of a step over 4.5:1 — so the softened background
+put it under before it was moved to `0.515`. It now holds 4.64:1
+against `--muted`, the tightest pairing that renders. Anything that
+darkens a light surface has to be re-checked against it.
+
+### Two known contrast gaps, both pre-dating the ramp
+
+- **`--ring` is ~1.5:1 against the light page** (and it's applied at
+  `/50` opacity by `focus-visible:ring-ring/50` and the base layer's
+  `outline-ring/50`), well under the 3:1 that SC 1.4.11 wants of a
+  focus indicator. Unchanged by the ramp — it was 1.48:1 on white and
+  is 1.53:1 on cream.
+- **`--primary` in dark (`0.432`) fails as _text_** — 2.31:1 on a dark
+  card, and `text-primary` has ~33 call sites. It can't be fixed by
+  moving the token alone: lightening it far enough for text
+  (≥`0.58`) drops `--primary-foreground` below AA _on_ it, because the
+  same token is the fill behind the header and the primary buttons.
+  Fixing it means splitting the fill role from the text role, which is
+  a design decision, not a retune.
+
 ## Page containers (`page-container.tsx`)
 
 `<main>` in `app-layout.tsx` carries **no padding on purpose** — the
