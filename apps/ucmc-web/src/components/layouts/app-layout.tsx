@@ -135,7 +135,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
        * as a gap under the navbar rather than an edge on it. The bar
        * is its own colour against the page; that is the separation.
        */}
-      <header className="sticky top-0 z-30 flex h-(--header-height) w-full items-center bg-primary/95 px-4 text-primary-foreground backdrop-blur-lg">
+      <header className="sticky top-0 z-30 flex h-(--header-height) w-full items-center bg-header/95 px-4 text-header-foreground backdrop-blur-lg">
         <nav
           aria-label="Primary"
           className="flex w-full flex-nowrap items-center gap-x-3"

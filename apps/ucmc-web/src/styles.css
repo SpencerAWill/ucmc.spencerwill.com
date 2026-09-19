@@ -57,6 +57,17 @@
   --popover-foreground: oklch(0.141 0.005 285.823);
   --primary: oklch(0.508 0.118 165.612);
   --primary-foreground: oklch(0.979 0.021 166.113);
+  /*
+   * The masthead bar is its own token, not `--primary`, because the
+   * two want opposite things in dark mode: the bar is brand chrome
+   * and should stay a deep, quiet green, while `--primary` is the
+   * interactive accent and has to be light enough to read as *text*
+   * on a dark surface. One token could not do both — see `.dark`.
+   * Light happens to match `--primary` today; that is a coincidence
+   * of this palette, not a constraint to preserve.
+   */
+  --header: oklch(0.508 0.118 165.612);
+  --header-foreground: oklch(0.979 0.021 166.113);
   --secondary: oklch(0.933 0.014 85);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.933 0.014 85);
@@ -118,8 +129,23 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.216 0.006 286);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.432 0.095 166.913);
-  --primary-foreground: oklch(0.979 0.021 166.113);
+  /*
+   * `--primary` is light here, the way a dark theme normally inverts
+   * its accent. It used to be the same deep green as light (0.432),
+   * which worked as a *fill* under white text but failed completely
+   * as text: `text-primary` has ~33 call sites and read 2.31:1 on a
+   * card. No single lightness fixed both roles — anything light
+   * enough to be legible as text (>=0.58) pushed a near-white
+   * `--primary-foreground` below AA on the fill. So the foreground
+   * inverts too, to the dark green the sidebar's branding already
+   * pairs with this mint: 6.14:1 on the fill, 7.10:1 as text.
+   */
+  --primary: oklch(0.696 0.17 162.48);
+  --primary-foreground: oklch(0.262 0.051 172.552);
+  /* The masthead keeps the deep green that `--primary` just gave up;
+   * a mint bar would shout across every page. */
+  --header: oklch(0.432 0.095 166.913);
+  --header-foreground: oklch(0.979 0.021 166.113);
   --secondary: oklch(0.288 0.006 286);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.288 0.006 286);
@@ -159,6 +185,8 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-header: var(--header);
+  --color-header-foreground: var(--header-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
