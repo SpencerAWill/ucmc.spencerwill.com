@@ -787,6 +787,36 @@ describe("tags + list filters", () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]?.code).toBe("CH2");
   });
+
+  it("sorts by the requested key in the requested direction", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    await createGearOk({ typePublicId, code: "CH1" });
+    await createGearOk({ typePublicId, code: "CH2" });
+    await createGearOk({ typePublicId, code: "CH3" });
+
+    const ascending = await listGearAction({ sort: "code" });
+    expect(ascending.rows.map((r) => r.code)).toEqual(["CH1", "CH2", "CH3"]);
+
+    const descending = await listGearAction({ sort: "code", dir: "desc" });
+    expect(descending.rows.map((r) => r.code)).toEqual(["CH3", "CH2", "CH1"]);
+  });
+
+  it("defaults each sort key to its own natural direction", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    await createGearOk({ typePublicId, code: "CH1" });
+    await createGearOk({ typePublicId, code: "CH2" });
+
+    // `dir` is the caller's now, but leaving it off must not silently
+    // flip a date sort to oldest-first just because `asc` is the more
+    // obvious global default.
+    const byDate = await listGearAction({ sort: "created_at" });
+    expect(byDate.rows.map((r) => r.code)).toEqual(["CH2", "CH1"]);
+
+    const byCode = await listGearAction({ sort: "code" });
+    expect(byCode.rows.map((r) => r.code)).toEqual(["CH1", "CH2"]);
+  });
 });
 
 // ── suggest code ───────────────────────────────────────────────────────

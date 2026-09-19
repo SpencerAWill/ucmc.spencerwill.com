@@ -1,24 +1,19 @@
 /**
- * Bulk-actions trigger. Slots into the filter row between the
- * `Filters` popover and the `Sort` Select when selection is
- * non-empty. Renders a single dropdown menu whose items either fire
- * a simple bulk action directly or open a dialog/popover for the
- * actions that need extra input (Retire wants a reason, Add tags
- * wants a multiselect).
+ * Gear's bulk actions, as material for the `DataToolbar` bulk slot.
  *
- * Returns `null` when no items are selected so the slot collapses
- * naturally — no layout shift, the slot just isn't in the DOM.
+ * This is a hook rather than a component because the two halves have to
+ * render in different places: the menu items go inside the toolbar's
+ * dropdown, while the dialogs they open must be **siblings** of it. A
+ * dialog rendered inside `DropdownMenuContent` unmounts the moment the
+ * menu closes — which is the same click that opens it. Keeping both in
+ * one hook keeps their shared state (the pending retire reason, the
+ * pending tag picks) in one place.
+ *
+ * The toolbar owns the trigger, the selected count and "Clear
+ * selection"; everything here is gear-specific.
  */
 import { useQuery } from "@tanstack/react-query";
-import {
-  CheckSquare,
-  ChevronDown,
-  Printer,
-  RotateCcw,
-  Tag,
-  Trash2,
-  Wrench,
-} from "lucide-react";
+import { Printer, RotateCcw, Tag, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -42,15 +37,10 @@ import {
   DialogTitle,
 } from "#/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
@@ -76,7 +66,16 @@ const CONDITION_LABEL: Record<GearCondition, string> = {
   lost: "Lost",
 };
 
-export function GearBulkActionsButton({
+export interface GearBulkActions {
+  /** `DropdownMenu*` items for the toolbar's bulk slot. */
+  items: React.ReactNode;
+  /** Render as a sibling of the toolbar, not inside the menu. */
+  dialogs: React.ReactNode;
+  /** True while any bulk mutation is in flight. */
+  busy: boolean;
+}
+
+export function useGearBulkActions({
   selectedPublicIds,
   lifecycleFilter,
   onClear,
@@ -84,7 +83,7 @@ export function GearBulkActionsButton({
   selectedPublicIds: string[];
   lifecycleFilter: GearLifecycle;
   onClear: () => void;
-}) {
+}): GearBulkActions {
   const count = selectedPublicIds.length;
   const [retireOpen, setRetireOpen] = useState(false);
   const [retireReason, setRetireReason] = useState("");
@@ -102,8 +101,6 @@ export function GearBulkActionsButton({
     unretire.isPending ||
     setCondition.isPending ||
     addTags.isPending;
-
-  if (count === 0) return null;
 
   function reportResult(label: string, affected: number, skipped: number) {
     if (affected === 0 && skipped === 0) return;
@@ -165,64 +162,48 @@ export function GearBulkActionsButton({
     );
   };
 
-  return (
+  const items = (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="secondary" className="h-9" disabled={anyPending}>
-            <CheckSquare className="size-4" />
-            <span>{count}</span>
-            <span className="hidden sm:inline">selected</span>
-            <ChevronDown className="size-4 opacity-60" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            {count} {count === 1 ? "piece" : "pieces"} selected
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setLabelsOpen(true)}>
-            <Printer className="size-4" />
-            Print labels…
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setTagsOpen(true)}>
-            <Tag className="size-4" />
-            Add tags…
-          </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Wrench className="size-4" />
-              Set condition
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {GEAR_CONDITION_VALUES.map((c) => (
-                <DropdownMenuItem key={c} onSelect={() => doSetCondition(c)}>
-                  {CONDITION_LABEL[c]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          {lifecycleFilter === "active" ? (
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={() => setRetireOpen(true)}
-            >
-              <Trash2 className="size-4" />
-              Retire…
+      <DropdownMenuItem onSelect={() => setLabelsOpen(true)}>
+        <Printer className="size-4" />
+        Print labels…
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => setTagsOpen(true)}>
+        <Tag className="size-4" />
+        Add tags…
+      </DropdownMenuItem>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <Wrench className="size-4" />
+          Set condition
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          {GEAR_CONDITION_VALUES.map((c) => (
+            <DropdownMenuItem key={c} onSelect={() => doSetCondition(c)}>
+              {CONDITION_LABEL[c]}
             </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onSelect={doUnretire}>
-              <RotateCcw className="size-4" />
-              Unretire
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onClear}>
-            Clear selection
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      {lifecycleFilter === "active" ? (
+        <DropdownMenuItem
+          variant="destructive"
+          onSelect={() => setRetireOpen(true)}
+        >
+          <Trash2 className="size-4" />
+          Retire…
+        </DropdownMenuItem>
+      ) : (
+        <DropdownMenuItem onSelect={doUnretire}>
+          <RotateCcw className="size-4" />
+          Unretire
+        </DropdownMenuItem>
+      )}
+    </>
+  );
 
+  const dialogs = (
+    <>
       <AlertDialog
         open={retireOpen}
         onOpenChange={(o) => {
@@ -318,4 +299,6 @@ export function GearBulkActionsButton({
       </Dialog>
     </>
   );
+
+  return { items, dialogs, busy: anyPending };
 }

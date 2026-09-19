@@ -4,7 +4,7 @@ import { DataPagination } from "#/components/data-pagination";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { gearListQueryOptions } from "#/features/gear/api/queries";
 import { GearCard } from "#/features/gear/components/gear-card";
-import type { GearView } from "#/features/gear/components/gear-filter-bar";
+import type { GearView } from "#/features/gear/components/gear-toolbar";
 import { GearGridCard } from "#/features/gear/components/gear-grid-card";
 import { GearTableView } from "#/features/gear/components/gear-table-view";
 import type {

@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
-import { GearBulkActionsButton } from "#/features/gear/components/gear-bulk-actions-bar";
+import { useGearBulkActions } from "#/features/gear/components/gear-bulk-actions";
 import {
   ButtonGroup,
   ButtonGroupSeparator,
@@ -18,8 +18,8 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { GearBulkImportSheet } from "#/features/gear/components/gear-bulk-import-sheet";
-import { GearFilterBar } from "#/features/gear/components/gear-filter-bar";
-import type { GearFilterState } from "#/features/gear/components/gear-filter-bar";
+import { GearToolbar } from "#/features/gear/components/gear-toolbar";
+import type { GearToolbarState } from "#/features/gear/components/gear-toolbar";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
@@ -27,6 +27,7 @@ import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog"
 import { GearTagsManageDialog } from "#/features/gear/components/gear-tags-manage-dialog";
 import { GearTypesManageDialog } from "#/features/gear/components/gear-types-manage-dialog";
 import { useUnretireGear } from "#/features/gear/api/use-unretire-gear";
+import { useToolbarSearchState } from "#/hooks/use-toolbar-search-state";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import {
   GEAR_CONDITION_VALUES,
@@ -35,6 +36,7 @@ import {
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
 const SORT_VALUES = ["code", "created_at", "updated_at"] as const;
+const DIR_VALUES = ["asc", "desc"] as const;
 const VIEW_VALUES = ["list", "grid", "table"] as const;
 
 const searchSchema = z.object({
@@ -44,10 +46,32 @@ const searchSchema = z.object({
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
   q: z.string().optional(),
   sort: z.enum(SORT_VALUES).optional(),
+  dir: z.enum(DIR_VALUES).optional(),
   view: z.enum(VIEW_VALUES).optional(),
   page: z.coerce.number().int().min(1).optional(),
   perPage: z.coerce.number().int().min(1).max(250).optional(),
 });
+
+/** Resolved on read, omitted on write — see `useToolbarSearchState`.
+ *  `dir` is absent on purpose: its default depends on which key you're
+ *  sorting by, so it can't be a single constant. */
+const SEARCH_DEFAULTS = {
+  lifecycle: "active",
+  sort: "code",
+  view: "list",
+} as const;
+
+/** Each sort key's natural direction, so an unqualified switch to
+ *  "Date added" lands on newest-first rather than 2019. */
+const DEFAULT_DIR: Record<(typeof SORT_VALUES)[number], "asc" | "desc"> = {
+  code: "asc",
+  created_at: "desc",
+  updated_at: "desc",
+};
+
+/** Changing any of these means different rows, so page 5 stops making
+ *  sense. Sort, dir and view are deliberately absent. */
+const RESULT_SET_KEYS = ["type", "tag", "lifecycle", "condition", "q"] as const;
 
 export const Route = createFileRoute("/gear/")({
   staticData: { pageFlag: "gear_inventory" },
@@ -64,39 +88,38 @@ function GearIndexPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
 
-  const filterState: GearFilterState = {
-    typePublicId: search.type ?? null,
-    tagPublicIds: search.tag ?? [],
-    lifecycle: search.lifecycle ?? "active",
-    condition: search.condition ?? null,
-    q: search.q ?? "",
-    sort: search.sort ?? "code",
-    view: search.view ?? "list",
+  const { value, set } = useToolbarSearchState({
+    search,
+    defaults: SEARCH_DEFAULTS,
+    resultSetKeys: RESULT_SET_KEYS,
+    navigate: (next) => void navigate({ search: next }),
+  });
+
+  const toolbarState: GearToolbarState = {
+    typePublicId: value.type ?? null,
+    tagPublicIds: value.tag ?? [],
+    lifecycle: value.lifecycle ?? "active",
+    condition: value.condition ?? null,
+    q: value.q ?? "",
+    sort: value.sort ?? "code",
+    dir: value.dir ?? DEFAULT_DIR[value.sort ?? "code"],
+    view: value.view ?? "list",
   };
 
-  const onFilterChange = (next: GearFilterState) => {
-    // Only changes that affect the result set reset pagination — sort
-    // and view changes preserve the current page.
-    const resultSetChanged =
-      next.typePublicId !== filterState.typePublicId ||
-      next.tagPublicIds.length !== filterState.tagPublicIds.length ||
-      next.tagPublicIds.some((id, i) => id !== filterState.tagPublicIds[i]) ||
-      next.lifecycle !== filterState.lifecycle ||
-      next.condition !== filterState.condition ||
-      next.q !== filterState.q ||
-      next.sort !== filterState.sort;
-    void navigate({
-      search: {
-        type: next.typePublicId ?? undefined,
-        tag: next.tagPublicIds.length > 0 ? next.tagPublicIds : undefined,
-        lifecycle: next.lifecycle === "active" ? undefined : next.lifecycle,
-        condition: next.condition ?? undefined,
-        q: next.q.length === 0 ? undefined : next.q,
-        sort: next.sort === "code" ? undefined : next.sort,
-        view: next.view === "list" ? undefined : next.view,
-        page: resultSetChanged ? undefined : search.page,
-        perPage: search.perPage,
-      },
+  const onToolbarChange = (next: Partial<GearToolbarState>) => {
+    set({
+      ...("typePublicId" in next
+        ? { type: next.typePublicId ?? undefined }
+        : {}),
+      ...("tagPublicIds" in next ? { tag: next.tagPublicIds } : {}),
+      ...("lifecycle" in next ? { lifecycle: next.lifecycle } : {}),
+      ...("condition" in next
+        ? { condition: next.condition ?? undefined }
+        : {}),
+      ...("q" in next ? { q: next.q } : {}),
+      ...("sort" in next ? { sort: next.sort } : {}),
+      ...("dir" in next ? { dir: next.dir } : {}),
+      ...("view" in next ? { view: next.view } : {}),
     });
   };
 
@@ -116,7 +139,10 @@ function GearIndexPage() {
   // filtered out of the visible list would surface as confusing
   // "X selected" with nothing checked.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const filterFingerprint = `${search.type ?? ""}|${(search.tag ?? []).join(",")}|${search.lifecycle ?? "active"}|${search.condition ?? ""}|${search.q ?? ""}`;
+  const filterFingerprint = RESULT_SET_KEYS.map((key) => {
+    const part = search[key];
+    return Array.isArray(part) ? part.join(",") : (part ?? "");
+  }).join("|");
   const lastFingerprintRef = useRef(filterFingerprint);
   useEffect(() => {
     if (lastFingerprintRef.current !== filterFingerprint) {
@@ -145,13 +171,26 @@ function GearIndexPage() {
   );
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
+  // The menu items go inside the toolbar's dropdown; the dialogs they
+  // open have to render as siblings of it, or the click that opens one
+  // is the same click that unmounts it with the menu.
+  const bulk = useGearBulkActions({
+    selectedPublicIds: Array.from(selected),
+    lifecycleFilter: toolbarState.lifecycle,
+    onClear: clearSelection,
+  });
+
   const listInput = {
-    typePublicId: search.type,
-    tagPublicIds: search.tag && search.tag.length > 0 ? search.tag : undefined,
-    lifecycle: search.lifecycle ?? "active",
-    condition: search.condition,
-    q: search.q,
-    sort: search.sort,
+    typePublicId: toolbarState.typePublicId ?? undefined,
+    tagPublicIds:
+      toolbarState.tagPublicIds.length > 0
+        ? toolbarState.tagPublicIds
+        : undefined,
+    lifecycle: toolbarState.lifecycle,
+    condition: toolbarState.condition ?? undefined,
+    q: toolbarState.q.length > 0 ? toolbarState.q : undefined,
+    sort: toolbarState.sort,
+    dir: toolbarState.dir,
     page: search.page,
     perPage: search.perPage,
   } as const;
@@ -220,22 +259,23 @@ function GearIndexPage() {
           </div>
         ) : null}
       </header>
-      <GearFilterBar
-        state={filterState}
-        onChange={onFilterChange}
+      <GearToolbar
+        state={toolbarState}
+        onChange={onToolbarChange}
         bulkActions={
-          canManage ? (
-            <GearBulkActionsButton
-              selectedPublicIds={Array.from(selected)}
-              lifecycleFilter={filterState.lifecycle}
-              onClear={clearSelection}
-            />
-          ) : null
+          canManage
+            ? {
+                selectedCount: selected.size,
+                items: bulk.items,
+                onClearSelection: clearSelection,
+                disabled: bulk.busy,
+              }
+            : undefined
         }
       />
       <GearList
         input={listInput}
-        view={filterState.view}
+        view={toolbarState.view}
         canManage={canManage}
         selection={selectionApi}
         onEdit={(g) => {
@@ -261,6 +301,7 @@ function GearIndexPage() {
           <GearBulkImportSheet open={importOpen} onOpenChange={setImportOpen} />
           <GearTypesManageDialog open={typesOpen} onOpenChange={setTypesOpen} />
           <GearTagsManageDialog open={tagsOpen} onOpenChange={setTagsOpen} />
+          {bulk.dialogs}
           <GearRetireDialog
             gear={retiring}
             onOpenChange={(o) => {
