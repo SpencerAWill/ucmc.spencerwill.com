@@ -41,7 +41,7 @@ export function Officers() {
 
   return (
     <section className="border-b py-16 md:py-20">
-      <div className="mx-auto max-w-6xl px-6">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mb-10 space-y-2 text-center">
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
             Meet the officers

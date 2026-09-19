@@ -71,7 +71,7 @@ export function PhotoCarousel() {
 
   return (
     <section className="border-b bg-muted/30 py-16 md:py-20">
-      <div className="mx-auto max-w-6xl px-6">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mb-10 space-y-2 text-center">
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
             On the wall and on the trail
