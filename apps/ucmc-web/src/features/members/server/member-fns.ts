@@ -64,7 +64,8 @@ export const listMembersInputSchema = z.object({
   affiliations: z.string().optional(), // comma-separated ucAffiliation values
   roles: z.string().optional(), // comma-separated role names
   statuses: z.string().optional(), // comma-separated user status values
-  sort: z.enum(["name_asc", "name_desc", "newest", "oldest"]).optional(),
+  sort: z.enum(["name", "created"]).optional(),
+  dir: z.enum(["asc", "desc"]).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 });
@@ -87,6 +88,7 @@ export const listMembersFn = createServerFn({ method: "GET" })
       roles: data.roles,
       statuses: data.statuses,
       sort: data.sort,
+      dir: data.dir,
       limit: data.limit,
       offset: data.offset,
     });

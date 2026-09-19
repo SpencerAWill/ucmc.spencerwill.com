@@ -654,6 +654,63 @@ describe("listMembersAction search", () => {
     expect(result.rows.map((r) => r.email)).toEqual(["aaron@example.com"]);
   });
 
+  it("sorts by name or join date, in the requested direction", async () => {
+    await signInAsMember();
+    await seedNamed("zoe@example.com", "Zoe Zimmerman");
+    await seedNamed("aaron@example.com", "Aaron Abbott");
+
+    // Relative order only: the signed-in member is in the directory
+    // too, and this isn't a test about who else is listed.
+    const ascending = (await listMembersAction({ sort: "name" })).rows.map(
+      (r) => r.fullName,
+    );
+    expect(ascending.indexOf("Aaron Abbott")).toBeLessThan(
+      ascending.indexOf("Zoe Zimmerman"),
+    );
+
+    const descending = (
+      await listMembersAction({ sort: "name", dir: "desc" })
+    ).rows.map((r) => r.fullName);
+    expect(descending.indexOf("Zoe Zimmerman")).toBeLessThan(
+      descending.indexOf("Aaron Abbott"),
+    );
+  });
+
+  it("defaults each sort key to its own natural direction", async () => {
+    await signInAsMember();
+    const zoe = await seedNamed("zoe@example.com", "Zoe Zimmerman");
+    const aaron = await seedNamed("aaron@example.com", "Aaron Abbott");
+    // `users.created_at` defaults to now for every row a test inserts,
+    // so a date sort has nothing to order by unless the dates are made
+    // to differ — and the name tiebreaker would answer instead.
+    const db = getDb();
+    await db
+      .update(schema.users)
+      .set({ createdAt: Temporal.Instant.from("2024-01-01T00:00:00Z") })
+      .where(eq(schema.users.id, zoe));
+    await db
+      .update(schema.users)
+      .set({ createdAt: Temporal.Instant.from("2025-06-01T00:00:00Z") })
+      .where(eq(schema.users.id, aaron));
+
+    // Splitting the old combined enum into key + direction must not
+    // quietly turn "Date joined" into oldest-first just because `asc`
+    // is the more obvious global default.
+    const newestFirst = (await listMembersAction({ sort: "created" })).rows.map(
+      (r) => r.fullName,
+    );
+    expect(newestFirst.indexOf("Aaron Abbott")).toBeLessThan(
+      newestFirst.indexOf("Zoe Zimmerman"),
+    );
+
+    const oldestFirst = (
+      await listMembersAction({ sort: "created", dir: "asc" })
+    ).rows.map((r) => r.fullName);
+    expect(oldestFirst.indexOf("Zoe Zimmerman")).toBeLessThan(
+      oldestFirst.indexOf("Aaron Abbott"),
+    );
+  });
+
   it("matches a secondary verified email, returning the primary", async () => {
     await signInAsMember();
     const userId = await seedNamed("primary@example.com", "Zoe Z");

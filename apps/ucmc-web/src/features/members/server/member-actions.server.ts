@@ -190,7 +190,8 @@ export async function listMembersAction(opts: {
   affiliations?: string;
   roles?: string;
   statuses?: string;
-  sort?: string;
+  sort?: "name" | "created";
+  dir?: "asc" | "desc";
   limit?: number;
   offset?: number;
 }): Promise<{ rows: MemberSummary[]; total: number }> {
@@ -297,20 +298,20 @@ export async function listMembersAction(opts: {
 
   const where = and(...conditions);
 
-  // Sort order.
-  const orderBy = (() => {
-    switch (opts.sort) {
-      case "name_desc":
-        return desc(schema.profiles.fullName);
-      case "newest":
-        return desc(schema.users.createdAt);
-      case "oldest":
-        return asc(schema.users.createdAt);
-      case "name_asc":
-      default:
-        return asc(schema.profiles.fullName);
-    }
-  })();
+  // Sort order. Key and direction are separate params: the toolbar
+  // exposes them as separate controls, and each key keeps its own
+  // default so "Date joined" means newest-first without being asked.
+  const sortKey = opts.sort ?? "name";
+  const direction = opts.dir ?? (sortKey === "name" ? "asc" : "desc");
+  const order = direction === "asc" ? asc : desc;
+  // Neither key is unique — two members can share a name, and a bulk
+  // pre-add stamps a whole CSV with one timestamp — so each carries a
+  // tiebreaker in the same direction, or a page boundary can drop or
+  // repeat a row between requests.
+  const orderBy =
+    sortKey === "name"
+      ? [order(schema.profiles.fullName), order(schema.users.createdAt)]
+      : [order(schema.users.createdAt), order(schema.profiles.fullName)];
 
   const selectFields = {
     userId: schema.users.id,
@@ -342,7 +343,7 @@ export async function listMembersAction(opts: {
       )
       .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
       .where(where)
-      .orderBy(orderBy)
+      .orderBy(...orderBy)
       .limit(opts.limit ?? DEFAULT_LIMIT)
       .offset(opts.offset ?? 0),
   ]);

@@ -44,8 +44,11 @@ export interface ListGearFilters {
   q?: string;
 }
 
+export type GearSortKey = "code" | "created_at" | "updated_at";
+
 export interface ListGearOptions extends ListGearFilters {
-  sort?: "code" | "created_at" | "updated_at";
+  sort?: GearSortKey;
+  dir?: "asc" | "desc";
   page?: number;
   perPage?: number;
 }
@@ -108,13 +111,24 @@ export async function listGear(
   );
   const where = gearWhere(options);
   const sort = options.sort ?? "code";
+  // Direction is the caller's now that the toolbar exposes it, but each
+  // key keeps its own default so an unqualified `?sort=created_at` still
+  // means newest-first rather than silently flipping to oldest.
+  const dir = options.dir ?? (sort === "code" ? "asc" : "desc");
+  const order = dir === "asc" ? asc : desc;
 
+  // Code is the only unique key here, so it needs no tiebreaker; the
+  // date sorts fall back to it for a stable page boundary — and the
+  // tiebreaker runs in the *same* direction, because two pieces
+  // created in the same millisecond (a bulk import does this for every
+  // row) would otherwise come back in ascending code order under a
+  // descending sort.
   const orderBy =
     sort === "code"
-      ? [asc(schema.gear.code), desc(schema.gear.createdAt)]
+      ? [order(schema.gear.code)]
       : sort === "created_at"
-        ? [desc(schema.gear.createdAt)]
-        : [desc(schema.gear.updatedAt)];
+        ? [order(schema.gear.createdAt), order(schema.gear.code)]
+        : [order(schema.gear.updatedAt), order(schema.gear.code)];
 
   const rows = await db
     .select({

@@ -1,144 +1,61 @@
 /**
- * The approved-members directory: search-by-filters (affiliation +
- * role), sort, list/grid view, pagination, optional role-assignment
- * affordance for officers. URL state is owned by the calling route and
- * threaded through props — this component is purely controlled.
+ * The approved-members directory: the shared `<DataToolbar />` over a
+ * list or grid of member cards, with pagination and an optional
+ * role-assignment affordance for officers. URL state is owned by the
+ * calling route and threaded through props — this component is purely
+ * controlled.
  */
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  Filter,
-  LayoutGrid,
-  List,
-  Search,
-  Shield,
-  User as UserIcon,
-} from "lucide-react";
+import { Shield, User as UserIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
-import { Checkbox } from "#/components/ui/checkbox";
 import { DataPagination } from "#/components/data-pagination";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
-import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "#/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "#/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "#/components/ui/tooltip";
 import { UserAvatar } from "#/components/user-avatar";
 import { useAuth } from "#/features/auth/api/use-auth";
-import {
-  membersDirectoryQueryOptions,
-  rolesQueryOptions,
-} from "#/features/members/api/queries";
+import { membersDirectoryQueryOptions } from "#/features/members/api/queries";
+import { MembersToolbar } from "#/features/members/components/members-toolbar";
+import type { MembersToolbarState } from "#/features/members/components/members-toolbar";
 import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
 import type {
   MemberRoleBadge,
   MemberSummary,
-  RoleOption,
 } from "#/features/members/server/member-fns";
 
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
-export type ApprovedViewMode = "list" | "grid";
-
-const AFFILIATION_OPTIONS = [
-  { value: "student", label: "Student" },
-  { value: "faculty", label: "Faculty" },
-  { value: "staff", label: "Staff" },
-  { value: "alum", label: "Alum" },
-  { value: "community", label: "Community" },
-] as const;
-
-const SORT_OPTIONS = [
-  { value: "name_asc", label: "Name (A–Z)" },
-  { value: "name_desc", label: "Name (Z–A)" },
-  { value: "newest", label: "Newest first" },
-  { value: "oldest", label: "Oldest first" },
-] as const;
-
-export type ApprovedSortOption = (typeof SORT_OPTIONS)[number]["value"];
-
 export interface ApprovedTabProps {
-  search: string | undefined;
-  affiliations: string[];
-  roles: string[];
-  sort: ApprovedSortOption;
+  state: MembersToolbarState;
+  onStateChange: (next: Partial<MembersToolbarState>) => void;
   perPage: number;
   page: number;
-  view: ApprovedViewMode;
-  onAffiliationsChange: (next: string[]) => void;
-  onRolesChange: (next: string[]) => void;
-  onSortChange: (sort: ApprovedSortOption) => void;
   onPerPageChange: (value: string) => void;
   onPageChange: (page: number) => void;
-  onViewChange: (view: ApprovedViewMode) => void;
-  onClearFilters: () => void;
 }
 
 export function ApprovedTab({
-  search,
-  affiliations,
-  roles,
-  sort,
+  state,
+  onStateChange,
   perPage,
   page,
-  view,
-  onAffiliationsChange,
-  onRolesChange,
-  onSortChange,
   onPerPageChange,
   onPageChange,
-  onViewChange,
-  onClearFilters,
 }: ApprovedTabProps) {
   const offset = (page - 1) * perPage;
 
-  const toggleAffiliation = (value: string) => {
-    onAffiliationsChange(
-      affiliations.includes(value)
-        ? affiliations.filter((a) => a !== value)
-        : [...affiliations, value],
-    );
-  };
-
-  const toggleRole = (value: string) => {
-    onRolesChange(
-      roles.includes(value)
-        ? roles.filter((r) => r !== value)
-        : [...roles, value],
-    );
-  };
-
-  const activeFilterCount = affiliations.length + roles.length;
-
-  const { data: roleOptions = [] } = useQuery({
-    ...rolesQueryOptions(),
-    staleTime: 5 * 60 * 1000, // roles rarely change
-  });
-
   const { data, isLoading } = useQuery(
     membersDirectoryQueryOptions({
-      search,
+      search: state.q.length > 0 ? state.q : undefined,
       affiliations:
-        affiliations.length > 0 ? affiliations.join(",") : undefined,
-      roles: roles.length > 0 ? roles.join(",") : undefined,
-      sort,
+        state.affiliations.length > 0
+          ? state.affiliations.join(",")
+          : undefined,
+      roles: state.roles.length > 0 ? state.roles.join(",") : undefined,
+      sort: state.sort,
+      dir: state.dir,
       limit: perPage,
       offset,
     }),
@@ -155,128 +72,7 @@ export function ApprovedTab({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Row 1: Search + view toggle */}
-      {/* TODO: wire this box to the route's search param.
-       * `listMembersAction` now honours `opts.search` (name,
-       * preferred name, or any verified email), so what's left is
-       * the URL-state plumbing, not the query. */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search coming soon…" className="pl-9" disabled />
-        </div>
-        <div className="flex h-9 rounded-md border">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={view === "list" ? "secondary" : "ghost"}
-                size="icon"
-                className="h-full w-9 rounded-r-none"
-                onClick={() => onViewChange("list")}
-              >
-                <List className="size-4" />
-                <span className="sr-only">List view</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>List view</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={view === "grid" ? "secondary" : "ghost"}
-                size="icon"
-                className="h-full w-9 rounded-l-none"
-                onClick={() => onViewChange("grid")}
-              >
-                <LayoutGrid className="size-4" />
-                <span className="sr-only">Grid view</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Grid view</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
-      {/* Row 2: Filters + sort */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Filters popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="h-9">
-              <Filter className="mr-2 size-4" />
-              Filters
-              {activeFilterCount > 0 ? (
-                <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 space-y-4" align="start">
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Affiliation
-              </Label>
-              {AFFILIATION_OPTIONS.map((opt) => (
-                <label
-                  key={opt.value}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <Checkbox
-                    checked={affiliations.includes(opt.value)}
-                    onCheckedChange={() => toggleAffiliation(opt.value)}
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Role
-              </Label>
-              {roleOptions.map((role: RoleOption) => (
-                <label
-                  key={role.name}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <Checkbox
-                    checked={roles.includes(role.name)}
-                    onCheckedChange={() => toggleRole(role.name)}
-                  />
-                  <span>{role.displayName}</span>
-                </label>
-              ))}
-            </div>
-            {activeFilterCount > 0 ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full"
-                onClick={onClearFilters}
-              >
-                Clear all filters
-              </Button>
-            ) : null}
-          </PopoverContent>
-        </Popover>
-
-        {/* Sort */}
-        <Select
-          value={sort}
-          onValueChange={(value) => onSortChange(value as ApprovedSortOption)}
-        >
-          <SelectTrigger className="w-[9rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SORT_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <MembersToolbar state={state} onChange={onStateChange} />
 
       {isLoading ? (
         <div className="py-8 text-center text-sm text-muted-foreground">
@@ -286,7 +82,9 @@ export function ApprovedTab({
         <Empty className="border">
           <EmptyHeader>
             <EmptyTitle>
-              {search
+              {state.q.length > 0 ||
+              state.affiliations.length > 0 ||
+              state.roles.length > 0
                 ? "No members match your search."
                 : "No approved members yet."}
             </EmptyTitle>
@@ -294,7 +92,7 @@ export function ApprovedTab({
         </Empty>
       ) : (
         <>
-          {view === "list" ? (
+          {state.view === "list" ? (
             <MemberListView
               members={members}
               canAssignRoles={canAssignRoles}

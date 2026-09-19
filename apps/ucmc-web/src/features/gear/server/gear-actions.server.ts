@@ -120,6 +120,7 @@ export interface ListGearActionInput {
   condition?: schema.GearCondition;
   q?: string;
   sort?: "code" | "created_at" | "updated_at";
+  dir?: "asc" | "desc";
   page?: number;
   perPage?: number;
 }
@@ -206,6 +207,7 @@ export async function listGearAction(
     condition: input.condition,
     q: input.q,
     sort: input.sort,
+    dir: input.dir,
     page: input.page,
     perPage: input.perPage,
   };

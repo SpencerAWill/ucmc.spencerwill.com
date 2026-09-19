@@ -191,6 +191,7 @@ export const listGearInputSchema = z.object({
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
   q: z.string().max(200).optional(),
   sort: z.enum(["code", "created_at", "updated_at"]).optional(),
+  dir: z.enum(["asc", "desc"]).optional(),
   page: z.number().int().min(1).optional(),
   perPage: z.number().int().min(1).max(250).optional(),
 });

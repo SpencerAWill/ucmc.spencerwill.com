@@ -56,7 +56,8 @@ export function LoanFilterBar({
 }) {
   const activeFilterCount = countActiveFilters(state);
   return (
-    // Two-row layout matching the gear page's filter bar:
+    // Two-row layout. The gear and members lists have since moved to
+    // the shared `DataToolbar`; this bar hasn't been converted yet.
     //   Row 1: [Active / History tabs]
     //   Row 2: [Filters (N)]                          [Sort ▾]
     // Filters and Sort live in the same flex container with `ml-auto`
