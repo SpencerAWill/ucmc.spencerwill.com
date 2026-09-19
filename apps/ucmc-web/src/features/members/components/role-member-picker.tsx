@@ -59,7 +59,7 @@ export function RoleMemberPicker({
   const { data, isFetching } = useQuery({
     ...membersDirectoryQueryOptions({
       search: deferred,
-      sort: "name_asc",
+      sort: "name",
       limit: 20,
     }),
     enabled: open && deferred.length > 0,

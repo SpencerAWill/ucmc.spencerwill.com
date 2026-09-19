@@ -71,7 +71,8 @@ export function lifecycleMembersQueryOptions(
       listMembersFn({
         data: {
           statuses: status,
-          sort: "newest",
+          sort: "created",
+          dir: "desc",
           limit: input.limit,
           offset: input.offset,
         },

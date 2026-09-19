@@ -59,6 +59,8 @@ const SEARCH_DEFAULTS = {
   lifecycle: "active",
   sort: "code",
   view: "list",
+  page: 1,
+  perPage: 50,
 } as const;
 
 /** Each sort key's natural direction, so an unqualified switch to
@@ -284,12 +286,8 @@ function GearIndexPage() {
         }}
         onRetire={(g) => setRetiring(g)}
         onUnretire={(g) => unretireMutation.mutate({ publicId: g.publicId })}
-        onPageChange={(p) => void navigate({ search: { ...search, page: p } })}
-        onPerPageChange={(pp) =>
-          void navigate({
-            search: { ...search, perPage: pp, page: undefined },
-          })
-        }
+        onPageChange={(p) => set({ page: p })}
+        onPerPageChange={(pp) => set({ perPage: pp, page: undefined })}
       />
       {canManage ? (
         <>
