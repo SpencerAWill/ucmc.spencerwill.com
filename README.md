@@ -122,7 +122,6 @@ pnpm --filter ucmc-web typecheck    # tsc --noEmit
 pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006
 pnpm --filter ucmc-web deploy:dev   # build and deploy to dev (dev.ucmc.spencerwill.com)
 pnpm --filter ucmc-web deploy:prod  # build and deploy to prod (ucmc.spencerwill.com)
-pnpm --filter ucmc-web db:generate  # generate Drizzle SQL migrations from schema.ts
 pnpm --filter ucmc-web db:migrate:local  # apply migrations to the local Miniflare D1
 pnpm --filter ucmc-web db:seed:local     # promote SEED_ADMIN_EMAIL to system_admin (local only)
 ```
