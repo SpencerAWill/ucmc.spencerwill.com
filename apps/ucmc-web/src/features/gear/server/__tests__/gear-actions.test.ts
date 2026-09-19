@@ -805,17 +805,32 @@ describe("tags + list filters", () => {
   it("defaults each sort key to its own natural direction", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
-    await createGearOk({ typePublicId, code: "CH1" });
-    await createGearOk({ typePublicId, code: "CH2" });
+    const older = await createGearOk({ typePublicId, code: "CH2" });
+    const newer = await createGearOk({ typePublicId, code: "CH1" });
+    // `gear.created_at` defaults to now for every row a test inserts,
+    // so the codes are chosen to run *against* the dates: if the date
+    // sort were ignored, the code tiebreaker would answer CH1 first.
+    const db = getDb();
+    await db
+      .update(schema.gear)
+      .set({ createdAt: Temporal.Instant.from("2024-01-01T00:00:00Z") })
+      .where(eq(schema.gear.publicId, older));
+    await db
+      .update(schema.gear)
+      .set({ createdAt: Temporal.Instant.from("2025-06-01T00:00:00Z") })
+      .where(eq(schema.gear.publicId, newer));
 
     // `dir` is the caller's now, but leaving it off must not silently
     // flip a date sort to oldest-first just because `asc` is the more
     // obvious global default.
     const byDate = await listGearAction({ sort: "created_at" });
-    expect(byDate.rows.map((r) => r.code)).toEqual(["CH2", "CH1"]);
+    expect(byDate.rows.map((r) => r.code)).toEqual(["CH1", "CH2"]);
 
-    const byCode = await listGearAction({ sort: "code" });
-    expect(byCode.rows.map((r) => r.code)).toEqual(["CH1", "CH2"]);
+    const oldestFirst = await listGearAction({
+      sort: "created_at",
+      dir: "asc",
+    });
+    expect(oldestFirst.rows.map((r) => r.code)).toEqual(["CH2", "CH1"]);
   });
 });
 
