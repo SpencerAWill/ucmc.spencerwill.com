@@ -453,26 +453,29 @@ function FormPane({
         disabled={pending}
         className="max-h-[55vh] space-y-4 overflow-y-auto border-0"
       >
+        {/* Manufacturer first: the name is the model proper, so the
+         * pair reads the way it is spoken and printed — "Black Diamond
+         * HotForge 12cm" — and the way every list renders it. */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="model-name">Name</Label>
-            <Input
-              id="model-name"
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={200}
-              placeholder="HotForge 12cm"
-            />
-          </div>
           <div className="space-y-1.5">
             <Label htmlFor="model-manufacturer">Manufacturer</Label>
             <Input
               id="model-manufacturer"
+              autoFocus
               value={manufacturer}
               onChange={(e) => setManufacturer(e.target.value)}
               maxLength={100}
               placeholder="Black Diamond"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="model-name">Name</Label>
+            <Input
+              id="model-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={200}
+              placeholder="HotForge 12cm"
             />
           </div>
         </div>

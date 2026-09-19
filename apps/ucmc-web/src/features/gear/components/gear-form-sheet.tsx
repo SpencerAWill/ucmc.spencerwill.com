@@ -575,20 +575,22 @@ function GearForm({
           </Select>
           {newModelOpen ? (
             <div className="space-y-2 rounded-md border p-3">
+              {/* Manufacturer first, matching the models dialog and the
+               * way every list renders the pair: "Petzl Corax". */}
               <div className="grid grid-cols-2 gap-2">
-                <Input
-                  aria-label="New model name"
-                  value={newModelName}
-                  onChange={(e) => setNewModelName(e.target.value)}
-                  placeholder="Corax"
-                  maxLength={200}
-                />
                 <Input
                   aria-label="New model manufacturer"
                   value={newModelManufacturer}
                   onChange={(e) => setNewModelManufacturer(e.target.value)}
                   placeholder="Petzl"
                   maxLength={100}
+                />
+                <Input
+                  aria-label="New model name"
+                  value={newModelName}
+                  onChange={(e) => setNewModelName(e.target.value)}
+                  placeholder="Corax"
+                  maxLength={200}
                 />
               </div>
               {/* Model-level attributes belong to the product, so they
