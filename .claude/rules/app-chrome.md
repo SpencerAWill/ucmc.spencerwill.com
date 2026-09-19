@@ -46,20 +46,37 @@ put it under before it was moved to `0.515`. It now holds 4.64:1
 against `--muted`, the tightest pairing that renders. Anything that
 darkens a light surface has to be re-checked against it.
 
-### Two known contrast gaps, both pre-dating the ramp
+### `--header` is not `--primary`
 
-- **`--ring` is ~1.5:1 against the light page** (and it's applied at
-  `/50` opacity by `focus-visible:ring-ring/50` and the base layer's
-  `outline-ring/50`), well under the 3:1 that SC 1.4.11 wants of a
-  focus indicator. Unchanged by the ramp — it was 1.48:1 on white and
-  is 1.53:1 on cream.
-- **`--primary` in dark (`0.432`) fails as _text_** — 2.31:1 on a dark
-  card, and `text-primary` has ~33 call sites. It can't be fixed by
-  moving the token alone: lightening it far enough for text
-  (≥`0.58`) drops `--primary-foreground` below AA _on_ it, because the
-  same token is the fill behind the header and the primary buttons.
-  Fixing it means splitting the fill role from the text role, which is
-  a design decision, not a retune.
+The masthead bar has its own token pair. The two roles want opposite
+things in dark mode: the bar is brand chrome and stays a deep, quiet
+green, while `--primary` is the interactive accent and has to be light
+enough to read as **text** on a dark card — `text-primary` has ~33 call
+sites. No single lightness served both; anything legible as text
+(≥`0.58`) pushed a near-white `--primary-foreground` below AA on the
+fill. So dark `--primary` inverts (mint `0.696` on a dark-green
+foreground, the pair the dark sidebar's branding already used) and
+`--header` keeps the deep green.
+
+In light they happen to hold the same value. **That is a coincidence of
+this palette, not a constraint** — don't collapse them back into one
+token because they currently match.
+
+### The focus ring carries contrast on its full-opacity edge
+
+`--ring` is the brand green (mint in dark), not a neutral: SC 1.4.11
+wants 3:1 for a focus indicator and the stock neutral managed 1.48:1.
+Components layer a full-opacity `border-ring` under a `ring-ring/50`
+halo, and **the full-opacity edge is the indicator** — a 50% ring
+composited over a near-white page cannot reach 3:1 at any hue short of
+near-black. Don't reduce a focus style to the `/50` ring alone.
+
+### Chrome carries no `border-border`
+
+The base layer applies `border-border` to every element, so a bare
+`border-b` on a saturated bar paints the page's own neutral along its
+edge — under the header that read as a gap rather than a border. **A
+coloured bar separates by colour; it takes no border rule.**
 
 ## Page containers (`page-container.tsx`)
 
