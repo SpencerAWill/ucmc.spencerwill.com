@@ -58,6 +58,7 @@ async function asViewer(
     userId,
     primaryEmail: `${userId}@example.com`,
     emails: [`${userId}@example.com`],
+    preferredName: null,
     status: "approved",
     hasProfile: false,
     avatarKey: null,
