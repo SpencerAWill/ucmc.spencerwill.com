@@ -2,11 +2,17 @@
 // for meta. Since they render inside `<AppField>` (which already
 // subscribes to all field state changes), `field.state.meta` and
 // `field.state.value` are always fresh at render time. Adding a
-// useStore call would create a competing subscription that only
-// triggers on meta changes — missing value changes needed for
-// validation-attribute computation (e.g. isDirty + hasValue → green).
-import { lazy, Suspense, useEffect, useRef } from "react";
-import PhoneInputBase from "react-phone-number-input/input";
+// useStore call on the *field* store would create a competing
+// subscription that only triggers on meta changes — missing value
+// changes needed for validation-attribute computation (e.g. isDirty +
+// hasValue → green). The one `useStore` below reads the *form* store
+// (`submissionAttempts`), which `<AppField>` does not subscribe to.
+import { lazy, Suspense, useEffect, useEffectEvent, useRef } from "react";
+import { useStore } from "@tanstack/react-form";
+import PhoneInputBase, {
+  getCountryCallingCode,
+  parsePhoneNumber,
+} from "react-phone-number-input/input";
 
 import { Button } from "#/components/ui/button";
 import {
@@ -21,10 +27,12 @@ import { Slider as ShadcnSlider } from "#/components/ui/slider";
 import { Switch as ShadcnSwitch } from "#/components/ui/switch";
 import { Textarea as ShadcnTextarea } from "#/components/ui/textarea";
 import { useFieldContext, useFormContext } from "#/lib/form/context";
-import { fieldValidationAttrs } from "#/lib/form/field-state";
+import { fieldValidationAttrs, hasVisibleError } from "#/lib/form/field-state";
 import { DEFAULT_PHONE_COUNTRY } from "#/lib/phone-format";
 
 import type { MarkdownEditorHandle } from "#/components/editor/markdown-editor";
+import type { AnyFieldApi } from "@tanstack/react-form";
+import type { AnimationEvent } from "react";
 
 // Matches the `@keyframes form-autofill-detect` rule in `styles.css`.
 const AUTOFILL_ANIMATION_NAME = "form-autofill-detect";
@@ -67,6 +75,93 @@ function describedById({
     ids.push(`${fieldName}-error`);
   }
   return ids.length > 0 ? ids.join(" ") : undefined;
+}
+
+/**
+ * The presentation state every field component derives the same way:
+ * whether to render the error node, the `aria-invalid` / `data-valid`
+ * attributes for the control, and the `aria-describedby` string.
+ *
+ * "Submitted" is read from the field's own form store rather than
+ * `useFormContext()` because `formContext` is only provided inside
+ * `<form.AppForm>`, and callers wrap just the submit button in that —
+ * the fields render outside it.
+ */
+function useFieldPresentation(field: AnyFieldApi, description?: string) {
+  const submitted = useStore(
+    field.form.store,
+    (state) => state.submissionAttempts > 0,
+  );
+  const { meta, value } = field.state;
+  const hasError = hasVisibleError(meta, submitted);
+  return {
+    hasError,
+    errors: toFieldErrors(meta.errors),
+    validation: fieldValidationAttrs(meta, value, submitted),
+    ariaDescribedBy: describedById({
+      fieldName: field.name,
+      hasDescription: Boolean(description),
+      hasError,
+    }),
+  };
+}
+
+/**
+ * Keeps TanStack Form state in step with a text control's *DOM* value
+ * for the two cases where the browser changes that value without React
+ * ever seeing an input event. Both leave the control visibly holding
+ * text while `field.state.value` is still the default, so the field
+ * shows neutral, the submit gate stays closed, and — worse — the next
+ * re-render rewrites the DOM from the stale controlled `value`, wiping
+ * what the user sees.
+ *
+ *  1. **Pre-hydration input.** The page is server-rendered, and on a
+ *     phone the JS bundle can land well after the markup. Anything typed
+ *     or autofilled in that window is deliberately left in place by React
+ *     during hydration, but the first post-hydration update of a
+ *     controlled input resets `node.value` to the prop. The mount effect
+ *     reads the DOM once and pushes it into field state before that
+ *     update happens (passive effects flush ahead of the sync re-render
+ *     that field mounting schedules).
+ *
+ *  2. **Autofill with no input event** (Chrome on `autoComplete="name"`,
+ *     before the user interacts). The 1ms `form-autofill-detect` animation
+ *     declared in `styles.css` runs when `:autofill` matches, which gives
+ *     us an `animationstart` event to sync from.
+ *
+ * `toValue` maps DOM text onto the field's stored value — identity for
+ * plain text, E.164 parsing for `PhoneField`, whose display text and
+ * stored value differ.
+ */
+function useNativeValueSync<T extends HTMLInputElement | HTMLTextAreaElement>(
+  field: { state: { value: string }; handleChange: (value: string) => void },
+  toValue: (text: string) => string = (text) => text,
+) {
+  const ref = useRef<T>(null);
+  const sync = (text: string) => {
+    const next = toValue(text);
+    if (next !== field.state.value) {
+      field.handleChange(next);
+    }
+  };
+  // Effect Event so the mount-only effect reads the field as of mount
+  // without listing it as a dependency (its identity changes on every
+  // value change, which would re-run the sync on each keystroke).
+  const syncFromDom = useEffectEvent(() => {
+    const element = ref.current;
+    if (element) {
+      sync(element.value);
+    }
+  });
+  useEffect(() => {
+    syncFromDom();
+  }, []);
+  const onAnimationStart = (event: AnimationEvent<T>) => {
+    if (event.animationName === AUTOFILL_ANIMATION_NAME) {
+      sync(event.currentTarget.value);
+    }
+  };
+  return { ref, onAnimationStart };
 }
 
 export function SubscribeButton({ label }: { label: string }) {
@@ -124,51 +219,15 @@ export function TextField({
   readOnly?: boolean;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Browser autofill (esp. Chrome on autoComplete="name") sets the
-  // input's DOM value but does NOT fire React's onChange handler
-  // until the user interacts (focus + blur). For controlled
-  // TanStack Form inputs that means `field.state.value` stays at
-  // its empty default while the field visibly contains text — so
-  // it shows neutral, and only flips to green on blur (when the
-  // browser finally fires a synthetic change).
-  //
-  // The 1ms `form-autofill-detect` animation declared in
-  // styles.css fires when the `:autofill` pseudo-class is set,
-  // giving us an `animationstart` event we can listen for and
-  // push the DOM value into form state ourselves.
-  useEffect(() => {
-    const input = inputRef.current;
-    if (!input) {
-      return;
-    }
-    const handler = (e: AnimationEvent) => {
-      if (e.animationName !== AUTOFILL_ANIMATION_NAME) {
-        return;
-      }
-      if (input.value !== field.state.value) {
-        field.handleChange(input.value);
-      }
-    };
-    input.addEventListener("animationstart", handler);
-    return () => input.removeEventListener("animationstart", handler);
-  }, [field]);
-
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
+  const { ref, onAnimationStart } = useNativeValueSync<HTMLInputElement>(field);
 
   return (
     <Field className="gap-1.5">
       <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       <Input
-        ref={inputRef}
+        ref={ref}
         id={field.name}
         name={field.name}
         type={type}
@@ -181,6 +240,7 @@ export function TextField({
         aria-describedby={ariaDescribedBy}
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
+        onAnimationStart={onAnimationStart}
         {...validation}
       />
       {description ? (
@@ -189,10 +249,7 @@ export function TextField({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -212,19 +269,16 @@ export function TextArea({
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
+  const { ref, onAnimationStart } =
+    useNativeValueSync<HTMLTextAreaElement>(field);
 
   return (
     <Field className="gap-1.5">
       <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       <ShadcnTextarea
+        ref={ref}
         id={field.name}
         name={field.name}
         value={field.state.value}
@@ -234,6 +288,7 @@ export function TextArea({
         placeholder={placeholder}
         aria-describedby={ariaDescribedBy}
         onChange={(e) => field.handleChange(e.target.value)}
+        onAnimationStart={onAnimationStart}
         {...validation}
       />
       {description ? (
@@ -242,10 +297,7 @@ export function TextArea({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -284,14 +336,8 @@ export function MarkdownField({
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
   // The editor renders a contenteditable `<div>`, which `<label htmlFor>`
   // doesn't focus. Wire screen-reader association via aria-labelledby
   // and route mouse clicks on the label through an imperative focus
@@ -328,10 +374,7 @@ export function MarkdownField({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -358,14 +401,8 @@ export function Select({
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
 
   return (
     <Field className="gap-1.5">
@@ -403,13 +440,40 @@ export function Select({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
+}
+
+/**
+ * Maps whatever text a browser left in the phone `<input>` — the
+ * library's own national formatting, an autofilled `+1 513-555-1234`,
+ * or a half-typed `(513) 55` — onto the E.164 string `PhoneField` stores.
+ * Complete numbers parse properly; incomplete ones keep their digits
+ * under the default country's calling code so the library can pick
+ * formatting back up from there. Empty / digit-less text is `""`, the
+ * field's empty value.
+ */
+function phoneTextToE164(
+  text: string,
+  country: typeof DEFAULT_PHONE_COUNTRY,
+): string {
+  const trimmed = text.trim();
+  if (trimmed === "") {
+    return "";
+  }
+  const parsed = parsePhoneNumber(trimmed, country);
+  if (parsed) {
+    return parsed.number;
+  }
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits === "") {
+    return "";
+  }
+  return trimmed.startsWith("+")
+    ? `+${digits}`
+    : `+${getCountryCallingCode(country)}${digits}`;
 }
 
 /**
@@ -426,6 +490,20 @@ export function Select({
  * full component adds a country-flag dropdown that we don't want for a
  * US-focused club app). The inner input renders with shadcn's Input
  * styling via the `inputComponent` prop.
+ *
+ * `smartCaret={false}` is deliberate. The default "smart" input
+ * intercepts Backspace/Delete on `keydown` by `keyCode` (8 / 46) so
+ * that erasing formatting punctuation erases the digit before it. Android
+ * soft keyboards report `keyCode 229` for those keys, so the interception
+ * never fires, the plain `input` event arrives with only the `)` gone,
+ * and the value re-formats straight back to `(513)` — the user cannot
+ * delete past the area code. The library also documents caret-position
+ * bugs with the smart input on Samsung keyboards, and its caret fix-ups
+ * "don't work for custom `inputComponent`s", which we use. The basic
+ * input handles the punctuation case by comparing parsed values instead
+ * of key codes and never moves the caret itself, at the cost of the
+ * caret jumping to the end when editing mid-number — an acceptable
+ * trade for a ten-digit field.
  */
 export function PhoneField({
   label,
@@ -441,27 +519,28 @@ export function PhoneField({
   placeholder?: string;
 }) {
   const field = useFieldContext<string>();
-  const { meta, value } = field.state;
-  const validation = fieldValidationAttrs(meta, value);
-  const hasError = meta.isTouched && meta.errors.length > 0;
-  const ariaDescribedBy = describedById({
-    fieldName: field.name,
-    hasDescription: Boolean(description),
-    hasError,
-  });
+  const { hasError, errors, validation, ariaDescribedBy } =
+    useFieldPresentation(field, description);
+  const { ref, onAnimationStart } = useNativeValueSync<HTMLInputElement>(
+    field,
+    (text) => phoneTextToE164(text, country),
+  );
 
   return (
     <Field className="gap-1.5">
       <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       <PhoneInputBase
+        ref={ref}
         id={field.name}
         name={field.name}
         country={country}
+        smartCaret={false}
         autoComplete={autoComplete}
         placeholder={placeholder ?? "(555) 555-5555"}
         value={field.state.value || undefined}
         onChange={(v) => field.handleChange(v ?? "")}
         onBlur={field.handleBlur}
+        onAnimationStart={onAnimationStart}
         inputComponent={Input}
         aria-describedby={ariaDescribedBy}
         {...validation}
@@ -472,10 +551,7 @@ export function PhoneField({
         </FieldDescription>
       ) : null}
       {hasError ? (
-        <FieldError
-          id={`${field.name}-error`}
-          errors={toFieldErrors(meta.errors)}
-        />
+        <FieldError id={`${field.name}-error`} errors={errors} />
       ) : null}
     </Field>
   );
@@ -489,7 +565,7 @@ export function Slider({
   description?: string;
 }) {
   const field = useFieldContext<number>();
-  const { meta } = field.state;
+  const { hasError, errors } = useFieldPresentation(field, description);
 
   return (
     <Field className="gap-1.5">
@@ -501,9 +577,7 @@ export function Slider({
         onValueChange={(v) => field.handleChange(v[0])}
       />
       {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {meta.isTouched ? (
-        <FieldError errors={toFieldErrors(meta.errors)} />
-      ) : null}
+      {hasError ? <FieldError errors={errors} /> : null}
     </Field>
   );
 }
@@ -516,7 +590,7 @@ export function Switch({
   description?: string;
 }) {
   const field = useFieldContext<boolean>();
-  const { meta } = field.state;
+  const { hasError, errors } = useFieldPresentation(field, description);
 
   return (
     <Field orientation="horizontal" className="gap-2">
@@ -529,9 +603,7 @@ export function Switch({
       />
       <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
       {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {meta.isTouched ? (
-        <FieldError errors={toFieldErrors(meta.errors)} />
-      ) : null}
+      {hasError ? <FieldError errors={errors} /> : null}
     </Field>
   );
 }

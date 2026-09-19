@@ -23,8 +23,8 @@ import { CURRENT_YEAR_TOKEN } from "#/server/settings/settings-registry";
  * is why the title next to it isn't redundant.
  *
  * The tagline is de-emphasised by size and weight only — **do not add a
- * `text-primary-foreground/NN` opacity to it.** Against the light
- * theme's `--primary`, the full-opacity foreground is 5.09:1, /95 is
+ * `text-header-foreground/NN` opacity to it.** Against the light
+ * theme's `--header`, the full-opacity foreground is 5.09:1, /95 is
  * 4.76:1, and /90 is already 4.44:1 — so anything below full opacity
  * either fails WCAG AA for 12px text or clears it by less than axe's
  * own measurement error. `/75` shipped once and failed the axe job on

@@ -1,5 +1,6 @@
 import { Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { requireApproved } from "#/features/auth/guards";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import {
@@ -35,7 +36,7 @@ function MembersTabsLayout() {
   const subtitle = getMembersTabSubtitle(pathname);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+    <PageContainer width="wide" className="flex flex-col gap-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Members</h1>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
@@ -44,6 +45,6 @@ function MembersTabsLayout() {
       <MembersTabsBar />
 
       <Outlet />
-    </div>
+    </PageContainer>
   );
 }

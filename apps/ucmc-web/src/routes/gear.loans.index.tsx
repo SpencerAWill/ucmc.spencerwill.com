@@ -5,6 +5,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { DataPagination } from "#/components/data-pagination";
+import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
@@ -112,7 +113,7 @@ function GearLoansPage() {
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 p-4">
+    <PageContainer width="wide" className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Loans</h1>
@@ -191,6 +192,6 @@ function GearLoansPage() {
           }
         />
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

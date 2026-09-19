@@ -1,3 +1,4 @@
+import { PageContainer } from "#/components/layouts/page-container";
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/disclaimer")({
 
 function DisclaimerPage() {
   return (
-    <main id="main" className="mx-auto w-full max-w-2xl space-y-6 px-6 py-12">
+    <PageContainer width="prose" className="space-y-6">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">
           Registration disclaimer
@@ -40,6 +41,6 @@ function DisclaimerPage() {
         <h2 className="text-base font-semibold">Disambiguation</h2>
         <p>{SUBBRAND_DISAMBIGUATION}</p>
       </section>
-    </main>
+    </PageContainer>
   );
 }

@@ -4,6 +4,7 @@ import {
   FeedbackTabsBar,
   getFeedbackTabSubtitle,
 } from "#/components/layouts/feedback-tabs-bar";
+import { PageContainer } from "#/components/layouts/page-container";
 import { requireApproved } from "#/features/auth/guards";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
@@ -34,7 +35,7 @@ function FeedbackTabsLayout() {
   const subtitle = getFeedbackTabSubtitle(pathname);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+    <PageContainer width="app" className="flex flex-col gap-6">
       <header className="space-y-1">
         {/* The surface switcher sits on the heading's row, right-aligned:
             two options don't warrant a full-width bar under the header, and
@@ -48,6 +49,6 @@ function FeedbackTabsLayout() {
       </header>
 
       <Outlet />
-    </div>
+    </PageContainer>
   );
 }

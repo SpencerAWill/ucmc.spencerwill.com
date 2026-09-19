@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import type { DateRange } from "react-day-picker";
 import { z } from "zod";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
 import { DataPagination } from "#/components/data-pagination";
@@ -171,7 +172,7 @@ function AuditPage() {
     : "Any date";
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <PageContainer width="wide" className="space-y-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Audit log</h1>
         <p className="text-sm text-muted-foreground">
@@ -260,7 +261,7 @@ function AuditPage() {
           </EmptyHeader>
         </Empty>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

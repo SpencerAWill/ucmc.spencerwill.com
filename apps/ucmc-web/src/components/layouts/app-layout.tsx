@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Compass,
   Crown,
-  Eye,
   FileText,
   Gavel,
   GraduationCap,
@@ -39,6 +38,7 @@ import {
 
 import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
 import { UserMenu } from "#/features/auth/components/user-menu";
+import { ViewAsMenu } from "#/features/auth/components/view-as-menu";
 import { GitHubIcon } from "#/components/brand-icons";
 import { HeaderMasthead } from "#/components/layouts/header-masthead";
 import { ModeToggle } from "#/components/mode-toggle";
@@ -80,7 +80,6 @@ import {
   TooltipTrigger,
 } from "#/components/ui/tooltip";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { useViewMode } from "#/features/auth/api/view-mode";
 import {
   CLUB_FEEDBACK_PERMISSIONS,
   SITE_FEEDBACK_PERMISSIONS,
@@ -129,7 +128,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       >
         Skip to main content
       </a>
-      <header className="sticky top-0 z-30 flex h-(--header-height) w-full items-center border-b bg-primary/95 px-4 text-primary-foreground backdrop-blur-lg">
+      {/*
+       * No `border-b`. The base layer applies `border-border` to every
+       * element, so a bare `border-b` here painted a light neutral
+       * hairline across the bottom of a saturated green bar — it read
+       * as a gap under the navbar rather than an edge on it. The bar
+       * is its own colour against the page; that is the separation.
+       */}
+      <header className="sticky top-0 z-30 flex h-(--header-height) w-full items-center bg-header/95 px-4 text-header-foreground backdrop-blur-lg">
         <nav
           aria-label="Primary"
           className="flex w-full flex-nowrap items-center gap-x-3"
@@ -140,12 +146,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <HeaderMasthead />
           <div className="flex flex-1 flex-nowrap flex-row-reverse gap-x-2">
             <UserMenu />
+            <ViewAsMenu />
             <AnnouncementsBell />
             <ModeToggle />
           </div>
         </nav>
       </header>
-      <EmulationBanner />
       <CloseSidebarOnNavigate />
       <div className="flex flex-1">
         <Sidebar
@@ -192,37 +198,6 @@ function CloseSidebarOnNavigate() {
     setOpenMobile(false);
   }, [pathname, setOpenMobile]);
   return null;
-}
-
-/**
- * The preview's always-visible exit. Load-bearing now that route guards
- * honour the preview: a previewed role that can't reach the current page
- * lands on a 404 or gets bounced home, and the switcher lives inside the
- * user menu — so without an exit right here you'd be hunting for the way
- * out from a page that no longer renders its own chrome.
- */
-function EmulationBanner() {
-  const { emulatedRole, principal } = useAuth();
-  const { setEmulatedRole } = useViewMode();
-  if (!emulatedRole) {
-    return null;
-  }
-  // `roleDisplayNames` covers every previewable role, so this only falls
-  // back to the slug if the session payload predates the field.
-  const label = principal?.roleDisplayNames[emulatedRole] ?? emulatedRole;
-  return (
-    <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-      <Eye className="size-3.5" />
-      Viewing as {label}
-      <button
-        type="button"
-        onClick={() => setEmulatedRole(null)}
-        className="rounded px-1.5 py-0.5 font-semibold underline underline-offset-2 hover:bg-amber-200/60 dark:hover:bg-amber-800/40"
-      >
-        Exit preview
-      </button>
-    </div>
-  );
 }
 
 // Exported for `__tests__/sidebar-nav.test.tsx`: the nav's gates compose a

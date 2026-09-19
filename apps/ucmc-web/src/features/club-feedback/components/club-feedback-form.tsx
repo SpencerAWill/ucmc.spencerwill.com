@@ -72,7 +72,6 @@ export function ClubFeedbackForm() {
     validators: {
       onMount: validateClubFeedback,
       onChange: validateClubFeedback,
-      onBlur: validateClubFeedback,
       onSubmit: validateClubFeedback,
     },
     onSubmit: ({ value, formApi }) => {

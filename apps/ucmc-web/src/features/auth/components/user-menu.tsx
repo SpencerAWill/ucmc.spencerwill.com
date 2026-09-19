@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Backpack,
-  Eye,
   LayoutDashboard,
   LogOut,
   Map,
@@ -20,29 +19,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
-import { Label } from "#/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "#/components/ui/select";
-import { Switch } from "#/components/ui/switch";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { useViewMode } from "#/features/auth/api/view-mode";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export function UserMenu() {
-  const {
-    principal,
-    isLoading,
-    isElevated,
-    isSystemAdmin,
-    emulatedRole,
-    signOut,
-  } = useAuth();
-  const { setEmulatedRole } = useViewMode();
+  const { principal, isLoading, emulatedRole, signOut } = useAuth();
   const navigate = useNavigate();
   // Per-page kill switches for the personal menu items. Hooks run before
   // the early returns below to satisfy the rules of hooks.
@@ -72,7 +53,11 @@ export function UserMenu() {
     );
   }
 
-  const display = principal.primaryEmail;
+  // The name the member chose, not their email: the menu is the one
+  // place the account is addressed rather than identified, and the
+  // email is on /my/details. Falls back to the email before the
+  // profile exists, when it's the only identifier there is.
+  const display = principal.preferredName ?? principal.primaryEmail;
   const statusLabel =
     principal.status === "approved"
       ? emulatedRole
@@ -149,60 +134,6 @@ export function UserMenu() {
             ) : null}
           </>
         )}
-        {/* Role preview — sys admins get a full role select (any role on
-            the site); non-admin officers get a Switch toggling to
-            member-view; single-role members get nothing. Route guards
-            honour the preview too, so this narrows what's reachable, not
-            just what's drawn — enforcement stays on the real principal
-            server-side. */}
-        {isElevated && principal.status === "approved" ? (
-          <>
-            <DropdownMenuSeparator />
-            <EmulationRow>
-              {isSystemAdmin ? (
-                <Select
-                  value={emulatedRole ?? "__actual__"}
-                  onValueChange={(value) => {
-                    setEmulatedRole(value === "__actual__" ? null : value);
-                  }}
-                >
-                  <SelectTrigger className="h-7 flex-1 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__actual__">
-                      Actual permissions
-                    </SelectItem>
-                    {Object.keys(principal.rolePermissionMap)
-                      .filter((role) => role !== "system_admin")
-                      .map((role) => (
-                        <SelectItem key={role} value={role}>
-                          View as {principal.roleDisplayNames[role] ?? role}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <>
-                  <Label
-                    htmlFor="view-as-member-switch"
-                    className="flex-1 text-xs font-normal"
-                  >
-                    View as member
-                  </Label>
-                  <Switch
-                    id="view-as-member-switch"
-                    size="sm"
-                    checked={emulatedRole === "member"}
-                    onCheckedChange={(on) =>
-                      setEmulatedRole(on ? "member" : null)
-                    }
-                  />
-                </>
-              )}
-            </EmulationRow>
-          </>
-        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={async (e) => {
@@ -216,17 +147,5 @@ export function UserMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function EmulationRow({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="flex items-center gap-2 px-2 py-1.5"
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      <Eye className="size-4 shrink-0 text-muted-foreground" />
-      {children}
-    </div>
   );
 }

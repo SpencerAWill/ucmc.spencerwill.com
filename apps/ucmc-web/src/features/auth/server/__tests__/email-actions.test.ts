@@ -449,6 +449,7 @@ describe("removeEmailAction", () => {
         userId,
         primaryEmail: "solo@example.com",
         emails: ["solo@example.com"],
+        preferredName: null,
         status: "approved",
         hasProfile: false,
         avatarKey: null,

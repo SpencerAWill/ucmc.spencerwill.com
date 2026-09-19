@@ -1,4 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { PageContainer } from "#/components/layouts/page-container";
 import { pageHeroQueryOptions } from "#/features/landing/api/queries";
 import { PageHero } from "#/features/landing/components/page-hero";
 import { createFileRoute } from "@tanstack/react-router";
@@ -188,10 +189,7 @@ function HistoryPage() {
   return (
     <>
       <PageHero page="history" />
-      <main
-        id="main"
-        className="mx-auto w-full max-w-2xl space-y-10 px-6 py-12"
-      >
+      <PageContainer width="prose" className="space-y-10">
         {canManageHistory ? (
           <div className="flex justify-end">
             <Button
@@ -447,7 +445,7 @@ function HistoryPage() {
             </AlertDialog>
           </>
         ) : null}
-      </main>
+      </PageContainer>
     </>
   );
 }

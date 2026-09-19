@@ -1,3 +1,7 @@
+# `set -e`: this hook runs more than one command now, and without it a
+# failing check would be masked by the exit status of the next one.
+set -e
+
 # `--no-stash` is deliberate, not a convenience.
 #
 # lint-staged's default backup stash performs a sequence of index writes
@@ -17,3 +21,32 @@
 # stays ON (the default) — disabling that would let formatters stage
 # changes you deliberately left unstaged.
 pnpm exec lint-staged --no-stash
+
+# Type errors can't be caught by the step above, for two reasons that
+# both point the same way. ESLint here is not type-aware across files,
+# and `tsc` cannot be run per-file at all: given explicit filenames it
+# ignores tsconfig.json entirely — wrong options, no `#/*` path alias —
+# so it only means anything run once over a whole project.
+#
+# That also rules out a lint-staged entry. Tasks for different globs run
+# concurrently, so a whole-project `tsc` would read the same files
+# ESLint and Prettier are still rewriting. Sequential, after, here.
+#
+# Scoped to the packages whose sources actually changed: the web
+# typecheck is ~8s and most commits don't touch it. Deletions and
+# renames count — removing a module breaks whatever imported it — so
+# this deliberately does not filter them out. tsconfig edits count for
+# the same reason.
+#
+# Like every task under `--no-stash`, this reads the working tree rather
+# than the staged snapshot, so unstaged edits in the same package are
+# part of what gets checked.
+staged=$(git diff --cached --name-only)
+
+if printf '%s\n' "$staged" | grep -qE '^apps/ucmc-web/.*\.(ts|tsx)$|^apps/ucmc-web/tsconfig.*\.json$'; then
+  pnpm --filter ucmc-web typecheck
+fi
+
+if printf '%s\n' "$staged" | grep -qE '^infra/.*\.ts$|^infra/tsconfig\.json$'; then
+  pnpm --filter @ucmc/infra typecheck
+fi

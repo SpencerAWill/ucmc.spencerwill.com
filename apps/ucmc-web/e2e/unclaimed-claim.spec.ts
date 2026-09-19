@@ -63,7 +63,7 @@ test("officer-pre-added unclaimed member can claim their account", async ({
 
   // Fill the form. Field labels mirror the components under
   // `apps/ucmc-web/src/components/profile/` (private-detail-fields.tsx,
-  // public-profile-fields.tsx, emergency-contact-fields.tsx).
+  // public-profile-fields.tsx, private-detail-fields.tsx).
   await page
     .getByRole("textbox", { name: /^full name$/i })
     .fill("Claimer Smith");
@@ -83,11 +83,6 @@ test("officer-pre-added unclaimed member can claim their account", async ({
   await page.getByRole("combobox", { name: /uc affiliation/i }).click();
   await page.getByRole("option", { name: /^student$/i }).click();
 
-  // Emergency contacts are optional and the form starts with the
-  // dynamic array empty (no contact cards rendered) — no need to fill
-  // any here, which keeps the locator surface small and resilient to
-  // layout changes inside the array section.
-
   // Tick the policies checkbox. Using `check()` over `click()` is more
   // robust against re-rendering: it asserts the post-state and retries
   // if the click didn't register, which it sometimes doesn't on Radix
@@ -95,9 +90,6 @@ test("officer-pre-added unclaimed member can claim their account", async ({
   const policiesCheckbox = page.getByRole("checkbox", { name: /policies/i });
   await policiesCheckbox.check();
   await expect(policiesCheckbox).toBeChecked();
-  // Force blur so any onBlur-gated validators run before we measure
-  // canSubmit on the submit button.
-  await policiesCheckbox.blur();
 
   // Wait for the form's `canSubmit` to flip true. Validation runs
   // async after each field change; on cold boots the worker takes a

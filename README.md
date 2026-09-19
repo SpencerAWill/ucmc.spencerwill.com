@@ -8,9 +8,8 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 
 - `apps/` — Applications
   - `apps/ucmc-web/` — UCMC web app (TanStack Start on Cloudflare Workers)
-- `libs/` — Shared libraries
 - `infra/` — Pulumi infrastructure-as-code
-- `.devcontainer/` — Dev container configuration (`initialize.sh` on the host, `configure-git.sh` on create; see CLAUDE.md on git index-lock contention)
+- `.devcontainer/` — Dev container configuration (`initialize.sh` on the host, `configure-git.sh` on create; see [`.claude/rules/devcontainer.md`](.claude/rules/devcontainer.md) on git index-lock contention)
 - `.zed/`, `.vscode/` — editor settings; both committed, and their scan/watch exclusions are load-bearing for git performance
 
 ## Development Setup
@@ -83,26 +82,35 @@ On every commit, the following runs automatically via lint-staged:
 - **ESLint** — lints and fixes `*.js`, `*.ts`, `*.tsx` files
 - **Prettier** — formats all supported file types
 
+The `pre-commit` hook then runs **TypeScript** (`tsc --noEmit`) for each
+package whose TypeScript changed — `apps/ucmc-web` (~8s) or `infra` (~1s) —
+so a commit can't introduce a type error that only CI would catch. A commit
+touching neither package's TypeScript skips it entirely. Deletions, renames
+and `tsconfig.json` edits all count as changes, since removing a module
+breaks whatever imported it.
+
 To run manually:
 
 ```bash
 pnpm exec eslint .
 pnpm exec prettier --write .
+pnpm --filter ucmc-web typecheck
+cd infra && pnpm typecheck
 ```
 
 ### Web App
 
 The web app lives in `apps/ucmc-web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Custom domains are provisioned by Pulumi (see Infrastructure below); dev auto-deploys on merge to main, prod is a manual dispatch with environment approval.
 
-Dates and times use the TC39 [Temporal](https://tc39.es/proposal-temporal/docs/) API (via `temporal-polyfill`, since workerd and Safari < 17 lack it natively) rather than `Date`. Calendar-shaped rules (waiver cycle, gear due dates) reason in the club's `America/New_York` zone; see the "Dates & time" section of [`CLAUDE.md`](CLAUDE.md) for the invariants.
+Dates and times use the TC39 [Temporal](https://tc39.es/proposal-temporal/docs/) API (via `temporal-polyfill`, since workerd and Safari < 17 lack it natively) rather than `Date`. Calendar-shaped rules (waiver cycle, gear due dates) reason in the club's `America/New_York` zone; see [`.claude/rules/dates-and-formats.md`](.claude/rules/dates-and-formats.md) for the invariants.
 
 Phone numbers are stored in E.164 (`+15135551234`) and validated with [`react-phone-number-input`](https://gitlab.com/catamphetamine/react-phone-number-input) (a `libphonenumber-js` wrapper) on the way in; every rendered number goes through `#/lib/phone-format`, which shows US numbers in national form (`(513) 555-1234`), keeps the country code on everything else, and pairs with the `<PhoneLink>` component for click-to-call.
 
-Every public page (`/`, `/gear-cave`, `/policies`, `/scholarships`, `/resources`, `/volunteer`, `/sponsors`, `/history`, `/album`, `/gazette`) renders a configurable **hero** — editable title and description over an optional auto-advancing image gallery, with hover-revealed arrows and a clock-face autoplay dial that doubles as the pause control. Adding a hero to a new page is one entry in the `HERO_PAGES` registry; see the "Page heroes" section of [`CLAUDE.md`](CLAUDE.md).
+Every public page (`/`, `/gear-cave`, `/policies`, `/scholarships`, `/resources`, `/volunteer`, `/sponsors`, `/history`, `/album`, `/gazette`) renders a configurable **hero** — editable title and description over an optional auto-advancing image gallery, with hover-revealed arrows and a clock-face autoplay dial that doubles as the pause control. Adding a hero to a new page is one entry in the `HERO_PAGES` registry; see [`.claude/rules/feature-public-pages.md`](.claude/rules/feature-public-pages.md).
 
 Public pages include a **volunteer** page (`/volunteer`) — standing service programs, upcoming outings, and a date-derived archive of everything the club has logged — and a **sponsors** page (`/sponsors`) listing the businesses that back UCMC, each with its logo, what it does for the club, and an officer-editable pitch for prospective sponsors. Sponsor logos are scaled to fit rather than cropped, so a wordmark and a roundel each keep their own shape. Member-only sponsor perks (discounts, codes, how to claim) sit behind their own `public_sponsors:perks` permission and are **stripped from the payload server-side** for anyone who lacks it, so they never reach a signed-out visitor's page source.
 
-Member-facing features include: registration + waiver workflow, announcements, feedback, paper-waiver attestation, member directory + management, and a **gear inventory** (`/gear`) with type/tag partitioning (tags can be public or officer-only-`internal`), freeform short codes that print to laminated tags and recycle on retirement, CSV bulk import, per-piece append-only inspection log (pass/fail/advisory), and officer-only barcode label printing (CODE128 via `jsbarcode`). A **gear-loans / checkout** flow on top of the inventory lets a gear-cave keeper (`gear:loan` permission) check pieces out to members at a desk via barcode scan or code search, with per-loan due dates and an asymmetric check-in batch that can span multiple borrowers. Members see their own loans at `/my/gear`. **Trip sign-ups** (`/trips`) are a temporary surface that embeds the club's existing Google Form, so members have an in-app place to sign up while the full trips feature is built; see the "Trip sign-ups" section of [`CLAUDE.md`](CLAUDE.md) for what comes out when it lands. Officers can **backfill** historical loans in bulk from a CSV (file, clipboard, or manual entry) — keyed on member primary email + gear `code`, supporting both open and already-returned rows in the same import.
+Member-facing features include: registration + waiver workflow, announcements, feedback, paper-waiver attestation, member directory + management, and a **gear inventory** (`/gear`) with type/tag partitioning (tags can be public or officer-only-`internal`), freeform short codes that print to laminated tags and recycle on retirement, CSV bulk import, per-piece append-only inspection log (pass/fail/advisory), and officer-only barcode label printing (CODE128 via `jsbarcode`). A **gear-loans / checkout** flow on top of the inventory lets a gear-cave keeper (`gear:loan` permission) check pieces out to members at a desk via barcode scan or code search, with per-loan due dates and an asymmetric check-in batch that can span multiple borrowers. Members see their own loans at `/my/gear`. **Trip sign-ups** (`/trips`) are a temporary surface that embeds the club's existing Google Form, so members have an in-app place to sign up while the full trips feature is built; see [`.claude/rules/feature-public-pages.md`](.claude/rules/feature-public-pages.md) for what comes out when it lands. Officers can **backfill** historical loans in bulk from a CSV (file, clipboard, or manual entry) — keyed on member primary email + gear `code`, supporting both open and already-returned rows in the same import.
 
 Common commands (run from the repo root):
 
@@ -127,7 +135,7 @@ The app uses a two-path authentication system:
 
 2. **Passkeys / WebAuthn** (primary for sign-in) — approved users can enroll FIDO2 passkeys on `/my/account/security`. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
 
-**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (fill profile) → `/register/pending` (wait for exec approval) → exec approves at `/members/pending` → user is `approved` with the `member` role.
+**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (required fields only: legal + preferred name, phone, UC affiliation, policies ack) → `/register/pending` (wait for exec approval; optionally add emergency contacts and a bio there) → exec approves at `/members/pending` → user is `approved` with the `member` role.
 
 **Anti-abuse**: Turnstile CAPTCHA on the magic-link form, per-IP + per-email rate limiting (10 req / 60 s), timing jitter (500–800 ms) to prevent email enumeration, SHA-256 hashed tokens in D1 (stolen DB can't replay links).
 

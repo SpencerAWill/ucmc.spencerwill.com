@@ -41,19 +41,14 @@ vi.mock("sonner", () => ({
   },
 }));
 
+// Registration collects required fields only. Bio and emergency
+// contacts are offered on /register/pending instead, so they aren't
+// accepted as defaults here — but they're still on the submitted shape.
 const VALID_DEFAULTS = {
   fullName: "Alice Example",
   preferredName: "Ali",
   phone: "+15135551234",
-  emergencyContacts: [
-    {
-      name: "Bob Example",
-      phone: "+15135559999",
-      relationship: "parent" as const,
-    },
-  ],
   ucAffiliation: "student" as const,
-  bio: "I climb things.",
 };
 
 function renderForm(props: Partial<Parameters<typeof ProfileForm>[0]> = {}) {
@@ -100,8 +95,8 @@ describe("ProfileForm", () => {
     renderForm({ redirectTo: "/my/profile" });
 
     // The submit button is gated on `isDefaultValue` — so dirty up the form
-    // by appending to the bio field before clicking submit.
-    await user.type(screen.getByLabelText(/bio/i), " Edited.");
+    // by editing the preferred name before clicking submit.
+    await user.type(screen.getByLabelText(/preferred name/i), "ce");
     // Registration also requires acknowledging the anti-hazing +
     // non-discrimination policies (literal-true on
     // `registrationInputSchema.policiesAck`).
@@ -114,17 +109,35 @@ describe("ProfileForm", () => {
       expect(submitProfileFn).toHaveBeenCalledTimes(1);
     });
     const [{ data }] = submitProfileFn.mock.calls[0] as [
-      { data: typeof VALID_DEFAULTS & { policiesAck: true } },
+      { data: Record<string, unknown> },
     ];
     expect(data.fullName).toBe("Alice Example");
+    expect(data.preferredName).toBe("Alice");
     expect(data.ucAffiliation).toBe("student");
-    expect(data.bio).toBe("I climb things. Edited.");
     expect(data.policiesAck).toBe(true);
+    // Both optional fields submit empty; /register/pending fills them in.
+    expect(data.bio).toBe("");
+    expect(data.emergencyContacts).toEqual([]);
 
     await waitFor(() => {
       expect(toastSuccess).toHaveBeenCalledWith("Profile submitted");
     });
     expect(navigateMock).toHaveBeenCalledWith({ to: "/my/profile" });
+  });
+
+  it("enables submit as soon as the ack checkbox is checked, without blurring it", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    // Leave another field first: with a form-level blur validator that
+    // stamped a stale error onto the still-unchecked box.
+    await user.click(screen.getByLabelText(/preferred name/i));
+    await user.tab();
+
+    await user.click(screen.getByLabelText(/acknowledge.*policies/i));
+    expect(
+      screen.getByRole("button", { name: /submit for review/i }),
+    ).toBeEnabled();
   });
 
   it("does not submit when the policies-ack checkbox is left unchecked", async () => {
@@ -136,7 +149,7 @@ describe("ProfileForm", () => {
     // Dirty the form so isDefaultValue won't gate the submit button,
     // but leave the ack checkbox unchecked. The validator should still
     // refuse to call the server fn.
-    await user.type(screen.getByLabelText(/bio/i), " Edited.");
+    await user.type(screen.getByLabelText(/preferred name/i), "ce");
     await user.click(
       screen.getByRole("button", { name: /submit for review/i }),
     );
@@ -151,7 +164,7 @@ describe("ProfileForm", () => {
 
     renderForm();
 
-    await user.type(screen.getByLabelText(/bio/i), " Edited.");
+    await user.type(screen.getByLabelText(/preferred name/i), "ce");
     await user.click(screen.getByLabelText(/acknowledge.*policies/i));
     await user.click(
       screen.getByRole("button", { name: /submit for review/i }),

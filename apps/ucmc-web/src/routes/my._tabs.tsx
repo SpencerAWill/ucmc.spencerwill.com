@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 import { RouteErrorFallback } from "#/components/error-page";
+import { AccountTabsBar } from "#/components/layouts/account-tabs-bar";
+import { PageContainer } from "#/components/layouts/page-container";
 import { profileQueryOptions } from "#/features/auth/api/queries";
-import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
-import type { PageFlagKey } from "#/server/settings/settings-registry";
 
 /**
  * Pathless layout for the personal-account tabs: a greeting header, a
@@ -33,27 +33,7 @@ export const Route = createFileRoute("/my/_tabs")({
   errorComponent: RouteErrorFallback,
 });
 
-const TABS = [
-  { to: "/my/profile", label: "Profile", flag: "my_profile" },
-  { to: "/my/details", label: "Details", flag: "my_details" },
-  { to: "/my/contacts", label: "Contacts", flag: "my_contacts" },
-  { to: "/my/waiver", label: "Waiver", flag: "my_waiver" },
-  { to: "/my/security", label: "Security", flag: "my_security" },
-  { to: "/my/preferences", label: "Preferences", flag: "my_preferences" },
-] as const satisfies ReadonlyArray<{
-  to: string;
-  label: string;
-  flag: PageFlagKey;
-}>;
-
 function AccountTabsLayout() {
-  // Per-page kill switches: hide any tab whose page has been switched off
-  // from /settings. Each route also 404s independently.
-  const flagsOptions = publicFlagsQueryOptions();
-  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
-  const pages = flags.pages;
-  const visibleTabs = TABS.filter((tab) => pages[tab.flag]);
-
   // Greeting name comes from the profile, not the principal — the
   // principal deliberately carries only identity + RBAC, no display
   // name. `profileQueryOptions` resolves to `{ profile,
@@ -65,35 +45,12 @@ function AccountTabsLayout() {
   const preferredName = data?.profile?.preferredName.trim();
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-6">
+    <PageContainer width="app">
       <h1 className="mb-4 text-2xl font-semibold">
         {preferredName ? `Hi ${preferredName}!` : "Hi there!"}
       </h1>
-      {/*
-       * The tab bar is allowed to overflow horizontally on narrow viewports
-       * rather than wrapping — six labels at body-text size will line-wrap
-       * on a phone, which looked broken. `border-b` lives on the container
-       * so the underline runs the full visual width even after the row
-       * scrolls. Per-link `whitespace-nowrap` keeps individual labels intact.
-       */}
-      <div className="mb-6 -mx-6 border-b border-border">
-        <nav className="flex gap-1 overflow-x-auto px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {visibleTabs.map((tab) => (
-            <Link
-              key={tab.to}
-              to={tab.to}
-              className="-mb-px shrink-0 border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap text-muted-foreground hover:text-foreground"
-              activeProps={{
-                className:
-                  "-mb-px shrink-0 border-b-2 border-primary px-3 py-2 text-sm whitespace-nowrap text-foreground",
-              }}
-            >
-              {tab.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <AccountTabsBar />
       <Outlet />
-    </div>
+    </PageContainer>
   );
 }

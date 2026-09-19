@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { useConsumeMagicLink } from "#/features/auth/api/use-consume-magic-link";
 import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
@@ -84,7 +85,7 @@ function CallbackPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-6 py-16">
+    <PageContainer width="focused" className="flex flex-col items-center gap-6">
       <header className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold">Verify your email</h1>
         <p className="text-sm text-muted-foreground">
@@ -100,6 +101,6 @@ function CallbackPage() {
           Something went wrong. Please request a new link.
         </p>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

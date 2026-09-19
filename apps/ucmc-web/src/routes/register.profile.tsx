@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { ProfileForm } from "#/features/auth/components/profile-form";
 import { requireRegistrationContext } from "#/features/auth/guards";
 
@@ -14,6 +15,12 @@ import { requireRegistrationContext } from "#/features/auth/guards";
  *     ahead of profile completion) — consume opens a session directly,
  *     route accepts that, submit upserts the profile against the
  *     existing user.
+ *
+ * The form asks only for what an exec needs to review the account.
+ * Emergency contacts and the bio are optional, so they live on
+ * /register/pending where a member can add them while they wait —
+ * the dynamic contacts list is the worst thing on this page to
+ * operate on a phone, and nothing about it gates approval.
  *
  * On submit, `submitProfileFn` either inserts or upserts the user,
  * upserts the profile, opens a session if one isn't already open,
@@ -31,14 +38,15 @@ export const Route = createFileRoute("/register/profile")({
 function ProfilePage() {
   const { reg } = Route.useRouteContext();
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
+    <PageContainer width="prose" className="flex flex-col gap-8">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Finish registering</h1>
         <p className="text-sm text-muted-foreground">
           These details are shared only with UCMC execs for member verification.
+          You can add emergency contacts and a short bio on the next page.
         </p>
       </header>
       <ProfileForm email={reg.email} redirectTo="/register/pending" />
-    </div>
+    </PageContainer>
   );
 }

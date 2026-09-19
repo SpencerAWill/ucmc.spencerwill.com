@@ -6,8 +6,8 @@
  * the router (so `beforeLoad` re-runs for the page you're already on).
  * Without the invalidate, switching to a narrower role while sitting on
  * `/settings` leaves the settings page fully rendered — the guards only
- * re-evaluate on navigation — and "Exit preview" can't rescue you off a
- * `notFound()` a preview threw.
+ * re-evaluate on navigation — and switching back to "Actual permissions"
+ * can't rescue you off a `notFound()` a preview threw.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";

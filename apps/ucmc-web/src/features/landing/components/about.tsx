@@ -24,7 +24,7 @@ export function About() {
 
   return (
     <section className="relative border-b py-16 md:py-20">
-      <div className="mx-auto max-w-6xl px-6">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <h2 className="mb-10 text-center text-3xl font-bold tracking-tight md:text-4xl">
           About the club
         </h2>

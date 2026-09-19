@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import type { z } from "zod";
 
+import { BioFields } from "#/components/profile/bio-fields";
 import { EmergencyContactFields } from "#/components/profile/emergency-contact-fields";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
@@ -17,11 +18,8 @@ import {
   UNSAVED_CHANGES_MESSAGE,
   useUnsavedChangesGuard,
 } from "#/lib/form/use-unsaved-changes-guard";
-import { cn } from "#/lib/utils";
 import type { EmergencyContactInput } from "#/server/profile/profile-schemas";
 import {
-  BIO_LIMITS,
-  countWords,
   PROFILE_LIMITS,
   profileInputSchema,
 } from "#/server/profile/profile-schemas";
@@ -86,7 +84,6 @@ export function AdminProfileSheet({
     validators: {
       onMount: profileInputSchema,
       onChange: profileInputSchema,
-      onBlur: profileInputSchema,
       onSubmit: profileInputSchema,
     },
     onSubmit: ({ value }) => {
@@ -195,33 +192,10 @@ export function AdminProfileSheet({
                   </form.AppField>
                 </div>
 
-                <div className="space-y-1">
-                  <form.AppField name="bio">
-                    {(field) => (
-                      <field.TextArea
-                        label="Bio"
-                        rows={4}
-                        placeholder="A short description shown on the member's public profile."
-                      />
-                    )}
-                  </form.AppField>
-                  <form.Subscribe selector={(s) => s.values.bio}>
-                    {(value) => {
-                      const count = countWords(value);
-                      const over = count > BIO_LIMITS.maxWords;
-                      return (
-                        <p
-                          className={cn(
-                            "text-xs text-muted-foreground",
-                            over && "text-destructive",
-                          )}
-                        >
-                          {count} / {BIO_LIMITS.maxWords} words
-                        </p>
-                      );
-                    }}
-                  </form.Subscribe>
-                </div>
+                <BioFields
+                  form={form}
+                  placeholder="A short description shown on the member's public profile."
+                />
 
                 <EmergencyContactFields form={form} />
 

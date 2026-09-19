@@ -113,6 +113,7 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
     userId: "user_abc",
     primaryEmail: "member@example.com",
     emails: ["member@example.com"],
+    preferredName: "Test",
     status: "approved",
     hasProfile: true,
     avatarKey: null,
