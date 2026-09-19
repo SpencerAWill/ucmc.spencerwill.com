@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { requireCurrentWaiver } from "#/features/auth/guards";
 import { MyCartList } from "#/features/gear/components/my-cart-list";
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/my/gear/cart")({
 
 function MyCartPage() {
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+    <PageContainer width="app" className="space-y-4">
       <div className="space-y-3">
         <Button asChild variant="ghost" size="sm">
           <Link to="/my/gear">
@@ -42,6 +43,6 @@ function MyCartPage() {
         </header>
       </div>
       <MyCartList />
-    </div>
+    </PageContainer>
   );
 }

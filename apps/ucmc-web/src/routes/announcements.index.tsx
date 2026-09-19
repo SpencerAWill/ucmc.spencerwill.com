@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { announcementsListQueryOptions } from "#/features/announcements/api/queries";
 import { useDeleteAnnouncement } from "#/features/announcements/api/use-delete-announcement";
 import { useMarkAnnouncementsRead } from "#/features/announcements/api/use-mark-announcements-read";
@@ -81,7 +82,7 @@ function AnnouncementsPage() {
   const announcements = data ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+    <PageContainer width="app" className="space-y-4">
       <header className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">Announcements</h1>
@@ -169,6 +170,6 @@ function AnnouncementsPage() {
           </AlertDialog>
         </>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

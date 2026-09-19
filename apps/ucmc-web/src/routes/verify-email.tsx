@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useConsumeAddEmail } from "#/features/auth/api/use-consume-add-email";
@@ -57,7 +58,10 @@ function VerifyEmailPage() {
     // Unauthenticated click. Tell the user what to do; do NOT consume
     // the token (the action would refuse anyway).
     return (
-      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-6 py-16">
+      <PageContainer
+        width="focused"
+        className="flex flex-col items-center gap-6"
+      >
         <header className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold">Sign in to verify</h1>
           <p className="text-sm text-muted-foreground">
@@ -75,13 +79,16 @@ function VerifyEmailPage() {
             Sign in
           </Link>
         </Button>
-      </div>
+      </PageContainer>
     );
   }
 
   if (outcome?.kind === "success") {
     return (
-      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-6 py-16">
+      <PageContainer
+        width="focused"
+        className="flex flex-col items-center gap-6"
+      >
         <header className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold">Email verified</h1>
           <p className="text-sm text-muted-foreground">
@@ -92,14 +99,17 @@ function VerifyEmailPage() {
         <Button size="lg" onClick={() => navigate({ to: "/my/details" })}>
           Back to your account
         </Button>
-      </div>
+      </PageContainer>
     );
   }
 
   if (outcome?.kind === "error") {
     const message = errorCopy(outcome.reason);
     return (
-      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-6 py-16">
+      <PageContainer
+        width="focused"
+        className="flex flex-col items-center gap-6"
+      >
         <header className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold">
             We couldn&rsquo;t verify that email
@@ -109,12 +119,12 @@ function VerifyEmailPage() {
         <Button asChild size="lg" variant="outline">
           <Link to="/my/details">Back to your account</Link>
         </Button>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-6 py-16">
+    <PageContainer width="focused" className="flex flex-col items-center gap-6">
       <header className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold">Verify your email</h1>
         <p className="text-sm text-muted-foreground">
@@ -125,7 +135,7 @@ function VerifyEmailPage() {
       <Button size="lg" disabled={consume.isPending} onClick={onVerify}>
         {consume.isPending ? "Verifying…" : "Verify email"}
       </Button>
-    </div>
+    </PageContainer>
   );
 }
 

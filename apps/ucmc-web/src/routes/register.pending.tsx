@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { BioEditor } from "#/features/auth/components/bio-editor";
@@ -66,7 +67,7 @@ function PendingPage() {
   const formKey = data?.profile?.updatedAt.toString();
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-16">
+    <PageContainer width="prose" className="flex flex-col gap-8">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Thanks for registering!</h1>
         <p className="text-sm text-muted-foreground">
@@ -138,6 +139,6 @@ function PendingPage() {
           activities.
         </p>
       </div>
-    </div>
+    </PageContainer>
   );
 }

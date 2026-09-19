@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { LegalSections } from "#/components/legal/legal-section";
 import { Button } from "#/components/ui/button";
 import type { LegalSection } from "#/config/legal";
@@ -68,7 +69,7 @@ const SECTIONS: readonly LegalSection[] = [
 
 function OpenSourcePage() {
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
+    <PageContainer width="prose" className="space-y-8">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Open source</h1>
         <p className="text-sm text-muted-foreground">
@@ -104,6 +105,6 @@ function OpenSourcePage() {
       </div>
 
       <LegalSections sections={SECTIONS} />
-    </div>
+    </PageContainer>
   );
 }

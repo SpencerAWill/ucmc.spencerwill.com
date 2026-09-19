@@ -4,6 +4,7 @@ import { Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { EditMarkdownSheet } from "#/components/markdown/edit-markdown-sheet";
 import { MarkdownContent } from "#/components/markdown/markdown-content";
 import {
@@ -122,7 +123,7 @@ function SponsorsPage() {
   return (
     <>
       <PageHero page="sponsors" />
-      <div className="mx-auto w-full max-w-2xl space-y-10 px-6 py-12">
+      <PageContainer width="prose" className="space-y-10">
         {canManage ? (
           <div className="flex justify-end">
             <Button
@@ -248,7 +249,7 @@ function SponsorsPage() {
             </AlertDialog>
           </>
         ) : null}
-      </div>
+      </PageContainer>
     </>
   );
 }

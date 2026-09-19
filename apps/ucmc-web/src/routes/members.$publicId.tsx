@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Fragment, useState } from "react";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { memberDetailQueryOptions } from "#/features/members/api/queries";
 import { useDeactivateMembers } from "#/features/members/api/use-deactivate-members";
 import { useReactivateMembers } from "#/features/members/api/use-reactivate-members";
@@ -97,7 +98,7 @@ function MemberDetailPage() {
   const name = member.preferredName ?? member.fullName;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <PageContainer width="prose" className="space-y-6">
       <Link
         to="/members"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -281,7 +282,7 @@ function MemberDetailPage() {
           </CardContent>
         </Card>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }
 

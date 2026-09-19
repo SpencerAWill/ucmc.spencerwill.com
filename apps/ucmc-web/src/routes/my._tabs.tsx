@@ -3,6 +3,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 import { RouteErrorFallback } from "#/components/error-page";
 import { AccountTabsBar } from "#/components/layouts/account-tabs-bar";
+import { PageContainer } from "#/components/layouts/page-container";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 
 /**
@@ -44,12 +45,12 @@ function AccountTabsLayout() {
   const preferredName = data?.profile?.preferredName.trim();
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-6">
+    <PageContainer width="app">
       <h1 className="mb-4 text-2xl font-semibold">
         {preferredName ? `Hi ${preferredName}!` : "Hi there!"}
       </h1>
       <AccountTabsBar />
       <Outlet />
-    </div>
+    </PageContainer>
   );
 }

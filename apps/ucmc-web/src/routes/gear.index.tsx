@@ -3,6 +3,7 @@ import { Boxes, ChevronDown, Plus, Tags, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { GearBulkActionsButton } from "#/features/gear/components/gear-bulk-actions-bar";
 import {
@@ -156,7 +157,7 @@ function GearIndexPage() {
   } as const;
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-4 p-4">
+    <PageContainer width="wide" className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">Gear inventory</h1>
@@ -268,6 +269,6 @@ function GearIndexPage() {
           />
         </>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

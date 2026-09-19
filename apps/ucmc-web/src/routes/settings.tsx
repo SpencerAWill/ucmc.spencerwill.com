@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { requirePermission } from "#/features/auth/guards";
 import { siteSettingsQueryOptions } from "#/features/settings/api/queries";
 import { PageFlagsPanel } from "#/features/settings/components/page-flags-panel";
@@ -33,7 +34,7 @@ function SettingsPage() {
   const grouped = keysByCategory();
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-8 p-4 sm:p-6">
+    <PageContainer width="app" className="space-y-8">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Site settings</h1>
         <p className="text-sm text-muted-foreground">
@@ -63,7 +64,7 @@ function SettingsPage() {
           />
         );
       })}
-    </div>
+    </PageContainer>
   );
 }
 
