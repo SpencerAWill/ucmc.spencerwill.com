@@ -62,6 +62,18 @@ Officer-defined attributes scoped to types via `gear_attribute_def_types` (a joi
 
 Four kinds: `text`, `number`, `select`, `boolean`. **The unit lives on the definition, never in the value** — a value of `"60m"` is text and stops being range-filterable, which defeats the point. **`select` options carry explicit ordering**; sorting sizes alphabetically yields `L, M, S, XL`.
 
+Values live across two columns, and which one a kind uses is decided **once**, in `coerceAttributeValue` (`lib/attributes.ts`): numbers and booleans in `value_number` (booleans as 0/1, matching every other boolean in the schema), text and select in `value_text`. The forms, the facets and the detail card all read that same function, so a value written by one surface reads back identically in the others.
+
+Three rules are enforced in `attributes-actions.server.ts` rather than the schema, because all three are about intent rather than integrity:
+
+- **`key` is derived once from the label and never re-derived.** It is what every stored value points at; re-deriving on a relabel would orphan them all. Renaming "Size" to "Harness size" keeps `size`.
+- **`kind` and `level` are immutable after creation.** Flipping a select to a number leaves every answer in the wrong column, and model → item can't say which item inherits the fleet's answer. Archive and redefine. The manage dialog shows both read-only on edit rather than letting a save fail.
+- **Deleting a def with answers against it is refused** (`has_values`, with the count). The FK cascades, so the database would take every answer with it. Archiving is the reversible door and sits in the same row.
+
+**Archiving is a soft delete that keeps values readable.** Archived defs drop off the forms and facets but their recorded answers still render — an answer that was given is still true, and hiding it the moment someone archives the question makes the detail card quietly lie. Detaching a type likewise does **not** delete values.
+
+Officers manage definitions from the **Attributes** button on `/gear`, beside Types and Tags.
+
 ## Availability is the rollup members browse by
 
 `lib/availability.ts` collapses the four axes into one answer to "can I

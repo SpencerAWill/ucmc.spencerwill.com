@@ -52,6 +52,15 @@ import type {
   EditGearTypeResult,
 } from "#/features/gear/server/gear-types-actions.server";
 import type {
+  CreateGearAttributeDefInput,
+  CreateGearAttributeDefResult,
+  DeleteGearAttributeDefResult,
+  GearAttributeDefSummary,
+  ListGearAttributeDefsActionInput,
+  UpdateGearAttributeDefInput,
+  UpdateGearAttributeDefResult,
+} from "#/features/gear/server/attributes-actions.server";
+import type {
   CreateGearTagInput,
   CreateGearTagResult,
   EditGearTagInput,
@@ -128,6 +137,17 @@ export const GEAR_ACQUISITION_KIND_VALUES = [
   "warranty_replacement",
 ] as const;
 export type GearAcquisitionKind = (typeof GEAR_ACQUISITION_KIND_VALUES)[number];
+
+export const GEAR_ATTRIBUTE_KIND_VALUES = [
+  "text",
+  "number",
+  "select",
+  "boolean",
+] as const;
+export type GearAttributeKind = (typeof GEAR_ATTRIBUTE_KIND_VALUES)[number];
+
+export const GEAR_ATTRIBUTE_LEVEL_VALUES = ["model", "item"] as const;
+export type GearAttributeLevel = (typeof GEAR_ATTRIBUTE_LEVEL_VALUES)[number];
 
 export const GEAR_INSPECTION_RESULT_VALUES = [
   "pass",
@@ -310,6 +330,39 @@ const editGearTagInputSchema = z.object({
 });
 
 const deleteGearTagInputSchema = z.object({
+  publicId: z.string().min(1),
+});
+
+// ── attribute definitions ──────────────────────────────────────────────
+
+const listGearAttributeDefsInputSchema = z.object({
+  typePublicId: z.string().min(1).optional(),
+  level: z.enum(GEAR_ATTRIBUTE_LEVEL_VALUES).optional(),
+  includeArchived: z.boolean().optional(),
+});
+
+const createGearAttributeDefInputSchema = z.object({
+  label: z.string().min(1).max(60),
+  kind: z.enum(GEAR_ATTRIBUTE_KIND_VALUES),
+  level: z.enum(GEAR_ATTRIBUTE_LEVEL_VALUES),
+  options: z.array(z.string().min(1).max(60)).max(50).nullable(),
+  unit: z.string().max(12).nullable(),
+  required: z.boolean(),
+  typePublicIds: z.array(z.string().min(1)).max(100),
+});
+
+const updateGearAttributeDefInputSchema = z.object({
+  publicId: z.string().min(1),
+  label: z.string().min(1).max(60).optional(),
+  options: z.array(z.string().min(1).max(60)).max(50).nullable().optional(),
+  unit: z.string().max(12).nullable().optional(),
+  required: z.boolean().optional(),
+  position: z.number().int().min(0).max(1000).optional(),
+  archived: z.boolean().optional(),
+  typePublicIds: z.array(z.string().min(1)).max(100).optional(),
+});
+
+const deleteGearAttributeDefInputSchema = z.object({
   publicId: z.string().min(1),
 });
 
@@ -632,6 +685,50 @@ export const deleteGearTagFn = createServerFn({ method: "POST" })
     const { deleteGearTagAction } =
       await import("#/features/gear/server/gear-tags-actions.server");
     return deleteGearTagAction(data);
+  });
+
+// ── attribute definitions ──────────────────────────────────────────────
+
+export type {
+  CreateGearAttributeDefInput,
+  CreateGearAttributeDefResult,
+  DeleteGearAttributeDefResult,
+  GearAttributeDefSummary,
+  ListGearAttributeDefsActionInput,
+  UpdateGearAttributeDefInput,
+  UpdateGearAttributeDefResult,
+};
+
+export const listGearAttributeDefsFn = createServerFn({ method: "GET" })
+  .validator(listGearAttributeDefsInputSchema)
+  .handler(async ({ data }): Promise<GearAttributeDefSummary[]> => {
+    const { listGearAttributeDefsAction } =
+      await import("#/features/gear/server/attributes-actions.server");
+    return listGearAttributeDefsAction(data);
+  });
+
+export const createGearAttributeDefFn = createServerFn({ method: "POST" })
+  .validator(createGearAttributeDefInputSchema)
+  .handler(async ({ data }): Promise<CreateGearAttributeDefResult> => {
+    const { createGearAttributeDefAction } =
+      await import("#/features/gear/server/attributes-actions.server");
+    return createGearAttributeDefAction(data);
+  });
+
+export const updateGearAttributeDefFn = createServerFn({ method: "POST" })
+  .validator(updateGearAttributeDefInputSchema)
+  .handler(async ({ data }): Promise<UpdateGearAttributeDefResult> => {
+    const { updateGearAttributeDefAction } =
+      await import("#/features/gear/server/attributes-actions.server");
+    return updateGearAttributeDefAction(data);
+  });
+
+export const deleteGearAttributeDefFn = createServerFn({ method: "POST" })
+  .validator(deleteGearAttributeDefInputSchema)
+  .handler(async ({ data }): Promise<DeleteGearAttributeDefResult> => {
+    const { deleteGearAttributeDefAction } =
+      await import("#/features/gear/server/attributes-actions.server");
+    return deleteGearAttributeDefAction(data);
   });
 
 export type { BulkResult };

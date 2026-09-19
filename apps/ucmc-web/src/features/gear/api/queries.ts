@@ -7,6 +7,7 @@
 import {
   GEAR_QUERY_KEY,
   GEAR_TAGS_QUERY_KEY,
+  gearAttributeDefsQueryKey,
   gearModelsQueryKey,
   GEAR_TYPES_QUERY_KEY,
   LOANS_QUERY_KEY,
@@ -30,6 +31,7 @@ import {
   listGearFn,
   listGearInspectionsFn,
   listGearLabelsFn,
+  listGearAttributeDefsFn,
   listGearTagsFn,
   listGearModelsFn,
   listGearTypesFn,
@@ -79,6 +81,32 @@ export function gearTagsQueryOptions() {
   return {
     queryKey: GEAR_TAGS_QUERY_KEY,
     queryFn: () => listGearTagsFn(),
+  } as const;
+}
+
+/**
+ * Definitions for one type, or every definition when `typePublicId` is
+ * null. The forms pass a type because the type is chosen by the time
+ * the fields render; the manage dialog passes null and asks for the
+ * archived ones too.
+ */
+export function gearAttributeDefsQueryOptions(
+  input: {
+    typePublicId?: string | null;
+    level?: "model" | "item" | null;
+    includeArchived?: boolean;
+  } = {},
+) {
+  return {
+    queryKey: gearAttributeDefsQueryKey(input),
+    queryFn: () =>
+      listGearAttributeDefsFn({
+        data: {
+          ...(input.typePublicId ? { typePublicId: input.typePublicId } : {}),
+          ...(input.level ? { level: input.level } : {}),
+          ...(input.includeArchived ? { includeArchived: true } : {}),
+        },
+      }),
   } as const;
 }
 

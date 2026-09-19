@@ -13,6 +13,8 @@
  */
 import type {
   GearAcquisitionKind,
+  GearAttributeKind,
+  GearAttributeLevel,
   GearCondition,
   GearStatus,
   GearTracking,
@@ -77,5 +79,24 @@ export const ACQUISITION_KIND_LABEL: Record<GearAcquisitionKind, string> = {
 
 /** Terminal statuses, for the "deactivate" picker. `active` is reached
  *  by reactivating, never by choosing it here. */
+export const ATTRIBUTE_KIND_LABEL: Record<GearAttributeKind, string> = {
+  text: "Free text",
+  number: "Number",
+  select: "Choice list",
+  boolean: "Yes / no",
+};
+
+export const ATTRIBUTE_LEVEL_LABEL: Record<GearAttributeLevel, string> = {
+  model: "Every unit of a model",
+  item: "Each piece",
+};
+
+/** The distinction officers get wrong the first time, phrased as the
+ *  consequence rather than the taxonomy. */
+export const ATTRIBUTE_LEVEL_HINT: Record<GearAttributeLevel, string> = {
+  model: "Answered once for the model — rope diameter, stove fuel.",
+  item: "Answered per piece — harness size, rope length after a cut.",
+};
+
 export const TERMINAL_STATUSES = ["retired", "lost", "disposed"] as const;
 export type TerminalGearStatus = (typeof TERMINAL_STATUSES)[number];

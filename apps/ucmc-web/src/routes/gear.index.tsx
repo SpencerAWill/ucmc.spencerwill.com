@@ -1,5 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Boxes, ChevronDown, Plus, Tags, Upload } from "lucide-react";
+import {
+  Boxes,
+  ChevronDown,
+  Plus,
+  SlidersHorizontal,
+  Tags,
+  Upload,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
@@ -24,6 +31,7 @@ import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
+import { GearAttributesManageDialog } from "#/features/gear/components/gear-attributes-manage-dialog";
 import { GearTagsManageDialog } from "#/features/gear/components/gear-tags-manage-dialog";
 import { GearTypesManageDialog } from "#/features/gear/components/gear-types-manage-dialog";
 import { useReactivateGear } from "#/features/gear/api/use-reactivate-gear";
@@ -145,6 +153,7 @@ function GearIndexPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [typesOpen, setTypesOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [attributesOpen, setAttributesOpen] = useState(false);
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
   const unretireMutation = useReactivateGear();
 
@@ -242,6 +251,14 @@ function GearIndexPage() {
               <Tags className="size-4" />
               Tags
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAttributesOpen(true)}
+            >
+              <SlidersHorizontal className="size-4" />
+              Attributes
+            </Button>
 
             {/* Additive split button: primary is "Add gear" (the common
              * case); the chevron only hosts other ways to add gear
@@ -313,6 +330,10 @@ function GearIndexPage() {
           <GearBulkImportSheet open={importOpen} onOpenChange={setImportOpen} />
           <GearTypesManageDialog open={typesOpen} onOpenChange={setTypesOpen} />
           <GearTagsManageDialog open={tagsOpen} onOpenChange={setTagsOpen} />
+          <GearAttributesManageDialog
+            open={attributesOpen}
+            onOpenChange={setAttributesOpen}
+          />
           {bulk.dialogs}
           <GearRetireDialog
             gear={retiring}

@@ -885,6 +885,17 @@ export async function getGearTypeById(
   return rows[0] ?? null;
 }
 
+export async function getGearTypesByPublicIds(
+  publicIds: string[],
+): Promise<schema.GearType[]> {
+  if (publicIds.length === 0) return [];
+  const db = getDb();
+  return db
+    .select()
+    .from(schema.gearTypes)
+    .where(inArray(schema.gearTypes.publicId, publicIds));
+}
+
 export async function insertGearType(input: {
   id: string;
   publicId: string;

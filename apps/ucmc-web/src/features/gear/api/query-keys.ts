@@ -14,6 +14,23 @@ export const GEAR_TYPES_QUERY_KEY = ["gear", "types"] as const;
 
 export const GEAR_TAGS_QUERY_KEY = ["gear", "tags"] as const;
 
+/** Attribute definitions, scoped by type the way the picker asks for
+ *  them — `null` is the unscoped "every definition" list the manage
+ *  dialog reads. */
+export const GEAR_ATTRIBUTE_DEFS_QUERY_KEY = ["gear", "attributeDefs"] as const;
+export function gearAttributeDefsQueryKey(input: {
+  typePublicId?: string | null;
+  level?: string | null;
+  includeArchived?: boolean;
+}) {
+  return [
+    ...GEAR_ATTRIBUTE_DEFS_QUERY_KEY,
+    input.typePublicId ?? "all",
+    input.level ?? "any",
+    input.includeArchived === true,
+  ] as const;
+}
+
 export const gearSuggestedCodeQueryKey = (typePublicId: string) =>
   ["gear", "suggestedCode", typePublicId] as const;
 
