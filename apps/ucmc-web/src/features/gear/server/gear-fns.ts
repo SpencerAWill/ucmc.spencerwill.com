@@ -711,6 +711,8 @@ export const deleteGearTagFn = createServerFn({ method: "POST" })
 
 // ── attribute definitions ──────────────────────────────────────────────
 
+export type { GearModelSummaryDto };
+
 export type {
   CreateGearAttributeDefInput,
   CreateGearAttributeDefResult,

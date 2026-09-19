@@ -195,6 +195,14 @@ QR rendering uses the **`qrcode`** dep on a canvas inside `<CartQrDialog />`; `j
 
 The "Add to cart" button is hidden for anonymous / non-approved viewers **and for officers operating gear admin tools (`gear:manage`)**. **Items without a `code` cannot be added** — the desk would have no scannable identifier even after a cart scan.
 
+## Managing models
+
+`/gear` → **Models**, scoped by type the way the picker in the add-gear sheet is: models only mean anything under a type, and a flat list of every product the club owns is a scrolling exercise. MSRP, service life, inspection cadence, product URL and the model-level attributes are all editable here — the inline creator in the add-gear sheet deliberately offers only name and manufacturer, because an officer adding the club's first pair of draws shouldn't have to fill in a product sheet first.
+
+Two refusals are typed rather than left to the database: `has_items` on a coded → counted flip (counted stock is quantities, and the item rows would be stranded while still holding their codes and loan history) and `has_items` on delete (the FK is RESTRICT; the pre-check turns it into a message naming what to move first).
+
 ## Not built yet
 
-The schema carries `gear_holds`, `gear_inventory_sweeps` (+ entries) and the four attribute tables; their actions and UI land in later steps. Model editing beyond inline creation from the add-gear sheet, reservations (member-initiated, converting into a loan at the desk), qualification gating, member-standing thresholds and the browse-by-model page redesign are all deliberately deferred.
+The schema carries `gear_holds` and `gear_inventory_sweeps` (+ entries); their actions and UI land in later steps. Counted stock is schema-only — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), qualification gating, derived inspection-due and service-life columns, and the browse-by-model page redesign are all deliberately deferred.
+
+**No attribute definitions are seeded.** Which attributes exist, at which level, with which options in which order, is the cave's call — a guessed set would be worse than an empty one, because officers would edit around it rather than replace it.

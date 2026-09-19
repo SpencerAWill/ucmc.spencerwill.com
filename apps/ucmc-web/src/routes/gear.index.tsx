@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   Boxes,
   ChevronDown,
+  Package,
   Plus,
   SlidersHorizontal,
   Tags,
@@ -32,6 +33,7 @@ import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
 import { GearAttributesManageDialog } from "#/features/gear/components/gear-attributes-manage-dialog";
+import { GearModelsManageDialog } from "#/features/gear/components/gear-models-manage-dialog";
 import { GearTagsManageDialog } from "#/features/gear/components/gear-tags-manage-dialog";
 import { GearTypesManageDialog } from "#/features/gear/components/gear-types-manage-dialog";
 import { useReactivateGear } from "#/features/gear/api/use-reactivate-gear";
@@ -176,6 +178,7 @@ function GearIndexPage() {
   const [typesOpen, setTypesOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [attributesOpen, setAttributesOpen] = useState(false);
+  const [modelsOpen, setModelsOpen] = useState(false);
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
   const unretireMutation = useReactivateGear();
 
@@ -270,6 +273,14 @@ function GearIndexPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setModelsOpen(true)}
+            >
+              <Package className="size-4" />
+              Models
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setTagsOpen(true)}
             >
               <Tags className="size-4" />
@@ -354,6 +365,10 @@ function GearIndexPage() {
           <GearBulkImportSheet open={importOpen} onOpenChange={setImportOpen} />
           <GearTypesManageDialog open={typesOpen} onOpenChange={setTypesOpen} />
           <GearTagsManageDialog open={tagsOpen} onOpenChange={setTagsOpen} />
+          <GearModelsManageDialog
+            open={modelsOpen}
+            onOpenChange={setModelsOpen}
+          />
           <GearAttributesManageDialog
             open={attributesOpen}
             onOpenChange={setAttributesOpen}
