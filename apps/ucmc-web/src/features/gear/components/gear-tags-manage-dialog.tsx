@@ -9,7 +9,7 @@
  * primary workspace so it lives inside the same Dialog shell.
  */
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Edit, Lock, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit, Globe, Lock, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -37,7 +37,7 @@ import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
 import { Item, ItemActions, ItemContent } from "#/components/ui/item";
 import { Label } from "#/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { gearTagsQueryOptions } from "#/features/gear/api/queries";
 import { useCreateGearTag } from "#/features/gear/api/use-create-gear-tag";
 import { useDeleteGearTag } from "#/features/gear/api/use-delete-gear-tag";
@@ -310,40 +310,42 @@ function FormPane({
             placeholder="outdoor"
           />
         </div>
+        {/* A segmented control rather than a stack of radios: there are
+         * exactly two mutually exclusive options and the choice is the
+         * point, not the prose. The old shape put a paragraph beside
+         * each radio, which wrapped and made a two-way switch look like
+         * a form section. One line of help, swapped with the choice. */}
         <div className="space-y-1.5">
-          <Label>Visibility</Label>
-          <RadioGroup
+          <Label id="tag-visibility-label">Visibility</Label>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            aria-labelledby="tag-visibility-label"
             value={visibility}
-            onValueChange={(v) => setVisibility(v as "public" | "internal")}
+            onValueChange={(next) => {
+              // Radix fires "" when the active item is re-pressed, and
+              // "neither" isn't a state this column can hold.
+              if (next === "public" || next === "internal") {
+                setVisibility(next);
+              }
+            }}
           >
-            <div className="flex items-start gap-2 text-sm">
-              <RadioGroupItem
-                value="public"
-                id="tag-vis-public"
-                className="mt-0.5"
-              />
-              <Label htmlFor="tag-vis-public" className="font-normal">
-                <span className="font-medium">Public</span>
-                <span className="block text-xs text-muted-foreground">
-                  Visible to anyone with gear:read.
-                </span>
-              </Label>
-            </div>
-            <div className="flex items-start gap-2 text-sm">
-              <RadioGroupItem
-                value="internal"
-                id="tag-vis-internal"
-                className="mt-0.5"
-              />
-              <Label htmlFor="tag-vis-internal" className="font-normal">
-                <span className="font-medium">Internal</span>
-                <span className="block text-xs text-muted-foreground">
-                  Officers only. Hidden from gear card chips and the tag picker
-                  for non-managers.
-                </span>
-              </Label>
-            </div>
-          </RadioGroup>
+            <ToggleGroupItem value="public" className="flex-1">
+              <Globe className="size-4" />
+              Public
+            </ToggleGroupItem>
+            <ToggleGroupItem value="internal" className="flex-1">
+              <Lock className="size-4" />
+              Internal
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <p className="text-xs text-muted-foreground">
+            {visibility === "public"
+              ? "Anyone who can browse gear sees this tag."
+              : "Officers only — hidden from gear cards and the tag picker."}
+          </p>
         </div>
         {error ? (
           <p className="text-sm text-destructive" role="alert">
