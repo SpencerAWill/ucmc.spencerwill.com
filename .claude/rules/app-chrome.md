@@ -16,6 +16,44 @@ Nav gates compose **permission AND page flag**, and the flag must be the one bel
 
 **Wire the sidebar in the same change as any new public route.** A route that exists but has no nav entry is invisible; this has been caught repeatedly in review.
 
+## Page containers (`page-container.tsx`)
+
+`<main>` in `app-layout.tsx` carries **no padding on purpose** — the
+landing page and every `PageHero` are full-bleed bands and a container on
+the shell would box them in. Page content therefore opens its own
+container, and **that container is `PageContainer`, not hand-rolled
+utilities.** Hand-rolling is what produced six width tiers and five
+padding schemes before it existed: `px-6` on the policy pages, `p-4` on
+the gear pages, `p-4 sm:p-6` on `/settings`, `p-4 md:p-6` on `/access`,
+so the text edge moved by 8px on a phone between pages that read as
+peers.
+
+**The horizontal gutter (`px-4 sm:px-6`) is the same for every tier and
+no tier may carry its own `px-*`** — that is the part the eye tracks
+across a navigation, and `page-container.test.tsx` pins it for all four.
+Only the measure varies:
+
+| Tier      | Measure     | For                                                   |
+| --------- | ----------- | ----------------------------------------------------- |
+| `focused` | `max-w-md`  | Signed-out interstitials — sign-in, verify-email      |
+| `prose`   | `max-w-2xl` | Policy, legal, marketing copy; ~65ch at the body size |
+| `app`     | `max-w-3xl` | Signed-in single-column pages: forms, card stacks     |
+| `wide`    | `max-w-5xl` | Tables and grids that earn the columns                |
+
+`width` has **no default** — an implicit measure is how the drift
+started. Content spacing (`space-y-*`, `flex flex-col gap-*`) stays on
+the page and comes through `className`, which `cn()` settles against the
+tier deterministically.
+
+Full-bleed pages are the exception, not a tier: the hero renders as a
+sibling _above_ the container, so `album`, `history`, `sponsors` and
+`volunteer` each render `<PageHero />` then a `PageContainer`. The
+landing sections centre their own inner column and share only the
+gutter.
+
+**The shell owns `<main id="main">`.** Pages must not render their own —
+21 of them used to, nesting a second landmark and duplicating the id.
+
 ## Header masthead (`header-masthead.tsx`)
 
 The header's middle column is the logo badge with configurable text either side of it — title left, tagline right — and **the whole thing is one `<Link to="/">`**, so any part of the visible wordmark goes home.
