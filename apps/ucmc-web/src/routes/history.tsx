@@ -188,10 +188,7 @@ function HistoryPage() {
   return (
     <>
       <PageHero page="history" />
-      <main
-        id="main"
-        className="mx-auto w-full max-w-2xl space-y-10 px-6 py-12"
-      >
+      <div className="mx-auto w-full max-w-2xl space-y-10 px-6 py-12">
         {canManageHistory ? (
           <div className="flex justify-end">
             <Button
@@ -447,7 +444,7 @@ function HistoryPage() {
             </AlertDialog>
           </>
         ) : null}
-      </main>
+      </div>
     </>
   );
 }

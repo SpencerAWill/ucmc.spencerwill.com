@@ -14,7 +14,7 @@ export const Route = createFileRoute("/nondiscrimination")({
 
 function NonDiscriminationPage() {
   return (
-    <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
+    <div className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">
           Non-discrimination
@@ -25,6 +25,6 @@ function NonDiscriminationPage() {
         </p>
       </header>
       <LegalSections sections={NON_DISCRIMINATION_BODY} />
-    </main>
+    </div>
   );
 }

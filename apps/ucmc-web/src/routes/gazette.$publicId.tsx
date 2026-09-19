@@ -62,7 +62,7 @@ function GazetteIssuePage() {
   const downloadName = gazettePdfFilename(issue.schoolYear, issue.issueNumber);
 
   return (
-    <main id="main" className="mx-auto w-full max-w-3xl space-y-6 px-6 py-12">
+    <div className="mx-auto w-full max-w-3xl space-y-6 px-6 py-12">
       <Button asChild variant="ghost" size="sm">
         <Link to="/gazette">
           <ArrowLeft className="size-4" />
@@ -116,6 +116,6 @@ function GazetteIssuePage() {
           className="block h-[80vh] w-full rounded-md"
         />
       </div>
-    </main>
+    </div>
   );
 }

@@ -54,7 +54,7 @@ function PoliciesPage() {
   return (
     <>
       <PageHero page="policies" />
-      <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
+      <div className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
         {canManage ? (
           <div className="flex justify-end">
             <Button
@@ -85,7 +85,7 @@ function PoliciesPage() {
             placeholder="Document the club's operational rules…"
           />
         ) : null}
-      </main>
+      </div>
     </>
   );
 }

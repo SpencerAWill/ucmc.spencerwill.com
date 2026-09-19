@@ -104,7 +104,7 @@ function GazettePage() {
   return (
     <>
       <PageHero page="gazette" />
-      <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
+      <div className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
         {canManage ? (
           <div className="flex justify-end">
             <Button
@@ -167,7 +167,7 @@ function GazettePage() {
             </AlertDialog>
           </>
         ) : null}
-      </main>
+      </div>
     </>
   );
 }

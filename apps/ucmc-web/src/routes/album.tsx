@@ -145,7 +145,7 @@ function AlbumPage() {
   return (
     <>
       <PageHero page="album" />
-      <main id="main" className="mx-auto w-full max-w-5xl space-y-6 px-6 py-12">
+      <div className="mx-auto w-full max-w-5xl space-y-6 px-6 py-12">
         {canManage ? (
           <div className="flex justify-end">
             <Button
@@ -217,7 +217,7 @@ function AlbumPage() {
             </AlertDialog>
           </>
         ) : null}
-      </main>
+      </div>
     </>
   );
 }
