@@ -31,6 +31,22 @@ export function gearAttributeDefsQueryKey(input: {
   ] as const;
 }
 
+/** Holds. The prefix is invalidated wholesale on any hold change —
+ *  placing one on an item also changes the "all live holds" list. */
+export const GEAR_HOLDS_QUERY_KEY = ["gear", "holds"] as const;
+export function gearHoldsQueryKey(input: {
+  liveOnly?: boolean;
+  gearPublicId?: string | null;
+  modelPublicId?: string | null;
+}) {
+  return [
+    ...GEAR_HOLDS_QUERY_KEY,
+    input.liveOnly === true,
+    input.gearPublicId ?? "all",
+    input.modelPublicId ?? "all",
+  ] as const;
+}
+
 export const gearSuggestedCodeQueryKey = (typePublicId: string) =>
   ["gear", "suggestedCode", typePublicId] as const;
 

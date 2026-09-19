@@ -8,6 +8,7 @@ import {
   GEAR_QUERY_KEY,
   GEAR_TAGS_QUERY_KEY,
   gearAttributeDefsQueryKey,
+  gearHoldsQueryKey,
   gearModelsQueryKey,
   GEAR_TYPES_QUERY_KEY,
   LOANS_QUERY_KEY,
@@ -32,6 +33,7 @@ import {
   listGearInspectionsFn,
   listGearLabelsFn,
   listGearAttributeDefsFn,
+  listGearHoldsFn,
   listGearTagsFn,
   listGearModelsFn,
   listGearTypesFn,
@@ -105,6 +107,28 @@ export function gearAttributeDefsQueryOptions(
           ...(input.typePublicId ? { typePublicId: input.typePublicId } : {}),
           ...(input.level ? { level: input.level } : {}),
           ...(input.includeArchived ? { includeArchived: true } : {}),
+        },
+      }),
+  } as const;
+}
+
+export function gearHoldsQueryOptions(
+  input: {
+    liveOnly?: boolean;
+    gearPublicId?: string | null;
+    modelPublicId?: string | null;
+  } = {},
+) {
+  return {
+    queryKey: gearHoldsQueryKey(input),
+    queryFn: () =>
+      listGearHoldsFn({
+        data: {
+          ...(input.liveOnly ? { liveOnly: true } : {}),
+          ...(input.gearPublicId ? { gearPublicId: input.gearPublicId } : {}),
+          ...(input.modelPublicId
+            ? { modelPublicId: input.modelPublicId }
+            : {}),
         },
       }),
   } as const;

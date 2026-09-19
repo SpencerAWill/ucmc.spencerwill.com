@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   Boxes,
   ChevronDown,
+  Lock,
   Package,
   Plus,
   SlidersHorizontal,
@@ -33,6 +34,7 @@ import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
 import { GearAttributesManageDialog } from "#/features/gear/components/gear-attributes-manage-dialog";
+import { GearHoldsManageDialog } from "#/features/gear/components/gear-holds-manage-dialog";
 import { GearModelsManageDialog } from "#/features/gear/components/gear-models-manage-dialog";
 import { GearTagsManageDialog } from "#/features/gear/components/gear-tags-manage-dialog";
 import { GearTypesManageDialog } from "#/features/gear/components/gear-types-manage-dialog";
@@ -179,6 +181,7 @@ function GearIndexPage() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const [attributesOpen, setAttributesOpen] = useState(false);
   const [modelsOpen, setModelsOpen] = useState(false);
+  const [holdsOpen, setHoldsOpen] = useState(false);
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
   const unretireMutation = useReactivateGear();
 
@@ -294,6 +297,14 @@ function GearIndexPage() {
               <SlidersHorizontal className="size-4" />
               Attributes
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHoldsOpen(true)}
+            >
+              <Lock className="size-4" />
+              Holds
+            </Button>
 
             {/* Additive split button: primary is "Add gear" (the common
              * case); the chevron only hosts other ways to add gear
@@ -369,6 +380,7 @@ function GearIndexPage() {
             open={modelsOpen}
             onOpenChange={setModelsOpen}
           />
+          <GearHoldsManageDialog open={holdsOpen} onOpenChange={setHoldsOpen} />
           <GearAttributesManageDialog
             open={attributesOpen}
             onOpenChange={setAttributesOpen}

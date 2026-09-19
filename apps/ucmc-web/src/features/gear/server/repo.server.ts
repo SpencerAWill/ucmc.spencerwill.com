@@ -475,6 +475,25 @@ export async function listTagsForItemIds(
   return map;
 }
 
+/**
+ * Lookup by the code on the tag. Distinct from the desk's code search
+ * in `loans-repo`: that one gates on `gear:loan` and carries loan
+ * state, this is the plain "which item is CH93" every officer surface
+ * needs. Case-insensitive, because nobody types the tag exactly.
+ */
+export async function getGearItemByCode(
+  code: string,
+): Promise<GearItemRow | null> {
+  const trimmed = code.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const rows = await itemsWithModelAndType()
+    .where(sql`upper(${schema.gearItems.code}) = upper(${trimmed})`)
+    .limit(1);
+  return rows.at(0) ?? null;
+}
+
 export async function insertGearItem(input: {
   id: string;
   publicId: string;

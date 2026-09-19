@@ -156,6 +156,14 @@ export function GearDetailCard({
             </div>
           ) : null}
         </dl>
+        {gear.holdReason !== null ? (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium">Held:</span> {gear.holdReason}
+            {gear.holdEndsAt !== null
+              ? ` — free again ${formatDate(gear.holdEndsAt)}`
+              : ""}
+          </p>
+        ) : null}
         {isRetired && gear.deactivatedReason ? (
           <p className="text-sm text-muted-foreground">
             <span className="font-medium">Reason:</span>{" "}

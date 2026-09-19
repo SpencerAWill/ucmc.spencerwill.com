@@ -201,6 +201,17 @@ The "Add to cart" button is hidden for anonymous / non-approved viewers **and fo
 
 Two refusals are typed rather than left to the database: `has_items` on a coded → counted flip (counted stock is quantities, and the item rows would be stranded while still holding their codes and loan history) and `has_items` on delete (the FK is RESTRICT; the pre-check turns it into a message naming what to move first).
 
+## Holds
+
+`/gear` → **Holds**. A hold reserves gear ahead of a trip without creating a loan: nobody has taken it, but the desk should stop handing it out. Dual-shape like loans — either a coded item or a counted model with a quantity, enforced by a CHECK constraint and pre-checked in the action so the form gets a message rather than a constraint error.
+
+- **Holds are self-expiring and nothing sweeps them.** Every read filters on `released_at IS NULL AND starts_at <= now < ends_at`, so an officer who forgets to release one after the trip costs the cave nothing. `liveWhere` is written once in `holds-repo.server.ts` because the list, the per-item lookup and the quantity rollup must agree on it.
+- **`now` is caller-supplied, not the database clock**, so the list, the availability rollup and the desk agree within one request and a test can pin it.
+- **The reason is required and member-visible.** "Held for the Red River trip" is a real answer; "Unavailable" is not. `GearSummary.holdReason` is populated **only when the hold is what's actually blocking** — a hold sitting behind an open loan or a repair flag would otherwise explain the wrong thing.
+- **Releasing is the only write besides placing — there is no delete.** A hold that ran its course is a record of what the cave did with its gear, and an expired hold can still be released: it changes nothing about availability, but it is how an officer says "this trip is over" rather than leaving a row that looks merely lapsed.
+- **A quantity hold is refused on a coded model** — its units are held one at a time, by code, and a quantity would pick no particular piece and block nothing the rollup can see. Conversely `liveHeldQuantityForModels` excludes coded items, or the same unit would be subtracted twice.
+- Officers name a piece **by its code**, case-insensitively (`getGearItemByCode`), because that is how the cave names pieces. The desk's own code search is separate: it gates on `gear:loan` and carries loan state.
+
 ## Not built yet
 
 The schema carries `gear_holds` and `gear_inventory_sweeps` (+ entries); their actions and UI land in later steps. Counted stock is schema-only — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), qualification gating, derived inspection-due and service-life columns, and the browse-by-model page redesign are all deliberately deferred.

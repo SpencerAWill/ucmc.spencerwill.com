@@ -52,6 +52,13 @@ import type {
   EditGearTypeResult,
 } from "#/features/gear/server/gear-types-actions.server";
 import type {
+  GearHoldSummary,
+  ListGearHoldsActionInput,
+  PlaceGearHoldInput,
+  PlaceGearHoldResult,
+  ReleaseGearHoldResult,
+} from "#/features/gear/server/holds-actions.server";
+import type {
   CreateGearAttributeDefInput,
   CreateGearAttributeDefResult,
   DeleteGearAttributeDefResult,
@@ -352,6 +359,28 @@ const editGearTagInputSchema = z.object({
 });
 
 const deleteGearTagInputSchema = z.object({
+  publicId: z.string().min(1),
+});
+
+// ── holds ──────────────────────────────────────────────────────────────
+
+const listGearHoldsInputSchema = z.object({
+  liveOnly: z.boolean().optional(),
+  gearPublicId: z.string().min(1).optional(),
+  modelPublicId: z.string().min(1).optional(),
+});
+
+const placeGearHoldInputSchema = z.object({
+  gearPublicId: z.string().min(1).optional(),
+  gearCode: z.string().trim().min(1).max(64).optional(),
+  modelPublicId: z.string().min(1).optional(),
+  quantity: z.number().int().min(1).max(999).optional(),
+  reason: z.string().trim().min(1).max(300),
+  startsAtMs: z.number().int(),
+  endsAtMs: z.number().int(),
+});
+
+const releaseGearHoldInputSchema = z.object({
   publicId: z.string().min(1),
 });
 
@@ -707,6 +736,40 @@ export const deleteGearTagFn = createServerFn({ method: "POST" })
     const { deleteGearTagAction } =
       await import("#/features/gear/server/gear-tags-actions.server");
     return deleteGearTagAction(data);
+  });
+
+// ── holds ──────────────────────────────────────────────────────────────
+
+export type {
+  GearHoldSummary,
+  ListGearHoldsActionInput,
+  PlaceGearHoldInput,
+  PlaceGearHoldResult,
+  ReleaseGearHoldResult,
+};
+
+export const listGearHoldsFn = createServerFn({ method: "GET" })
+  .validator(listGearHoldsInputSchema)
+  .handler(async ({ data }): Promise<GearHoldSummary[]> => {
+    const { listGearHoldsAction } =
+      await import("#/features/gear/server/holds-actions.server");
+    return listGearHoldsAction(data);
+  });
+
+export const placeGearHoldFn = createServerFn({ method: "POST" })
+  .validator(placeGearHoldInputSchema)
+  .handler(async ({ data }): Promise<PlaceGearHoldResult> => {
+    const { placeGearHoldAction } =
+      await import("#/features/gear/server/holds-actions.server");
+    return placeGearHoldAction(data);
+  });
+
+export const releaseGearHoldFn = createServerFn({ method: "POST" })
+  .validator(releaseGearHoldInputSchema)
+  .handler(async ({ data }): Promise<ReleaseGearHoldResult> => {
+    const { releaseGearHoldAction } =
+      await import("#/features/gear/server/holds-actions.server");
+    return releaseGearHoldAction(data);
   });
 
 // ── attribute definitions ──────────────────────────────────────────────

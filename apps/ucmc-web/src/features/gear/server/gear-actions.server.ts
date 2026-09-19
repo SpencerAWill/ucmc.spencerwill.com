@@ -133,6 +133,11 @@ export interface GearSummary {
   /** True when the viewer is the one holding it. Cheaper here than
    *  making every call site compare ids. */
   isMine: boolean;
+  /** Why it's held, when it is. Carried on the row because "Held for
+   *  the Red River trip" is a real answer and "Unavailable" is not —
+   *  the reason is written by officers for exactly this audience. */
+  holdReason: string | null;
+  holdEndsAt: Temporal.Instant | null;
 }
 
 export interface GearDetail extends GearSummary {
@@ -208,6 +213,11 @@ function toSummary(
   return {
     availability,
     availableFrom: row.openLoanDueAt,
+    // Only surfaced when the hold is what is actually blocking. A hold
+    // sitting behind an open loan or a repair flag would otherwise
+    // explain the wrong thing.
+    holdReason: availability === "on_hold" ? row.activeHoldReason : null,
+    holdEndsAt: availability === "on_hold" ? row.activeHoldEndsAt : null,
     isMine: viewerUserId !== null && row.openLoanMemberUserId === viewerUserId,
     publicId: row.publicId,
     code: row.code,
