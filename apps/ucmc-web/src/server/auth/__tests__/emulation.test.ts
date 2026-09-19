@@ -17,6 +17,7 @@ function principal(overrides: Partial<Principal> = {}): Principal {
     userId: "u1",
     primaryEmail: "a@example.com",
     emails: ["a@example.com"],
+    preferredName: "Test",
     status: "approved",
     hasProfile: true,
     avatarKey: null,

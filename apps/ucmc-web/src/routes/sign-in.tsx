@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Alert, AlertDescription } from "#/components/ui/alert";
 import { MagicLinkForm } from "#/features/auth/components/magic-link-form";
 import { SignInWithPasskeyButton } from "#/features/auth/components/sign-in-with-passkey-button";
@@ -40,7 +41,7 @@ function SignInPage() {
     : "We’ll email you a one-time sign-in link.";
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-6 py-16">
+    <PageContainer width="focused" className="flex flex-col gap-6">
       <header className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold">{heading}</h1>
         <p className="text-sm text-muted-foreground">{subheading}</p>
@@ -99,6 +100,6 @@ function SignInPage() {
           </>
         )}
       </p>
-    </div>
+    </PageContainer>
   );
 }

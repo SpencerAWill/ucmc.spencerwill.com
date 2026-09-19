@@ -1,4 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { PageContainer } from "#/components/layouts/page-container";
 import { pageHeroQueryOptions } from "#/features/landing/api/queries";
 import { PageHero } from "#/features/landing/components/page-hero";
 import { createFileRoute } from "@tanstack/react-router";
@@ -52,7 +53,7 @@ function ScholarshipsPage() {
   return (
     <>
       <PageHero page="scholarships" />
-      <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
+      <PageContainer width="prose" className="space-y-8">
         {canManage ? (
           <div className="flex justify-end">
             <Button
@@ -83,7 +84,7 @@ function ScholarshipsPage() {
             placeholder="Document the scholarship program…"
           />
         ) : null}
-      </main>
+      </PageContainer>
     </>
   );
 }

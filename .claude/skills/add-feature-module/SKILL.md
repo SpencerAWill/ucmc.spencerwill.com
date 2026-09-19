@@ -35,6 +35,8 @@ Do **not** add a `FEATURE_PUBLIC_API` entry. Only `auth` and `settings` have one
 
 Routes are flat files in `src/routes/` (`feature.tsx`, `feature.$publicId.tsx`, `feature._tabs.child.tsx`).
 
+**Wrap the page body in `PageContainer`** (`#/components/layouts/page-container`) with the tier that fits — `prose` for copy, `app` for a single-column signed-in page, `wide` for a table. Never hand-roll `mx-auto max-w-* p-*`, and never render your own `<main>`; the shell owns the landmark. A `PageHero` renders as a sibling above the container, not inside it. See the `app-chrome` rule.
+
 **After adding or renaming a route, run `pnpm --filter ucmc-web build` (or `dev`) and commit the regenerated `src/routeTree.gen.ts`.** Never hand-edit it — a `.claude/` hook and permission rules block that, and a hand-edit that disagrees with the route files makes `tsc` pass against a tree the router doesn't serve.
 
 ## 5. Add the page flag and the sidebar entry

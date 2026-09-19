@@ -4,6 +4,7 @@ import { ArrowLeft, Edit, Printer, RotateCcw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { gearDetailQueryOptions } from "#/features/gear/api/queries";
@@ -42,7 +43,7 @@ function GearDetailPage() {
   }
   if (error || !data) {
     return (
-      <div className="mx-auto w-full max-w-3xl p-4">
+      <PageContainer width="app">
         <p className="text-sm text-muted-foreground">Gear not found.</p>
         <Button asChild variant="ghost" size="sm" className="mt-2">
           <Link to="/gear">
@@ -50,12 +51,12 @@ function GearDetailPage() {
             Back to gear
           </Link>
         </Button>
-      </div>
+      </PageContainer>
     );
   }
   const isRetired = data.lifecycle === "retired";
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+    <PageContainer width="app" className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm">
           <Link to="/gear">
@@ -143,6 +144,6 @@ function GearDetailPage() {
           />
         </>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { requirePermission } from "#/features/auth/guards";
 import { CreateRoleDialog } from "#/features/members/components/create-role-dialog";
 import { RolesListEditor } from "#/features/members/components/roles-list-editor";
@@ -31,7 +32,7 @@ export const Route = createFileRoute("/access")({
 
 function AccessPage() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
+    <PageContainer width="wide" className="space-y-6">
       {/* Title and primary action share one row, matching /gear and the
        * other root-level admin surfaces. The subtitle carries the
        * how-to that used to sit in a second row above the list. */}
@@ -46,6 +47,6 @@ function AccessPage() {
         <CreateRoleDialog />
       </header>
       <RolesListEditor />
-    </div>
+    </PageContainer>
   );
 }

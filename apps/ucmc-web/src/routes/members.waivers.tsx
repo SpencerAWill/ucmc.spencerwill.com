@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
@@ -61,7 +62,7 @@ function WaiversQueuePage() {
   const { data: queue } = useSuspenseQuery(waiverPendingQueueQueryOptions());
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
+    <PageContainer width="wide" className="space-y-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Waiver attestations</h1>
         <p className="text-sm text-muted-foreground">
@@ -85,7 +86,7 @@ function WaiversQueuePage() {
       ) : (
         <QueueTable queue={queue} canVerify={canVerify} />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

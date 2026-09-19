@@ -15,75 +15,164 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Surfaces are a warm off-white ramp (oklch hue 85), not the stock
+ * pure white. Two reasons, and the second is the one that constrains
+ * every value below.
+ *
+ * Glare: `--background`, `--card` and `--popover` were all `oklch(1 0
+ * 0)` — the brightest value a display can emit, across the entire
+ * screen.
+ *
+ * Elevation: because all three were the *same* white, a card could not
+ * separate from the page it sat on; only the sidebar (0.985) read as
+ * its own plane. So the page steps down and the cards stay near-white
+ * above it, which is what makes a card look raised rather than
+ * outlined.
+ *
+ * The ramp is therefore a ladder, and the rungs have to stay apart:
+ * card 0.993 > background 0.968 > sidebar 0.947 > muted 0.933 >
+ * border 0.897. `--muted` / `--secondary` / `--accent` used to sit at
+ * 0.967, which is *between* the new card and the new background —
+ * leave them there and every muted surface disappears into the page.
+ *
+ * Text neutrals keep the cool zinc hue (286) at very low chroma: the
+ * warmth belongs to the surfaces, and at C=0.016 the hue of the text
+ * is imperceptible anyway.
+ *
+ * **`--muted-foreground` is the AA floor of this file.** It was
+ * 4.83:1 on pure white — a tenth of a step over 4.5:1 — so lowering
+ * the background at all puts it under (4.40:1 at 0.552). It moves to
+ * 0.515, which holds 4.64:1 against `--muted`, the tightest pairing
+ * that actually renders (muted text on a muted surface). Anything
+ * that darkens a surface in this block has to be re-checked against
+ * it.
+ */
 :root {
-  --background: oklch(1 0 0);
+  --background: oklch(0.968 0.012 85);
   --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
+  --card: oklch(0.993 0.004 85);
   --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
+  --popover: oklch(0.993 0.004 85);
   --popover-foreground: oklch(0.141 0.005 285.823);
   --primary: oklch(0.508 0.118 165.612);
   --primary-foreground: oklch(0.979 0.021 166.113);
-  --secondary: oklch(0.967 0.001 286.375);
+  /*
+   * The masthead bar is its own token, not `--primary`, because the
+   * two want opposite things in dark mode: the bar is brand chrome
+   * and should stay a deep, quiet green, while `--primary` is the
+   * interactive accent and has to be light enough to read as *text*
+   * on a dark surface. One token could not do both — see `.dark`.
+   * Light happens to match `--primary` today; that is a coincidence
+   * of this palette, not a constraint to preserve.
+   */
+  --header: oklch(0.508 0.118 165.612);
+  --header-foreground: oklch(0.979 0.021 166.113);
+  --secondary: oklch(0.933 0.014 85);
   --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
+  --muted: oklch(0.933 0.014 85);
+  --muted-foreground: oklch(0.515 0.016 285.938);
+  --accent: oklch(0.933 0.014 85);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.871 0.006 286.286);
+  --border: oklch(0.897 0.014 85);
+  --input: oklch(0.897 0.014 85);
+  /*
+   * The focus ring is the brand green, not a neutral. A focus
+   * indicator has to reach 3:1 against what surrounds it (SC 1.4.11);
+   * the stock neutral managed 1.48:1 on white and 1.53:1 on the cream
+   * page, so it was decorative rather than an indicator. Green gives
+   * 4.89:1 on the page and 5.26:1 on a card.
+   *
+   * Components layer a full-opacity `border-ring` under a `ring-ring/50`
+   * halo. **The full-opacity edge is the indicator** — a 50% ring
+   * composited over a near-white page cannot reach 3:1 at any hue
+   * short of near-black, so the halo is spread, not signal. Don't
+   * "simplify" a focus style down to the /50 ring alone.
+   */
+  --ring: oklch(0.508 0.118 165.612);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
   --chart-4: oklch(0.508 0.118 165.612);
   --chart-5: oklch(0.432 0.095 166.913);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.947 0.014 85);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
   --sidebar-primary: oklch(0.596 0.145 163.225);
   --sidebar-primary-foreground: oklch(0.979 0.021 166.113);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent: oklch(0.915 0.016 85);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.871 0.006 286.286);
+  --sidebar-border: oklch(0.897 0.014 85);
+  --sidebar-ring: oklch(0.508 0.118 165.612);
 }
 
+/*
+ * The dark theme was never too bright — 0.141 is already an off-black.
+ * Its problem was the same flatness as the light one: `--card` and
+ * `--popover` were set to *exactly* `--background`, so a card was
+ * implied only by its border and a popover floated with nothing behind
+ * it.
+ *
+ * So the page lifts slightly to a charcoal and the raised surfaces
+ * lift further, giving dark mode the same ladder as light, in the same
+ * direction — away from the page, toward the viewer: card 0.216 >
+ * background 0.178, with the sidebar at 0.238 above both (it reads as
+ * chrome rather than content). `--border` moves up too, or it stops
+ * being visible against the surfaces that just got lighter.
+ */
 .dark {
-  --background: oklch(0.141 0.005 285.823);
+  --background: oklch(0.178 0.006 286);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.141 0.005 285.823);
+  --card: oklch(0.216 0.006 286);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.141 0.005 285.823);
+  --popover: oklch(0.216 0.006 286);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.432 0.095 166.913);
-  --primary-foreground: oklch(0.979 0.021 166.113);
-  --secondary: oklch(0.274 0.006 286.033);
+  /*
+   * `--primary` is light here, the way a dark theme normally inverts
+   * its accent. It used to be the same deep green as light (0.432),
+   * which worked as a *fill* under white text but failed completely
+   * as text: `text-primary` has ~33 call sites and read 2.31:1 on a
+   * card. No single lightness fixed both roles — anything light
+   * enough to be legible as text (>=0.58) pushed a near-white
+   * `--primary-foreground` below AA on the fill. So the foreground
+   * inverts too, to the dark green the sidebar's branding already
+   * pairs with this mint: 6.14:1 on the fill, 7.10:1 as text.
+   */
+  --primary: oklch(0.696 0.17 162.48);
+  --primary-foreground: oklch(0.262 0.051 172.552);
+  /* The masthead keeps the deep green that `--primary` just gave up;
+   * a mint bar would shout across every page. */
+  --header: oklch(0.432 0.095 166.913);
+  --header-foreground: oklch(0.979 0.021 166.113);
+  --secondary: oklch(0.288 0.006 286);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
+  --muted: oklch(0.288 0.006 286);
   --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
+  --accent: oklch(0.288 0.006 286);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.274 0.006 286.033);
-  --input: oklch(0.274 0.006 286.033);
-  --ring: oklch(0.442 0.017 285.786);
+  --border: oklch(0.305 0.006 286);
+  --input: oklch(0.305 0.006 286);
+  /* Same reasoning as light; the neutral managed 2.58:1. The mint
+   * reads 7.66:1 on the page — dark mode can afford the brighter
+   * green that light mode cannot. */
+  --ring: oklch(0.696 0.17 162.48);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
   --chart-4: oklch(0.508 0.118 165.612);
   --chart-5: oklch(0.432 0.095 166.913);
-  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar: oklch(0.238 0.006 286);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.696 0.17 162.48);
   --sidebar-primary-foreground: oklch(0.262 0.051 172.552);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent: oklch(0.305 0.006 286);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.274 0.006 286.033);
-  --sidebar-ring: oklch(0.442 0.017 285.786);
+  --sidebar-border: oklch(0.305 0.006 286);
+  --sidebar-ring: oklch(0.696 0.17 162.48);
 }
 
 @theme inline {
@@ -96,6 +185,8 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-header: var(--header);
+  --color-header-foreground: var(--header-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

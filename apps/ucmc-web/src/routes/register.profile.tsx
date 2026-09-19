@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { ProfileForm } from "#/features/auth/components/profile-form";
 import { requireRegistrationContext } from "#/features/auth/guards";
 
@@ -37,7 +38,7 @@ export const Route = createFileRoute("/register/profile")({
 function ProfilePage() {
   const { reg } = Route.useRouteContext();
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
+    <PageContainer width="prose" className="flex flex-col gap-8">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Finish registering</h1>
         <p className="text-sm text-muted-foreground">
@@ -46,6 +47,6 @@ function ProfilePage() {
         </p>
       </header>
       <ProfileForm email={reg.email} redirectTo="/register/pending" />
-    </div>
+    </PageContainer>
   );
 }

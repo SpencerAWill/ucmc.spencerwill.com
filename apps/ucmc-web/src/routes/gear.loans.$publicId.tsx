@@ -3,6 +3,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, CalendarClock, Inbox } from "lucide-react";
 import { useState } from "react";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { requirePermission } from "#/features/auth/guards";
 import { loanDetailQueryOptions } from "#/features/gear/api/queries";
@@ -30,7 +31,7 @@ function LoanDetailPage() {
   }
   if (error || !data) {
     return (
-      <div className="mx-auto w-full max-w-3xl p-4">
+      <PageContainer width="app">
         <p className="text-sm text-muted-foreground">Loan not found.</p>
         <Button asChild variant="ghost" size="sm" className="mt-2">
           <Link to="/gear/loans">
@@ -38,12 +39,12 @@ function LoanDetailPage() {
             Back to loans
           </Link>
         </Button>
-      </div>
+      </PageContainer>
     );
   }
   const isActive = data.returnedAt === null;
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+    <PageContainer width="app" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm">
           <Link to="/gear/loans">
@@ -82,6 +83,6 @@ function LoanDetailPage() {
           </Link>
         </Button>
       </div>
-    </div>
+    </PageContainer>
   );
 }

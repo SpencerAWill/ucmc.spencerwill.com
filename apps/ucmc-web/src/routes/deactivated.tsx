@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { requireAuth } from "#/features/auth/guards";
 
 /**
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/deactivated")({
 
 function DeactivatedPage() {
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-6 px-6 py-16">
+    <PageContainer width="focused" className="flex flex-col gap-6">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Account deactivated</h1>
         <p className="text-sm text-muted-foreground">
@@ -29,6 +30,6 @@ function DeactivatedPage() {
           account reactivated.
         </p>
       </header>
-    </div>
+    </PageContainer>
   );
 }

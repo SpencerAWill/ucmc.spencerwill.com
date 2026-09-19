@@ -104,7 +104,7 @@ export function PageHero({ page, children, size = "compact" }: PageHeroProps) {
 
       <div
         className={cn(
-          "relative z-10 mx-auto flex max-w-5xl flex-col items-center gap-8 px-6 text-center",
+          "relative z-10 mx-auto flex max-w-5xl flex-col items-center gap-8 px-4 sm:px-6 text-center",
           size === "full" ? "py-20 md:py-28" : "py-12 md:py-16",
           hasSlides && "text-white",
         )}

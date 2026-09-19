@@ -68,7 +68,7 @@ export function MeetingInfo() {
       {/* Mobile-only stacked image (md hides this — desktop uses the
           absolute background). */}
       {hasImage ? (
-        <div className="relative mx-auto mb-8 max-w-2xl px-6 md:hidden">
+        <div className="relative mx-auto mb-8 max-w-2xl px-4 sm:px-6 md:hidden">
           <div className="aspect-video overflow-hidden rounded-xl border shadow-sm">
             <img
               src={landingImageUrlFor(imageKey)}
@@ -80,7 +80,7 @@ export function MeetingInfo() {
         </div>
       ) : null}
 
-      <div className="relative mx-auto max-w-2xl px-6">
+      <div className="relative mx-auto max-w-2xl px-4 sm:px-6">
         <div className="mb-10 space-y-2 text-center">
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
             Where to find us

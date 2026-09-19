@@ -95,6 +95,40 @@ describe("loadPrincipal", () => {
     expect(principal!.roles).toEqual(["member"]);
     expect(principal!.permissions).toEqual([]);
     expect(principal!.hasProfile).toBe(true);
+    expect(principal!.preferredName).toBe("Test");
+  });
+
+  /**
+   * The account menu addresses the member by `preferredName` and falls
+   * back to the email on `null`. `preferred_name` is NOT NULL, so a
+   * blank one would otherwise reach the menu as an empty label rather
+   * than falling back — it's normalised here so no call site has to.
+   */
+  it("normalises a blank preferred name to null", async () => {
+    const userId = await seedUser("blank@example.com");
+    await getDb()
+      .update(schema.profiles)
+      .set({ preferredName: "   " })
+      .where(eq(schema.profiles.userId, userId));
+
+    expect((await loadPrincipal(userId))!.preferredName).toBeNull();
+  });
+
+  it("has no preferred name before the profile exists", async () => {
+    const userId = `user_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.users)
+      .values({
+        id: userId,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        status: "pending",
+      });
+    await attachPrimaryEmail(userId, "noprofile@example.com");
+
+    const principal = await loadPrincipal(userId);
+
+    expect(principal!.hasProfile).toBe(false);
+    expect(principal!.preferredName).toBeNull();
   });
 
   it("system_admin automatically gets ALL permissions, including unlinked ones", async () => {

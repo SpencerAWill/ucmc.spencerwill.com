@@ -26,6 +26,13 @@ export interface Principal {
    */
   emails: string[];
   status: schema.UserStatus;
+  /**
+   * The name the member asked to be called, from their profile. `null`
+   * until they finish registering — the account chrome falls back to
+   * `primaryEmail` for that window, which is the only identifier that
+   * exists yet.
+   */
+  preferredName: string | null;
   hasProfile: boolean;
   avatarKey: string | null;
   roles: string[];
@@ -83,7 +90,10 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
       .where(eq(schema.users.id, userId))
       .limit(1),
     db
-      .select({ avatarKey: schema.profiles.avatarKey })
+      .select({
+        avatarKey: schema.profiles.avatarKey,
+        preferredName: schema.profiles.preferredName,
+      })
       .from(schema.profiles)
       .where(eq(schema.profiles.userId, userId))
       .limit(1),
@@ -256,6 +266,10 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
     primaryEmail: primaryRow.email,
     emails,
     status: user.status,
+    // `preferred_name` is NOT NULL, but a blank one would render as an
+    // empty label rather than falling back, so it's normalised here
+    // instead of at each call site.
+    preferredName: profile?.preferredName.trim() || null,
     hasProfile: Boolean(profile),
     avatarKey: profile?.avatarKey ?? null,
     roles: userRoleRows.map((r) => r.name),

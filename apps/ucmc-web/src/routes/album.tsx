@@ -1,4 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { PageContainer } from "#/components/layouts/page-container";
 import { pageHeroQueryOptions } from "#/features/landing/api/queries";
 import { PageHero } from "#/features/landing/components/page-hero";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -145,7 +146,7 @@ function AlbumPage() {
   return (
     <>
       <PageHero page="album" />
-      <main id="main" className="mx-auto w-full max-w-5xl space-y-6 px-6 py-12">
+      <PageContainer width="wide" className="space-y-6">
         {canManage ? (
           <div className="flex justify-end">
             <Button
@@ -217,7 +218,7 @@ function AlbumPage() {
             </AlertDialog>
           </>
         ) : null}
-      </main>
+      </PageContainer>
     </>
   );
 }

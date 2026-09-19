@@ -197,7 +197,7 @@ function DataAndDeletionSection() {
                   onConfirm();
                 }}
                 disabled={!matches || deletion.isPending}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                variant="destructive"
               >
                 {deletion.isPending ? "Deleting…" : "Delete forever"}
               </AlertDialogAction>

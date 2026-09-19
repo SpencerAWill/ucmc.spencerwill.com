@@ -16,6 +16,106 @@ Nav gates compose **permission AND page flag**, and the flag must be the one bel
 
 **Wire the sidebar in the same change as any new public route.** A route that exists but has no nav entry is invisible; this has been caught repeatedly in review.
 
+## Theme tokens (`src/styles.css`)
+
+Surfaces are a **ladder, not a palette**, and both themes climb in the
+same direction — away from the page, toward the viewer:
+
+| Rung                           | Light   | Dark    |
+| ------------------------------ | ------- | ------- |
+| `--card`/popover               | `0.993` | `0.216` |
+| `--background`                 | `0.968` | `0.178` |
+| `--sidebar`                    | `0.947` | `0.238` |
+| `--muted`/`secondary`/`accent` | `0.933` | `0.288` |
+| `--border`/`input`             | `0.897` | `0.305` |
+
+Stock shadcn had `--background`, `--card` and `--popover` identical
+(pure white in light, `0.141` in dark), which is why nothing separated
+from anything. **Moving any one of these means re-checking its
+neighbours** — the rungs are only useful while they stay apart, and
+`--muted` at its old `0.967` would now sit _between_ the light card and
+the light background and vanish.
+
+Light surfaces carry a warm tint (oklch hue 85, C≈0.012–0.016); **text
+neutrals keep the cool zinc hue (286)** because at C≈0.016 the hue of
+the text is imperceptible and the warmth belongs to the surfaces.
+
+**`--muted-foreground` is the AA floor of the file.** It was 4.83:1 on
+pure white — a tenth of a step over 4.5:1 — so the softened background
+put it under before it was moved to `0.515`. It now holds 4.64:1
+against `--muted`, the tightest pairing that renders. Anything that
+darkens a light surface has to be re-checked against it.
+
+### `--header` is not `--primary`
+
+The masthead bar has its own token pair. The two roles want opposite
+things in dark mode: the bar is brand chrome and stays a deep, quiet
+green, while `--primary` is the interactive accent and has to be light
+enough to read as **text** on a dark card — `text-primary` has ~33 call
+sites. No single lightness served both; anything legible as text
+(≥`0.58`) pushed a near-white `--primary-foreground` below AA on the
+fill. So dark `--primary` inverts (mint `0.696` on a dark-green
+foreground, the pair the dark sidebar's branding already used) and
+`--header` keeps the deep green.
+
+In light they happen to hold the same value. **That is a coincidence of
+this palette, not a constraint** — don't collapse them back into one
+token because they currently match.
+
+### The focus ring carries contrast on its full-opacity edge
+
+`--ring` is the brand green (mint in dark), not a neutral: SC 1.4.11
+wants 3:1 for a focus indicator and the stock neutral managed 1.48:1.
+Components layer a full-opacity `border-ring` under a `ring-ring/50`
+halo, and **the full-opacity edge is the indicator** — a 50% ring
+composited over a near-white page cannot reach 3:1 at any hue short of
+near-black. Don't reduce a focus style to the `/50` ring alone.
+
+### Chrome carries no `border-border`
+
+The base layer applies `border-border` to every element, so a bare
+`border-b` on a saturated bar paints the page's own neutral along its
+edge — under the header that read as a gap rather than a border. **A
+coloured bar separates by colour; it takes no border rule.**
+
+## Page containers (`page-container.tsx`)
+
+`<main>` in `app-layout.tsx` carries **no padding on purpose** — the
+landing page and every `PageHero` are full-bleed bands and a container on
+the shell would box them in. Page content therefore opens its own
+container, and **that container is `PageContainer`, not hand-rolled
+utilities.** Hand-rolling is what produced six width tiers and five
+padding schemes before it existed: `px-6` on the policy pages, `p-4` on
+the gear pages, `p-4 sm:p-6` on `/settings`, `p-4 md:p-6` on `/access`,
+so the text edge moved by 8px on a phone between pages that read as
+peers.
+
+**The horizontal gutter (`px-4 sm:px-6`) is the same for every tier and
+no tier may carry its own `px-*`** — that is the part the eye tracks
+across a navigation, and `page-container.test.tsx` pins it for all four.
+Only the measure varies:
+
+| Tier      | Measure     | For                                                   |
+| --------- | ----------- | ----------------------------------------------------- |
+| `focused` | `max-w-md`  | Signed-out interstitials — sign-in, verify-email      |
+| `prose`   | `max-w-2xl` | Policy, legal, marketing copy; ~65ch at the body size |
+| `app`     | `max-w-3xl` | Signed-in single-column pages: forms, card stacks     |
+| `wide`    | `max-w-5xl` | Tables and grids that earn the columns                |
+
+`width` has **no default** — an implicit measure is how the drift
+started. Content spacing (`space-y-*`, `flex flex-col gap-*`) stays on
+the page and comes through `className`, which `cn()` settles against the
+tier deterministically.
+
+Full-bleed pages are the exception, not a tier: the hero renders as a
+sibling _above_ the container, so `album`, `history`, `sponsors` and
+`volunteer` each render `<PageHero />` then a `PageContainer`. The
+landing sections centre their own inner column and share only the
+gutter.
+
+**The shell owns `<main id="main">`.** Pages must not render their own —
+21 of them used to, nesting a second landmark and duplicating the id.
+
 ## Header masthead (`header-masthead.tsx`)
 
 The header's middle column is the logo badge with configurable text either side of it — title left, tagline right — and **the whole thing is one `<Link to="/">`**, so any part of the visible wordmark goes home.

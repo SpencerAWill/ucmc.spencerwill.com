@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { LEGAL_INDEX_LINKS } from "#/config/legal";
 
 /**
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/legal")({
 
 function LegalIndexPage() {
   return (
-    <main id="main" className="mx-auto w-full max-w-2xl space-y-8 px-6 py-12">
+    <PageContainer width="prose" className="space-y-8">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Legal</h1>
         <p className="text-sm text-muted-foreground">
@@ -39,6 +40,6 @@ function LegalIndexPage() {
           </li>
         ))}
       </ul>
-    </main>
+    </PageContainer>
   );
 }

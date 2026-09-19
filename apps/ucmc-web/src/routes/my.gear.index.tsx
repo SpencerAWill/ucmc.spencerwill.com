@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { PageContainer } from "#/components/layouts/page-container";
 import { MyGearList } from "#/features/gear/components/my-gear-list";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/my/gear/")({
 
 function MyGearPage() {
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+    <PageContainer width="app" className="space-y-4">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">My gear</h1>
         <p className="text-sm text-muted-foreground">
@@ -29,6 +30,6 @@ function MyGearPage() {
         </p>
       </header>
       <MyGearList />
-    </div>
+    </PageContainer>
   );
 }

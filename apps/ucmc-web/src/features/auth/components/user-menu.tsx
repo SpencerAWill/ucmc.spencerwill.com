@@ -53,7 +53,11 @@ export function UserMenu() {
     );
   }
 
-  const display = principal.primaryEmail;
+  // The name the member chose, not their email: the menu is the one
+  // place the account is addressed rather than identified, and the
+  // email is on /my/details. Falls back to the email before the
+  // profile exists, when it's the only identifier there is.
+  const display = principal.preferredName ?? principal.primaryEmail;
   const statusLabel =
     principal.status === "approved"
       ? emulatedRole
