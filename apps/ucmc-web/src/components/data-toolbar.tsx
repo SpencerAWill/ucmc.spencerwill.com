@@ -25,8 +25,9 @@
  */
 import {
   ArrowDown,
+  ArrowDownWideNarrow,
   ArrowUp,
-  ArrowUpDown,
+  ArrowUpNarrowWide,
   CheckSquare,
   ListFilter,
   Search,
@@ -35,10 +36,20 @@ import {
 import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "#/components/ui/drawer";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -62,6 +73,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "#/components/ui/tooltip";
+import { useIsMobile } from "#/hooks/use-mobile";
 import { cn } from "#/lib/utils";
 
 /** Typing shouldn't put a history entry (or a server round trip) on
@@ -95,6 +107,17 @@ export interface DataToolbarSearchProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Set false to opt out of the page-level "/" focus shortcut — for a
+   *  page that mounts two toolbars, where "/" would be ambiguous. */
+  focusShortcut?: boolean;
+}
+
+/** One applied filter, rendered as a removable chip under the bar. */
+export interface DataToolbarFilterChip {
+  /** Stable across renders — `affiliation:student`, not the index. */
+  key: string;
+  label: string;
+  onRemove: () => void;
 }
 
 export interface DataToolbarFiltersProps {
@@ -103,6 +126,12 @@ export interface DataToolbarFiltersProps {
    *  popover. */
   activeCount: number;
   onClear?: () => void;
+  /** The applied filters, spelled out. The count badge says *that* the
+   *  list is restricted; only chips say what by, which is the question
+   *  someone landing on a shared URL actually has. */
+  chips?: readonly DataToolbarFilterChip[];
+  /** Heading for the mobile filter drawer. Defaults to "Filters". */
+  title?: string;
   /** The filter fields themselves — different per dataset. */
   children: React.ReactNode;
 }
@@ -111,6 +140,9 @@ export interface DataToolbarBulkActionsProps {
   selectedCount: number;
   /** `DropdownMenu*` items for the actions available on the selection. */
   children: React.ReactNode;
+  /** Adds a "Clear selection" item. Without it the only way out of a
+   *  selection is to complete an action or unpick every row. */
+  onClearSelection?: () => void;
   disabled?: boolean;
 }
 
@@ -161,6 +193,8 @@ export function DataToolbar<TSort extends string, TView extends string>({
     ...(view ? (["view"] as const) : []),
   ];
 
+  const chips = filters?.chips ?? [];
+
   const seamClass = (key: SlotKey) => {
     const index = slots.indexOf(key);
     return cn(
@@ -176,40 +210,47 @@ export function DataToolbar<TSort extends string, TView extends string>({
     // one here keeps the component self-contained; nesting it inside
     // the sidebar's is harmless.
     <TooltipProvider delayDuration={300}>
-      <div
-        role="group"
-        aria-label={label}
-        className={cn(
-          "flex flex-wrap items-stretch gap-2",
-          "md:w-full md:flex-nowrap md:gap-0",
-          // Segments overlap their borders once connected, so a focused
-          // one has to rise above its neighbour for the ring to close.
-          "[&>*]:focus-within:relative [&>*]:focus-within:z-10",
-          className,
-        )}
-      >
-        {filters ? (
-          <FiltersSlot {...filters} className={seamClass("filters")} />
+      <div className={cn("flex flex-col gap-2", className)}>
+        <div
+          role="group"
+          aria-label={label}
+          className={cn(
+            "flex flex-wrap items-stretch gap-2",
+            "md:w-full md:flex-nowrap md:gap-0",
+            // Segments overlap their borders once connected, so a
+            // focused one has to rise above its neighbour for the ring
+            // to close.
+            "[&>*]:focus-within:relative [&>*]:focus-within:z-10",
+          )}
+        >
+          {filters ? (
+            <FiltersSlot {...filters} className={seamClass("filters")} />
+          ) : null}
+
+          {search ? (
+            <SearchSlot
+              {...search}
+              className={cn(
+                // Own row on mobile, the elastic middle of the bar on
+                // desktop.
+                "order-first w-full md:order-none md:w-auto md:min-w-0 md:flex-1",
+                seamClass("search"),
+              )}
+            />
+          ) : null}
+
+          {showBulk ? (
+            <BulkActionsSlot {...bulkActions} className={seamClass("bulk")} />
+          ) : null}
+
+          {sort ? <SortSlot {...sort} className={seamClass("sort")} /> : null}
+
+          {view ? <ViewSlot {...view} className={seamClass("view")} /> : null}
+        </div>
+
+        {chips.length > 0 ? (
+          <FilterChips chips={chips} onClear={filters?.onClear} />
         ) : null}
-
-        {search ? (
-          <SearchSlot
-            {...search}
-            className={cn(
-              // Own row on mobile, the elastic middle of the bar on desktop.
-              "order-first w-full md:order-none md:w-auto md:min-w-0 md:flex-1",
-              seamClass("search"),
-            )}
-          />
-        ) : null}
-
-        {showBulk ? (
-          <BulkActionsSlot {...bulkActions} className={seamClass("bulk")} />
-        ) : null}
-
-        {sort ? <SortSlot {...sort} className={seamClass("sort")} /> : null}
-
-        {view ? <ViewSlot {...view} className={seamClass("view")} /> : null}
       </div>
     </TooltipProvider>
   );
@@ -229,27 +270,104 @@ function CountBadge({ count }: { count: number }) {
   );
 }
 
+function FilterChips({
+  chips,
+  onClear,
+}: {
+  chips: readonly DataToolbarFilterChip[];
+  onClear?: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {chips.map((chip) => (
+        <Badge
+          key={chip.key}
+          variant="secondary"
+          className="gap-1 py-1 pr-1 pl-2"
+        >
+          {chip.label}
+          <button
+            type="button"
+            onClick={chip.onRemove}
+            className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <X className="size-3" />
+            <span className="sr-only">Remove filter: {chip.label}</span>
+          </button>
+        </Badge>
+      ))}
+      {onClear ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-xs text-muted-foreground"
+          onClick={onClear}
+        >
+          Clear all
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function FiltersSlot({
   activeCount,
   onClear,
+  title,
   children,
   className,
 }: DataToolbarFiltersProps & { className?: string }) {
+  const isMobile = useIsMobile();
+
+  const trigger = (
+    <Button variant="outline" className={cn(SEGMENT, className)}>
+      <ListFilter className="size-4" />
+      {activeCount > 0 ? <CountBadge count={activeCount} /> : null}
+      <span className="sr-only">
+        {activeCount > 0 ? `Filters (${activeCount} active)` : "Filters"}
+      </span>
+    </Button>
+  );
+
+  const body = (
+    <>
+      {children}
+      {activeCount > 0 && onClear ? (
+        <Button variant="ghost" size="sm" className="w-full" onClick={onClear}>
+          Clear filters
+        </Button>
+      ) : null}
+    </>
+  );
+
+  // A 20rem popover anchored to a button is a bad fit on a 360px screen
+  // — it covers the list it's filtering and its selects open off-screen.
+  // Below `md` the same fields go in a bottom sheet instead. No tooltip
+  // on that branch: there's no hover to reveal it.
+  if (isMobile) {
+    return (
+      <Drawer>
+        <DrawerTrigger asChild>{trigger}</DrawerTrigger>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>{title ?? "Filters"}</DrawerTitle>
+            <DrawerDescription className="sr-only">
+              Narrow the list below.
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="max-h-[60vh] space-y-4 overflow-y-auto px-4 pb-8">
+            {body}
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
   return (
     <Popover>
       <Tooltip>
         <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className={cn(SEGMENT, className)}>
-              <ListFilter className="size-4" />
-              {activeCount > 0 ? <CountBadge count={activeCount} /> : null}
-              <span className="sr-only">
-                {activeCount > 0
-                  ? `Filters (${activeCount} active)`
-                  : "Filters"}
-              </span>
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent>Filters</TooltipContent>
       </Tooltip>
@@ -257,17 +375,7 @@ function FiltersSlot({
         align="start"
         className="w-[min(20rem,calc(100vw-2rem))] space-y-4"
       >
-        {children}
-        {activeCount > 0 && onClear ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full"
-            onClick={onClear}
-          >
-            Clear filters
-          </Button>
-        ) : null}
+        {body}
       </PopoverContent>
     </Popover>
   );
@@ -277,10 +385,12 @@ function SearchSlot({
   value,
   onChange,
   placeholder,
+  focusShortcut = true,
   className,
 }: DataToolbarSearchProps & { className?: string }) {
   const [draft, setDraft] = useState(value);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // `onChange` is usually an inline arrow that navigates, so a new
   // identity arrives every render. Reading it from a ref keeps the
@@ -304,6 +414,35 @@ function SearchSlot({
     },
     [],
   );
+
+  // "/" jumps to search, the convention everywhere from GitHub to Slack.
+  // Guarded on the event target rather than on `document.activeElement`
+  // so a "/" typed into any other field — or into this one — inserts a
+  // slash instead of being swallowed.
+  useEffect(() => {
+    if (!focusShortcut) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      inputRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [focusShortcut]);
 
   const cancelPending = () => {
     if (timerRef.current !== null) {
@@ -332,6 +471,7 @@ function SearchSlot({
         <Search className="size-4" />
       </InputGroupAddon>
       <InputGroupInput
+        ref={inputRef}
         type="search"
         value={draft}
         placeholder={placeholder ?? "Search…"}
@@ -368,6 +508,7 @@ function SearchSlot({
 function BulkActionsSlot({
   selectedCount,
   children,
+  onClearSelection,
   disabled,
   className,
 }: DataToolbarBulkActionsProps & { className?: string }) {
@@ -397,6 +538,15 @@ function BulkActionsSlot({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {children}
+        {onClearSelection ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onClearSelection}>
+              <X className="size-4" />
+              Clear selection
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -410,6 +560,15 @@ function SortSlot<TSort extends string>({
   className,
 }: DataToolbarSortProps<TSort> & { className?: string }) {
   const active = options.find((o) => o.value === value) ?? options[0];
+  // The trigger carries the direction, not a neutral ⇅: which way the
+  // list runs is the half of the sort state people re-check, and a
+  // static glyph makes them open the menu to find out.
+  const DirectionIcon =
+    direction === "asc" ? ArrowUpNarrowWide : ArrowDownWideNarrow;
+  const directionLabel =
+    direction === "asc"
+      ? (active.ascLabel ?? "Ascending")
+      : (active.descLabel ?? "Descending");
 
   return (
     <DropdownMenu>
@@ -417,12 +576,16 @@ function SortSlot<TSort extends string>({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className={cn(SEGMENT, className)}>
-              <ArrowUpDown className="size-4" />
-              <span className="sr-only">Sort: {active.label}</span>
+              <DirectionIcon className="size-4" />
+              <span className="sr-only">
+                Sort: {active.label}, {directionLabel}
+              </span>
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>Sort</TooltipContent>
+        <TooltipContent>
+          Sort: {active.label} · {directionLabel}
+        </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-52">
         {/* Direction first, then the property — the order the control

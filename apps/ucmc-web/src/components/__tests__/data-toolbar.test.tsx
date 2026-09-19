@@ -37,7 +37,11 @@ describe("<DataToolbar />", () => {
     );
 
     const [first, last] = Array.from(
-      container.querySelectorAll<HTMLElement>(":scope > [role='group'] > *"),
+      // Scoped by label, not `[role=group]`: the search InputGroup is
+      // itself a role=group and would otherwise match.
+      container.querySelectorAll<HTMLElement>(
+        "[aria-label='List controls'] > *",
+      ),
     );
     expect(first.className).not.toContain("md:rounded-l-none");
     expect(first.className).toContain("md:rounded-r-none");
@@ -133,6 +137,86 @@ describe("<DataToolbar />", () => {
       sort: "created",
       direction: "desc",
     });
+  });
+
+  it("shows the current direction on the sort trigger", () => {
+    const { rerender } = render(
+      <DataToolbar
+        label="List controls"
+        sort={{
+          value: "created",
+          direction: "desc",
+          options: SORT_OPTIONS,
+          onChange: vi.fn(),
+        }}
+      />,
+    );
+    // Direction is half the sort state; a neutral glyph would hide it
+    // behind a click.
+    expect(
+      screen.getByRole("button", { name: "Sort: Date added, Newest first" }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <DataToolbar
+        label="List controls"
+        sort={{
+          value: "created",
+          direction: "asc",
+          options: SORT_OPTIONS,
+          onChange: vi.fn(),
+        }}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Sort: Date added, Oldest first" }),
+    ).toBeInTheDocument();
+  });
+
+  it("spells out each applied filter as its own removable chip", async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+
+    render(
+      <DataToolbar
+        label="List controls"
+        filters={{
+          activeCount: 2,
+          chips: [
+            { key: "affiliation:student", label: "Student", onRemove },
+            { key: "role:officer", label: "Officer", onRemove: vi.fn() },
+          ],
+          children: <div />,
+        }}
+      />,
+    );
+
+    // The count badge says the list is restricted; only the chips say
+    // what by — the question someone opening a shared URL has.
+    await user.click(
+      screen.getByRole("button", { name: "Remove filter: Student" }),
+    );
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers a way out of a selection", async () => {
+    const user = userEvent.setup();
+    const onClearSelection = vi.fn();
+
+    render(
+      <DataToolbar
+        label="List controls"
+        bulkActions={{
+          selectedCount: 2,
+          onClearSelection,
+          children: <div />,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /bulk actions/i }));
+    await user.click(screen.getByRole("menuitem", { name: "Clear selection" }));
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
   });
 
   it("labels the direction options per sort property", async () => {
