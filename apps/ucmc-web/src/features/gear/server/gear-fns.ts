@@ -52,6 +52,14 @@ import type {
   EditGearTypeResult,
 } from "#/features/gear/server/gear-types-actions.server";
 import type {
+  CloseSweepResult,
+  GearSweepDetail,
+  GearSweepSummary,
+  RecordSweepEntryInput,
+  RecordSweepEntryResult,
+  StartSweepResult,
+} from "#/features/gear/server/sweeps-actions.server";
+import type {
   GearHoldSummary,
   ListGearHoldsActionInput,
   PlaceGearHoldInput,
@@ -359,6 +367,22 @@ const editGearTagInputSchema = z.object({
 });
 
 const deleteGearTagInputSchema = z.object({
+  publicId: z.string().min(1),
+});
+
+// ── sweeps ─────────────────────────────────────────────────────────────
+
+const recordSweepEntryInputSchema = z.object({
+  gearCode: z.string().trim().min(1).max(64).optional(),
+  modelPublicId: z.string().min(1).optional(),
+  quantityCounted: z.number().int().min(0).max(9999).optional(),
+});
+
+const closeSweepInputSchema = z.object({
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+const getSweepInputSchema = z.object({
   publicId: z.string().min(1),
 });
 
@@ -736,6 +760,65 @@ export const deleteGearTagFn = createServerFn({ method: "POST" })
     const { deleteGearTagAction } =
       await import("#/features/gear/server/gear-tags-actions.server");
     return deleteGearTagAction(data);
+  });
+
+// ── sweeps ─────────────────────────────────────────────────────────────
+
+export type {
+  CloseSweepResult,
+  GearSweepDetail,
+  GearSweepSummary,
+  RecordSweepEntryInput,
+  RecordSweepEntryResult,
+  StartSweepResult,
+};
+
+export const getOpenSweepFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<GearSweepDetail | null> => {
+    const { getOpenSweepAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return getOpenSweepAction();
+  },
+);
+
+export const listSweepsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<GearSweepSummary[]> => {
+    const { listSweepsAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return listSweepsAction();
+  },
+);
+
+export const getSweepFn = createServerFn({ method: "GET" })
+  .validator(getSweepInputSchema)
+  .handler(async ({ data }): Promise<GearSweepDetail | null> => {
+    const { getSweepAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return getSweepAction(data);
+  });
+
+export const startSweepFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<StartSweepResult> => {
+    const { startSweepAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return startSweepAction();
+  },
+);
+
+export const recordSweepEntryFn = createServerFn({ method: "POST" })
+  .validator(recordSweepEntryInputSchema)
+  .handler(async ({ data }): Promise<RecordSweepEntryResult> => {
+    const { recordSweepEntryAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return recordSweepEntryAction(data);
+  });
+
+export const closeSweepFn = createServerFn({ method: "POST" })
+  .validator(closeSweepInputSchema)
+  .handler(async ({ data }): Promise<CloseSweepResult> => {
+    const { closeSweepAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return closeSweepAction(data);
   });
 
 // ── holds ──────────────────────────────────────────────────────────────

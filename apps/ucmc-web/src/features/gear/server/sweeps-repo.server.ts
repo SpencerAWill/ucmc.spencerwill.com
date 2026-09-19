@@ -1,0 +1,296 @@
+/**
+ * Pure data access for inventory sweeps — a cave-wide count, run by
+ * several people scanning into the same open sweep at once.
+ *
+ * The shape exists because **presence is recorded and absence is
+ * inferred at close**. A per-item "seen" checkbox could record presence
+ * too, but it could not say *when* the cave was last looked at, which
+ * is the whole basis for calling something missing and for the
+ * `whereabouts_as_of` date that goes with it.
+ */
+import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
+
+import { getDb, schema } from "#/server/db";
+
+export interface GearSweepRow {
+  id: string;
+  publicId: string;
+  startedAt: Temporal.Instant;
+  startedByUserId: string | null;
+  closedAt: Temporal.Instant | null;
+  closedByUserId: string | null;
+  notes: string | null;
+}
+
+export async function getOpenSweep(): Promise<GearSweepRow | null> {
+  const rows = await getDb()
+    .select()
+    .from(schema.gearInventorySweeps)
+    .where(isNull(schema.gearInventorySweeps.closedAt))
+    .orderBy(desc(schema.gearInventorySweeps.startedAt))
+    .limit(1);
+  return rows.at(0) ?? null;
+}
+
+export async function getSweepByPublicId(
+  publicId: string,
+): Promise<GearSweepRow | null> {
+  const rows = await getDb()
+    .select()
+    .from(schema.gearInventorySweeps)
+    .where(eq(schema.gearInventorySweeps.publicId, publicId))
+    .limit(1);
+  return rows.at(0) ?? null;
+}
+
+export async function listSweeps(limit = 20): Promise<GearSweepRow[]> {
+  return getDb()
+    .select()
+    .from(schema.gearInventorySweeps)
+    .orderBy(desc(schema.gearInventorySweeps.startedAt))
+    .limit(limit);
+}
+
+export async function insertSweep(input: {
+  id: string;
+  publicId: string;
+  startedByUserId: string;
+}): Promise<void> {
+  await getDb().insert(schema.gearInventorySweeps).values(input);
+}
+
+export async function markSweepClosed(input: {
+  id: string;
+  closedByUserId: string;
+  notes: string | null;
+}): Promise<void> {
+  await getDb()
+    .update(schema.gearInventorySweeps)
+    .set({
+      closedAt: Temporal.Now.instant(),
+      closedByUserId: input.closedByUserId,
+      notes: input.notes,
+    })
+    .where(eq(schema.gearInventorySweeps.id, input.id));
+}
+
+export interface SweepEntryRow {
+  itemId: string | null;
+  itemPublicId: string | null;
+  itemCode: string | null;
+  modelId: string | null;
+  modelName: string | null;
+  quantityCounted: number;
+  seenAt: Temporal.Instant;
+  seenByUserId: string | null;
+}
+
+export async function listSweepEntries(
+  sweepId: string,
+): Promise<SweepEntryRow[]> {
+  return getDb()
+    .select({
+      itemId: schema.gearInventorySweepEntries.itemId,
+      itemPublicId: schema.gearItems.publicId,
+      itemCode: schema.gearItems.code,
+      modelId: schema.gearInventorySweepEntries.modelId,
+      modelName: schema.gearModels.name,
+      quantityCounted: schema.gearInventorySweepEntries.quantityCounted,
+      seenAt: schema.gearInventorySweepEntries.seenAt,
+      seenByUserId: schema.gearInventorySweepEntries.seenByUserId,
+    })
+    .from(schema.gearInventorySweepEntries)
+    .leftJoin(
+      schema.gearItems,
+      eq(schema.gearItems.id, schema.gearInventorySweepEntries.itemId),
+    )
+    .leftJoin(
+      schema.gearModels,
+      eq(schema.gearModels.id, schema.gearInventorySweepEntries.modelId),
+    )
+    .where(eq(schema.gearInventorySweepEntries.sweepId, sweepId))
+    .orderBy(desc(schema.gearInventorySweepEntries.seenAt));
+}
+
+/**
+ * Records a sighting. Idempotent for coded items by the unique index on
+ * `(sweep_id, item_id)`: two people scanning the same harness is the
+ * normal case in a cave with three people working it, not an error.
+ *
+ * For a counted model the later count **replaces** the earlier one
+ * rather than adding to it. Two people each counting the whole bin is
+ * far likelier than two people splitting it, and a wrong total that
+ * reads as a surplus is harder to notice than one that reads short.
+ */
+export async function upsertSweepEntry(input: {
+  sweepId: string;
+  itemId: string | null;
+  modelId: string | null;
+  quantityCounted: number;
+  seenByUserId: string;
+}): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(schema.gearInventorySweepEntries)
+    .values({ ...input, seenAt: Temporal.Now.instant() })
+    .onConflictDoUpdate({
+      target:
+        input.itemId !== null
+          ? [
+              schema.gearInventorySweepEntries.sweepId,
+              schema.gearInventorySweepEntries.itemId,
+            ]
+          : [
+              schema.gearInventorySweepEntries.sweepId,
+              schema.gearInventorySweepEntries.modelId,
+            ],
+      set: {
+        quantityCounted: input.quantityCounted,
+        seenAt: Temporal.Now.instant(),
+        seenByUserId: input.seenByUserId,
+      },
+    });
+}
+
+export async function countSweepEntries(sweepId: string): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(schema.gearInventorySweepEntries)
+    .where(eq(schema.gearInventorySweepEntries.sweepId, sweepId));
+  return rows[0]?.value ?? 0;
+}
+
+export interface UnseenItemRow {
+  id: string;
+  publicId: string;
+  code: string | null;
+  modelName: string;
+  whereabouts: schema.GearWhereabouts;
+}
+
+/**
+ * Active coded items nobody logged in this sweep — the candidates for
+ * `missing`.
+ *
+ * Three exclusions, each for its own reason:
+ *
+ *   - **on an open loan** — legitimately absent, and marking it missing
+ *     would accuse the borrower of losing what they signed out.
+ *   - **at `repair`** — absent by arrangement, and the cave knows where.
+ *   - **with an `officer`** — same.
+ *
+ * An item already `missing` is deliberately *not* excluded: it is
+ * still unseen, and re-stamping `whereabouts_as_of` is how "missing
+ * since March" stays true rather than freezing at the first sweep that
+ * noticed.
+ */
+export async function listUnseenActiveItems(
+  sweepId: string,
+): Promise<UnseenItemRow[]> {
+  return getDb()
+    .select({
+      id: schema.gearItems.id,
+      publicId: schema.gearItems.publicId,
+      code: schema.gearItems.code,
+      modelName: schema.gearModels.name,
+      whereabouts: schema.gearItems.whereabouts,
+    })
+    .from(schema.gearItems)
+    .innerJoin(
+      schema.gearModels,
+      eq(schema.gearModels.id, schema.gearItems.modelId),
+    )
+    .where(
+      and(
+        eq(schema.gearItems.status, "active"),
+        sql`${schema.gearItems.whereabouts} NOT IN ('repair', 'officer')`,
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${schema.gearInventorySweepEntries} e
+          WHERE e.sweep_id = ${sweepId} AND e.item_id = ${schema.gearItems.id}
+        )`,
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${schema.gearLoans} l
+          WHERE l.item_id = ${schema.gearItems.id} AND l.returned_at IS NULL
+        )`,
+      ),
+    )
+    .orderBy(schema.gearItems.code);
+}
+
+export async function markItemsMissing(
+  itemIds: string[],
+  asOf: Temporal.Instant,
+): Promise<void> {
+  if (itemIds.length === 0) {
+    return;
+  }
+  await getDb()
+    .update(schema.gearItems)
+    .set({ whereabouts: "missing", whereaboutsAsOf: asOf, updatedAt: asOf })
+    .where(
+      sql`${schema.gearItems.id} IN (${sql.join(
+        itemIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})`,
+    );
+}
+
+export interface CountedReconciliationRow {
+  modelId: string;
+  modelPublicId: string;
+  modelName: string;
+  typeName: string;
+  /** What the stock table says the club owns, across all condition
+   *  buckets. */
+  expected: number;
+  counted: number;
+  onLoan: number;
+}
+
+/**
+ * Counted models against what the sweep found.
+ *
+ * `expected` is total stock; `counted + onLoan` is what the sweep can
+ * account for. The difference is a shortfall, reported rather than
+ * written off — a miscount is likelier than four lost draws, and the
+ * write-off should be somebody's decision.
+ */
+export async function reconcileCountedModels(
+  sweepId: string,
+): Promise<CountedReconciliationRow[]> {
+  const rows = await getDb()
+    .select({
+      modelId: schema.gearModels.id,
+      modelPublicId: schema.gearModels.publicId,
+      modelName: schema.gearModels.name,
+      typeName: schema.gearTypes.name,
+      expected: sql<number>`(
+        SELECT coalesce(sum(s.quantity), 0)
+        FROM ${schema.gearStockLevels} s
+        WHERE s.model_id = ${schema.gearModels.id}
+      )`,
+      counted: sql<number>`(
+        SELECT coalesce(sum(e.quantity_counted), 0)
+        FROM ${schema.gearInventorySweepEntries} e
+        WHERE e.sweep_id = ${sweepId} AND e.model_id = ${schema.gearModels.id}
+      )`,
+      onLoan: sql<number>`(
+        SELECT coalesce(sum(l.quantity - l.quantity_returned), 0)
+        FROM ${schema.gearLoans} l
+        WHERE l.model_id = ${schema.gearModels.id} AND l.returned_at IS NULL
+      )`,
+    })
+    .from(schema.gearModels)
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .where(eq(schema.gearModels.tracking, "counted"))
+    .orderBy(schema.gearModels.name);
+  return rows.map((row) => ({
+    ...row,
+    expected: Number(row.expected),
+    counted: Number(row.counted),
+    onLoan: Number(row.onLoan),
+  }));
+}

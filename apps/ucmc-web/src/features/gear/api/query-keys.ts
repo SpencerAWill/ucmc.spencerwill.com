@@ -31,6 +31,13 @@ export function gearAttributeDefsQueryKey(input: {
   ] as const;
 }
 
+/** Sweeps. The open sweep and the history share a prefix: closing one
+ *  changes both. */
+export const GEAR_SWEEPS_QUERY_KEY = ["gear", "sweeps"] as const;
+export const OPEN_SWEEP_QUERY_KEY = ["gear", "sweeps", "open"] as const;
+export const sweepDetailQueryKey = (publicId: string) =>
+  ["gear", "sweeps", "detail", publicId] as const;
+
 /** Holds. The prefix is invalidated wholesale on any hold change —
  *  placing one on an item also changes the "all live holds" list. */
 export const GEAR_HOLDS_QUERY_KEY = ["gear", "holds"] as const;

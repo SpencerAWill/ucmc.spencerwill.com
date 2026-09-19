@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   Boxes,
   ChevronDown,
+  ClipboardCheck,
   Lock,
   Package,
   Plus,
@@ -34,6 +35,7 @@ import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
 import { GearAttributesManageDialog } from "#/features/gear/components/gear-attributes-manage-dialog";
+import { GearSweepSheet } from "#/features/gear/components/gear-sweep-sheet";
 import { GearHoldsManageDialog } from "#/features/gear/components/gear-holds-manage-dialog";
 import { GearModelsManageDialog } from "#/features/gear/components/gear-models-manage-dialog";
 import { GearTagsManageDialog } from "#/features/gear/components/gear-tags-manage-dialog";
@@ -182,6 +184,7 @@ function GearIndexPage() {
   const [attributesOpen, setAttributesOpen] = useState(false);
   const [modelsOpen, setModelsOpen] = useState(false);
   const [holdsOpen, setHoldsOpen] = useState(false);
+  const [sweepOpen, setSweepOpen] = useState(false);
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
   const unretireMutation = useReactivateGear();
 
@@ -305,6 +308,14 @@ function GearIndexPage() {
               <Lock className="size-4" />
               Holds
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSweepOpen(true)}
+            >
+              <ClipboardCheck className="size-4" />
+              Sweep
+            </Button>
 
             {/* Additive split button: primary is "Add gear" (the common
              * case); the chevron only hosts other ways to add gear
@@ -381,6 +392,7 @@ function GearIndexPage() {
             onOpenChange={setModelsOpen}
           />
           <GearHoldsManageDialog open={holdsOpen} onOpenChange={setHoldsOpen} />
+          <GearSweepSheet open={sweepOpen} onOpenChange={setSweepOpen} />
           <GearAttributesManageDialog
             open={attributesOpen}
             onOpenChange={setAttributesOpen}

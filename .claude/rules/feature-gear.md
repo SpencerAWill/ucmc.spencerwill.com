@@ -212,8 +212,20 @@ Two refusals are typed rather than left to the database: `has_items` on a coded 
 - **A quantity hold is refused on a coded model** — its units are held one at a time, by code, and a quantity would pick no particular piece and block nothing the rollup can see. Conversely `liveHeldQuantityForModels` excludes coded items, or the same unit would be subtracted twice.
 - Officers name a piece **by its code**, case-insensitively (`getGearItemByCode`), because that is how the cave names pieces. The desk's own code search is separate: it gates on `gear:loan` and carries loan state.
 
+## Inventory sweeps
+
+`/gear` → **Sweep**, a Sheet rather than a dialog because a sweep is a standing session somebody works out of for an hour with a phone, not a form they dismiss.
+
+**Presence is recorded; absence is inferred at close.** That inference is the only thing in the system that can decide a piece is `missing`, and it is why the sweep is an entity rather than a per-item checkbox: the close stamps _when_ the cave was last looked at, which is what `whereabouts_as_of` means.
+
+- **One sweep is open at a time, cave-wide.** Two concurrent counts would each infer absence from the other's sightings and mark half the cave missing. A second `startSweepAction` returns `already_open` with the existing publicId rather than erroring — two officers both tapping Start is how a sweep begins.
+- **Logging is idempotent** by the unique index on `(sweep_id, item_id)`. Several people working one sweep will scan the same harness; that is the normal case, not an error.
+- **For a counted model a later count replaces the earlier one** rather than adding to it. Two people each counting the whole bin is far likelier than two splitting it, and a wrong total that reads as a surplus is harder to notice than one that reads short.
+- **Close excludes three things from the missing sweep**, each for its own reason: on an open loan (legitimately absent — marking it missing accuses the borrower of losing what they signed out), at `repair`, and with an `officer` (both absent by arrangement). An item **already** `missing` is deliberately _not_ excluded: it is still unseen, and re-stamping is how "missing since March" stays true rather than freezing at the first sweep that noticed.
+- **Counted shortfalls are reported, never written off.** `expected` is total stock; `counted + onLoan` is what the sweep accounts for. A miscount is likelier than four lost draws, so the write-off stays somebody's decision. A surplus is reported as nothing — it means a miscount upward or stale stock, neither of which is a loss to chase.
+
 ## Not built yet
 
-The schema carries `gear_holds` and `gear_inventory_sweeps` (+ entries); their actions and UI land in later steps. Counted stock is schema-only — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), qualification gating, derived inspection-due and service-life columns, and the browse-by-model page redesign are all deliberately deferred.
+Counted stock is still only half-wired — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), qualification gating, derived inspection-due and service-life columns, and the browse-by-model page redesign are all deliberately deferred.
 
 **No attribute definitions are seeded.** Which attributes exist, at which level, with which options in which order, is the cave's call — a guessed set would be worse than an empty one, because officers would edit around it rather than replace it.

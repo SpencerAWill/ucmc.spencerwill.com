@@ -9,6 +9,9 @@ import {
   GEAR_TAGS_QUERY_KEY,
   gearAttributeDefsQueryKey,
   gearHoldsQueryKey,
+  GEAR_SWEEPS_QUERY_KEY,
+  OPEN_SWEEP_QUERY_KEY,
+  sweepDetailQueryKey,
   gearModelsQueryKey,
   GEAR_TYPES_QUERY_KEY,
   LOANS_QUERY_KEY,
@@ -33,7 +36,10 @@ import {
   listGearInspectionsFn,
   listGearLabelsFn,
   listGearAttributeDefsFn,
+  getOpenSweepFn,
+  getSweepFn,
   listGearHoldsFn,
+  listSweepsFn,
   listGearTagsFn,
   listGearModelsFn,
   listGearTypesFn,
@@ -131,6 +137,27 @@ export function gearHoldsQueryOptions(
             : {}),
         },
       }),
+  } as const;
+}
+
+export function openSweepQueryOptions() {
+  return {
+    queryKey: OPEN_SWEEP_QUERY_KEY,
+    queryFn: () => getOpenSweepFn(),
+  } as const;
+}
+
+export function sweepsQueryOptions() {
+  return {
+    queryKey: GEAR_SWEEPS_QUERY_KEY,
+    queryFn: () => listSweepsFn(),
+  } as const;
+}
+
+export function sweepDetailQueryOptions(publicId: string) {
+  return {
+    queryKey: sweepDetailQueryKey(publicId),
+    queryFn: () => getSweepFn({ data: { publicId } }),
   } as const;
 }
 
