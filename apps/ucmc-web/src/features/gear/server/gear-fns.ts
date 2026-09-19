@@ -7,6 +7,8 @@
  * validateSearch / queryOptions input typing.
  */
 import { createServerFn } from "@tanstack/react-start";
+
+import { GEAR_AVAILABILITY } from "#/features/gear/lib/availability";
 import { z } from "zod";
 import type {
   CreateGearModelResult,
@@ -71,6 +73,7 @@ import type {
   ListLoansActionResult,
   LoanDetail,
   LoanSummary,
+  MyLoansResult,
 } from "#/features/gear/server/loans-actions.server";
 import type {
   AddToCartResult,
@@ -215,6 +218,7 @@ export const listGearInputSchema = z.object({
   status: z.enum(GEAR_STATUS_VALUES).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
   whereabouts: z.enum(GEAR_WHEREABOUTS_VALUES).optional(),
+  availability: z.enum(GEAR_AVAILABILITY).optional(),
   q: z.string().max(200).optional(),
   sort: z.enum(["code", "created_at", "updated_at", "model"]).optional(),
   dir: z.enum(["asc", "desc"]).optional(),
@@ -739,7 +743,7 @@ export const getLoanDetailFn = createServerFn({ method: "GET" })
   });
 
 export const listMyLoansFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ active: LoanSummary[]; history: LoanSummary[] }> => {
+  async (): Promise<MyLoansResult> => {
     const { listMyLoansAction } =
       await import("#/features/gear/server/loans-actions.server");
     return listMyLoansAction();

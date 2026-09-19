@@ -18,6 +18,7 @@
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import { CLUB_TIME_ZONE } from "#/config/time";
 import {
   computeDueAt,
   MAX_LOAN_DURATION_DAYS,
@@ -34,6 +35,7 @@ import {
   extendLoanDueAt,
   getItemByCode,
   getLoanByPublicId,
+  getActiveHoldForItem,
   getOpenLoanForItem,
   insertLoans,
   listLoans,
@@ -43,6 +45,8 @@ import {
   searchApprovedMembers,
   searchItemsByCode,
 } from "#/features/gear/server/loans-repo.server";
+import { gearCaveStanding } from "#/server/gear/gear-cave-standing.server";
+import type { GearCaveStanding } from "#/server/gear/gear-cave-standing.server";
 import type {
   GearCodeSearchRow,
   LoanListRow,
@@ -111,13 +115,21 @@ export interface CheckoutLoansInput {
   memberPublicId: string;
   items: Array<{ gearPublicId: string; durationDays: number }>;
   notes: string | null;
+  /** Officer overrides, both `gear:manage`-gated and both audited. A
+   *  non-manager passing either is ignored rather than rejected — the
+   *  desk UI never offers them, so a request carrying one is a stale
+   *  client, not an attack worth a distinct error. */
+  overrideStanding?: boolean;
+  overrideHolds?: boolean;
 }
 
 export type CheckoutSkipReason =
   | "not_found"
   | "retired"
   | "not_serviceable"
-  | "already_on_loan";
+  | "already_on_loan"
+  | "on_hold"
+  | "member_blocked";
 
 export type CheckoutResult =
   | {
@@ -160,6 +172,34 @@ export async function checkoutLoansAction(
     throw new Error("Member not found or not approved");
   }
   const now = Temporal.Now.instant();
+
+  // Cave standing is checked once per batch, not per item: it is a
+  // property of the borrower, so a blocked member fails every row and
+  // re-reading their overdue list ten times would just be ten queries
+  // for the same answer.
+  //
+  // The officer override is deliberate and audited rather than silent —
+  // `gear:manage` is the same grant that can retire gear, so someone
+  // holding it deciding "let them take the rope anyway" is a judgement
+  // the system should permit and record, not prevent.
+  const standing = await gearCaveStanding({
+    memberUserId: member.userId,
+    now,
+    timeZone: CLUB_TIME_ZONE,
+  });
+  const overrideStanding =
+    input.overrideStanding === true &&
+    principal.permissions.includes("gear:manage");
+  if (standing.standing === "blocked" && !overrideStanding) {
+    return {
+      results: input.items.map((item) => ({
+        ok: false as const,
+        gearPublicId: item.gearPublicId,
+        reason: "member_blocked" as const,
+      })),
+    };
+  }
+
   const results: CheckoutResult[] = [];
   const validRows: Array<{
     insert: Parameters<typeof insertLoans>[0][number];
@@ -185,7 +225,7 @@ export async function checkoutLoansAction(
       });
       continue;
     }
-    if (gear.status === "retired") {
+    if (gear.status !== "active") {
       results.push({
         ok: false,
         gearPublicId: item.gearPublicId,
@@ -209,6 +249,20 @@ export async function checkoutLoansAction(
         reason: "already_on_loan",
       });
       continue;
+    }
+    // A live hold blocks the desk the same way it blocks the member —
+    // a warning nobody has to act on gets trampled, and then holds stop
+    // being trusted. Officers pass `overrideHolds` to proceed.
+    if (!input.overrideHolds) {
+      const held = await getActiveHoldForItem(gear.id, now);
+      if (held) {
+        results.push({
+          ok: false,
+          gearPublicId: item.gearPublicId,
+          reason: "on_hold",
+        });
+        continue;
+      }
     }
     const duration = Math.min(
       MAX_LOAN_DURATION_DAYS,
@@ -599,15 +653,38 @@ export async function getLoanDetailAction(input: {
 
 // ── member-side read ────────────────────────────────────────────────────
 
-export async function listMyLoansAction(): Promise<{
+export interface MyLoansResult {
   active: LoanSummary[];
   history: LoanSummary[];
-}> {
+  /** The member's own cave standing. Bundled with the loans rather than
+   *  fetched separately because the page renders them together and the
+   *  two would otherwise be able to disagree across a refetch — a banner
+   *  saying "you're blocked" above a list showing nothing overdue. */
+  standing: {
+    standing: GearCaveStanding;
+    worstDaysOverdue: number;
+    flagAfterDays: number;
+    blockAfterDays: number;
+  };
+}
+
+export async function listMyLoansAction(): Promise<MyLoansResult> {
   const principal = await requireGearReader();
   const { active, history } = await listLoansForMember(principal.userId);
+  const standing = await gearCaveStanding({
+    memberUserId: principal.userId,
+    now: Temporal.Now.instant(),
+    timeZone: CLUB_TIME_ZONE,
+  });
   return {
     active: active.map(toSummary),
     history: history.map(toSummary),
+    standing: {
+      standing: standing.standing,
+      worstDaysOverdue: standing.worstDaysOverdue,
+      flagAfterDays: standing.flagAfterDays,
+      blockAfterDays: standing.blockAfterDays,
+    },
   };
 }
 

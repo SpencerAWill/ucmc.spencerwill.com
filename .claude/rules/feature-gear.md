@@ -62,6 +62,63 @@ Officer-defined attributes scoped to types via `gear_attribute_def_types` (a joi
 
 Four kinds: `text`, `number`, `select`, `boolean`. **The unit lives on the definition, never in the value** — a value of `"60m"` is text and stops being range-filterable, which defeats the point. **`select` options carry explicit ordering**; sorting sizes alphabetically yields `L, M, S, XL`.
 
+## Availability is the rollup members browse by
+
+`lib/availability.ts` collapses the four axes into one answer to "can I
+take this out?". Precedence is deliberate and written down there:
+terminal status → open loan → condition/whereabouts problem → hold.
+
+- **`on_loan` deliberately outranks a condition problem.** An open loan
+  resolves on a known date, and the borrower is often the person who
+  reported the damage at check-in; "back Thursday" beats "needs repair".
+- **A hold ranks last** of the blocking states — it is the softest,
+  officer-overridable and self-expiring.
+- **`availabilityWhere` in `repo.server.ts` is the SQL mirror** of the
+  same function and must stay in step with it. A disagreement shows up
+  as a row filtered to "Available" wearing an "On loan" badge. The
+  filter is pushed into SQL rather than applied to a fetched page,
+  because filtering after the fact returns short pages and a lying
+  total — **and the count query must carry the same joins as the row
+  query** or it fails on an unknown column.
+- The list query LEFT JOINs the open loan and **the earliest-ending live
+  hold via a correlated subquery**. The subquery is the fan-out guard:
+  two overlapping holds on one item would otherwise duplicate its row.
+
+`blockedReason` answers a different question from availability — it is a
+property of the _pairing_ of member and item, not of the item. A
+greyed-out button with no explanation is the classic complaint about
+club gear systems, so every refusal carries a message.
+
+## Gear cave standing
+
+`src/server/gear/gear-cave-standing.server.ts` — `good` / `flagged` /
+`blocked`, derived from open overdue loans against two thresholds.
+
+**Scoped to the cave, not named "member standing".** The club may grow
+other standings (trips, dues, training) answering to different rules; a
+single global "standing" would either collapse them or need renaming
+later under more pressure.
+
+It lives in `src/server/` rather than the gear feature because three
+callers need it and features can't import each other — the desk blocks
+checkout on it, `/my/gear` renders the member's own banner, and trips
+will want it. **Derived, never stored:** storing it would need a cron to
+keep it true and a way to disagree with the loan table.
+
+Thresholds are **site settings** (`gear.overdueFlagDays`,
+`gear.overdueBlockDays`), so the cave tunes them without a migration.
+Defaults are 7 and 21 — one and three missed Wednesday return windows.
+A block threshold below the flag threshold is honoured rather than
+rejected, so the stricter still governs. Days are **whole club days in
+`CLUB_TIME_ZONE`**, not elapsed hours: due dates are stamped
+end-of-day, so "one day overdue" must mean a calendar day has turned.
+
+Checkout consults standing **once per batch**, not per item — it is a
+property of the borrower. The `gear:manage` override is deliberate and
+audited rather than absent: the grant that can retire gear can also
+decide "let them take the rope anyway", and the system should record
+that rather than prevent it.
+
 ## Loans are dual-shape
 
 Each loan names **either** a coded item (`item_id`) **or** a counted model with a quantity (`model_id` + `quantity`, "six draws"). A CHECK constraint enforces exactly one. Every read path LEFT JOINs items and resolves the model through `coalesce(loans.model_id, items.model_id)` — one query serves both kinds, rather than two near-identical tables and two of every query behind `/my/gear`, the overdue list and member standing.

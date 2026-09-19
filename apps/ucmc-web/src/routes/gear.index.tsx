@@ -33,6 +33,7 @@ import {
   GEAR_CONDITION_VALUES,
   GEAR_STATUS_VALUES,
 } from "#/features/gear/server/gear-fns";
+import { GEAR_AVAILABILITY } from "#/features/gear/lib/availability";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
 const SORT_VALUES = ["code", "created_at", "updated_at"] as const;
@@ -43,6 +44,7 @@ const searchSchema = z.object({
   type: z.string().optional(),
   tag: z.array(z.string()).optional(),
   status: z.enum(GEAR_STATUS_VALUES).optional(),
+  availability: z.enum(GEAR_AVAILABILITY).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
   q: z.string().optional(),
   sort: z.enum(SORT_VALUES).optional(),
@@ -73,7 +75,14 @@ const DEFAULT_DIR: Record<(typeof SORT_VALUES)[number], "asc" | "desc"> = {
 
 /** Changing any of these means different rows, so page 5 stops making
  *  sense. Sort, dir and view are deliberately absent. */
-const RESULT_SET_KEYS = ["type", "tag", "status", "condition", "q"] as const;
+const RESULT_SET_KEYS = [
+  "type",
+  "tag",
+  "status",
+  "availability",
+  "condition",
+  "q",
+] as const;
 
 export const Route = createFileRoute("/gear/")({
   staticData: { pageFlag: "gear_inventory" },
@@ -101,6 +110,7 @@ function GearIndexPage() {
     typePublicId: value.type ?? null,
     tagPublicIds: value.tag ?? [],
     status: value.status ?? "active",
+    availability: value.availability ?? null,
     condition: value.condition ?? null,
     q: value.q ?? "",
     sort: value.sort ?? "code",
@@ -115,6 +125,9 @@ function GearIndexPage() {
         : {}),
       ...("tagPublicIds" in next ? { tag: next.tagPublicIds } : {}),
       ...("status" in next ? { status: next.status } : {}),
+      ...("availability" in next
+        ? { availability: next.availability ?? undefined }
+        : {}),
       ...("condition" in next
         ? { condition: next.condition ?? undefined }
         : {}),
@@ -189,6 +202,7 @@ function GearIndexPage() {
         ? toolbarState.tagPublicIds
         : undefined,
     status: toolbarState.status,
+    availability: toolbarState.availability ?? undefined,
     condition: toolbarState.condition ?? undefined,
     q: toolbarState.q.length > 0 ? toolbarState.q : undefined,
     sort: toolbarState.sort,

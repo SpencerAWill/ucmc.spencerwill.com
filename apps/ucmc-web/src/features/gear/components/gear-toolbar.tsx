@@ -32,6 +32,11 @@ import {
 } from "#/features/gear/api/queries";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
+import {
+  AVAILABILITY_LABEL,
+  GEAR_AVAILABILITY,
+} from "#/features/gear/lib/availability";
+import type { GearAvailability } from "#/features/gear/lib/availability";
 import type {
   GearCondition,
   GearStatus,
@@ -75,6 +80,7 @@ export interface GearToolbarState {
   typePublicId: string | null;
   tagPublicIds: string[];
   status: GearStatus;
+  availability: GearAvailability | null;
   condition: GearCondition | null;
   q: string;
   sort: GearItemSortKey;
@@ -120,6 +126,15 @@ export function GearToolbar({
             key: `status:${state.status}`,
             label: STATUS_LABEL[state.status],
             onRemove: () => onChange({ status: "active" }),
+          },
+        ]
+      : []),
+    ...(state.availability !== null
+      ? [
+          {
+            key: `availability:${state.availability}`,
+            label: AVAILABILITY_LABEL[state.availability],
+            onRemove: () => onChange({ availability: null }),
           },
         ]
       : []),
@@ -215,6 +230,37 @@ export function GearToolbar({
                   </label>
                 ))}
               </RadioGroup>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                Availability
+              </Label>
+              <Select
+                value={state.availability ?? "__any__"}
+                onValueChange={(v) =>
+                  onChange({
+                    availability:
+                      v === "__any__" ? null : (v as GearAvailability),
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Any availability" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__any__">Any availability</SelectItem>
+                  {GEAR_AVAILABILITY.map((a) => (
+                    <SelectItem key={a} value={a}>
+                      {AVAILABILITY_LABEL[a]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Rolls up status, condition, whereabouts and loans into the one
+                question: can I take this out?
+              </p>
             </div>
 
             <div className="space-y-1.5">

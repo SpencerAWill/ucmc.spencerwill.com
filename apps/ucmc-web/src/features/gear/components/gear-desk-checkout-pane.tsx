@@ -43,9 +43,11 @@ const SKIP_LABEL: Record<
   string
 > = {
   not_found: "No longer in inventory",
-  retired: "Retired since this batch was opened",
+  retired: "No longer active in the collection",
   not_serviceable: "Condition isn't serviceable",
   already_on_loan: "Already checked out to someone else",
+  on_hold: "Held for a trip",
+  member_blocked: "Member is blocked — overdue gear outstanding",
 };
 
 /**

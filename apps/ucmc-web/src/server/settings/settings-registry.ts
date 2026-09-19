@@ -745,6 +745,43 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-05-16",
   }),
+  // ── Gear: member standing ────────────────────────────────────────────
+  // Thresholds, not policy switches: the cave wants overdue gear to have
+  // consequences, and wants to tune how forgiving they are without a
+  // migration. Checkouts run weekly, so the defaults are one missed
+  // return window to flag and three to block.
+  "gear.overdueFlagDays": z
+    .number()
+    .int()
+    .min(1)
+    .max(365)
+    .default(7)
+    .register(registry, {
+      label: "Days overdue before a member is flagged",
+      description:
+        "A flagged member can still borrow; officers see the flag at the desk and the member sees a banner on their gear page. Counted from the loan's due date, which is end-of-day Cincinnati time.",
+      category: "features",
+      flagKind: "ops",
+      owner: "system_admin",
+      createdAt: "2026-09-19",
+    }),
+  "gear.overdueBlockDays": z
+    .number()
+    .int()
+    .min(1)
+    .max(365)
+    .default(21)
+    .register(registry, {
+      label: "Days overdue before a member is blocked",
+      description:
+        "A blocked member cannot check out anything until the overdue item comes back. An officer with gear:manage can override with a confirm. Set this at or above the flag threshold — a block that fires before the flag just skips the warning.",
+      category: "features",
+      flagKind: "ops",
+      owner: "system_admin",
+      createdAt: "2026-09-19",
+      confirm:
+        "Lowering this can block members who were fine a moment ago, and raising it un-blocks anyone currently caught by the old value. Standing is computed at read time, so the change takes effect on the next checkout attempt.",
+    }),
   "feedback.club_enabled": z.boolean().default(true).register(registry, {
     label: "Accept club feedback submissions",
     description:

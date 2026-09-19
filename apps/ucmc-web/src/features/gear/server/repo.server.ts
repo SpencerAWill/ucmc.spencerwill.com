@@ -10,6 +10,7 @@
  */
 import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 
+import type { GearAvailability } from "#/features/gear/lib/availability";
 import { getDb, likeContains, schema } from "#/server/db";
 
 /**
@@ -50,6 +51,16 @@ export interface GearItemRow {
   typePublicId: string;
   typeName: string;
   typePrefix: string | null;
+  /** Open loan, joined here rather than fetched per row — the list used
+   *  to carry no loan state at all, which is why the page could not
+   *  sort or filter by "can I borrow this". */
+  openLoanId: string | null;
+  openLoanDueAt: Temporal.Instant | null;
+  openLoanMemberUserId: string | null;
+  /** An unreleased hold whose window covers now. */
+  activeHoldId: string | null;
+  activeHoldReason: string | null;
+  activeHoldEndsAt: Temporal.Instant | null;
 }
 
 const ITEM_COLUMNS = {
@@ -84,10 +95,25 @@ const ITEM_COLUMNS = {
   typePublicId: schema.gearTypes.publicId,
   typeName: schema.gearTypes.name,
   typePrefix: schema.gearTypes.prefix,
+  openLoanId: schema.gearLoans.id,
+  openLoanDueAt: schema.gearLoans.dueAt,
+  openLoanMemberUserId: schema.gearLoans.memberUserId,
+  activeHoldId: schema.gearHolds.id,
+  activeHoldReason: schema.gearHolds.reason,
+  activeHoldEndsAt: schema.gearHolds.endsAt,
 } as const;
 
-/** Item → model → type. Every read path needs both joins. */
+/**
+ * Item → model → type, plus the open loan and any live hold.
+ *
+ * Both LEFT JOINs are safe against fan-out for different reasons: the
+ * partial unique index guarantees at most one open loan per item, and
+ * the hold join is capped by picking the earliest-ending live hold in a
+ * correlated subquery rather than joining the whole set. Without that
+ * cap two overlapping holds on one item would duplicate its row.
+ */
 function itemsWithModelAndType() {
+  const now = sql`(unixepoch() * 1000)`;
   return getDb()
     .select(ITEM_COLUMNS)
     .from(schema.gearItems)
@@ -98,6 +124,25 @@ function itemsWithModelAndType() {
     .innerJoin(
       schema.gearTypes,
       eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .leftJoin(
+      schema.gearLoans,
+      and(
+        eq(schema.gearLoans.itemId, schema.gearItems.id),
+        sql`${schema.gearLoans.returnedAt} IS NULL`,
+      ),
+    )
+    .leftJoin(
+      schema.gearHolds,
+      sql`${schema.gearHolds.id} = (
+        SELECT h.id FROM ${schema.gearHolds} h
+        WHERE h.item_id = ${schema.gearItems.id}
+          AND h.released_at IS NULL
+          AND h.starts_at <= ${now}
+          AND h.ends_at > ${now}
+        ORDER BY h.ends_at ASC
+        LIMIT 1
+      )`,
     );
 }
 
@@ -108,6 +153,10 @@ export interface ListGearItemFilters {
   status?: schema.GearStatus;
   condition?: schema.GearCondition;
   whereabouts?: schema.GearWhereabouts;
+  /** The member-facing rollup. Pushed into SQL rather than filtered in
+   *  TypeScript so paging and totals stay correct — filtering a page
+   *  after the fact returns short pages and a lying count. */
+  availability?: GearAvailability;
   q?: string;
 }
 
@@ -141,6 +190,9 @@ function itemWhere(filters: ListGearItemFilters) {
   if (filters.whereabouts) {
     clauses.push(eq(schema.gearItems.whereabouts, filters.whereabouts));
   }
+  if (filters.availability) {
+    clauses.push(availabilityWhere(filters.availability));
+  }
   if (filters.q && filters.q.trim().length > 0) {
     const q = filters.q.trim();
     // Model name and manufacturer are in here deliberately: typing
@@ -169,6 +221,39 @@ function itemWhere(filters: ListGearItemFilters) {
     );
   }
   return clauses.length === 0 ? undefined : and(...clauses);
+}
+
+/**
+ * SQL mirror of `gearAvailability`. The two must agree: this decides
+ * which rows come back, that decides what each one is labelled, and a
+ * disagreement shows up as an item filtered to "Available" wearing an
+ * "On loan" badge. Kept adjacent and in the same precedence order so a
+ * change to one is an obvious prompt to change the other.
+ */
+function availabilityWhere(availability: GearAvailability) {
+  const active = eq(schema.gearItems.status, "active");
+  const onLoan = sql`${schema.gearLoans.id} IS NOT NULL`;
+  const notOnLoan = sql`${schema.gearLoans.id} IS NULL`;
+  const held = sql`${schema.gearHolds.id} IS NOT NULL`;
+  const notHeld = sql`${schema.gearHolds.id} IS NULL`;
+  const serviceable = eq(schema.gearItems.condition, "serviceable");
+  const inCave = eq(schema.gearItems.whereabouts, "cave");
+  switch (availability) {
+    case "retired":
+      return sql`${schema.gearItems.status} <> 'active'`;
+    case "on_loan":
+      return and(active, onLoan);
+    case "unavailable":
+      return and(
+        active,
+        notOnLoan,
+        sql`(${schema.gearItems.condition} <> 'serviceable' OR ${schema.gearItems.whereabouts} <> 'cave')`,
+      );
+    case "on_hold":
+      return and(active, notOnLoan, serviceable, inCave, held);
+    case "available":
+      return and(active, notOnLoan, serviceable, inCave, notHeld);
+  }
 }
 
 export interface ListGearItemsResult {
@@ -217,12 +302,40 @@ export async function listGearItems(
     .limit(perPage)
     .offset((page - 1) * perPage);
 
+  // The count mirrors the row query's joins exactly. It must: the
+  // availability filter and the free-text search both reference the
+  // model, loan and hold tables, so a narrower count either fails on an
+  // unknown column or reports a total the rows can't add up to.
+  const now = sql`(unixepoch() * 1000)`;
   const totalRows = await db
     .select({ value: count() })
     .from(schema.gearItems)
     .innerJoin(
       schema.gearModels,
       eq(schema.gearModels.id, schema.gearItems.modelId),
+    )
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .leftJoin(
+      schema.gearLoans,
+      and(
+        eq(schema.gearLoans.itemId, schema.gearItems.id),
+        sql`${schema.gearLoans.returnedAt} IS NULL`,
+      ),
+    )
+    .leftJoin(
+      schema.gearHolds,
+      sql`${schema.gearHolds.id} = (
+        SELECT h.id FROM ${schema.gearHolds} h
+        WHERE h.item_id = ${schema.gearItems.id}
+          AND h.released_at IS NULL
+          AND h.starts_at <= ${now}
+          AND h.ends_at > ${now}
+        ORDER BY h.ends_at ASC
+        LIMIT 1
+      )`,
     )
     .where(where);
   const total = totalRows[0]?.value ?? 0;

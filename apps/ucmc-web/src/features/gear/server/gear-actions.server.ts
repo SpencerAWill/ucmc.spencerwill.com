@@ -42,6 +42,8 @@ import type {
   ListGearItemOptions,
   ListGearItemsResult,
 } from "#/features/gear/server/repo.server";
+import { gearAvailability } from "#/features/gear/lib/availability";
+import type { GearAvailability } from "#/features/gear/lib/availability";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { eq } from "drizzle-orm";
@@ -107,6 +109,15 @@ export interface GearSummary {
   model: GearModelSummary;
   type: { publicId: string; name: string; prefix: string | null };
   tags: GearTagSummary[];
+  /** The rollup members browse by — see `lib/availability.ts` for the
+   *  precedence. Derived, never stored. */
+  availability: GearAvailability;
+  /** When an open loan exists, the date it comes back. Null otherwise.
+   *  "On loan, back Thursday" is the answer a member actually wants. */
+  availableFrom: Temporal.Instant | null;
+  /** True when the viewer is the one holding it. Cheaper here than
+   *  making every call site compare ids. */
+  isMine: boolean;
 }
 
 export interface GearDetail extends GearSummary {
@@ -141,6 +152,7 @@ export interface ListGearActionInput {
   status?: schema.GearStatus;
   condition?: schema.GearCondition;
   whereabouts?: schema.GearWhereabouts;
+  availability?: GearAvailability;
   q?: string;
   sort?: "code" | "created_at" | "updated_at" | "model";
   dir?: "asc" | "desc";
@@ -161,8 +173,19 @@ function toSummary(
   row: Awaited<ReturnType<typeof listGearItems>>["rows"][number],
   tags: GearTagSummary[],
   canSeeCost: boolean,
+  viewerUserId: string | null,
 ): GearSummary {
+  const availability = gearAvailability({
+    status: row.status,
+    condition: row.condition,
+    whereabouts: row.whereabouts,
+    hasOpenLoan: row.openLoanId !== null,
+    hasActiveHold: row.activeHoldId !== null,
+  });
   return {
+    availability,
+    availableFrom: row.openLoanDueAt,
+    isMine: viewerUserId !== null && row.openLoanMemberUserId === viewerUserId,
     publicId: row.publicId,
     code: row.code,
     description: row.description ?? row.modelName,
@@ -248,6 +271,7 @@ export async function listGearAction(
     status: input.status,
     condition: input.condition,
     whereabouts: input.whereabouts,
+    availability: input.availability,
     q: input.q,
     sort: input.sort,
     dir: input.dir,
@@ -291,6 +315,7 @@ export async function listGearAction(
           visibility: t.visibility,
         })),
         canSeeCost,
+        principal.userId,
       ),
     ),
     total: result.total,
@@ -335,6 +360,7 @@ export async function getGearDetailAction(input: {
       visibility: t.visibility,
     })),
     canSeeCost,
+    principal.userId,
   );
 
   // Optional "currently on loan" join. Stripped of the borrower's name

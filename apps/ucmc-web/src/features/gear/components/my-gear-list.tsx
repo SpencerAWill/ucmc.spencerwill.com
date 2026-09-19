@@ -38,9 +38,29 @@ export function MyGearList() {
   }
   const active = data?.active ?? [];
   const history = data?.history ?? [];
+  const standing = data?.standing;
 
   return (
     <div className="space-y-6">
+      {/* Standing goes above the list, not beside an item: it is a fact
+          about the member, and finding out at the desk that you're
+          blocked is the outcome this banner exists to prevent. */}
+      {standing && standing.standing !== "good" ? (
+        <Alert
+          variant={standing.standing === "blocked" ? "destructive" : "default"}
+        >
+          <AlertTitle>
+            {standing.standing === "blocked"
+              ? "You can't check out more gear yet"
+              : "You have overdue gear"}
+          </AlertTitle>
+          <AlertDescription>
+            {standing.standing === "blocked"
+              ? `Something is ${standing.worstDaysOverdue} days overdue. Bring it back to the cave and you'll be able to borrow again straight away.`
+              : `Something is ${standing.worstDaysOverdue} days overdue. At ${standing.blockAfterDays} days you won't be able to check out anything new.`}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <section className="space-y-2">
         <h2 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
           Currently out

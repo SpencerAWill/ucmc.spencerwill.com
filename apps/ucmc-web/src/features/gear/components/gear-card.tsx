@@ -22,6 +22,11 @@ import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 import { CONDITION_LABEL, CONDITION_VARIANT } from "#/features/gear/lib/labels";
+import {
+  AVAILABILITY_LABEL,
+  AVAILABILITY_VARIANT,
+} from "#/features/gear/lib/availability";
+import { formatDate } from "#/lib/date-format";
 
 // Falls back to the static placeholder SVG when the gear row has no
 // uploaded thumbnail. Per-gear keys live under `gear/<gearId>/...` and
@@ -146,10 +151,22 @@ export function GearCard({
             </p>
           ) : null}
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <Badge variant={CONDITION_VARIANT[gear.condition]}>
-              {CONDITION_LABEL[gear.condition]}
+            {/* Availability leads: it is the question a member came to
+                ask. The raw condition only earns a badge when it adds
+                something the rollup didn't already say. */}
+            <Badge variant={AVAILABILITY_VARIANT[gear.availability]}>
+              {AVAILABILITY_LABEL[gear.availability]}
             </Badge>
-            {isRetired ? <Badge variant="outline">Retired</Badge> : null}
+            {gear.availability === "on_loan" && gear.availableFrom !== null ? (
+              <span className="text-xs text-muted-foreground">
+                back {formatDate(gear.availableFrom)}
+              </span>
+            ) : null}
+            {gear.condition !== "serviceable" ? (
+              <Badge variant={CONDITION_VARIANT[gear.condition]}>
+                {CONDITION_LABEL[gear.condition]}
+              </Badge>
+            ) : null}
           </div>
         </div>
 

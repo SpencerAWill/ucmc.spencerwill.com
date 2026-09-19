@@ -932,3 +932,32 @@ export async function getItemByCode(
   const r = rows.at(0);
   return r ? toCodeSearchRow(r) : null;
 }
+
+/**
+ * The live hold on an item, if any — unreleased and with `now` inside
+ * its window. Holds auto-release by expiry rather than by a cron, so
+ * "live" is evaluated at read time against the clock.
+ *
+ * Returns the earliest-ending one when several overlap: that is the
+ * hold a checkout would collide with first, and it is the one the desk
+ * should name when it refuses.
+ */
+export async function getActiveHoldForItem(
+  itemId: string,
+  now: Temporal.Instant,
+): Promise<schema.GearHold | null> {
+  const rows = await getDb()
+    .select()
+    .from(schema.gearHolds)
+    .where(
+      and(
+        eq(schema.gearHolds.itemId, itemId),
+        isNull(schema.gearHolds.releasedAt),
+        sql`${schema.gearHolds.startsAt} <= ${now.epochMilliseconds}`,
+        sql`${schema.gearHolds.endsAt} > ${now.epochMilliseconds}`,
+      ),
+    )
+    .orderBy(asc(schema.gearHolds.endsAt))
+    .limit(1);
+  return rows.at(0) ?? null;
+}
