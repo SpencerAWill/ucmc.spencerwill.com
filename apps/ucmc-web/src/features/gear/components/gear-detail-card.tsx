@@ -10,6 +10,11 @@ import {
 } from "#/components/ui/card";
 import { MarkdownContent } from "#/components/markdown/markdown-content";
 import { formatAttributeValue } from "#/features/gear/lib/attributes";
+import {
+  INSPECTION_STATUS_LABEL,
+  SERVICE_LIFE_STATUS_LABEL,
+  isSafetyFlag,
+} from "#/features/gear/lib/safety";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearDetail } from "#/features/gear/server/gear-fns";
 import {
@@ -156,6 +161,43 @@ export function GearDetailCard({
             </div>
           ) : null}
         </dl>
+        {/* The two derived safety clocks. Only the states worth acting
+         * on get a line — "Inspection current" on every page would be
+         * noise, and the quiet majority is exactly that. */}
+        {isSafetyFlag(gear.inspection.status) ||
+        isSafetyFlag(gear.serviceLife.status) ? (
+          <div className="flex flex-wrap gap-2">
+            {isSafetyFlag(gear.inspection.status) ? (
+              <Badge
+                variant={
+                  gear.inspection.status === "overdue" ||
+                  gear.inspection.status === "never"
+                    ? "destructive"
+                    : "outline"
+                }
+              >
+                {INSPECTION_STATUS_LABEL[gear.inspection.status]}
+                {gear.inspection.dueAt !== null
+                  ? ` — due ${formatDate(gear.inspection.dueAt)}`
+                  : ""}
+              </Badge>
+            ) : null}
+            {isSafetyFlag(gear.serviceLife.status) ? (
+              <Badge
+                variant={
+                  gear.serviceLife.status === "expired"
+                    ? "destructive"
+                    : "outline"
+                }
+              >
+                {SERVICE_LIFE_STATUS_LABEL[gear.serviceLife.status]}
+                {gear.serviceLife.expiresAt !== null
+                  ? ` — ${formatDate(gear.serviceLife.expiresAt)}`
+                  : ""}
+              </Badge>
+            ) : null}
+          </div>
+        ) : null}
         {gear.holdReason !== null ? (
           <p className="text-sm text-muted-foreground">
             <span className="font-medium">Held:</span> {gear.holdReason}

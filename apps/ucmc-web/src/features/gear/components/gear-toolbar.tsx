@@ -47,6 +47,38 @@ import { CONDITION_LABEL, STATUS_LABEL } from "#/features/gear/lib/labels";
 
 const STATUS_VALUES = ["active", "retired"] as const;
 
+export const INSPECTION_FILTER_VALUES = [
+  "overdue",
+  "due_soon",
+  "never",
+] as const;
+
+/** Phrased as the backlog an officer is working, not as the state of
+ *  the row — "Overdue" alone in a filter list reads as overdue *what*. */
+const INSPECTION_FILTER_LABEL: Record<
+  (typeof INSPECTION_FILTER_VALUES)[number],
+  string
+> = {
+  overdue: "Inspection overdue",
+  due_soon: "Due within two weeks",
+  never: "Never inspected",
+};
+
+export const SERVICE_LIFE_FILTER_VALUES = [
+  "expired",
+  "expiring",
+  "unknown",
+] as const;
+
+const SERVICE_LIFE_FILTER_LABEL: Record<
+  (typeof SERVICE_LIFE_FILTER_VALUES)[number],
+  string
+> = {
+  expired: "Past service life",
+  expiring: "Ages out within a year",
+  unknown: "Age unknown",
+};
+
 export type GearItemSortKey = "code" | "created_at" | "updated_at";
 
 export const GEAR_SORT_OPTIONS: DataToolbarSortOption<GearItemSortKey>[] = [
@@ -80,6 +112,11 @@ export const GEAR_VIEW_OPTIONS: DataToolbarViewOption<GearView>[] = [
 
 export interface GearToolbarState {
   typePublicId: string | null;
+  /** The two safety backlogs. Separate filters rather than one
+   *  "needs attention" because they are different jobs: one is booking
+   *  an inspection, the other is spending money. */
+  inspection: "overdue" | "due_soon" | "never" | null;
+  serviceLife: "expired" | "expiring" | "unknown" | null;
   /** Facet selections, `defPublicId → chosen values`. Scoped to the
    *  selected type, because a facet without one would have to merge
    *  every definition in the club into a single unreadable list. */
@@ -173,6 +210,24 @@ export function GearToolbar({
           },
         ]
       : []),
+    ...(state.inspection !== null
+      ? [
+          {
+            key: `inspection:${state.inspection}`,
+            label: INSPECTION_FILTER_LABEL[state.inspection],
+            onRemove: () => onChange({ inspection: null }),
+          },
+        ]
+      : []),
+    ...(state.serviceLife !== null
+      ? [
+          {
+            key: `serviceLife:${state.serviceLife}`,
+            label: SERVICE_LIFE_FILTER_LABEL[state.serviceLife],
+            onRemove: () => onChange({ serviceLife: null }),
+          },
+        ]
+      : []),
     ...facetDefs.flatMap((def) =>
       (state.attributes[def.publicId] ?? []).map((value) => ({
         key: `attr:${def.publicId}:${value}`,
@@ -205,6 +260,8 @@ export function GearToolbar({
       status: "active",
       condition: null,
       attributes: {},
+      inspection: null,
+      serviceLife: null,
     });
 
   return (
@@ -325,6 +382,68 @@ export function GearToolbar({
                   {GEAR_CONDITION_VALUES.map((c) => (
                     <SelectItem key={c} value={c}>
                       {CONDITION_LABEL[c]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                Inspection
+              </Label>
+              <Select
+                value={state.inspection ?? "__any__"}
+                onValueChange={(v) =>
+                  onChange({
+                    inspection:
+                      v === "__any__"
+                        ? null
+                        : (v as NonNullable<GearToolbarState["inspection"]>),
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__any__">Any</SelectItem>
+                  {INSPECTION_FILTER_VALUES.map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {INSPECTION_FILTER_LABEL[v]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Cadence only. An overdue inspection means nobody has looked yet
+                — it doesn't block checkout, an <em>unsafe</em> flag does.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                Service life
+              </Label>
+              <Select
+                value={state.serviceLife ?? "__any__"}
+                onValueChange={(v) =>
+                  onChange({
+                    serviceLife:
+                      v === "__any__"
+                        ? null
+                        : (v as NonNullable<GearToolbarState["serviceLife"]>),
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__any__">Any</SelectItem>
+                  {SERVICE_LIFE_FILTER_VALUES.map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {SERVICE_LIFE_FILTER_LABEL[v]}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -11,6 +11,7 @@
 import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { GearAvailability } from "#/features/gear/lib/availability";
+import { DUE_SOON_DAYS, EXPIRING_SOON_DAYS } from "#/features/gear/lib/safety";
 import { getDb, likeContains, schema } from "#/server/db";
 
 /**
@@ -57,6 +58,16 @@ export interface GearItemRow {
   openLoanId: string | null;
   openLoanDueAt: Temporal.Instant | null;
   openLoanMemberUserId: string | null;
+  /** Inspection cadence, model overriding type. Both are carried
+   *  rather than pre-resolved because the officer view wants to say
+   *  which level the number came from. */
+  modelInspectionIntervalDays: number | null;
+  typeInspectionIntervalDays: number | null;
+  /** Most recent inspection of this piece, joined in a correlated
+   *  subquery rather than a second round-trip: the derived safety
+   *  columns are on every row, so fetching them separately would mean
+   *  a second query per page for something the sort needs anyway. */
+  lastInspectedAt: Temporal.Instant | null;
   /** An unreleased hold whose window covers now. */
   activeHoldId: string | null;
   activeHoldReason: string | null;
@@ -95,6 +106,12 @@ const ITEM_COLUMNS = {
   typePublicId: schema.gearTypes.publicId,
   typeName: schema.gearTypes.name,
   typePrefix: schema.gearTypes.prefix,
+  modelInspectionIntervalDays: schema.gearModels.inspectionIntervalDays,
+  typeInspectionIntervalDays: schema.gearTypes.inspectionIntervalDays,
+  lastInspectedAt: sql<number | null>`(
+    SELECT max(i.inspected_at) FROM ${schema.gearInspections} i
+    WHERE i.item_id = ${schema.gearItems.id}
+  )`.mapWith(schema.gearInspections.inspectedAt),
   openLoanId: schema.gearLoans.id,
   openLoanDueAt: schema.gearLoans.dueAt,
   openLoanMemberUserId: schema.gearLoans.memberUserId,
@@ -160,6 +177,11 @@ export interface ListGearItemFilters {
   /** Facet filter, already resolved to ids and coerced to the storage
    *  columns by the action — the repo never sees a raw form string. */
   attributes?: AttributeFilter[];
+  /** Derived safety backlogs. Pushed into SQL for the same reason
+   *  availability is: filtering a fetched page returns short pages and
+   *  a lying total. */
+  inspection?: "overdue" | "due_soon" | "never";
+  serviceLife?: "expired" | "expiring" | "unknown";
   q?: string;
 }
 
@@ -225,6 +247,12 @@ function itemWhere(filters: ListGearItemFilters) {
       ),
     );
   }
+  if (filters.inspection) {
+    clauses.push(inspectionWhere(filters.inspection));
+  }
+  if (filters.serviceLife) {
+    clauses.push(serviceLifeWhere(filters.serviceLife));
+  }
   for (const facet of filters.attributes ?? []) {
     const match = attributeValueMatch(facet);
     if (match === null) {
@@ -263,6 +291,86 @@ function itemWhere(filters: ListGearItemFilters) {
     );
   }
   return clauses.length === 0 ? undefined : and(...clauses);
+}
+
+/** The cadence in force for a row: the model's, else the type's. */
+const EFFECTIVE_INTERVAL = sql`coalesce(${schema.gearModels.inspectionIntervalDays}, ${schema.gearTypes.inspectionIntervalDays})`;
+
+const LAST_INSPECTED = sql`(
+  SELECT max(i.inspected_at) FROM ${schema.gearInspections} i
+  WHERE i.item_id = ${schema.gearItems.id}
+)`;
+
+/**
+ * SQL mirror of `inspectionState`, and subject to the same
+ * keep-in-step rule as `availabilityWhere`.
+ *
+ * The one place the two can disagree: this does the arithmetic in
+ * milliseconds while `inspectionState` counts whole club-time calendar
+ * days. They differ only for a piece whose inspection timestamp falls
+ * within the UTC offset of midnight *and* whose due date straddles a
+ * DST change — a row that would read one day early or late in the
+ * filter while its badge says otherwise. Counting calendar days in SQL
+ * would mean reimplementing club-time date math in SQLite, which is a
+ * worse trade than a documented one-day edge on a backlog list.
+ */
+function inspectionWhere(filter: "overdue" | "due_soon" | "never") {
+  const tracked = sql`${EFFECTIVE_INTERVAL} IS NOT NULL`;
+  const dueAt = sql`${LAST_INSPECTED} + ${EFFECTIVE_INTERVAL} * 86400000`;
+  const now = sql`(unixepoch() * 1000)`;
+  switch (filter) {
+    case "never":
+      // Its own filter, not a flavour of overdue: a piece nobody has
+      // ever looked at and one a week late are different jobs.
+      return and(tracked, sql`${LAST_INSPECTED} IS NULL`);
+    case "overdue":
+      return and(
+        tracked,
+        sql`${LAST_INSPECTED} IS NOT NULL`,
+        sql`${dueAt} < ${now}`,
+      );
+    case "due_soon":
+      return and(
+        tracked,
+        sql`${LAST_INSPECTED} IS NOT NULL`,
+        sql`${dueAt} >= ${now}`,
+        sql`${dueAt} <= ${now} + ${DUE_SOON_DAYS} * 86400000`,
+      );
+  }
+}
+
+/**
+ * SQL mirror of `serviceLifeState`. Calendar years are done by SQLite's
+ * own date functions rather than an approximation in milliseconds,
+ * because a leap day inside a ten-year life is a real day and "+10
+ * years" is exactly what the manufacturer means.
+ */
+function serviceLifeWhere(filter: "expired" | "expiring" | "unknown") {
+  const tracked = sql`${schema.gearModels.serviceLifeYears} IS NOT NULL`;
+  const expiresAt = sql`(
+    unixepoch(date(${schema.gearItems.manufacturedAt} / 1000, 'unixepoch',
+      '+' || ${schema.gearModels.serviceLifeYears} || ' years')) * 1000
+  )`;
+  const now = sql`(unixepoch() * 1000)`;
+  switch (filter) {
+    case "unknown":
+      // The model ages out but nobody read the date off the tag. A gap
+      // somebody can close, so it must not look like "doesn't apply".
+      return and(tracked, sql`${schema.gearItems.manufacturedAt} IS NULL`);
+    case "expired":
+      return and(
+        tracked,
+        sql`${schema.gearItems.manufacturedAt} IS NOT NULL`,
+        sql`${expiresAt} < ${now}`,
+      );
+    case "expiring":
+      return and(
+        tracked,
+        sql`${schema.gearItems.manufacturedAt} IS NOT NULL`,
+        sql`${expiresAt} >= ${now}`,
+        sql`${expiresAt} <= ${now} + ${EXPIRING_SOON_DAYS} * 86400000`,
+      );
+  }
 }
 
 /**

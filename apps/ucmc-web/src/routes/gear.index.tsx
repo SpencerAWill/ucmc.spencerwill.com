@@ -28,7 +28,11 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { GearBulkImportSheet } from "#/features/gear/components/gear-bulk-import-sheet";
-import { GearToolbar } from "#/features/gear/components/gear-toolbar";
+import {
+  GearToolbar,
+  INSPECTION_FILTER_VALUES,
+  SERVICE_LIFE_FILTER_VALUES,
+} from "#/features/gear/components/gear-toolbar";
 import type { GearToolbarState } from "#/features/gear/components/gear-toolbar";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
@@ -66,6 +70,8 @@ const searchSchema = z.object({
   // `attr=<defPublicId>:<value>`. Flat and repeated because that is
   // what survives a copied link and a browser Back without a codec.
   attr: z.array(z.string()).optional(),
+  inspection: z.enum(INSPECTION_FILTER_VALUES).optional(),
+  serviceLife: z.enum(SERVICE_LIFE_FILTER_VALUES).optional(),
   status: z.enum(GEAR_STATUS_VALUES).optional(),
   availability: z.enum(GEAR_AVAILABILITY).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
@@ -102,6 +108,8 @@ const RESULT_SET_KEYS = [
   "type",
   "tag",
   "attr",
+  "inspection",
+  "serviceLife",
   "status",
   "availability",
   "condition",
@@ -134,6 +142,8 @@ function GearIndexPage() {
     typePublicId: value.type ?? null,
     tagPublicIds: value.tag ?? [],
     attributes: parseAttributeSearchParams(value.attr),
+    inspection: value.inspection ?? null,
+    serviceLife: value.serviceLife ?? null,
     status: value.status ?? "active",
     availability: value.availability ?? null,
     condition: value.condition ?? null,
@@ -166,6 +176,12 @@ function GearIndexPage() {
         : {}),
       ...("condition" in next
         ? { condition: next.condition ?? undefined }
+        : {}),
+      ...("inspection" in next
+        ? { inspection: next.inspection ?? undefined }
+        : {}),
+      ...("serviceLife" in next
+        ? { serviceLife: next.serviceLife ?? undefined }
         : {}),
       ...("q" in next ? { q: next.q } : {}),
       ...("sort" in next ? { sort: next.sort } : {}),
@@ -246,6 +262,8 @@ function GearIndexPage() {
     status: toolbarState.status,
     availability: toolbarState.availability ?? undefined,
     condition: toolbarState.condition ?? undefined,
+    inspection: toolbarState.inspection ?? undefined,
+    serviceLife: toolbarState.serviceLife ?? undefined,
     q: toolbarState.q.length > 0 ? toolbarState.q : undefined,
     sort: toolbarState.sort,
     dir: toolbarState.dir,

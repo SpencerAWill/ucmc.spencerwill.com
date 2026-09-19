@@ -224,8 +224,22 @@ Two refusals are typed rather than left to the database: `has_items` on a coded 
 - **Close excludes three things from the missing sweep**, each for its own reason: on an open loan (legitimately absent — marking it missing accuses the borrower of losing what they signed out), at `repair`, and with an `officer` (both absent by arrangement). An item **already** `missing` is deliberately _not_ excluded: it is still unseen, and re-stamping is how "missing since March" stays true rather than freezing at the first sweep that noticed.
 - **Counted shortfalls are reported, never written off.** `expected` is total stock; `counted + onLoan` is what the sweep accounts for. A miscount is likelier than four lost draws, so the write-off stays somebody's decision. A surplus is reported as nothing — it means a miscount upward or stale stock, neither of which is a loss to chase.
 
+## The two safety clocks
+
+`lib/safety.ts` — `inspectionState` and `serviceLifeState`. Both are **derived, never stored**: storing either would need a cron to keep it true and a way for it to disagree with the inspection log, the same reasoning that keeps loan state off the item row.
+
+**Neither blocks checkout.** `unsafe` is the hard block and an inspection is what sets it; an overdue cadence means nobody has _looked_, which is a job for the cave rather than a refusal at the desk. Blocking on it would strand a club that fell behind over a summer — exactly when the gear most needs to keep moving. What these do is make the backlog filterable.
+
+- **Cadence resolves model → type.** A dry rope may need looking at more often than ropes in general.
+- **`never` is its own status, not a flavour of `overdue`** — a piece nobody has ever inspected and one a week late are different jobs. Likewise `unknown` service life (the model ages out, nobody read the tag) is distinct from `untracked` (it doesn't age out): one is a gap somebody can close, the other isn't a gap at all.
+- **The service-life clock runs from `manufactured_at`, never acquisition.** A rope bought from old warehouse stock is as old as the day it was made.
+- Thresholds: `DUE_SOON_DAYS` 14 (one meeting cycle plus slack) and `EXPIRING_SOON_DAYS` 365 (the point where replacement stops being an emergency and becomes a budget line). Constants, not site settings — nobody has asked to tune them yet.
+- `isSafetyFlag` decides what gets a badge. `ok` and `untracked` are the quiet majority; badging them would make the list all badge and no signal.
+
+**`inspectionWhere` / `serviceLifeWhere` in `repo.server.ts` are SQL mirrors** under the same keep-in-step rule as `availabilityWhere`, and `gear-safety-filters.test.ts` pins each filter against the status on the row it returns. One known divergence, documented at the function: the inspection filter does its arithmetic in milliseconds while `inspectionState` counts whole club-time calendar days, so they can differ by a day for a piece whose inspection timestamp falls within the UTC offset of midnight _and_ whose due date straddles a DST change. Reimplementing club-time date math in SQLite is the worse trade. Service life uses SQLite's own `date(..., '+N years')` so a leap day inside a ten-year life is a real day.
+
 ## Not built yet
 
-Counted stock is still only half-wired — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), qualification gating, derived inspection-due and service-life columns, and the browse-by-model page redesign are all deliberately deferred.
+Counted stock is still only half-wired — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), qualification gating, and the browse-by-model page redesign are all deliberately deferred.
 
 **No attribute definitions are seeded.** Which attributes exist, at which level, with which options in which order, is the cave's call — a guessed set would be worse than an empty one, because officers would edit around it rather than replace it.

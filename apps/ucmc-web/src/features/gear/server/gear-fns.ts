@@ -263,6 +263,8 @@ export const listGearInputSchema = z.object({
     )
     .max(20)
     .optional(),
+  inspection: z.enum(["overdue", "due_soon", "never"]).optional(),
+  serviceLife: z.enum(["expired", "expiring", "unknown"]).optional(),
   q: z.string().max(200).optional(),
   sort: z.enum(["code", "created_at", "updated_at", "model"]).optional(),
   dir: z.enum(["asc", "desc"]).optional(),

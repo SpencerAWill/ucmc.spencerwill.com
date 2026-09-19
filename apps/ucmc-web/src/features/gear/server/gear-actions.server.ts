@@ -58,6 +58,11 @@ import type {
   ListGearItemsResult,
 } from "#/features/gear/server/repo.server";
 import { gearAvailability } from "#/features/gear/lib/availability";
+import { inspectionState, serviceLifeState } from "#/features/gear/lib/safety";
+import type {
+  InspectionState,
+  ServiceLifeState,
+} from "#/features/gear/lib/safety";
 import type { GearAvailability } from "#/features/gear/lib/availability";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
@@ -138,6 +143,11 @@ export interface GearSummary {
    *  the reason is written by officers for exactly this audience. */
   holdReason: string | null;
   holdEndsAt: Temporal.Instant | null;
+  /** The two derived safety clocks — see `lib/safety.ts`. Neither
+   *  blocks checkout; both exist so the backlog is filterable. */
+  lastInspectedAt: Temporal.Instant | null;
+  inspection: InspectionState;
+  serviceLife: ServiceLifeState;
 }
 
 export interface GearDetail extends GearSummary {
@@ -181,6 +191,8 @@ export interface ListGearActionInput {
   /** Facet selections — one entry per definition, values OR'd within
    *  it and AND'd across entries. */
   attributes?: AttributeFacetInput[];
+  inspection?: "overdue" | "due_soon" | "never";
+  serviceLife?: "expired" | "expiring" | "unknown";
   q?: string;
   sort?: "code" | "created_at" | "updated_at" | "model";
   dir?: "asc" | "desc";
@@ -203,6 +215,20 @@ function toSummary(
   canSeeCost: boolean,
   viewerUserId: string | null,
 ): GearSummary {
+  const now = Temporal.Now.instant();
+  const inspection = inspectionState({
+    // Model overrides type — a dry rope may need looking at more often
+    // than ropes in general.
+    intervalDays:
+      row.modelInspectionIntervalDays ?? row.typeInspectionIntervalDays,
+    lastInspectedAt: row.lastInspectedAt,
+    now,
+  });
+  const serviceLife = serviceLifeState({
+    serviceLifeYears: row.serviceLifeYears,
+    manufacturedAt: row.manufacturedAt,
+    now,
+  });
   const availability = gearAvailability({
     status: row.status,
     condition: row.condition,
@@ -218,6 +244,9 @@ function toSummary(
     // explain the wrong thing.
     holdReason: availability === "on_hold" ? row.activeHoldReason : null,
     holdEndsAt: availability === "on_hold" ? row.activeHoldEndsAt : null,
+    lastInspectedAt: row.lastInspectedAt,
+    inspection,
+    serviceLife,
     isMine: viewerUserId !== null && row.openLoanMemberUserId === viewerUserId,
     publicId: row.publicId,
     code: row.code,
@@ -313,6 +342,8 @@ export async function listGearAction(
     condition: input.condition,
     whereabouts: input.whereabouts,
     availability: input.availability,
+    inspection: input.inspection,
+    serviceLife: input.serviceLife,
     q: input.q,
     sort: input.sort,
     dir: input.dir,
