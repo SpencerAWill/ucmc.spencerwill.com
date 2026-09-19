@@ -67,7 +67,20 @@
   --destructive-foreground: oklch(0.577 0.245 27.325);
   --border: oklch(0.897 0.014 85);
   --input: oklch(0.897 0.014 85);
-  --ring: oklch(0.831 0.016 85);
+  /*
+   * The focus ring is the brand green, not a neutral. A focus
+   * indicator has to reach 3:1 against what surrounds it (SC 1.4.11);
+   * the stock neutral managed 1.48:1 on white and 1.53:1 on the cream
+   * page, so it was decorative rather than an indicator. Green gives
+   * 4.89:1 on the page and 5.26:1 on a card.
+   *
+   * Components layer a full-opacity `border-ring` under a `ring-ring/50`
+   * halo. **The full-opacity edge is the indicator** — a 50% ring
+   * composited over a near-white page cannot reach 3:1 at any hue
+   * short of near-black, so the halo is spread, not signal. Don't
+   * "simplify" a focus style down to the /50 ring alone.
+   */
+  --ring: oklch(0.508 0.118 165.612);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
@@ -81,7 +94,7 @@
   --sidebar-accent: oklch(0.915 0.016 85);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.897 0.014 85);
-  --sidebar-ring: oklch(0.831 0.016 85);
+  --sidebar-ring: oklch(0.508 0.118 165.612);
 }
 
 /*
@@ -117,7 +130,10 @@
   --destructive-foreground: oklch(0.637 0.237 25.331);
   --border: oklch(0.305 0.006 286);
   --input: oklch(0.305 0.006 286);
-  --ring: oklch(0.455 0.017 286);
+  /* Same reasoning as light; the neutral managed 2.58:1. The mint
+   * reads 7.66:1 on the page — dark mode can afford the brighter
+   * green that light mode cannot. */
+  --ring: oklch(0.696 0.17 162.48);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
@@ -130,7 +146,7 @@
   --sidebar-accent: oklch(0.305 0.006 286);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.305 0.006 286);
-  --sidebar-ring: oklch(0.455 0.017 286);
+  --sidebar-ring: oklch(0.696 0.17 162.48);
 }
 
 @theme inline {
