@@ -18,8 +18,16 @@
  */
 import { uuidv7 } from "uuidv7";
 
-import { attributeKeyFromLabel } from "#/features/gear/lib/attributes";
-import type { GearAttributeDefSummary } from "#/features/gear/lib/attributes";
+import {
+  attributeKeyFromLabel,
+  coerceAttributeValue,
+  formatAttributeValue,
+} from "#/features/gear/lib/attributes";
+import type {
+  GearAttributeDefSummary,
+  GearAttributeValueDto,
+  GearAttributeValueInput,
+} from "#/features/gear/lib/attributes";
 import {
   countValuesForDef,
   deleteGearAttributeDefById,
@@ -29,7 +37,11 @@ import {
   setGearAttributeDefTypes,
   updateGearAttributeDefById,
 } from "#/features/gear/server/attributes-repo.server";
-import type { GearAttributeDefRow } from "#/features/gear/server/attributes-repo.server";
+import type {
+  AttributeValueWrite,
+  GearAttributeDefRow,
+  GearAttributeValueRow,
+} from "#/features/gear/server/attributes-repo.server";
 import {
   requireGearManager,
   requireGearReader,
@@ -40,7 +52,7 @@ import { generatePublicId } from "#/server/auth/ids";
 import { isUniqueViolation } from "#/server/db";
 import type { schema } from "#/server/db";
 
-export type { GearAttributeDefSummary };
+export type { GearAttributeDefSummary, GearAttributeValueDto };
 
 export function toDefSummary(
   row: GearAttributeDefRow,
@@ -307,4 +319,113 @@ export async function deleteGearAttributeDefAction(input: {
     metadata: { key: existing.key, label: existing.label },
   });
   return { ok: true };
+}
+
+// ── values ─────────────────────────────────────────────────────────────
+
+export type ResolveAttributeWritesResult =
+  | { ok: true; writes: AttributeValueWrite[] }
+  | { ok: false; reason: "invalid_attribute"; label: string; message: string };
+
+/**
+ * Turns what a form submitted into what the value tables take, for one
+ * owner at one level.
+ *
+ * Shared by the item and model actions because the rules are identical
+ * and the failure messages should be too. Three behaviours worth
+ * knowing:
+ *
+ *   - Definitions the caller did not mention are left alone. The item
+ *     form renders item-level defs for one type; it must not wipe an
+ *     answer belonging to a def it never showed.
+ *   - Definitions the caller mentioned but that are not attached to
+ *     this type (or are archived) are ignored rather than rejected. A
+ *     form submitted moments after somebody detached a type is a stale
+ *     form, not a bad request.
+ *   - `required` is enforced here, so the refusal is the same whether
+ *     the form forgot to mark the field or somebody posted around it.
+ */
+export async function resolveAttributeWrites(params: {
+  typeId: string;
+  level: schema.GearAttributeLevel;
+  inputs: GearAttributeValueInput[];
+}): Promise<ResolveAttributeWritesResult> {
+  const defs = await listGearAttributeDefs({
+    typeId: params.typeId,
+    level: params.level,
+  });
+  if (defs.length === 0) {
+    return { ok: true, writes: [] };
+  }
+  const byPublicId = new Map(defs.map((d) => [d.publicId, d]));
+  const supplied = new Map(
+    params.inputs.map((i) => [i.defPublicId, i.value] as const),
+  );
+  const writes: AttributeValueWrite[] = [];
+  for (const [defPublicId, raw] of supplied) {
+    const def = byPublicId.get(defPublicId);
+    if (!def) {
+      continue;
+    }
+    const coerced = coerceAttributeValue(
+      { kind: def.kind, options: def.options, required: def.required },
+      raw,
+    );
+    if (!coerced.ok) {
+      return {
+        ok: false,
+        reason: "invalid_attribute",
+        label: def.label,
+        message:
+          coerced.reason === "required"
+            ? `${def.label} is required.`
+            : coerced.reason === "not_a_number"
+              ? `${def.label} must be a number.`
+              : `That isn't one of the options for ${def.label}.`,
+      };
+    }
+    writes.push({
+      defId: def.id,
+      valueText: coerced.text,
+      valueNumber: coerced.number,
+    });
+  }
+  // A required def the form never sent is the same refusal as one sent
+  // blank — otherwise omitting the field is a way around the rule.
+  for (const def of defs) {
+    if (def.required && !supplied.has(def.publicId)) {
+      return {
+        ok: false,
+        reason: "invalid_attribute",
+        label: def.label,
+        message: `${def.label} is required.`,
+      };
+    }
+  }
+  return { ok: true, writes };
+}
+
+/** Wire shape for a stored answer. Formatting stays on the client so
+ *  the unit can be styled separately from the number. */
+export function toValueDto(row: GearAttributeValueRow): GearAttributeValueDto {
+  return {
+    defPublicId: row.defPublicId,
+    key: row.key,
+    label: row.label,
+    kind: row.kind,
+    unit: row.unit,
+    text: row.valueText,
+    number: row.valueNumber,
+  };
+}
+
+/** Answers with nothing recorded are dropped rather than rendered as
+ *  an empty row — "Size —" reads as a data problem, and the absence is
+ *  already visible from the field simply not being there. */
+export function toValueDtos(
+  rows: GearAttributeValueRow[] | undefined,
+): GearAttributeValueDto[] {
+  return (rows ?? [])
+    .map(toValueDto)
+    .filter((dto) => formatAttributeValue(dto) !== null);
 }

@@ -34,6 +34,12 @@ import {
 } from "#/features/gear/api/queries";
 import { useCreateGear } from "#/features/gear/api/use-create-gear";
 import { useEditGear } from "#/features/gear/api/use-edit-gear";
+import {
+  GearAttributeFields,
+  attributeFormValuesFrom,
+  attributeInputsFrom,
+} from "#/features/gear/components/gear-attribute-fields";
+import type { AttributeFormValues } from "#/features/gear/components/gear-attribute-fields";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import { toDateInputValue } from "#/lib/date-format";
@@ -181,6 +187,7 @@ function GearForm({
         serviceLifeYears: null,
         inspectionIntervalDays: null,
         productUrl: null,
+        attributes: attributeInputsFrom(newModelAttributes),
       },
       {
         onSuccess: (result) => {
@@ -189,11 +196,14 @@ function GearForm({
             setNewModelOpen(false);
             setNewModelName("");
             setNewModelManufacturer("");
+            setNewModelAttributes({});
           } else {
             setError(
-              result.reason === "name_in_use"
-                ? "A model with that name already exists for this type."
-                : "Pick a type first.",
+              result.reason === "invalid_attribute"
+                ? result.message
+                : result.reason === "name_in_use"
+                  ? "A model with that name already exists for this type."
+                  : "Pick a type first.",
             );
           }
         },
@@ -224,6 +234,20 @@ function GearForm({
   const [tagPublicIds, setTagPublicIds] = useState<string[]>(
     isEdit ? intent.gear.tags.map((t) => t.publicId) : [],
   );
+  // Seeded from whatever the detail payload carried; the model-level
+  // answers riding along in that same list are filtered out by the
+  // fields block, which only knows about item-level definitions.
+  const [attributeValues, setAttributeValues] = useState<AttributeFormValues>(
+    isEdit && "attributes" in intent.gear
+      ? attributeFormValuesFrom(
+          intent.gear.attributes,
+          new Set(intent.gear.attributes.map((a) => a.defPublicId)),
+        )
+      : {},
+  );
+  // Model-level answers, collected only while creating a model inline.
+  const [newModelAttributes, setNewModelAttributes] =
+    useState<AttributeFormValues>({});
   // Thumbnail state is a tri-state at the form layer:
   //   - newDataUrl !== null → user picked a new image; send it
   //   - cleared === true    → user removed an existing thumbnail; send null
@@ -349,6 +373,7 @@ function GearForm({
       notesMarkdown: notes.trim().length === 0 ? null : notes,
       condition,
       tagPublicIds,
+      attributes: attributeInputsFrom(attributeValues),
     };
 
     if (isEdit) {
@@ -374,7 +399,11 @@ function GearForm({
             toast.success("Gear updated");
             onClose();
           } else {
-            setError(`Code "${result.code}" is already in use.`);
+            setError(
+              result.reason === "invalid_attribute"
+                ? result.message
+                : `Code "${result.code}" is already in use.`,
+            );
           }
         },
         onError: () => setError("Couldn't save changes."),
@@ -395,7 +424,11 @@ function GearForm({
             );
             onClose();
           } else {
-            setError(`Code "${result.code}" is already in use.`);
+            setError(
+              result.reason === "invalid_attribute"
+                ? result.message
+                : `Code "${result.code}" is already in use.`,
+            );
           }
         },
         onError: () => setError("Couldn't add gear."),
@@ -558,6 +591,16 @@ function GearForm({
                   maxLength={100}
                 />
               </div>
+              {/* Model-level attributes belong to the product, so they
+               * are answered while the product is being defined — not
+               * later, per item, forty times over. */}
+              <GearAttributeFields
+                typePublicId={typePublicId || null}
+                level="model"
+                values={newModelAttributes}
+                onChange={setNewModelAttributes}
+                idPrefix="new-model"
+              />
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -718,6 +761,16 @@ function GearForm({
             </SelectContent>
           </Select>
         </div>
+        {/* Item-level attributes — the ones that vary unit to unit.
+         * Renders nothing when the type has no definitions attached, so
+         * a club that never defines any sees the form it had before. */}
+        <GearAttributeFields
+          typePublicId={typePublicId || null}
+          level="item"
+          values={attributeValues}
+          onChange={setAttributeValues}
+          idPrefix="gear"
+        />
         <div className="space-y-1.5">
           <Label>Tags</Label>
           <GearTagMultiselect

@@ -21,6 +21,18 @@ import {
   updateGearModelById,
 } from "#/features/gear/server/models-repo.server";
 import { getGearTypeByPublicId } from "#/features/gear/server/repo.server";
+import {
+  resolveAttributeWrites,
+  toValueDtos,
+} from "#/features/gear/server/attributes-actions.server";
+import {
+  listAttributeValuesForModels,
+  setModelAttributeValues,
+} from "#/features/gear/server/attributes-repo.server";
+import type {
+  GearAttributeValueDto,
+  GearAttributeValueInput,
+} from "#/features/gear/lib/attributes";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { isUniqueViolation } from "#/server/db";
@@ -43,6 +55,8 @@ export interface GearModelSummaryDto {
   /** Counted models only: quantity per condition bucket. Empty for
    *  coded models, which count their item rows instead. */
   stock: Array<{ condition: schema.GearCondition; quantity: number }>;
+  /** Model-level answers — the ones true of every unit. */
+  attributes: GearAttributeValueDto[];
 }
 
 export async function listGearModelsAction(
@@ -62,6 +76,9 @@ export async function listGearModelsAction(
   const stockByModel = await listStockForModelIds(
     rows.filter((r) => r.tracking === "counted").map((r) => r.id),
   );
+  const valuesByModel = await listAttributeValuesForModels(
+    rows.map((r) => r.id),
+  );
   return rows.map((r) => ({
     publicId: r.publicId,
     name: r.name,
@@ -80,6 +97,7 @@ export async function listGearModelsAction(
       prefix: r.typePrefix,
     },
     stock: stockByModel.get(r.id) ?? [],
+    attributes: toValueDtos(valuesByModel.get(r.id)),
   }));
 }
 
@@ -93,11 +111,14 @@ export interface CreateGearModelInput {
   serviceLifeYears: number | null;
   inspectionIntervalDays: number | null;
   productUrl: string | null;
+  /** Answers to the model-level attribute definitions on this type. */
+  attributes?: GearAttributeValueInput[];
 }
 
 export type CreateGearModelResult =
   | { ok: true; publicId: string }
-  | { ok: false; reason: "name_in_use" | "type_not_found" };
+  | { ok: false; reason: "name_in_use" | "type_not_found" }
+  | { ok: false; reason: "invalid_attribute"; message: string };
 
 export async function createGearModelAction(
   input: CreateGearModelInput,
@@ -106,6 +127,18 @@ export async function createGearModelAction(
   const type = await getGearTypeByPublicId(input.typePublicId);
   if (!type) {
     return { ok: false, reason: "type_not_found" };
+  }
+  const attributes = await resolveAttributeWrites({
+    typeId: type.id,
+    level: "model",
+    inputs: input.attributes ?? [],
+  });
+  if (!attributes.ok) {
+    return {
+      ok: false,
+      reason: "invalid_attribute",
+      message: attributes.message,
+    };
   }
   const id = `gm_${uuidv7()}`;
   const publicId = generatePublicId();
@@ -135,6 +168,7 @@ export async function createGearModelAction(
     }
     throw err;
   }
+  await setModelAttributeValues(id, attributes.writes);
   await recordAuditEvent({
     actorUserId: principal.userId,
     action: "gear_model.created",
@@ -151,7 +185,8 @@ export interface UpdateGearModelInput extends Partial<CreateGearModelInput> {
 
 export type UpdateGearModelResult =
   | { ok: true }
-  | { ok: false; reason: "name_in_use" | "not_found" | "has_items" };
+  | { ok: false; reason: "name_in_use" | "not_found" | "has_items" }
+  | { ok: false; reason: "invalid_attribute"; message: string };
 
 export async function updateGearModelAction(
   input: UpdateGearModelInput,
@@ -171,6 +206,21 @@ export async function updateGearModelAction(
     (await countItemsForModel(existing.id)) > 0
   ) {
     return { ok: false, reason: "has_items" };
+  }
+  const attributes =
+    input.attributes === undefined
+      ? null
+      : await resolveAttributeWrites({
+          typeId: existing.typeId,
+          level: "model",
+          inputs: input.attributes,
+        });
+  if (attributes !== null && !attributes.ok) {
+    return {
+      ok: false,
+      reason: "invalid_attribute",
+      message: attributes.message,
+    };
   }
   const patch: Parameters<typeof updateGearModelById>[1] = {};
   const changedFields: string[] = [];
@@ -223,6 +273,9 @@ export async function updateGearModelAction(
   ) {
     patch.productUrl = input.productUrl;
     changedFields.push("product_url");
+  }
+  if (attributes !== null) {
+    await setModelAttributeValues(existing.id, attributes.writes);
   }
   if (changedFields.length === 0) {
     return { ok: true };

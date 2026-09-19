@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "#/components/ui/card";
 import { MarkdownContent } from "#/components/markdown/markdown-content";
+import { formatAttributeValue } from "#/features/gear/lib/attributes";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearDetail } from "#/features/gear/server/gear-fns";
 import {
@@ -108,6 +109,24 @@ export function GearDetailCard({
               <dd className="font-mono text-xs">{gear.serialNumber}</dd>
             </div>
           ) : null}
+          {/* Officer-defined answers sit in the same grid as the
+           * built-in fields on purpose: to a member reading a harness
+           * page, "Size M" is not a different class of fact from
+           * "Manufacturer Petzl", and a separate section would imply it
+           * was. Model- and item-level answers are likewise not
+           * distinguished — nobody reading the page cares which level
+           * the answer was typed at. */}
+          {gear.attributes.map((attribute) => {
+            const formatted = formatAttributeValue(attribute);
+            return formatted === null ? null : (
+              <div key={attribute.defPublicId}>
+                <dt className="text-xs text-muted-foreground">
+                  {attribute.label}
+                </dt>
+                <dd>{formatted}</dd>
+              </div>
+            );
+          })}
           {gear.acquiredAt ? (
             <div>
               <dt className="text-xs text-muted-foreground">Acquired</dt>

@@ -28,6 +28,10 @@ const {
   listGearAttributeDefsAction,
   updateGearAttributeDefAction,
 } = await import("#/features/gear/server/attributes-actions.server");
+const { createGearAction, editGearAction, getGearDetailAction } =
+  await import("#/features/gear/server/gear-actions.server");
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
 const { createGearTypeAction } =
   await import("#/features/gear/server/gear-types-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
@@ -353,5 +357,226 @@ describe("deleteGearAttributeDefAction", () => {
     await expect(
       deleteGearAttributeDefAction({ publicId: created.publicId }),
     ).rejects.toThrow();
+  });
+});
+
+describe("values on items and models", () => {
+  async function seedHarness() {
+    const typePublicId = await createType(`Harness ${crypto.randomUUID()}`);
+    const size = await createDef({
+      label: `Size ${crypto.randomUUID()}`,
+      kind: "select",
+      level: "item",
+      options: ["S", "M", "L"],
+      typePublicIds: [typePublicId],
+    });
+    const weight = await createDef({
+      label: `Weight ${crypto.randomUUID()}`,
+      kind: "number",
+      level: "model",
+      options: null,
+      unit: "g",
+      typePublicIds: [typePublicId],
+    });
+    if (!size.ok || !weight.ok) throw new Error("def create failed");
+    const model = await createGearModelAction({
+      typePublicId,
+      name: `Corax ${crypto.randomUUID()}`,
+      manufacturer: "Petzl",
+      tracking: "coded",
+      description: null,
+      msrpCents: null,
+      serviceLifeYears: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+      attributes: [{ defPublicId: weight.publicId, value: "290" }],
+    });
+    if (!model.ok) throw new Error("model create failed");
+    return {
+      typePublicId,
+      modelPublicId: model.publicId,
+      sizeDef: size.publicId,
+      weightDef: weight.publicId,
+    };
+  }
+
+  async function createItem(
+    modelPublicId: string,
+    attributes: { defPublicId: string; value: string | null }[],
+  ) {
+    return createGearAction({
+      modelPublicId,
+      code: `CH${Math.floor(Math.random() * 100000)}`,
+      description: null,
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+      attributes,
+    });
+  }
+
+  it("shows model and item answers together on the detail page", async () => {
+    await signInAsManager();
+    const seed = await seedHarness();
+    const created = await createItem(seed.modelPublicId, [
+      { defPublicId: seed.sizeDef, value: "M" },
+    ]);
+    if (!created.ok) throw new Error("gear create failed");
+
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    // Model first: it describes the product, and the per-piece answer
+    // reads as a refinement of it.
+    expect(detail.attributes.map((a) => [a.label, a.text, a.number])).toEqual([
+      [expect.stringContaining("Weight"), null, 290],
+      [expect.stringContaining("Size"), "M", null],
+    ]);
+  });
+
+  it("refuses a value outside the definition's options", async () => {
+    await signInAsManager();
+    const seed = await seedHarness();
+    const result = await createItem(seed.modelPublicId, [
+      { defPublicId: seed.sizeDef, value: "XXL" },
+    ]);
+    expect(result).toMatchObject({ ok: false, reason: "invalid_attribute" });
+  });
+
+  it("writes nothing when an attribute is refused", async () => {
+    await signInAsManager();
+    const seed = await seedHarness();
+    const before = await getDb().select().from(schema.gearItems);
+    await createItem(seed.modelPublicId, [
+      { defPublicId: seed.sizeDef, value: "XXL" },
+    ]);
+    // Validation runs before the insert on purpose: a rejected value
+    // must not leave a half-made item behind.
+    expect(await getDb().select().from(schema.gearItems)).toHaveLength(
+      before.length,
+    );
+  });
+
+  it("ignores an answer to a definition attached to another type", async () => {
+    await signInAsManager();
+    const seed = await seedHarness();
+    const otherType = await createType(`Rope ${crypto.randomUUID()}`);
+    const foreign = await createDef({
+      label: `Diameter ${crypto.randomUUID()}`,
+      kind: "number",
+      level: "item",
+      options: null,
+      typePublicIds: [otherType],
+    });
+    if (!foreign.ok) throw new Error("def create failed");
+    // A stale form, not a bad request — it is rejected by being
+    // dropped, not by failing the save.
+    const created = await createItem(seed.modelPublicId, [
+      { defPublicId: foreign.publicId, value: "9.8" },
+    ]);
+    if (!created.ok) throw new Error("gear create failed");
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    expect(
+      detail.attributes.some((a) => a.defPublicId === foreign.publicId),
+    ).toBe(false);
+  });
+
+  it("clears an answer when the field comes back blank", async () => {
+    await signInAsManager();
+    const seed = await seedHarness();
+    const created = await createItem(seed.modelPublicId, [
+      { defPublicId: seed.sizeDef, value: "M" },
+    ]);
+    if (!created.ok) throw new Error("gear create failed");
+    await editGearAction({
+      publicId: created.publicId,
+      modelPublicId: seed.modelPublicId,
+      code: created.code,
+      description: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+      attributes: [{ defPublicId: seed.sizeDef, value: null }],
+    });
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    expect(detail.attributes.some((a) => a.defPublicId === seed.sizeDef)).toBe(
+      false,
+    );
+  });
+
+  it("leaves answers alone when the edit omits them entirely", async () => {
+    await signInAsManager();
+    const seed = await seedHarness();
+    const created = await createItem(seed.modelPublicId, [
+      { defPublicId: seed.sizeDef, value: "M" },
+    ]);
+    if (!created.ok) throw new Error("gear create failed");
+    // The list page edits a GearSummary, which never carried the
+    // answers; omitting must not read as "clear them all".
+    await editGearAction({
+      publicId: created.publicId,
+      modelPublicId: seed.modelPublicId,
+      code: created.code,
+      description: "scuffed",
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    expect(detail.attributes.some((a) => a.text === "M")).toBe(true);
+  });
+
+  it("refuses to save an item missing a required answer", async () => {
+    await signInAsManager();
+    const typePublicId = await createType(`Rope ${crypto.randomUUID()}`);
+    const required = await createDef({
+      label: `Length ${crypto.randomUUID()}`,
+      kind: "number",
+      level: "item",
+      options: null,
+      required: true,
+      typePublicIds: [typePublicId],
+    });
+    if (!required.ok) throw new Error("def create failed");
+    const model = await createGearModelAction({
+      typePublicId,
+      name: `Rope ${crypto.randomUUID()}`,
+      manufacturer: null,
+      tracking: "coded",
+      description: null,
+      msrpCents: null,
+      serviceLifeYears: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+    if (!model.ok) throw new Error("model create failed");
+    // Omitting the field is the same refusal as sending it blank —
+    // otherwise leaving it out is a way around the rule.
+    expect(await createItem(model.publicId, [])).toMatchObject({
+      ok: false,
+      reason: "invalid_attribute",
+    });
+  });
+
+  it("keeps answers readable after the definition is archived", async () => {
+    await signInAsManager();
+    const seed = await seedHarness();
+    const created = await createItem(seed.modelPublicId, [
+      { defPublicId: seed.sizeDef, value: "M" },
+    ]);
+    if (!created.ok) throw new Error("gear create failed");
+    await updateGearAttributeDefAction({
+      publicId: seed.sizeDef,
+      archived: true,
+    });
+    // An answer that was given is still true. Hiding it the moment
+    // somebody archives the question makes the page quietly lie.
+    const detail = await getGearDetailAction({ publicId: created.publicId });
+    expect(detail.attributes.some((a) => a.text === "M")).toBe(true);
   });
 });

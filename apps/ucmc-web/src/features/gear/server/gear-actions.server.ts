@@ -32,6 +32,19 @@ import {
 } from "#/features/gear/server/repo.server";
 import { getGearModelByPublicId } from "#/features/gear/server/models-repo.server";
 import {
+  resolveAttributeWrites,
+  toValueDtos,
+} from "#/features/gear/server/attributes-actions.server";
+import {
+  listAttributeValuesForItems,
+  listAttributeValuesForModels,
+  setItemAttributeValues,
+} from "#/features/gear/server/attributes-repo.server";
+import type {
+  GearAttributeValueDto,
+  GearAttributeValueInput,
+} from "#/features/gear/lib/attributes";
+import {
   decodeGearThumbnailDataUrl,
   deleteGearThumbnail,
   gearShortContentHash,
@@ -122,6 +135,11 @@ export interface GearSummary {
 
 export interface GearDetail extends GearSummary {
   notesMarkdown: string | null;
+  /** Answers recorded against this piece and against its model, in one
+   *  list. A member reading a harness page does not care which level
+   *  "Size: M" was typed at, and splitting them into two sections
+   *  would make the page argue with itself. */
+  attributes: GearAttributeValueDto[];
   /** Manufacturer's serial number. Officer-only (same gate as
    *  `acquisitionCostCents` / `msrpCents`) — stripped for callers
    *  without `gear:manage`. */
@@ -225,11 +243,19 @@ function toSummary(
 }
 
 async function resolveModelId(modelPublicId: string): Promise<string> {
+  return (await resolveModel(modelPublicId)).id;
+}
+
+/** The type comes back too: attribute definitions are scoped to types,
+ *  and the item form only ever names a model. */
+async function resolveModel(
+  modelPublicId: string,
+): Promise<{ id: string; typeId: string }> {
   const model = await getGearModelByPublicId(modelPublicId);
   if (!model) {
     throw new Error(`Gear model not found: ${modelPublicId}`);
   }
-  return model.id;
+  return { id: model.id, typeId: model.typeId };
 }
 
 async function resolveTypeId(typePublicId: string): Promise<string> {
@@ -389,9 +415,20 @@ export async function getGearDetailAction(input: {
     };
   }
 
+  const [itemValues, modelValues] = await Promise.all([
+    listAttributeValuesForItems([row.id]),
+    listAttributeValuesForModels([row.modelId]),
+  ]);
+
   return {
     ...summary,
     notesMarkdown: row.notesMarkdown,
+    // Model answers first: they describe the product, and the
+    // per-piece ones read as refinements of it.
+    attributes: [
+      ...toValueDtos(modelValues.get(row.modelId)),
+      ...toValueDtos(itemValues.get(row.id)),
+    ],
     // Serial rides the same officer-only gate as the financial fields.
     // Leaking serials to all approved members hands a thief a shopping
     // list — name/brand alone isn't enough to flip a piece, but serial
@@ -428,6 +465,10 @@ export interface CreateGearInput {
   condition: schema.GearCondition;
   whereabouts?: schema.GearWhereabouts;
   tagPublicIds: string[];
+  /** Answers to the item-level attribute definitions attached to this
+   *  model's type. Omitted entirely by callers that predate them (the
+   *  bulk importer), which is why it is optional. */
+  attributes?: GearAttributeValueInput[];
 }
 
 function msToInstant(ms: number | null): Temporal.Instant | null {
@@ -447,15 +488,31 @@ async function uploadThumbnail(
 
 export type CreateGearResult =
   | { ok: true; publicId: string; code: string | null }
-  | { ok: false; reason: "code_in_use"; code: string };
+  | { ok: false; reason: "code_in_use"; code: string }
+  | { ok: false; reason: "invalid_attribute"; message: string };
 
 export async function createGearAction(
   input: CreateGearInput,
 ): Promise<CreateGearResult> {
   const principal = await requireGearManager();
-  const modelId = await resolveModelId(input.modelPublicId);
+  const model = await resolveModel(input.modelPublicId);
+  const modelId = model.id;
   const tagIds = await resolveTagIds(input.tagPublicIds);
   const code = normalizeCode(input.code);
+  // Resolved before the insert and the thumbnail upload: a rejected
+  // attribute must not leave a half-made item behind.
+  const attributes = await resolveAttributeWrites({
+    typeId: model.typeId,
+    level: "item",
+    inputs: input.attributes ?? [],
+  });
+  if (!attributes.ok) {
+    return {
+      ok: false,
+      reason: "invalid_attribute",
+      message: attributes.message,
+    };
+  }
   const id = `gi_${uuidv7()}`;
   const publicId = generatePublicId();
   // Upload thumbnail BEFORE the DB insert so a content-hash collision
@@ -506,6 +563,7 @@ export async function createGearAction(
   if (tagIds.length > 0) {
     await setGearItemTags({ itemId: id, tagIds, assignedBy: principal.userId });
   }
+  await setItemAttributeValues(id, attributes.writes);
   await recordAuditEvent({
     actorUserId: principal.userId,
     action: "gear.added",
@@ -539,11 +597,15 @@ export interface EditGearInput {
   whereabouts?: schema.GearWhereabouts;
   whereaboutsNote?: string | null;
   tagPublicIds: string[];
+  /** Omit to leave every answer untouched — the same omit-means-no-
+   *  change semantics the other optional fields here use. */
+  attributes?: GearAttributeValueInput[];
 }
 
 export type EditGearResult =
   | { ok: true }
-  | { ok: false; reason: "code_in_use"; code: string };
+  | { ok: false; reason: "code_in_use"; code: string }
+  | { ok: false; reason: "invalid_attribute"; message: string };
 
 export async function editGearAction(
   input: EditGearInput,
@@ -553,9 +615,25 @@ export async function editGearAction(
   if (!existing) {
     throw new Error("Gear not found");
   }
-  const modelId = await resolveModelId(input.modelPublicId);
+  const model = await resolveModel(input.modelPublicId);
+  const modelId = model.id;
   const tagIds = await resolveTagIds(input.tagPublicIds);
   const code = normalizeCode(input.code);
+  const attributes =
+    input.attributes === undefined
+      ? null
+      : await resolveAttributeWrites({
+          typeId: model.typeId,
+          level: "item",
+          inputs: input.attributes,
+        });
+  if (attributes !== null && !attributes.ok) {
+    return {
+      ok: false,
+      reason: "invalid_attribute",
+      message: attributes.message,
+    };
+  }
   const changedFields: string[] = [];
   const patch: Parameters<typeof updateGearItemById>[1] = {};
   if (modelId !== existing.modelId) {
@@ -658,6 +736,9 @@ export async function editGearAction(
       }
       throw err;
     }
+  }
+  if (attributes !== null) {
+    await setItemAttributeValues(existing.id, attributes.writes);
   }
   // Always reconcile tags — caller passes the desired full set.
   const tagDiff = await setGearItemTags({

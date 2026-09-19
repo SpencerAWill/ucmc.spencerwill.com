@@ -253,6 +253,18 @@ const thumbnailDataUrlSchema = z
   .max(600 * 1024)
   .regex(/^data:image\/(webp|jpeg|png);base64,/, "Invalid image data URL");
 
+/** Answers to officer-defined attributes. The value is the raw string
+ *  the control produced; `null` clears it. Coercion into the two
+ *  storage columns happens once, server-side. */
+const attributeValueInputSchema = z
+  .array(
+    z.object({
+      defPublicId: z.string().min(1),
+      value: z.string().max(500).nullable(),
+    }),
+  )
+  .max(100);
+
 export const createGearInputSchema = z.object({
   // The product this unit is. Manufacturer, MSRP and service life come
   // from the model now, so they are no longer per-item fields.
@@ -278,6 +290,7 @@ export const createGearInputSchema = z.object({
   whereabouts: z.enum(GEAR_WHEREABOUTS_VALUES).optional(),
   whereaboutsNote: z.string().trim().max(500).nullable().optional(),
   tagPublicIds: z.array(z.string().min(1)),
+  attributes: attributeValueInputSchema.optional(),
 });
 
 const editGearInputSchema = createGearInputSchema
@@ -963,6 +976,7 @@ const gearModelInputSchema = z.object({
     .max(500)
     .regex(/^https?:\/\//, "must be an http(s) URL")
     .nullable(),
+  attributes: attributeValueInputSchema.optional(),
 });
 
 export const listGearModelsFn = createServerFn({ method: "GET" })

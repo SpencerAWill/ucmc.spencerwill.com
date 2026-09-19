@@ -72,7 +72,15 @@ Three rules are enforced in `attributes-actions.server.ts` rather than the schem
 
 **Archiving is a soft delete that keeps values readable.** Archived defs drop off the forms and facets but their recorded answers still render — an answer that was given is still true, and hiding it the moment someone archives the question makes the detail card quietly lie. Detaching a type likewise does **not** delete values.
 
-Officers manage definitions from the **Attributes** button on `/gear`, beside Types and Tags.
+Officers manage definitions from the **Attributes** button on `/gear`, beside Types and Tags. Model-level answers are collected in the inline model-creation panel of the add-gear sheet; item-level ones render in the sheet itself, keyed off the selected type.
+
+`resolveAttributeWrites` is the one path from a submitted form to the value tables, shared by the item and model actions:
+
+- **Definitions the caller didn't mention are left alone.** The item form renders item-level defs for one type and must not wipe an answer belonging to a def it never showed — which is also why `attributes: undefined` on edit means "no change", matching `serialNumber` and `thumbnailDataUrl`. Editing from the list (a `GearSummary`, which never carried the answers) therefore leaves them intact.
+- **Definitions mentioned but not attached to this type, or archived, are ignored rather than rejected.** A form submitted moments after somebody detached a type is stale, not malicious.
+- **`required` is enforced whether the field arrives blank or not at all**, so omitting it isn't a way around the rule. Validation runs **before** the insert and the thumbnail upload, so a refused value can't leave a half-made item behind.
+
+**Bulk import does not enforce `required`** — it calls `insertGearItem` directly rather than going through `createGearAction`, and predates attributes entirely. A CSV of forty harnesses lands with no size answered even where size is required.
 
 ## Availability is the rollup members browse by
 
