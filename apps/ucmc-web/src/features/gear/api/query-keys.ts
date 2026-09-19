@@ -91,3 +91,18 @@ export const GEAR_MODELS_QUERY_KEY = ["gear-models"] as const;
 export function gearModelsQueryKey(typePublicId: string | null) {
   return [...GEAR_MODELS_QUERY_KEY, typePublicId ?? "all"] as const;
 }
+
+/** Browse-by-model. Under the models prefix so a model edit refreshes
+ *  it, but keyed separately — the counts move with loans and holds,
+ *  not just with the model row. */
+export function gearModelBrowseQueryKey(input: {
+  typePublicId?: string | null;
+  q?: string;
+}) {
+  return [
+    ...GEAR_MODELS_QUERY_KEY,
+    "browse",
+    input.typePublicId ?? "all",
+    input.q ?? "",
+  ] as const;
+}

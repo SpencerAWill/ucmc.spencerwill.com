@@ -37,6 +37,7 @@ import type { GearToolbarState } from "#/features/gear/components/gear-toolbar";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import type { GearFormMode } from "#/features/gear/components/gear-form-sheet";
 import { GearList } from "#/features/gear/components/gear-list";
+import { GearModelBrowse } from "#/features/gear/components/gear-model-browse";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
 import { GearAttributesManageDialog } from "#/features/gear/components/gear-attributes-manage-dialog";
 import { GearSweepSheet } from "#/features/gear/components/gear-sweep-sheet";
@@ -61,10 +62,11 @@ import type { GearSummary } from "#/features/gear/server/gear-fns";
 
 const SORT_VALUES = ["code", "created_at", "updated_at"] as const;
 const DIR_VALUES = ["asc", "desc"] as const;
-const VIEW_VALUES = ["list", "grid", "table"] as const;
+const VIEW_VALUES = ["list", "grid", "table", "models"] as const;
 
 const searchSchema = z.object({
   type: z.string().optional(),
+  model: z.string().optional(),
   tag: z.array(z.string()).optional(),
   // Facet selections, one repeated param per chosen value:
   // `attr=<defPublicId>:<value>`. Flat and repeated because that is
@@ -106,6 +108,7 @@ const DEFAULT_DIR: Record<(typeof SORT_VALUES)[number], "asc" | "desc"> = {
  *  sense. Sort, dir and view are deliberately absent. */
 const RESULT_SET_KEYS = [
   "type",
+  "model",
   "tag",
   "attr",
   "inspection",
@@ -140,6 +143,7 @@ function GearIndexPage() {
 
   const toolbarState: GearToolbarState = {
     typePublicId: value.type ?? null,
+    modelPublicId: value.model ?? null,
     tagPublicIds: value.tag ?? [],
     attributes: parseAttributeSearchParams(value.attr),
     inspection: value.inspection ?? null,
@@ -166,6 +170,9 @@ function GearIndexPage() {
         ? { type: next.typePublicId ?? undefined }
         : {}),
       ...(typeChanged ? { attr: undefined } : {}),
+      ...("modelPublicId" in next
+        ? { model: next.modelPublicId ?? undefined }
+        : {}),
       ...("tagPublicIds" in next ? { tag: next.tagPublicIds } : {}),
       ...("attributes" in next
         ? { attr: toAttributeSearchParams(next.attributes ?? {}) }
@@ -254,6 +261,7 @@ function GearIndexPage() {
   const attributeFacets = toAttributeFacets(toolbarState.attributes);
   const listInput = {
     typePublicId: toolbarState.typePublicId ?? undefined,
+    modelPublicId: toolbarState.modelPublicId ?? undefined,
     attributes: attributeFacets.length > 0 ? attributeFacets : undefined,
     tagPublicIds:
       toolbarState.tagPublicIds.length > 0
@@ -381,20 +389,32 @@ function GearIndexPage() {
             : undefined
         }
       />
-      <GearList
-        input={listInput}
-        view={toolbarState.view}
-        canManage={canManage}
-        selection={selectionApi}
-        onEdit={(g) => {
-          setFormIntent({ mode: "edit", gear: g });
-          setFormOpen(true);
-        }}
-        onRetire={(g) => setRetiring(g)}
-        onUnretire={(g) => unretireMutation.mutate({ publicId: g.publicId })}
-        onPageChange={(p) => set({ page: p })}
-        onPerPageChange={(pp) => set({ perPage: pp, page: undefined })}
-      />
+      {toolbarState.view === "models" ? (
+        <GearModelBrowse
+          typePublicId={toolbarState.typePublicId}
+          q={toolbarState.q}
+          onPick={(modelPublicId) =>
+            // Land on the item list already narrowed: this is the step
+            // from "7 available" to a code somebody can ask for.
+            set({ model: modelPublicId, view: "list", page: undefined })
+          }
+        />
+      ) : (
+        <GearList
+          input={listInput}
+          view={toolbarState.view}
+          canManage={canManage}
+          selection={selectionApi}
+          onEdit={(g) => {
+            setFormIntent({ mode: "edit", gear: g });
+            setFormOpen(true);
+          }}
+          onRetire={(g) => setRetiring(g)}
+          onUnretire={(g) => unretireMutation.mutate({ publicId: g.publicId })}
+          onPageChange={(p) => set({ page: p })}
+          onPerPageChange={(pp) => set({ perPage: pp, page: undefined })}
+        />
+      )}
       {canManage ? (
         <>
           <GearFormSheet

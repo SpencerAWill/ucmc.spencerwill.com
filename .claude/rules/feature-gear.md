@@ -238,8 +238,18 @@ Two refusals are typed rather than left to the database: `has_items` on a coded 
 
 **`inspectionWhere` / `serviceLifeWhere` in `repo.server.ts` are SQL mirrors** under the same keep-in-step rule as `availabilityWhere`, and `gear-safety-filters.test.ts` pins each filter against the status on the row it returns. One known divergence, documented at the function: the inspection filter does its arithmetic in milliseconds while `inspectionState` counts whole club-time calendar days, so they can differ by a day for a piece whose inspection timestamp falls within the UTC offset of midnight _and_ whose due date straddles a DST change. Reimplementing club-time date math in SQLite is the worse trade. Service life uses SQLite's own `date(..., '+N years')` so a leap day inside a ten-year life is a real day.
 
+## Browse by model
+
+The `models` view on `/gear` — one card per product, with its units bucketed. This is what the type → model → item rework was _for_. The flat item list answers "where is CH93", which is an officer's question; a member asks "does the club have a harness I can borrow on Saturday", and twelve unrelated rows all reading "Black Diamond HotForge" cannot answer it.
+
+- **The counts use the same `availabilityWhere` predicates** the item list filters by, summed as CASE expressions over the same joins. A fourth hand-written copy of the precedence would be a fourth thing to keep in step.
+- **Coded and counted models render identically.** Whether the cave tracks a product unit by unit or by the binful is a bookkeeping decision, and a member borrowing six draws has no reason to learn about it. `takeable` is the one number both produce: available units for a coded model, serviceable stock minus out-on-loan minus held for a counted one.
+- **Models with no units still appear.** Defined-but-unstocked is a real intermediate state during setup, and dropping the row would make the model look like it failed to save.
+- **Picking a model sets a `model` filter and switches to the list view** — that is the step from "7 available" to a code somebody can ask for at the desk.
+- `listGearModelBrowseAction` is **`gear:read`**, unlike `listGearModelsAction` (the officer admin list, `gear:manage`). The toolbar's model chip resolves its label through the browse read for that reason.
+
 ## Not built yet
 
-Counted stock is still only half-wired — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), qualification gating, and the browse-by-model page redesign are all deliberately deferred.
+Counted stock is still only half-wired — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), and qualification gating are deliberately deferred.
 
 **No attribute definitions are seeded.** Which attributes exist, at which level, with which options in which order, is the cave's call — a guessed set would be worse than an empty one, because officers would edit around it rather than replace it.

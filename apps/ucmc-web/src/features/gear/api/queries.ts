@@ -12,6 +12,7 @@ import {
   GEAR_SWEEPS_QUERY_KEY,
   OPEN_SWEEP_QUERY_KEY,
   sweepDetailQueryKey,
+  gearModelBrowseQueryKey,
   gearModelsQueryKey,
   GEAR_TYPES_QUERY_KEY,
   LOANS_QUERY_KEY,
@@ -41,6 +42,7 @@ import {
   listGearHoldsFn,
   listSweepsFn,
   listGearTagsFn,
+  listGearModelBrowseFn,
   listGearModelsFn,
   listGearTypesFn,
   listLoansFn,
@@ -81,6 +83,26 @@ export function gearModelsQueryOptions(typePublicId: string | null) {
     queryFn: () =>
       listGearModelsFn({
         data: typePublicId === null ? {} : { typePublicId },
+      }),
+  } as const;
+}
+
+/**
+ * The member-facing shape of the gear page: one row per product, with
+ * its units bucketed. `gear:read`, unlike `gearModelsQueryOptions`,
+ * which is the officer's model admin list.
+ */
+export function gearModelBrowseQueryOptions(
+  input: { typePublicId?: string | null; q?: string } = {},
+) {
+  return {
+    queryKey: gearModelBrowseQueryKey(input),
+    queryFn: () =>
+      listGearModelBrowseFn({
+        data: {
+          ...(input.typePublicId ? { typePublicId: input.typePublicId } : {}),
+          ...(input.q ? { q: input.q } : {}),
+        },
       }),
   } as const;
 }

@@ -8,7 +8,7 @@
  * lets `/members` look identical without sharing a line of gear code.
  */
 import { useQuery } from "@tanstack/react-query";
-import { LayoutGrid, List, Rows3 } from "lucide-react";
+import { LayoutGrid, List, Package, Rows3 } from "lucide-react";
 
 import { DataToolbar } from "#/components/data-toolbar";
 import type {
@@ -29,6 +29,7 @@ import {
 } from "#/components/ui/select";
 import {
   gearAttributeDefsQueryOptions,
+  gearModelBrowseQueryOptions,
   gearTagsQueryOptions,
   gearTypesQueryOptions,
 } from "#/features/gear/api/queries";
@@ -99,7 +100,7 @@ export const GEAR_SORT_OPTIONS: DataToolbarSortOption<GearItemSortKey>[] = [
   },
 ];
 
-export type GearView = "list" | "grid" | "table";
+export type GearView = "list" | "grid" | "table" | "models";
 
 /** List (thumbnail + info card per row), grid (square tiles), table
  *  (dense rows, no thumbnail). Officers with hundreds of pieces live in
@@ -108,10 +109,17 @@ export const GEAR_VIEW_OPTIONS: DataToolbarViewOption<GearView>[] = [
   { value: "list", label: "List", icon: List },
   { value: "grid", label: "Grid", icon: LayoutGrid },
   { value: "table", label: "Table", icon: Rows3 },
+  // Browse-by-model: the member's view of the same data, where the
+  // unit of interest is the product rather than the piece.
+  { value: "models", label: "Models", icon: Package },
 ];
 
 export interface GearToolbarState {
   typePublicId: string | null;
+  /** Set by picking a model in the browse view. Its own filter rather
+   *  than a type filter, because "this exact product" is what the
+   *  member just asked for. */
+  modelPublicId: string | null;
   /** The two safety backlogs. Separate filters rather than one
    *  "needs attention" because they are different jobs: one is booking
    *  an inspection, the other is spending money. */
@@ -153,6 +161,13 @@ export function GearToolbar({
   const { data: attributeDefs } = useQuery({
     ...gearAttributeDefsQueryOptions({ typePublicId: state.typePublicId }),
     enabled: state.typePublicId !== null,
+  });
+  // Resolves the model chip's label. Uses the browse read rather than
+  // the officer model list: the chip has to render for members too,
+  // and that list gates on gear:manage.
+  const { data: browseModels } = useQuery({
+    ...gearModelBrowseQueryOptions(),
+    enabled: state.modelPublicId !== null,
   });
   const facetDefs = (attributeDefs ?? []).filter(
     (def) => def.kind === "select" || def.kind === "boolean",
@@ -210,6 +225,17 @@ export function GearToolbar({
           },
         ]
       : []),
+    ...(state.modelPublicId !== null
+      ? [
+          {
+            key: `model:${state.modelPublicId}`,
+            label:
+              browseModels?.find((m) => m.publicId === state.modelPublicId)
+                ?.name ?? "Model",
+            onRemove: () => onChange({ modelPublicId: null }),
+          },
+        ]
+      : []),
     ...(state.inspection !== null
       ? [
           {
@@ -256,6 +282,7 @@ export function GearToolbar({
   const clearFilters = () =>
     onChange({
       typePublicId: null,
+      modelPublicId: null,
       tagPublicIds: [],
       status: "active",
       condition: null,

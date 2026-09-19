@@ -10,7 +10,10 @@
  */
 import { uuidv7 } from "uuidv7";
 
-import { requireGearManager } from "#/features/gear/server/permissions.server";
+import {
+  requireGearManager,
+  requireGearReader,
+} from "#/features/gear/server/permissions.server";
 import {
   countItemsForModel,
   deleteGearModelById,
@@ -20,7 +23,12 @@ import {
   listStockForModelIds,
   updateGearModelById,
 } from "#/features/gear/server/models-repo.server";
-import { getGearTypeByPublicId } from "#/features/gear/server/repo.server";
+import {
+  getGearTypeByPublicId,
+  listGearModelBrowseRows,
+} from "#/features/gear/server/repo.server";
+import { liveHeldQuantityForModels } from "#/features/gear/server/holds-repo.server";
+import { openLoanQuantityForModels } from "#/features/gear/server/loans-repo.server";
 import {
   resolveAttributeWrites,
   toValueDtos,
@@ -325,4 +333,102 @@ export async function deleteGearModelAction(input: {
     metadata: { name: existing.name, manufacturer: existing.manufacturer },
   });
   return { ok: true };
+}
+
+// ── browse by model ────────────────────────────────────────────────────
+
+export interface GearModelBrowseDto {
+  publicId: string;
+  name: string;
+  manufacturer: string | null;
+  tracking: schema.GearTracking;
+  imageKey: string | null;
+  type: { publicId: string; name: string };
+  /** Coded models: units bucketed by the same availability rollup the
+   *  item list filters by. Counted models: all zero — their numbers
+   *  come from `stock` instead. */
+  total: number;
+  available: number;
+  onLoan: number;
+  onHold: number;
+  unavailable: number;
+  retired: number;
+  /** Counted models only. */
+  stock: Array<{ condition: schema.GearCondition; quantity: number }>;
+  /** What a member can actually take right now: available units for a
+   *  coded model, serviceable stock minus what is out and held for a
+   *  counted one. One number, because "can I borrow this" is one
+   *  question whichever way the cave tracks it. */
+  takeable: number;
+  attributes: GearAttributeValueDto[];
+}
+
+export interface ListGearModelBrowseInput {
+  typePublicId?: string;
+  q?: string;
+}
+
+/**
+ * The browse-by-model read. `gear:read`, not `gear:manage`: this is the
+ * member-facing shape of the gear page, and the whole point of the
+ * model layer was to answer "7 of 12 available" for them.
+ */
+export async function listGearModelBrowseAction(
+  input: ListGearModelBrowseInput = {},
+): Promise<GearModelBrowseDto[]> {
+  await requireGearReader();
+  let typeId: string | undefined;
+  if (input.typePublicId) {
+    const type = await getGearTypeByPublicId(input.typePublicId);
+    if (!type) {
+      return [];
+    }
+    typeId = type.id;
+  }
+  const rows = await listGearModelBrowseRows({ typeId, q: input.q });
+  const countedIds = rows
+    .filter((r) => r.tracking === "counted")
+    .map((r) => r.modelId);
+  const [stockByModel, heldByModel, onLoanByModel, valuesByModel] =
+    await Promise.all([
+      listStockForModelIds(countedIds),
+      liveHeldQuantityForModels(countedIds, Temporal.Now.instant()),
+      openLoanQuantityForModels(countedIds),
+      listAttributeValuesForModels(rows.map((r) => r.modelId)),
+    ]);
+
+  return rows.map((row) => {
+    const stock = stockByModel.get(row.modelId) ?? [];
+    const serviceable =
+      stock.find((s) => s.condition === "serviceable")?.quantity ?? 0;
+    const takeable =
+      row.tracking === "counted"
+        ? // Subtract what is out and what is spoken for. Holds on a
+          // counted model are quantities, so they reduce the number a
+          // member sees rather than blocking a particular unit.
+          Math.max(
+            0,
+            serviceable -
+              (onLoanByModel.get(row.modelId) ?? 0) -
+              (heldByModel.get(row.modelId) ?? 0),
+          )
+        : row.available;
+    return {
+      publicId: row.modelPublicId,
+      name: row.modelName,
+      manufacturer: row.manufacturer,
+      tracking: row.tracking,
+      imageKey: row.imageKey,
+      type: { publicId: row.typePublicId, name: row.typeName },
+      total: row.total,
+      available: row.available,
+      onLoan: row.onLoan,
+      onHold: row.onHold,
+      unavailable: row.unavailable,
+      retired: row.retired,
+      stock,
+      takeable,
+      attributes: toValueDtos(valuesByModel.get(row.modelId)),
+    };
+  });
 }

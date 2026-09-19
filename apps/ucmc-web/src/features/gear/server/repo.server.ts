@@ -412,7 +412,7 @@ function attributeValueMatch(facet: AttributeFilter) {
  * "On loan" badge. Kept adjacent and in the same precedence order so a
  * change to one is an obvious prompt to change the other.
  */
-function availabilityWhere(availability: GearAvailability) {
+export function availabilityWhere(availability: GearAvailability) {
   const active = eq(schema.gearItems.status, "active");
   const onLoan = sql`${schema.gearLoans.id} IS NOT NULL`;
   const notOnLoan = sql`${schema.gearLoans.id} IS NULL`;
@@ -1291,4 +1291,127 @@ export async function listCodesForType(typeId: string): Promise<string[]> {
       ),
     );
   return rows.map((r) => r.code).filter((c): c is string => c !== null);
+}
+
+// ── browse by model ────────────────────────────────────────────────────
+
+/**
+ * One row per model, with its units bucketed by availability.
+ *
+ * This is the query the old flat list could not express, and the
+ * reason the model layer exists: "7 of 12 available" is the answer a
+ * member wants, and twelve unrelated rows saying "Black Diamond
+ * HotForge" cannot give it.
+ *
+ * Counts are computed with the **same** `availabilityWhere` predicates
+ * the item list filters by, summed as CASE expressions over the same
+ * joins. That is deliberate — a fourth hand-written copy of the
+ * precedence would be a fourth thing to keep in step.
+ */
+export interface GearModelBrowseRow {
+  modelId: string;
+  modelPublicId: string;
+  modelName: string;
+  manufacturer: string | null;
+  tracking: schema.GearTracking;
+  imageKey: string | null;
+  typePublicId: string;
+  typeName: string;
+  total: number;
+  available: number;
+  onLoan: number;
+  onHold: number;
+  unavailable: number;
+  retired: number;
+}
+
+export interface ListGearModelBrowseOptions {
+  typeId?: string;
+  q?: string;
+}
+
+export async function listGearModelBrowseRows(
+  options: ListGearModelBrowseOptions = {},
+): Promise<GearModelBrowseRow[]> {
+  const now = sql`(unixepoch() * 1000)`;
+  const bucket = (availability: GearAvailability) =>
+    sql<number>`sum(case when ${availabilityWhere(availability)} then 1 else 0 end)`;
+
+  const clauses = [] as Parameters<typeof and>;
+  if (options.typeId) {
+    clauses.push(eq(schema.gearModels.typeId, options.typeId));
+  }
+  if (options.q && options.q.trim().length > 0) {
+    const q = options.q.trim();
+    clauses.push(
+      or(
+        likeContains(schema.gearModels.name, q),
+        likeContains(schema.gearModels.manufacturer, q),
+        likeContains(schema.gearTypes.name, q),
+      ),
+    );
+  }
+
+  const rows = await getDb()
+    .select({
+      modelId: schema.gearModels.id,
+      modelPublicId: schema.gearModels.publicId,
+      modelName: schema.gearModels.name,
+      manufacturer: schema.gearModels.manufacturer,
+      tracking: schema.gearModels.tracking,
+      imageKey: schema.gearModels.imageKey,
+      typePublicId: schema.gearTypes.publicId,
+      typeName: schema.gearTypes.name,
+      // A LEFT JOIN from the model side, so a model with no units yet
+      // still appears — a counted model has none by definition, and a
+      // coded one the cave has defined but not stocked is a real
+      // intermediate state during setup.
+      total: sql<number>`sum(case when ${schema.gearItems.id} is not null then 1 else 0 end)`,
+      available: bucket("available"),
+      onLoan: bucket("on_loan"),
+      onHold: bucket("on_hold"),
+      unavailable: bucket("unavailable"),
+      retired: bucket("retired"),
+    })
+    .from(schema.gearModels)
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .leftJoin(
+      schema.gearItems,
+      eq(schema.gearItems.modelId, schema.gearModels.id),
+    )
+    .leftJoin(
+      schema.gearLoans,
+      and(
+        eq(schema.gearLoans.itemId, schema.gearItems.id),
+        sql`${schema.gearLoans.returnedAt} IS NULL`,
+      ),
+    )
+    .leftJoin(
+      schema.gearHolds,
+      sql`${schema.gearHolds.id} = (
+        SELECT h.id FROM ${schema.gearHolds} h
+        WHERE h.item_id = ${schema.gearItems.id}
+          AND h.released_at IS NULL
+          AND h.starts_at <= ${now}
+          AND h.ends_at > ${now}
+        ORDER BY h.ends_at ASC
+        LIMIT 1
+      )`,
+    )
+    .where(clauses.length === 0 ? undefined : and(...clauses))
+    .groupBy(schema.gearModels.id)
+    .orderBy(asc(schema.gearTypes.name), asc(schema.gearModels.name));
+
+  return rows.map((row) => ({
+    ...row,
+    total: Number(row.total),
+    available: Number(row.available),
+    onLoan: Number(row.onLoan),
+    onHold: Number(row.onHold),
+    unavailable: Number(row.unavailable),
+    retired: Number(row.retired),
+  }));
 }

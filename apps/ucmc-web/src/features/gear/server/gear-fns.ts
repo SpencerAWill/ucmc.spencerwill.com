@@ -11,6 +11,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { GEAR_AVAILABILITY } from "#/features/gear/lib/availability";
 import { z } from "zod";
 import type {
+  GearModelBrowseDto,
   CreateGearModelResult,
   DeleteGearModelResult,
   GearModelSummaryDto,
@@ -370,6 +371,11 @@ const editGearTagInputSchema = z.object({
 
 const deleteGearTagInputSchema = z.object({
   publicId: z.string().min(1),
+});
+
+const listGearModelBrowseInputSchema = z.object({
+  typePublicId: z.string().min(1).optional(),
+  q: z.string().max(200).optional(),
 });
 
 // ── sweeps ─────────────────────────────────────────────────────────────
@@ -859,7 +865,15 @@ export const releaseGearHoldFn = createServerFn({ method: "POST" })
 
 // ── attribute definitions ──────────────────────────────────────────────
 
-export type { GearModelSummaryDto };
+export type { GearModelSummaryDto, GearModelBrowseDto };
+
+export const listGearModelBrowseFn = createServerFn({ method: "GET" })
+  .validator(listGearModelBrowseInputSchema)
+  .handler(async ({ data }): Promise<GearModelBrowseDto[]> => {
+    const { listGearModelBrowseAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return listGearModelBrowseAction(data);
+  });
 
 export type {
   CreateGearAttributeDefInput,
