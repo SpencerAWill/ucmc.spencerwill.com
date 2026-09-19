@@ -4,6 +4,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  check,
   customType,
   index,
   integer,
@@ -624,9 +625,26 @@ export const auditAction = [
   // edit. Metadata is non-PII (typeId, code, changedFields, reason).
   "gear.added",
   "gear.updated",
+  // Superseded by `gear.deactivated` / `gear.reactivated` when the
+  // status column gained `lost` and `disposed`. Retained so historical
+  // rows still resolve; nothing emits them any more.
   "gear.retired",
   "gear.unretired",
+  "gear.deactivated",
+  "gear.reactivated",
+  "gear.code_released",
   "gear.tags_changed",
+  "gear_model.created",
+  "gear_model.updated",
+  "gear_model.deleted",
+  "gear_stock.adjusted",
+  "gear_hold.placed",
+  "gear_hold.released",
+  "gear_sweep.started",
+  "gear_sweep.closed",
+  "gear_attribute.created",
+  "gear_attribute.updated",
+  "gear_attribute.deleted",
   "gear_type.created",
   "gear_type.updated",
   "gear_type.deleted",
@@ -876,61 +894,94 @@ export const clubFeedback = sqliteTable(
 /**
  * Gear inventory.
  *
- * Each piece of gear the club owns gets one row in `gear`. Pieces are
- * **exclusively** partitioned by type (`gear_types`) — climbing harness,
- * life jacket, etc. — and tagged with zero or more non-exclusive labels
- * via `gear_tag_assignments`.
+ * Three levels, because the cave owns fleets rather than one-offs:
  *
- * The `code` column is the human-and-scanner-friendly identifier
- * printed on the laminated tag stuck to the physical item (e.g. "CH93",
- * "LJ4"). It is freeform text — conventions like "type-prefix + number"
- * exist for officers' convenience but are not enforced by the schema.
+ *   - `gear_types` — the browse category ("Quickdraw", "Harness"). Owns
+ *     the code prefix and the default inspection cadence.
+ *   - `gear_models` — the product ("BD HotForge 12cm"). Owns everything
+ *     true of every unit of it: manufacturer, MSRP, service life,
+ *     product photo. **Also owns `tracking`** (below).
+ *   - `gear_items` — one physical unit, with its own code, serial and
+ *     date of manufacture. Only exists for `tracking = "coded"` models.
  *
- * **Code recycling.** `code` is nullable and `UNIQUE` (SQLite allows
- * multiple NULLs in a unique column). When a piece of gear is retired,
- * the retire action NULLs `code`, freeing the string to be reissued to
- * a newer piece. The historical value is captured in the `gear.retired`
- * audit row's metadata (`{ priorCode, reason }`) so the lineage
- * survives.
+ * Retyping "Black Diamond" onto forty quickdraw rows was the old shape;
+ * the model layer stores it once, which is also what makes "7 of 12
+ * available" and recall-matching answerable at all.
  *
- * **Lifecycle vs condition** are two orthogonal columns:
+ * **Coded vs counted.** Not every model is labelled. Harnesses, ropes
+ * and tents each carry a code; quickdraws and pre-cut slings are handed
+ * out by the handful. A `counted` model has **no item rows at all** —
+ * `gear_stock_levels` holds a quantity per condition bucket, and loans
+ * against it carry a quantity instead of an item. Giving each draw a row
+ * anyway would be fake precision: when five of six come back, nothing
+ * knows which one is gone, so the desk would be picking rows at random.
  *
- *   - `lifecycle` — `"active"` or `"retired"`. Terminal: retiring is
- *     conceptually "this physical item is gone from inventory". A
- *     follow-up `gear.unretired` exists for officer-correction of a
- *     mistaken retirement (rare).
- *   - `condition` — `"serviceable"`, `"needs_repair"`, `"missing"`, or
- *     `"lost"`. Transient state, separate from lifecycle so a piece can
- *     be `lifecycle=active, condition=missing` (we expect it back) vs
- *     `lifecycle=retired` (gone for good).
- *
- * Future loan/checkout work will land as a separate `gear_loans` table
- * keyed on `gear.id`; checkout state is intentionally **not** modeled
- * on these columns.
+ * `tracking` lives on the **model**, not the type, so the cave can code
+ * a special alpine draw set while everyday draws stay counted.
  */
-export const gearLifecycle = ["active", "retired"] as const;
-export type GearLifecycle = (typeof gearLifecycle)[number];
 
-export const gearCondition = [
-  "serviceable",
-  "needs_repair",
-  "missing",
-  "lost",
-] as const;
+/**
+ * Terminal disposition. One-way in practice: `reactivateItem` exists to
+ * undo a mis-click, not as a normal transition.
+ *
+ * Split out from the old `lifecycle`/`condition` pair, which mixed "is
+ * it still ours" with "is it broken" with "where is it". Those are three
+ * independent questions and a piece can be any combination of them —
+ * notably `missing` + `needs_repair`, which the old single column could
+ * not express.
+ */
+export const gearStatus = ["active", "retired", "lost", "disposed"] as const;
+export type GearStatus = (typeof gearStatus)[number];
+
+/**
+ * Physical serviceability — "can this be loaned?" — and nothing else.
+ * Whereabouts moved to its own column, which frees `condition` to mean
+ * the one thing the cave already uses the word for.
+ *
+ * `needs_repair` is loanable with an officer override (worn, still
+ * works). `unsafe` is a hard block with no override path: a cored
+ * sheath or a cracked helmet never goes out, whoever is asking.
+ *
+ * Only an inspection may raise this value. Anyone can lower it at
+ * check-in by reporting damage.
+ */
+export const gearCondition = ["serviceable", "needs_repair", "unsafe"] as const;
 export type GearCondition = (typeof gearCondition)[number];
 
 /**
- * Optional wear-level grade independent of {@link gearCondition}.
+ * Where the item physically is when it is **not** out on loan. Loan
+ * state is derived from `gear_loans` and deliberately not mirrored here
+ * — one source of truth for checkout.
  *
- * `condition` is operational state ("can this be loaned out?"); the
- * grade is a coarse subjective wear assessment carried over from
- * legacy paper inventories. A piece can be `condition=serviceable,
- * conditionGrade=fair` (loanable but visibly worn) or
- * `condition=needs_repair, conditionGrade=excellent` (only just
- * developed a defect on a near-new item).
+ * `missing` is the odd one out: it is inferred from *absence* at the
+ * close of an inventory sweep rather than recorded as it happens, which
+ * is why `whereaboutsAsOf` exists. An item out on loan is legitimately
+ * absent from the cave and can never be marked missing.
  */
-export const gearConditionGrade = ["excellent", "good", "fair"] as const;
-export type GearConditionGrade = (typeof gearConditionGrade)[number];
+export const gearWhereabouts = [
+  "cave",
+  "repair",
+  "officer",
+  "missing",
+] as const;
+export type GearWhereabouts = (typeof gearWhereabouts)[number];
+
+/** See the `gear_models` block comment. */
+export const gearTracking = ["coded", "counted"] as const;
+export type GearTracking = (typeof gearTracking)[number];
+
+/**
+ * How the club came to own it. Exists so a null/zero
+ * `acquisitionCostCents` stops meaning both "it was free" and "we lost
+ * the receipt" — replacement-value reporting needs to tell those apart.
+ */
+export const gearAcquisitionKind = [
+  "purchased",
+  "donated",
+  "found",
+  "warranty_replacement",
+] as const;
+export type GearAcquisitionKind = (typeof gearAcquisitionKind)[number];
 
 export const gearTypes = sqliteTable(
   "gear_types",
@@ -939,11 +990,15 @@ export const gearTypes = sqliteTable(
     publicId: text("public_id").notNull().unique(),
     name: text("name").notNull(),
     // Display-only convention hint (e.g. "CH" for Climbing Harness).
-    // NOT enforced against gear.code — officers may give a piece any
-    // code regardless of its type's prefix. The create-gear UI uses
+    // NOT enforced against gear_items.code — officers may give an item
+    // any code regardless of its type's prefix. The create-item UI uses
     // this only to seed a "Suggested: CH4" auto-fill.
     prefix: text("prefix"),
     description: text("description"),
+    // Default inspection cadence for items of this type, in days. A
+    // model may override it. NULL means "no cadence" — inspections are
+    // still recordable, nothing is ever reported as due.
+    inspectionIntervalDays: integer("inspection_interval_days"),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -957,50 +1012,43 @@ export const gearTypes = sqliteTable(
   (t) => [uniqueIndex("gear_types_name_unique").on(t.name)],
 );
 
-export const gear = sqliteTable(
-  "gear",
+export const gearModels = sqliteTable(
+  "gear_models",
   {
     id: text("id").primaryKey(),
     publicId: text("public_id").notNull().unique(),
-    // RESTRICT delete: a type can't be removed while any gear (active
-    // or retired) references it. Officers must merge/relabel first.
+    // RESTRICT: a type can't be removed while any model references it.
     typeId: text("type_id")
       .notNull()
       .references(() => gearTypes.id, { onDelete: "restrict" }),
-    // Freeform tag label e.g. "CH93". NULL on retired gear (NULLed by
-    // the retire action) and on un-coded active gear (fresh-in-box not
-    // yet labeled). The plain UNIQUE constraint relies on SQLite's
-    // multiple-NULL-allowed semantics for the recycling story.
-    code: text("code"),
-    description: text("description").notNull(),
-    // R2 key under `gear/<contentHash>.<ext>` for the per-gear
-    // thumbnail. NULL when the officer hasn't uploaded one — the card
-    // falls back to the generic placeholder SVG in that case.
-    // Content-hashed key means the URL is immutable across edits, so
-    // the public bucket can serve with `Cache-Control: immutable`.
-    thumbnailKey: text("thumbnail_key"),
-    acquiredAt: timestamp("acquired_at"),
-    acquisitionCostCents: integer("acquisition_cost_cents"),
-    // Manufacturer's listed retail price at acquisition, in cents.
-    // Separate from `acquisitionCostCents` so the club can report
-    // replacement value for pieces that were donated or bought at
-    // steep discount.
-    msrpCents: integer("msrp_cents"),
+    // Manufacturer + name together identify the product. Both freeform:
+    // "unbranded" donations are real and a required brand would invite
+    // junk values. A one-off gets a thin model with a single item.
     manufacturer: text("manufacturer"),
-    serialNumber: text("serial_number"),
-    conditionGrade: text("condition_grade", { enum: gearConditionGrade }),
-    notesMarkdown: text("notes_markdown"),
-    lifecycle: text("lifecycle", { enum: gearLifecycle })
+    name: text("name").notNull(),
+    tracking: text("tracking", { enum: gearTracking })
       .notNull()
-      .default("active"),
-    condition: text("condition", { enum: gearCondition })
-      .notNull()
-      .default("serviceable"),
-    retiredAt: timestamp("retired_at"),
-    retiredBy: text("retired_by").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    retiredReason: text("retired_reason"),
+      .default("coded"),
+    description: text("description"),
+    // Manufacturer's listed retail price, in cents. Lives here rather
+    // than per-item so replacement value stays right for donated and
+    // pro-deal units, and so a loss charge is computable later.
+    msrpCents: integer("msrp_cents"),
+    // Manufacturer's stated service life. **Runs from date of
+    // manufacture, not acquisition** — soft goods age on the shelf, so
+    // a harness bought new in 2024 but made in 2019 is already five
+    // years in. NULL for hardware with no stated life.
+    serviceLifeYears: integer("service_life_years"),
+    // Overrides the type's cadence when set.
+    inspectionIntervalDays: integer("inspection_interval_days"),
+    // R2 key for the product shot, shared by every item of this model.
+    // An item's own `thumbnailKey` wins when set (damage, distinguishing
+    // marks); otherwise the card falls back to this, then to the
+    // placeholder SVG.
+    imageKey: text("image_key"),
+    // Manufacturer's product or manual page. Scheme-restricted on write
+    // and re-checked at render — see the public-pages rule.
+    productUrl: text("product_url"),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -1012,21 +1060,135 @@ export const gear = sqliteTable(
       .default(sql`(unixepoch() * 1000)`),
   },
   (t) => [
-    uniqueIndex("gear_code_unique").on(t.code),
-    index("gear_type_idx").on(t.typeId),
-    index("gear_lifecycle_idx").on(t.lifecycle),
-    index("gear_condition_idx").on(t.condition),
-    index("gear_created_at_idx").on(t.createdAt),
+    index("gear_models_type_idx").on(t.typeId),
+    index("gear_models_tracking_idx").on(t.tracking),
+    uniqueIndex("gear_models_type_manufacturer_name_unique").on(
+      t.typeId,
+      t.manufacturer,
+      t.name,
+    ),
   ],
+);
+
+export const gearItems = sqliteTable(
+  "gear_items",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    // RESTRICT: a model can't be removed while items reference it.
+    modelId: text("model_id")
+      .notNull()
+      .references(() => gearModels.id, { onDelete: "restrict" }),
+    // The label on the physical item, e.g. "CH93". **Never recycled.**
+    // Retiring keeps the code, so every historical mention of "CH93" —
+    // in a note, a logbook, an audit row, someone's memory — resolves to
+    // exactly one item forever. NULL only for an active item nobody has
+    // labelled yet (fresh in the box); the plain UNIQUE relies on
+    // SQLite's multiple-NULLs-allowed semantics for that case.
+    //
+    // A code can be deliberately freed by `releaseItemCode`, which NULLs
+    // it on an already-retired item and records the prior value in the
+    // audit row. That is the whole of the recycling story: explicit,
+    // one item at a time, never a mode the system runs in.
+    code: text("code"),
+    serialNumber: text("serial_number"),
+    // Distinguishing marks for this unit ("blue tape on the spine").
+    // Optional now that the model carries the product identity — this
+    // column used to be the required catch-all for name, size and notes.
+    description: text("description"),
+    // Overrides the model's `imageKey` when set.
+    thumbnailKey: text("thumbnail_key"),
+    // The safety clock for soft goods. See `serviceLifeYears`.
+    manufacturedAt: timestamp("manufactured_at"),
+    acquiredAt: timestamp("acquired_at"),
+    acquisitionCostCents: integer("acquisition_cost_cents"),
+    acquisitionKind: text("acquisition_kind", { enum: gearAcquisitionKind }),
+    notesMarkdown: text("notes_markdown"),
+    status: text("status", { enum: gearStatus }).notNull().default("active"),
+    condition: text("condition", { enum: gearCondition })
+      .notNull()
+      .default("serviceable"),
+    whereabouts: text("whereabouts", { enum: gearWhereabouts })
+      .notNull()
+      .default("cave"),
+    // When the whereabouts became true. Required by the action layer for
+    // `missing` (it is inferred from a dated sweep, so an undated
+    // "missing" tells a manager nothing); optional otherwise.
+    whereaboutsAsOf: timestamp("whereabouts_as_of"),
+    // Which shop, which officer. Free text — the cave did not want a
+    // vendor entity for this.
+    whereaboutsNote: text("whereabouts_note"),
+    // Set when `status` leaves "active", whichever terminal state it
+    // lands in. Named `deactivated*` rather than `retired*` because
+    // `lost` and `disposed` are terminal too and the old name lied about
+    // three of the four cases.
+    //
+    // `reactivateItem` deliberately does NOT clear `deactivatedReason` —
+    // it moves to the audit row instead. The old un-retire nulled it,
+    // which destroyed the record of *why* a harness was pulled the
+    // moment someone undid a mis-click.
+    deactivatedAt: timestamp("deactivated_at"),
+    deactivatedBy: text("deactivated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    deactivatedReason: text("deactivated_reason"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("gear_items_code_unique").on(t.code),
+    index("gear_items_model_idx").on(t.modelId),
+    index("gear_items_status_idx").on(t.status),
+    index("gear_items_condition_idx").on(t.condition),
+    index("gear_items_whereabouts_idx").on(t.whereabouts),
+    index("gear_items_created_at_idx").on(t.createdAt),
+  ],
+);
+
+/**
+ * Stock for `tracking = "counted"` models: one row per condition bucket,
+ * so "38 draws, 4 pulled for worn slings" is representable and the
+ * unsafe ones stay out of the available count.
+ *
+ * Quantity here is **everything the club owns in that bucket**, including
+ * units currently out on loan. Available = quantity − open loan quantity,
+ * computed at read time rather than stored, so a crashed checkout can't
+ * leave the two disagreeing.
+ */
+export const gearStockLevels = sqliteTable(
+  "gear_stock_levels",
+  {
+    modelId: text("model_id")
+      .notNull()
+      .references(() => gearModels.id, { onDelete: "cascade" }),
+    condition: text("condition", { enum: gearCondition }).notNull(),
+    quantity: integer("quantity").notNull().default(0),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [primaryKey({ columns: [t.modelId, t.condition] })],
 );
 
 /**
  * Tag visibility scope. `public` tags are visible to anyone with
  * `gear:read`; `internal` tags only render for `gear:manage` officers
- * — both in the multiselect surfaces and on the gear card/detail
- * read paths. Used for exec-only annotations like "needs-inspection"
- * or "checked-out-to-treasurer" that shouldn't leak to general
+ * — both in the multiselect surfaces and on the item card/detail read
+ * paths. Used for exec-only annotations that shouldn't leak to general
  * members.
+ *
+ * Tags are for **multi-valued, cross-cutting** labels ("dry-treated",
+ * "instruction-only"). Per-type scales like harness size belong in
+ * `gear_attribute_defs`: tag names are globally unique (one "M" shared
+ * by harnesses and jackets) and the tag filter is AND-only, so "M or L"
+ * as tags returns nothing.
  */
 export const gearTagVisibility = ["public", "internal"] as const;
 export type GearTagVisibility = (typeof gearTagVisibility)[number];
@@ -1050,68 +1212,12 @@ export const gearTags = sqliteTable(
   (t) => [uniqueIndex("gear_tags_name_unique").on(t.name)],
 );
 
-/**
- * Per-piece inspection log. Climbing gear (harnesses, ropes, helmets,
- * draws) has real safety stakes and is typically inspected on a
- * cadence; this table records each inspection event so the detail
- * page can surface history and a future report can flag "due for
- * inspection" pieces.
- *
- * Append-mostly. Officers can correct a mistaken entry by recording
- * a superseding inspection, but the historical row stays. This
- * mirrors the audit-log philosophy: the only safe way to reason
- * about gear safety later is if the trail is intact.
- *
- * Cascade on gear delete: when a piece is hard-deleted, its
- * inspection history goes with it. Retirement does NOT delete
- * inspections — the row stays so a future "why did we retire this?"
- * audit can pull the failing inspection alongside the gear.retired
- * audit event.
- */
-export const gearInspectionResult = ["pass", "fail", "advisory"] as const;
-export type GearInspectionResult = (typeof gearInspectionResult)[number];
-
-export const gearInspections = sqliteTable(
-  "gear_inspections",
-  {
-    id: text("id").primaryKey(),
-    publicId: text("public_id").notNull().unique(),
-    gearId: text("gear_id")
-      .notNull()
-      .references(() => gear.id, { onDelete: "cascade" }),
-    // Inspector keeps SET NULL on user delete so the inspection
-    // history survives an officer leaving the club. The
-    // `inspectorNameSnapshot` captures who it was at write time so
-    // the historical row still reads usefully after the FK nulls.
-    inspectorUserId: text("inspector_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    inspectorNameSnapshot: text("inspector_name_snapshot"),
-    // When the inspection physically happened. Distinct from
-    // `createdAt` because officers might log a past inspection (e.g.,
-    // entering paper records into the system after a season).
-    inspectedAt: timestamp("inspected_at").notNull(),
-    result: text("result", { enum: gearInspectionResult }).notNull(),
-    notes: text("notes"),
-    createdAt: timestamp("created_at")
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-  },
-  (t) => [
-    index("gear_inspections_gear_idx").on(t.gearId),
-    // Compound index supports the "latest inspection per gear" query
-    // — the detail page's history list and any future per-gear
-    // latest-inspection summary both want gear_id, inspected_at DESC.
-    index("gear_inspections_gear_inspected_idx").on(t.gearId, t.inspectedAt),
-  ],
-);
-
 export const gearTagAssignments = sqliteTable(
   "gear_tag_assignments",
   {
-    gearId: text("gear_id")
+    itemId: text("item_id")
       .notNull()
-      .references(() => gear.id, { onDelete: "cascade" }),
+      .references(() => gearItems.id, { onDelete: "cascade" }),
     tagId: text("tag_id")
       .notNull()
       .references(() => gearTags.id, { onDelete: "cascade" }),
@@ -1123,40 +1229,227 @@ export const gearTagAssignments = sqliteTable(
     }),
   },
   (t) => [
-    primaryKey({ columns: [t.gearId, t.tagId] }),
+    primaryKey({ columns: [t.itemId, t.tagId] }),
     index("gear_tag_assignments_tag_idx").on(t.tagId),
   ],
 );
 
 /**
- * A loan is a per-piece checkout: exactly one gear row linked to one
- * member, with its own due date and (eventually) returned timestamp.
+ * Officer-defined attributes, scoped to gear types via
+ * `gear_attribute_def_types` so "Colour" can be defined once and
+ * attached to a dozen types rather than redefined per type.
  *
- * One officer-driven checkout batch generates N loan rows (one per
- * piece). Check-in batches may span multiple borrowers — each row's
- * member is derived from the open loan, not from a batch-level field.
+ * `level` is what makes seeding cheap: a `model`-level attribute (rope
+ * diameter) is typed once for a fleet of forty; an `item`-level one
+ * (harness size) varies per unit. A counted model has no items, so only
+ * model-level values can exist for it — that falls out of the shape
+ * rather than needing a rule.
+ */
+export const gearAttributeKind = [
+  "text",
+  "number",
+  "select",
+  "boolean",
+] as const;
+export type GearAttributeKind = (typeof gearAttributeKind)[number];
+
+export const gearAttributeLevel = ["model", "item"] as const;
+export type GearAttributeLevel = (typeof gearAttributeLevel)[number];
+
+export const gearAttributeDefs = sqliteTable(
+  "gear_attribute_defs",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    // Stable machine key, e.g. "size". Unique across all defs so a
+    // value row can never be ambiguous about which def it answers.
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    kind: text("kind", { enum: gearAttributeKind }).notNull(),
+    level: text("level", { enum: gearAttributeLevel }).notNull(),
+    // JSON array of option strings for `kind = "select"`, **in display
+    // order**. Order is explicit and authoritative: sorting sizes
+    // alphabetically yields L, M, S, XL, which reads as a bug.
+    options: text("options", { mode: "json" }).$type<string[]>(),
+    // Unit for `kind = "number"` ("m", "mm", "g"). Lives on the
+    // definition, never in the value — a value of "60m" is text and
+    // stops being range-filterable, which defeats the point.
+    unit: text("unit"),
+    required: integer("required", { mode: "boolean" }).notNull().default(false),
+    position: integer("position").notNull().default(0),
+    // Soft delete: values survive so a mis-click doesn't destroy data,
+    // and the manage UI can offer them back.
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [uniqueIndex("gear_attribute_defs_key_unique").on(t.key)],
+);
+
+export const gearAttributeDefTypes = sqliteTable(
+  "gear_attribute_def_types",
+  {
+    defId: text("def_id")
+      .notNull()
+      .references(() => gearAttributeDefs.id, { onDelete: "cascade" }),
+    typeId: text("type_id")
+      .notNull()
+      .references(() => gearTypes.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.defId, t.typeId] }),
+    index("gear_attribute_def_types_type_idx").on(t.typeId),
+  ],
+);
+
+/**
+ * Attribute values. Two tables rather than one polymorphic table so the
+ * foreign keys stay real — a value row can't point at a missing item.
  *
- * Concurrency: the partial unique on `(gear_id) WHERE returned_at IS
- * NULL` enforces "at most one open loan per piece" at the DB layer.
- * The action's per-row pre-check is a UX nicety; the index is what
- * actually wins races between two officers checking out the same
- * piece at the same instant.
+ * Both carry `valueText` and `valueNumber`; the def's `kind` says which
+ * one is authoritative. `number` writes both (the text form for display,
+ * the number for range filters) so a facet query never has to cast.
+ */
+export const gearModelAttributeValues = sqliteTable(
+  "gear_model_attribute_values",
+  {
+    modelId: text("model_id")
+      .notNull()
+      .references(() => gearModels.id, { onDelete: "cascade" }),
+    defId: text("def_id")
+      .notNull()
+      .references(() => gearAttributeDefs.id, { onDelete: "cascade" }),
+    valueText: text("value_text"),
+    valueNumber: integer("value_number"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.modelId, t.defId] }),
+    // Drives the facet query: distinct values for a def, cheaply.
+    index("gear_model_attribute_values_def_idx").on(t.defId, t.valueText),
+  ],
+);
+
+export const gearItemAttributeValues = sqliteTable(
+  "gear_item_attribute_values",
+  {
+    itemId: text("item_id")
+      .notNull()
+      .references(() => gearItems.id, { onDelete: "cascade" }),
+    defId: text("def_id")
+      .notNull()
+      .references(() => gearAttributeDefs.id, { onDelete: "cascade" }),
+    valueText: text("value_text"),
+    valueNumber: integer("value_number"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.itemId, t.defId] }),
+    index("gear_item_attribute_values_def_idx").on(t.defId, t.valueText),
+  ],
+);
+
+/**
+ * Per-item inspection log. Climbing gear has real safety stakes and is
+ * inspected on a cadence; this table records each inspection event so
+ * the detail page can surface history and the "due for inspection"
+ * report has something to compute from.
+ *
+ * Append-mostly. Officers correct a mistaken entry by recording a
+ * superseding inspection; the historical row stays. This mirrors the
+ * audit-log philosophy: the only safe way to reason about gear safety
+ * later is if the trail is intact.
+ *
+ * **Either `itemId` or `modelId` is set, never both.** A counted model
+ * has no items, so "inspected all the draws" is recorded against the
+ * model. Cascade on delete either way: hard-deleting gear takes its
+ * inspection history with it. Deactivation does NOT — the row stays so
+ * a later "why did we retire this?" can pull the failing inspection
+ * alongside the audit event.
+ */
+export const gearInspectionResult = ["pass", "fail", "advisory"] as const;
+export type GearInspectionResult = (typeof gearInspectionResult)[number];
+
+export const gearInspections = sqliteTable(
+  "gear_inspections",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    itemId: text("item_id").references(() => gearItems.id, {
+      onDelete: "cascade",
+    }),
+    modelId: text("model_id").references(() => gearModels.id, {
+      onDelete: "cascade",
+    }),
+    // Inspector keeps SET NULL on user delete so the history survives an
+    // officer leaving the club. `inspectorNameSnapshot` captures who it
+    // was at write time so the row still reads usefully after the FK
+    // nulls.
+    inspectorUserId: text("inspector_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    inspectorNameSnapshot: text("inspector_name_snapshot"),
+    // When the inspection physically happened. Distinct from `createdAt`
+    // because officers enter paper records after the fact.
+    inspectedAt: timestamp("inspected_at").notNull(),
+    result: text("result", { enum: gearInspectionResult }).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index("gear_inspections_item_idx").on(t.itemId),
+    index("gear_inspections_model_idx").on(t.modelId),
+    // Supports "latest inspection per item" — the detail page's history
+    // list and the due-for-inspection report both want item, date DESC.
+    index("gear_inspections_item_inspected_idx").on(t.itemId, t.inspectedAt),
+  ],
+);
+
+/**
+ * A loan is a checkout to one member with its own due date.
+ *
+ * **Dual shape.** A coded loan sets `itemId` and leaves `quantity` at 1;
+ * a counted loan sets `modelId` and a real `quantity` ("six draws").
+ * Exactly one of the two is set — enforced by a CHECK constraint, since
+ * the alternative is two near-identical tables and then two of every
+ * query behind /my/gear, the overdue list and member standing.
+ *
+ * Counted loans support **partial return**: `quantityReturned` climbs as
+ * units come back, and the loan closes when it reaches `quantity` or an
+ * officer writes off the shortfall. Coded loans go straight from 0 to 1.
+ *
+ * Concurrency: the partial unique on `(item_id) WHERE returned_at IS
+ * NULL` enforces "at most one open loan per item" at the DB layer, and
+ * is what actually wins a race between two officers checking out the
+ * same harness. It applies only to coded loans — counted stock is
+ * guarded by an available-quantity check in the action layer, which is
+ * inherently a read-then-write and can over-lend by one under a true
+ * tie; the cave would rather that than a lock.
  *
  * FK choices:
- *   - gear / member: RESTRICT — can't retire on-loan gear or delete a
- *     member account with open loans. The action layer surfaces this
- *     as a typed error, the FK is defense-in-depth.
- *   - checkedOutBy / returnedTo: SET NULL — officer accounts may come
- *     and go; closed-loan history survives them.
+ *   - item / model / member: RESTRICT — can't retire on-loan gear or
+ *     delete a member account with open loans. The action layer surfaces
+ *     this as a typed error; the FK is defense-in-depth.
+ *   - checkedOutBy / returnedTo: SET NULL — officer accounts come and
+ *     go; closed-loan history survives them.
  */
 export const gearLoans = sqliteTable(
   "gear_loans",
   {
     id: text("id").primaryKey(),
     publicId: text("public_id").notNull().unique(),
-    gearId: text("gear_id")
-      .notNull()
-      .references(() => gear.id, { onDelete: "restrict" }),
+    itemId: text("item_id").references(() => gearItems.id, {
+      onDelete: "restrict",
+    }),
+    modelId: text("model_id").references(() => gearModels.id, {
+      onDelete: "restrict",
+    }),
+    quantity: integer("quantity").notNull().default(1),
+    quantityReturned: integer("quantity_returned").notNull().default(0),
     memberUserId: text("member_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
@@ -1172,24 +1465,163 @@ export const gearLoans = sqliteTable(
     }),
     checkoutNotes: text("checkout_notes"),
     checkinNotes: text("checkin_notes"),
-    // Optional snapshot of the gear's condition AT the moment of return.
-    // The check-in flow may also update `gear.condition` directly when
-    // an officer flags damage; this column is a per-loan record so the
-    // history doesn't get rewritten by later condition changes.
+    // Condition of the gear AT the moment of return. The check-in flow
+    // may also update the item's own `condition`; this column is a
+    // per-loan record so history isn't rewritten by later changes.
     conditionAtReturn: text("condition_at_return", { enum: gearCondition }),
+    // Units never returned, written off at close. Feeds the lost-gear
+    // report and, eventually, a replacement charge.
+    quantityLost: integer("quantity_lost").notNull().default(0),
   },
   (t) => [
-    // Race-protective: only one open loan per piece at any moment.
-    // SQLite partial unique. Mirrors `user_emails_one_primary_per_user`.
-    uniqueIndex("gear_loans_one_active_per_gear")
-      .on(t.gearId)
+    check(
+      "gear_loans_item_xor_model",
+      sql`(${t.itemId} IS NOT NULL) <> (${t.modelId} IS NOT NULL)`,
+    ),
+    // Race-protective: only one open loan per coded item at any moment.
+    uniqueIndex("gear_loans_one_active_per_item")
+      .on(t.itemId)
       .where(sql`${t.returnedAt} IS NULL`),
-    // Drives /my/gear (active + history per member).
+    // Drives /my/gear (active + history per member) and the standing check.
     index("gear_loans_member_returned_idx").on(t.memberUserId, t.returnedAt),
-    // Drives the "open loan for this gear" lookup on /gear/$publicId.
-    index("gear_loans_gear_idx").on(t.gearId),
+    index("gear_loans_item_idx").on(t.itemId),
+    index("gear_loans_model_idx").on(t.modelId),
     // Drives the overdue list + due-date sort on /gear/loans.
     index("gear_loans_due_idx").on(t.dueAt),
+  ],
+);
+
+/**
+ * An officer reserving gear ahead of a trip.
+ *
+ * A hold is a statement of **intent**, not a property of the object,
+ * which is why it is a row rather than a fourth `condition` value: it
+ * has a placer, a reason and an expiry that no enum value could carry,
+ * and it must be able to coexist with `needs_repair` and with an open
+ * loan (an item due back the 5th, held for a trip on the 12th).
+ *
+ * Same dual shape as loans — a hold on "six draws" is a counted hold,
+ * and for a counted model it's the only kind there is.
+ *
+ * Holds **hard-block member checkout** and are overridable by
+ * `gear:manage` with a confirm; a soft warning gets trampled and then
+ * nobody trusts holds. They auto-release at `endsAt` (evaluated at read
+ * time, so no cron), and the manage UI lists expired-but-unreleased ones
+ * so stale reservations surface rather than rot.
+ *
+ * `reason` is free text until trips are a real entity; a `tripId` FK
+ * lands cleanly beside it when they are.
+ */
+export const gearHolds = sqliteTable(
+  "gear_holds",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    itemId: text("item_id").references(() => gearItems.id, {
+      onDelete: "cascade",
+    }),
+    modelId: text("model_id").references(() => gearModels.id, {
+      onDelete: "cascade",
+    }),
+    quantity: integer("quantity").notNull().default(1),
+    reason: text("reason").notNull(),
+    startsAt: timestamp("starts_at").notNull(),
+    endsAt: timestamp("ends_at").notNull(),
+    releasedAt: timestamp("released_at"),
+    releasedByUserId: text("released_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    heldByUserId: text("held_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    check(
+      "gear_holds_item_xor_model",
+      sql`(${t.itemId} IS NOT NULL) <> (${t.modelId} IS NOT NULL)`,
+    ),
+    index("gear_holds_item_idx").on(t.itemId),
+    index("gear_holds_model_idx").on(t.modelId),
+    // Drives "is this held right now" and the expired-holds list.
+    index("gear_holds_window_idx").on(t.endsAt, t.releasedAt),
+  ],
+);
+
+/**
+ * A cave-wide inventory count.
+ *
+ * Several people scan into the same open sweep at once, so `seenBy`
+ * lives on each entry rather than on the sweep. **Presence is recorded;
+ * absence is inferred at close** — which is the whole reason sweeps are
+ * an entity instead of a per-item checkbox, and where `missing` and its
+ * `whereaboutsAsOf` date come from.
+ *
+ * On close, every active coded item with no entry, no open loan, and not
+ * already at `repair` or with an `officer` flips to `missing`. Counted
+ * models compare the counted quantity plus quantity-on-loan against
+ * stock, and a shortfall is surfaced to the closing officer rather than
+ * written off automatically — a miscount is likelier than four lost
+ * draws, and the write-off should be a decision.
+ */
+export const gearInventorySweeps = sqliteTable(
+  "gear_inventory_sweeps",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    startedAt: timestamp("started_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    startedByUserId: text("started_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    closedAt: timestamp("closed_at"),
+    closedByUserId: text("closed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+  },
+  (t) => [index("gear_inventory_sweeps_closed_idx").on(t.closedAt)],
+);
+
+export const gearInventorySweepEntries = sqliteTable(
+  "gear_inventory_sweep_entries",
+  {
+    sweepId: text("sweep_id")
+      .notNull()
+      .references(() => gearInventorySweeps.id, { onDelete: "cascade" }),
+    itemId: text("item_id").references(() => gearItems.id, {
+      onDelete: "cascade",
+    }),
+    modelId: text("model_id").references(() => gearModels.id, {
+      onDelete: "cascade",
+    }),
+    // For a counted model the entry IS the count; for a coded item it is
+    // 1 and only presence matters.
+    quantityCounted: integer("quantity_counted").notNull().default(1),
+    seenAt: timestamp("seen_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    seenByUserId: text("seen_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    check(
+      "gear_sweep_entries_item_xor_model",
+      sql`(${t.itemId} IS NOT NULL) <> (${t.modelId} IS NOT NULL)`,
+    ),
+    index("gear_inventory_sweep_entries_sweep_idx").on(t.sweepId),
+    uniqueIndex("gear_inventory_sweep_entries_sweep_item_unique").on(
+      t.sweepId,
+      t.itemId,
+    ),
+    uniqueIndex("gear_inventory_sweep_entries_sweep_model_unique").on(
+      t.sweepId,
+      t.modelId,
+    ),
   ],
 );
 
@@ -1210,11 +1642,22 @@ export type LandingActivity = typeof landingActivities.$inferSelect;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type Feedback = typeof feedback.$inferSelect;
 export type GearType = typeof gearTypes.$inferSelect;
-export type Gear = typeof gear.$inferSelect;
+export type GearModel = typeof gearModels.$inferSelect;
+export type GearItem = typeof gearItems.$inferSelect;
+export type GearStockLevel = typeof gearStockLevels.$inferSelect;
 export type GearTag = typeof gearTags.$inferSelect;
 export type GearTagAssignment = typeof gearTagAssignments.$inferSelect;
+export type GearAttributeDef = typeof gearAttributeDefs.$inferSelect;
+export type GearModelAttributeValue =
+  typeof gearModelAttributeValues.$inferSelect;
+export type GearItemAttributeValue =
+  typeof gearItemAttributeValues.$inferSelect;
 export type GearInspection = typeof gearInspections.$inferSelect;
 export type GearLoan = typeof gearLoans.$inferSelect;
+export type GearHold = typeof gearHolds.$inferSelect;
+export type GearInventorySweep = typeof gearInventorySweeps.$inferSelect;
+export type GearInventorySweepEntry =
+  typeof gearInventorySweepEntries.$inferSelect;
 
 /**
  * Historical archive of past UCMC officer rosters, one row per

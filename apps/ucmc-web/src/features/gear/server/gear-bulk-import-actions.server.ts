@@ -22,10 +22,14 @@ import { uuidv7 } from "uuidv7";
 import { requireGearManager } from "#/features/gear/server/permissions.server";
 import {
   getGearTypeByPublicId,
-  insertGear,
+  insertGearItem,
   listGearTags,
-  setGearTags,
+  setGearItemTags,
 } from "#/features/gear/server/repo.server";
+import {
+  findGearModelByName,
+  insertGearModel,
+} from "#/features/gear/server/models-repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { isUniqueViolation } from "#/server/db";
@@ -36,7 +40,7 @@ export interface BulkImportRow {
   code: string | null;
   /** Required free-form description / model. Rows with empty
    *  description are skipped with `missing_description`. */
-  description: string;
+  description?: string | null;
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
@@ -45,7 +49,12 @@ export interface BulkImportRow {
   msrpCents?: number | null;
   manufacturer?: string | null;
   serialNumber?: string | null;
-  conditionGrade?: schema.GearConditionGrade | null;
+  manufacturedAt?: number | null;
+  acquisitionKind?: schema.GearAcquisitionKind | null;
+  /** Product name. With the model layer, a CSV row names its product
+   *  and the import creates the model on demand — requiring officers to
+   *  pre-create forty models by hand would make bulk import useless. */
+  modelName: string;
   /** Tag NAMES (not publicIds). Resolved server-side against
    *  `gear_tags.name` (case-insensitive). Any unknown name skips the
    *  whole row with reason `tag_not_found`. */
@@ -102,6 +111,10 @@ export async function bulkImportGearAction(
   const skipped: BulkImportSkipped[] = [];
 
   const typeCache = new Map<string, string | null>(); // typePublicId -> typeId (null = not found)
+  // `<typeId>\u0000<manufacturer>\u0000<modelName>` -> modelId. NUL as the
+  // separator because it can't occur in any of the three parts, so two
+  // different triples can never collide on one key.
+  const modelCache = new Map<string, string>();
   const seenCodes = new Set<string>();
 
   // Resolve every tag name in the payload up-front against the
@@ -126,9 +139,11 @@ export async function bulkImportGearAction(
   for (let i = 0; i < input.rows.length; i++) {
     const row = input.rows[i];
     const code = normalizeCode(row.code);
-    const description = row.description.trim();
-
-    if (description.length === 0) {
+    // Description is now optional — the model carries the product name,
+    // so a row only needs distinguishing marks when it has any. What the
+    // row cannot go without is a model name.
+    const description = (row.description ?? "").trim();
+    if (row.modelName.trim().length === 0) {
       skipped.push({ rowIndex: i, reason: "missing_description", code });
       continue;
     }
@@ -183,15 +198,57 @@ export async function bulkImportGearAction(
       continue;
     }
 
-    const id = `g_${uuidv7()}`;
+    // Resolve (or create) the model this row belongs to. Repeated rows
+    // for the same product reuse it, which is the common case — a CSV
+    // of forty draws is forty rows against one model.
+    const manufacturer = normalizeOptional(row.manufacturer);
+    const modelKey = `${typeId}\u0000${manufacturer ?? ""}\u0000${row.modelName}`;
+    let modelId = modelCache.get(modelKey);
+    if (modelId === undefined) {
+      const existingModel = await findGearModelByName({
+        typeId,
+        manufacturer,
+        name: row.modelName,
+      });
+      if (existingModel) {
+        modelId = existingModel.id;
+      } else {
+        modelId = `gm_${uuidv7()}`;
+        await insertGearModel({
+          id: modelId,
+          publicId: generatePublicId(),
+          typeId,
+          manufacturer,
+          name: row.modelName,
+          tracking: "coded",
+          description: null,
+          msrpCents: row.msrpCents ?? null,
+          serviceLifeYears: null,
+          inspectionIntervalDays: null,
+          imageKey: null,
+          productUrl: null,
+          createdBy: principal.userId,
+        });
+        await recordAuditEvent({
+          actorUserId: principal.userId,
+          action: "gear_model.created",
+          targetType: "gear",
+          targetId: modelId,
+          metadata: { name: row.modelName, manufacturer, bulk: true },
+        });
+      }
+      modelCache.set(modelKey, modelId);
+    }
+
+    const id = `gi_${uuidv7()}`;
     const publicId = generatePublicId();
     try {
-      await insertGear({
+      await insertGearItem({
         id,
         publicId,
-        typeId,
+        modelId,
         code,
-        description,
+        description: normalizeOptional(description),
         // Bulk import doesn't support thumbnails — officers can upload
         // per-piece via the singular Add/Edit sheet after the fact.
         thumbnailKey: null,
@@ -199,11 +256,13 @@ export async function bulkImportGearAction(
           row.acquiredAt === null
             ? null
             : Temporal.Instant.fromEpochMilliseconds(row.acquiredAt),
+        manufacturedAt:
+          row.manufacturedAt === null || row.manufacturedAt === undefined
+            ? null
+            : Temporal.Instant.fromEpochMilliseconds(row.manufacturedAt),
         acquisitionCostCents: row.acquisitionCostCents,
-        msrpCents: row.msrpCents ?? null,
-        manufacturer: normalizeOptional(row.manufacturer),
+        acquisitionKind: row.acquisitionKind ?? null,
         serialNumber: normalizeOptional(row.serialNumber),
-        conditionGrade: row.conditionGrade ?? null,
         notesMarkdown: null,
         condition: "serviceable",
         createdBy: principal.userId,
@@ -216,7 +275,7 @@ export async function bulkImportGearAction(
       throw err;
     }
 
-    // setGearTags runs after the insert — the gear row already exists
+    // setGearItemTags runs after the insert — the gear row already exists
     // when this fires. A failure here throws out of the loop, leaving
     // a tag-less gear row behind. That's the same partial-failure
     // shape the per-row audit emission carries (see the file-level
@@ -225,8 +284,8 @@ export async function bulkImportGearAction(
     // rolling back the insert. An officer can re-tag the orphan row
     // via the singular Edit sheet.
     if (tagIds.length > 0) {
-      await setGearTags({
-        gearId: id,
+      await setGearItemTags({
+        itemId: id,
         tagIds,
         assignedBy: principal.userId,
       });

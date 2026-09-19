@@ -29,7 +29,7 @@ import {
 } from "#/features/gear/server/cart-kv.server";
 import type { StoredCart } from "#/features/gear/server/cart-kv.server";
 import { requireGearLoanManager } from "#/features/gear/server/permissions.server";
-import { getGearByPublicId } from "#/features/gear/server/repo.server";
+import { getGearItemByPublicId } from "#/features/gear/server/repo.server";
 import {
   getApprovedMemberByPublicId,
   getCartHydrationRowsByPublicIds,
@@ -99,7 +99,7 @@ export interface CartItemRow {
   description: string;
   typeName: string;
   thumbnailKey: string | null;
-  lifecycle: schema.GearLifecycle;
+  status: schema.GearStatus;
   condition: schema.GearCondition;
   hasOpenLoan: boolean;
   availability: CartItemAvailability;
@@ -171,7 +171,10 @@ async function hydrateCartItems(
     survivingEntries.push(entry);
 
     let availability: CartItemAvailability;
-    if (row.lifecycle === "retired") {
+    // Any terminal status, not just `retired` — a `lost` or `disposed`
+    // item is equally un-loanable, and the member-facing label for all
+    // three is the same.
+    if (row.status !== "active") {
       availability = "retired";
     } else if (row.condition !== "serviceable") {
       availability = "not_serviceable";
@@ -189,7 +192,7 @@ async function hydrateCartItems(
       description: row.description,
       typeName: row.typeName,
       thumbnailKey: row.thumbnailKey,
-      lifecycle: row.lifecycle,
+      status: row.status,
       condition: row.condition,
       hasOpenLoan: row.hasOpenLoan,
       availability,
@@ -235,11 +238,11 @@ export async function addToCartAction(input: {
   gearPublicId: string;
 }): Promise<AddToCartResult> {
   const principal = await requireCartMember();
-  const gear = await getGearByPublicId(input.gearPublicId);
+  const gear = await getGearItemByPublicId(input.gearPublicId);
   if (!gear) {
     return { ok: false, reason: "not_found" };
   }
-  if (gear.lifecycle === "retired") {
+  if (gear.status !== "active") {
     return { ok: false, reason: "retired" };
   }
   if (gear.code === null) {

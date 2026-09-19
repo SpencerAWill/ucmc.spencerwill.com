@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { LoanSubjectLink } from "#/features/gear/components/loan-subject-link";
 import { formatDate, formatRelative } from "#/lib/date-format";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
@@ -78,11 +78,7 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
     loan.returnedAt === null && loan.dueAt.epochMilliseconds < Date.now();
   return (
     <li>
-      <Link
-        to="/gear/$publicId"
-        params={{ publicId: loan.gearPublicId }}
-        className="block"
-      >
+      <LoanSubjectLink publicId={loan.gearPublicId} className="block">
         <Card className="overflow-hidden p-0 transition-shadow hover:shadow-md">
           <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[7rem_1fr]">
             <div className="bg-muted">
@@ -124,7 +120,7 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
             </div>
           </div>
         </Card>
-      </Link>
+      </LoanSubjectLink>
     </li>
   );
 }

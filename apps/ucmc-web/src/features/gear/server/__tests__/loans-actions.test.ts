@@ -35,12 +35,12 @@ vi.mock("#/features/gear/server/loans-repo.server", async (importOriginal) => {
   const actual = await importOriginal<typeof LoansRepoModule>();
   return {
     ...actual,
-    getOpenLoanForGear: async (gearId: string) =>
-      raceFlags.skipPreCheck ? null : actual.getOpenLoanForGear(gearId),
+    getOpenLoanForItem: async (itemId: string) =>
+      raceFlags.skipPreCheck ? null : actual.getOpenLoanForItem(itemId),
   };
 });
 
-const { createGearAction, retireGearAction } =
+const { createGearAction, deactivateGearAction } =
   await import("#/features/gear/server/gear-actions.server");
 const { createGearTypeAction } =
   await import("#/features/gear/server/gear-types-actions.server");
@@ -53,6 +53,8 @@ const {
   listLoansAction,
   listMyLoansAction,
 } = await import("#/features/gear/server/loans-actions.server");
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
 const { listLoans } = await import("#/features/gear/server/loans-repo.server");
 const { openSession } = await import("#/server/auth/session.server");
 
@@ -119,9 +121,39 @@ async function createTypeOk(): Promise<string> {
     name: `Harness ${crypto.randomUUID()}`,
     prefix: "CH",
     description: null,
+    inspectionIntervalDays: null,
   });
   if (!r.ok) throw new Error("createGearType failed");
   return r.publicId;
+}
+
+/**
+ * Creates the model on demand so a test can keep naming a type and get
+ * a working item. The model layer is real in production — officers pick
+ * a product — but a test asserting retire semantics shouldn't have to
+ * care, so one model per type is created lazily and reused.
+ */
+const modelByType = new Map<string, string>();
+
+async function modelForType(typePublicId: string): Promise<string> {
+  const cached = modelByType.get(typePublicId);
+  if (cached !== undefined) return cached;
+  const result = await createGearModelAction({
+    typePublicId,
+    name: `Model for ${typePublicId}`,
+    manufacturer: null,
+    tracking: "coded",
+    description: null,
+    msrpCents: null,
+    serviceLifeYears: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!result.ok) {
+    throw new Error(`createGearModel failed: ${JSON.stringify(result)}`);
+  }
+  modelByType.set(typePublicId, result.publicId);
+  return result.publicId;
 }
 
 async function createGearOk(input: {
@@ -130,7 +162,7 @@ async function createGearOk(input: {
   condition?: schema.GearCondition;
 }): Promise<string> {
   const r = await createGearAction({
-    typePublicId: input.typePublicId,
+    modelPublicId: await modelForType(input.typePublicId),
     code: input.code,
     description: "Test gear",
     thumbnailDataUrl: null,
@@ -146,11 +178,21 @@ async function createGearOk(input: {
 
 beforeEach(async () => {
   cookieJar.clear();
+  modelByType.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
@@ -239,7 +281,11 @@ describe("checkoutLoansAction", () => {
     const typePublicId = await createTypeOk();
     const ok = await createGearOk({ typePublicId, code: "CH1" });
     const retired = await createGearOk({ typePublicId, code: "CH2" });
-    await retireGearAction({ publicId: retired, reason: null });
+    await deactivateGearAction({
+      publicId: retired,
+      status: "retired",
+      reason: null,
+    });
     const damaged = await createGearOk({
       typePublicId,
       code: "CH3",
@@ -412,9 +458,9 @@ describe("checkinLoansAction", () => {
     });
 
     const gRows = await getDb()
-      .select({ condition: schema.gear.condition })
-      .from(schema.gear)
-      .where(eq(schema.gear.publicId, gear));
+      .select({ condition: schema.gearItems.condition })
+      .from(schema.gearItems)
+      .where(eq(schema.gearItems.publicId, gear));
     expect(gRows.at(0)?.condition).toBe("needs_repair");
     const updates = (await getDb().select().from(schema.auditLog)).filter(
       (r) => r.action === "gear.updated",
@@ -543,7 +589,7 @@ describe("listMyLoansAction", () => {
   });
 });
 
-describe("retireGearAction with open loan", () => {
+describe("deactivateGearAction with open loan", () => {
   it("blocks retire with `on_loan` while a piece is checked out", async () => {
     await signInAsLoanManager();
     const typePublicId = await createTypeOk();
@@ -555,7 +601,11 @@ describe("retireGearAction with open loan", () => {
       notes: null,
     });
 
-    const result = await retireGearAction({ publicId: gear, reason: null });
+    const result = await deactivateGearAction({
+      publicId: gear,
+      status: "retired",
+      reason: null,
+    });
     expect(result).toEqual({ ok: false, reason: "on_loan" });
   });
 
@@ -573,7 +623,11 @@ describe("retireGearAction with open loan", () => {
       items: [{ gearPublicId: gear, conditionAtReturn: null, notes: null }],
     });
 
-    const result = await retireGearAction({ publicId: gear, reason: null });
+    const result = await deactivateGearAction({
+      publicId: gear,
+      status: "retired",
+      reason: null,
+    });
     expect(result).toEqual({ ok: true });
   });
 });

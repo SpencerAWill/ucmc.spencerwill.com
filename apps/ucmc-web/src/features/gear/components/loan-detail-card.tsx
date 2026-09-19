@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { LoanSubjectLink } from "#/features/gear/components/loan-subject-link";
 import { formatDate } from "#/lib/date-format";
 
 import { Badge } from "#/components/ui/badge";
@@ -11,17 +11,8 @@ import {
 } from "#/components/ui/card";
 import { UserAvatar } from "#/components/user-avatar";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
-import type {
-  GearCondition,
-  LoanDetail,
-} from "#/features/gear/server/gear-fns";
-
-const CONDITION_LABEL: Record<GearCondition, string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
+import type { LoanDetail } from "#/features/gear/server/gear-fns";
+import { CONDITION_LABEL } from "#/features/gear/lib/labels";
 
 const PLACEHOLDER = "/gear-placeholder.svg";
 
@@ -31,9 +22,8 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <Link
-          to="/gear/$publicId"
-          params={{ publicId: loan.gearPublicId }}
+        <LoanSubjectLink
+          publicId={loan.gearPublicId}
           className="aspect-square w-32 shrink-0 overflow-hidden rounded-md border bg-muted sm:w-40"
         >
           <img
@@ -45,7 +35,7 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
             alt=""
             className="h-full w-full object-cover"
           />
-        </Link>
+        </LoanSubjectLink>
         <div className="flex-1 space-y-2">
           <div className="flex items-center gap-3">
             <span className="inline-flex h-10 items-center justify-center rounded border border-primary/30 bg-primary/10 px-3 font-mono text-lg font-semibold text-primary">
@@ -55,13 +45,12 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
               <CardTitle>{loan.gearDescription}</CardTitle>
               <CardDescription>
                 {loan.typeName} ·{" "}
-                <Link
-                  to="/gear/$publicId"
-                  params={{ publicId: loan.gearPublicId }}
-                  className="underline-offset-2 hover:underline"
+                <LoanSubjectLink
+                  publicId={loan.gearPublicId}
+                  className="inline underline-offset-2 hover:underline"
                 >
                   view gear
-                </Link>
+                </LoanSubjectLink>
               </CardDescription>
             </div>
           </div>

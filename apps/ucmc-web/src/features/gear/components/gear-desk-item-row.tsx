@@ -33,6 +33,7 @@ import type {
   GearCondition,
   GearLookupRow,
 } from "#/features/gear/server/gear-fns";
+import { CONDITION_LABEL } from "#/features/gear/lib/labels";
 
 /**
  * Row components for the gear-desk items table. The parent pane owns
@@ -100,13 +101,6 @@ export function CheckoutItemRow({
     </>
   );
 }
-
-const CONDITION_LABEL: Record<GearCondition, string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
 
 export function CheckinItemRow({
   row,

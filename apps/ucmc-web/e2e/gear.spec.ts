@@ -11,13 +11,16 @@ import { expect, test } from "./fixtures/mailpit";
  *     gear:manage.
  *   - Type creation lands in D1 and the type appears in the type
  *     dropdown when adding gear.
- *   - Adding a piece with a code stores it; retiring it NULLs the code;
- *     re-adding the same code on a new piece succeeds (the headline
- *     "code recycling" behavior of this feature).
- *   - The lifecycle filter on `/gear` toggles between active and
- *     retired rows.
+ *   - A model is created inline from the add-gear sheet, since an item
+ *     now references a product rather than carrying the brand itself.
+ *   - Adding a piece with a code stores it; retiring it KEEPS the code,
+ *     and re-adding the same code on a new piece is refused. Codes are
+ *     never recycled, so every historical mention of one resolves to
+ *     exactly one item.
+ *   - The status filter on `/gear` toggles between active and retired
+ *     rows.
  */
-test("officer creates a type, adds gear, retires it, and reissues the code", async ({
+test("officer creates a type, adds gear, retires it, and cannot reissue the code", async ({
   page,
   mailpit,
 }) => {
@@ -69,15 +72,25 @@ test("officer creates a type, adds gear, retires it, and reissues the code", asy
   // Pick the freshly-created type.
   await page.getByRole("combobox", { name: /^type$/i }).click();
   await page.getByRole("option", { name: new RegExp(typeName) }).click();
+  // The type has no models yet, so create one inline — an item can't
+  // exist without the product it is an instance of.
+  await page.getByRole("button", { name: /^new model/i }).click();
+  await page
+    .getByRole("textbox", { name: /^new model name$/i })
+    .fill(`E2E Model ${runTag}`);
+  await page
+    .getByRole("textbox", { name: /^new model manufacturer$/i })
+    .fill("Petzl");
+  await page.getByRole("button", { name: /^create model$/i }).click();
   // Code auto-fills to "{prefix}1" via the suggest-code helper since
   // this is the type's first piece. Overwrite explicitly just to be
   // deterministic against the auto-fill effect's timing.
   const codeInput = page.getByRole("textbox", { name: /^code$/i });
   await codeInput.fill(code);
-  // Description is required end-to-end (data model + UI) since the
-  // description-required refactor.
+  // Optional now that the model carries the product name — this field
+  // is only for per-unit distinguishing marks.
   await page
-    .getByRole("textbox", { name: /description/i })
+    .getByRole("textbox", { name: /distinguishing marks/i })
     .fill(`Test gear ${runTag}`);
   // The sheet's submit button reuses the "Add gear" label; the toolbar
   // button behind the sheet overlay is hidden, so the role lookup
@@ -107,20 +120,21 @@ test("officer creates a type, adds gear, retires it, and reissues the code", asy
     timeout: 5_000,
   });
 
-  // The row leaves the active list (default lifecycle filter = active).
+  // The row leaves the active list (default status filter = active).
   await expect(page.getByText(code).first()).toBeHidden();
 
-  // Toggling the lifecycle filter to "retired" reveals the row, with
-  // its code now cleared from the database — so the card shows the
-  // "no code" placeholder. Lifecycle lives in the Filters popover as a
-  // radio group since the multi-view refactor.
+  // Toggling the status filter to "retired" reveals the row — and it
+  // STILL carries its code, which is the behaviour change: retirement
+  // used to NULL it. Status lives in the Filters popover as a radio
+  // group since the multi-view refactor.
   await page.getByRole("button", { name: /^filters/i }).click();
   await page.getByRole("radio", { name: /^retired$/i }).check();
   await page.keyboard.press("Escape");
   await expect(page.getByText(typeName).first()).toBeVisible();
+  await expect(page.getByText(code).first()).toBeVisible();
 
-  // ── 4. Re-issue the freed code on a brand-new piece ──────────────────
-  // Switch back to active filter so the new piece shows up immediately.
+  // ── 4. The code cannot be reissued ──────────────────────────────────
+  // Switch back to the active filter so a successful create would show.
   await page.getByRole("button", { name: /^filters/i }).click();
   await page.getByRole("radio", { name: /^active$/i }).check();
   await page.keyboard.press("Escape");
@@ -128,17 +142,17 @@ test("officer creates a type, adds gear, retires it, and reissues the code", asy
   await page.getByRole("button", { name: /^add gear$/i }).click();
   await page.getByRole("combobox", { name: /^type$/i }).click();
   await page.getByRole("option", { name: new RegExp(typeName) }).click();
-  // The suggested code returns to the same value since the old piece's
-  // code is NULL — type now has zero active codes again. Explicitly
-  // refill to keep the assertion independent of the suggester.
+  await page.getByRole("combobox", { name: /^model$/i }).click();
+  await page.getByRole("option", { name: /E2E Model/ }).click();
   await page.getByRole("textbox", { name: /^code$/i }).fill(code);
   await page
-    .getByRole("textbox", { name: /description/i })
+    .getByRole("textbox", { name: /distinguishing marks/i })
     .fill(`Reissued ${runTag}`);
   await page.getByRole("button", { name: /^add gear$/i }).click();
 
-  await expect(page.getByText(new RegExp(`Added ${code}`, "i"))).toBeVisible({
-    timeout: 5_000,
-  });
-  await expect(page.getByText(code).first()).toBeVisible();
+  // The retired piece still holds the unique index, so the save is
+  // refused rather than silently rebinding the label to a second item.
+  await expect(
+    page.getByText(new RegExp(`"${code}" is already in use`, "i")),
+  ).toBeVisible({ timeout: 5_000 });
 });

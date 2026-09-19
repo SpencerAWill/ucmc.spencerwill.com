@@ -75,13 +75,17 @@ function LoanDetailPage() {
         open={extendOpen}
         onOpenChange={setExtendOpen}
       />
+      {/* A counted loan ("six draws") has no single item page to open,
+          so the link only renders for a coded loan. */}
       <div className="flex justify-end">
-        <Button asChild variant="link" size="sm">
-          <Link to="/gear/$publicId" params={{ publicId: data.gearPublicId }}>
-            <Inbox className="size-4" />
-            View gear
-          </Link>
-        </Button>
+        {data.gearPublicId !== null ? (
+          <Button asChild variant="link" size="sm">
+            <Link to="/gear/$publicId" params={{ publicId: data.gearPublicId }}>
+              <Inbox className="size-4" />
+              View gear
+            </Link>
+          </Button>
+        ) : null}
       </div>
     </PageContainer>
   );

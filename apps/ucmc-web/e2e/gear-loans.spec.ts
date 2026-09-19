@@ -28,9 +28,12 @@ test("officer checks out, checks in, and the member sees the history", async ({
   const runTag = Date.now();
   const typeId = `gt_${randomUUID()}`;
   const typePublicId = randomUUID().replace(/-/g, "").slice(0, 12);
-  const g1Id = `g_${randomUUID()}`;
+  // Items hang off a model now, so the fixture seeds one per type.
+  const modelId = `gm_${randomUUID()}`;
+  const modelPublicId = randomUUID().replace(/-/g, "").slice(0, 12);
+  const g1Id = `gi_${randomUUID()}`;
   const g1PublicId = randomUUID().replace(/-/g, "").slice(0, 12);
-  const g2Id = `g_${randomUUID()}`;
+  const g2Id = `gi_${randomUUID()}`;
   const g2PublicId = randomUUID().replace(/-/g, "").slice(0, 12);
   const code1 = `LN${runTag.toString().slice(-4)}A`;
   const code2 = `LN${runTag.toString().slice(-4)}B`;
@@ -38,10 +41,12 @@ test("officer checks out, checks in, and the member sees the history", async ({
   execD1(`
 INSERT INTO gear_types (id, public_id, name, prefix, created_at, updated_at)
 VALUES ('${typeId}', '${typePublicId}', 'E2E Loan Type ${runTag}', 'LN', ${runTag}, ${runTag});
-INSERT INTO gear (id, public_id, type_id, code, description, lifecycle, condition, created_at, updated_at)
-VALUES ('${g1Id}', '${g1PublicId}', '${typeId}', '${code1}', 'Piece one', 'active', 'serviceable', ${runTag}, ${runTag});
-INSERT INTO gear (id, public_id, type_id, code, description, lifecycle, condition, created_at, updated_at)
-VALUES ('${g2Id}', '${g2PublicId}', '${typeId}', '${code2}', 'Piece two', 'active', 'serviceable', ${runTag}, ${runTag});
+INSERT INTO gear_models (id, public_id, type_id, name, tracking, created_at, updated_at)
+VALUES ('${modelId}', '${modelPublicId}', '${typeId}', 'E2E Model ${runTag}', 'coded', ${runTag}, ${runTag});
+INSERT INTO gear_items (id, public_id, model_id, code, description, status, condition, created_at, updated_at)
+VALUES ('${g1Id}', '${g1PublicId}', '${modelId}', '${code1}', 'Piece one', 'active', 'serviceable', ${runTag}, ${runTag});
+INSERT INTO gear_items (id, public_id, model_id, code, description, status, condition, created_at, updated_at)
+VALUES ('${g2Id}', '${g2PublicId}', '${modelId}', '${code2}', 'Piece two', 'active', 'serviceable', ${runTag}, ${runTag});
 `);
 
   // Sign in as the officer via magic link.

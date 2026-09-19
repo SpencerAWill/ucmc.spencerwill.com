@@ -25,7 +25,10 @@ test("officer records an inspection and sees it on the gear detail page", async 
   const runTag = Date.now();
   const typeId = `gt_${randomUUID()}`;
   const typePublicId = randomUUID().replace(/-/g, "").slice(0, 12);
-  const gearId = `g_${randomUUID()}`;
+  // Items hang off a model now, so the fixture seeds one per type.
+  const modelId = `gm_${randomUUID()}`;
+  const modelPublicId = randomUUID().replace(/-/g, "").slice(0, 12);
+  const gearId = `gi_${randomUUID()}`;
   const gearPublicId = randomUUID().replace(/-/g, "").slice(0, 12);
   const typeName = `E2E Inspect Harness ${runTag}`;
   const code = `EI${runTag.toString().slice(-4)}`;
@@ -33,8 +36,10 @@ test("officer records an inspection and sees it on the gear detail page", async 
   execD1(`
 INSERT INTO gear_types (id, public_id, name, prefix, created_at, updated_at)
 VALUES ('${typeId}', '${typePublicId}', '${typeName}', 'EI', ${runTag}, ${runTag});
-INSERT INTO gear (id, public_id, type_id, code, description, lifecycle, condition, created_at, updated_at)
-VALUES ('${gearId}', '${gearPublicId}', '${typeId}', '${code}', 'Inspection target', 'active', 'serviceable', ${runTag}, ${runTag});
+INSERT INTO gear_models (id, public_id, type_id, name, tracking, created_at, updated_at)
+VALUES ('${modelId}', '${modelPublicId}', '${typeId}', 'E2E Inspect Model ${runTag}', 'coded', ${runTag}, ${runTag});
+INSERT INTO gear_items (id, public_id, model_id, code, description, status, condition, created_at, updated_at)
+VALUES ('${gearId}', '${gearPublicId}', '${modelId}', '${code}', 'Inspection target', 'active', 'serviceable', ${runTag}, ${runTag});
 `);
 
   // Sign in via magic link.

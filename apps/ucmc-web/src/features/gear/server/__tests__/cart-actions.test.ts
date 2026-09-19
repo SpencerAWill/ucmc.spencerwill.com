@@ -34,7 +34,9 @@ const {
   removeFromCartAction,
   resolveCartTokenAction,
 } = await import("#/features/gear/server/cart-actions.server");
-const { createGearAction, retireGearAction } =
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
+const { createGearAction, deactivateGearAction } =
   await import("#/features/gear/server/gear-actions.server");
 const { createGearTypeAction } =
   await import("#/features/gear/server/gear-types-actions.server");
@@ -127,9 +129,39 @@ async function createTypeOk(): Promise<string> {
     name: `Cart Type ${crypto.randomUUID()}`,
     prefix: "CR",
     description: null,
+    inspectionIntervalDays: null,
   });
   if (!r.ok) throw new Error(`createGearType failed: ${JSON.stringify(r)}`);
   return r.publicId;
+}
+
+/**
+ * Creates the model on demand so a test can keep naming a type and get
+ * a working item. The model layer is real in production — officers pick
+ * a product — but a test asserting retire semantics shouldn't have to
+ * care, so one model per type is created lazily and reused.
+ */
+const modelByType = new Map<string, string>();
+
+async function modelForType(typePublicId: string): Promise<string> {
+  const cached = modelByType.get(typePublicId);
+  if (cached !== undefined) return cached;
+  const result = await createGearModelAction({
+    typePublicId,
+    name: `Model for ${typePublicId}`,
+    manufacturer: null,
+    tracking: "coded",
+    description: null,
+    msrpCents: null,
+    serviceLifeYears: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!result.ok) {
+    throw new Error(`createGearModel failed: ${JSON.stringify(result)}`);
+  }
+  modelByType.set(typePublicId, result.publicId);
+  return result.publicId;
 }
 
 async function createGearOk(input: {
@@ -138,7 +170,7 @@ async function createGearOk(input: {
   condition?: schema.GearCondition;
 }): Promise<string> {
   const r = await createGearAction({
-    typePublicId: input.typePublicId,
+    modelPublicId: await modelForType(input.typePublicId),
     code: input.code,
     description: "Cart test gear",
     thumbnailDataUrl: null,
@@ -162,12 +194,22 @@ async function clearCartKv(): Promise<void> {
 
 beforeEach(async () => {
   cookieJar.clear();
+  modelByType.clear();
   await clearCartKv();
   const db = getDb();
   await db.delete(schema.auditLog);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.waiverAttestations);
@@ -244,7 +286,11 @@ describe("addToCartAction", () => {
   it("rejects retired pieces with reason 'retired'", async () => {
     const typePublicId = await createTypeOk();
     const gearPublicId = await createGearOk({ typePublicId, code: "CR2" });
-    await retireGearAction({ publicId: gearPublicId, reason: null });
+    await deactivateGearAction({
+      publicId: gearPublicId,
+      status: "retired",
+      reason: null,
+    });
     await signInAsApprovedMemberWithWaiver();
 
     const result = await addToCartAction({ gearPublicId });
@@ -357,8 +403,8 @@ describe("getMyCartAction availability", () => {
 
     // Hard delete from D1 directly (simulates a maintenance op).
     await getDb()
-      .delete(schema.gear)
-      .where(eq(schema.gear.publicId, gearPublicId));
+      .delete(schema.gearItems)
+      .where(eq(schema.gearItems.publicId, gearPublicId));
 
     const cart = await getMyCartAction();
     expect(cart.items).toEqual([]);
@@ -488,7 +534,9 @@ describe("getMyCartAction prune behavior", () => {
     const before = await getKv().get(key);
 
     // Hard-delete the gear; next getMyCart should prune + rewrite.
-    await getDb().delete(schema.gear).where(eq(schema.gear.publicId, a));
+    await getDb()
+      .delete(schema.gearItems)
+      .where(eq(schema.gearItems.publicId, a));
     await getMyCartAction();
 
     const after = await getKv().get(key);
@@ -509,9 +557,9 @@ describe("hydration surfaces no_code for code-cleared rows", () => {
     // cycle, or a manual edit). The row stays in inventory but loses
     // its scannable identifier.
     await getDb()
-      .update(schema.gear)
+      .update(schema.gearItems)
       .set({ code: null })
-      .where(eq(schema.gear.publicId, a));
+      .where(eq(schema.gearItems.publicId, a));
 
     const cart = await getMyCartAction();
     expect(cart.items).toHaveLength(1);

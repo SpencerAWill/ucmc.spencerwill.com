@@ -7,33 +7,78 @@ paths:
 
 # Gear inventory, loans, and carts
 
-## Inventory (`/gear`, `/gear/$publicId`)
+## Three levels: type → model → item
 
-Every piece is a row in `gear`, exclusively partitioned by a `gear_types` row and tagged via the `gear_tag_assignments` join. Each piece is referenced on its laminated tag by a **freeform `code`** string (e.g. `CH93`) — nullable + unique. **Retiring NULLs the column so the same string can be reissued**; the `gear.retired` audit event captures `priorCode`.
+The cave owns fleets, not one-offs, so the product is modelled separately from the physical unit.
 
-**Lifecycle (`active`/`retired`) and condition (`serviceable`/`needs_repair`/`missing`/`lost`) are intentionally orthogonal** so a loan table could land without reshaping `gear`.
+- **`gear_types`** — the browse category ("Quickdraw", "Harness"). Owns the code prefix and a default `inspection_interval_days`.
+- **`gear_models`** — the product ("BD HotForge 12cm"). Owns everything true of every unit: `manufacturer`, `msrp_cents`, `service_life_years`, the product image, and **`tracking`**.
+- **`gear_items`** — one physical unit: `code`, `serial_number`, `manufactured_at`, acquisition, and the three state axes.
 
-Tags have a `visibility` column (`public`/`internal`) — **internal tags are stripped from list/detail responses for non-officers at the repo layer, not just the UI.**
+`manufacturer` / `msrp_cents` moved **off** the item onto the model — retyping "Black Diamond" onto forty rows was the old shape, and it's why "7 of 12 available" and recall-matching weren't answerable. An item's `description` is now **optional** (per-unit distinguishing marks); the model supplies the name.
 
-Permissions: browse is `gear:read` (auto-granted to `role_member`); create/edit/retire/import and type/tag management need `gear:manage`. Recording an inspection needs only **`gear:inspect`**, checked as `gear:inspect || gear:manage` in `requireGearInspector` so a trip leader can log a failed rope without the authority to retire pieces or bulk-import inventory; seeded with no grants, to be delegated at `/access`.
+**Coded vs counted (`gear_models.tracking`).** Quickdraws and pre-cut slings carry no labels — the desk hands out six and counts six back. A `counted` model has **no item rows at all**; `gear_stock_levels` holds a quantity per condition bucket. Giving each draw a row anyway was fake precision: when five of six come back, nothing knows which one is gone. `tracking` lives on the **model**, not the type, so a special alpine draw set can be coded while everyday draws stay counted.
 
-Type and tag management are dialogs on `/gear`, not standalone routes. Bulk CSV import reuses the same papaparse helper pattern as members' pre-add sheet.
+## Three state axes, not one column
 
-The **inspection log** is append-only per piece (`gear_inspections`; pass/fail/advisory), surfaced on the detail page. **The inspector's display name is snapshotted at write time** to survive an officer-deletion FK SET NULL.
+The old `lifecycle` + `condition` pair mixed three questions. They are now independent:
 
-Officers can **print barcode labels** for one or many pieces (CODE128 SVG via `jsbarcode`) — a Dialog whose `@media print` rules hide everything else on the page.
+| Column        | Values                                     | Question                       |
+| ------------- | ------------------------------------------ | ------------------------------ |
+| `status`      | `active` · `retired` · `lost` · `disposed` | Is it still club property?     |
+| `condition`   | `serviceable` · `needs_repair` · `unsafe`  | Can it be loaned?              |
+| `whereabouts` | `cave` · `repair` · `officer` · `missing`  | Where is it, when not on loan? |
 
-## Loans (`/gear/loans`, `/gear/loans/$publicId`, `/my/gear`)
+Loan state is **derived from `gear_loans` and never mirrored** onto the item — one source of truth for checkout.
 
-Each loan is a row in `gear_loans` linking one `gear` to one borrower with its own `dueAt`. One officer-driven checkout flow generates N loan rows; check-in batches may span multiple borrowers (each row resolves its own loan from the gear code).
+- `missing` + `needs_repair` is legal (it was already broken when it vanished). The old single column couldn't say this.
+- `missing` is the only state **inferred from absence**, at the close of an inventory sweep, which is why `whereabouts_as_of` exists. An item on an open loan is legitimately absent and can never be marked missing.
+- `unsafe` is a hard loan block with **no override**. `needs_repair` is overridable by an officer with a confirm.
+- Only an inspection may raise `condition`; anyone can lower it at check-in.
+- Display labels live in **`lib/labels.ts`**, not per-component — six private copies had already drifted.
 
-**The partial unique index `gear_loans_one_active_per_gear` on `(gear_id) WHERE returned_at IS NULL` is the race protector — the per-row pre-check in the action is UX only.** Retiring on-loan gear is blocked (typed `on_loan` result on `retireGearAction`; the FK is also `RESTRICT` as defense-in-depth).
+## Codes are never recycled
 
-Officer-only flows gate on `gear:loan` (separate from `gear:manage` so a "gear cave keeper" role can be delegated independently); `/my/gear` is member-self-read, gated on `gear:read` plus an in-action filter on the borrower's userId.
+`gear_items.code` is nullable (an unlabelled fresh-in-box item) and **absolutely unique**. **Deactivating does NOT null it** — the label stays bound to that item forever, so every historical "CH93" in a note, logbook or audit row resolves to exactly one thing.
 
-The **gear-desk Sheet** (`components/gear-desk-sheet.tsx`) hosts both checkout and check-in behind a tab toggle, reachable from a single responsive header button on `/gear/loans`. An earlier mobile FAB iteration was dropped because the FAB's fixed positioning fought with the sidebar's stacking context.
+- **`listCodesForType` is deliberately unfiltered by status.** It used to consider only active gear, which was safe _only because_ retiring nulled the code. Filtering now would suggest a code the unique index then rejects.
+- `suggestCode` is `max + 1` and advisory — an officer may type anything. The client helper in `lib/suggest-code.ts` mirrors the server action.
+- Freeing a code is an explicit, audited **`releaseGearItemCodeAction`** on an already-deactivated item. Refused on an active item. That is the whole recycling story — not a mode the system runs in.
+- Retired items **appear** in code search and at the desk, flagged ineligible: scanning a retired harness should say "retired, do not loan", which beats "not found".
 
-Audit actions: `loan.checked_out` (one event per row in a batch, with `bulk: true`), `loan.checked_in`, `loan.extended`, `loan.cart_scanned`.
+**`reactivateGearAction` preserves `deactivated_reason`.** The old un-retire nulled it, destroying the record of _why_ a harness was pulled the moment someone reversed the call.
+
+## Permissions
+
+Browse is `gear:read` (auto-granted to `role_member`); create/edit/deactivate/import, **models, holds, sweeps and attribute definitions** all need `gear:manage`. Recording an inspection needs **`gear:inspect`**, checked as `gear:inspect || gear:manage` in `requireGearInspector` so a trip leader can log a failed rope without authority to retire or bulk-import; seeded ungranted, to be delegated at `/access`.
+
+**The new surfaces deliberately introduce no permissions of their own.** They are the same officer surface as the items they group, and a permission costs a migration plus a seed plus a role grant — worth spending only when a surface can be delegated separately, which none of these can.
+
+Tags have a `visibility` column (`public`/`internal`) — **internal tags are stripped at the repo layer for non-officers, not just in the UI.** Tags are for multi-valued, cross-cutting labels (`dry-treated`, `instruction-only`). Per-type scales like harness size belong in `gear_attribute_defs`: tag names are globally unique (one `"M"` shared by harnesses and jackets) and the tag filter is **AND-only**, so "M or L" as tags returns nothing.
+
+## Custom attributes, at two levels
+
+Officer-defined attributes scoped to types via `gear_attribute_def_types` (a join table, so `Colour` is defined once and attached to many types). `level` is `model` or `item`: rope diameter is typed once for a fleet of forty, harness size varies per unit. A counted model has no items, so only model-level values can exist for it — that falls out of the shape rather than needing a rule.
+
+Four kinds: `text`, `number`, `select`, `boolean`. **The unit lives on the definition, never in the value** — a value of `"60m"` is text and stops being range-filterable, which defeats the point. **`select` options carry explicit ordering**; sorting sizes alphabetically yields `L, M, S, XL`.
+
+## Loans are dual-shape
+
+Each loan names **either** a coded item (`item_id`) **or** a counted model with a quantity (`model_id` + `quantity`, "six draws"). A CHECK constraint enforces exactly one. Every read path LEFT JOINs items and resolves the model through `coalesce(loans.model_id, items.model_id)` — one query serves both kinds, rather than two near-identical tables and two of every query behind `/my/gear`, the overdue list and member standing.
+
+Counted loans support **partial return**: `quantity_returned` climbs as units come back; the shortfall lands in `quantity_lost` when the loan closes.
+
+**The partial unique index `gear_loans_one_active_per_item` on `(item_id) WHERE returned_at IS NULL` is the race protector — the per-row pre-check in the action is UX only.** It applies to coded loans only; counted stock is guarded by an available-quantity read-then-write that can over-lend by one under a true tie, which the cave prefers to taking a lock. Deactivating on-loan gear is blocked (typed `on_loan` result; the FK is also `RESTRICT`).
+
+`LoanSummary.gearPublicId` is **nullable** — a counted loan has no item page to open. `<LoanSubjectLink>` owns that branch, because an `<a>` with no `href` still reads as a link.
+
+Officer-only flows gate on `gear:loan` (separate from `gear:manage` so a "gear cave keeper" role can be delegated independently); `/my/gear` is member-self-read on `gear:read` plus an in-action borrower filter.
+
+The **gear-desk Sheet** hosts checkout and check-in behind a tab toggle. An earlier mobile FAB iteration was dropped because the FAB's fixed positioning fought the sidebar's stacking context.
+
+Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`, `loan.extended`, `loan.cart_scanned`. Gear-side: `gear.added`, `gear.updated`, `gear.deactivated`, `gear.reactivated`, `gear.code_released`, `gear.tags_changed`, `gear_model.*`. **`gear.retired` / `gear.unretired` remain in the enum for historical rows only** — nothing emits them.
+
+**The audit action list exists twice** — `auditAction` in `drizzle/schema.ts` (the column enum) and `AUDIT_ACTIONS` in `features/audit/server/audit-fns.ts` (the filter dropdown). Nothing keeps them in sync; add to both.
 
 ### Barcode scanning is hand-rolled
 
@@ -41,22 +86,28 @@ Native `BarcodeDetector` on Chrome / Edge / Android Chrome / Safari iOS 17+ / Sa
 
 ### Backfill
 
-`LoansBulkImportSheet` (header "Backfill" button on `/gear/loans`, gated by `gear:loan`). `bulkImportLoansAction` reads CSV (file / clipboard / manual rows), resolves members by primary email through `user_emails` and gear by `code`, and supports both open and pre-returned rows in the same import.
+`LoansBulkImportSheet` (header "Backfill" button on `/gear/loans`, gated by `gear:loan`). `bulkImportLoansAction` reads CSV, resolves members by primary email through `user_emails` and items by `code`, and supports open and pre-returned rows in the same import.
 
-**Eligibility checks for `lifecycle` and `condition` are intentionally relaxed** — a piece retired today may have been serviceable when loaned years ago. The partial unique index still gates open backfill rows, surfaced as an `already_on_loan` skip. Audit events carry `bulk: true, backfill: true`; closed-loan rows also emit a `loan.checked_in` in the same call. **Backfill does NOT mutate `gear.condition` from `condition_at_return`** — the historical condition belongs on the loan row only.
+**Eligibility checks for `status` and `condition` are intentionally relaxed** — a piece retired today may have been serviceable when loaned years ago. The partial unique index still gates open backfill rows, surfaced as an `already_on_loan` skip. Audit events carry `bulk: true, backfill: true`. **Backfill does NOT mutate an item's `condition` from `condition_at_return`** — the historical condition belongs on the loan row only.
+
+Gear bulk import **creates models on demand** from a `model` / `model_name` CSV column, falling back to the description when the column is absent, so a sheet of forty draws lands on one model rather than forty.
 
 ## Member cart (`/my/gear/cart`)
 
-Each approved + current-waiver member has a personal pre-checkout cart so they can tag pieces online and present a QR at the cave instead of dictating codes at the desk.
+Each approved + current-waiver member has a personal pre-checkout cart so they can tag items online and present a QR at the cave instead of dictating codes at the desk.
 
-**Storage is KV-only — no D1 table, no per-piece reservation.** `gear-cart:user:<userId>` holds the live cart with a 24 h TTL (refreshed on every mutation); a separate `gear-cart-token:<uuid>` holds a snapshot at QR-generation time with a 5 min TTL. The QR encodes `ucmc-cart:<uuid>` — the gear-desk scanner branches on the `ucmc-cart:` prefix to call `resolveCartTokenFn` instead of `getGearByCode`, and **the _snapshot_ (not the live cart) is what resolves, so a post-mint edit doesn't drift the officer's view.**
+**Storage is KV-only — no D1 table, no per-item reservation.** `gear-cart:user:<userId>` holds the live cart with a 24 h TTL (refreshed on every mutation); a separate `gear-cart-token:<uuid>` holds a snapshot at QR-generation time with a 5 min TTL. The QR encodes `ucmc-cart:<uuid>` — the desk scanner branches on the prefix to call `resolveCartTokenFn` instead of `getItemByCode`, and **the _snapshot_ (not the live cart) is what resolves**, so a post-mint edit doesn't drift the officer's view.
 
 Member writes go through `requireCartMember` (approved + current-cycle waiver attestation); `resolveCartTokenAction` is officer-only (`gear:loan`) and emits `loan.cart_scanned`.
 
-Hydration computes per-row `availability` (`loanable` / `on_loan` / `not_serviceable` / `retired` / `not_found`) so the cart page can flag unavailable items inline AND the desk pane can pre-emptively block submit until they're removed — the post-submit `CheckoutLoansResult` skip path remains as a second line of defense.
+Hydration computes per-row `availability` (`loanable` / `on_loan` / `not_serviceable` / `retired` / `not_found`) so the cart page can flag unavailable items inline AND the desk pane can block submit until they're removed. **The status check is `!== "active"`, not `=== "retired"`** — a `lost` or `disposed` item is equally un-loanable.
 
-**Cart membership is not audited** — it's a private, ephemeral surface; only the officer scan creates an audit row, and checkout itself still emits `loan.checked_out`.
+**Cart membership is not audited** — it's a private, ephemeral surface; only the officer scan creates an audit row.
 
-QR rendering uses the **`qrcode`** dep on a canvas inside `<CartQrDialog />`; `jsbarcode` continues to own the linear-barcode label-printing path.
+QR rendering uses the **`qrcode`** dep on a canvas inside `<CartQrDialog />`; `jsbarcode` owns linear-barcode label printing.
 
-The "Add to cart" button on `/gear` list cards and the detail page is hidden for anonymous / non-approved viewers **and for officers operating gear admin tools (`gear:manage`)** so it doesn't clutter inventory management. **Pieces without a `code` cannot be added** — the desk would have no scannable identifier even after a cart scan.
+The "Add to cart" button is hidden for anonymous / non-approved viewers **and for officers operating gear admin tools (`gear:manage`)**. **Items without a `code` cannot be added** — the desk would have no scannable identifier even after a cart scan.
+
+## Not built yet
+
+The schema carries `gear_holds`, `gear_inventory_sweeps` (+ entries) and the four attribute tables; their actions and UI land in later steps. Model editing beyond inline creation from the add-gear sheet, reservations (member-initiated, converting into a loan at the desk), qualification gating, member-standing thresholds and the browse-by-model page redesign are all deliberately deferred.

@@ -47,24 +47,18 @@ import { Textarea } from "#/components/ui/textarea";
 import { gearTagsQueryOptions } from "#/features/gear/api/queries";
 import {
   useBulkAddGearTags,
-  useBulkRetireGear,
+  useBulkDeactivateGear,
   useBulkSetGearCondition,
-  useBulkUnretireGear,
+  useBulkReactivateGear,
 } from "#/features/gear/api/use-bulk-gear";
 import { GearLabelsDialog } from "#/features/gear/components/gear-labels-dialog";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
 import type {
   GearCondition,
-  GearLifecycle,
+  GearStatus,
 } from "#/features/gear/server/gear-fns";
-
-const CONDITION_LABEL: Record<GearCondition, string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
+import { CONDITION_LABEL } from "#/features/gear/lib/labels";
 
 export interface GearBulkActions {
   /** `DropdownMenu*` items for the toolbar's bulk slot. */
@@ -77,11 +71,11 @@ export interface GearBulkActions {
 
 export function useGearBulkActions({
   selectedPublicIds,
-  lifecycleFilter,
+  statusFilter,
   onClear,
 }: {
   selectedPublicIds: string[];
-  lifecycleFilter: GearLifecycle;
+  statusFilter: GearStatus;
   onClear: () => void;
 }): GearBulkActions {
   const count = selectedPublicIds.length;
@@ -92,8 +86,8 @@ export function useGearBulkActions({
   const [pendingTagIds, setPendingTagIds] = useState<string[]>([]);
   const { data: tags } = useQuery(gearTagsQueryOptions());
 
-  const retire = useBulkRetireGear();
-  const unretire = useBulkUnretireGear();
+  const retire = useBulkDeactivateGear();
+  const unretire = useBulkReactivateGear();
   const setCondition = useBulkSetGearCondition();
   const addTags = useBulkAddGearTags();
   const anyPending =
@@ -113,7 +107,11 @@ export function useGearBulkActions({
 
   const doRetire = () => {
     retire.mutate(
-      { publicIds: selectedPublicIds, reason: retireReason.trim() || null },
+      {
+        publicIds: selectedPublicIds,
+        status: "retired" as const,
+        reason: retireReason.trim() || null,
+      },
       {
         onSuccess: (r) => {
           reportResult("Retired", r.affected, r.skipped);
@@ -185,7 +183,7 @@ export function useGearBulkActions({
           ))}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
-      {lifecycleFilter === "active" ? (
+      {statusFilter === "active" ? (
         <DropdownMenuItem
           variant="destructive"
           onSelect={() => setRetireOpen(true)}

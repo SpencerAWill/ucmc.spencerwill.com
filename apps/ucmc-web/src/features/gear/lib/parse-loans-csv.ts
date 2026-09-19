@@ -27,11 +27,7 @@
  */
 import Papa from "papaparse";
 
-export type ParsedLoanCondition =
-  | "serviceable"
-  | "needs_repair"
-  | "missing"
-  | "lost";
+export type ParsedLoanCondition = "serviceable" | "needs_repair" | "unsafe";
 
 export interface ParsedLoanRow {
   memberEmail: string;
@@ -131,8 +127,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_CONDITIONS = new Set<ParsedLoanCondition>([
   "serviceable",
   "needs_repair",
-  "missing",
-  "lost",
+  "unsafe",
 ]);
 
 function normalize(value: unknown): string {
@@ -223,7 +218,7 @@ function parseCondition(
   }
   return {
     value: null,
-    error: `condition_at_return must be one of serviceable, needs_repair, missing, lost (line ${line})`,
+    error: `condition_at_return must be one of serviceable, needs_repair, unsafe (line ${line})`,
   };
 }
 

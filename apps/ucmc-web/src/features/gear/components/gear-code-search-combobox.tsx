@@ -54,7 +54,7 @@ export function GearCodeSearchCombobox({
     if (excluded.has(row.publicId)) return false;
     if (mode === "checkout") {
       return (
-        row.lifecycle === "active" &&
+        row.status === "active" &&
         row.condition === "serviceable" &&
         !row.hasOpenLoan
       );

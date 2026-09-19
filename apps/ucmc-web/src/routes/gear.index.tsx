@@ -26,12 +26,12 @@ import { GearList } from "#/features/gear/components/gear-list";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
 import { GearTagsManageDialog } from "#/features/gear/components/gear-tags-manage-dialog";
 import { GearTypesManageDialog } from "#/features/gear/components/gear-types-manage-dialog";
-import { useUnretireGear } from "#/features/gear/api/use-unretire-gear";
+import { useReactivateGear } from "#/features/gear/api/use-reactivate-gear";
 import { useToolbarSearchState } from "#/hooks/use-toolbar-search-state";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import {
   GEAR_CONDITION_VALUES,
-  GEAR_LIFECYCLE_VALUES,
+  GEAR_STATUS_VALUES,
 } from "#/features/gear/server/gear-fns";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
@@ -42,7 +42,7 @@ const VIEW_VALUES = ["list", "grid", "table"] as const;
 const searchSchema = z.object({
   type: z.string().optional(),
   tag: z.array(z.string()).optional(),
-  lifecycle: z.enum(GEAR_LIFECYCLE_VALUES).optional(),
+  status: z.enum(GEAR_STATUS_VALUES).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
   q: z.string().optional(),
   sort: z.enum(SORT_VALUES).optional(),
@@ -56,7 +56,7 @@ const searchSchema = z.object({
  *  `dir` is absent on purpose: its default depends on which key you're
  *  sorting by, so it can't be a single constant. */
 const SEARCH_DEFAULTS = {
-  lifecycle: "active",
+  status: "active",
   sort: "code",
   view: "list",
   page: 1,
@@ -73,7 +73,7 @@ const DEFAULT_DIR: Record<(typeof SORT_VALUES)[number], "asc" | "desc"> = {
 
 /** Changing any of these means different rows, so page 5 stops making
  *  sense. Sort, dir and view are deliberately absent. */
-const RESULT_SET_KEYS = ["type", "tag", "lifecycle", "condition", "q"] as const;
+const RESULT_SET_KEYS = ["type", "tag", "status", "condition", "q"] as const;
 
 export const Route = createFileRoute("/gear/")({
   staticData: { pageFlag: "gear_inventory" },
@@ -100,7 +100,7 @@ function GearIndexPage() {
   const toolbarState: GearToolbarState = {
     typePublicId: value.type ?? null,
     tagPublicIds: value.tag ?? [],
-    lifecycle: value.lifecycle ?? "active",
+    status: value.status ?? "active",
     condition: value.condition ?? null,
     q: value.q ?? "",
     sort: value.sort ?? "code",
@@ -114,7 +114,7 @@ function GearIndexPage() {
         ? { type: next.typePublicId ?? undefined }
         : {}),
       ...("tagPublicIds" in next ? { tag: next.tagPublicIds } : {}),
-      ...("lifecycle" in next ? { lifecycle: next.lifecycle } : {}),
+      ...("status" in next ? { status: next.status } : {}),
       ...("condition" in next
         ? { condition: next.condition ?? undefined }
         : {}),
@@ -133,7 +133,7 @@ function GearIndexPage() {
   const [typesOpen, setTypesOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
-  const unretireMutation = useUnretireGear();
+  const unretireMutation = useReactivateGear();
 
   // Selection state lives at the route so it survives view-mode
   // changes (list ↔ grid ↔ table). Reset whenever filters that change
@@ -178,7 +178,7 @@ function GearIndexPage() {
   // is the same click that unmounts it with the menu.
   const bulk = useGearBulkActions({
     selectedPublicIds: Array.from(selected),
-    lifecycleFilter: toolbarState.lifecycle,
+    statusFilter: toolbarState.status,
     onClear: clearSelection,
   });
 
@@ -188,7 +188,7 @@ function GearIndexPage() {
       toolbarState.tagPublicIds.length > 0
         ? toolbarState.tagPublicIds
         : undefined,
-    lifecycle: toolbarState.lifecycle,
+    status: toolbarState.status,
     condition: toolbarState.condition ?? undefined,
     q: toolbarState.q.length > 0 ? toolbarState.q : undefined,
     sort: toolbarState.sort,

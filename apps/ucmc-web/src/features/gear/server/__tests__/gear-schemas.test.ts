@@ -16,6 +16,7 @@ const baseInput = {
   thumbnailDataUrl: null,
   acquiredAt: null,
   acquisitionCostCents: null,
+  modelPublicId: "mdl_test",
   notesMarkdown: null,
   condition: "serviceable" as const,
   tagPublicIds: [] as string[],

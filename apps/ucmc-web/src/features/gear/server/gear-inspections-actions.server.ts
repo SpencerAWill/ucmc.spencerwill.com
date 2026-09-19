@@ -17,9 +17,9 @@ import {
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
 import {
-  getGearByPublicId,
+  getGearItemByPublicId,
   insertGearInspection,
-  listInspectionsForGear,
+  listInspectionsForItem,
 } from "#/features/gear/server/repo.server";
 import type { GearInspectionRow } from "#/features/gear/server/repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
@@ -53,11 +53,11 @@ export async function listGearInspectionsAction(input: {
   gearPublicId: string;
 }): Promise<GearInspectionSummary[]> {
   await requireGearReader();
-  const gear = await getGearByPublicId(input.gearPublicId);
+  const gear = await getGearItemByPublicId(input.gearPublicId);
   if (!gear) {
     throw new Error("Gear not found");
   }
-  const rows = await listInspectionsForGear(gear.id);
+  const rows = await listInspectionsForItem(gear.id);
   return rows.map(toSummary);
 }
 
@@ -101,7 +101,7 @@ export async function recordGearInspectionAction(
   input: RecordGearInspectionInput,
 ): Promise<RecordGearInspectionResult> {
   const principal = await requireGearInspector();
-  const gear = await getGearByPublicId(input.gearPublicId);
+  const gear = await getGearItemByPublicId(input.gearPublicId);
   if (!gear) {
     throw new Error("Gear not found");
   }
@@ -111,7 +111,8 @@ export async function recordGearInspectionAction(
   await insertGearInspection({
     id,
     publicId,
-    gearId: gear.id,
+    itemId: gear.id,
+    modelId: null,
     inspectorUserId: principal.userId,
     inspectorNameSnapshot: inspectorName,
     inspectedAt: Temporal.Instant.fromEpochMilliseconds(input.inspectedAt),

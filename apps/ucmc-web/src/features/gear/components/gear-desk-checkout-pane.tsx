@@ -79,7 +79,7 @@ function cartItemToCheckoutItem(
     description: cartItem.description,
     typeName: cartItem.typeName,
     thumbnailKey: cartItem.thumbnailKey,
-    lifecycle: cartItem.lifecycle,
+    status: cartItem.status,
     condition: cartItem.condition,
     hasOpenLoan: cartItem.hasOpenLoan,
     // Cart hydration doesn't fetch the borrower's display info — the
@@ -132,7 +132,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
         return;
       }
       if (
-        row.lifecycle !== "active" ||
+        row.status !== "active" ||
         row.condition !== "serviceable" ||
         row.hasOpenLoan
       ) {

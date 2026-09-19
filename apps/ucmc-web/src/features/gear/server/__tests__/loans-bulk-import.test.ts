@@ -25,11 +25,13 @@ const { bulkImportLoansAction } =
   await import("#/features/gear/server/loans-bulk-import-actions.server");
 const { createGearTypeAction } =
   await import("#/features/gear/server/gear-types-actions.server");
-const { createGearAction, retireGearAction } =
+const { createGearAction, deactivateGearAction } =
   await import("#/features/gear/server/gear-actions.server");
 const { checkoutLoansAction } =
   await import("#/features/gear/server/loans-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
 
 async function seedUser(
   email: string,
@@ -91,9 +93,39 @@ async function createTypeOk(): Promise<string> {
     name: `Harness ${crypto.randomUUID()}`,
     prefix: "CH",
     description: null,
+    inspectionIntervalDays: null,
   });
   if (!r.ok) throw new Error("createGearType failed");
   return r.publicId;
+}
+
+/**
+ * Creates the model on demand so a test can keep naming a type and get
+ * a working item. The model layer is real in production — officers pick
+ * a product — but a test asserting retire semantics shouldn't have to
+ * care, so one model per type is created lazily and reused.
+ */
+const modelByType = new Map<string, string>();
+
+async function modelForType(typePublicId: string): Promise<string> {
+  const cached = modelByType.get(typePublicId);
+  if (cached !== undefined) return cached;
+  const result = await createGearModelAction({
+    typePublicId,
+    name: `Model for ${typePublicId}`,
+    manufacturer: null,
+    tracking: "coded",
+    description: null,
+    msrpCents: null,
+    serviceLifeYears: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!result.ok) {
+    throw new Error(`createGearModel failed: ${JSON.stringify(result)}`);
+  }
+  modelByType.set(typePublicId, result.publicId);
+  return result.publicId;
 }
 
 async function createGearOk(input: {
@@ -101,7 +133,7 @@ async function createGearOk(input: {
   code: string;
 }): Promise<string> {
   const r = await createGearAction({
-    typePublicId: input.typePublicId,
+    modelPublicId: await modelForType(input.typePublicId),
     code: input.code,
     description: "Test gear",
     thumbnailDataUrl: null,
@@ -117,11 +149,21 @@ async function createGearOk(input: {
 
 beforeEach(async () => {
   cookieJar.clear();
+  modelByType.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
@@ -269,8 +311,9 @@ describe("bulkImportLoansAction happy paths", () => {
 
     // Retire the gear FIRST — backfill should still record the
     // historical (closed) loan that happened before retirement.
-    const retired = await retireGearAction({
+    const retired = await deactivateGearAction({
       publicId: gearPublicId,
+      status: "retired",
       reason: null,
     });
     expect(retired).toEqual({ ok: true });
@@ -497,9 +540,9 @@ describe("bulkImportLoansAction skip reasons", () => {
 
     const gear = (
       await getDb()
-        .select({ condition: schema.gear.condition })
-        .from(schema.gear)
-        .where(eq(schema.gear.publicId, gearPublicId))
+        .select({ condition: schema.gearItems.condition })
+        .from(schema.gearItems)
+        .where(eq(schema.gearItems.publicId, gearPublicId))
     ).at(0);
     expect(gear?.condition).toBe("serviceable");
   });

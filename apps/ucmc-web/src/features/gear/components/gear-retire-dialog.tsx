@@ -13,7 +13,7 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
-import { useRetireGear } from "#/features/gear/api/use-retire-gear";
+import { useDeactivateGear } from "#/features/gear/api/use-deactivate-gear";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
 
 export function GearRetireDialog({
@@ -24,13 +24,19 @@ export function GearRetireDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [reason, setReason] = useState("");
-  const retire = useRetireGear();
+  const retire = useDeactivateGear();
 
   const open = gear !== null;
   const onConfirm = () => {
     if (!gear) return;
     retire.mutate(
-      { publicId: gear.publicId, reason: reason.trim() || null },
+      {
+        publicId: gear.publicId,
+        // The dialog is the "retire" affordance specifically; `lost` and
+        // `disposed` are reached from the status menu, not from here.
+        status: "retired" as const,
+        reason: reason.trim() || null,
+      },
       {
         onSuccess: (result) => {
           if (result.ok) {

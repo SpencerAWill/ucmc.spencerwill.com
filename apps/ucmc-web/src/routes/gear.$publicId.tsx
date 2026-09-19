@@ -8,7 +8,7 @@ import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { gearDetailQueryOptions } from "#/features/gear/api/queries";
-import { useUnretireGear } from "#/features/gear/api/use-unretire-gear";
+import { useReactivateGear } from "#/features/gear/api/use-reactivate-gear";
 import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { GearDetailCard } from "#/features/gear/components/gear-detail-card";
 import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
@@ -36,7 +36,7 @@ function GearDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [retiring, setRetiring] = useState(false);
   const [labelsOpen, setLabelsOpen] = useState(false);
-  const unretire = useUnretireGear();
+  const unretire = useReactivateGear();
 
   if (isLoading) {
     return <p className="p-4 text-sm text-muted-foreground">Loading…</p>;
@@ -54,7 +54,7 @@ function GearDetailPage() {
       </PageContainer>
     );
   }
-  const isRetired = data.lifecycle === "retired";
+  const isRetired = data.status === "retired";
   return (
     <PageContainer width="app" className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -68,7 +68,7 @@ function GearDetailPage() {
           <AddToCartButton
             publicId={publicId}
             code={data.code}
-            lifecycle={data.lifecycle}
+            status={data.status}
             variant="detail"
           />
         </div>

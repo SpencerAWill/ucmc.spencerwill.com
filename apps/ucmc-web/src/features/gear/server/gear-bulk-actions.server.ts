@@ -12,11 +12,11 @@
  */
 import { requireGearManager } from "#/features/gear/server/permissions.server";
 import {
-  bulkAddGearTags,
-  bulkMarkGearUnretired,
-  bulkSetGearCondition,
-  buildBulkMarkGearRetiredStatement,
-  getGearByPublicIds,
+  bulkAddGearItemTags,
+  bulkMarkGearItemsReactivated,
+  bulkSetGearItemCondition,
+  buildBulkDeactivateStatement,
+  getGearItemsByPublicIds,
   getGearTagsByPublicIds,
 } from "#/features/gear/server/repo.server";
 import {
@@ -34,23 +34,24 @@ export interface BulkResult {
   skipped: number;
 }
 
-export async function bulkRetireGearAction(input: {
+export async function bulkDeactivateGearAction(input: {
   publicIds: string[];
+  status: Exclude<schema.GearStatus, "active">;
   reason: string | null;
 }): Promise<BulkResult> {
   const principal = await requireGearManager();
-  const rows = await getGearByPublicIds(input.publicIds);
+  const rows = await getGearItemsByPublicIds(input.publicIds);
   // Only items currently active are eligible. Already-retired rows are
   // a no-op (the bulk SQL also filters this; we filter client-side to
   // get accurate `affected`/`skipped` counts AND to know which codes
   // to capture in the audit metadata).
-  const active = rows.filter((r) => r.lifecycle === "active");
-  // Also block any piece that's currently on an open loan — retiring
-  // would NULL its code mid-loan and orphan the borrower's view.
-  // Matches the single-row retire action's `on_loan` short-circuit.
-  const { getOpenLoansForGearIds } =
+  const active = rows.filter((r) => r.status === "active");
+  // Also block anything on an open loan — deactivating would drop it
+  // out of the borrower's "what do I have out" view mid-loan. Matches
+  // the single-row action's `on_loan` short-circuit.
+  const { getOpenLoansForItemIds } =
     await import("#/features/gear/server/loans-repo.server");
-  const openLoans = await getOpenLoansForGearIds(active.map((r) => r.id));
+  const openLoans = await getOpenLoansForItemIds(active.map((r) => r.id));
   const eligible = active.filter((r) => !openLoans.has(r.id));
   if (eligible.length === 0) {
     return { affected: 0, skipped: input.publicIds.length };
@@ -58,27 +59,29 @@ export async function bulkRetireGearAction(input: {
   // Combine the UPDATE and the audit INSERT into a single D1 round-trip.
   // Both writes target the same `eligible` set, so atomicity is a free
   // upgrade on top of the latency win.
-  const retireStmt = buildBulkMarkGearRetiredStatement({
+  const deactivateStmt = buildBulkDeactivateStatement({
     ids: eligible.map((r) => r.id),
-    retiredBy: principal.userId,
+    status: input.status,
+    deactivatedBy: principal.userId,
     reason: input.reason,
   });
   const auditStmt = buildBulkAuditEventStatement(
     eligible.map((r) => ({
       actorUserId: principal.userId,
-      action: "gear.retired",
+      action: "gear.deactivated",
       targetType: "gear",
       targetId: r.id,
       metadata: {
-        priorCode: r.code,
+        status: input.status,
+        code: r.code,
         reason: input.reason,
         bulk: true,
       },
     })),
   );
   // Both statements are non-null here because `eligible.length > 0`.
-  if (retireStmt && auditStmt) {
-    await getDb().batch([retireStmt, auditStmt]);
+  if (deactivateStmt && auditStmt) {
+    await getDb().batch([deactivateStmt, auditStmt]);
   }
   return {
     affected: eligible.length,
@@ -86,20 +89,20 @@ export async function bulkRetireGearAction(input: {
   };
 }
 
-export async function bulkUnretireGearAction(input: {
+export async function bulkReactivateGearAction(input: {
   publicIds: string[];
 }): Promise<BulkResult> {
   const principal = await requireGearManager();
-  const rows = await getGearByPublicIds(input.publicIds);
-  const eligible = rows.filter((r) => r.lifecycle === "retired");
+  const rows = await getGearItemsByPublicIds(input.publicIds);
+  const eligible = rows.filter((r) => r.status !== "active");
   if (eligible.length === 0) {
     return { affected: 0, skipped: input.publicIds.length };
   }
-  await bulkMarkGearUnretired(eligible.map((r) => r.id));
+  await bulkMarkGearItemsReactivated(eligible.map((r) => r.id));
   await recordAuditEvents(
     eligible.map((r) => ({
       actorUserId: principal.userId,
-      action: "gear.unretired",
+      action: "gear.reactivated",
       targetType: "gear",
       targetId: r.id,
       metadata: { bulk: true },
@@ -111,16 +114,16 @@ export async function bulkUnretireGearAction(input: {
   };
 }
 
-export async function bulkSetGearConditionAction(input: {
+export async function bulkSetGearItemConditionAction(input: {
   publicIds: string[];
   condition: schema.GearCondition;
 }): Promise<BulkResult> {
   const principal = await requireGearManager();
-  const rows = await getGearByPublicIds(input.publicIds);
+  const rows = await getGearItemsByPublicIds(input.publicIds);
   if (rows.length === 0) {
     return { affected: 0, skipped: input.publicIds.length };
   }
-  await bulkSetGearCondition({
+  await bulkSetGearItemCondition({
     ids: rows.map((r) => r.id),
     condition: input.condition,
   });
@@ -143,7 +146,7 @@ export async function bulkSetGearConditionAction(input: {
   };
 }
 
-export async function bulkAddGearTagsAction(input: {
+export async function bulkAddGearItemTagsAction(input: {
   publicIds: string[];
   tagPublicIds: string[];
 }): Promise<BulkResult> {
@@ -151,13 +154,13 @@ export async function bulkAddGearTagsAction(input: {
   if (input.tagPublicIds.length === 0) {
     return { affected: 0, skipped: input.publicIds.length };
   }
-  const rows = await getGearByPublicIds(input.publicIds);
+  const rows = await getGearItemsByPublicIds(input.publicIds);
   const tags = await getGearTagsByPublicIds(input.tagPublicIds);
   if (rows.length === 0 || tags.length === 0) {
     return { affected: 0, skipped: input.publicIds.length };
   }
-  await bulkAddGearTags({
-    gearIds: rows.map((r) => r.id),
+  await bulkAddGearItemTags({
+    itemIds: rows.map((r) => r.id),
     tagIds: tags.map((t) => t.id),
     assignedBy: principal.userId,
   });

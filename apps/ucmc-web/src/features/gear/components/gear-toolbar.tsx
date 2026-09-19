@@ -34,24 +34,15 @@ import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multisel
 import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
 import type {
   GearCondition,
-  GearLifecycle,
+  GearStatus,
 } from "#/features/gear/server/gear-fns";
+import { CONDITION_LABEL, STATUS_LABEL } from "#/features/gear/lib/labels";
 
-const LIFECYCLE_VALUES = ["active", "retired"] as const;
-const LIFECYCLE_LABEL: Record<GearLifecycle, string> = {
-  active: "Active",
-  retired: "Retired",
-};
-const CONDITION_LABEL: Record<GearCondition, string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
+const STATUS_VALUES = ["active", "retired"] as const;
 
-export type GearSortKey = "code" | "created_at" | "updated_at";
+export type GearItemSortKey = "code" | "created_at" | "updated_at";
 
-export const GEAR_SORT_OPTIONS: DataToolbarSortOption<GearSortKey>[] = [
+export const GEAR_SORT_OPTIONS: DataToolbarSortOption<GearItemSortKey>[] = [
   { value: "code", label: "Code", ascLabel: "A → Z", descLabel: "Z → A" },
   {
     value: "created_at",
@@ -83,10 +74,10 @@ export const GEAR_VIEW_OPTIONS: DataToolbarViewOption<GearView>[] = [
 export interface GearToolbarState {
   typePublicId: string | null;
   tagPublicIds: string[];
-  lifecycle: GearLifecycle;
+  status: GearStatus;
   condition: GearCondition | null;
   q: string;
-  sort: GearSortKey;
+  sort: GearItemSortKey;
   dir: SortDirection;
   view: GearView;
 }
@@ -123,12 +114,12 @@ export function GearToolbar({
           },
         ]
       : []),
-    ...(state.lifecycle !== "active"
+    ...(state.status !== "active"
       ? [
           {
-            key: `lifecycle:${state.lifecycle}`,
-            label: LIFECYCLE_LABEL[state.lifecycle],
-            onRemove: () => onChange({ lifecycle: "active" }),
+            key: `status:${state.status}`,
+            label: STATUS_LABEL[state.status],
+            onRemove: () => onChange({ status: "active" }),
           },
         ]
       : []),
@@ -155,7 +146,7 @@ export function GearToolbar({
     onChange({
       typePublicId: null,
       tagPublicIds: [],
-      lifecycle: "active",
+      status: "active",
       condition: null,
     });
 
@@ -209,18 +200,18 @@ export function GearToolbar({
                * underlying server param is a single enum; "both" isn't
                * a state this filter can express. */}
               <RadioGroup
-                value={state.lifecycle}
+                value={state.status}
                 onValueChange={(v) =>
                   onChange({
-                    lifecycle: v as (typeof LIFECYCLE_VALUES)[number],
+                    status: v as (typeof STATUS_VALUES)[number],
                   })
                 }
                 className="flex flex-col gap-1.5 text-sm"
               >
-                {LIFECYCLE_VALUES.map((v) => (
+                {STATUS_VALUES.map((v) => (
                   <label key={v} className="flex items-center gap-2">
                     <RadioGroupItem value={v} id={`lifecycle-${v}`} />
-                    {LIFECYCLE_LABEL[v]}
+                    {STATUS_LABEL[v]}
                   </label>
                 ))}
               </RadioGroup>

@@ -477,6 +477,13 @@
       "when": 1779477596944,
       "tag": "0067_sponsors_page",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1779477596945,
+      "tag": "0068_gear_model_layer",
+      "breakpoints": true
     }
   ]
 }

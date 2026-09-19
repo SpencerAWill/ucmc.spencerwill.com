@@ -9,6 +9,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type {
+  CreateGearModelResult,
+  DeleteGearModelResult,
+  GearModelSummaryDto,
+  UpdateGearModelResult,
+} from "#/features/gear/server/models-actions.server";
+import type {
   BulkImportInput,
   BulkImportResult,
   BulkImportSkipped,
@@ -33,7 +39,8 @@ import type {
   GearTypeSummary,
   ListGearActionInput,
   ListGearActionResult,
-  RetireGearResult,
+  DeactivateGearResult,
+  ReleaseCodeResult,
 } from "#/features/gear/server/gear-actions.server";
 import type {
   CreateGearTypeInput,
@@ -85,23 +92,39 @@ import type { BulkResult } from "#/features/gear/server/gear-bulk-actions.server
 // without pulling the whole schema file into the client bundle. Keep in
 // sync with `drizzle/schema.ts` — the schema is the database-side
 // source of truth.
-export const GEAR_LIFECYCLE_VALUES = ["active", "retired"] as const;
-export type GearLifecycle = (typeof GEAR_LIFECYCLE_VALUES)[number];
+export const GEAR_STATUS_VALUES = [
+  "active",
+  "retired",
+  "lost",
+  "disposed",
+] as const;
+export type GearStatus = (typeof GEAR_STATUS_VALUES)[number];
 
 export const GEAR_CONDITION_VALUES = [
   "serviceable",
   "needs_repair",
-  "missing",
-  "lost",
+  "unsafe",
 ] as const;
 export type GearCondition = (typeof GEAR_CONDITION_VALUES)[number];
 
-export const GEAR_CONDITION_GRADE_VALUES = [
-  "excellent",
-  "good",
-  "fair",
+export const GEAR_WHEREABOUTS_VALUES = [
+  "cave",
+  "repair",
+  "officer",
+  "missing",
 ] as const;
-export type GearConditionGrade = (typeof GEAR_CONDITION_GRADE_VALUES)[number];
+export type GearWhereabouts = (typeof GEAR_WHEREABOUTS_VALUES)[number];
+
+export const GEAR_TRACKING_VALUES = ["coded", "counted"] as const;
+export type GearTracking = (typeof GEAR_TRACKING_VALUES)[number];
+
+export const GEAR_ACQUISITION_KIND_VALUES = [
+  "purchased",
+  "donated",
+  "found",
+  "warranty_replacement",
+] as const;
+export type GearAcquisitionKind = (typeof GEAR_ACQUISITION_KIND_VALUES)[number];
 
 export const GEAR_INSPECTION_RESULT_VALUES = [
   "pass",
@@ -162,7 +185,8 @@ export type {
   MemberSearchResult,
   RecordGearInspectionInput,
   RecordGearInspectionResult,
-  RetireGearResult,
+  DeactivateGearResult,
+  ReleaseCodeResult,
 };
 
 // ── input schemas ───────────────────────────────────────────────────────
@@ -186,11 +210,13 @@ const acquiredAtSchema = z
 
 export const listGearInputSchema = z.object({
   typePublicId: z.string().min(1).optional(),
+  modelPublicId: z.string().min(1).optional(),
   tagPublicIds: z.array(z.string().min(1)).optional(),
-  lifecycle: z.enum(GEAR_LIFECYCLE_VALUES).optional(),
+  status: z.enum(GEAR_STATUS_VALUES).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
+  whereabouts: z.enum(GEAR_WHEREABOUTS_VALUES).optional(),
   q: z.string().max(200).optional(),
-  sort: z.enum(["code", "created_at", "updated_at"]).optional(),
+  sort: z.enum(["code", "created_at", "updated_at", "model"]).optional(),
   dir: z.enum(["asc", "desc"]).optional(),
   page: z.number().int().min(1).optional(),
   perPage: z.number().int().min(1).max(250).optional(),
@@ -204,24 +230,29 @@ const thumbnailDataUrlSchema = z
   .regex(/^data:image\/(webp|jpeg|png);base64,/, "Invalid image data URL");
 
 export const createGearInputSchema = z.object({
-  typePublicId: z.string().min(1),
+  // The product this unit is. Manufacturer, MSRP and service life come
+  // from the model now, so they are no longer per-item fields.
+  modelPublicId: z.string().min(1),
   code: z.string().max(64).nullable(),
-  // Description is the primary heading on the gear card — required end
-  // to end. `.trim()` before `.min(1)` so whitespace-only strings fail.
-  description: z.string().trim().min(1, "Description is required").max(500),
-  // null = no thumbnail (omit on create).
+  // Distinguishing marks for this unit, e.g. "blue tape on the spine".
+  // Optional: the model supplies the name, so most items have nothing
+  // to say here.
+  description: z.string().trim().max(500).nullable(),
+  // null = no thumbnail (omit on create); falls back to the model's
+  // product shot at render time.
   thumbnailDataUrl: thumbnailDataUrlSchema.nullable(),
   acquiredAt: acquiredAtSchema,
+  manufacturedAt: acquiredAtSchema.optional(),
   acquisitionCostCents: z.number().int().min(0).nullable(),
+  acquisitionKind: z.enum(GEAR_ACQUISITION_KIND_VALUES).nullable().optional(),
   // Optional on the wire — omit means "unknown / not provided" on
   // create, and "no change" on edit. The action normalizes undefined
   // to null at the boundary.
-  msrpCents: z.number().int().min(0).nullable().optional(),
-  manufacturer: z.string().trim().max(100).nullable().optional(),
   serialNumber: z.string().trim().max(100).nullable().optional(),
-  conditionGrade: z.enum(GEAR_CONDITION_GRADE_VALUES).nullable().optional(),
   notesMarkdown: z.string().max(10_000).nullable(),
   condition: z.enum(GEAR_CONDITION_VALUES),
+  whereabouts: z.enum(GEAR_WHEREABOUTS_VALUES).optional(),
+  whereaboutsNote: z.string().trim().max(500).nullable().optional(),
   tagPublicIds: z.array(z.string().min(1)),
 });
 
@@ -236,12 +267,13 @@ const editGearInputSchema = createGearInputSchema
     thumbnailDataUrl: thumbnailDataUrlSchema.nullable().optional(),
   });
 
-const retireGearInputSchema = z.object({
+const deactivateGearInputSchema = z.object({
   publicId: z.string().min(1),
+  status: z.enum(["retired", "lost", "disposed"]),
   reason: z.string().max(500).nullable(),
 });
 
-const unretireGearInputSchema = z.object({
+const reactivateGearInputSchema = z.object({
   publicId: z.string().min(1),
 });
 
@@ -249,6 +281,7 @@ const gearTypeInputSchema = z.object({
   name: z.string().min(1).max(80),
   prefix: z.string().max(8).nullable(),
   description: z.string().max(500).nullable(),
+  inspectionIntervalDays: z.number().int().min(1).max(3650).nullable(),
 });
 
 const editGearTypeInputSchema = gearTypeInputSchema.extend({
@@ -280,12 +313,13 @@ const deleteGearTagInputSchema = z.object({
 
 const publicIdArraySchema = z.array(z.string().min(1)).min(1).max(500);
 
-const bulkRetireInputSchema = z.object({
+const bulkDeactivateInputSchema = z.object({
   publicIds: publicIdArraySchema,
+  status: z.enum(["retired", "lost", "disposed"]),
   reason: z.string().max(500).nullable(),
 });
 
-const bulkUnretireInputSchema = z.object({
+const bulkReactivateInputSchema = z.object({
   publicIds: publicIdArraySchema,
 });
 
@@ -303,22 +337,24 @@ const bulkImportInputSchema = z.object({
   rows: z
     .array(
       z.object({
+        // The import addresses a type + product by name and creates
+        // the model on demand, because a CSV of forty draws shouldn't
+        // require the officer to pre-create the model by hand.
         typePublicId: z.string().min(1),
-        code: z.string().max(64).nullable(),
-        // Required at the wire level. The action also re-checks and
-        // skips with `missing_description` for any row that slipped
-        // through the client validation.
-        description: z.string().max(500),
-        acquiredAt: acquiredAtSchema,
-        acquisitionCostCents: z.number().int().min(0).nullable(),
-        // Optional passthroughs — see BulkImportRow.
-        msrpCents: z.number().int().min(0).nullable().optional(),
+        modelName: z.string().trim().min(1).max(200),
         manufacturer: z.string().trim().max(100).nullable().optional(),
-        serialNumber: z.string().trim().max(100).nullable().optional(),
-        conditionGrade: z
-          .enum(GEAR_CONDITION_GRADE_VALUES)
+        code: z.string().max(64).nullable(),
+        description: z.string().max(500).nullable().optional(),
+        acquiredAt: acquiredAtSchema,
+        manufacturedAt: acquiredAtSchema.optional(),
+        acquisitionCostCents: z.number().int().min(0).nullable(),
+        acquisitionKind: z
+          .enum(GEAR_ACQUISITION_KIND_VALUES)
           .nullable()
           .optional(),
+        // Optional passthroughs — see BulkImportRow.
+        msrpCents: z.number().int().min(0).nullable().optional(),
+        serialNumber: z.string().trim().max(100).nullable().optional(),
         tagNames: z.array(z.string().min(1).max(40)).max(50).optional(),
       }),
     )
@@ -330,12 +366,7 @@ const isoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
 
-const conditionSchema = z.enum([
-  "serviceable",
-  "needs_repair",
-  "missing",
-  "lost",
-]);
+const conditionSchema = z.enum(GEAR_CONDITION_VALUES);
 
 const bulkImportLoansInputSchema = z.object({
   rows: z
@@ -503,20 +534,28 @@ export const editGearFn = createServerFn({ method: "POST" })
     return editGearAction(data);
   });
 
-export const retireGearFn = createServerFn({ method: "POST" })
-  .validator(retireGearInputSchema)
-  .handler(async ({ data }): Promise<RetireGearResult> => {
-    const { retireGearAction } =
+export const deactivateGearFn = createServerFn({ method: "POST" })
+  .validator(deactivateGearInputSchema)
+  .handler(async ({ data }): Promise<DeactivateGearResult> => {
+    const { deactivateGearAction } =
       await import("#/features/gear/server/gear-actions.server");
-    return retireGearAction(data);
+    return deactivateGearAction(data);
   });
 
-export const unretireGearFn = createServerFn({ method: "POST" })
-  .validator(unretireGearInputSchema)
+export const reactivateGearFn = createServerFn({ method: "POST" })
+  .validator(reactivateGearInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const { unretireGearAction } =
+    const { reactivateGearAction } =
       await import("#/features/gear/server/gear-actions.server");
-    return unretireGearAction(data);
+    return reactivateGearAction(data);
+  });
+
+export const releaseGearCodeFn = createServerFn({ method: "POST" })
+  .validator(reactivateGearInputSchema)
+  .handler(async ({ data }): Promise<ReleaseCodeResult> => {
+    const { releaseGearItemCodeAction } =
+      await import("#/features/gear/server/gear-actions.server");
+    return releaseGearItemCodeAction(data);
   });
 
 export const suggestCodeForTypeFn = createServerFn({ method: "GET" })
@@ -593,36 +632,36 @@ export const deleteGearTagFn = createServerFn({ method: "POST" })
 
 export type { BulkResult };
 
-export const bulkRetireGearFn = createServerFn({ method: "POST" })
-  .validator(bulkRetireInputSchema)
+export const bulkDeactivateGearFn = createServerFn({ method: "POST" })
+  .validator(bulkDeactivateInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
-    const { bulkRetireGearAction } =
+    const { bulkDeactivateGearAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
-    return bulkRetireGearAction(data);
+    return bulkDeactivateGearAction(data);
   });
 
-export const bulkUnretireGearFn = createServerFn({ method: "POST" })
-  .validator(bulkUnretireInputSchema)
+export const bulkReactivateGearFn = createServerFn({ method: "POST" })
+  .validator(bulkReactivateInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
-    const { bulkUnretireGearAction } =
+    const { bulkReactivateGearAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
-    return bulkUnretireGearAction(data);
+    return bulkReactivateGearAction(data);
   });
 
-export const bulkSetGearConditionFn = createServerFn({ method: "POST" })
+export const bulkSetGearItemConditionFn = createServerFn({ method: "POST" })
   .validator(bulkSetConditionInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
-    const { bulkSetGearConditionAction } =
+    const { bulkSetGearItemConditionAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
-    return bulkSetGearConditionAction(data);
+    return bulkSetGearItemConditionAction(data);
   });
 
-export const bulkAddGearTagsFn = createServerFn({ method: "POST" })
+export const bulkAddGearItemTagsFn = createServerFn({ method: "POST" })
   .validator(bulkAddTagsInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
-    const { bulkAddGearTagsAction } =
+    const { bulkAddGearItemTagsAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
-    return bulkAddGearTagsAction(data);
+    return bulkAddGearItemTagsAction(data);
   });
 
 export const listGearInspectionsFn = createServerFn({ method: "GET" })
@@ -723,20 +762,20 @@ export const getMemberForLoanFn = createServerFn({ method: "GET" })
     return getMemberForLoanAction(data);
   });
 
-export const searchGearByCodeFn = createServerFn({ method: "GET" })
+export const searchItemsByCodeFn = createServerFn({ method: "GET" })
   .validator(gearCodeSearchInputSchema)
   .handler(async ({ data }): Promise<GearLookupRow[]> => {
-    const { searchGearByCodeAction } =
+    const { searchItemsByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
-    return searchGearByCodeAction(data);
+    return searchItemsByCodeAction(data);
   });
 
-export const getGearByCodeFn = createServerFn({ method: "GET" })
+export const getItemByCodeFn = createServerFn({ method: "GET" })
   .validator(gearByCodeInputSchema)
   .handler(async ({ data }): Promise<GearLookupRow | null> => {
-    const { getGearByCodeAction } =
+    const { getItemByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
-    return getGearByCodeAction(data);
+    return getItemByCodeAction(data);
   });
 
 // ── cart shells ────────────────────────────────────────────────────────
@@ -798,4 +837,65 @@ export const resolveCartTokenFn = createServerFn({ method: "POST" })
     const { resolveCartTokenAction } =
       await import("#/features/gear/server/cart-actions.server");
     return resolveCartTokenAction(data);
+  });
+
+// ── gear models ─────────────────────────────────────────────────────────
+
+const listGearModelsInputSchema = z.object({
+  typePublicId: z.string().min(1).optional(),
+});
+
+const gearModelInputSchema = z.object({
+  typePublicId: z.string().min(1),
+  name: z.string().trim().min(1).max(200),
+  manufacturer: z.string().trim().max(100).nullable(),
+  tracking: z.enum(GEAR_TRACKING_VALUES),
+  description: z.string().max(1000).nullable(),
+  msrpCents: z.number().int().min(0).nullable(),
+  serviceLifeYears: z.number().int().min(1).max(100).nullable(),
+  inspectionIntervalDays: z.number().int().min(1).max(3650).nullable(),
+  // Scheme-restricted: `z.url()` alone accepts `javascript:` and
+  // `data:`, and `gear:manage` is delegable — see the public-pages rule.
+  productUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .regex(/^https?:\/\//, "must be an http(s) URL")
+    .nullable(),
+});
+
+export const listGearModelsFn = createServerFn({ method: "GET" })
+  .validator(listGearModelsInputSchema)
+  .handler(async ({ data }): Promise<GearModelSummaryDto[]> => {
+    const { listGearModelsAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return listGearModelsAction(data);
+  });
+
+export const createGearModelFn = createServerFn({ method: "POST" })
+  .validator(gearModelInputSchema)
+  .handler(async ({ data }): Promise<CreateGearModelResult> => {
+    const { createGearModelAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return createGearModelAction(data);
+  });
+
+export const updateGearModelFn = createServerFn({ method: "POST" })
+  .validator(
+    gearModelInputSchema.partial().extend({
+      publicId: z.string().min(1),
+    }),
+  )
+  .handler(async ({ data }): Promise<UpdateGearModelResult> => {
+    const { updateGearModelAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return updateGearModelAction(data);
+  });
+
+export const deleteGearModelFn = createServerFn({ method: "POST" })
+  .validator(z.object({ publicId: z.string().min(1) }))
+  .handler(async ({ data }): Promise<DeleteGearModelResult> => {
+    const { deleteGearModelAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return deleteGearModelAction(data);
   });

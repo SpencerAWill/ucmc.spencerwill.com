@@ -6,14 +6,17 @@ import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { myCartQueryOptions } from "#/features/gear/api/queries";
 import { useAddToCart } from "#/features/gear/api/use-add-to-cart";
-import type { AddToCartResult } from "#/features/gear/server/gear-fns";
+import type {
+  AddToCartResult,
+  GearStatus,
+} from "#/features/gear/server/gear-fns";
 
 type Variant = "card" | "detail";
 
 interface AddToCartButtonProps {
   publicId: string;
   code: string | null;
-  lifecycle: "active" | "retired";
+  status: GearStatus;
   /** Renders compact (icon-only) on `card`, full button with label on
    *  `detail`. Both are the same component so the in-cart / disabled
    *  state logic lives in one place. */
@@ -43,7 +46,7 @@ const REASON_COPY: Record<AddToCartFailureReason, string> = {
 export function AddToCartButton({
   publicId,
   code,
-  lifecycle,
+  status,
   variant = "card",
 }: AddToCartButtonProps) {
   const { principal } = useAuth();
@@ -62,7 +65,9 @@ export function AddToCartButton({
   if (!principal || principal.status !== "approved") {
     return null;
   }
-  if (lifecycle === "retired") {
+  // Any terminal status hides the control, not just `retired` — a
+  // lost or disposed item is equally un-cartable.
+  if (status !== "active") {
     return null;
   }
   if (code === null) {

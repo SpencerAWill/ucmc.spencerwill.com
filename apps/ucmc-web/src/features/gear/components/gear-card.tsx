@@ -21,23 +21,7 @@ import {
 import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
-
-const CONDITION_LABEL: Record<GearSummary["condition"], string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
-
-const CONDITION_VARIANT: Record<
-  GearSummary["condition"],
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  serviceable: "secondary",
-  needs_repair: "outline",
-  missing: "outline",
-  lost: "destructive",
-};
+import { CONDITION_LABEL, CONDITION_VARIANT } from "#/features/gear/lib/labels";
 
 // Falls back to the static placeholder SVG when the gear row has no
 // uploaded thumbnail. Per-gear keys live under `gear/<gearId>/...` and
@@ -85,7 +69,7 @@ export function GearCard({
   onRetire: () => void;
   onUnretire: () => void;
 }) {
-  const isRetired = gear.lifecycle === "retired";
+  const isRetired = gear.status === "retired";
   const subtitleParts = [gear.type.name, gear.code].filter(
     (p): p is string => p !== null,
   );
@@ -179,7 +163,7 @@ export function GearCard({
           <AddToCartButton
             publicId={gear.publicId}
             code={gear.code}
-            lifecycle={gear.lifecycle}
+            status={gear.status}
           />
           {gear.tags.length > 0 ? <TagsPopover tags={gear.tags} /> : null}
           {canManage ? (

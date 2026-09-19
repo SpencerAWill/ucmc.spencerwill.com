@@ -82,7 +82,7 @@ function row(overrides: Partial<MyCartResult["items"][number]>) {
     description: "Test piece",
     typeName: "Harness",
     thumbnailKey: null,
-    lifecycle: "active" as const,
+    status: "active" as const,
     condition: "serviceable" as const,
     hasOpenLoan: false,
     availability: "loanable" as const,

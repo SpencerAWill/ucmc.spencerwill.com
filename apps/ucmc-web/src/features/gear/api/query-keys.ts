@@ -44,3 +44,10 @@ export const memberForLoanByPublicIdQueryKey = (publicId: string) =>
 
 export const gearCodeSearchQueryKey = (q: string) =>
   ["gear", "loans", "search-gear-code", q] as const;
+
+/** Models are scoped by type in the picker, so the key carries it —
+ *  `null` is the unscoped "every model" list. */
+export const GEAR_MODELS_QUERY_KEY = ["gear-models"] as const;
+export function gearModelsQueryKey(typePublicId: string | null) {
+  return [...GEAR_MODELS_QUERY_KEY, typePublicId ?? "all"] as const;
+}

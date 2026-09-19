@@ -25,23 +25,7 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
-
-const CONDITION_LABEL: Record<GearSummary["condition"], string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
-
-const CONDITION_VARIANT: Record<
-  GearSummary["condition"],
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  serviceable: "secondary",
-  needs_repair: "outline",
-  missing: "outline",
-  lost: "destructive",
-};
+import { CONDITION_LABEL, CONDITION_VARIANT } from "#/features/gear/lib/labels";
 
 /**
  * Dense tabular view of the gear list. No thumbnails — meant for
@@ -103,7 +87,7 @@ export function GearTableView({
         </TableHeader>
         <TableBody>
           {rows.map((g) => {
-            const isRetired = g.lifecycle === "retired";
+            const isRetired = g.status === "retired";
             return (
               <TableRow
                 key={g.publicId}
@@ -154,8 +138,8 @@ export function GearTableView({
                   {g.type.name}
                 </TableCell>
                 <TableCell className="hidden text-sm md:table-cell">
-                  {g.manufacturer ? (
-                    g.manufacturer
+                  {g.model.manufacturer ? (
+                    g.model.manufacturer
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}

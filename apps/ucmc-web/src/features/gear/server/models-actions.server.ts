@@ -1,0 +1,275 @@
+/**
+ * Action implementations for gear models — the product layer between a
+ * type ("Quickdraw") and the physical units under it.
+ *
+ * Models ride on `gear:manage` rather than a permission of their own.
+ * They are the same officer surface as the items they group, and a
+ * permission costs a migration plus a seed plus a role grant — worth
+ * spending only when a surface can be delegated separately, which this
+ * one can't.
+ */
+import { uuidv7 } from "uuidv7";
+
+import { requireGearManager } from "#/features/gear/server/permissions.server";
+import {
+  countItemsForModel,
+  deleteGearModelById,
+  getGearModelByPublicId,
+  insertGearModel,
+  listGearModels,
+  listStockForModelIds,
+  updateGearModelById,
+} from "#/features/gear/server/models-repo.server";
+import { getGearTypeByPublicId } from "#/features/gear/server/repo.server";
+import { recordAuditEvent } from "#/server/audit/audit-log.server";
+import { generatePublicId } from "#/server/auth/ids";
+import { isUniqueViolation } from "#/server/db";
+import type { schema } from "#/server/db";
+
+export interface GearModelSummaryDto {
+  publicId: string;
+  name: string;
+  manufacturer: string | null;
+  tracking: schema.GearTracking;
+  description: string | null;
+  msrpCents: number | null;
+  serviceLifeYears: number | null;
+  inspectionIntervalDays: number | null;
+  /** Resolved from the type when the model doesn't override it. */
+  effectiveInspectionIntervalDays: number | null;
+  imageKey: string | null;
+  productUrl: string | null;
+  type: { publicId: string; name: string; prefix: string | null };
+  /** Counted models only: quantity per condition bucket. Empty for
+   *  coded models, which count their item rows instead. */
+  stock: Array<{ condition: schema.GearCondition; quantity: number }>;
+}
+
+export async function listGearModelsAction(
+  input: { typePublicId?: string } = {},
+): Promise<GearModelSummaryDto[]> {
+  await requireGearManager();
+  let typeId: string | undefined;
+  if (input.typePublicId) {
+    const type = await getGearTypeByPublicId(input.typePublicId);
+    // An unresolvable type means an empty list rather than an error:
+    // the picker passes whatever is selected, and a stale selection
+    // shouldn't blow up the form.
+    if (!type) return [];
+    typeId = type.id;
+  }
+  const rows = await listGearModels({ typeId });
+  const stockByModel = await listStockForModelIds(
+    rows.filter((r) => r.tracking === "counted").map((r) => r.id),
+  );
+  return rows.map((r) => ({
+    publicId: r.publicId,
+    name: r.name,
+    manufacturer: r.manufacturer,
+    tracking: r.tracking,
+    description: r.description,
+    msrpCents: r.msrpCents,
+    serviceLifeYears: r.serviceLifeYears,
+    inspectionIntervalDays: r.inspectionIntervalDays,
+    effectiveInspectionIntervalDays: r.effectiveInspectionIntervalDays,
+    imageKey: r.imageKey,
+    productUrl: r.productUrl,
+    type: {
+      publicId: r.typePublicId,
+      name: r.typeName,
+      prefix: r.typePrefix,
+    },
+    stock: stockByModel.get(r.id) ?? [],
+  }));
+}
+
+export interface CreateGearModelInput {
+  typePublicId: string;
+  name: string;
+  manufacturer: string | null;
+  tracking: schema.GearTracking;
+  description: string | null;
+  msrpCents: number | null;
+  serviceLifeYears: number | null;
+  inspectionIntervalDays: number | null;
+  productUrl: string | null;
+}
+
+export type CreateGearModelResult =
+  | { ok: true; publicId: string }
+  | { ok: false; reason: "name_in_use" | "type_not_found" };
+
+export async function createGearModelAction(
+  input: CreateGearModelInput,
+): Promise<CreateGearModelResult> {
+  const principal = await requireGearManager();
+  const type = await getGearTypeByPublicId(input.typePublicId);
+  if (!type) {
+    return { ok: false, reason: "type_not_found" };
+  }
+  const id = `gm_${uuidv7()}`;
+  const publicId = generatePublicId();
+  const manufacturer =
+    input.manufacturer && input.manufacturer.trim().length > 0
+      ? input.manufacturer.trim()
+      : null;
+  try {
+    await insertGearModel({
+      id,
+      publicId,
+      typeId: type.id,
+      manufacturer,
+      name: input.name.trim(),
+      tracking: input.tracking,
+      description: input.description,
+      msrpCents: input.msrpCents,
+      serviceLifeYears: input.serviceLifeYears,
+      inspectionIntervalDays: input.inspectionIntervalDays,
+      imageKey: null,
+      productUrl: input.productUrl,
+      createdBy: principal.userId,
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return { ok: false, reason: "name_in_use" };
+    }
+    throw err;
+  }
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "gear_model.created",
+    targetType: "gear",
+    targetId: id,
+    metadata: { name: input.name, manufacturer, tracking: input.tracking },
+  });
+  return { ok: true, publicId };
+}
+
+export interface UpdateGearModelInput extends Partial<CreateGearModelInput> {
+  publicId: string;
+}
+
+export type UpdateGearModelResult =
+  | { ok: true }
+  | { ok: false; reason: "name_in_use" | "not_found" | "has_items" };
+
+export async function updateGearModelAction(
+  input: UpdateGearModelInput,
+): Promise<UpdateGearModelResult> {
+  const principal = await requireGearManager();
+  const existing = await getGearModelByPublicId(input.publicId);
+  if (!existing) {
+    return { ok: false, reason: "not_found" };
+  }
+  // Flipping a model that already has item rows to `counted` would
+  // strand them: counted stock is quantities, and the items would stop
+  // being reachable while still holding their codes and loan history.
+  // Officers must retire or move the items first.
+  if (
+    input.tracking === "counted" &&
+    existing.tracking === "coded" &&
+    (await countItemsForModel(existing.id)) > 0
+  ) {
+    return { ok: false, reason: "has_items" };
+  }
+  const patch: Parameters<typeof updateGearModelById>[1] = {};
+  const changedFields: string[] = [];
+  if (input.name !== undefined && input.name.trim() !== existing.name) {
+    patch.name = input.name.trim();
+    changedFields.push("name");
+  }
+  if (input.manufacturer !== undefined) {
+    const next =
+      input.manufacturer && input.manufacturer.trim().length > 0
+        ? input.manufacturer.trim()
+        : null;
+    if (next !== existing.manufacturer) {
+      patch.manufacturer = next;
+      changedFields.push("manufacturer");
+    }
+  }
+  if (input.tracking !== undefined && input.tracking !== existing.tracking) {
+    patch.tracking = input.tracking;
+    changedFields.push("tracking");
+  }
+  if (
+    input.description !== undefined &&
+    input.description !== existing.description
+  ) {
+    patch.description = input.description;
+    changedFields.push("description");
+  }
+  if (input.msrpCents !== undefined && input.msrpCents !== existing.msrpCents) {
+    patch.msrpCents = input.msrpCents;
+    changedFields.push("msrp_cents");
+  }
+  if (
+    input.serviceLifeYears !== undefined &&
+    input.serviceLifeYears !== existing.serviceLifeYears
+  ) {
+    patch.serviceLifeYears = input.serviceLifeYears;
+    changedFields.push("service_life_years");
+  }
+  if (
+    input.inspectionIntervalDays !== undefined &&
+    input.inspectionIntervalDays !== existing.inspectionIntervalDays
+  ) {
+    patch.inspectionIntervalDays = input.inspectionIntervalDays;
+    changedFields.push("inspection_interval_days");
+  }
+  if (
+    input.productUrl !== undefined &&
+    input.productUrl !== existing.productUrl
+  ) {
+    patch.productUrl = input.productUrl;
+    changedFields.push("product_url");
+  }
+  if (changedFields.length === 0) {
+    return { ok: true };
+  }
+  try {
+    await updateGearModelById(existing.id, patch);
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return { ok: false, reason: "name_in_use" };
+    }
+    throw err;
+  }
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "gear_model.updated",
+    targetType: "gear",
+    targetId: existing.id,
+    metadata: { changedFields },
+  });
+  return { ok: true };
+}
+
+export type DeleteGearModelResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "has_items" };
+
+export async function deleteGearModelAction(input: {
+  publicId: string;
+}): Promise<DeleteGearModelResult> {
+  const principal = await requireGearManager();
+  const existing = await getGearModelByPublicId(input.publicId);
+  if (!existing) {
+    return { ok: false, reason: "not_found" };
+  }
+  // The FK is RESTRICT; this pre-check turns it into a typed result so
+  // the UI can say "move these 12 items first" instead of surfacing a
+  // constraint error.
+  if ((await countItemsForModel(existing.id)) > 0) {
+    return { ok: false, reason: "has_items" };
+  }
+  await deleteGearModelById(existing.id);
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "gear_model.deleted",
+    targetType: "gear",
+    targetId: existing.id,
+    metadata: { name: existing.name, manufacturer: existing.manufacturer },
+  });
+  return { ok: true };
+}

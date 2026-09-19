@@ -42,25 +42,20 @@ import type {
   ParseGearCsvError,
   ParsedGearRow,
 } from "#/features/gear/lib/parse-gear-csv";
-import { GEAR_CONDITION_GRADE_VALUES } from "#/features/gear/server/gear-fns";
+import { GEAR_ACQUISITION_KIND_VALUES } from "#/features/gear/server/gear-fns";
 import type {
   BulkImportResult,
   BulkImportSkipped,
-  GearConditionGrade,
+  GearAcquisitionKind,
   GearTypeSummary,
 } from "#/features/gear/server/gear-fns";
+import { ACQUISITION_KIND_LABEL } from "#/features/gear/lib/labels";
 
 const MAX_ROWS = 200;
 
 // Sentinel for the condition-grade `<Select>` — same trick as the
 // singular gear form, since shadcn's Select can't take an empty value.
-const CONDITION_GRADE_NONE = "__none__";
-
-const CONDITION_GRADE_LABEL: Record<GearConditionGrade, string> = {
-  excellent: "Excellent",
-  good: "Good",
-  fair: "Fair",
-};
+const ACQUISITION_KIND_NONE = "__none__";
 
 interface RowState {
   /** Stable key so React doesn't remount inputs as the array shifts. */
@@ -76,7 +71,11 @@ interface RowState {
   msrpDollars: string;
   manufacturer: string;
   serialNumber: string;
-  conditionGrade: GearConditionGrade | typeof CONDITION_GRADE_NONE;
+  /** Product name. Required by the import — it decides which model the
+   *  item lands under, and the parser falls back to the description
+   *  when the CSV has no model column. */
+  modelName: string;
+  acquisitionKind: GearAcquisitionKind | typeof ACQUISITION_KIND_NONE;
   /** Raw comma-separated text. Split + trimmed at submit. */
   tagsInput: string;
 }
@@ -92,7 +91,8 @@ function makeRow(initial: Partial<RowState> = {}): RowState {
     msrpDollars: initial.msrpDollars ?? "",
     manufacturer: initial.manufacturer ?? "",
     serialNumber: initial.serialNumber ?? "",
-    conditionGrade: initial.conditionGrade ?? CONDITION_GRADE_NONE,
+    modelName: initial.modelName ?? "",
+    acquisitionKind: initial.acquisitionKind ?? ACQUISITION_KIND_NONE,
     tagsInput: initial.tagsInput ?? "",
   };
 }
@@ -114,7 +114,8 @@ function rowHasContent(row: RowState): boolean {
     row.msrpDollars.trim().length > 0 ||
     row.manufacturer.trim().length > 0 ||
     row.serialNumber.trim().length > 0 ||
-    row.conditionGrade !== CONDITION_GRADE_NONE ||
+    row.modelName.trim().length > 0 ||
+    row.acquisitionKind !== ACQUISITION_KIND_NONE ||
     row.tagsInput.trim().length > 0
   );
 }
@@ -238,7 +239,8 @@ export function GearBulkImportSheet({
             r.msrpCents !== null ? (r.msrpCents / 100).toFixed(2) : "",
           manufacturer: r.manufacturer ?? "",
           serialNumber: r.serialNumber ?? "",
-          conditionGrade: r.conditionGrade ?? CONDITION_GRADE_NONE,
+          modelName: r.modelName,
+          acquisitionKind: r.acquisitionKind ?? ACQUISITION_KIND_NONE,
           tagsInput: r.tagNames.join(", "),
         }),
       );
@@ -311,8 +313,16 @@ export function GearBulkImportSheet({
         row.manufacturer.trim().length === 0 ? null : row.manufacturer.trim(),
       serialNumber:
         row.serialNumber.trim().length === 0 ? null : row.serialNumber.trim(),
-      conditionGrade:
-        row.conditionGrade === CONDITION_GRADE_NONE ? null : row.conditionGrade,
+      // Falls back to the description so a sheet with no model column
+      // still imports — each distinct description becomes its own model.
+      modelName:
+        row.modelName.trim().length > 0
+          ? row.modelName.trim()
+          : row.description.trim(),
+      acquisitionKind:
+        row.acquisitionKind === ACQUISITION_KIND_NONE
+          ? null
+          : row.acquisitionKind,
       tagNames: splitTagsInput(row.tagsInput),
     }));
     try {
@@ -631,29 +641,41 @@ function GearImportRow({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label className="text-xs" htmlFor={`grade-${row.key}`}>
-            Condition grade
+          <Label className="text-xs" htmlFor={`model-${row.key}`}>
+            Model
+          </Label>
+          <Input
+            id={`model-${row.key}`}
+            className="h-9"
+            value={row.modelName}
+            placeholder="Falls back to description"
+            onChange={(e) => onChange({ modelName: e.target.value })}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`acq-kind-${row.key}`}>
+            Acquisition
           </Label>
           <Select
-            value={row.conditionGrade}
+            value={row.acquisitionKind}
             onValueChange={(v) =>
               onChange({
-                conditionGrade: v as
-                  | GearConditionGrade
-                  | typeof CONDITION_GRADE_NONE,
+                acquisitionKind: v as
+                  | GearAcquisitionKind
+                  | typeof ACQUISITION_KIND_NONE,
               })
             }
           >
-            <SelectTrigger id={`grade-${row.key}`} className="h-9 w-full">
+            <SelectTrigger id={`acq-kind-${row.key}`} className="h-9 w-full">
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={CONDITION_GRADE_NONE}>
-                <span className="text-muted-foreground">No grade</span>
+              <SelectItem value={ACQUISITION_KIND_NONE}>
+                <span className="text-muted-foreground">Unknown</span>
               </SelectItem>
-              {GEAR_CONDITION_GRADE_VALUES.map((g) => (
-                <SelectItem key={g} value={g}>
-                  {CONDITION_GRADE_LABEL[g]}
+              {GEAR_ACQUISITION_KIND_VALUES.map((k) => (
+                <SelectItem key={k} value={k}>
+                  {ACQUISITION_KIND_LABEL[k]}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -7,6 +7,7 @@
 import {
   GEAR_QUERY_KEY,
   GEAR_TAGS_QUERY_KEY,
+  gearModelsQueryKey,
   GEAR_TYPES_QUERY_KEY,
   LOANS_QUERY_KEY,
   MY_CART_QUERY_KEY,
@@ -21,7 +22,7 @@ import {
   memberLoanSearchQueryKey,
 } from "#/features/gear/api/query-keys";
 import {
-  getGearByCodeFn,
+  getItemByCodeFn,
   getGearDetailFn,
   getLoanDetailFn,
   getMemberForLoanFn,
@@ -30,10 +31,11 @@ import {
   listGearInspectionsFn,
   listGearLabelsFn,
   listGearTagsFn,
+  listGearModelsFn,
   listGearTypesFn,
   listLoansFn,
   listMyLoansFn,
-  searchGearByCodeFn,
+  searchItemsByCodeFn,
   searchMembersForLoanFn,
   suggestCodeForTypeFn,
 } from "#/features/gear/server/gear-fns";
@@ -60,6 +62,16 @@ export function gearTypesQueryOptions() {
   return {
     queryKey: GEAR_TYPES_QUERY_KEY,
     queryFn: () => listGearTypesFn(),
+  } as const;
+}
+
+export function gearModelsQueryOptions(typePublicId: string | null) {
+  return {
+    queryKey: gearModelsQueryKey(typePublicId),
+    queryFn: () =>
+      listGearModelsFn({
+        data: typePublicId === null ? {} : { typePublicId },
+      }),
   } as const;
 }
 
@@ -174,7 +186,7 @@ export function gearCodeSearchQueryOptions(q: string) {
   const trimmed = q.trim();
   return {
     queryKey: gearCodeSearchQueryKey(trimmed),
-    queryFn: () => searchGearByCodeFn({ data: { q: trimmed } }),
+    queryFn: () => searchItemsByCodeFn({ data: { q: trimmed } }),
     enabled: trimmed.length > 0,
   } as const;
 }
@@ -182,10 +194,10 @@ export function gearCodeSearchQueryOptions(q: string) {
 /**
  * Exact-match lookup for a barcode scan result. Not memoized as a
  * `useQuery` factory — the scanner's `onResult` callsite invokes
- * `getGearByCodeFn` imperatively via the underlying mutation/manual
+ * `getItemByCodeFn` imperatively via the underlying mutation/manual
  * fetch and feeds the row into local state. Exposed here as a small
  * helper so callsites don't reach into the server fn module directly.
  */
 export function fetchGearByCode(code: string) {
-  return getGearByCodeFn({ data: { code } });
+  return getItemByCodeFn({ data: { code } });
 }

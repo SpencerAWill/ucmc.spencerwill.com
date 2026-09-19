@@ -9,10 +9,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { GEAR_QUERY_KEY } from "#/features/gear/api/query-keys";
 import {
-  bulkAddGearTagsFn,
-  bulkRetireGearFn,
-  bulkSetGearConditionFn,
-  bulkUnretireGearFn,
+  bulkAddGearItemTagsFn,
+  bulkDeactivateGearFn,
+  bulkSetGearItemConditionFn,
+  bulkReactivateGearFn,
 } from "#/features/gear/server/gear-fns";
 import type { GearCondition } from "#/features/gear/server/gear-fns";
 
@@ -32,26 +32,28 @@ function useBulkGearMutation<TInput>(
   });
 }
 
-export function useBulkRetireGear() {
-  return useBulkGearMutation<{ publicIds: string[]; reason: string | null }>(
-    bulkRetireGearFn,
-  );
+export function useBulkDeactivateGear() {
+  return useBulkGearMutation<{
+    publicIds: string[];
+    status: "retired" | "lost" | "disposed";
+    reason: string | null;
+  }>(bulkDeactivateGearFn);
 }
 
-export function useBulkUnretireGear() {
-  return useBulkGearMutation<{ publicIds: string[] }>(bulkUnretireGearFn);
+export function useBulkReactivateGear() {
+  return useBulkGearMutation<{ publicIds: string[] }>(bulkReactivateGearFn);
 }
 
 export function useBulkSetGearCondition() {
   return useBulkGearMutation<{
     publicIds: string[];
     condition: GearCondition;
-  }>(bulkSetGearConditionFn);
+  }>(bulkSetGearItemConditionFn);
 }
 
 export function useBulkAddGearTags() {
   return useBulkGearMutation<{
     publicIds: string[];
     tagPublicIds: string[];
-  }>(bulkAddGearTagsFn);
+  }>(bulkAddGearItemTagsFn);
 }

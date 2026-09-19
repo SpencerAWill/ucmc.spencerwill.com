@@ -27,21 +27,21 @@ import {
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
 import {
-  getGearByPublicId,
-  updateGearById,
+  getGearItemByPublicId,
+  updateGearItemById,
 } from "#/features/gear/server/repo.server";
 import {
   extendLoanDueAt,
-  getGearByCode,
+  getItemByCode,
   getLoanByPublicId,
-  getOpenLoanForGear,
+  getOpenLoanForItem,
   insertLoans,
   listLoans,
   listLoansForMember,
   markLoanReturned,
   getApprovedMemberByPublicId,
   searchApprovedMembers,
-  searchGearByCode,
+  searchItemsByCode,
 } from "#/features/gear/server/loans-repo.server";
 import type {
   GearCodeSearchRow,
@@ -61,7 +61,8 @@ import { getDb, isUniqueViolation, schema } from "#/server/db";
 
 export interface LoanSummary {
   publicId: string;
-  gearPublicId: string;
+  /** Null for a counted loan — there is no single unit to link to. */
+  gearPublicId: string | null;
   code: string | null;
   gearDescription: string;
   thumbnailKey: string | null;
@@ -87,7 +88,7 @@ export interface LoanDetail extends LoanSummary {
 function toSummary(row: LoanListRow): LoanSummary {
   return {
     publicId: row.publicId,
-    gearPublicId: row.gearPublicId,
+    gearPublicId: row.itemPublicId,
     code: row.code,
     gearDescription: row.description,
     thumbnailKey: row.thumbnailKey,
@@ -175,7 +176,7 @@ export async function checkoutLoansAction(
   // per-row resolution outcomes. The bulk insert + audit fan-out
   // happens after the loop in two D1 round-trips.
   for (const item of input.items) {
-    const gear = await getGearByPublicId(item.gearPublicId);
+    const gear = await getGearItemByPublicId(item.gearPublicId);
     if (!gear) {
       results.push({
         ok: false,
@@ -184,7 +185,7 @@ export async function checkoutLoansAction(
       });
       continue;
     }
-    if (gear.lifecycle === "retired") {
+    if (gear.status === "retired") {
       results.push({
         ok: false,
         gearPublicId: item.gearPublicId,
@@ -200,7 +201,7 @@ export async function checkoutLoansAction(
       });
       continue;
     }
-    const existing = await getOpenLoanForGear(gear.id);
+    const existing = await getOpenLoanForItem(gear.id);
     if (existing) {
       results.push({
         ok: false,
@@ -220,7 +221,12 @@ export async function checkoutLoansAction(
       insert: {
         id,
         publicId,
-        gearId: gear.id,
+        // Coded checkout: one named item, quantity 1. Counted checkout
+        // (a quantity against a model) comes in with the desk's
+        // counted pane and sets `modelId` instead.
+        itemId: gear.id,
+        modelId: null,
+        quantity: 1,
         memberUserId: member.userId,
         checkedOutByUserId: principal.userId,
         checkedOutAt: now,
@@ -292,7 +298,11 @@ async function emitCheckoutAudits(
   actorUserId: string,
   memberUserId: string,
   rows: Array<{
-    insert: { gearId: string; dueAt: Temporal.Instant };
+    insert: {
+      itemId: string | null;
+      modelId: string | null;
+      dueAt: Temporal.Instant;
+    };
     code: string | null;
     durationDays: number;
   }>,
@@ -302,10 +312,11 @@ async function emitCheckoutAudits(
       actorUserId,
       action: "loan.checked_out" as const,
       targetType: "gear",
-      targetId: r.insert.gearId,
+      targetId: r.insert.itemId ?? r.insert.modelId,
       metadata: {
         memberUserId,
-        gearId: r.insert.gearId,
+        itemId: r.insert.itemId,
+        modelId: r.insert.modelId,
         dueAt: r.insert.dueAt.epochMilliseconds,
         code: r.code,
         durationDays: r.durationDays,
@@ -352,7 +363,7 @@ export async function checkinLoansAction(
     [];
 
   for (const item of input.items) {
-    const gear = await getGearByPublicId(item.gearPublicId);
+    const gear = await getGearItemByPublicId(item.gearPublicId);
     if (!gear) {
       results.push({
         ok: false,
@@ -361,7 +372,7 @@ export async function checkinLoansAction(
       });
       continue;
     }
-    const loan = await getOpenLoanForGear(gear.id);
+    const loan = await getOpenLoanForItem(gear.id);
     if (!loan) {
       results.push({
         ok: false,
@@ -376,6 +387,10 @@ export async function checkinLoansAction(
       returnedToUserId: principal.userId,
       checkinNotes: item.notes,
       conditionAtReturn: item.conditionAtReturn,
+      // A coded loan is all-or-nothing: the single unit either came
+      // back or it did not, and check-in here only ever means it did.
+      quantityReturned: loan.quantity,
+      quantityLost: 0,
     });
 
     // If the officer noted a condition change, update the gear too
@@ -385,7 +400,7 @@ export async function checkinLoansAction(
       item.conditionAtReturn !== null &&
       item.conditionAtReturn !== gear.condition
     ) {
-      await updateGearById(gear.id, { condition: item.conditionAtReturn });
+      await updateGearItemById(gear.id, { condition: item.conditionAtReturn });
       auditPayloads.push({
         actorUserId: principal.userId,
         action: "gear.updated",
@@ -475,7 +490,7 @@ export async function extendLoanAction(input: {
     actorUserId: principal.userId,
     action: "loan.extended",
     targetType: "gear",
-    targetId: loan.gearId,
+    targetId: loan.itemId ?? loan.modelId,
     metadata: {
       loanId: loan.id,
       priorDueAt,
@@ -614,16 +629,16 @@ export async function getMemberForLoanAction(input: {
 
 export type GearLookupRow = GearCodeSearchRow;
 
-export async function searchGearByCodeAction(input: {
+export async function searchItemsByCodeAction(input: {
   q: string;
 }): Promise<GearLookupRow[]> {
   await requireGearLoanManager();
-  return searchGearByCode(input.q);
+  return searchItemsByCode(input.q);
 }
 
-export async function getGearByCodeAction(input: {
+export async function getItemByCodeAction(input: {
   code: string;
 }): Promise<GearLookupRow | null> {
   await requireGearLoanManager();
-  return getGearByCode(input.code);
+  return getItemByCode(input.code);
 }

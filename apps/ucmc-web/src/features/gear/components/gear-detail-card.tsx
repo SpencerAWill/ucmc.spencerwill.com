@@ -11,22 +11,14 @@ import {
 import { MarkdownContent } from "#/components/markdown/markdown-content";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearDetail } from "#/features/gear/server/gear-fns";
-
-const CONDITION_LABEL: Record<GearDetail["condition"], string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
-
-const CONDITION_GRADE_LABEL: Record<
-  NonNullable<GearDetail["conditionGrade"]>,
-  string
-> = {
-  excellent: "Excellent",
-  good: "Good",
-  fair: "Fair",
-};
+import {
+  CONDITION_LABEL,
+  CONDITION_VARIANT,
+  STATUS_LABEL,
+  STATUS_VARIANT,
+  WHEREABOUTS_LABEL,
+  WHEREABOUTS_VARIANT,
+} from "#/features/gear/lib/labels";
 
 // Mirrors the placeholder used on the list page so the detail view
 // matches visually. Swap for a real per-gear thumbnail key when that
@@ -43,7 +35,7 @@ export function GearDetailCard({
    *  officer-only since it leaks budget detail. */
   canManage: boolean;
 }) {
-  const isRetired = gear.lifecycle === "retired";
+  const isRetired = gear.status === "retired";
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -77,13 +69,17 @@ export function GearDetailCard({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Badge variant={isRetired ? "outline" : "secondary"}>
-              {isRetired ? "Retired" : "Active"}
+            <Badge variant={STATUS_VARIANT[gear.status]}>
+              {STATUS_LABEL[gear.status]}
             </Badge>
-            <Badge variant="outline">{CONDITION_LABEL[gear.condition]}</Badge>
-            {gear.conditionGrade ? (
-              <Badge variant="outline">
-                {CONDITION_GRADE_LABEL[gear.conditionGrade]}
+            <Badge variant={CONDITION_VARIANT[gear.condition]}>
+              {CONDITION_LABEL[gear.condition]}
+            </Badge>
+            {/* Whereabouts only reads as news when the item isn't where
+                it should be — "In the cave" on every card is noise. */}
+            {gear.whereabouts !== "cave" ? (
+              <Badge variant={WHEREABOUTS_VARIANT[gear.whereabouts]}>
+                {WHEREABOUTS_LABEL[gear.whereabouts]}
               </Badge>
             ) : null}
           </div>
@@ -100,10 +96,10 @@ export function GearDetailCard({
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {gear.manufacturer ? (
+          {gear.model.manufacturer ? (
             <div>
               <dt className="text-xs text-muted-foreground">Manufacturer</dt>
-              <dd>{gear.manufacturer}</dd>
+              <dd>{gear.model.manufacturer}</dd>
             </div>
           ) : null}
           {gear.serialNumber ? (
@@ -124,26 +120,27 @@ export function GearDetailCard({
               <dd>${(gear.acquisitionCostCents / 100).toFixed(2)}</dd>
             </div>
           ) : null}
-          {canManage && gear.msrpCents !== null ? (
+          {canManage && gear.model.msrpCents !== null ? (
             <div>
               <dt className="text-xs text-muted-foreground">MSRP</dt>
-              <dd>${(gear.msrpCents / 100).toFixed(2)}</dd>
+              <dd>${(gear.model.msrpCents / 100).toFixed(2)}</dd>
             </div>
           ) : null}
           <div>
             <dt className="text-xs text-muted-foreground">Added</dt>
             <dd>{formatDate(gear.createdAt)}</dd>
           </div>
-          {isRetired && gear.retiredAt ? (
+          {isRetired && gear.deactivatedAt ? (
             <div>
               <dt className="text-xs text-muted-foreground">Retired</dt>
-              <dd>{formatDate(gear.retiredAt)}</dd>
+              <dd>{formatDate(gear.deactivatedAt)}</dd>
             </div>
           ) : null}
         </dl>
-        {isRetired && gear.retiredReason ? (
+        {isRetired && gear.deactivatedReason ? (
           <p className="text-sm text-muted-foreground">
-            <span className="font-medium">Reason:</span> {gear.retiredReason}
+            <span className="font-medium">Reason:</span>{" "}
+            {gear.deactivatedReason}
           </p>
         ) : null}
         {gear.notesMarkdown ? (

@@ -1,53 +1,120 @@
 /**
- * Pure data access for gear inventory. No auth, no business logic — the
- * action modules are responsible for authorization and audit emission.
+ * Pure data access for gear items, types and tags. No auth, no business
+ * logic — the action modules are responsible for authorization and audit
+ * emission. Models and stock levels live in `models-repo.server.ts`.
  *
  * Tag joins are handled with a second query rather than SQL aggregation:
- * after the gear page is loaded we fetch every tag assignment for the
- * matching gear IDs and merge in TypeScript. Two D1 round-trips total
+ * after the item page is loaded we fetch every tag assignment for the
+ * matching item IDs and merge in TypeScript. Two D1 round-trips total
  * per list request, but the shape is straightforward and easy to test.
  */
 import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { getDb, likeContains, schema } from "#/server/db";
 
-export interface GearRow {
+/**
+ * One physical unit, with its model and type flattened in. Members never
+ * see a bare item — "CH93" means nothing without "Petzl Corax harness"
+ * beside it — so every read path joins both levels rather than making
+ * callers stitch them.
+ */
+export interface GearItemRow {
   id: string;
   publicId: string;
-  typeId: string;
+  modelId: string;
   code: string | null;
-  description: string;
+  serialNumber: string | null;
+  description: string | null;
   thumbnailKey: string | null;
+  manufacturedAt: Temporal.Instant | null;
   acquiredAt: Temporal.Instant | null;
   acquisitionCostCents: number | null;
-  msrpCents: number | null;
-  manufacturer: string | null;
-  serialNumber: string | null;
-  conditionGrade: schema.GearConditionGrade | null;
+  acquisitionKind: schema.GearAcquisitionKind | null;
   notesMarkdown: string | null;
-  lifecycle: schema.GearLifecycle;
+  status: schema.GearStatus;
   condition: schema.GearCondition;
-  retiredAt: Temporal.Instant | null;
-  retiredReason: string | null;
+  whereabouts: schema.GearWhereabouts;
+  whereaboutsAsOf: Temporal.Instant | null;
+  whereaboutsNote: string | null;
+  deactivatedAt: Temporal.Instant | null;
+  deactivatedReason: string | null;
   createdAt: Temporal.Instant;
   updatedAt: Temporal.Instant;
+  modelPublicId: string;
+  modelName: string;
+  manufacturer: string | null;
+  msrpCents: number | null;
+  serviceLifeYears: number | null;
+  modelImageKey: string | null;
+  typeId: string;
   typePublicId: string;
   typeName: string;
   typePrefix: string | null;
 }
 
-export interface ListGearFilters {
+const ITEM_COLUMNS = {
+  id: schema.gearItems.id,
+  publicId: schema.gearItems.publicId,
+  modelId: schema.gearItems.modelId,
+  code: schema.gearItems.code,
+  serialNumber: schema.gearItems.serialNumber,
+  description: schema.gearItems.description,
+  thumbnailKey: schema.gearItems.thumbnailKey,
+  manufacturedAt: schema.gearItems.manufacturedAt,
+  acquiredAt: schema.gearItems.acquiredAt,
+  acquisitionCostCents: schema.gearItems.acquisitionCostCents,
+  acquisitionKind: schema.gearItems.acquisitionKind,
+  notesMarkdown: schema.gearItems.notesMarkdown,
+  status: schema.gearItems.status,
+  condition: schema.gearItems.condition,
+  whereabouts: schema.gearItems.whereabouts,
+  whereaboutsAsOf: schema.gearItems.whereaboutsAsOf,
+  whereaboutsNote: schema.gearItems.whereaboutsNote,
+  deactivatedAt: schema.gearItems.deactivatedAt,
+  deactivatedReason: schema.gearItems.deactivatedReason,
+  createdAt: schema.gearItems.createdAt,
+  updatedAt: schema.gearItems.updatedAt,
+  modelPublicId: schema.gearModels.publicId,
+  modelName: schema.gearModels.name,
+  manufacturer: schema.gearModels.manufacturer,
+  msrpCents: schema.gearModels.msrpCents,
+  serviceLifeYears: schema.gearModels.serviceLifeYears,
+  modelImageKey: schema.gearModels.imageKey,
+  typeId: schema.gearTypes.id,
+  typePublicId: schema.gearTypes.publicId,
+  typeName: schema.gearTypes.name,
+  typePrefix: schema.gearTypes.prefix,
+} as const;
+
+/** Item → model → type. Every read path needs both joins. */
+function itemsWithModelAndType() {
+  return getDb()
+    .select(ITEM_COLUMNS)
+    .from(schema.gearItems)
+    .innerJoin(
+      schema.gearModels,
+      eq(schema.gearModels.id, schema.gearItems.modelId),
+    )
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    );
+}
+
+export interface ListGearItemFilters {
   typeId?: string;
+  modelId?: string;
   tagIds?: string[];
-  lifecycle?: schema.GearLifecycle;
+  status?: schema.GearStatus;
   condition?: schema.GearCondition;
+  whereabouts?: schema.GearWhereabouts;
   q?: string;
 }
 
-export type GearSortKey = "code" | "created_at" | "updated_at";
+export type GearItemSortKey = "code" | "created_at" | "updated_at" | "model";
 
-export interface ListGearOptions extends ListGearFilters {
-  sort?: GearSortKey;
+export interface ListGearItemOptions extends ListGearItemFilters {
+  sort?: GearItemSortKey;
   dir?: "asc" | "desc";
   page?: number;
   perPage?: number;
@@ -57,35 +124,46 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PER_PAGE = 50;
 const MAX_PER_PAGE = 250;
 
-function gearWhere(filters: ListGearFilters) {
+function itemWhere(filters: ListGearItemFilters) {
   const clauses = [] as Parameters<typeof and>;
   if (filters.typeId) {
-    clauses.push(eq(schema.gear.typeId, filters.typeId));
+    clauses.push(eq(schema.gearModels.typeId, filters.typeId));
   }
-  if (filters.lifecycle) {
-    clauses.push(eq(schema.gear.lifecycle, filters.lifecycle));
+  if (filters.modelId) {
+    clauses.push(eq(schema.gearItems.modelId, filters.modelId));
+  }
+  if (filters.status) {
+    clauses.push(eq(schema.gearItems.status, filters.status));
   }
   if (filters.condition) {
-    clauses.push(eq(schema.gear.condition, filters.condition));
+    clauses.push(eq(schema.gearItems.condition, filters.condition));
+  }
+  if (filters.whereabouts) {
+    clauses.push(eq(schema.gearItems.whereabouts, filters.whereabouts));
   }
   if (filters.q && filters.q.trim().length > 0) {
     const q = filters.q.trim();
+    // Model name and manufacturer are in here deliberately: typing
+    // "Black Diamond" or "Corax" is how a member searches, and before
+    // the model layer those words only existed as free text on each row.
     clauses.push(
       or(
-        likeContains(schema.gear.code, q),
-        likeContains(schema.gear.description, q),
-        likeContains(schema.gear.notesMarkdown, q),
+        likeContains(schema.gearItems.code, q),
+        likeContains(schema.gearItems.description, q),
+        likeContains(schema.gearItems.notesMarkdown, q),
+        likeContains(schema.gearModels.name, q),
+        likeContains(schema.gearModels.manufacturer, q),
       ),
     );
   }
   if (filters.tagIds && filters.tagIds.length > 0) {
     const tagIds = filters.tagIds;
     clauses.push(
-      sql`${schema.gear.id} IN (
-        SELECT ${schema.gearTagAssignments.gearId}
+      sql`${schema.gearItems.id} IN (
+        SELECT ${schema.gearTagAssignments.itemId}
         FROM ${schema.gearTagAssignments}
         WHERE ${inArray(schema.gearTagAssignments.tagId, tagIds)}
-        GROUP BY ${schema.gearTagAssignments.gearId}
+        GROUP BY ${schema.gearTagAssignments.itemId}
         HAVING COUNT(DISTINCT ${schema.gearTagAssignments.tagId}) = ${tagIds.length}
       )`,
     );
@@ -93,70 +171,47 @@ function gearWhere(filters: ListGearFilters) {
   return clauses.length === 0 ? undefined : and(...clauses);
 }
 
-export interface ListGearResult {
-  rows: GearRow[];
+export interface ListGearItemsResult {
+  rows: GearItemRow[];
   total: number;
   page: number;
   perPage: number;
 }
 
-export async function listGear(
-  options: ListGearOptions = {},
-): Promise<ListGearResult> {
+export async function listGearItems(
+  options: ListGearItemOptions = {},
+): Promise<ListGearItemsResult> {
   const db = getDb();
   const page = Math.max(1, options.page ?? DEFAULT_PAGE);
   const perPage = Math.min(
     MAX_PER_PAGE,
     Math.max(1, options.perPage ?? DEFAULT_PER_PAGE),
   );
-  const where = gearWhere(options);
+  const where = itemWhere(options);
   const sort = options.sort ?? "code";
   // Direction is the caller's now that the toolbar exposes it, but each
   // key keeps its own default so an unqualified `?sort=created_at` still
   // means newest-first rather than silently flipping to oldest.
-  const dir = options.dir ?? (sort === "code" ? "asc" : "desc");
+  const dir =
+    options.dir ?? (sort === "code" || sort === "model" ? "asc" : "desc");
   const order = dir === "asc" ? asc : desc;
 
   // Code is the only unique key here, so it needs no tiebreaker; the
-  // date sorts fall back to it for a stable page boundary — and the
-  // tiebreaker runs in the *same* direction, because two pieces
-  // created in the same millisecond (a bulk import does this for every
-  // row) would otherwise come back in ascending code order under a
+  // other sorts fall back to it for a stable page boundary — and the
+  // tiebreaker runs in the *same* direction, because two items created
+  // in the same millisecond (a bulk import does this for every row)
+  // would otherwise come back in ascending code order under a
   // descending sort.
   const orderBy =
     sort === "code"
-      ? [order(schema.gear.code)]
-      : sort === "created_at"
-        ? [order(schema.gear.createdAt), order(schema.gear.code)]
-        : [order(schema.gear.updatedAt), order(schema.gear.code)];
+      ? [order(schema.gearItems.code)]
+      : sort === "model"
+        ? [order(schema.gearModels.name), order(schema.gearItems.code)]
+        : sort === "created_at"
+          ? [order(schema.gearItems.createdAt), order(schema.gearItems.code)]
+          : [order(schema.gearItems.updatedAt), order(schema.gearItems.code)];
 
-  const rows = await db
-    .select({
-      id: schema.gear.id,
-      publicId: schema.gear.publicId,
-      typeId: schema.gear.typeId,
-      code: schema.gear.code,
-      description: schema.gear.description,
-      thumbnailKey: schema.gear.thumbnailKey,
-      acquiredAt: schema.gear.acquiredAt,
-      acquisitionCostCents: schema.gear.acquisitionCostCents,
-      msrpCents: schema.gear.msrpCents,
-      manufacturer: schema.gear.manufacturer,
-      serialNumber: schema.gear.serialNumber,
-      conditionGrade: schema.gear.conditionGrade,
-      notesMarkdown: schema.gear.notesMarkdown,
-      lifecycle: schema.gear.lifecycle,
-      condition: schema.gear.condition,
-      retiredAt: schema.gear.retiredAt,
-      retiredReason: schema.gear.retiredReason,
-      createdAt: schema.gear.createdAt,
-      updatedAt: schema.gear.updatedAt,
-      typePublicId: schema.gearTypes.publicId,
-      typeName: schema.gearTypes.name,
-      typePrefix: schema.gearTypes.prefix,
-    })
-    .from(schema.gear)
-    .innerJoin(schema.gearTypes, eq(schema.gearTypes.id, schema.gear.typeId))
+  const rows = await itemsWithModelAndType()
     .where(where)
     .orderBy(...orderBy)
     .limit(perPage)
@@ -164,79 +219,58 @@ export async function listGear(
 
   const totalRows = await db
     .select({ value: count() })
-    .from(schema.gear)
+    .from(schema.gearItems)
+    .innerJoin(
+      schema.gearModels,
+      eq(schema.gearModels.id, schema.gearItems.modelId),
+    )
     .where(where);
   const total = totalRows[0]?.value ?? 0;
 
   return { rows, total, page, perPage };
 }
 
-export async function getGearByPublicId(
+export async function getGearItemByPublicId(
   publicId: string,
-): Promise<GearRow | null> {
-  const db = getDb();
-  const rows = await db
-    .select({
-      id: schema.gear.id,
-      publicId: schema.gear.publicId,
-      typeId: schema.gear.typeId,
-      code: schema.gear.code,
-      description: schema.gear.description,
-      thumbnailKey: schema.gear.thumbnailKey,
-      acquiredAt: schema.gear.acquiredAt,
-      acquisitionCostCents: schema.gear.acquisitionCostCents,
-      msrpCents: schema.gear.msrpCents,
-      manufacturer: schema.gear.manufacturer,
-      serialNumber: schema.gear.serialNumber,
-      conditionGrade: schema.gear.conditionGrade,
-      notesMarkdown: schema.gear.notesMarkdown,
-      lifecycle: schema.gear.lifecycle,
-      condition: schema.gear.condition,
-      retiredAt: schema.gear.retiredAt,
-      retiredReason: schema.gear.retiredReason,
-      createdAt: schema.gear.createdAt,
-      updatedAt: schema.gear.updatedAt,
-      typePublicId: schema.gearTypes.publicId,
-      typeName: schema.gearTypes.name,
-      typePrefix: schema.gearTypes.prefix,
-    })
-    .from(schema.gear)
-    .innerJoin(schema.gearTypes, eq(schema.gearTypes.id, schema.gear.typeId))
-    .where(eq(schema.gear.publicId, publicId))
+): Promise<GearItemRow | null> {
+  const rows = await itemsWithModelAndType()
+    .where(eq(schema.gearItems.publicId, publicId))
     .limit(1);
   return rows[0] ?? null;
 }
 
-export async function getGearById(id: string): Promise<schema.Gear | null> {
+export async function getGearItemById(
+  id: string,
+): Promise<schema.GearItem | null> {
   const db = getDb();
   const rows = await db
     .select()
-    .from(schema.gear)
-    .where(eq(schema.gear.id, id))
+    .from(schema.gearItems)
+    .where(eq(schema.gearItems.id, id))
     .limit(1);
   return rows[0] ?? null;
 }
 
 /**
- * Fetch tag assignments for the given gear IDs. Returns a map keyed by
- * gear ID. Callers merge into their `GearRow[]` themselves.
+ * Fetch tag assignments for the given item IDs. Returns a map keyed by
+ * item ID. Callers merge into their `GearItemRow[]` themselves.
  */
-export async function listTagsForGearIds(
-  gearIds: string[],
+export async function listTagsForItemIds(
+  itemIds: string[],
   options: { includeInternal: boolean } = { includeInternal: true },
 ): Promise<Map<string, schema.GearTag[]>> {
   const map = new Map<string, schema.GearTag[]>();
-  if (gearIds.length === 0) return map;
+  if (itemIds.length === 0) return map;
   const db = getDb();
   const where = options.includeInternal
-    ? inArray(schema.gearTagAssignments.gearId, gearIds)
+    ? inArray(schema.gearTagAssignments.itemId, itemIds)
     : and(
-        inArray(schema.gearTagAssignments.gearId, gearIds),
+        inArray(schema.gearTagAssignments.itemId, itemIds),
         eq(schema.gearTags.visibility, "public"),
       );
   const rows = await db
     .select({
-      gearId: schema.gearTagAssignments.gearId,
+      itemId: schema.gearTagAssignments.itemId,
       tag: schema.gearTags,
     })
     .from(schema.gearTagAssignments)
@@ -247,110 +281,128 @@ export async function listTagsForGearIds(
     .where(where)
     .orderBy(asc(schema.gearTags.name));
   for (const row of rows) {
-    const list = map.get(row.gearId) ?? [];
+    const list = map.get(row.itemId) ?? [];
     list.push(row.tag);
-    map.set(row.gearId, list);
+    map.set(row.itemId, list);
   }
   return map;
 }
 
-export async function insertGear(input: {
+export async function insertGearItem(input: {
   id: string;
   publicId: string;
-  typeId: string;
+  modelId: string;
   code: string | null;
-  description: string;
+  serialNumber: string | null;
+  description: string | null;
   thumbnailKey: string | null;
+  manufacturedAt: Temporal.Instant | null;
   acquiredAt: Temporal.Instant | null;
   acquisitionCostCents: number | null;
-  msrpCents?: number | null;
-  manufacturer?: string | null;
-  serialNumber?: string | null;
-  conditionGrade?: schema.GearConditionGrade | null;
+  acquisitionKind: schema.GearAcquisitionKind | null;
   notesMarkdown: string | null;
   condition: schema.GearCondition;
+  whereabouts?: schema.GearWhereabouts;
   createdBy: string;
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
-  await db.insert(schema.gear).values({
-    id: input.id,
-    publicId: input.publicId,
-    typeId: input.typeId,
-    code: input.code,
-    description: input.description,
-    thumbnailKey: input.thumbnailKey,
-    acquiredAt: input.acquiredAt,
-    acquisitionCostCents: input.acquisitionCostCents,
-    msrpCents: input.msrpCents ?? null,
-    manufacturer: input.manufacturer ?? null,
-    serialNumber: input.serialNumber ?? null,
-    conditionGrade: input.conditionGrade ?? null,
-    notesMarkdown: input.notesMarkdown,
-    lifecycle: "active",
-    condition: input.condition,
-    createdBy: input.createdBy,
+  await db.insert(schema.gearItems).values({
+    ...input,
+    status: "active",
+    whereabouts: input.whereabouts ?? "cave",
     createdAt: now,
     updatedAt: now,
   });
 }
 
-export async function updateGearById(
+export async function updateGearItemById(
   id: string,
   patch: Partial<{
-    typeId: string;
+    modelId: string;
     code: string | null;
-    description: string;
+    serialNumber: string | null;
+    description: string | null;
     thumbnailKey: string | null;
+    manufacturedAt: Temporal.Instant | null;
     acquiredAt: Temporal.Instant | null;
     acquisitionCostCents: number | null;
-    msrpCents: number | null;
-    manufacturer: string | null;
-    serialNumber: string | null;
-    conditionGrade: schema.GearConditionGrade | null;
+    acquisitionKind: schema.GearAcquisitionKind | null;
     notesMarkdown: string | null;
     condition: schema.GearCondition;
+    whereabouts: schema.GearWhereabouts;
+    whereaboutsAsOf: Temporal.Instant | null;
+    whereaboutsNote: string | null;
   }>,
 ): Promise<void> {
   const db = getDb();
   await db
-    .update(schema.gear)
+    .update(schema.gearItems)
     .set({ ...patch, updatedAt: Temporal.Now.instant() })
-    .where(eq(schema.gear.id, id));
+    .where(eq(schema.gearItems.id, id));
 }
 
-export async function markGearRetired(input: {
+/**
+ * Move an item to a terminal status.
+ *
+ * **Deliberately does not touch `code`.** The old retire NULLed it to
+ * free the string for reuse; codes are no longer recycled, so the label
+ * stays bound to this item forever and every historical mention of
+ * "CH93" resolves to exactly one thing. `releaseGearItemCode` is the
+ * explicit way to free one.
+ */
+export async function markGearItemDeactivated(input: {
   id: string;
-  retiredBy: string;
+  status: Exclude<schema.GearStatus, "active">;
+  deactivatedBy: string;
   reason: string | null;
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
   await db
-    .update(schema.gear)
+    .update(schema.gearItems)
     .set({
-      lifecycle: "retired",
-      code: null,
-      retiredAt: now,
-      retiredBy: input.retiredBy,
-      retiredReason: input.reason,
+      status: input.status,
+      deactivatedAt: now,
+      deactivatedBy: input.deactivatedBy,
+      deactivatedReason: input.reason,
       updatedAt: now,
     })
-    .where(eq(schema.gear.id, input.id));
+    .where(eq(schema.gearItems.id, input.id));
 }
 
-export async function markGearUnretired(id: string): Promise<void> {
+/**
+ * Undo a mis-click. **Preserves `deactivatedReason`** — the old
+ * un-retire nulled it, which destroyed the record of why a harness was
+ * pulled from service the moment someone reversed the decision. The
+ * reason stays on the row until the next deactivation overwrites it, and
+ * the reactivation itself is an audit event.
+ */
+export async function markGearItemReactivated(id: string): Promise<void> {
   const db = getDb();
   await db
-    .update(schema.gear)
+    .update(schema.gearItems)
     .set({
-      lifecycle: "active",
-      retiredAt: null,
-      retiredBy: null,
-      retiredReason: null,
+      status: "active",
+      deactivatedAt: null,
+      deactivatedBy: null,
       updatedAt: Temporal.Now.instant(),
     })
-    .where(eq(schema.gear.id, id));
+    .where(eq(schema.gearItems.id, id));
+}
+
+/**
+ * Free a code from an already-deactivated item so it can be reissued.
+ *
+ * The whole of the code-recycling story: explicit, one item at a time,
+ * audited by the caller with the prior value. Not a mode the system runs
+ * in, which is what lets the UNIQUE index mean what it says.
+ */
+export async function releaseGearItemCode(id: string): Promise<void> {
+  await getDb()
+    .update(schema.gearItems)
+    .set({ code: null, updatedAt: Temporal.Now.instant() })
+    .where(eq(schema.gearItems.id, id));
 }
 
 /**
@@ -360,90 +412,114 @@ export async function markGearUnretired(id: string): Promise<void> {
  * prior values (for audit metadata) BEFORE calling these — we don't
  * .returning() because that doubles the planner cost.
  */
-export async function bulkMarkGearRetired(input: {
+export async function bulkMarkGearItemsDeactivated(input: {
   ids: string[];
-  retiredBy: string;
+  status: Exclude<schema.GearStatus, "active">;
+  deactivatedBy: string;
   reason: string | null;
 }): Promise<void> {
-  const stmt = buildBulkMarkGearRetiredStatement(input);
+  const stmt = buildBulkDeactivateStatement(input);
   if (stmt) await stmt;
 }
 
 /**
- * Statement-builder variant of `bulkMarkGearRetired`. Returns the
- * drizzle UPDATE builder (or `null` when there's nothing to retire) so
- * the caller can compose it with other writes in a single `db.batch`.
+ * Statement-builder variant. Returns the drizzle UPDATE builder (or
+ * `null` when there's nothing to do) so the caller can compose it with
+ * other writes in a single `db.batch`.
  */
-export function buildBulkMarkGearRetiredStatement(input: {
+export function buildBulkDeactivateStatement(input: {
   ids: string[];
-  retiredBy: string;
+  status: Exclude<schema.GearStatus, "active">;
+  deactivatedBy: string;
   reason: string | null;
 }) {
   if (input.ids.length === 0) return null;
   const now = Temporal.Now.instant();
   return getDb()
-    .update(schema.gear)
+    .update(schema.gearItems)
     .set({
-      lifecycle: "retired",
-      code: null,
-      retiredAt: now,
-      retiredBy: input.retiredBy,
-      retiredReason: input.reason,
+      status: input.status,
+      deactivatedAt: now,
+      deactivatedBy: input.deactivatedBy,
+      deactivatedReason: input.reason,
       updatedAt: now,
     })
     .where(
       and(
-        inArray(schema.gear.id, input.ids),
-        eq(schema.gear.lifecycle, "active"),
+        inArray(schema.gearItems.id, input.ids),
+        eq(schema.gearItems.status, "active"),
       ),
     );
 }
 
-export async function bulkMarkGearUnretired(ids: string[]): Promise<void> {
+export async function bulkMarkGearItemsReactivated(
+  ids: string[],
+): Promise<void> {
   if (ids.length === 0) return;
   const db = getDb();
   await db
-    .update(schema.gear)
+    .update(schema.gearItems)
     .set({
-      lifecycle: "active",
-      retiredAt: null,
-      retiredBy: null,
-      retiredReason: null,
+      status: "active",
+      deactivatedAt: null,
+      deactivatedBy: null,
       updatedAt: Temporal.Now.instant(),
     })
     .where(
-      and(inArray(schema.gear.id, ids), eq(schema.gear.lifecycle, "retired")),
+      and(
+        inArray(schema.gearItems.id, ids),
+        sql`${schema.gearItems.status} <> 'active'`,
+      ),
     );
 }
 
-export async function bulkSetGearCondition(input: {
+export async function bulkSetGearItemCondition(input: {
   ids: string[];
   condition: schema.GearCondition;
 }): Promise<void> {
   if (input.ids.length === 0) return;
   const db = getDb();
   await db
-    .update(schema.gear)
+    .update(schema.gearItems)
     .set({ condition: input.condition, updatedAt: Temporal.Now.instant() })
-    .where(inArray(schema.gear.id, input.ids));
+    .where(inArray(schema.gearItems.id, input.ids));
+}
+
+export async function bulkSetGearItemWhereabouts(input: {
+  ids: string[];
+  whereabouts: schema.GearWhereabouts;
+  asOf: Temporal.Instant | null;
+  note: string | null;
+}): Promise<void> {
+  if (input.ids.length === 0) return;
+  const db = getDb();
+  await db
+    .update(schema.gearItems)
+    .set({
+      whereabouts: input.whereabouts,
+      whereaboutsAsOf: input.asOf,
+      whereaboutsNote: input.note,
+      updatedAt: Temporal.Now.instant(),
+    })
+    .where(inArray(schema.gearItems.id, input.ids));
 }
 
 /**
- * Add the given tags to every gear in `gearIds`, leaving existing tag
+ * Add the given tags to every item in `itemIds`, leaving existing tag
  * assignments untouched. Uses `INSERT OR IGNORE` semantics via
- * Drizzle's `onConflictDoNothing` so duplicate (gearId, tagId) pairs
+ * Drizzle's `onConflictDoNothing` so duplicate (itemId, tagId) pairs
  * aren't an error — saves the caller from having to dedupe.
  */
-export async function bulkAddGearTags(input: {
-  gearIds: string[];
+export async function bulkAddGearItemTags(input: {
+  itemIds: string[];
   tagIds: string[];
   assignedBy: string;
 }): Promise<void> {
-  if (input.gearIds.length === 0 || input.tagIds.length === 0) return;
+  if (input.itemIds.length === 0 || input.tagIds.length === 0) return;
   const now = Temporal.Now.instant();
-  const rows = input.gearIds.flatMap((gearId) =>
+  const rows = input.itemIds.flatMap((itemId) =>
     input.tagIds.map((tagId) => ({
-      gearId,
+      itemId,
       tagId,
       assignedAt: now,
       assignedBy: input.assignedBy,
@@ -456,10 +532,10 @@ export async function bulkAddGearTags(input: {
 }
 
 /**
- * Fetch label-ready rows for printing: gear with its type name joined.
- * Returns rows whose `code` is non-null (codeless gear has nothing
- * scannable to print) in the order the publicIds were supplied so the
- * printed sheet matches the user's selection order.
+ * Fetch label-ready rows for printing: items with their model and type
+ * names joined. Returns rows whose `code` is non-null (an unlabelled
+ * item has nothing scannable to print) in the order the publicIds were
+ * supplied so the printed sheet matches the user's selection order.
  */
 export interface GearLabelRow {
   publicId: string;
@@ -475,14 +551,22 @@ export async function getGearLabelsByPublicIds(
   const db = getDb();
   const rows = await db
     .select({
-      publicId: schema.gear.publicId,
-      code: schema.gear.code,
-      description: schema.gear.description,
+      publicId: schema.gearItems.publicId,
+      code: schema.gearItems.code,
+      description: schema.gearItems.description,
+      modelName: schema.gearModels.name,
       typeName: schema.gearTypes.name,
     })
-    .from(schema.gear)
-    .innerJoin(schema.gearTypes, eq(schema.gearTypes.id, schema.gear.typeId))
-    .where(inArray(schema.gear.publicId, publicIds));
+    .from(schema.gearItems)
+    .innerJoin(
+      schema.gearModels,
+      eq(schema.gearModels.id, schema.gearItems.modelId),
+    )
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .where(inArray(schema.gearItems.publicId, publicIds));
   const byPublicId = new Map(rows.map((r) => [r.publicId, r]));
   return publicIds.flatMap((id) => {
     const row = byPublicId.get(id);
@@ -491,7 +575,9 @@ export async function getGearLabelsByPublicIds(
       {
         publicId: row.publicId,
         code: row.code,
-        description: row.description,
+        // The label wants the product, not the per-unit scribble: an
+        // item's `description` is now optional and usually empty.
+        description: row.description ?? row.modelName,
         typeName: row.typeName,
       },
     ];
@@ -499,29 +585,29 @@ export async function getGearLabelsByPublicIds(
 }
 
 /**
- * Fetch the `id` and `code` for a set of gear publicIds. Used by bulk
- * actions to translate the client-supplied publicIds into internal
+ * Fetch the `id`, `code` and `status` for a set of item publicIds. Used
+ * by bulk actions to translate client-supplied publicIds into internal
  * ids and to surface prior codes in the audit log.
  */
-export async function getGearByPublicIds(publicIds: string[]): Promise<
+export async function getGearItemsByPublicIds(publicIds: string[]): Promise<
   Array<{
     id: string;
     publicId: string;
     code: string | null;
-    lifecycle: schema.GearLifecycle;
+    status: schema.GearStatus;
   }>
 > {
   if (publicIds.length === 0) return [];
   const db = getDb();
   return db
     .select({
-      id: schema.gear.id,
-      publicId: schema.gear.publicId,
-      code: schema.gear.code,
-      lifecycle: schema.gear.lifecycle,
+      id: schema.gearItems.id,
+      publicId: schema.gearItems.publicId,
+      code: schema.gearItems.code,
+      status: schema.gearItems.status,
     })
-    .from(schema.gear)
-    .where(inArray(schema.gear.publicId, publicIds));
+    .from(schema.gearItems)
+    .where(inArray(schema.gearItems.publicId, publicIds));
 }
 
 // ── gear inspections ────────────────────────────────────────────────────
@@ -529,7 +615,8 @@ export async function getGearByPublicIds(publicIds: string[]): Promise<
 export interface GearInspectionRow {
   id: string;
   publicId: string;
-  gearId: string;
+  itemId: string | null;
+  modelId: string | null;
   inspectorUserId: string | null;
   inspectorNameSnapshot: string | null;
   /** Profile.fullName joined at read time. Falls back to the snapshot
@@ -544,61 +631,114 @@ export interface GearInspectionRow {
 export async function insertGearInspection(input: {
   id: string;
   publicId: string;
-  gearId: string;
+  itemId: string | null;
+  modelId: string | null;
   inspectorUserId: string;
   inspectorNameSnapshot: string;
   inspectedAt: Temporal.Instant;
   result: schema.GearInspectionResult;
   notes: string | null;
 }): Promise<void> {
-  await getDb().insert(schema.gearInspections).values({
-    id: input.id,
-    publicId: input.publicId,
-    gearId: input.gearId,
-    inspectorUserId: input.inspectorUserId,
-    inspectorNameSnapshot: input.inspectorNameSnapshot,
-    inspectedAt: input.inspectedAt,
-    result: input.result,
-    notes: input.notes,
-  });
+  await getDb().insert(schema.gearInspections).values(input);
 }
 
-export async function listInspectionsForGear(
-  gearId: string,
+const INSPECTION_COLUMNS = {
+  id: schema.gearInspections.id,
+  publicId: schema.gearInspections.publicId,
+  itemId: schema.gearInspections.itemId,
+  modelId: schema.gearInspections.modelId,
+  inspectorUserId: schema.gearInspections.inspectorUserId,
+  inspectorNameSnapshot: schema.gearInspections.inspectorNameSnapshot,
+  profileName: schema.profiles.fullName,
+  inspectedAt: schema.gearInspections.inspectedAt,
+  result: schema.gearInspections.result,
+  notes: schema.gearInspections.notes,
+  createdAt: schema.gearInspections.createdAt,
+} as const;
+
+function toInspectionRow(r: {
+  id: string;
+  publicId: string;
+  itemId: string | null;
+  modelId: string | null;
+  inspectorUserId: string | null;
+  inspectorNameSnapshot: string | null;
+  profileName: string | null;
+  inspectedAt: Temporal.Instant;
+  result: schema.GearInspectionResult;
+  notes: string | null;
+  createdAt: Temporal.Instant;
+}): GearInspectionRow {
+  const { profileName, ...rest } = r;
+  return {
+    ...rest,
+    inspectorDisplayName: profileName ?? r.inspectorNameSnapshot,
+  };
+}
+
+export async function listInspectionsForItem(
+  itemId: string,
 ): Promise<GearInspectionRow[]> {
-  const db = getDb();
-  const rows = await db
-    .select({
-      id: schema.gearInspections.id,
-      publicId: schema.gearInspections.publicId,
-      gearId: schema.gearInspections.gearId,
-      inspectorUserId: schema.gearInspections.inspectorUserId,
-      inspectorNameSnapshot: schema.gearInspections.inspectorNameSnapshot,
-      profileName: schema.profiles.fullName,
-      inspectedAt: schema.gearInspections.inspectedAt,
-      result: schema.gearInspections.result,
-      notes: schema.gearInspections.notes,
-      createdAt: schema.gearInspections.createdAt,
-    })
+  const rows = await getDb()
+    .select(INSPECTION_COLUMNS)
     .from(schema.gearInspections)
     .leftJoin(
       schema.profiles,
       eq(schema.profiles.userId, schema.gearInspections.inspectorUserId),
     )
-    .where(eq(schema.gearInspections.gearId, gearId))
+    .where(eq(schema.gearInspections.itemId, itemId))
     .orderBy(desc(schema.gearInspections.inspectedAt));
-  return rows.map((r) => ({
-    id: r.id,
-    publicId: r.publicId,
-    gearId: r.gearId,
-    inspectorUserId: r.inspectorUserId,
-    inspectorNameSnapshot: r.inspectorNameSnapshot,
-    inspectorDisplayName: r.profileName ?? r.inspectorNameSnapshot,
-    inspectedAt: r.inspectedAt,
-    result: r.result,
-    notes: r.notes,
-    createdAt: r.createdAt,
-  }));
+  return rows.map(toInspectionRow);
+}
+
+/** Counted models are inspected as a batch ("looked over all the draws"),
+ *  so their history hangs off the model rather than any one unit. */
+export async function listInspectionsForModel(
+  modelId: string,
+): Promise<GearInspectionRow[]> {
+  const rows = await getDb()
+    .select(INSPECTION_COLUMNS)
+    .from(schema.gearInspections)
+    .leftJoin(
+      schema.profiles,
+      eq(schema.profiles.userId, schema.gearInspections.inspectorUserId),
+    )
+    .where(eq(schema.gearInspections.modelId, modelId))
+    .orderBy(desc(schema.gearInspections.inspectedAt));
+  return rows.map(toInspectionRow);
+}
+
+/**
+ * Latest inspection per item, for the due-for-inspection report and the
+ * list-view badge. One query with a correlated MAX rather than N+1.
+ */
+export async function latestInspectionByItemIds(
+  itemIds: string[],
+): Promise<
+  Map<
+    string,
+    { inspectedAt: Temporal.Instant; result: schema.GearInspectionResult }
+  >
+> {
+  const map = new Map<
+    string,
+    { inspectedAt: Temporal.Instant; result: schema.GearInspectionResult }
+  >();
+  if (itemIds.length === 0) return map;
+  const rows = await getDb()
+    .select({
+      itemId: schema.gearInspections.itemId,
+      inspectedAt: schema.gearInspections.inspectedAt,
+      result: schema.gearInspections.result,
+    })
+    .from(schema.gearInspections)
+    .where(inArray(schema.gearInspections.itemId, itemIds))
+    .orderBy(desc(schema.gearInspections.inspectedAt));
+  for (const row of rows) {
+    if (row.itemId === null || map.has(row.itemId)) continue;
+    map.set(row.itemId, { inspectedAt: row.inspectedAt, result: row.result });
+  }
+  return map;
 }
 
 // ── gear types ──────────────────────────────────────────────────────────
@@ -638,20 +778,14 @@ export async function insertGearType(input: {
   name: string;
   prefix: string | null;
   description: string | null;
+  inspectionIntervalDays: number | null;
   createdBy: string;
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
-  await db.insert(schema.gearTypes).values({
-    id: input.id,
-    publicId: input.publicId,
-    name: input.name,
-    prefix: input.prefix,
-    description: input.description,
-    createdBy: input.createdBy,
-    createdAt: now,
-    updatedAt: now,
-  });
+  await db
+    .insert(schema.gearTypes)
+    .values({ ...input, createdAt: now, updatedAt: now });
 }
 
 export async function updateGearTypeById(
@@ -660,6 +794,7 @@ export async function updateGearTypeById(
     name: string;
     prefix: string | null;
     description: string | null;
+    inspectionIntervalDays: number | null;
   }>,
 ): Promise<void> {
   const db = getDb();
@@ -674,19 +809,29 @@ export async function deleteGearTypeById(id: string): Promise<void> {
   await db.delete(schema.gearTypes).where(eq(schema.gearTypes.id, id));
 }
 
+/** Models are RESTRICTed against type delete; the action layer pre-checks
+ *  so it can return a typed error rather than let the FK throw. */
+export async function countModelsForType(typeId: string): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(schema.gearModels)
+    .where(eq(schema.gearModels.typeId, typeId));
+  return rows[0]?.value ?? 0;
+}
+
 // ── gear tags ───────────────────────────────────────────────────────────
 
 export async function listGearTags(
   options: { includeInternal: boolean } = { includeInternal: true },
 ): Promise<schema.GearTag[]> {
   const db = getDb();
-  const query = db.select().from(schema.gearTags);
-  if (!options.includeInternal) {
-    return query
-      .where(eq(schema.gearTags.visibility, "public"))
-      .orderBy(asc(schema.gearTags.name));
-  }
-  return query.orderBy(asc(schema.gearTags.name));
+  const q = db.select().from(schema.gearTags);
+  const rows = options.includeInternal
+    ? await q.orderBy(asc(schema.gearTags.name))
+    : await q
+        .where(eq(schema.gearTags.visibility, "public"))
+        .orderBy(asc(schema.gearTags.name));
+  return rows;
 }
 
 export async function getGearTagByPublicId(
@@ -720,14 +865,9 @@ export async function insertGearTag(input: {
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
-  await db.insert(schema.gearTags).values({
-    id: input.id,
-    publicId: input.publicId,
-    name: input.name,
-    visibility: input.visibility,
-    createdAt: now,
-    updatedAt: now,
-  });
+  await db
+    .insert(schema.gearTags)
+    .values({ ...input, createdAt: now, updatedAt: now });
 }
 
 export async function deleteGearTagById(id: string): Promise<void> {
@@ -754,17 +894,17 @@ export async function updateGearTagById(
   const db = getDb();
   await db
     .update(schema.gearTags)
-    .set({ name: patch.name, updatedAt: Temporal.Now.instant() })
+    .set({ ...patch, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.gearTags.id, id));
 }
 
 /**
- * Replace the tag set for a single gear row. Computes the diff against
- * the current assignments so the caller can emit a focused
+ * Replace the tag set for a single item. Computes the diff against the
+ * current assignments so the caller can emit a focused
  * `gear.tags_changed` audit event without inspecting state twice.
  */
-export async function setGearTags(input: {
-  gearId: string;
+export async function setGearItemTags(input: {
+  itemId: string;
   tagIds: string[];
   assignedBy: string;
 }): Promise<{ added: string[]; removed: string[] }> {
@@ -773,7 +913,7 @@ export async function setGearTags(input: {
   const current = await db
     .select({ tagId: schema.gearTagAssignments.tagId })
     .from(schema.gearTagAssignments)
-    .where(eq(schema.gearTagAssignments.gearId, input.gearId));
+    .where(eq(schema.gearTagAssignments.itemId, input.itemId));
   const currentIds = new Set(current.map((r) => r.tagId));
   const added = [...desired].filter((id) => !currentIds.has(id));
   const removed = [...currentIds].filter((id) => !desired.has(id));
@@ -782,7 +922,7 @@ export async function setGearTags(input: {
       .delete(schema.gearTagAssignments)
       .where(
         and(
-          eq(schema.gearTagAssignments.gearId, input.gearId),
+          eq(schema.gearTagAssignments.itemId, input.itemId),
           inArray(schema.gearTagAssignments.tagId, removed),
         ),
       );
@@ -791,7 +931,7 @@ export async function setGearTags(input: {
     const now = Temporal.Now.instant();
     await db.insert(schema.gearTagAssignments).values(
       added.map((tagId) => ({
-        gearId: input.gearId,
+        itemId: input.itemId,
         tagId,
         assignedAt: now,
         assignedBy: input.assignedBy,
@@ -802,21 +942,27 @@ export async function setGearTags(input: {
 }
 
 /**
- * Existing codes for one type (for the suggest-code UI helper).
- * Returns just the strings; the helper does the suffix math.
+ * Every code ever issued under one type, for the suggest-code helper.
+ *
+ * **Deliberately unfiltered by status.** This used to consider only
+ * active gear, which was safe only because retiring NULLed the code.
+ * Codes are no longer recycled, so a retired `CH93` still holds the
+ * UNIQUE index — filtering it out here would make the app suggest a code
+ * that its own constraint then rejects.
  */
-export async function listActiveCodesForType(
-  typeId: string,
-): Promise<string[]> {
+export async function listCodesForType(typeId: string): Promise<string[]> {
   const db = getDb();
   const rows = await db
-    .select({ code: schema.gear.code })
-    .from(schema.gear)
+    .select({ code: schema.gearItems.code })
+    .from(schema.gearItems)
+    .innerJoin(
+      schema.gearModels,
+      eq(schema.gearModels.id, schema.gearItems.modelId),
+    )
     .where(
       and(
-        eq(schema.gear.typeId, typeId),
-        eq(schema.gear.lifecycle, "active"),
-        sql`${schema.gear.code} IS NOT NULL`,
+        eq(schema.gearModels.typeId, typeId),
+        sql`${schema.gearItems.code} IS NOT NULL`,
       ),
     );
   return rows.map((r) => r.code).filter((c): c is string => c !== null);

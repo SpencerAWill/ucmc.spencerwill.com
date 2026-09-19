@@ -66,6 +66,14 @@ function TypeForm({
   const [description, setDescription] = useState(
     isEdit ? (intent.type.description ?? "") : "",
   );
+  // Kept on the form so editing a type can't silently wipe a cadence
+  // the officer never saw. The due-for-inspection report that consumes
+  // it lands later; the column is live now.
+  const [inspectionDays, setInspectionDays] = useState(
+    isEdit && intent.type.inspectionIntervalDays !== null
+      ? String(intent.type.inspectionIntervalDays)
+      : "",
+  );
   const [error, setError] = useState<string | null>(null);
   const createMutation = useCreateGearType();
   const editMutation = useEditGearType();
@@ -82,6 +90,8 @@ function TypeForm({
       name: trimmedName,
       prefix: prefix.trim().length === 0 ? null : prefix.trim(),
       description: description.trim().length === 0 ? null : description.trim(),
+      inspectionIntervalDays:
+        inspectionDays.trim().length === 0 ? null : Number(inspectionDays),
     };
     if (isEdit) {
       editMutation.mutate(
@@ -158,6 +168,25 @@ function TypeForm({
             rows={3}
             maxLength={500}
           />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="type-inspection-days">
+            Inspection interval (days)
+          </Label>
+          <Input
+            id="type-inspection-days"
+            type="number"
+            min={1}
+            max={3650}
+            inputMode="numeric"
+            value={inspectionDays}
+            onChange={(e) => setInspectionDays(e.target.value)}
+            placeholder="Leave blank for no cadence"
+          />
+          <p className="text-xs text-muted-foreground">
+            How often items of this type should be inspected. A model can
+            override it.
+          </p>
         </div>
         {error ? (
           <p className="text-sm text-destructive" role="alert">

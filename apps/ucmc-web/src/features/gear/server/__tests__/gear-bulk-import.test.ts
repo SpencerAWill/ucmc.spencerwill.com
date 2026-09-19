@@ -30,6 +30,8 @@ const { createGearAction, getGearDetailAction } =
 const { createGearTagAction } =
   await import("#/features/gear/server/gear-tags-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
 
 async function seedManager(): Promise<string> {
   const id = `user_${crypto.randomUUID()}`;
@@ -57,7 +59,16 @@ beforeEach(async () => {
   await db.delete(schema.gearInspections);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
@@ -72,6 +83,7 @@ describe("bulkImportGearAction", () => {
       name: "Harness",
       prefix: "CH",
       description: "Test gear",
+      inspectionIntervalDays: null,
     });
     if (!t.ok) throw new Error("type setup failed");
 
@@ -79,6 +91,7 @@ describe("bulkImportGearAction", () => {
       rows: [
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH1",
           description: "Black Diamond",
           acquiredAt: null,
@@ -86,6 +99,7 @@ describe("bulkImportGearAction", () => {
         },
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH2",
           description: "Test gear",
           acquiredAt: null,
@@ -93,6 +107,7 @@ describe("bulkImportGearAction", () => {
         },
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: null,
           description: "Spare — not yet labeled",
           acquiredAt: null,
@@ -116,12 +131,14 @@ describe("bulkImportGearAction", () => {
       name: "Harness",
       prefix: "CH",
       description: "Test gear",
+      inspectionIntervalDays: null,
     });
     if (!t.ok) throw new Error("type setup failed");
     const result = await bulkImportGearAction({
       rows: [
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH1",
           description: "Test gear",
           acquiredAt: null,
@@ -129,6 +146,7 @@ describe("bulkImportGearAction", () => {
         },
         {
           typePublicId: "nope-no-type-here",
+          modelName: "Test model",
           code: "X1",
           description: "Test gear",
           acquiredAt: null,
@@ -152,11 +170,24 @@ describe("bulkImportGearAction", () => {
       name: "Harness",
       prefix: "CH",
       description: "Test gear",
+      inspectionIntervalDays: null,
     });
     if (!t.ok) throw new Error("type setup failed");
     // Pre-populate CH1 outside the import.
-    const preexisting = await createGearAction({
+    const preexisting = await createGearModelAction({
       typePublicId: t.publicId,
+      name: "Test model",
+      manufacturer: null,
+      tracking: "coded",
+      description: null,
+      msrpCents: null,
+      serviceLifeYears: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+    if (!preexisting.ok) throw new Error("model setup failed");
+    await createGearAction({
+      modelPublicId: preexisting.publicId,
       code: "CH1",
       description: "Test gear",
       thumbnailDataUrl: null,
@@ -166,12 +197,12 @@ describe("bulkImportGearAction", () => {
       condition: "serviceable",
       tagPublicIds: [],
     });
-    if (!preexisting.ok) throw new Error("seed failed");
 
     const result = await bulkImportGearAction({
       rows: [
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH1",
           description: "Test gear",
           acquiredAt: null,
@@ -179,6 +210,7 @@ describe("bulkImportGearAction", () => {
         },
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH2",
           description: "Test gear",
           acquiredAt: null,
@@ -199,6 +231,7 @@ describe("bulkImportGearAction", () => {
       name: "Harness",
       prefix: "CH",
       description: "Test gear",
+      inspectionIntervalDays: null,
     });
     if (!t.ok) throw new Error("type setup failed");
     const tagRed = await createGearTagAction({
@@ -215,6 +248,7 @@ describe("bulkImportGearAction", () => {
       rows: [
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH1",
           description: "Petzl Sama",
           acquiredAt: null,
@@ -222,7 +256,7 @@ describe("bulkImportGearAction", () => {
           msrpCents: 8495,
           manufacturer: "Petzl",
           serialNumber: "ABC-123",
-          conditionGrade: "good",
+          acquisitionKind: "donated",
           // case-insensitive resolve + duplicate tolerated
           tagNames: ["Color:Red", "size:m", "color:red"],
         },
@@ -234,10 +268,11 @@ describe("bulkImportGearAction", () => {
     const detail = await getGearDetailAction({
       publicId: result.created[0].publicId,
     });
-    expect(detail.msrpCents).toBe(8495);
-    expect(detail.manufacturer).toBe("Petzl");
+    // MSRP and brand landed on the model the import created on demand.
+    expect(detail.model.msrpCents).toBe(8495);
+    expect(detail.model.manufacturer).toBe("Petzl");
     expect(detail.serialNumber).toBe("ABC-123");
-    expect(detail.conditionGrade).toBe("good");
+    expect(detail.acquisitionKind).toBe("donated");
     expect(detail.tags.map((tag) => tag.name).sort()).toEqual([
       "color:red",
       "size:m",
@@ -266,6 +301,7 @@ describe("bulkImportGearAction", () => {
       name: "Harness",
       prefix: "CH",
       description: "Test gear",
+      inspectionIntervalDays: null,
     });
     if (!t.ok) throw new Error("type setup failed");
     const tagRed = await createGearTagAction({
@@ -278,6 +314,7 @@ describe("bulkImportGearAction", () => {
       rows: [
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH1",
           description: "Test gear",
           acquiredAt: null,
@@ -286,6 +323,7 @@ describe("bulkImportGearAction", () => {
         },
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH2",
           description: "Test gear",
           acquiredAt: null,
@@ -312,12 +350,14 @@ describe("bulkImportGearAction", () => {
       name: "Harness",
       prefix: "CH",
       description: "Test gear",
+      inspectionIntervalDays: null,
     });
     if (!t.ok) throw new Error("type setup failed");
     const result = await bulkImportGearAction({
       rows: [
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH1",
           description: "Test gear",
           acquiredAt: null,
@@ -325,6 +365,7 @@ describe("bulkImportGearAction", () => {
         },
         {
           typePublicId: t.publicId,
+          modelName: "Test model",
           code: "CH1",
           description: "Test gear",
           acquiredAt: null,
