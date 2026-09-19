@@ -385,7 +385,7 @@ function MemberManageActions({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
               onClick={() =>
                 deactivate.mutate([member.userId], {
                   onSuccess: () => setConfirmAction(null),
@@ -457,7 +457,7 @@ function RevokeSessionsButton({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
               onClick={() =>
                 revoke.mutate(member.userId, {
                   onSuccess: () => setOpen(false),
