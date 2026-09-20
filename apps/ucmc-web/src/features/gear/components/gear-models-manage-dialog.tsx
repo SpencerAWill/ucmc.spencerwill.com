@@ -7,9 +7,11 @@
  * are the fields the model layer was introduced for, so leaving them
  * unwritable made the layer decorative.
  *
- * Scoped by type rather than listing every model at once, matching the
- * picker in the gear sheet: models only mean anything under a type, and
- * a flat list of every product the club owns is a scrolling exercise.
+ * Lists every model by default, with the type select as a filter. It
+ * used to hold the list back until a type was picked, which opened the
+ * officer surface for the model layer on an empty select and nothing
+ * else — and gave no way to find a model whose type you had forgotten.
+ * Creating still wants a type, because a model hangs off one.
  */
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Edit, Plus, Trash2 } from "lucide-react";
@@ -79,10 +81,14 @@ export function GearModelsManageDialog({
     useState<GearModelSummaryDto | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const { data: types } = useQuery(gearTypesQueryOptions());
-  const { data: models, isLoading } = useQuery({
-    ...gearModelsQueryOptions(typePublicId || null),
-    enabled: typePublicId.length > 0,
-  });
+  // Always enabled, unscoped by default. The dialog used to hold the
+  // query back until a type was picked, so the officer surface for the
+  // layer this whole rework introduced opened on a lone empty select
+  // with no list, no count and no way in — and no way at all to find a
+  // model whose type you couldn't remember.
+  const { data: models, isLoading } = useQuery(
+    gearModelsQueryOptions(typePublicId || null),
+  );
   const deleteMutation = useDeleteGearModel();
 
   const onConfirmDelete = () => {
@@ -159,7 +165,7 @@ export function GearModelsManageDialog({
                   value={typePublicId}
                   onChange={(e) => setTypePublicId(e.target.value)}
                 >
-                  <option value="">Pick a type…</option>
+                  <option value="">All types</option>
                   {(types ?? []).map((t) => (
                     <option key={t.publicId} value={t.publicId}>
                       {t.name}
@@ -167,18 +173,18 @@ export function GearModelsManageDialog({
                   ))}
                 </NativeSelect>
               </div>
-              {typePublicId.length === 0 ? null : (
-                <ListPane
-                  models={models ?? []}
-                  isLoading={isLoading}
-                  onCreate={() => setMode({ kind: "create" })}
-                  onEdit={(model) => setMode({ kind: "edit", model })}
-                  onDelete={(model) => {
-                    setDeleteError(null);
-                    setPendingDelete(model);
-                  }}
-                />
-              )}
+              <ListPane
+                models={models ?? []}
+                isLoading={isLoading}
+                canCreate={typePublicId.length > 0}
+                scoped={typePublicId.length > 0}
+                onCreate={() => setMode({ kind: "create" })}
+                onEdit={(model) => setMode({ kind: "edit", model })}
+                onDelete={(model) => {
+                  setDeleteError(null);
+                  setPendingDelete(model);
+                }}
+              />
             </div>
           ) : (
             <FormPane
@@ -239,27 +245,45 @@ function ListPane({
   onCreate,
   onEdit,
   onDelete,
+  canCreate,
+  scoped,
 }: {
   models: GearModelSummaryDto[];
   isLoading: boolean;
   onCreate: () => void;
   onEdit: (model: GearModelSummaryDto) => void;
   onDelete: (model: GearModelSummaryDto) => void;
+  /** A new model needs a type to hang off, so creating still wants one
+   *  picked even though browsing no longer does. */
+  canCreate: boolean;
+  scoped: boolean;
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <Button size="sm" onClick={onCreate}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {isLoading
+            ? ""
+            : `${models.length} ${models.length === 1 ? "model" : "models"}`}
+        </p>
+        <Button size="sm" onClick={onCreate} disabled={!canCreate}>
           <Plus className="size-4" />
           New model
         </Button>
       </div>
+      {!canCreate ? (
+        <p className="text-xs text-muted-foreground">
+          Pick a type to add a model to it.
+        </p>
+      ) : null}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : models.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
-            <EmptyTitle>No models under this type yet.</EmptyTitle>
+            <EmptyTitle>
+              {scoped ? "No models under this type yet." : "No models yet."}
+            </EmptyTitle>
           </EmptyHeader>
         </Empty>
       ) : (
