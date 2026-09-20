@@ -458,69 +458,6 @@ function GearForm({
         disabled={submitting}
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-0 px-4 pb-4"
       >
-        {/* Thumbnail picker. The clickable preview IS the upload
-         * affordance — empty state shows an "Add" hint, populated state
-         * shows the image and clicking it re-opens the file picker
-         * (replace). Remove is a separate text button only when there's
-         * something to remove. */}
-        <div className="space-y-1.5">
-          <Label>Thumbnail</Label>
-          <div className="flex items-start gap-3">
-            <button
-              type="button"
-              onClick={() => thumbnailInputRef.current?.click()}
-              className="relative size-24 shrink-0 overflow-hidden rounded-md border bg-muted transition-colors hover:border-foreground/40 disabled:opacity-50"
-              disabled={thumbnailBusy || submitting}
-              aria-label={
-                thumbnailPreviewSrc ? "Replace thumbnail" : "Add thumbnail"
-              }
-            >
-              {thumbnailPreviewSrc ? (
-                <img
-                  src={thumbnailPreviewSrc}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
-                  <ImagePlus className="size-5" />
-                  <span className="text-xs">Add</span>
-                </div>
-              )}
-            </button>
-            <div className="flex flex-col gap-2">
-              <p className="text-xs text-muted-foreground">
-                {thumbnailPreviewSrc
-                  ? "Click the preview to replace."
-                  : "Click the box to upload. Square works best; auto-compressed to ~600px JPEG."}
-              </p>
-              {thumbnailPreviewSrc ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="w-fit"
-                  onClick={removeThumbnail}
-                  disabled={thumbnailBusy || submitting}
-                >
-                  <Trash2 className="size-4" />
-                  Remove
-                </Button>
-              ) : null}
-            </div>
-            <input
-              ref={thumbnailInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void onThumbnailPicked(file);
-              }}
-            />
-          </div>
-        </div>
-
         {/* Type and Code sit on one row — type drives the suggested
          * code prefix, so visually pairing them makes the cause-effect
          * obvious. Stack on the narrowest viewports so the type-select
@@ -652,24 +589,94 @@ function GearForm({
           </p>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="gear-description">
-            Distinguishing marks
-            <span className="sr-only" aria-hidden>
-              {""}
-            </span>
-          </Label>
+          <Label htmlFor="gear-description">Distinguishing marks</Label>
           <Input
             id="gear-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Black Diamond Momentum, size M"
+            placeholder="Blue tape on the spine"
             maxLength={500}
-            required
-            aria-required
           />
+          {/* Not required, matching the schema: the model supplies the
+              name, so most pieces have nothing to say here. It was
+              marked required with "Black Diamond Momentum, size M" for a
+              placeholder, which made every officer re-type the product
+              and the size — the two things the model layer and the
+              attributes exist to stop duplicating. */}
           <p className="text-xs text-muted-foreground">
-            Primary heading on the gear card.
+            Optional. What tells this unit apart from the others like it — the
+            card falls back to the model's name.
           </p>
+        </div>
+
+        {/* Thumbnail picker, below the identity fields rather than
+         * above them. It used to open the form, so the first thing an
+         * officer met was an optional photo — and per-unit photos are
+         * the less useful kind now that the product shot lives on the
+         * model and every unit falls back to it. Type, code and model
+         * are what the form is for.
+         *
+         * The clickable preview IS the upload affordance — empty state
+         * shows an "Add" hint, populated state shows the image and
+         * clicking it re-opens the file picker (replace). Remove is a
+         * separate text button only when there's something to
+         * remove. */}
+        <div className="space-y-1.5">
+          <Label>Thumbnail</Label>
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => thumbnailInputRef.current?.click()}
+              className="relative size-24 shrink-0 overflow-hidden rounded-md border bg-muted transition-colors hover:border-foreground/40 disabled:opacity-50"
+              disabled={thumbnailBusy || submitting}
+              aria-label={
+                thumbnailPreviewSrc ? "Replace thumbnail" : "Add thumbnail"
+              }
+            >
+              {thumbnailPreviewSrc ? (
+                <img
+                  src={thumbnailPreviewSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
+                  <ImagePlus className="size-5" />
+                  <span className="text-xs">Add</span>
+                </div>
+              )}
+            </button>
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground">
+                {thumbnailPreviewSrc
+                  ? "Click the preview to replace."
+                  : "Click the box to upload. Square works best; auto-compressed to ~600px JPEG."}
+              </p>
+              {thumbnailPreviewSrc ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-fit"
+                  onClick={removeThumbnail}
+                  disabled={thumbnailBusy || submitting}
+                >
+                  <Trash2 className="size-4" />
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void onThumbnailPicked(file);
+              }}
+            />
+          </div>
         </div>
         <div
           className={
