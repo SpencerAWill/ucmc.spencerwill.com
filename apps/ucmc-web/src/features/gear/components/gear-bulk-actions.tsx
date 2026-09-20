@@ -194,7 +194,7 @@ export function useGearBulkActions({
       ) : (
         <DropdownMenuItem onSelect={doUnretire}>
           <RotateCcw className="size-4" />
-          Unretire
+          Reactivate
         </DropdownMenuItem>
       )}
     </>

@@ -36,6 +36,7 @@ import {
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import {
   GEAR_CONDITION_VALUES,
+  GEAR_STATUS_VALUES,
   GEAR_WHEREABOUTS_VALUES,
 } from "#/features/gear/server/gear-fns";
 import {
@@ -54,7 +55,12 @@ import {
   WHEREABOUTS_LABEL,
 } from "#/features/gear/lib/labels";
 
-const STATUS_VALUES = ["active", "retired"] as const;
+/** All four, not just active/retired. The filter used to offer two, and
+ *  since the server matches the status exactly, a `lost` or `disposed`
+ *  piece was reachable from neither: "Active" excluded it and "Retired"
+ *  matched only the literal `retired` rows. Written off meant invisible,
+ *  which is the opposite of what writing something off is for. */
+const STATUS_VALUES = GEAR_STATUS_VALUES;
 
 export const INSPECTION_FILTER_VALUES = [
   "overdue",
@@ -361,7 +367,7 @@ export function GearToolbar({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                Lifecycle
+                Status
               </Label>
               {/* Single-value pick → RadioGroup, not Checkbox. The
                * underlying server param is a single enum; "both" isn't
@@ -377,7 +383,7 @@ export function GearToolbar({
               >
                 {STATUS_VALUES.map((v) => (
                   <label key={v} className="flex items-center gap-2">
-                    <RadioGroupItem value={v} id={`lifecycle-${v}`} />
+                    <RadioGroupItem value={v} id={`status-${v}`} />
                     {STATUS_LABEL[v]}
                   </label>
                 ))}
