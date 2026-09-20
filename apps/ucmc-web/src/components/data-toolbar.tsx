@@ -472,6 +472,10 @@ function SearchSlot({
       </InputGroupAddon>
       <InputGroupInput
         ref={inputRef}
+        // `type="search"` for the semantics — role=searchbox, and the
+        // Search key instead of Return on an iOS keyboard. WebKit and
+        // Blink draw their own ✕ inside such a field, which would sit
+        // beside the labelled one below; `styles.css` suppresses it.
         type="search"
         value={draft}
         placeholder={placeholder ?? "Search…"}

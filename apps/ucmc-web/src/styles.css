@@ -250,3 +250,21 @@ input:autofill {
   animation-name: form-autofill-detect;
   animation-duration: 0.001s;
 }
+
+/* WebKit and Blink draw their own clear ✕ inside `input[type="search"]`
+ * once it has content. `DataToolbar`'s search slot renders its own —
+ * tooltipped, screen-reader-labelled, and wired to the debounce it has
+ * to flush — so both appeared side by side on /gear and /members the
+ * moment anyone typed. The field keeps `type="search"` for its
+ * semantics (role=searchbox, the Search key on an iOS keyboard) and
+ * loses only the widget.
+ *
+ * Unprefixed `appearance` only: Lightning CSS strips a
+ * `-webkit-appearance` companion at build time as redundant for the
+ * configured targets, so writing the pair would ship one declaration
+ * and imply two. The decoration pseudo-element goes with the button —
+ * same widget family, and it leaves a dead gutter otherwise. */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  appearance: none;
+}
