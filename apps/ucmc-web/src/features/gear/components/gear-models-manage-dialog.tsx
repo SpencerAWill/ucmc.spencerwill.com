@@ -14,14 +14,7 @@
  * Creating still wants a type, because a model hangs off one.
  */
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  Boxes,
-  ClipboardCheck,
-  Edit,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, Boxes, Edit, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -51,7 +44,6 @@ import { Item, ItemActions, ItemContent } from "#/components/ui/item";
 import { Label } from "#/components/ui/label";
 import { NativeSelect } from "#/components/ui/native-select";
 import {
-  gearModelInspectionsQueryOptions,
   gearModelsQueryOptions,
   gearTypesQueryOptions,
 } from "#/features/gear/api/queries";
@@ -59,8 +51,6 @@ import { useCreateGearModel } from "#/features/gear/api/use-create-gear-model";
 import { useDeleteGearModel } from "#/features/gear/api/use-delete-gear-model";
 import { useSetGearModelStock } from "#/features/gear/api/use-set-gear-model-stock";
 import { useUpdateGearModel } from "#/features/gear/api/use-update-gear-model";
-import { GearInspectionFormDialog } from "#/features/gear/components/gear-inspection-form-dialog";
-import { GearInspectionList } from "#/features/gear/components/gear-inspection-list";
 import {
   GearAttributeFields,
   attributeFormValuesFrom,
@@ -84,8 +74,7 @@ type Mode =
   | { kind: "list" }
   | { kind: "create" }
   | { kind: "edit"; model: GearModelSummaryDto }
-  | { kind: "stock"; model: GearModelSummaryDto }
-  | { kind: "inspections"; model: GearModelSummaryDto };
+  | { kind: "stock"; model: GearModelSummaryDto };
 
 export function GearModelsManageDialog({
   open,
@@ -167,9 +156,7 @@ export function GearModelsManageDialog({
                   ? "New model"
                   : mode.kind === "stock"
                     ? `Stock — ${mode.model.name}`
-                    : mode.kind === "inspections"
-                      ? `Inspections — ${mode.model.name}`
-                      : `Edit ${mode.model.name}`}
+                    : `Edit ${mode.model.name}`}
             </DialogTitle>
             <DialogDescription>
               The product a piece of gear is — "BD HotForge 12cm". Everything
@@ -204,15 +191,12 @@ export function GearModelsManageDialog({
                 onCreate={() => setMode({ kind: "create" })}
                 onEdit={(model) => setMode({ kind: "edit", model })}
                 onEditStock={(model) => setMode({ kind: "stock", model })}
-                onInspect={(model) => setMode({ kind: "inspections", model })}
                 onDelete={(model) => {
                   setDeleteError(null);
                   setPendingDelete(model);
                 }}
               />
             </div>
-          ) : mode.kind === "inspections" ? (
-            <InspectionsPane model={mode.model} />
           ) : mode.kind === "stock" ? (
             <StockPane
               model={mode.model}
@@ -277,7 +261,6 @@ function ListPane({
   onCreate,
   onEdit,
   onEditStock,
-  onInspect,
   onDelete,
   canCreate,
   scoped,
@@ -287,7 +270,6 @@ function ListPane({
   onCreate: () => void;
   onEdit: (model: GearModelSummaryDto) => void;
   onEditStock: (model: GearModelSummaryDto) => void;
-  onInspect: (model: GearModelSummaryDto) => void;
   onDelete: (model: GearModelSummaryDto) => void;
   /** A new model needs a type to hang off, so creating still wants one
    *  picked even though browsing no longer does. */
@@ -368,29 +350,19 @@ function ListPane({
                   </p>
                 </ItemContent>
                 <ItemActions>
+                  {/* Stock only. Batch inspections live on the
+                   * Inspections worklist, which rides on `gear:inspect`
+                   * — a second door here would be the same log behind
+                   * the stricter grant. */}
                   {model.tracking === "counted" ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onEditStock(model)}
-                        aria-label={`Stock for ${model.name}`}
-                      >
-                        <Boxes className="size-4" />
-                      </Button>
-                      {/* Counted gear is inspected as a batch, so this
-                       * is the only door to its inspection log — a
-                       * coded model's pieces each have their own on
-                       * the detail page. */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onInspect(model)}
-                        aria-label={`Inspections for ${model.name}`}
-                      >
-                        <ClipboardCheck className="size-4" />
-                      </Button>
-                    </>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEditStock(model)}
+                      aria-label={`Stock for ${model.name}`}
+                    >
+                      <Boxes className="size-4" />
+                    </Button>
                   ) : null}
                   <Button
                     variant="ghost"
@@ -880,48 +852,5 @@ function StockPane({
         </Button>
       </DialogFooter>
     </form>
-  );
-}
-
-/**
- * A counted model's inspection log.
- *
- * "Looked over all the draws" is recorded against the model, because a
- * counted model has no item rows to hang it on — the `gear_inspections`
- * row has carried a `model_id` from the start, and until now nothing
- * could write one, so slings and draws were the one category of gear
- * with no inspection record at all.
- */
-function InspectionsPane({ model }: { model: GearModelSummaryDto }) {
-  const [logOpen, setLogOpen] = useState(false);
-  const { data, isLoading } = useQuery(
-    gearModelInspectionsQueryOptions(model.publicId),
-  );
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          The whole batch, checked at once.
-        </p>
-        <Button size="sm" variant="outline" onClick={() => setLogOpen(true)}>
-          <Plus className="size-4" />
-          Log inspection
-        </Button>
-      </div>
-      <div className="max-h-[45vh] overflow-y-auto">
-        <GearInspectionList inspections={data ?? []} isLoading={isLoading} />
-      </div>
-      <GearInspectionFormDialog
-        target={{ kind: "model", publicId: model.publicId }}
-        label={
-          model.manufacturer
-            ? `${model.manufacturer} ${model.name}`
-            : model.name
-        }
-        open={logOpen}
-        onOpenChange={setLogOpen}
-      />
-    </div>
   );
 }

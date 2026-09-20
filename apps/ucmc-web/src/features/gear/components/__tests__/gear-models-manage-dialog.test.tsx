@@ -134,6 +134,18 @@ describe("GearModelsManageDialog stock editor", () => {
     expect(screen.getAllByText("Past service life")).toHaveLength(1);
   });
 
+  it("offers no inspection door — that log lives on the worklist", async () => {
+    renderDialog();
+    await screen.findByRole("button", { name: "Stock for HotWire Draw" });
+
+    // The models dialog is `gear:manage`; batch inspections ride on
+    // `gear:inspect`. A second entrance here would be the same log
+    // behind the stricter grant.
+    expect(
+      screen.queryByRole("button", { name: /Inspections for/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("nets out what is on loan, because stock counts it", async () => {
     const user = userEvent.setup();
     renderDialog();
