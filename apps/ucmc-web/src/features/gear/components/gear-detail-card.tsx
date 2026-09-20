@@ -1,4 +1,4 @@
-import { formatDate } from "#/lib/date-format";
+import { formatDate, formatRelative } from "#/lib/date-format";
 
 import { Badge } from "#/components/ui/badge";
 import {
@@ -21,9 +21,10 @@ import {
   CONDITION_LABEL,
   CONDITION_VARIANT,
   STATUS_LABEL,
-  STATUS_VARIANT,
   WHEREABOUTS_LABEL,
   WHEREABOUTS_VARIANT,
+  availabilityBadge,
+  isOverdue,
   isTerminalStatus,
 } from "#/features/gear/lib/labels";
 
@@ -43,6 +44,7 @@ export function GearDetailCard({
   canManage: boolean;
 }) {
   const isInactive = isTerminalStatus(gear.status);
+  const availability = availabilityBadge(gear);
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -75,10 +77,13 @@ export function GearDetailCard({
               ) : null}
             </div>
           </div>
+          {/* Availability leads, as it does on every other gear
+              surface. The page used to open with Active + Serviceable
+              and nothing else, so a harness out on loan, one held for
+              Saturday and one nobody could find all read the same —
+              while the list card one click back said exactly which. */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Badge variant={STATUS_VARIANT[gear.status]}>
-              {STATUS_LABEL[gear.status]}
-            </Badge>
+            <Badge variant={availability.variant}>{availability.label}</Badge>
             <Badge variant={CONDITION_VARIANT[gear.condition]}>
               {CONDITION_LABEL[gear.condition]}
             </Badge>
@@ -204,12 +209,50 @@ export function GearDetailCard({
             ) : null}
           </div>
         ) : null}
+        {/* Who has it and when it's back. The page carried `currentLoan`
+            and rendered none of it, so the deepest view of a piece was
+            the one view that wouldn't say it was out. The borrower's
+            name is server-gated: officers and the borrower themselves
+            get it, everyone else sees that it's out and nothing more. */}
+        {gear.currentLoan !== null ? (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium">
+              {isOverdue(gear.currentLoan.dueAt) ? "Overdue" : "On loan"}
+            </span>
+            {gear.currentLoan.memberFullName
+              ? ` to ${gear.currentLoan.memberFullName}`
+              : ""}
+            {isOverdue(gear.currentLoan.dueAt)
+              ? ` — was due ${formatRelative(gear.currentLoan.dueAt)}`
+              : ` — back ${formatDate(gear.currentLoan.dueAt)}`}
+          </p>
+        ) : null}
+        {/* No "Held:" label in front of the reason. Officers write these
+            as sentences starting with the word Held — "Held for the Red
+            River trip" — so a label produced "Held: Held for…". The
+            reason leads and the badge above already says it's on hold. */}
         {gear.holdReason !== null ? (
           <p className="text-sm text-muted-foreground">
-            <span className="font-medium">Held:</span> {gear.holdReason}
+            {gear.holdReason}
             {gear.holdEndsAt !== null
               ? ` — free again ${formatDate(gear.holdEndsAt)}`
               : ""}
+          </p>
+        ) : null}
+        {/* Where it was last seen and when. Both are stored, both come
+            from a sweep, and neither rendered — so a missing harness
+            said "Missing" and refused to say since when, which is the
+            first thing anybody asks. */}
+        {gear.whereabouts !== "cave" &&
+        (gear.whereaboutsAsOf !== null || gear.whereaboutsNote !== null) ? (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium">
+              {WHEREABOUTS_LABEL[gear.whereabouts]}
+            </span>
+            {gear.whereaboutsAsOf !== null
+              ? ` since ${formatDate(gear.whereaboutsAsOf)}`
+              : ""}
+            {gear.whereaboutsNote ? ` — ${gear.whereaboutsNote}` : ""}
           </p>
         ) : null}
         {isInactive && gear.deactivatedReason ? (
