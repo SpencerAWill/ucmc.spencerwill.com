@@ -13,6 +13,7 @@
  * between the control and the column.
  */
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
@@ -63,6 +64,25 @@ export function GearAttributeFields({
     ...gearAttributeDefsQueryOptions({ typePublicId, level }),
     enabled: typePublicId !== null,
   });
+
+  // A Switch has no unanswered position: it renders "No" from the
+  // moment it mounts, so "No" is what the officer is looking at and
+  // what the form has to send. Left absent, `attributeInputsFrom`
+  // emits no key for it and the server refuses a *required* boolean
+  // the officer answered by leaving it alone — the only way to say
+  // "No" would be toggling on and back off. Every other kind keeps a
+  // real blank, which the server reads as cleared.
+  useEffect(() => {
+    if (!defs) return;
+    const unseeded = defs.filter(
+      (def) => def.kind === "boolean" && !(def.publicId in values),
+    );
+    if (unseeded.length === 0) return;
+    onChange({
+      ...values,
+      ...Object.fromEntries(unseeded.map((def) => [def.publicId, "false"])),
+    });
+  }, [defs, values, onChange]);
 
   if (typePublicId === null || !defs || defs.length === 0) {
     return null;

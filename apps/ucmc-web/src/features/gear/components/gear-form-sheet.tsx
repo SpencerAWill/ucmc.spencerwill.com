@@ -126,6 +126,13 @@ function GearForm({
   // never received the real value we shouldn't offer to overwrite it.
   const hasDetailFields = isEdit && "serialNumber" in intent.gear;
   const showSerialNumber = !isEdit || hasDetailFields;
+  // Attribute answers ride on GearDetail too, and the same rule applies
+  // for the same reason: a form that never received them must not offer
+  // to overwrite them. Sending `attributes: []` from the list would be
+  // read as "every answer cleared", which `resolveAttributeWrites` turns
+  // into "<label> is required" the moment the type has a required
+  // item-level definition — the officer simply can't save from there.
+  const showAttributes = !isEdit || hasDetailFields;
   const { data: types } = useQuery(gearTypesQueryOptions());
   const { data: tags } = useQuery(gearTagsQueryOptions());
   const createMutation = useCreateGear();
@@ -373,7 +380,6 @@ function GearForm({
       notesMarkdown: notes.trim().length === 0 ? null : notes,
       condition,
       tagPublicIds,
-      attributes: attributeInputsFrom(attributeValues),
     };
 
     if (isEdit) {
@@ -387,6 +393,9 @@ function GearForm({
       };
       if (hasDetailFields) {
         editPayload.serialNumber = trimmedSerial;
+      }
+      if (showAttributes) {
+        editPayload.attributes = attributeInputsFrom(attributeValues);
       }
       if (newThumbnailDataUrl !== null) {
         editPayload.thumbnailDataUrl = newThumbnailDataUrl;
@@ -415,6 +424,7 @@ function GearForm({
         ...basePayload,
         serialNumber: trimmedSerial,
         thumbnailDataUrl: newThumbnailDataUrl,
+        attributes: attributeInputsFrom(attributeValues),
       },
       {
         onSuccess: (result) => {
@@ -765,14 +775,19 @@ function GearForm({
         </div>
         {/* Item-level attributes — the ones that vary unit to unit.
          * Renders nothing when the type has no definitions attached, so
-         * a club that never defines any sees the form it had before. */}
-        <GearAttributeFields
-          typePublicId={typePublicId || null}
-          level="item"
-          values={attributeValues}
-          onChange={setAttributeValues}
-          idPrefix="gear"
-        />
+         * a club that never defines any sees the form it had before,
+         * and nothing when the caller handed us a summary: controls
+         * seeded blank from answers we never received would invite the
+         * officer to overwrite them with nothing. */}
+        {showAttributes ? (
+          <GearAttributeFields
+            typePublicId={typePublicId || null}
+            level="item"
+            values={attributeValues}
+            onChange={setAttributeValues}
+            idPrefix="gear"
+          />
+        ) : null}
         <div className="space-y-1.5">
           <Label>Tags</Label>
           <GearTagMultiselect
