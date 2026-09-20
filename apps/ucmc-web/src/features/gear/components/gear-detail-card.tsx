@@ -174,17 +174,26 @@ export function GearDetailCard({
         </dl>
         {/* The two derived safety clocks. Only the states worth acting
          * on get a line — "Inspection current" on every page would be
-         * noise, and the quiet majority is exactly that. */}
+         * noise, and the quiet majority is exactly that.
+         *
+         * Outline, never solid destructive. Neither clock blocks
+         * checkout: an overdue cadence means nobody has *looked*, which
+         * is a job for the cave rather than a refusal at the desk.
+         * Wearing the same solid red as `Unsafe` — the one hard block
+         * with no override — said the opposite, and made the red that
+         * does mean "stop" mean less. The urgent states keep destructive
+         * *text* so the hierarchy survives. */}
         {isSafetyFlag(gear.inspection.status) ||
         isSafetyFlag(gear.serviceLife.status) ? (
           <div className="flex flex-wrap gap-2">
             {isSafetyFlag(gear.inspection.status) ? (
               <Badge
-                variant={
+                variant="outline"
+                className={
                   gear.inspection.status === "overdue" ||
                   gear.inspection.status === "never"
-                    ? "destructive"
-                    : "outline"
+                    ? "border-destructive/40 text-destructive"
+                    : undefined
                 }
               >
                 {INSPECTION_STATUS_LABEL[gear.inspection.status]}
@@ -195,10 +204,11 @@ export function GearDetailCard({
             ) : null}
             {isSafetyFlag(gear.serviceLife.status) ? (
               <Badge
-                variant={
+                variant="outline"
+                className={
                   gear.serviceLife.status === "expired"
-                    ? "destructive"
-                    : "outline"
+                    ? "border-destructive/40 text-destructive"
+                    : undefined
                 }
               >
                 {SERVICE_LIFE_STATUS_LABEL[gear.serviceLife.status]}

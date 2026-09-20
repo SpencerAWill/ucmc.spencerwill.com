@@ -476,14 +476,23 @@ export async function listGearItems(
   // in the same millisecond (a bulk import does this for every row)
   // would otherwise come back in ascending code order under a
   // descending sort.
+  // SQLite sorts NULLs first ascending, so an untagged piece led the
+  // default "Code, A → Z" list — the one row with no code at the top of
+  // a list sorted by code. Uncoded pieces go last in either direction:
+  // they are the exception, and they are what the officer is least
+  // likely to be scanning for.
+  const codeOrder = [
+    sql`${schema.gearItems.code} is null`,
+    order(schema.gearItems.code),
+  ];
   const orderBy =
     sort === "code"
-      ? [order(schema.gearItems.code)]
+      ? codeOrder
       : sort === "model"
-        ? [order(schema.gearModels.name), order(schema.gearItems.code)]
+        ? [order(schema.gearModels.name), ...codeOrder]
         : sort === "created_at"
-          ? [order(schema.gearItems.createdAt), order(schema.gearItems.code)]
-          : [order(schema.gearItems.updatedAt), order(schema.gearItems.code)];
+          ? [order(schema.gearItems.createdAt), ...codeOrder]
+          : [order(schema.gearItems.updatedAt), ...codeOrder];
 
   const rows = await itemsWithModelAndType()
     .where(where)
