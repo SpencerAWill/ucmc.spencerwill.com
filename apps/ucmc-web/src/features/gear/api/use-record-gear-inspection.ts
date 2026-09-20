@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
+  COUNTED_MODELS_FOR_INSPECTION_QUERY_KEY,
   GEAR_MODELS_QUERY_KEY,
   gearDetailQueryKey,
   gearInspectionsQueryKey,
@@ -38,13 +39,18 @@ export function useRecordGearInspection(target: GearInspectionTarget) {
         ]);
         return;
       }
-      // A model's batch log, plus the models prefix: the inspection
-      // clock on the model row is derived from the newest of these.
+      // A model's batch log, the models prefix (the clock on the model
+      // row is derived from the newest of these), and the inspection
+      // worklist — which is sorted by exactly the value just written,
+      // so the bin that was stalest should drop to the bottom.
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: gearModelInspectionsQueryKey(target.publicId),
         }),
         queryClient.invalidateQueries({ queryKey: GEAR_MODELS_QUERY_KEY }),
+        queryClient.invalidateQueries({
+          queryKey: COUNTED_MODELS_FOR_INSPECTION_QUERY_KEY,
+        }),
       ]);
     },
   });

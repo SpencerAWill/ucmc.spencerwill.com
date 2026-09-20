@@ -67,14 +67,8 @@ import {
   attributeInputsFrom,
 } from "#/features/gear/components/gear-attribute-fields";
 import type { AttributeFormValues } from "#/features/gear/components/gear-attribute-fields";
+import { GearModelSafetyBadges } from "#/features/gear/components/gear-model-safety-badges";
 import { CONDITION_LABEL, TRACKING_LABEL } from "#/features/gear/lib/labels";
-import {
-  INSPECTION_STATUS_LABEL,
-  SERVICE_LIFE_STATUS_LABEL,
-  inspectionState,
-  isSafetyFlag,
-  serviceLifeState,
-} from "#/features/gear/lib/safety";
 import { toDateInputValue } from "#/lib/date-format";
 import {
   GEAR_CONDITION_VALUES,
@@ -346,7 +340,7 @@ function ListPane({
                      * per unit and read on the item rows, where the
                      * dates actually live. */}
                     {model.tracking === "counted" ? (
-                      <SafetyBadges model={model} />
+                      <GearModelSafetyBadges model={model} />
                     ) : null}
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -929,63 +923,5 @@ function InspectionsPane({ model }: { model: GearModelSummaryDto }) {
         onOpenChange={setLogOpen}
       />
     </div>
-  );
-}
-
-/**
- * The two safety clocks for a counted model.
- *
- * Both were structurally unanswerable for counted gear until now: the
- * service-life clock ran off `gear_items.manufactured_at` and a counted
- * model has no items, and the inspection clock ran off a per-item log
- * nothing could write a model row into. So a bin of ten-year slings
- * reported "age unknown" and "never inspected" no matter what the cave
- * did about it.
- *
- * Only flagged statuses render, matching the item list: `ok` and
- * `untracked` are the quiet majority and badging them would make the
- * list all badge and no signal.
- */
-function SafetyBadges({ model }: { model: GearModelSummaryDto }) {
-  const now = Temporal.Now.instant();
-  const inspection = inspectionState({
-    intervalDays: model.effectiveInspectionIntervalDays,
-    lastInspectedAt:
-      model.lastInspectedAtMs === null
-        ? null
-        : Temporal.Instant.fromEpochMilliseconds(model.lastInspectedAtMs),
-    now,
-  });
-  const serviceLife = serviceLifeState({
-    serviceLifeYears: model.serviceLifeYears,
-    manufacturedAt:
-      model.manufacturedAtMs === null
-        ? null
-        : Temporal.Instant.fromEpochMilliseconds(model.manufacturedAtMs),
-    now,
-  });
-  return (
-    <>
-      {isSafetyFlag(inspection.status) ? (
-        <Badge
-          variant={
-            inspection.status === "overdue" || inspection.status === "never"
-              ? "destructive"
-              : "secondary"
-          }
-        >
-          {INSPECTION_STATUS_LABEL[inspection.status]}
-        </Badge>
-      ) : null}
-      {isSafetyFlag(serviceLife.status) ? (
-        <Badge
-          variant={
-            serviceLife.status === "expired" ? "destructive" : "secondary"
-          }
-        >
-          {SERVICE_LIFE_STATUS_LABEL[serviceLife.status]}
-        </Badge>
-      ) : null}
-    </>
   );
 }

@@ -79,6 +79,14 @@ export const gearInspectionsQueryKey = (gearPublicId: string) =>
 export const gearModelInspectionsQueryKey = (modelPublicId: string) =>
   ["gear", "inspections", "model", modelPublicId] as const;
 
+/** The counted-gear worklist behind the Inspections dialog. Under the
+ *  inspections prefix, so logging a batch check re-sorts it. */
+export const COUNTED_MODELS_FOR_INSPECTION_QUERY_KEY = [
+  "gear",
+  "inspections",
+  "counted-models",
+] as const;
+
 export const gearLabelsQueryKey = (publicIds: readonly string[]) =>
   ["gear", "labels", [...publicIds].sort().join(",")] as const;
 

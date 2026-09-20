@@ -21,6 +21,7 @@ import {
   MY_LOANS_QUERY_KEY,
   gearCodeSearchQueryKey,
   gearDetailQueryKey,
+  COUNTED_MODELS_FOR_INSPECTION_QUERY_KEY,
   gearInspectionsQueryKey,
   gearModelInspectionsQueryKey,
   gearLabelsQueryKey,
@@ -36,6 +37,7 @@ import {
   getMemberForLoanFn,
   getMyCartFn,
   listGearFn,
+  listCountedModelsForInspectionFn,
   listGearInspectionsFn,
   listGearLabelsFn,
   listGearAttributeDefsFn,
@@ -205,6 +207,16 @@ export function gearInspectionsQueryOptions(gearPublicId: string) {
   return {
     queryKey: gearInspectionsQueryKey(gearPublicId),
     queryFn: () => listGearInspectionsFn({ data: { gearPublicId } }),
+  } as const;
+}
+
+/** Every counted model, stalest first — the worklist a `gear:inspect`
+ *  holder works out of. Narrower than the officer model list on
+ *  purpose; see `listCountedModelsForInspectionAction`. */
+export function countedModelsForInspectionQueryOptions() {
+  return {
+    queryKey: COUNTED_MODELS_FOR_INSPECTION_QUERY_KEY,
+    queryFn: () => listCountedModelsForInspectionFn(),
   } as const;
 }
 

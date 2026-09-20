@@ -11,6 +11,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { GEAR_AVAILABILITY } from "#/features/gear/lib/availability";
 import { z } from "zod";
 import type {
+  CountedModelForInspectionDto,
   GearModelBrowseDto,
   CreateGearModelResult,
   DeleteGearModelResult,
@@ -1228,6 +1229,18 @@ export const deleteGearModelFn = createServerFn({ method: "POST" })
       await import("#/features/gear/server/models-actions.server");
     return deleteGearModelAction(data);
   });
+
+export type { CountedModelForInspectionDto };
+
+/** The counted-gear inspection worklist. `gear:inspect`, not
+ *  `gear:manage` — see the action. */
+export const listCountedModelsForInspectionFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<CountedModelForInspectionDto[]> => {
+  const { listCountedModelsForInspectionAction } =
+    await import("#/features/gear/server/models-actions.server");
+  return listCountedModelsForInspectionAction();
+});
 
 export const setGearModelStockFn = createServerFn({ method: "POST" })
   .validator(

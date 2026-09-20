@@ -278,7 +278,9 @@ Two refusals are typed rather than left to the database: `has_items` on a coded 
 - The write **refuses a coded model** (`not_counted`): its units are inspected one at a time, by code, and a batch row would record "all of them are fine" while saying nothing about which harness was in somebody's hands. The **read answers with an empty list instead** — a coded model has no batch history, which is a fact about it rather than a broken request.
 - The audit row carries `level: "item" | "model"`, because otherwise a reader can't tell a batch check of forty draws from one harness.
 - `GearInspectionFormDialog` and `GearInspectionList` are shared by both surfaces rather than copied per layer — an inspection reads the same either way.
-- **Batch inspections are `gear:manage`-reachable only**, because the models dialog is. The action itself is `requireGearInspector` like the item path, so opening a counted-gear surface to `gear:inspect` is a UI change, not a permissions one. Known gap: a trip leader can log a failed rope but not a fuzzing sling.
+- **Batch inspections ride on `gear:inspect`**, through the **Inspections** button on `/gear` — a worklist of counted models, stalest first, with their two safety clocks and no catalog affordances. They were briefly `gear:manage`-only because the models dialog was the sole door, which coupled a fuzzing sling to the grant that can retire gear and bulk-import stock — the exact coupling `gear:inspect` was seeded to break. Managers keep the same log inside the models dialog, where they are already editing the product.
+- **`listCountedModelsForInspectionAction` is deliberately narrower than `listGearModelsAction`** — no MSRP, no stock, no attributes, no product URL. A read that answers only "which bin, and when was it last looked at" is one that can be delegated without handing over the catalog. It is also sorted for the job rather than alphabetically: never-inspected first, then stalest.
+- `MANAGE_ACTIONS` in `gear.index.tsx` carries a `permission` per entry and the bar renders when **any** of them passes, so an inspect-only officer sees one button and no "Add gear".
 
 ## The two safety clocks
 

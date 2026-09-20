@@ -30,8 +30,11 @@ const { createGearTypeAction } =
 const { listGearInspectionsAction, recordGearInspectionAction } =
   await import("#/features/gear/server/gear-inspections-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
-const { createGearModelAction } =
-  await import("#/features/gear/server/models-actions.server");
+const {
+  createGearModelAction,
+  listCountedModelsForInspectionAction,
+  listGearModelsAction,
+} = await import("#/features/gear/server/models-actions.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -519,5 +522,89 @@ describe("counted models are inspected as a batch", () => {
     // Without it, a reader of the log can't tell a batch check of forty
     // draws from one harness.
     expect(JSON.parse(rows[0]?.metadataJson ?? "{}").level).toBe("model");
+  });
+});
+
+describe("the counted-gear inspection worklist", () => {
+  async function countedModel(name: string): Promise<string> {
+    const typeResult = await createGearTypeAction({
+      name: `Quickdraw ${crypto.randomUUID()}`,
+      prefix: "QD",
+      description: null,
+      inspectionIntervalDays: 365,
+    });
+    if (!typeResult.ok) throw new Error("createGearType failed");
+    const result = await createGearModelAction({
+      typePublicId: typeResult.publicId,
+      name,
+      manufacturer: null,
+      description: null,
+      tracking: "counted",
+      msrpCents: null,
+      serviceLifeYears: null,
+      manufacturedAtMs: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+    if (!result.ok) throw new Error("createGearModel failed");
+    return result.publicId;
+  }
+
+  it("is readable by a gear:inspect holder, which the officer list is not", async () => {
+    await signInAsManager();
+    await countedModel("Slings");
+
+    await signInAsInspector();
+    // The whole point: batch inspections used to be reachable only
+    // through the `gear:manage` model list, which coupled a fuzzing
+    // sling to the grant that can retire gear and bulk-import stock.
+    const worklist = await listCountedModelsForInspectionAction();
+    expect(worklist.map((m) => m.name)).toEqual(["Slings"]);
+
+    await expect(listGearModelsAction({})).rejects.toThrow(
+      "Forbidden: missing gear:manage",
+    );
+  });
+
+  it("refuses a member holding neither grant", async () => {
+    await signInAsRegularMember();
+    await expect(listCountedModelsForInspectionAction()).rejects.toThrow(
+      "Forbidden: missing gear:inspect",
+    );
+  });
+
+  it("lists coded models nowhere — their units answer for themselves", async () => {
+    await signInAsManager();
+    await countedModel("Draws");
+    await createGearOk();
+
+    expect(
+      (await listCountedModelsForInspectionAction()).map((m) => m.name),
+    ).toEqual(["Draws"]);
+  });
+
+  it("puts never-inspected first, then stalest — the worklist order", async () => {
+    await signInAsManager();
+    const never = await countedModel("Never looked at");
+    const stale = await countedModel("Stale");
+    const fresh = await countedModel("Fresh");
+    await recordGearInspectionAction({
+      modelPublicId: stale,
+      inspectedAt: Date.parse("2025-02-01T12:00:00Z"),
+      result: "pass",
+      notes: null,
+    });
+    await recordGearInspectionAction({
+      modelPublicId: fresh,
+      inspectedAt: Date.parse("2026-08-01T12:00:00Z"),
+      result: "pass",
+      notes: null,
+    });
+
+    // Not the catalog's alphabetical order: a bin nobody has ever
+    // looked at is the one to hand somebody with an hour free.
+    const worklist = await listCountedModelsForInspectionAction();
+    expect(worklist.map((m) => m.publicId)).toEqual([never, stale, fresh]);
+    expect(worklist[0].lastInspectedAtMs).toBeNull();
   });
 });

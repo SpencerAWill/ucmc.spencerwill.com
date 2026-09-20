@@ -3,6 +3,7 @@ import {
   Boxes,
   ChevronDown,
   ClipboardCheck,
+  ClipboardList,
   Lock,
   Package,
   Plus,
@@ -40,6 +41,7 @@ import { GearList } from "#/features/gear/components/gear-list";
 import { GearModelBrowse } from "#/features/gear/components/gear-model-browse";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
 import { GearAttributesManageDialog } from "#/features/gear/components/gear-attributes-manage-dialog";
+import { GearBatchInspectionsDialog } from "#/features/gear/components/gear-batch-inspections-dialog";
 import { GearSweepSheet } from "#/features/gear/components/gear-sweep-sheet";
 import { GearHoldsManageDialog } from "#/features/gear/components/gear-holds-manage-dialog";
 import { GearModelsManageDialog } from "#/features/gear/components/gear-models-manage-dialog";
@@ -122,8 +124,8 @@ const RESULT_SET_KEYS = [
   "q",
 ] as const;
 
-/** The six officer manage surfaces, declared once so the sm+ button row
- *  and the mobile menu can't drift apart. */
+/** The officer manage surfaces, declared once so the sm+ button row and
+ *  the mobile menu can't drift apart. */
 interface ManageOpeners {
   types: () => void;
   models: () => void;
@@ -131,23 +133,60 @@ interface ManageOpeners {
   attributes: () => void;
   holds: () => void;
   sweep: () => void;
+  batchInspections: () => void;
 }
 
 const MANAGE_ACTIONS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   open: (o: ManageOpeners) => void;
+  /** Which grant this surface answers to. All but one are catalog
+   *  writes; batch inspections ride on `gear:inspect`, the delegable
+   *  permission, so a trip leader sees that button and nothing else. */
+  permission: "gear:manage" | "gear:inspect";
 }> = [
-  { label: "Types", icon: Boxes, open: (o) => o.types() },
-  { label: "Models", icon: Package, open: (o) => o.models() },
-  { label: "Tags", icon: Tags, open: (o) => o.tags() },
+  {
+    label: "Types",
+    icon: Boxes,
+    open: (o) => o.types(),
+    permission: "gear:manage",
+  },
+  {
+    label: "Models",
+    icon: Package,
+    open: (o) => o.models(),
+    permission: "gear:manage",
+  },
+  {
+    label: "Tags",
+    icon: Tags,
+    open: (o) => o.tags(),
+    permission: "gear:manage",
+  },
   {
     label: "Attributes",
     icon: SlidersHorizontal,
     open: (o) => o.attributes(),
+    permission: "gear:manage",
   },
-  { label: "Holds", icon: Lock, open: (o) => o.holds() },
-  { label: "Sweep", icon: ClipboardCheck, open: (o) => o.sweep() },
+  {
+    label: "Holds",
+    icon: Lock,
+    open: (o) => o.holds(),
+    permission: "gear:manage",
+  },
+  {
+    label: "Sweep",
+    icon: ClipboardCheck,
+    open: (o) => o.sweep(),
+    permission: "gear:manage",
+  },
+  {
+    label: "Inspections",
+    icon: ClipboardList,
+    open: (o) => o.batchInspections(),
+    permission: "gear:inspect",
+  },
 ];
 
 export const Route = createFileRoute("/gear/")({
@@ -162,6 +201,14 @@ export const Route = createFileRoute("/gear/")({
 function GearIndexPage() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission("gear:manage");
+  // The same OR `requireGearInspector` applies server-side: the narrow
+  // grant exists so an inspector needs no catalog authority, and a
+  // manager keeps what they already had. There is no permission
+  // implication mechanism in this codebase, so it is spelled out.
+  const canInspect = hasPermission("gear:inspect") || canManage;
+  const manageActions = MANAGE_ACTIONS.filter((action) =>
+    action.permission === "gear:manage" ? canManage : canInspect,
+  );
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
 
@@ -243,6 +290,7 @@ function GearIndexPage() {
   const [modelsOpen, setModelsOpen] = useState(false);
   const [holdsOpen, setHoldsOpen] = useState(false);
   const [sweepOpen, setSweepOpen] = useState(false);
+  const [batchInspectionsOpen, setBatchInspectionsOpen] = useState(false);
   const openers: ManageOpeners = {
     types: () => setTypesOpen(true),
     models: () => setModelsOpen(true),
@@ -250,6 +298,7 @@ function GearIndexPage() {
     attributes: () => setAttributesOpen(true),
     holds: () => setHoldsOpen(true),
     sweep: () => setSweepOpen(true),
+    batchInspections: () => setBatchInspectionsOpen(true),
   };
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
   const unretireMutation = useReactivateGear();
@@ -333,7 +382,7 @@ function GearIndexPage() {
             etc.).
           </p>
         </div>
-        {canManage ? (
+        {manageActions.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2">
             {/* Six manage surfaces. At sm+ they are direct affordances —
              * officers expect Types and Tags right where the other gear
@@ -343,7 +392,7 @@ function GearIndexPage() {
              * gear under the fold, on the device the cave desk actually
              * runs on. */}
             <div className="hidden items-center gap-2 sm:flex">
-              {MANAGE_ACTIONS.map((action) => (
+              {manageActions.map((action) => (
                 <Button
                   key={action.label}
                   variant="outline"
@@ -364,7 +413,7 @@ function GearIndexPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {MANAGE_ACTIONS.map((action) => (
+                {manageActions.map((action) => (
                   <DropdownMenuItem
                     key={action.label}
                     onSelect={() => action.open(openers)}
@@ -378,33 +427,37 @@ function GearIndexPage() {
 
             {/* Additive split button: primary is "Add gear" (the common
              * case); the chevron only hosts other ways to add gear
-             * (today: bulk import). */}
-            <ButtonGroup>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setFormIntent({ mode: "create" });
-                  setFormOpen(true);
-                }}
-              >
-                <Plus className="size-4" />
-                Add gear
-              </Button>
-              <ButtonGroupSeparator />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" aria-label="More add options">
-                    <ChevronDown className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setImportOpen(true)}>
-                    <Upload className="size-4" />
-                    Bulk import…
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </ButtonGroup>
+             * (today: bulk import). Manager-only — the bar itself now
+             * renders for an inspector, who has no business adding
+             * gear and would get a server refusal if they tried. */}
+            {canManage ? (
+              <ButtonGroup>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setFormIntent({ mode: "create" });
+                    setFormOpen(true);
+                  }}
+                >
+                  <Plus className="size-4" />
+                  Add gear
+                </Button>
+                <ButtonGroupSeparator />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" aria-label="More add options">
+                      <ChevronDown className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                      <Upload className="size-4" />
+                      Bulk import…
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </ButtonGroup>
+            ) : null}
           </div>
         ) : null}
       </header>
@@ -448,6 +501,12 @@ function GearIndexPage() {
           onPerPageChange={(pp) => set({ perPage: pp, page: undefined })}
         />
       )}
+      {canInspect ? (
+        <GearBatchInspectionsDialog
+          open={batchInspectionsOpen}
+          onOpenChange={setBatchInspectionsOpen}
+        />
+      ) : null}
       {canManage ? (
         <>
           <GearFormSheet

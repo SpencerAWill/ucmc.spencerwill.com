@@ -11,6 +11,7 @@
 import { uuidv7 } from "uuidv7";
 
 import {
+  requireGearInspector,
   requireGearManager,
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
@@ -509,6 +510,68 @@ export async function listGearModelBrowseAction(
       attributes: toValueDtos(valuesByModel.get(row.modelId)),
     };
   });
+}
+
+// ── the counted-gear inspection worklist ───────────────────────────────
+
+export interface CountedModelForInspectionDto {
+  publicId: string;
+  name: string;
+  manufacturer: string | null;
+  typeName: string;
+  /** Resolved model → type, the same precedence the item clocks use. */
+  effectiveInspectionIntervalDays: number | null;
+  lastInspectedAtMs: number | null;
+  serviceLifeYears: number | null;
+  manufacturedAtMs: number | null;
+}
+
+/**
+ * Every counted model, stalest first, for somebody holding `gear:inspect`
+ * and nothing else.
+ *
+ * The officer model list is `gear:manage`, which made batch inspections
+ * reachable only by the grant that can also retire gear and bulk-import
+ * inventory — the exact coupling `gear:inspect` was seeded to break. A
+ * trip leader could log a failed rope but not a fuzzing sling, because
+ * the sling's only door was the catalog editor.
+ *
+ * Deliberately narrower than `listGearModelsAction`: no MSRP, no stock,
+ * no attributes, no product URL. An inspector needs to find the bin and
+ * see when it was last looked at, and a read that answers only that is
+ * one that can be delegated without leaking the catalog.
+ */
+export async function listCountedModelsForInspectionAction(): Promise<
+  CountedModelForInspectionDto[]
+> {
+  await requireGearInspector();
+  const rows = await listGearModels({ tracking: "counted" });
+  const lastInspectionByModel = await latestInspectionByModelIds(
+    rows.map((r) => r.id),
+  );
+  return rows
+    .map((r) => ({
+      publicId: r.publicId,
+      name: r.name,
+      manufacturer: r.manufacturer,
+      typeName: r.typeName,
+      effectiveInspectionIntervalDays: r.effectiveInspectionIntervalDays,
+      lastInspectedAtMs:
+        lastInspectionByModel.get(r.id)?.inspectedAt.epochMilliseconds ?? null,
+      serviceLifeYears: r.serviceLifeYears,
+      manufacturedAtMs: r.manufacturedAt?.epochMilliseconds ?? null,
+    }))
+    .sort((a, b) => {
+      // Never inspected first, then stalest — the worklist order, not
+      // the alphabetical one the catalog list uses. A bin nobody has
+      // ever looked at is the one to hand somebody with an hour free.
+      if (a.lastInspectedAtMs === b.lastInspectedAtMs) {
+        return a.name.localeCompare(b.name);
+      }
+      if (a.lastInspectedAtMs === null) return -1;
+      if (b.lastInspectedAtMs === null) return 1;
+      return a.lastInspectedAtMs - b.lastInspectedAtMs;
+    });
 }
 
 // ── counted stock ──────────────────────────────────────────────────────
