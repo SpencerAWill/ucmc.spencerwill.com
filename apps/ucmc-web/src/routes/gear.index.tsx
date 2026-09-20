@@ -122,6 +122,34 @@ const RESULT_SET_KEYS = [
   "q",
 ] as const;
 
+/** The six officer manage surfaces, declared once so the sm+ button row
+ *  and the mobile menu can't drift apart. */
+interface ManageOpeners {
+  types: () => void;
+  models: () => void;
+  tags: () => void;
+  attributes: () => void;
+  holds: () => void;
+  sweep: () => void;
+}
+
+const MANAGE_ACTIONS: Array<{
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  open: (o: ManageOpeners) => void;
+}> = [
+  { label: "Types", icon: Boxes, open: (o) => o.types() },
+  { label: "Models", icon: Package, open: (o) => o.models() },
+  { label: "Tags", icon: Tags, open: (o) => o.tags() },
+  {
+    label: "Attributes",
+    icon: SlidersHorizontal,
+    open: (o) => o.attributes(),
+  },
+  { label: "Holds", icon: Lock, open: (o) => o.holds() },
+  { label: "Sweep", icon: ClipboardCheck, open: (o) => o.sweep() },
+];
+
 export const Route = createFileRoute("/gear/")({
   staticData: { pageFlag: "gear_inventory" },
   beforeLoad: async ({ context, matches }) => {
@@ -215,6 +243,14 @@ function GearIndexPage() {
   const [modelsOpen, setModelsOpen] = useState(false);
   const [holdsOpen, setHoldsOpen] = useState(false);
   const [sweepOpen, setSweepOpen] = useState(false);
+  const openers: ManageOpeners = {
+    types: () => setTypesOpen(true),
+    models: () => setModelsOpen(true),
+    tags: () => setTagsOpen(true),
+    attributes: () => setAttributesOpen(true),
+    holds: () => setHoldsOpen(true),
+    sweep: () => setSweepOpen(true),
+  };
   const [retiring, setRetiring] = useState<GearSummary | null>(null);
   const unretireMutation = useReactivateGear();
 
@@ -299,57 +335,46 @@ function GearIndexPage() {
         </div>
         {canManage ? (
           <div className="flex flex-wrap items-center gap-2">
-            {/* Taxonomy buttons — direct affordances, not behind a
-             * dropdown. Officers expect Types and Tags right where the
-             * other gear actions live. */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setTypesOpen(true)}
-            >
-              <Boxes className="size-4" />
-              Types
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setModelsOpen(true)}
-            >
-              <Package className="size-4" />
-              Models
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setTagsOpen(true)}
-            >
-              <Tags className="size-4" />
-              Tags
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAttributesOpen(true)}
-            >
-              <SlidersHorizontal className="size-4" />
-              Attributes
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setHoldsOpen(true)}
-            >
-              <Lock className="size-4" />
-              Holds
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSweepOpen(true)}
-            >
-              <ClipboardCheck className="size-4" />
-              Sweep
-            </Button>
+            {/* Six manage surfaces. At sm+ they are direct affordances —
+             * officers expect Types and Tags right where the other gear
+             * actions live. Below that they collapse into one menu:
+             * seven buttons wrapped to three rows on a 390px screen and
+             * pushed the search box, the filters and the first piece of
+             * gear under the fold, on the device the cave desk actually
+             * runs on. */}
+            <div className="hidden items-center gap-2 sm:flex">
+              {MANAGE_ACTIONS.map((action) => (
+                <Button
+                  key={action.label}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => action.open(openers)}
+                >
+                  <action.icon className="size-4" />
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="sm:hidden">
+                  <SlidersHorizontal className="size-4" />
+                  Manage
+                  <ChevronDown className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {MANAGE_ACTIONS.map((action) => (
+                  <DropdownMenuItem
+                    key={action.label}
+                    onSelect={() => action.open(openers)}
+                  >
+                    <action.icon className="size-4" />
+                    {action.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Additive split button: primary is "Add gear" (the common
              * case); the chevron only hosts other ways to add gear
