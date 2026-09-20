@@ -34,6 +34,8 @@ const {
   setGearModelStockAction,
   updateGearModelAction,
 } = await import("#/features/gear/server/models-actions.server");
+const { recordGearInspectionAction } =
+  await import("#/features/gear/server/gear-inspections-actions.server");
 const { createGearAttributeDefAction } =
   await import("#/features/gear/server/attributes-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
@@ -82,6 +84,7 @@ async function createModel(
     tracking: "coded",
     msrpCents: null,
     serviceLifeYears: null,
+    manufacturedAtMs: null,
     inspectionIntervalDays: null,
     productUrl: null,
     ...overrides,
@@ -94,6 +97,7 @@ beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
+  await db.delete(schema.gearInspections);
   await db.delete(schema.gearItemAttributeValues);
   await db.delete(schema.gearModelAttributeValues);
   await db.delete(schema.gearAttributeDefTypes);
@@ -125,6 +129,7 @@ describe("createGearModelAction uniqueness", () => {
       tracking: "coded",
       msrpCents: null,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
     });
@@ -251,6 +256,7 @@ describe("updateGearModelAction", () => {
         publicId,
         msrpCents: 2495,
         serviceLifeYears: 10,
+        manufacturedAtMs: null,
         inspectionIntervalDays: 180,
         productUrl: "https://example.com/hotforge",
       }),
@@ -259,6 +265,7 @@ describe("updateGearModelAction", () => {
     expect(model).toMatchObject({
       msrpCents: 2495,
       serviceLifeYears: 10,
+      manufacturedAtMs: null,
       inspectionIntervalDays: 180,
       productUrl: "https://example.com/hotforge",
     });
@@ -501,5 +508,99 @@ describe("setGearModelStockAction", () => {
       }),
     ).toEqual({ ok: true });
     expect(await getDb().select().from(schema.auditLog)).toHaveLength(0);
+  });
+});
+
+describe("a counted model's batch date of manufacture", () => {
+  it("round-trips, so the service-life clock has something to run from", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const made = Date.parse("2016-04-02T00:00:00Z");
+    const publicId = await createModel(typePublicId, {
+      tracking: "counted",
+      serviceLifeYears: 10,
+      manufacturedAtMs: made,
+    });
+
+    const model = (await listGearModelsAction({ typePublicId })).find(
+      (m) => m.publicId === publicId,
+    );
+    // A counted model has no item rows, so without this the clock ran
+    // from nothing and every bin of slings read "age unknown" forever.
+    expect(model?.manufacturedAtMs).toBe(made);
+    expect(model?.serviceLifeYears).toBe(10);
+  });
+
+  it("is clearable back to unknown", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const publicId = await createModel(typePublicId, {
+      tracking: "counted",
+      manufacturedAtMs: Date.parse("2016-04-02T00:00:00Z"),
+    });
+
+    expect(
+      await updateGearModelAction({ publicId, manufacturedAtMs: null }),
+    ).toEqual({ ok: true });
+    const model = (await listGearModelsAction({ typePublicId })).find(
+      (m) => m.publicId === publicId,
+    );
+    expect(model?.manufacturedAtMs).toBeNull();
+  });
+
+  it("is left alone by an edit that doesn't mention it", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const made = Date.parse("2016-04-02T00:00:00Z");
+    const publicId = await createModel(typePublicId, {
+      tracking: "counted",
+      manufacturedAtMs: made,
+    });
+
+    // `undefined` means "no change", matching every other optional
+    // field on the update input.
+    await updateGearModelAction({ publicId, name: "Renamed" });
+    const model = (await listGearModelsAction({ typePublicId })).find(
+      (m) => m.publicId === publicId,
+    );
+    expect(model?.manufacturedAtMs).toBe(made);
+  });
+
+  it("carries the newest batch inspection onto the model row", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const publicId = await createModel(typePublicId, { tracking: "counted" });
+    const older = Date.parse("2026-01-05T15:00:00Z");
+    const newer = Date.parse("2026-06-05T15:00:00Z");
+    await recordGearInspectionAction({
+      modelPublicId: publicId,
+      inspectedAt: older,
+      result: "pass",
+      notes: null,
+    });
+    await recordGearInspectionAction({
+      modelPublicId: publicId,
+      inspectedAt: newer,
+      result: "pass",
+      notes: null,
+    });
+
+    const model = (await listGearModelsAction({ typePublicId })).find(
+      (m) => m.publicId === publicId,
+    );
+    expect(model?.lastInspectedAtMs).toBe(newer);
+  });
+
+  it("leaves a coded model's clocks to its pieces", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const publicId = await createModel(typePublicId, { tracking: "coded" });
+
+    // Item-level inspections never populate this field — a coded
+    // model's cadence is answered per unit, on the item rows.
+    const model = (await listGearModelsAction({ typePublicId })).find(
+      (m) => m.publicId === publicId,
+    );
+    expect(model?.lastInspectedAtMs).toBeNull();
   });
 });

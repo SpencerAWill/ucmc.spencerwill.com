@@ -81,6 +81,7 @@ async function seedModel(overrides: {
     tracking: "coded",
     msrpCents: null,
     serviceLifeYears: overrides.serviceLifeYears ?? null,
+    manufacturedAtMs: null,
     inspectionIntervalDays: overrides.inspectionIntervalDays ?? null,
     productUrl: null,
   });

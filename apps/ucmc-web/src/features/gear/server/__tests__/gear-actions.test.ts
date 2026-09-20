@@ -129,6 +129,7 @@ async function modelForType(typePublicId: string): Promise<string> {
     tracking: "coded",
     msrpCents: null,
     serviceLifeYears: null,
+    manufacturedAtMs: null,
     inspectionIntervalDays: null,
     productUrl: null,
   });
@@ -247,6 +248,7 @@ describe("authorization", () => {
       tracking: "coded",
       msrpCents: 7500,
       serviceLifeYears: 10,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
     });
@@ -402,6 +404,7 @@ describe("authorization", () => {
       tracking: "coded",
       msrpCents: 8495,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
     });

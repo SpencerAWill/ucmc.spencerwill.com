@@ -177,6 +177,7 @@ describe("bulkImportGearAction", () => {
       tracking: "coded",
       msrpCents: null,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
     });

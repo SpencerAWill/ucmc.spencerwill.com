@@ -189,6 +189,7 @@ function GearForm({
         description: null,
         msrpCents: null,
         serviceLifeYears: null,
+        manufacturedAtMs: null,
         inspectionIntervalDays: null,
         productUrl: null,
         attributes: attributeInputsFrom(newModelAttributes),

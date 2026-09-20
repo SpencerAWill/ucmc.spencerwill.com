@@ -69,6 +69,14 @@ import {
 import type { AttributeFormValues } from "#/features/gear/components/gear-attribute-fields";
 import { CONDITION_LABEL, TRACKING_LABEL } from "#/features/gear/lib/labels";
 import {
+  INSPECTION_STATUS_LABEL,
+  SERVICE_LIFE_STATUS_LABEL,
+  inspectionState,
+  isSafetyFlag,
+  serviceLifeState,
+} from "#/features/gear/lib/safety";
+import { toDateInputValue } from "#/lib/date-format";
+import {
   GEAR_CONDITION_VALUES,
   GEAR_TRACKING_VALUES,
 } from "#/features/gear/server/gear-fns";
@@ -334,6 +342,12 @@ function ListPane({
                     <Badge variant="outline">
                       {TRACKING_LABEL[model.tracking]}
                     </Badge>
+                    {/* Counted gear only: a coded model's clocks are
+                     * per unit and read on the item rows, where the
+                     * dates actually live. */}
+                    {model.tracking === "counted" ? (
+                      <SafetyBadges model={model} />
+                    ) : null}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {[
@@ -425,6 +439,18 @@ function dollarsToCents(dollars: string): number | null {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
 }
 
+/** A date-only input at UTC midnight, or null when left blank. An
+ *  unparseable value is null too: the field is optional, so a half-typed
+ *  date should not refuse the save. */
+function manufacturedDateToMs(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const parsed = Date.parse(`${trimmed}T00:00:00Z`);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function optionalInt(raw: string): number | null {
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
@@ -463,6 +489,13 @@ function FormPane({
       ? ""
       : String(existing.inspectionIntervalDays),
   );
+  const [manufacturedAt, setManufacturedAt] = useState(
+    existing === null || existing.manufacturedAtMs === null
+      ? ""
+      : toDateInputValue(
+          Temporal.Instant.fromEpochMilliseconds(existing.manufacturedAtMs),
+        ),
+  );
   const [productUrl, setProductUrl] = useState(existing?.productUrl ?? "");
   const [attributes, setAttributes] = useState<AttributeFormValues>(
     existing
@@ -497,6 +530,9 @@ function FormPane({
       description: null,
       msrpCents: dollarsToCents(msrp),
       serviceLifeYears: optionalInt(serviceLifeYears),
+      // Parsed at UTC midnight, matching how the item form stores the
+      // same date — a date-only field, not a moment.
+      manufacturedAtMs: manufacturedDateToMs(manufacturedAt),
       inspectionIntervalDays: optionalInt(inspectionIntervalDays),
       productUrl: productUrl.trim().length === 0 ? null : productUrl.trim(),
       attributes: attributeInputsFrom(attributes),
@@ -590,7 +626,7 @@ function FormPane({
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="model-msrp">MSRP</Label>
             <Input
@@ -614,6 +650,18 @@ function FormPane({
             />
             <p className="text-xs text-muted-foreground">
               Years from manufacture.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="model-manufactured">Made</Label>
+            <Input
+              id="model-manufactured"
+              type="date"
+              value={manufacturedAt}
+              onChange={(e) => setManufacturedAt(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              The batch date. Counted gear has no pieces to carry their own.
             </p>
           </div>
           <div className="space-y-1.5">
@@ -881,5 +929,63 @@ function InspectionsPane({ model }: { model: GearModelSummaryDto }) {
         onOpenChange={setLogOpen}
       />
     </div>
+  );
+}
+
+/**
+ * The two safety clocks for a counted model.
+ *
+ * Both were structurally unanswerable for counted gear until now: the
+ * service-life clock ran off `gear_items.manufactured_at` and a counted
+ * model has no items, and the inspection clock ran off a per-item log
+ * nothing could write a model row into. So a bin of ten-year slings
+ * reported "age unknown" and "never inspected" no matter what the cave
+ * did about it.
+ *
+ * Only flagged statuses render, matching the item list: `ok` and
+ * `untracked` are the quiet majority and badging them would make the
+ * list all badge and no signal.
+ */
+function SafetyBadges({ model }: { model: GearModelSummaryDto }) {
+  const now = Temporal.Now.instant();
+  const inspection = inspectionState({
+    intervalDays: model.effectiveInspectionIntervalDays,
+    lastInspectedAt:
+      model.lastInspectedAtMs === null
+        ? null
+        : Temporal.Instant.fromEpochMilliseconds(model.lastInspectedAtMs),
+    now,
+  });
+  const serviceLife = serviceLifeState({
+    serviceLifeYears: model.serviceLifeYears,
+    manufacturedAt:
+      model.manufacturedAtMs === null
+        ? null
+        : Temporal.Instant.fromEpochMilliseconds(model.manufacturedAtMs),
+    now,
+  });
+  return (
+    <>
+      {isSafetyFlag(inspection.status) ? (
+        <Badge
+          variant={
+            inspection.status === "overdue" || inspection.status === "never"
+              ? "destructive"
+              : "secondary"
+          }
+        >
+          {INSPECTION_STATUS_LABEL[inspection.status]}
+        </Badge>
+      ) : null}
+      {isSafetyFlag(serviceLife.status) ? (
+        <Badge
+          variant={
+            serviceLife.status === "expired" ? "destructive" : "secondary"
+          }
+        >
+          {SERVICE_LIFE_STATUS_LABEL[serviceLife.status]}
+        </Badge>
+      ) : null}
+    </>
   );
 }

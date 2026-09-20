@@ -1,0 +1,27 @@
+-- Add `gear_models.manufactured_at` — the service-life clock for gear
+-- the cave tracks by the binful.
+--
+-- Hand-written, like every migration since 0060: `db:generate` cannot
+-- run against the stale meta snapshots (see CLAUDE.md).
+--
+-- `service_life_years` has lived on the model since 0068, but the date
+-- the clock runs from lived only on `gear_items.manufactured_at`. A
+-- `counted` model has no item rows by design, so a fleet of quickdraws
+-- or pre-cut slings — the shortest-lived soft goods in the cave, and
+-- the ones nobody inspects unit by unit — had a stated service life and
+-- no possible way to compute an expiry from it. `serviceLifeState`
+-- returned `unknown` for every counted model forever, which reads as
+-- "nobody read the tag" when the truth was "there is nowhere to write
+-- it down".
+--
+-- One date for the whole model, not a range: the cave buys draws as a
+-- batch, and a per-unit date is exactly the precision `counted` exists
+-- to stop pretending to. A coded model leaves it NULL and its items
+-- keep answering for themselves — the resolution is item first, model
+-- second, so a mixed model (rare, but a restocked fleet is real) still
+-- prefers the unit's own date where it has one.
+--
+-- Nullable with no backfill. Plenty of gear has no legible date of
+-- manufacture, and `unknown` is a real answer the safety clock already
+-- distinguishes from `untracked`.
+ALTER TABLE `gear_models` ADD COLUMN `manufactured_at` integer;

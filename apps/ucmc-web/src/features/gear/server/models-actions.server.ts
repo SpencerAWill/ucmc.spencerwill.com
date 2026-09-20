@@ -27,6 +27,7 @@ import {
 } from "#/features/gear/server/models-repo.server";
 import {
   getGearTypeByPublicId,
+  latestInspectionByModelIds,
   listGearModelBrowseRows,
 } from "#/features/gear/server/repo.server";
 import { liveHeldQuantityForModels } from "#/features/gear/server/holds-repo.server";
@@ -56,9 +57,15 @@ export interface GearModelSummaryDto {
   description: string | null;
   msrpCents: number | null;
   serviceLifeYears: number | null;
+  /** Batch date of manufacture, ms-since-epoch. The service-life clock
+   *  for a counted model, which has no units to carry their own. */
+  manufacturedAtMs: number | null;
   inspectionIntervalDays: number | null;
   /** Resolved from the type when the model doesn't override it. */
   effectiveInspectionIntervalDays: number | null;
+  /** Newest batch inspection, ms-since-epoch — counted models only, and
+   *  null until somebody logs one. Coded models answer per unit. */
+  lastInspectedAtMs: number | null;
   imageKey: string | null;
   productUrl: string | null;
   type: { publicId: string; name: string; prefix: string | null };
@@ -91,13 +98,19 @@ export async function listGearModelsAction(
   const countedIds = rows
     .filter((r) => r.tracking === "counted")
     .map((r) => r.id);
-  const [stockByModel, onLoanByModel, heldByModel, valuesByModel] =
-    await Promise.all([
-      listStockForModelIds(countedIds),
-      openLoanQuantityForModels(countedIds),
-      liveHeldQuantityForModels(countedIds, Temporal.Now.instant()),
-      listAttributeValuesForModels(rows.map((r) => r.id)),
-    ]);
+  const [
+    stockByModel,
+    onLoanByModel,
+    heldByModel,
+    lastInspectionByModel,
+    valuesByModel,
+  ] = await Promise.all([
+    listStockForModelIds(countedIds),
+    openLoanQuantityForModels(countedIds),
+    liveHeldQuantityForModels(countedIds, Temporal.Now.instant()),
+    latestInspectionByModelIds(countedIds),
+    listAttributeValuesForModels(rows.map((r) => r.id)),
+  ]);
   return rows.map((r) => ({
     publicId: r.publicId,
     name: r.name,
@@ -106,8 +119,11 @@ export async function listGearModelsAction(
     description: r.description,
     msrpCents: r.msrpCents,
     serviceLifeYears: r.serviceLifeYears,
+    manufacturedAtMs: r.manufacturedAt?.epochMilliseconds ?? null,
     inspectionIntervalDays: r.inspectionIntervalDays,
     effectiveInspectionIntervalDays: r.effectiveInspectionIntervalDays,
+    lastInspectedAtMs:
+      lastInspectionByModel.get(r.id)?.inspectedAt.epochMilliseconds ?? null,
     imageKey: r.imageKey,
     productUrl: r.productUrl,
     type: {
@@ -122,6 +138,12 @@ export async function listGearModelsAction(
   }));
 }
 
+/** Milliseconds on the wire, `Temporal.Instant` in the row — the same
+ *  boundary every other timestamp DTO field crosses. */
+function toInstant(ms: number | null): Temporal.Instant | null {
+  return ms === null ? null : Temporal.Instant.fromEpochMilliseconds(ms);
+}
+
 export interface CreateGearModelInput {
   typePublicId: string;
   name: string;
@@ -130,6 +152,8 @@ export interface CreateGearModelInput {
   description: string | null;
   msrpCents: number | null;
   serviceLifeYears: number | null;
+  /** Batch date of manufacture, ms-since-epoch. */
+  manufacturedAtMs: number | null;
   inspectionIntervalDays: number | null;
   productUrl: string | null;
   /** Answers to the model-level attribute definitions on this type. */
@@ -178,6 +202,7 @@ export async function createGearModelAction(
       description: input.description,
       msrpCents: input.msrpCents,
       serviceLifeYears: input.serviceLifeYears,
+      manufacturedAt: toInstant(input.manufacturedAtMs),
       inspectionIntervalDays: input.inspectionIntervalDays,
       imageKey: null,
       productUrl: input.productUrl,
@@ -289,6 +314,16 @@ export async function updateGearModelAction(
   ) {
     patch.serviceLifeYears = input.serviceLifeYears;
     changedFields.push("service_life_years");
+  }
+  if (input.manufacturedAtMs !== undefined) {
+    const next = toInstant(input.manufacturedAtMs);
+    if (
+      next?.epochMilliseconds !==
+      (existing.manufacturedAt?.epochMilliseconds ?? undefined)
+    ) {
+      patch.manufacturedAt = next;
+      changedFields.push("manufactured_at");
+    }
   }
   if (
     input.inspectionIntervalDays !== undefined &&

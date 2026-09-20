@@ -1174,6 +1174,7 @@ const gearModelInputSchema = z.object({
   description: z.string().max(1000).nullable(),
   msrpCents: z.number().int().min(0).nullable(),
   serviceLifeYears: z.number().int().min(1).max(100).nullable(),
+  manufacturedAtMs: z.number().int().nonnegative().nullable(),
   inspectionIntervalDays: z.number().int().min(1).max(3650).nullable(),
   // Scheme-restricted: `z.url()` alone accepts `javascript:` and
   // `data:`, and `gear:manage` is delegable — see the public-pages rule.

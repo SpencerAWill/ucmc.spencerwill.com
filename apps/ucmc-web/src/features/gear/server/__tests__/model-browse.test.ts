@@ -81,6 +81,7 @@ async function seedModel(tracking: "coded" | "counted") {
     description: null,
     msrpCents: null,
     serviceLifeYears: null,
+    manufacturedAtMs: null,
     inspectionIntervalDays: null,
     productUrl: null,
   });

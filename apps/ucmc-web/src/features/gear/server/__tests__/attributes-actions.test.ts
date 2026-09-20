@@ -391,6 +391,7 @@ describe("values on items and models", () => {
       tracking: "coded",
       msrpCents: null,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
       attributes: [{ defPublicId: weight.publicId, value: "290" }],
@@ -552,6 +553,7 @@ describe("values on items and models", () => {
       tracking: "coded",
       msrpCents: null,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
     });
@@ -608,6 +610,7 @@ describe("filtering the gear list by attribute", () => {
       tracking: "coded",
       msrpCents: null,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
       attributes: [{ defPublicId: dry.publicId, value: "true" }],

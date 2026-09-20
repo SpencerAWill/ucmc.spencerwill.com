@@ -22,6 +22,9 @@ export interface GearModelRow {
   description: string | null;
   msrpCents: number | null;
   serviceLifeYears: number | null;
+  /** Batch date of manufacture — what a counted model's service-life
+   *  clock runs from, since it has no item rows of its own. */
+  manufacturedAt: Temporal.Instant | null;
   inspectionIntervalDays: number | null;
   imageKey: string | null;
   productUrl: string | null;
@@ -45,6 +48,7 @@ const MODEL_COLUMNS = {
   description: schema.gearModels.description,
   msrpCents: schema.gearModels.msrpCents,
   serviceLifeYears: schema.gearModels.serviceLifeYears,
+  manufacturedAt: schema.gearModels.manufacturedAt,
   inspectionIntervalDays: schema.gearModels.inspectionIntervalDays,
   imageKey: schema.gearModels.imageKey,
   productUrl: schema.gearModels.productUrl,
@@ -155,6 +159,7 @@ export async function insertGearModel(input: {
   description: string | null;
   msrpCents: number | null;
   serviceLifeYears: number | null;
+  manufacturedAt: Temporal.Instant | null;
   inspectionIntervalDays: number | null;
   imageKey: string | null;
   productUrl: string | null;
@@ -176,6 +181,7 @@ export async function updateGearModelById(
     description: string | null;
     msrpCents: number | null;
     serviceLifeYears: number | null;
+    manufacturedAt: Temporal.Instant | null;
     inspectionIntervalDays: number | null;
     imageKey: string | null;
     productUrl: string | null;

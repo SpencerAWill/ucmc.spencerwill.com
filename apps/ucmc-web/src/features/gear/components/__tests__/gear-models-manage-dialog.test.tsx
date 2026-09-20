@@ -19,9 +19,14 @@ vi.mock("#/features/gear/api/queries", () => {
     tracking: "counted",
     description: null,
     msrpCents: null,
-    serviceLifeYears: null,
+    // A ten-year sling made in 2010: expired, and never inspected. Both
+    // clocks were structurally unanswerable for counted gear before
+    // `manufactured_at` and model-level inspections existed.
+    serviceLifeYears: 10,
+    manufacturedAtMs: Date.parse("2010-06-01T00:00:00Z"),
     inspectionIntervalDays: null,
-    effectiveInspectionIntervalDays: null,
+    effectiveInspectionIntervalDays: 365,
+    lastInspectedAtMs: null,
     imageKey: null,
     productUrl: null,
     type: { publicId: "type_1", name: "Quickdraw", prefix: "QD" },
@@ -41,6 +46,9 @@ vi.mock("#/features/gear/api/queries", () => {
     tracking: "coded",
     stock: [],
     onLoan: 0,
+    serviceLifeYears: null,
+    manufacturedAtMs: null,
+    effectiveInspectionIntervalDays: null,
   } satisfies GearModelSummaryDto;
   const stub = (data: unknown) => () => ({
     queryKey: ["stub", JSON.stringify(data)],
@@ -102,6 +110,28 @@ describe("GearModelsManageDialog stock editor", () => {
     expect(
       screen.queryByRole("button", { name: "Stock for Corax" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("flags both safety clocks, which counted gear could not answer before", async () => {
+    renderDialog();
+
+    // A ten-year sling made in 2010 with no inspection ever logged. The
+    // service-life clock had nowhere to run from (no item rows, hence
+    // no date of manufacture) and the inspection log had no model-level
+    // row, so this bin read as fine indefinitely.
+    expect(await screen.findByText("Past service life")).toBeInTheDocument();
+    expect(screen.getByText("Never inspected")).toBeInTheDocument();
+  });
+
+  it("leaves a coded model's clocks to its pieces", async () => {
+    renderDialog();
+    // Both rows are listed (each carries its own Delete), and only one
+    // of them wears safety badges — the counted one. A coded model's
+    // dates live on its units, where the item list reads them.
+    expect(
+      await screen.findAllByRole("button", { name: "Delete" }),
+    ).toHaveLength(2);
+    expect(screen.getAllByText("Past service life")).toHaveLength(1);
   });
 
   it("nets out what is on loan, because stock counts it", async () => {

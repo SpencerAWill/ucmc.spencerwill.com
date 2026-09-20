@@ -1040,6 +1040,12 @@ export const gearModels = sqliteTable(
     // a harness bought new in 2024 but made in 2019 is already five
     // years in. NULL for hardware with no stated life.
     serviceLifeYears: integer("service_life_years"),
+    // Date of manufacture for the model as a batch. A `counted` model
+    // has no item rows, so without this its stated service life had
+    // nothing to run from and every bin of draws read "age unknown"
+    // forever. An item's own `manufacturedAt` wins where it has one;
+    // this answers for the fleet otherwise.
+    manufacturedAt: timestamp("manufactured_at"),
     // Overrides the type's cadence when set.
     inspectionIntervalDays: integer("inspection_interval_days"),
     // R2 key for the product shot, shared by every item of this model.

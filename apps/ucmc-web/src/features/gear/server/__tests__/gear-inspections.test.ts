@@ -142,6 +142,7 @@ async function modelForType(typePublicId: string): Promise<string> {
     tracking: "coded",
     msrpCents: null,
     serviceLifeYears: null,
+    manufacturedAtMs: null,
     inspectionIntervalDays: null,
     productUrl: null,
   });
@@ -394,6 +395,7 @@ describe("counted models are inspected as a batch", () => {
       tracking: "counted",
       msrpCents: null,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
     });

@@ -82,6 +82,7 @@ async function seedCatalog() {
     tracking: "coded",
     msrpCents: null,
     serviceLifeYears: null,
+    manufacturedAtMs: null,
     inspectionIntervalDays: null,
     productUrl: null,
   });
@@ -412,6 +413,7 @@ describe("closeSweepAction", () => {
       tracking: "counted",
       msrpCents: null,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
     });
@@ -458,6 +460,7 @@ describe("closeSweepAction", () => {
       tracking: "counted",
       msrpCents: null,
       serviceLifeYears: null,
+      manufacturedAtMs: null,
       inspectionIntervalDays: null,
       productUrl: null,
     });

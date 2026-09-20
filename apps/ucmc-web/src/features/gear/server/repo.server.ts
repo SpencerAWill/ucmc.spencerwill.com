@@ -1075,6 +1075,37 @@ export async function latestInspectionByItemIds(
   return map;
 }
 
+/** The same read aimed at `model_id`: a counted model's inspection
+ *  clock runs off the newest batch check, there being no units to ask. */
+export async function latestInspectionByModelIds(
+  modelIds: string[],
+): Promise<
+  Map<
+    string,
+    { inspectedAt: Temporal.Instant; result: schema.GearInspectionResult }
+  >
+> {
+  const map = new Map<
+    string,
+    { inspectedAt: Temporal.Instant; result: schema.GearInspectionResult }
+  >();
+  if (modelIds.length === 0) return map;
+  const rows = await getDb()
+    .select({
+      modelId: schema.gearInspections.modelId,
+      inspectedAt: schema.gearInspections.inspectedAt,
+      result: schema.gearInspections.result,
+    })
+    .from(schema.gearInspections)
+    .where(inArray(schema.gearInspections.modelId, modelIds))
+    .orderBy(desc(schema.gearInspections.inspectedAt));
+  for (const row of rows) {
+    if (row.modelId === null || map.has(row.modelId)) continue;
+    map.set(row.modelId, { inspectedAt: row.inspectedAt, result: row.result });
+  }
+  return map;
+}
+
 // ── gear types ──────────────────────────────────────────────────────────
 
 export async function listGearTypes(): Promise<schema.GearType[]> {

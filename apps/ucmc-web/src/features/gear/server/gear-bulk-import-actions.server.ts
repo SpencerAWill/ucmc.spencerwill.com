@@ -223,6 +223,7 @@ export async function bulkImportGearAction(
           description: null,
           msrpCents: row.msrpCents ?? null,
           serviceLifeYears: null,
+          manufacturedAt: null,
           inspectionIntervalDays: null,
           imageKey: null,
           productUrl: null,
