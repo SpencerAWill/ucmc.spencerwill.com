@@ -1178,9 +1178,15 @@ export const createGearModelFn = createServerFn({ method: "POST" })
 
 export const updateGearModelFn = createServerFn({ method: "POST" })
   .validator(
-    gearModelInputSchema.partial().extend({
-      publicId: z.string().min(1),
-    }),
+    // `typePublicId` is omitted rather than merely ignored — see
+    // `UpdateGearModelInput`. Accepting a field the action drops reads
+    // as a supported type change that silently does nothing.
+    gearModelInputSchema
+      .omit({ typePublicId: true })
+      .partial()
+      .extend({
+        publicId: z.string().min(1),
+      }),
   )
   .handler(async ({ data }): Promise<UpdateGearModelResult> => {
     const { updateGearModelAction } =

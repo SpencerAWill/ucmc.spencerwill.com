@@ -187,7 +187,16 @@ export async function createGearModelAction(
   return { ok: true, publicId };
 }
 
-export interface UpdateGearModelInput extends Partial<CreateGearModelInput> {
+/**
+ * `typePublicId` is deliberately omitted. Nothing asks to move a model
+ * between types, and it is not the one-field change it looks like:
+ * attribute definitions are scoped per type, so a move would orphan
+ * every model- and item-level answer under the old type, and the items
+ * would keep codes carrying the old type's prefix.
+ */
+export interface UpdateGearModelInput extends Partial<
+  Omit<CreateGearModelInput, "typePublicId">
+> {
   publicId: string;
 }
 
@@ -282,19 +291,25 @@ export async function updateGearModelAction(
     patch.productUrl = input.productUrl;
     changedFields.push("product_url");
   }
+  // The row goes first, and the attribute answers only once it lands.
+  // The other order committed the answers and *then* found the rename
+  // collided, leaving a partial save behind a refused submit — the
+  // officer sees "name already in use" with half their edit applied.
+  if (changedFields.length > 0) {
+    try {
+      await updateGearModelById(existing.id, patch);
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        return { ok: false, reason: "name_in_use" };
+      }
+      throw err;
+    }
+  }
   if (attributes !== null) {
     await setModelAttributeValues(existing.id, attributes.writes);
   }
   if (changedFields.length === 0) {
     return { ok: true };
-  }
-  try {
-    await updateGearModelById(existing.id, patch);
-  } catch (err) {
-    if (isUniqueViolation(err)) {
-      return { ok: false, reason: "name_in_use" };
-    }
-    throw err;
   }
   await recordAuditEvent({
     actorUserId: principal.userId,

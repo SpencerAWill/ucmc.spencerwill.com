@@ -416,7 +416,9 @@ function FormPane({
     };
     if (isEdit && existing) {
       updateMutation.mutate(
-        { publicId: existing.publicId, typePublicId, ...payload },
+        // No `typePublicId`: the edit form doesn't offer a type change,
+        // and the action doesn't support one.
+        { publicId: existing.publicId, ...payload },
         {
           onSuccess: (result) => {
             if (result.ok) {

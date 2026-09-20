@@ -222,6 +222,8 @@ The "Add to cart" button is hidden for anonymous / non-approved viewers **and fo
 
 Two refusals are typed rather than left to the database: `has_items` on a coded → counted flip (counted stock is quantities, and the item rows would be stranded while still holding their codes and loan history) and `has_items` on delete (the FK is RESTRICT; the pre-check turns it into a message naming what to move first).
 
+**An update writes the model row before its attribute answers**, so a rename that collides on the unique index refuses with nothing committed. The other order left a partial save behind a refused submit. **A model cannot change type** — `UpdateGearModelInput` omits `typePublicId` rather than ignoring it, because attribute definitions are scoped per type and a move would orphan every answer under the old one while the items kept codes carrying the old prefix.
+
 ## Holds
 
 `/gear` → **Holds**. A hold reserves gear ahead of a trip without creating a loan: nobody has taken it, but the desk should stop handing it out. Dual-shape like loans — either a coded item or a counted model with a quantity, enforced by a CHECK constraint and pre-checked in the action so the form gets a message rather than a constraint error.

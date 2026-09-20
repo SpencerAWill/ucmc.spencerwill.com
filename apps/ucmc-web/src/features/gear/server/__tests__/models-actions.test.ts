@@ -32,6 +32,8 @@ const {
   listGearModelsAction,
   updateGearModelAction,
 } = await import("#/features/gear/server/models-actions.server");
+const { createGearAttributeDefAction } =
+  await import("#/features/gear/server/attributes-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -158,6 +160,78 @@ describe("createGearModelAction uniqueness", () => {
       ok: false,
       reason: "name_in_use",
     });
+  });
+});
+
+describe("updateGearModelAction write ordering", () => {
+  it("commits no attribute answer when the rename is refused", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const def = await createGearAttributeDefAction({
+      label: `Diameter ${crypto.randomUUID()}`,
+      kind: "number",
+      level: "model",
+      options: null,
+      unit: "mm",
+      required: false,
+      typePublicIds: [typePublicId],
+    });
+    if (!def.ok) throw new Error("def create failed");
+    const taken = await createModel(typePublicId, { name: "Taken" });
+    const subject = await createModel(typePublicId, {
+      name: "Subject",
+      attributes: [{ defPublicId: def.publicId, value: "9.8" }],
+    });
+    expect(taken).not.toBe(subject);
+
+    // One submit changing both: the rename collides, so nothing at all
+    // should land. The other write order committed the answer first and
+    // left a partial save behind a refused submit.
+    const result = await updateGearModelAction({
+      publicId: subject,
+      name: "Taken",
+      attributes: [{ defPublicId: def.publicId, value: "10.2" }],
+    });
+    expect(result).toEqual({ ok: false, reason: "name_in_use" });
+
+    const models = await listGearModelsAction({ typePublicId });
+    const after = models.find((m) => m.publicId === subject);
+    expect(after?.name).toBe("Subject");
+    expect(after?.attributes.map((a) => a.number)).toEqual([9.8]);
+  });
+
+  it("saves attribute answers when nothing else changed", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const def = await createGearAttributeDefAction({
+      label: `Diameter ${crypto.randomUUID()}`,
+      kind: "number",
+      level: "model",
+      options: null,
+      unit: "mm",
+      required: false,
+      typePublicIds: [typePublicId],
+    });
+    if (!def.ok) throw new Error("def create failed");
+    const publicId = await createModel(typePublicId, {
+      attributes: [{ defPublicId: def.publicId, value: "9.8" }],
+    });
+
+    // An attribute-only edit leaves `changedFields` empty, which is the
+    // early-return path — the answers still have to be written.
+    expect(
+      await updateGearModelAction({
+        publicId,
+        attributes: [{ defPublicId: def.publicId, value: "10.2" }],
+      }),
+    ).toEqual({ ok: true });
+
+    const models = await listGearModelsAction({ typePublicId });
+    expect(
+      models
+        .find((m) => m.publicId === publicId)
+        ?.attributes.map((a) => a.number),
+    ).toEqual([10.2]);
   });
 });
 
