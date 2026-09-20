@@ -279,12 +279,16 @@ export function GearToolbar({
     })),
   ];
 
+  // Every dimension that can raise a chip has to be cleared here, or
+  // "Clear filters" leaves the list filtered with the chip still on
+  // screen and the counter stuck above zero.
   const clearFilters = () =>
     onChange({
       typePublicId: null,
       modelPublicId: null,
       tagPublicIds: [],
       status: "active",
+      availability: null,
       condition: null,
       attributes: {},
       inspection: null,
