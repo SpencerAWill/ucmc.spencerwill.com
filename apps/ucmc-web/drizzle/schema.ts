@@ -1062,9 +1062,16 @@ export const gearModels = sqliteTable(
   (t) => [
     index("gear_models_type_idx").on(t.typeId),
     index("gear_models_tracking_idx").on(t.tracking),
+    // `manufacturer` is nullable and SQLite treats NULLs as distinct, so
+    // a plain three-column index lets "Rope" be created twice under one
+    // type with the brand left blank — two identical models, items split
+    // across them, the same product listed twice in browse.
+    // `coalesce(..., '')` makes blank collide with blank, while "Petzl
+    // Rope" and an unbranded "Rope" stay distinct. `createGearModelAction`
+    // reads the violation back as `name_in_use`.
     uniqueIndex("gear_models_type_manufacturer_name_unique").on(
       t.typeId,
-      t.manufacturer,
+      sql`coalesce(${t.manufacturer}, '')`,
       t.name,
     ),
   ],

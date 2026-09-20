@@ -217,6 +217,8 @@ The "Add to cart" button is hidden for anonymous / non-approved viewers **and fo
 
 `/gear` → **Models**, scoped by type the way the picker in the add-gear sheet is: models only mean anything under a type, and a flat list of every product the club owns is a scrolling exercise. MSRP, service life, inspection cadence, product URL and the model-level attributes are all editable here — the inline creator in the add-gear sheet deliberately offers only name and manufacturer, because an officer adding the club's first pair of draws shouldn't have to fill in a product sheet first.
 
+**A model is unique on `(type_id, coalesce(manufacturer, ''), name)`.** The `coalesce` is load-bearing: `manufacturer` is nullable and SQLite treats NULLs as distinct, so a plain three-column index let the same unbranded "Rope" be created twice under one type — two identical models with the items split across them. Blank collides with blank; "Petzl Rope" and an unbranded "Rope" stay distinct, because plenty of club gear genuinely has no brand recorded.
+
 Two refusals are typed rather than left to the database: `has_items` on a coded → counted flip (counted stock is quantities, and the item rows would be stranded while still holding their codes and loan history) and `has_items` on delete (the FK is RESTRICT; the pre-check turns it into a message naming what to move first).
 
 ## Holds

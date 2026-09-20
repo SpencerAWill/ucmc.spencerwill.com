@@ -104,6 +104,63 @@ beforeEach(async () => {
   await db.delete(schema.users);
 });
 
+describe("createGearModelAction uniqueness", () => {
+  /** The action returns typed results here rather than throwing, so
+   *  these call it directly instead of through `createModel`. */
+  const model = (
+    typePublicId: string,
+    name: string,
+    manufacturer: string | null,
+  ) =>
+    createGearModelAction({
+      typePublicId,
+      name,
+      manufacturer,
+      tracking: "coded",
+      description: null,
+      msrpCents: null,
+      serviceLifeYears: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+
+  it("refuses a duplicate name when both leave the brand blank", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    expect(await model(typePublicId, "Rope", null)).toMatchObject({ ok: true });
+
+    // SQLite treats NULLs as distinct, so the plain three-column index
+    // let this through: two identical unbranded models, items split
+    // across them, the same product listed twice in browse.
+    expect(await model(typePublicId, "Rope", null)).toEqual({
+      ok: false,
+      reason: "name_in_use",
+    });
+    // A blank string is the same answer as no answer — the action
+    // normalizes it to null before the insert.
+    expect(await model(typePublicId, "Rope", "   ")).toEqual({
+      ok: false,
+      reason: "name_in_use",
+    });
+  });
+
+  it("keeps a branded model distinct from an unbranded one", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    expect(await model(typePublicId, "Rope", null)).toMatchObject({ ok: true });
+    expect(await model(typePublicId, "Rope", "Petzl")).toMatchObject({
+      ok: true,
+    });
+    expect(await model(typePublicId, "Rope", "Sterling")).toMatchObject({
+      ok: true,
+    });
+    expect(await model(typePublicId, "Rope", "Petzl")).toEqual({
+      ok: false,
+      reason: "name_in_use",
+    });
+  });
+});
+
 describe("updateGearModelAction", () => {
   it("saves the fields the model layer exists for", async () => {
     await signInAsManager();

@@ -95,7 +95,13 @@ CREATE TABLE `gear_models` (
 CREATE UNIQUE INDEX `gear_models_public_id_unique` ON `gear_models` (`public_id`);--> statement-breakpoint
 CREATE INDEX `gear_models_type_idx` ON `gear_models` (`type_id`);--> statement-breakpoint
 CREATE INDEX `gear_models_tracking_idx` ON `gear_models` (`tracking`);--> statement-breakpoint
-CREATE UNIQUE INDEX `gear_models_type_manufacturer_name_unique` ON `gear_models` (`type_id`,`manufacturer`,`name`);--> statement-breakpoint
+-- `manufacturer` is nullable and SQLite treats NULLs as distinct, so a
+-- plain three-column index would let "Rope" be created twice under one
+-- type with the brand left blank. `coalesce(..., '')` makes blank
+-- collide with blank while leaving "Petzl Rope" and an unbranded "Rope"
+-- distinct; `createGearModelAction` reads the violation back as
+-- `name_in_use`.
+CREATE UNIQUE INDEX `gear_models_type_manufacturer_name_unique` ON `gear_models` (`type_id`,coalesce(`manufacturer`, ''),`name`);--> statement-breakpoint
 
 -- ── items: one physical unit (coded models only) ──────────────────────
 CREATE TABLE `gear_items` (
