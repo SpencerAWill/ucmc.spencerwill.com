@@ -120,6 +120,39 @@ export function isOverridableBlock(reason: CheckoutBlockedReason): boolean {
   return reason === "needs_repair" || reason === "on_hold";
 }
 
+/**
+ * The item's half of `blockedReason` — everything knowable from the row
+ * itself, with no member attached. `not_waiver_current` and
+ * `has_overdue` are the other half and belong to the viewer, so they
+ * are not decided here.
+ *
+ * Ordering follows `gearAvailability` with two departures, both because
+ * this answers "what should I tell them" rather than "is it free":
+ *
+ *   - `no_code` comes early. It outranks the condition axis because it
+ *     is the one refusal with an obvious next step — ask an officer to
+ *     tag it — and it applies whatever else is true of the piece.
+ *   - `unsafe` and `needs_repair` are told apart rather than collapsed
+ *     into the rollup's single `unavailable`, since one is a hard stop
+ *     and the other is something the desk can wave through.
+ */
+export function itemBlockedReason(gear: {
+  status: GearStatus;
+  condition: GearCondition;
+  whereabouts: GearWhereabouts;
+  availability: GearAvailability;
+  code: string | null;
+}): CheckoutBlockedReason | null {
+  if (gear.status !== "active") return "retired";
+  if (gear.code === null) return "no_code";
+  if (gear.availability === "on_loan") return "on_loan";
+  if (gear.condition === "unsafe") return "unsafe";
+  if (gear.condition === "needs_repair") return "needs_repair";
+  if (gear.whereabouts !== "cave") return "not_in_cave";
+  if (gear.availability === "on_hold") return "on_hold";
+  return null;
+}
+
 /** The two flags `checkoutLoansAction` accepts, both `gear:manage`-gated
  *  and both recorded on the resulting audit event. */
 export type CheckoutOverrideFlag = "overrideStanding" | "overrideHolds";

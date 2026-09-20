@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BLOCKED_REASON_MESSAGE,
+  CHECKOUT_BLOCKED_REASONS,
   gearAvailability,
   isOverridableBlock,
+  itemBlockedReason,
 } from "#/features/gear/lib/availability";
 import type { AvailabilityInput } from "#/features/gear/lib/availability";
 
@@ -102,6 +105,68 @@ describe("isOverridableBlock", () => {
       "has_overdue",
     ] as const) {
       expect(isOverridableBlock(reason)).toBe(false);
+    }
+  });
+});
+
+describe("itemBlockedReason", () => {
+  const item = {
+    status: "active" as const,
+    condition: "serviceable" as const,
+    whereabouts: "cave" as const,
+    availability: "available" as const,
+    code: "CH93",
+  };
+
+  it("is null for a piece a member can simply take", () => {
+    expect(itemBlockedReason(item)).toBeNull();
+  });
+
+  it("names each refusal the browse surfaces have to explain", () => {
+    expect(itemBlockedReason({ ...item, status: "lost" })).toBe("retired");
+    expect(itemBlockedReason({ ...item, code: null })).toBe("no_code");
+    expect(itemBlockedReason({ ...item, availability: "on_loan" })).toBe(
+      "on_loan",
+    );
+    expect(itemBlockedReason({ ...item, condition: "unsafe" })).toBe("unsafe");
+    expect(itemBlockedReason({ ...item, condition: "needs_repair" })).toBe(
+      "needs_repair",
+    );
+    expect(itemBlockedReason({ ...item, whereabouts: "repair" })).toBe(
+      "not_in_cave",
+    );
+    expect(itemBlockedReason({ ...item, availability: "on_hold" })).toBe(
+      "on_hold",
+    );
+  });
+
+  it("tells unsafe and needs_repair apart where the rollup can't", () => {
+    // Both collapse to `unavailable` in `gearAvailability`, but one is a
+    // hard stop and the other is something the desk can wave through, so
+    // the member-facing message has to differ.
+    const unsafe = itemBlockedReason({ ...item, condition: "unsafe" });
+    const repair = itemBlockedReason({ ...item, condition: "needs_repair" });
+    expect(unsafe).not.toBe(repair);
+    expect(isOverridableBlock(unsafe!)).toBe(false);
+    expect(isOverridableBlock(repair!)).toBe(true);
+  });
+
+  it("prefers no_code over anything else fixable, whatever else is wrong", () => {
+    // It is the one refusal with an obvious next step, and it applies
+    // however the rest of the row reads.
+    expect(
+      itemBlockedReason({
+        ...item,
+        code: null,
+        condition: "unsafe",
+        whereabouts: "missing",
+      }),
+    ).toBe("no_code");
+  });
+
+  it("has a message for every reason it can return", () => {
+    for (const reason of CHECKOUT_BLOCKED_REASONS) {
+      expect(BLOCKED_REASON_MESSAGE[reason]).toBeTruthy();
     }
   });
 });

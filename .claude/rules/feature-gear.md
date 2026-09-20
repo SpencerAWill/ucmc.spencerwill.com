@@ -121,6 +121,18 @@ property of the _pairing_ of member and item, not of the item. A
 greyed-out button with no explanation is the classic complaint about
 club gear systems, so every refusal carries a message.
 
+**`itemBlockedReason` is the item's half of it** — everything decidable
+from the row, with no member attached; `not_waiver_current` and
+`has_overdue` are the viewer's half and are decided server-side. It is
+what `AddToCartButton` disables on, and the message is what it shows. The
+button previously gated on terminal status and a null code only, so a
+member could cart an unsafe harness, one at the repair shop or one
+already out with somebody and hear about it at the desk — while the
+messages written for exactly that moment sat unreferenced outside their
+own unit test. **A piece short of terminal keeps its control and says
+why**; only a terminal one loses it, because "you can't borrow this"
+under every row of a retired list is noise rather than an answer.
+
 ## Gear cave standing
 
 `src/server/gear/gear-cave-standing.server.ts` — `good` / `flagged` /

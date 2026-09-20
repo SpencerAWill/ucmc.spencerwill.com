@@ -145,6 +145,9 @@ export function GearGridCard({
               publicId={gear.publicId}
               code={gear.code}
               status={gear.status}
+              condition={gear.condition}
+              whereabouts={gear.whereabouts}
+              availability={gear.availability}
             />
             {gear.tags.length > 0 ? <TagsPopover tags={gear.tags} /> : null}
             {canManage ? (

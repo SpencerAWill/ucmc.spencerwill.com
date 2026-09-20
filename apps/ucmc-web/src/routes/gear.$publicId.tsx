@@ -70,6 +70,9 @@ function GearDetailPage() {
             publicId={publicId}
             code={data.code}
             status={data.status}
+            condition={data.condition}
+            whereabouts={data.whereabouts}
+            availability={data.availability}
             variant="detail"
           />
         </div>
