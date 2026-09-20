@@ -225,7 +225,7 @@ export async function closeSweepAction(
   // This is the only inference in the system that can decide a piece is
   // missing, which is why the sweep is an entity rather than a
   // per-item checkbox: the close stamps *when* the cave was looked at.
-  const unseen = await listUnseenActiveItems(sweep.id);
+  const unseen = await listUnseenActiveItems(sweep.id, now);
   await markItemsMissing(
     unseen.map((item) => item.id),
     now,

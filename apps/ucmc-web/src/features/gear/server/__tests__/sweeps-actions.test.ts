@@ -279,6 +279,65 @@ describe("closeSweepAction", () => {
     },
   );
 
+  it("leaves held gear alone — also absent by arrangement", async () => {
+    // A hold is somebody saying out loud that they pulled this from the
+    // bin for Saturday. Calling it missing at close made the sweep
+    // contradict the hold sitting beside it in the same UI.
+    await signInAsManager();
+    await seedCatalog();
+    const publicId = await addItem("CH-held");
+    const rows = await getDb()
+      .select({ id: schema.gearItems.id })
+      .from(schema.gearItems)
+      .where(eq(schema.gearItems.publicId, publicId));
+    await getDb()
+      .insert(schema.gearHolds)
+      .values({
+        id: `gh_${crypto.randomUUID()}`,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        itemId: rows[0]?.id ?? "",
+        modelId: null,
+        quantity: 1,
+        reason: "Held for the intro-to-climbing session",
+        startsAt: Temporal.Now.instant().subtract({ hours: 24 }),
+        endsAt: Temporal.Now.instant().add({ hours: 144 }),
+      });
+    await startSweepAction();
+    const result = await closeSweepAction();
+    if (!result.ok) throw new Error("close failed");
+    expect(result.markedMissing).toEqual([]);
+    expect((await whereaboutsOf(publicId)).whereabouts).toBe("cave");
+  });
+
+  it("still marks a piece whose hold has expired", async () => {
+    // An expired hold releases itself everywhere else in the system, so
+    // it must not go on shielding a piece from the count either.
+    await signInAsManager();
+    await seedCatalog();
+    const publicId = await addItem("CH-lapsed");
+    const rows = await getDb()
+      .select({ id: schema.gearItems.id })
+      .from(schema.gearItems)
+      .where(eq(schema.gearItems.publicId, publicId));
+    await getDb()
+      .insert(schema.gearHolds)
+      .values({
+        id: `gh_${crypto.randomUUID()}`,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        itemId: rows[0]?.id ?? "",
+        modelId: null,
+        quantity: 1,
+        reason: "Trip that already happened",
+        startsAt: Temporal.Now.instant().subtract({ hours: 480 }),
+        endsAt: Temporal.Now.instant().subtract({ hours: 144 }),
+      });
+    await startSweepAction();
+    const result = await closeSweepAction();
+    if (!result.ok) throw new Error("close failed");
+    expect(result.markedMissing).toHaveLength(1);
+    expect((await whereaboutsOf(publicId)).whereabouts).toBe("missing");
+  });
+
   it("re-stamps a piece that was already missing", async () => {
     await signInAsManager();
     await seedCatalog();

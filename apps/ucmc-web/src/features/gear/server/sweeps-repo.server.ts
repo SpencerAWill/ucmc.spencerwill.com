@@ -9,6 +9,7 @@
  * `whereabouts_as_of` date that goes with it.
  */
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { Temporal } from "temporal-polyfill";
 
 import { getDb, schema } from "#/server/db";
 
@@ -172,12 +173,16 @@ export interface UnseenItemRow {
  * Active coded items nobody logged in this sweep — the candidates for
  * `missing`.
  *
- * Three exclusions, each for its own reason:
+ * Four exclusions, each for its own reason:
  *
  *   - **on an open loan** — legitimately absent, and marking it missing
  *     would accuse the borrower of losing what they signed out.
  *   - **at `repair`** — absent by arrangement, and the cave knows where.
  *   - **with an `officer`** — same.
+ *   - **under a live hold** — also absent by arrangement: somebody
+ *     pulled it from the bin for the trip the hold names. This one was
+ *     missed at first, which made the close contradict the hold sitting
+ *     right beside it in the same UI.
  *
  * An item already `missing` is deliberately *not* excluded: it is
  * still unseen, and re-stamping `whereabouts_as_of` is how "missing
@@ -186,7 +191,9 @@ export interface UnseenItemRow {
  */
 export async function listUnseenActiveItems(
   sweepId: string,
+  now: Temporal.Instant,
 ): Promise<UnseenItemRow[]> {
+  const nowMs = now.epochMilliseconds;
   return getDb()
     .select({
       id: schema.gearItems.id,
@@ -211,6 +218,19 @@ export async function listUnseenActiveItems(
         sql`NOT EXISTS (
           SELECT 1 FROM ${schema.gearLoans} l
           WHERE l.item_id = ${schema.gearItems.id} AND l.returned_at IS NULL
+        )`,
+        // Held gear is absent by arrangement, exactly like a piece at
+        // the shop or out with an officer: somebody pulled it from the
+        // bin for Saturday's trip, which is what the hold says out loud.
+        // Without this a live hold was the one deliberate absence the
+        // close still called missing — and it is the absence with a
+        // named officer and a written reason attached to it.
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${schema.gearHolds} h
+          WHERE h.item_id = ${schema.gearItems.id}
+            AND h.released_at IS NULL
+            AND h.starts_at <= ${nowMs}
+            AND h.ends_at > ${nowMs}
         )`,
       ),
     )
