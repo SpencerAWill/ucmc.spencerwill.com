@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
+  GEAR_DETAIL_QUERY_KEY,
   GEAR_MODELS_QUERY_KEY,
   GEAR_QUERY_KEY,
 } from "#/features/gear/api/query-keys";
@@ -21,6 +22,7 @@ export function useCreateGearModel() {
           queryClient.invalidateQueries({ queryKey: GEAR_MODELS_QUERY_KEY }),
           // Item rows render the model's name and brand.
           queryClient.invalidateQueries({ queryKey: GEAR_QUERY_KEY }),
+          queryClient.invalidateQueries({ queryKey: GEAR_DETAIL_QUERY_KEY }),
         ]);
       }
     },

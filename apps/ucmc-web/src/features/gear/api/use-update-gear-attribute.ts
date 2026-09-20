@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   GEAR_ATTRIBUTE_DEFS_QUERY_KEY,
+  GEAR_DETAIL_QUERY_KEY,
   GEAR_QUERY_KEY,
 } from "#/features/gear/api/query-keys";
 import { updateGearAttributeDefFn } from "#/features/gear/server/gear-fns";
@@ -24,6 +25,7 @@ export function useUpdateGearAttribute() {
           queryKey: GEAR_ATTRIBUTE_DEFS_QUERY_KEY,
         }),
         queryClient.invalidateQueries({ queryKey: GEAR_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: GEAR_DETAIL_QUERY_KEY }),
       ]);
     },
   });

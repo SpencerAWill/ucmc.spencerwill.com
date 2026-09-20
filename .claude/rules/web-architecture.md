@@ -35,6 +35,8 @@ Everything else under those features stays private. Two one-off `ZONE_EXCEPTIONS
 
 **Inline `useMutation` in routes/components is forbidden.** Each mutation has a `use-*.ts` hook with a fixed cache-invalidation contract; call sites pass `onSuccess`/`onError` to `mutate()`.
 
+**A mutation that changes what a detail page renders must invalidate the detail key too, not only the list.** Where the set of affected ids is knowable, pin it (`gearDetailQueryKey(publicId)`); where it isn't — a model rename, a bulk retire, a sweep close, a tag or attribute-definition edit — invalidate the namespace prefix (`GEAR_DETAIL_QUERY_KEY`). Half the gear hooks did one and half the other, so a rename left an open `/gear/$publicId` tab showing the old product name.
+
 ## Forms (`src/lib/form/`)
 
 `useAppForm` / `withForm` come from `createFormHook`, with the shared field components in `fields.tsx`. Each form passes one Zod schema as **`onMount` + `onChange` + `onSubmit` — never `onBlur`.** TanStack Form stores errors per cause and a change re-runs only the change validator, so a form-level blur validator stamps `errorMap.onBlur` on every invalid field whenever any field blurs, and each entry clears only when that field itself blurs. On `/register/profile` that left the policies checkbox invalid after being ticked until it lost focus, holding `canSubmit` false. _When_ an error is shown is a separate question, answered by `meta.isBlurred` in `field-state.ts` — not `isTouched`, which flips on the first change.

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
+  GEAR_DETAIL_QUERY_KEY,
   GEAR_HOLDS_QUERY_KEY,
   GEAR_QUERY_KEY,
 } from "#/features/gear/api/query-keys";
@@ -19,6 +20,10 @@ export function usePlaceGearHold() {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: GEAR_HOLDS_QUERY_KEY }),
           queryClient.invalidateQueries({ queryKey: GEAR_QUERY_KEY }),
+          // The detail page reads the same availability rollup. A hold
+          // can name a model rather than one item, so the prefix goes
+          // rather than a single id.
+          queryClient.invalidateQueries({ queryKey: GEAR_DETAIL_QUERY_KEY }),
         ]);
       }
     },

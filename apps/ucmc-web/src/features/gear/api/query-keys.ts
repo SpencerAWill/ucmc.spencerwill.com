@@ -7,8 +7,14 @@
 
 export const GEAR_QUERY_KEY = ["gear", "list"] as const;
 
+/** The whole detail namespace. A mutation that changes many items at
+ *  once — a model rename, a sweep close — can't enumerate the ids it
+ *  touched, so it invalidates the prefix; per-item mutations still pin
+ *  `gearDetailQueryKey`. */
+export const GEAR_DETAIL_QUERY_KEY = ["gear", "detail"] as const;
+
 export const gearDetailQueryKey = (publicId: string) =>
-  ["gear", "detail", publicId] as const;
+  [...GEAR_DETAIL_QUERY_KEY, publicId] as const;
 
 export const GEAR_TYPES_QUERY_KEY = ["gear", "types"] as const;
 
