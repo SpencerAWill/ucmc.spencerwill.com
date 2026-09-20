@@ -513,6 +513,10 @@ export interface CreateGearInput {
   notesMarkdown: string | null;
   condition: schema.GearCondition;
   whereabouts?: schema.GearWhereabouts;
+  /** Free text explaining an off-cave whereabouts ("lent to the shop
+   *  for a re-stitch"). Accepted on create for the same reason
+   *  `whereabouts` is: a piece can arrive already somewhere else. */
+  whereaboutsNote?: string | null;
   tagPublicIds: string[];
   /** Answers to the item-level attribute definitions attached to this
    *  model's type. Omitted entirely by callers that predate them (the
@@ -588,6 +592,7 @@ export async function createGearAction(
       notesMarkdown: input.notesMarkdown,
       condition: input.condition,
       whereabouts: input.whereabouts,
+      whereaboutsNote: normalizeOptionalText(input.whereaboutsNote),
       createdBy: principal.userId,
     });
   } catch (err) {

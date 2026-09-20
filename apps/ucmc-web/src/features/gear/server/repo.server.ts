@@ -617,14 +617,20 @@ export async function insertGearItem(input: {
   notesMarkdown: string | null;
   condition: schema.GearCondition;
   whereabouts?: schema.GearWhereabouts;
+  whereaboutsNote?: string | null;
   createdBy: string;
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
+  const whereabouts = input.whereabouts ?? "cave";
   await db.insert(schema.gearItems).values({
     ...input,
     status: "active",
-    whereabouts: input.whereabouts ?? "cave",
+    whereabouts,
+    whereaboutsNote: input.whereaboutsNote ?? null,
+    // Same stamp `updateGearItemById`'s callers apply: `missing` is the
+    // one state that means "unseen since", so it needs a since.
+    whereaboutsAsOf: whereabouts === "missing" ? now : null,
     createdAt: now,
     updatedAt: now,
   });

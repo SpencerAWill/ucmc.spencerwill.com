@@ -527,6 +527,55 @@ describe("gear lifecycle", () => {
     expect(meta.code).toBe("CH93");
   });
 
+  it("records the whereabouts note a create supplies", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const result = await createGearAction({
+      modelPublicId: await modelForType(typePublicId),
+      code: "CH94",
+      description: null,
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      whereabouts: "repair",
+      // The schema accepted this and the insert dropped it on the
+      // floor, so a piece could arrive at the shop with no record of
+      // why until somebody re-typed it through the edit form.
+      whereaboutsNote: "at the shop for a re-stitch",
+      tagPublicIds: [],
+    });
+    if (!result.ok) throw new Error("createGear failed");
+
+    const detail = await getGearDetailAction({ publicId: result.publicId });
+    expect(detail.whereabouts).toBe("repair");
+    expect(detail.whereaboutsNote).toBe("at the shop for a re-stitch");
+    // Only `missing` means "unseen since", so nothing else is stamped.
+    expect(detail.whereaboutsAsOf).toBeNull();
+  });
+
+  it("stamps whereaboutsAsOf for a piece created as missing", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const result = await createGearAction({
+      modelPublicId: await modelForType(typePublicId),
+      code: "CH95",
+      description: null,
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      whereabouts: "missing",
+      tagPublicIds: [],
+    });
+    if (!result.ok) throw new Error("createGear failed");
+
+    const detail = await getGearDetailAction({ publicId: result.publicId });
+    expect(detail.whereaboutsAsOf).not.toBeNull();
+  });
+
   it("rolls back the R2 thumbnail when createGear fails on code_in_use", async () => {
     // A 1×1 PNG, ~70 bytes, comfortably under the 600 KB wire cap and
     // the 400 KB R2 cap. Any decodable image works; the test asserts
