@@ -96,8 +96,10 @@ export function GearInspectionFormDialog({
         notes: trimmedNotes.length === 0 ? null : trimmedNotes,
       },
       {
-        onSuccess: (result) => {
-          if (!result.ok) {
+        // Not `result`: that is the form's own pass/fail/advisory state,
+        // and shadowing it here reads as the thing being submitted.
+        onSuccess: (outcome) => {
+          if (!outcome.ok) {
             toast.error(
               "This model tracks its units individually, so inspections belong on the pieces themselves.",
             );
