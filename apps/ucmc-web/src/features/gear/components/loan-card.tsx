@@ -49,6 +49,10 @@ export function LoanCard({ loan }: { loan: LoanSummary }) {
                   {loan.code ?? "—"}
                 </span>
                 <span className="truncate text-sm font-medium">
+                  {/* A counted loan IS its quantity — "six draws" — and
+                      the row used to name the product alone, which read
+                      as a single item. */}
+                  {loan.quantity > 1 ? `${loan.quantity} × ` : ""}
                   {loan.gearDescription}
                 </span>
               </div>

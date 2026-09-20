@@ -118,6 +118,7 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
                   {loan.code ?? "—"}
                 </span>
                 <span className="truncate text-sm font-medium">
+                  {loan.quantity > 1 ? `${loan.quantity} × ` : ""}
                   {loan.gearDescription}
                 </span>
               </div>

@@ -42,7 +42,10 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
               {loan.code ?? "—"}
             </span>
             <div>
-              <CardTitle>{loan.gearDescription}</CardTitle>
+              <CardTitle>
+                {loan.quantity > 1 ? `${loan.quantity} × ` : ""}
+                {loan.gearDescription}
+              </CardTitle>
               <CardDescription>
                 {loan.typeName} ·{" "}
                 <LoanSubjectLink
