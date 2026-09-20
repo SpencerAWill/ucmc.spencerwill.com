@@ -69,6 +69,7 @@ import { generatePublicId } from "#/server/auth/ids";
 import { eq } from "drizzle-orm";
 
 import { getDb, isUniqueViolation, schema } from "#/server/db";
+import { gearFallbackName } from "#/features/gear/lib/labels";
 
 // ── public types ────────────────────────────────────────────────────────
 
@@ -250,7 +251,12 @@ function toSummary(
     isMine: viewerUserId !== null && row.openLoanMemberUserId === viewerUserId,
     publicId: row.publicId,
     code: row.code,
-    description: row.description ?? row.modelName,
+    description:
+      row.description ??
+      gearFallbackName({
+        manufacturer: row.manufacturer,
+        name: row.modelName,
+      }),
     thumbnailKey: row.thumbnailKey ?? row.modelImageKey,
     status: row.status,
     condition: row.condition,

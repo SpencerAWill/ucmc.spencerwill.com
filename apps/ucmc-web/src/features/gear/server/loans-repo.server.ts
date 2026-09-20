@@ -20,6 +20,7 @@
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { getDb, likeContains, schema } from "#/server/db";
+import { gearFallbackName } from "#/features/gear/lib/labels";
 
 // ── shared row shapes ──────────────────────────────────────────────────
 
@@ -140,7 +141,9 @@ function toLoanRow(r: RawLoanRow): LoanListRow {
     modelPublicId: r.modelPublicId,
     modelName: r.modelName,
     manufacturer: r.manufacturer,
-    description: r.itemDescription ?? r.modelName,
+    description:
+      r.itemDescription ??
+      gearFallbackName({ manufacturer: r.manufacturer, name: r.modelName }),
     thumbnailKey: r.itemThumbnailKey ?? r.modelImageKey,
     typeName: r.typeName,
     quantity: r.quantity,
@@ -747,6 +750,7 @@ export async function getCartHydrationRowsByPublicIds(
       code: schema.gearItems.code,
       itemDescription: schema.gearItems.description,
       modelName: schema.gearModels.name,
+      manufacturer: schema.gearModels.manufacturer,
       typeName: schema.gearTypes.name,
       itemThumbnailKey: schema.gearItems.thumbnailKey,
       modelImageKey: schema.gearModels.imageKey,
@@ -790,7 +794,9 @@ export async function getCartHydrationRowsByPublicIds(
   return rows.map((r) => ({
     publicId: r.publicId,
     code: r.code,
-    description: r.itemDescription ?? r.modelName,
+    description:
+      r.itemDescription ??
+      gearFallbackName({ manufacturer: r.manufacturer, name: r.modelName }),
     typeName: r.typeName,
     thumbnailKey: r.itemThumbnailKey ?? r.modelImageKey,
     status: r.status,
@@ -831,6 +837,7 @@ const CODE_SEARCH_COLUMNS = {
   code: schema.gearItems.code,
   itemDescription: schema.gearItems.description,
   modelName: schema.gearModels.name,
+  manufacturer: schema.gearModels.manufacturer,
   typeName: schema.gearTypes.name,
   itemThumbnailKey: schema.gearItems.thumbnailKey,
   modelImageKey: schema.gearModels.imageKey,
@@ -846,6 +853,7 @@ function toCodeSearchRow(r: {
   code: string | null;
   itemDescription: string | null;
   modelName: string;
+  manufacturer: string | null;
   typeName: string;
   itemThumbnailKey: string | null;
   modelImageKey: string | null;
@@ -859,7 +867,9 @@ function toCodeSearchRow(r: {
   return {
     publicId: r.publicId,
     code: r.code,
-    description: r.itemDescription ?? r.modelName,
+    description:
+      r.itemDescription ??
+      gearFallbackName({ manufacturer: r.manufacturer, name: r.modelName }),
     typeName: r.typeName,
     thumbnailKey: r.itemThumbnailKey ?? r.modelImageKey,
     status: r.status,

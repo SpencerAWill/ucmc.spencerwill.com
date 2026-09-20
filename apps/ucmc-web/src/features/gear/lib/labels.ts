@@ -106,6 +106,23 @@ export const ATTRIBUTE_LEVEL_HINT: Record<GearAttributeLevel, string> = {
   item: "Answered per piece — harness size, rope length after a cut.",
 };
 
+/**
+ * What to call a piece that has no distinguishing marks of its own.
+ *
+ * The product's full name, brand included. Five DTO mappers had spelled
+ * this `description ?? modelName`, dropping the manufacturer — so the
+ * list read "Corax" six times over while the models view a tab away
+ * read "Petzl Corax", and `/gear/loans` read a third thing again.
+ */
+export function gearFallbackName(model: {
+  manufacturer: string | null;
+  name: string;
+}): string {
+  return model.manufacturer
+    ? `${model.manufacturer} ${model.name}`
+    : model.name;
+}
+
 export const TERMINAL_STATUSES = ["retired", "lost", "disposed"] as const;
 export type TerminalGearStatus = (typeof TERMINAL_STATUSES)[number];
 

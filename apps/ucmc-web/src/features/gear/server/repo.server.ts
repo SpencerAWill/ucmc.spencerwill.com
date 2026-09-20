@@ -13,6 +13,7 @@ import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { GearAvailability } from "#/features/gear/lib/availability";
 import { DUE_SOON_DAYS, EXPIRING_SOON_DAYS } from "#/features/gear/lib/safety";
 import { getDb, likeContains, schema } from "#/server/db";
+import { gearFallbackName } from "#/features/gear/lib/labels";
 
 /**
  * One physical unit, with its model and type flattened in. Members never
@@ -891,6 +892,7 @@ export async function getGearLabelsByPublicIds(
       code: schema.gearItems.code,
       description: schema.gearItems.description,
       modelName: schema.gearModels.name,
+      manufacturer: schema.gearModels.manufacturer,
       typeName: schema.gearTypes.name,
     })
     .from(schema.gearItems)
@@ -913,7 +915,12 @@ export async function getGearLabelsByPublicIds(
         code: row.code,
         // The label wants the product, not the per-unit scribble: an
         // item's `description` is now optional and usually empty.
-        description: row.description ?? row.modelName,
+        description:
+          row.description ??
+          gearFallbackName({
+            manufacturer: row.manufacturer,
+            name: row.modelName,
+          }),
         typeName: row.typeName,
       },
     ];
