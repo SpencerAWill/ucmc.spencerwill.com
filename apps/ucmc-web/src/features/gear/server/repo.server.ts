@@ -344,6 +344,13 @@ function inspectionWhere(filter: "overdue" | "due_soon" | "never") {
  * own date functions rather than an approximation in milliseconds,
  * because a leap day inside a ten-year life is a real day and "+10
  * years" is exactly what the manufacturer means.
+ *
+ * Carries the same class of drift `inspectionWhere` documents, for the
+ * same reason: SQLite's `date()` works in UTC while `serviceLifeState`
+ * counts club-time calendar days, so a piece whose expiry falls within
+ * the UTC offset of midnight can land on either side of the boundary
+ * for one day. Reimplementing club-time date math in SQLite is the
+ * worse trade.
  */
 function serviceLifeWhere(filter: "expired" | "expiring" | "unknown") {
   const tracked = sql`${schema.gearModels.serviceLifeYears} IS NOT NULL`;
