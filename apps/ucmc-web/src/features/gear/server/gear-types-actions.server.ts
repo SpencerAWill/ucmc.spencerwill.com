@@ -30,12 +30,14 @@ function toSummary(row: {
   name: string;
   prefix: string | null;
   description: string | null;
+  inspectionIntervalDays: number | null;
 }): GearTypeSummary {
   return {
     publicId: row.publicId,
     name: row.name,
     prefix: row.prefix,
     description: row.description,
+    inspectionIntervalDays: row.inspectionIntervalDays,
   };
 }
 
@@ -53,6 +55,9 @@ export interface CreateGearTypeInput {
   name: string;
   prefix: string | null;
   description: string | null;
+  /** Default inspection cadence for items of this type, in days. A
+   *  model may override it; null means no cadence is tracked. */
+  inspectionIntervalDays: number | null;
 }
 
 export type CreateGearTypeResult =
@@ -72,6 +77,7 @@ export async function createGearTypeAction(
       name: input.name.trim(),
       prefix: input.prefix?.trim() || null,
       description: input.description?.trim() || null,
+      inspectionIntervalDays: input.inspectionIntervalDays ?? null,
       createdBy: principal.userId,
     });
   } catch (err) {
@@ -90,11 +96,8 @@ export async function createGearTypeAction(
   return { ok: true, publicId };
 }
 
-export interface EditGearTypeInput {
+export interface EditGearTypeInput extends CreateGearTypeInput {
   publicId: string;
-  name: string;
-  prefix: string | null;
-  description: string | null;
 }
 
 export type EditGearTypeResult =
@@ -118,6 +121,9 @@ export async function editGearTypeAction(
   if (nextDescription !== existing.description) {
     changedFields.push("description");
   }
+  if (input.inspectionIntervalDays !== existing.inspectionIntervalDays) {
+    changedFields.push("inspection_interval_days");
+  }
   if (changedFields.length === 0) {
     return { ok: true };
   }
@@ -126,6 +132,7 @@ export async function editGearTypeAction(
       name: nextName,
       prefix: nextPrefix,
       description: nextDescription,
+      inspectionIntervalDays: input.inspectionIntervalDays,
     });
   } catch (err) {
     if (isUniqueViolation(err)) {

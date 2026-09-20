@@ -17,10 +17,12 @@ import {
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
 import {
-  getGearByPublicId,
+  getGearItemByPublicId,
   insertGearInspection,
-  listInspectionsForGear,
+  listInspectionsForItem,
+  listInspectionsForModel,
 } from "#/features/gear/server/repo.server";
+import { getGearModelByPublicId } from "#/features/gear/server/models-repo.server";
 import type { GearInspectionRow } from "#/features/gear/server/repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
@@ -49,30 +51,85 @@ function toSummary(row: GearInspectionRow): GearInspectionSummary {
   };
 }
 
-export async function listGearInspectionsAction(input: {
-  gearPublicId: string;
-}): Promise<GearInspectionSummary[]> {
-  await requireGearReader();
-  const gear = await getGearByPublicId(input.gearPublicId);
+/**
+ * What was inspected: one coded piece, or a counted model as a batch.
+ * Exactly one of the two, mirroring the `item_id` / `model_id` XOR on
+ * the row itself — the same dual shape loans, holds and sweep entries
+ * carry, and for the same reason: a counted model has no item rows, so
+ * "looked over all the draws" has nowhere else to hang.
+ */
+export interface GearInspectionTargetInput {
+  gearPublicId?: string;
+  modelPublicId?: string;
+}
+
+/** A union rather than a pair of nullables, so the read below narrows
+ *  to one branch instead of coalescing an id it knows is there. */
+type ResolvedTarget =
+  | { kind: "item"; id: string }
+  | { kind: "model"; id: string };
+
+type ResolveInspectionTargetResult =
+  | { ok: true; target: ResolvedTarget }
+  | { ok: false; reason: "not_found" | "not_counted" };
+
+async function resolveTarget(
+  input: GearInspectionTargetInput,
+): Promise<ResolveInspectionTargetResult> {
+  if (input.modelPublicId !== undefined) {
+    const model = await getGearModelByPublicId(input.modelPublicId);
+    if (!model) {
+      return { ok: false, reason: "not_found" };
+    }
+    // A coded model's units are inspected one at a time, by code — a
+    // model-level row would record "all of them are fine" while saying
+    // nothing about which harness was actually in somebody's hands, and
+    // the per-item clocks would keep running regardless.
+    if (model.tracking !== "counted") {
+      return { ok: false, reason: "not_counted" };
+    }
+    return { ok: true, target: { kind: "model", id: model.id } };
+  }
+  if (input.gearPublicId === undefined) {
+    return { ok: false, reason: "not_found" };
+  }
+  const gear = await getGearItemByPublicId(input.gearPublicId);
   if (!gear) {
+    return { ok: false, reason: "not_found" };
+  }
+  return { ok: true, target: { kind: "item", id: gear.id } };
+}
+
+export async function listGearInspectionsAction(
+  input: GearInspectionTargetInput,
+): Promise<GearInspectionSummary[]> {
+  await requireGearReader();
+  const resolved = await resolveTarget(input);
+  if (!resolved.ok) {
+    // A coded model has no batch history rather than a broken one, so
+    // the read answers with an empty list where the write refuses.
+    if (resolved.reason === "not_counted") {
+      return [];
+    }
     throw new Error("Gear not found");
   }
-  const rows = await listInspectionsForGear(gear.id);
+  const rows =
+    resolved.target.kind === "item"
+      ? await listInspectionsForItem(resolved.target.id)
+      : await listInspectionsForModel(resolved.target.id);
   return rows.map(toSummary);
 }
 
-export interface RecordGearInspectionInput {
-  gearPublicId: string;
+export interface RecordGearInspectionInput extends GearInspectionTargetInput {
   /** Date/time the inspection physically happened, ms-since-epoch. */
   inspectedAt: number;
   result: schema.GearInspectionResult;
   notes: string | null;
 }
 
-export type RecordGearInspectionResult = {
-  ok: true;
-  publicId: string;
-};
+export type RecordGearInspectionResult =
+  | { ok: true; publicId: string }
+  | { ok: false; reason: "not_counted" };
 
 async function loadActorName(userId: string): Promise<string> {
   // Snapshot the actor's display name at write time. We prefer the
@@ -101,17 +158,22 @@ export async function recordGearInspectionAction(
   input: RecordGearInspectionInput,
 ): Promise<RecordGearInspectionResult> {
   const principal = await requireGearInspector();
-  const gear = await getGearByPublicId(input.gearPublicId);
-  if (!gear) {
+  const resolved = await resolveTarget(input);
+  if (!resolved.ok) {
+    if (resolved.reason === "not_counted") {
+      return { ok: false, reason: "not_counted" };
+    }
     throw new Error("Gear not found");
   }
+  const { kind, id: targetId } = resolved.target;
   const inspectorName = await loadActorName(principal.userId);
   const id = `gi_${uuidv7()}`;
   const publicId = generatePublicId();
   await insertGearInspection({
     id,
     publicId,
-    gearId: gear.id,
+    itemId: kind === "item" ? targetId : null,
+    modelId: kind === "model" ? targetId : null,
     inspectorUserId: principal.userId,
     inspectorNameSnapshot: inspectorName,
     inspectedAt: Temporal.Instant.fromEpochMilliseconds(input.inspectedAt),
@@ -122,11 +184,14 @@ export async function recordGearInspectionAction(
     actorUserId: principal.userId,
     action: "gear_inspection.recorded",
     targetType: "gear",
-    targetId: gear.id,
+    targetId,
     metadata: {
       inspectionId: id,
       result: input.result,
       inspectedAt: input.inspectedAt,
+      // Which layer was inspected. Without it a reader of the log can't
+      // tell a batch check of forty draws from one harness.
+      level: kind,
     },
   });
   return { ok: true, publicId };

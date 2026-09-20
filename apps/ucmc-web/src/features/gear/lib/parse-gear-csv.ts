@@ -10,7 +10,11 @@
  *                                  OR its prefix; case-insensitive
  *   - code           (optional) — freeform short identifier; left blank
  *                                  for unlabeled gear
- *   - description    (required) — primary heading on the gear card
+ *   - description    (legacy) — read ONLY as a fallback product name
+ *                                  for a sheet that predates the
+ *                                  `model` column. Items carry no
+ *                                  description of their own any more,
+ *                                  so nothing is stored from it
  *   - acquired_at    (optional) — ISO date (YYYY-MM-DD); parsed to ms
  *   - cost / price / amount (optional) — **always interpreted as
  *                                  dollars**, integer or decimal. `60`
@@ -19,8 +23,17 @@
  *   - manufacturer   (optional) — free-text brand
  *   - serial_number  (optional) — free-text serial
  *   - msrp / list_price (optional) — same always-dollars rule as `cost`
- *   - condition_grade / grade / wear (optional) — must be
- *                                  excellent|good|fair if present
+ *   - model / model_name (REQUIRED) — the product name. With the model
+ *                                  layer, a row names its product and
+ *                                  the import creates the model on
+ *                                  demand; a CSV of forty draws lands
+ *                                  on one model, not forty. A legacy
+ *                                  sheet carrying only `description`
+ *                                  still imports: that column becomes
+ *                                  the model name, which is right for a
+ *                                  pile of one-offs.
+ *   - acquisition_kind (optional) — purchased|donated|found|
+ *                                  warranty_replacement if present
  *   - tags           (optional) — comma-separated list of tag NAMES; the
  *                                  server resolves each to an existing
  *                                  tag (case-insensitive) and skips the
@@ -34,18 +47,18 @@
  */
 import Papa from "papaparse";
 
-import type { GearConditionGrade } from "#/features/gear/server/gear-fns";
+import type { GearAcquisitionKind } from "#/features/gear/server/gear-fns";
 
 export interface ParsedGearRow {
   typePublicId: string;
   code: string | null;
-  description: string;
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
   msrpCents: number | null;
   manufacturer: string | null;
   serialNumber: string | null;
-  conditionGrade: GearConditionGrade | null;
+  modelName: string;
+  acquisitionKind: GearAcquisitionKind | null;
   /** Tag names as written in the CSV. The server resolves these to
    *  IDs at import time. Empty array when the column is absent or
    *  blank for this row. */
@@ -71,7 +84,11 @@ export interface GearTypeLookupEntry {
 
 const TYPE_HEADERS = new Set(["type", "gear type", "kind"]);
 const CODE_HEADERS = new Set(["code", "short id", "short_id", "id", "tag"]);
-const DESCRIPTION_HEADERS = new Set(["description", "model", "notes"]);
+// `model` is deliberately NOT a description alias any more: under the
+// model layer it names the product, and reading it into both columns
+// stamped the product name onto every item's distinguishing-marks
+// field as well.
+const DESCRIPTION_HEADERS = new Set(["description", "notes"]);
 const ACQUIRED_AT_HEADERS = new Set([
   "acquired_at",
   "acquired at",
@@ -89,24 +106,29 @@ const SERIAL_HEADERS = new Set([
   "serial",
   "serial_no",
 ]);
-// `status` is intentionally NOT an alias here — too generic, would
-// collide with lifecycle/availability columns on other sheets. The
-// legacy paper inventory's `Status` column is renamed by the officer
-// to `condition_grade` (or `grade` / `wear`) before import.
-const CONDITION_GRADE_HEADERS = new Set([
-  "condition_grade",
-  "condition grade",
-  "grade",
-  "wear",
+const MODEL_NAME_HEADERS = new Set([
+  "model",
+  "model_name",
+  "model name",
+  "product",
+]);
+// `status` is intentionally NOT an alias here — too generic, and it
+// would collide with the item status column on other sheets.
+const ACQUISITION_KIND_HEADERS = new Set([
+  "acquisition_kind",
+  "acquisition kind",
+  "acquired_how",
+  "source",
 ]);
 const TAGS_HEADERS = new Set(["tags", "tag", "labels"]);
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-const VALID_CONDITION_GRADES: readonly GearConditionGrade[] = [
-  "excellent",
-  "good",
-  "fair",
+const VALID_ACQUISITION_KINDS: readonly GearAcquisitionKind[] = [
+  "purchased",
+  "donated",
+  "found",
+  "warranty_replacement",
 ];
 
 function normalize(value: unknown): string {
@@ -122,7 +144,8 @@ interface ColumnMap {
   msrp: number;
   manufacturer: number;
   serial: number;
-  conditionGrade: number;
+  modelName: number;
+  acquisitionKind: number;
   tags: number;
   hasHeader: boolean;
 }
@@ -138,7 +161,8 @@ function detectColumns(firstRow: string[]): ColumnMap {
   const msrp = find(MSRP_HEADERS);
   const manufacturer = find(MANUFACTURER_HEADERS);
   const serial = find(SERIAL_HEADERS);
-  const conditionGrade = find(CONDITION_GRADE_HEADERS);
+  const modelName = find(MODEL_NAME_HEADERS);
+  const acquisitionKind = find(ACQUISITION_KIND_HEADERS);
   const tags = find(TAGS_HEADERS);
   if (type !== -1) {
     return {
@@ -150,7 +174,8 @@ function detectColumns(firstRow: string[]): ColumnMap {
       msrp,
       manufacturer,
       serial,
-      conditionGrade,
+      modelName,
+      acquisitionKind,
       tags,
       hasHeader: true,
     };
@@ -169,7 +194,8 @@ function detectColumns(firstRow: string[]): ColumnMap {
     msrp: -1,
     manufacturer: -1,
     serial: -1,
-    conditionGrade: -1,
+    modelName: -1,
+    acquisitionKind: -1,
     tags: -1,
     hasHeader: false,
   };
@@ -252,20 +278,20 @@ function parseMoney(
   return { value: Math.round(asNumber * 100) };
 }
 
-function parseConditionGrade(
+function parseAcquisitionKind(
   cell: string,
   line: number,
 ): {
-  value: GearConditionGrade | null;
+  value: GearAcquisitionKind | null;
   error?: string;
 } {
   if (cell.length === 0) return { value: null };
-  const lower = cell.toLowerCase();
-  const match = VALID_CONDITION_GRADES.find((g) => g === lower);
+  const lower = cell.toLowerCase().replace(/[\s-]+/g, "_");
+  const match = VALID_ACQUISITION_KINDS.find((k) => k === lower);
   if (!match) {
     return {
       value: null,
-      error: `condition_grade must be excellent|good|fair (line ${line})`,
+      error: `acquisition_kind must be purchased|donated|found|warranty_replacement (line ${line})`,
     };
   }
   return { value: match };
@@ -312,10 +338,6 @@ export async function parseGearCsv(
     const code = cols.code === -1 ? "" : normalize(row[cols.code]);
     const description =
       cols.description === -1 ? "" : normalize(row[cols.description]);
-    if (description.length === 0) {
-      errors.push({ line, message: "Missing description" });
-      continue;
-    }
     const acquiredAtCell =
       cols.acquiredAt === -1 ? "" : normalize(row[cols.acquiredAt]);
     const costCell = cols.cost === -1 ? "" : normalize(row[cols.cost]);
@@ -323,8 +345,10 @@ export async function parseGearCsv(
     const manufacturerCell =
       cols.manufacturer === -1 ? "" : normalize(row[cols.manufacturer]);
     const serialCell = cols.serial === -1 ? "" : normalize(row[cols.serial]);
-    const gradeCell =
-      cols.conditionGrade === -1 ? "" : normalize(row[cols.conditionGrade]);
+    const modelNameCell =
+      cols.modelName === -1 ? "" : normalize(row[cols.modelName]);
+    const acquisitionKindCell =
+      cols.acquisitionKind === -1 ? "" : normalize(row[cols.acquisitionKind]);
     const tagsCell = cols.tags === -1 ? "" : normalize(row[cols.tags]);
     const acquired = parseAcquiredAt(acquiredAtCell, line);
     if (acquired.error) errors.push({ line, message: acquired.error });
@@ -332,18 +356,32 @@ export async function parseGearCsv(
     if (cost.error) errors.push({ line, message: cost.error });
     const msrp = parseMoney(msrpCell, "msrp", line);
     if (msrp.error) errors.push({ line, message: msrp.error });
-    const grade = parseConditionGrade(gradeCell, line);
-    if (grade.error) errors.push({ line, message: grade.error });
+    const acquisitionKind = parseAcquisitionKind(acquisitionKindCell, line);
+    if (acquisitionKind.error) {
+      errors.push({ line, message: acquisitionKind.error });
+    }
+    // The model name is what the import groups items under. Falling
+    // back to the legacy `description` column keeps single-column
+    // sheets importable: each distinct value becomes its own model,
+    // which is exactly right for a pile of one-offs and harmless for a
+    // fleet the officer can merge afterwards. Nothing else is read from
+    // that column — items no longer store text of their own.
+    const modelName = modelNameCell.length > 0 ? modelNameCell : description;
+    // What a row cannot go without: it has to land on some product.
+    if (modelName.length === 0) {
+      errors.push({ line, message: "Missing model" });
+      continue;
+    }
     rows.push({
       typePublicId,
       code: code.length === 0 ? null : code,
-      description,
       acquiredAt: acquired.value,
       acquisitionCostCents: cost.value,
       msrpCents: msrp.value,
       manufacturer: manufacturerCell.length === 0 ? null : manufacturerCell,
       serialNumber: serialCell.length === 0 ? null : serialCell,
-      conditionGrade: grade.value,
+      modelName,
+      acquisitionKind: acquisitionKind.value,
       tagNames: parseTags(tagsCell),
     });
   }

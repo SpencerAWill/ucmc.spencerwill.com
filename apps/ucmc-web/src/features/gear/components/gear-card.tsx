@@ -21,23 +21,14 @@ import {
 import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
-
-const CONDITION_LABEL: Record<GearSummary["condition"], string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
-
-const CONDITION_VARIANT: Record<
-  GearSummary["condition"],
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  serviceable: "secondary",
-  needs_repair: "outline",
-  missing: "outline",
-  lost: "destructive",
-};
+import { GearTagChip } from "#/features/gear/components/gear-tag-chip";
+import {
+  CONDITION_LABEL,
+  CONDITION_VARIANT,
+  availabilityBadge,
+  availabilityNote,
+  isTerminalStatus,
+} from "#/features/gear/lib/labels";
 
 // Falls back to the static placeholder SVG when the gear row has no
 // uploaded thumbnail. Per-gear keys live under `gear/<gearId>/...` and
@@ -85,7 +76,9 @@ export function GearCard({
   onRetire: () => void;
   onUnretire: () => void;
 }) {
-  const isRetired = gear.lifecycle === "retired";
+  const isInactive = isTerminalStatus(gear.status);
+  const badge = availabilityBadge(gear);
+  const note = availabilityNote(gear);
   const subtitleParts = [gear.type.name, gear.code].filter(
     (p): p is string => p !== null,
   );
@@ -103,7 +96,7 @@ export function GearCard({
             to="/gear/$publicId"
             params={{ publicId: gear.publicId }}
             className="block h-full w-full bg-muted"
-            aria-label={`Open ${gear.description}`}
+            aria-label={`Open ${gear.name}`}
           >
             <img
               src={
@@ -116,23 +109,16 @@ export function GearCard({
             />
           </Link>
           {onToggleSelect && canManage ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onToggleSelect();
-              }}
-              className="absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
-              aria-label={`Select ${gear.code ?? gear.description}`}
-            >
-              <Checkbox
-                checked={selected}
-                className="pointer-events-none size-4"
-                tabIndex={-1}
-                aria-hidden
-              />
-            </button>
+            // The Checkbox IS the plate: it renders its own <button>, so
+            // wrapping it in one nests a button inside a button — invalid
+            // HTML that React reports as a hydration error on every row.
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => onToggleSelect()}
+              onClick={(e) => e.stopPropagation()}
+              className="absolute top-1.5 left-1.5 size-6 rounded-md border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
+              aria-label={`Select ${gear.code ?? gear.name}`}
+            />
           ) : null}
         </div>
 
@@ -144,7 +130,7 @@ export function GearCard({
               params={{ publicId: gear.publicId }}
               className="line-clamp-2 underline-offset-4 hover:underline"
             >
-              {gear.description}
+              {gear.name}
             </Link>
           </h3>
           {subtitleParts.length > 0 ? (
@@ -162,10 +148,18 @@ export function GearCard({
             </p>
           ) : null}
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <Badge variant={CONDITION_VARIANT[gear.condition]}>
-              {CONDITION_LABEL[gear.condition]}
-            </Badge>
-            {isRetired ? <Badge variant="outline">Retired</Badge> : null}
+            {/* Availability leads: it is the question a member came to
+                ask. The raw condition only earns a badge when it adds
+                something the rollup didn't already say. */}
+            <Badge variant={badge.variant}>{badge.label}</Badge>
+            {note ? (
+              <span className="text-xs text-muted-foreground">{note}</span>
+            ) : null}
+            {gear.condition !== "serviceable" ? (
+              <Badge variant={CONDITION_VARIANT[gear.condition]}>
+                {CONDITION_LABEL[gear.condition]}
+              </Badge>
+            ) : null}
           </div>
         </div>
 
@@ -179,7 +173,10 @@ export function GearCard({
           <AddToCartButton
             publicId={gear.publicId}
             code={gear.code}
-            lifecycle={gear.lifecycle}
+            status={gear.status}
+            condition={gear.condition}
+            whereabouts={gear.whereabouts}
+            availability={gear.availability}
           />
           {gear.tags.length > 0 ? <TagsPopover tags={gear.tags} /> : null}
           {canManage ? (
@@ -189,7 +186,7 @@ export function GearCard({
                   variant="ghost"
                   size="icon"
                   className="size-8"
-                  aria-label={`Actions for ${gear.code ?? gear.description}`}
+                  aria-label={`Actions for ${gear.code ?? gear.name}`}
                 >
                   <MoreVertical className="size-4" />
                 </Button>
@@ -199,10 +196,10 @@ export function GearCard({
                   <Edit className="size-4" />
                   Edit
                 </DropdownMenuItem>
-                {isRetired ? (
+                {isInactive ? (
                   <DropdownMenuItem onSelect={onUnretire}>
                     <RotateCcw className="size-4" />
-                    Unretire
+                    Reactivate
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem onSelect={onRetire}>
@@ -279,9 +276,7 @@ function TagsPopover({ tags }: { tags: GearSummary["tags"] }) {
       >
         <div className="flex flex-wrap gap-1.5">
           {tags.map((t) => (
-            <Badge key={t.publicId} variant="outline">
-              #{t.name}
-            </Badge>
+            <GearTagChip key={t.publicId} name={t.name} />
           ))}
         </div>
       </PopoverContent>

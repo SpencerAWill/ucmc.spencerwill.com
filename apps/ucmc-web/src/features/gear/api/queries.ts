@@ -7,13 +7,23 @@
 import {
   GEAR_QUERY_KEY,
   GEAR_TAGS_QUERY_KEY,
+  gearAttributeDefsQueryKey,
+  gearHoldsQueryKey,
+  GEAR_SWEEPS_QUERY_KEY,
+  OPEN_SWEEP_QUERY_KEY,
+  UNCODED_SWEEP_CANDIDATES_QUERY_KEY,
+  sweepDetailQueryKey,
+  gearModelBrowseQueryKey,
+  gearModelsQueryKey,
   GEAR_TYPES_QUERY_KEY,
   LOANS_QUERY_KEY,
   MY_CART_QUERY_KEY,
   MY_LOANS_QUERY_KEY,
   gearCodeSearchQueryKey,
   gearDetailQueryKey,
+  COUNTED_MODELS_FOR_INSPECTION_QUERY_KEY,
   gearInspectionsQueryKey,
+  gearModelInspectionsQueryKey,
   gearLabelsQueryKey,
   gearSuggestedCodeQueryKey,
   loanDetailQueryKey,
@@ -21,19 +31,28 @@ import {
   memberLoanSearchQueryKey,
 } from "#/features/gear/api/query-keys";
 import {
-  getGearByCodeFn,
+  getItemByCodeFn,
   getGearDetailFn,
   getLoanDetailFn,
   getMemberForLoanFn,
   getMyCartFn,
   listGearFn,
+  listCountedModelsForInspectionFn,
   listGearInspectionsFn,
   listGearLabelsFn,
+  listGearAttributeDefsFn,
+  getOpenSweepFn,
+  listUncodedSweepCandidatesFn,
+  getSweepFn,
+  listGearHoldsFn,
+  listSweepsFn,
   listGearTagsFn,
+  listGearModelBrowseFn,
+  listGearModelsFn,
   listGearTypesFn,
   listLoansFn,
   listMyLoansFn,
-  searchGearByCodeFn,
+  searchItemsByCodeFn,
   searchMembersForLoanFn,
   suggestCodeForTypeFn,
 } from "#/features/gear/server/gear-fns";
@@ -63,10 +82,116 @@ export function gearTypesQueryOptions() {
   } as const;
 }
 
+export function gearModelsQueryOptions(typePublicId: string | null) {
+  return {
+    queryKey: gearModelsQueryKey(typePublicId),
+    queryFn: () =>
+      listGearModelsFn({
+        data: typePublicId === null ? {} : { typePublicId },
+      }),
+  } as const;
+}
+
+/**
+ * The member-facing shape of the gear page: one row per product, with
+ * its units bucketed. `gear:read`, unlike `gearModelsQueryOptions`,
+ * which is the officer's model admin list.
+ */
+export function gearModelBrowseQueryOptions(
+  input: { typePublicId?: string | null; q?: string } = {},
+) {
+  return {
+    queryKey: gearModelBrowseQueryKey(input),
+    queryFn: () =>
+      listGearModelBrowseFn({
+        data: {
+          ...(input.typePublicId ? { typePublicId: input.typePublicId } : {}),
+          ...(input.q ? { q: input.q } : {}),
+        },
+      }),
+  } as const;
+}
+
 export function gearTagsQueryOptions() {
   return {
     queryKey: GEAR_TAGS_QUERY_KEY,
     queryFn: () => listGearTagsFn(),
+  } as const;
+}
+
+/**
+ * Definitions for one type, or every definition when `typePublicId` is
+ * null. The forms pass a type because the type is chosen by the time
+ * the fields render; the manage dialog passes null and asks for the
+ * archived ones too.
+ */
+export function gearAttributeDefsQueryOptions(
+  input: {
+    typePublicId?: string | null;
+    level?: "model" | "item" | null;
+    includeArchived?: boolean;
+  } = {},
+) {
+  return {
+    queryKey: gearAttributeDefsQueryKey(input),
+    queryFn: () =>
+      listGearAttributeDefsFn({
+        data: {
+          ...(input.typePublicId ? { typePublicId: input.typePublicId } : {}),
+          ...(input.level ? { level: input.level } : {}),
+          ...(input.includeArchived ? { includeArchived: true } : {}),
+        },
+      }),
+  } as const;
+}
+
+export function gearHoldsQueryOptions(
+  input: {
+    liveOnly?: boolean;
+    gearPublicId?: string | null;
+    modelPublicId?: string | null;
+  } = {},
+) {
+  return {
+    queryKey: gearHoldsQueryKey(input),
+    queryFn: () =>
+      listGearHoldsFn({
+        data: {
+          ...(input.liveOnly ? { liveOnly: true } : {}),
+          ...(input.gearPublicId ? { gearPublicId: input.gearPublicId } : {}),
+          ...(input.modelPublicId
+            ? { modelPublicId: input.modelPublicId }
+            : {}),
+        },
+      }),
+  } as const;
+}
+
+export function openSweepQueryOptions() {
+  return {
+    queryKey: OPEN_SWEEP_QUERY_KEY,
+    queryFn: () => getOpenSweepFn(),
+  } as const;
+}
+
+export function uncodedSweepCandidatesQueryOptions() {
+  return {
+    queryKey: UNCODED_SWEEP_CANDIDATES_QUERY_KEY,
+    queryFn: () => listUncodedSweepCandidatesFn(),
+  } as const;
+}
+
+export function sweepsQueryOptions() {
+  return {
+    queryKey: GEAR_SWEEPS_QUERY_KEY,
+    queryFn: () => listSweepsFn(),
+  } as const;
+}
+
+export function sweepDetailQueryOptions(publicId: string) {
+  return {
+    queryKey: sweepDetailQueryKey(publicId),
+    queryFn: () => getSweepFn({ data: { publicId } }),
   } as const;
 }
 
@@ -82,6 +207,25 @@ export function gearInspectionsQueryOptions(gearPublicId: string) {
   return {
     queryKey: gearInspectionsQueryKey(gearPublicId),
     queryFn: () => listGearInspectionsFn({ data: { gearPublicId } }),
+  } as const;
+}
+
+/** Every counted model, stalest first — the worklist a `gear:inspect`
+ *  holder works out of. Narrower than the officer model list on
+ *  purpose; see `listCountedModelsForInspectionAction`. */
+export function countedModelsForInspectionQueryOptions() {
+  return {
+    queryKey: COUNTED_MODELS_FOR_INSPECTION_QUERY_KEY,
+    queryFn: () => listCountedModelsForInspectionFn(),
+  } as const;
+}
+
+/** The batch inspection log for a counted model — the same read, aimed
+ *  at the other half of the row's item/model XOR. */
+export function gearModelInspectionsQueryOptions(modelPublicId: string) {
+  return {
+    queryKey: gearModelInspectionsQueryKey(modelPublicId),
+    queryFn: () => listGearInspectionsFn({ data: { modelPublicId } }),
   } as const;
 }
 
@@ -174,7 +318,7 @@ export function gearCodeSearchQueryOptions(q: string) {
   const trimmed = q.trim();
   return {
     queryKey: gearCodeSearchQueryKey(trimmed),
-    queryFn: () => searchGearByCodeFn({ data: { q: trimmed } }),
+    queryFn: () => searchItemsByCodeFn({ data: { q: trimmed } }),
     enabled: trimmed.length > 0,
   } as const;
 }
@@ -182,10 +326,10 @@ export function gearCodeSearchQueryOptions(q: string) {
 /**
  * Exact-match lookup for a barcode scan result. Not memoized as a
  * `useQuery` factory — the scanner's `onResult` callsite invokes
- * `getGearByCodeFn` imperatively via the underlying mutation/manual
+ * `getItemByCodeFn` imperatively via the underlying mutation/manual
  * fetch and feeds the row into local state. Exposed here as a small
  * helper so callsites don't reach into the server fn module directly.
  */
 export function fetchGearByCode(code: string) {
-  return getGearByCodeFn({ data: { code } });
+  return getItemByCodeFn({ data: { code } });
 }

@@ -30,6 +30,11 @@ const { createGearTypeAction } =
 const { listGearInspectionsAction, recordGearInspectionAction } =
   await import("#/features/gear/server/gear-inspections-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const {
+  createGearModelAction,
+  listCountedModelsForInspectionAction,
+  listGearModelsAction,
+} = await import("#/features/gear/server/models-actions.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -100,7 +105,6 @@ async function signInAsInspector(fullName = "Ivy Inspector"): Promise<string> {
       id: "role_test_gear_inspector",
       name: "test_gear_inspector",
       displayName: "Test gear inspector",
-      description: "Holds gear:inspect without gear:manage",
     })
     .onConflictDoNothing();
   await db
@@ -122,17 +126,47 @@ async function signInAsInspector(fullName = "Ivy Inspector"): Promise<string> {
   return userId;
 }
 
+/**
+ * Creates the model on demand so a test can keep naming a type and get
+ * a working item. The model layer is real in production — officers pick
+ * a product — but a test asserting retire semantics shouldn't have to
+ * care, so one model per type is created lazily and reused.
+ */
+const modelByType = new Map<string, string>();
+
+async function modelForType(typePublicId: string): Promise<string> {
+  const cached = modelByType.get(typePublicId);
+  if (cached !== undefined) return cached;
+  const result = await createGearModelAction({
+    typePublicId,
+    name: `Model for ${typePublicId}`,
+    manufacturer: null,
+    description: null,
+    tracking: "coded",
+    msrpCents: null,
+    serviceLifeYears: null,
+    manufacturedAtMs: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!result.ok) {
+    throw new Error(`createGearModel failed: ${JSON.stringify(result)}`);
+  }
+  modelByType.set(typePublicId, result.publicId);
+  return result.publicId;
+}
+
 async function createGearOk(): Promise<string> {
   const typeResult = await createGearTypeAction({
     name: `Harness ${crypto.randomUUID()}`,
     prefix: "CH",
     description: null,
+    inspectionIntervalDays: null,
   });
   if (!typeResult.ok) throw new Error("createGearType failed");
   const gearResult = await createGearAction({
-    typePublicId: typeResult.publicId,
+    modelPublicId: await modelForType(typeResult.publicId),
     code: "CH1",
-    description: "Test harness",
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,
@@ -146,12 +180,22 @@ async function createGearOk(): Promise<string> {
 
 beforeEach(async () => {
   cookieJar.clear();
+  modelByType.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
   await db.delete(schema.gearInspections);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
@@ -334,5 +378,233 @@ describe("recordGearInspectionAction", () => {
         notes: null,
       }),
     ).rejects.toThrow("Gear not found");
+  });
+});
+
+describe("counted models are inspected as a batch", () => {
+  async function createCountedModel(): Promise<string> {
+    const typeResult = await createGearTypeAction({
+      name: `Quickdraw ${crypto.randomUUID()}`,
+      prefix: "QD",
+      description: null,
+      inspectionIntervalDays: 365,
+    });
+    if (!typeResult.ok) throw new Error("createGearType failed");
+    const result = await createGearModelAction({
+      typePublicId: typeResult.publicId,
+      name: `HotWire ${crypto.randomUUID()}`,
+      manufacturer: "Black Diamond",
+      description: null,
+      tracking: "counted",
+      msrpCents: null,
+      serviceLifeYears: null,
+      manufacturedAtMs: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+    if (!result.ok) throw new Error("createGearModel failed");
+    return result.publicId;
+  }
+
+  it("records against the model, which had no way to be inspected at all", async () => {
+    await signInAsManager();
+    const modelPublicId = await createCountedModel();
+
+    // A counted model has no item rows, so before this the whole
+    // category — draws, slings, the shortest-lived soft goods in the
+    // cave — had no inspection record available to it.
+    const result = await recordGearInspectionAction({
+      modelPublicId,
+      inspectedAt: Date.now(),
+      result: "advisory",
+      notes: "Four slings fuzzing at the bar-tack.",
+    });
+    expect(result).toMatchObject({ ok: true });
+
+    const rows = await listGearInspectionsAction({ modelPublicId });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].result).toBe("advisory");
+    expect(rows[0].notes).toBe("Four slings fuzzing at the bar-tack.");
+  });
+
+  it("hangs the row off model_id, leaving item_id null", async () => {
+    await signInAsManager();
+    const modelPublicId = await createCountedModel();
+    await recordGearInspectionAction({
+      modelPublicId,
+      inspectedAt: Date.now(),
+      result: "pass",
+      notes: null,
+    });
+
+    const rows = await getDb()
+      .select({
+        itemId: schema.gearInspections.itemId,
+        modelId: schema.gearInspections.modelId,
+      })
+      .from(schema.gearInspections);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].itemId).toBeNull();
+    expect(rows[0].modelId).not.toBeNull();
+  });
+
+  it("refuses a coded model, whose units are inspected one at a time", async () => {
+    await signInAsManager();
+    const gearPublicId = await createGearOk();
+    const gear = await getDb()
+      .select({ modelId: schema.gearItems.modelId })
+      .from(schema.gearItems);
+    const models = await getDb()
+      .select({
+        id: schema.gearModels.id,
+        publicId: schema.gearModels.publicId,
+      })
+      .from(schema.gearModels);
+    const modelPublicId =
+      models.find((m) => m.id === gear[0]?.modelId)?.publicId ?? "";
+
+    expect(
+      await recordGearInspectionAction({
+        modelPublicId,
+        inspectedAt: Date.now(),
+        result: "pass",
+        notes: null,
+      }),
+    ).toEqual({ ok: false, reason: "not_counted" });
+
+    // The read answers empty rather than refusing: a coded model has no
+    // batch history, which is a fact about it, not a broken request.
+    expect(await listGearInspectionsAction({ modelPublicId })).toEqual([]);
+    // …and the piece's own log is untouched by the refused write.
+    expect(await listGearInspectionsAction({ gearPublicId })).toEqual([]);
+  });
+
+  it("keeps a model's batch log separate from its type's pieces", async () => {
+    await signInAsManager();
+    const modelPublicId = await createCountedModel();
+    const gearPublicId = await createGearOk();
+    await recordGearInspectionAction({
+      modelPublicId,
+      inspectedAt: Date.now(),
+      result: "pass",
+      notes: "Batch.",
+    });
+    await recordGearInspectionAction({
+      gearPublicId,
+      inspectedAt: Date.now(),
+      result: "fail",
+      notes: "One harness.",
+    });
+
+    expect(
+      (await listGearInspectionsAction({ modelPublicId })).map((r) => r.notes),
+    ).toEqual(["Batch."]);
+    expect(
+      (await listGearInspectionsAction({ gearPublicId })).map((r) => r.notes),
+    ).toEqual(["One harness."]);
+  });
+
+  it("records which layer was inspected in the audit row", async () => {
+    await signInAsManager();
+    const modelPublicId = await createCountedModel();
+    await getDb().delete(schema.auditLog);
+    await recordGearInspectionAction({
+      modelPublicId,
+      inspectedAt: Date.now(),
+      result: "pass",
+      notes: null,
+    });
+
+    const rows = await getDb()
+      .select({ metadataJson: schema.auditLog.metadataJson })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear_inspection.recorded"));
+    // Without it, a reader of the log can't tell a batch check of forty
+    // draws from one harness.
+    expect(JSON.parse(rows[0]?.metadataJson ?? "{}").level).toBe("model");
+  });
+});
+
+describe("the counted-gear inspection worklist", () => {
+  async function countedModel(name: string): Promise<string> {
+    const typeResult = await createGearTypeAction({
+      name: `Quickdraw ${crypto.randomUUID()}`,
+      prefix: "QD",
+      description: null,
+      inspectionIntervalDays: 365,
+    });
+    if (!typeResult.ok) throw new Error("createGearType failed");
+    const result = await createGearModelAction({
+      typePublicId: typeResult.publicId,
+      name,
+      manufacturer: null,
+      description: null,
+      tracking: "counted",
+      msrpCents: null,
+      serviceLifeYears: null,
+      manufacturedAtMs: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+    if (!result.ok) throw new Error("createGearModel failed");
+    return result.publicId;
+  }
+
+  it("is readable by a gear:inspect holder, which the officer list is not", async () => {
+    await signInAsManager();
+    await countedModel("Slings");
+
+    await signInAsInspector();
+    // The whole point: batch inspections used to be reachable only
+    // through the `gear:manage` model list, which coupled a fuzzing
+    // sling to the grant that can retire gear and bulk-import stock.
+    const worklist = await listCountedModelsForInspectionAction();
+    expect(worklist.map((m) => m.name)).toEqual(["Slings"]);
+
+    await expect(listGearModelsAction({})).rejects.toThrow(
+      "Forbidden: missing gear:manage",
+    );
+  });
+
+  it("refuses a member holding neither grant", async () => {
+    await signInAsRegularMember();
+    await expect(listCountedModelsForInspectionAction()).rejects.toThrow(
+      "Forbidden: missing gear:inspect",
+    );
+  });
+
+  it("lists coded models nowhere — their units answer for themselves", async () => {
+    await signInAsManager();
+    await countedModel("Draws");
+    await createGearOk();
+
+    expect(
+      (await listCountedModelsForInspectionAction()).map((m) => m.name),
+    ).toEqual(["Draws"]);
+  });
+
+  it("puts never-inspected first, then stalest — the worklist order", async () => {
+    await signInAsManager();
+    const never = await countedModel("Never looked at");
+    const stale = await countedModel("Stale");
+    const fresh = await countedModel("Fresh");
+    await recordGearInspectionAction({
+      modelPublicId: stale,
+      inspectedAt: Date.parse("2025-02-01T12:00:00Z"),
+      result: "pass",
+      notes: null,
+    });
+    await recordGearInspectionAction({
+      modelPublicId: fresh,
+      inspectedAt: Date.parse("2026-08-01T12:00:00Z"),
+      result: "pass",
+      notes: null,
+    });
+
+    // Not the catalog's alphabetical order: a bin nobody has ever
+    // looked at is the one to hand somebody with an hour free.
+    const worklist = await listCountedModelsForInspectionAction();
+    expect(worklist.map((m) => m.publicId)).toEqual([never, stale, fresh]);
+    expect(worklist[0].lastInspectedAtMs).toBeNull();
   });
 });

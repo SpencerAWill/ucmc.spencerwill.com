@@ -35,12 +35,12 @@ vi.mock("#/features/gear/server/loans-repo.server", async (importOriginal) => {
   const actual = await importOriginal<typeof LoansRepoModule>();
   return {
     ...actual,
-    getOpenLoanForGear: async (gearId: string) =>
-      raceFlags.skipPreCheck ? null : actual.getOpenLoanForGear(gearId),
+    getOpenLoanForItem: async (itemId: string) =>
+      raceFlags.skipPreCheck ? null : actual.getOpenLoanForItem(itemId),
   };
 });
 
-const { createGearAction, retireGearAction } =
+const { createGearAction, deactivateGearAction } =
   await import("#/features/gear/server/gear-actions.server");
 const { createGearTypeAction } =
   await import("#/features/gear/server/gear-types-actions.server");
@@ -53,6 +53,10 @@ const {
   listLoansAction,
   listMyLoansAction,
 } = await import("#/features/gear/server/loans-actions.server");
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
+const { placeGearHoldAction } =
+  await import("#/features/gear/server/holds-actions.server");
 const { listLoans } = await import("#/features/gear/server/loans-repo.server");
 const { openSession } = await import("#/server/auth/session.server");
 
@@ -114,14 +118,76 @@ async function signInAsMember(
   return user;
 }
 
+/**
+ * A keeper holding `gear:loan` and NOT `gear:manage` — the delegable
+ * desk tier. Ad-hoc role so the test pins the permission rather than a
+ * seeded role's evolving grants.
+ */
+async function signInAsDeskKeeper(
+  fullName = "Kit Keeper",
+): Promise<{ id: string; publicId: string }> {
+  const db = getDb();
+  await db
+    .insert(schema.roles)
+    .values({
+      id: "role_test_gear_keeper",
+      name: "test_gear_keeper",
+      displayName: "Test gear keeper",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.rolePermissions)
+    .values({ roleId: "role_test_gear_keeper", permissionId: "perm_gear_loan" })
+    .onConflictDoNothing();
+  const user = await seedUser(
+    `keeper-${crypto.randomUUID()}@example.com`,
+    fullName,
+  );
+  await assignRole(user.id, "role_member");
+  await assignRole(user.id, "role_test_gear_keeper");
+  await signInAs(user.id);
+  return user;
+}
+
 async function createTypeOk(): Promise<string> {
   const r = await createGearTypeAction({
     name: `Harness ${crypto.randomUUID()}`,
     prefix: "CH",
     description: null,
+    inspectionIntervalDays: null,
   });
   if (!r.ok) throw new Error("createGearType failed");
   return r.publicId;
+}
+
+/**
+ * Creates the model on demand so a test can keep naming a type and get
+ * a working item. The model layer is real in production — officers pick
+ * a product — but a test asserting retire semantics shouldn't have to
+ * care, so one model per type is created lazily and reused.
+ */
+const modelByType = new Map<string, string>();
+
+async function modelForType(typePublicId: string): Promise<string> {
+  const cached = modelByType.get(typePublicId);
+  if (cached !== undefined) return cached;
+  const result = await createGearModelAction({
+    typePublicId,
+    name: `Model for ${typePublicId}`,
+    manufacturer: null,
+    description: null,
+    tracking: "coded",
+    msrpCents: null,
+    serviceLifeYears: null,
+    manufacturedAtMs: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!result.ok) {
+    throw new Error(`createGearModel failed: ${JSON.stringify(result)}`);
+  }
+  modelByType.set(typePublicId, result.publicId);
+  return result.publicId;
 }
 
 async function createGearOk(input: {
@@ -130,9 +196,8 @@ async function createGearOk(input: {
   condition?: schema.GearCondition;
 }): Promise<string> {
   const r = await createGearAction({
-    typePublicId: input.typePublicId,
+    modelPublicId: await modelForType(input.typePublicId),
     code: input.code,
-    description: "Test gear",
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,
@@ -146,11 +211,21 @@ async function createGearOk(input: {
 
 beforeEach(async () => {
   cookieJar.clear();
+  modelByType.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
@@ -239,7 +314,11 @@ describe("checkoutLoansAction", () => {
     const typePublicId = await createTypeOk();
     const ok = await createGearOk({ typePublicId, code: "CH1" });
     const retired = await createGearOk({ typePublicId, code: "CH2" });
-    await retireGearAction({ publicId: retired, reason: null });
+    await deactivateGearAction({
+      publicId: retired,
+      status: "retired",
+      reason: null,
+    });
     const damaged = await createGearOk({
       typePublicId,
       code: "CH3",
@@ -335,6 +414,92 @@ describe("checkoutLoansAction", () => {
   });
 });
 
+// ── officer overrides ──────────────────────────────────────────────────
+
+describe("checkoutLoansAction hold override", () => {
+  /** Seeds a member, a held piece, and leaves the caller signed in as
+   *  whoever `signIn` says. The hold itself needs `gear:manage`, so it
+   *  is always placed by an admin first. */
+  async function seedHeldPiece(): Promise<{
+    gearPublicId: string;
+    memberPublicId: string;
+  }> {
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const gearPublicId = await createGearOk({ typePublicId, code: "CH1" });
+    const member = await seedUser("borrower@example.com", "Borrower One");
+    const now = Date.now();
+    const hold = await placeGearHoldAction({
+      gearPublicId,
+      reason: "Held for the Red River trip",
+      startsAtMs: now - 3600_000,
+      endsAtMs: now + 86_400_000,
+    });
+    if (!hold.ok) throw new Error(`placeGearHold failed: ${hold.reason}`);
+    return { gearPublicId, memberPublicId: member.publicId };
+  }
+
+  it("refuses a held piece when no override is passed", async () => {
+    const { gearPublicId, memberPublicId } = await seedHeldPiece();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [{ gearPublicId, durationDays: 7 }],
+      notes: null,
+    });
+
+    expect(result.results).toEqual([
+      { ok: false, gearPublicId, reason: "on_hold" },
+    ]);
+  });
+
+  it("lets a gear:manage officer override the hold, and records it", async () => {
+    const { gearPublicId, memberPublicId } = await seedHeldPiece();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [{ gearPublicId, durationDays: 7 }],
+      notes: null,
+      overrideHolds: true,
+    });
+
+    expect(result.results.every((r) => r.ok)).toBe(true);
+    const audits = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "loan.checked_out"));
+    expect(audits).toHaveLength(1);
+    // The override is the judgement the officer made; it belongs on the
+    // event, not only in the desk's memory.
+    const metadataJson = audits.at(0)?.metadataJson;
+    const md = metadataJson
+      ? (JSON.parse(metadataJson) as Record<string, unknown>)
+      : {};
+    expect(md.overrideHolds).toBe(true);
+    expect(md.overrideStanding).toBe(false);
+  });
+
+  it("ignores overrideHolds from a gear:loan keeper without gear:manage", async () => {
+    const { gearPublicId, memberPublicId } = await seedHeldPiece();
+    // `gear:loan` is delegable on its own, so the desk tier must not
+    // inherit the override that comes with `gear:manage`.
+    await signInAsDeskKeeper();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [{ gearPublicId, durationDays: 7 }],
+      notes: null,
+      overrideHolds: true,
+    });
+
+    expect(result.results).toEqual([
+      { ok: false, gearPublicId, reason: "on_hold" },
+    ]);
+    const loans = await getDb().select().from(schema.gearLoans);
+    expect(loans).toHaveLength(0);
+  });
+});
+
 // ── check-in ───────────────────────────────────────────────────────────
 
 describe("checkinLoansAction", () => {
@@ -412,9 +577,9 @@ describe("checkinLoansAction", () => {
     });
 
     const gRows = await getDb()
-      .select({ condition: schema.gear.condition })
-      .from(schema.gear)
-      .where(eq(schema.gear.publicId, gear));
+      .select({ condition: schema.gearItems.condition })
+      .from(schema.gearItems)
+      .where(eq(schema.gearItems.publicId, gear));
     expect(gRows.at(0)?.condition).toBe("needs_repair");
     const updates = (await getDb().select().from(schema.auditLog)).filter(
       (r) => r.action === "gear.updated",
@@ -543,7 +708,7 @@ describe("listMyLoansAction", () => {
   });
 });
 
-describe("retireGearAction with open loan", () => {
+describe("deactivateGearAction with open loan", () => {
   it("blocks retire with `on_loan` while a piece is checked out", async () => {
     await signInAsLoanManager();
     const typePublicId = await createTypeOk();
@@ -555,7 +720,11 @@ describe("retireGearAction with open loan", () => {
       notes: null,
     });
 
-    const result = await retireGearAction({ publicId: gear, reason: null });
+    const result = await deactivateGearAction({
+      publicId: gear,
+      status: "retired",
+      reason: null,
+    });
     expect(result).toEqual({ ok: false, reason: "on_loan" });
   });
 
@@ -573,7 +742,11 @@ describe("retireGearAction with open loan", () => {
       items: [{ gearPublicId: gear, conditionAtReturn: null, notes: null }],
     });
 
-    const result = await retireGearAction({ publicId: gear, reason: null });
+    const result = await deactivateGearAction({
+      publicId: gear,
+      status: "retired",
+      reason: null,
+    });
     expect(result).toEqual({ ok: true });
   });
 });

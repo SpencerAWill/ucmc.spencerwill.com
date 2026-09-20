@@ -7,7 +7,18 @@
  * validateSearch / queryOptions input typing.
  */
 import { createServerFn } from "@tanstack/react-start";
+
+import { GEAR_AVAILABILITY } from "#/features/gear/lib/availability";
 import { z } from "zod";
+import type {
+  CountedModelForInspectionDto,
+  GearModelBrowseDto,
+  CreateGearModelResult,
+  DeleteGearModelResult,
+  GearModelSummaryDto,
+  SetGearModelStockResult,
+  UpdateGearModelResult,
+} from "#/features/gear/server/models-actions.server";
 import type {
   BulkImportInput,
   BulkImportResult,
@@ -33,7 +44,8 @@ import type {
   GearTypeSummary,
   ListGearActionInput,
   ListGearActionResult,
-  RetireGearResult,
+  DeactivateGearResult,
+  ReleaseCodeResult,
 } from "#/features/gear/server/gear-actions.server";
 import type {
   CreateGearTypeInput,
@@ -42,6 +54,31 @@ import type {
   EditGearTypeInput,
   EditGearTypeResult,
 } from "#/features/gear/server/gear-types-actions.server";
+import type {
+  CloseSweepResult,
+  GearSweepDetail,
+  GearSweepSummary,
+  RecordSweepEntryInput,
+  RecordSweepEntryResult,
+  StartSweepResult,
+} from "#/features/gear/server/sweeps-actions.server";
+import type { UncodedItemRow } from "#/features/gear/server/sweeps-repo.server";
+import type {
+  GearHoldSummary,
+  ListGearHoldsActionInput,
+  PlaceGearHoldInput,
+  PlaceGearHoldResult,
+  ReleaseGearHoldResult,
+} from "#/features/gear/server/holds-actions.server";
+import type {
+  CreateGearAttributeDefInput,
+  CreateGearAttributeDefResult,
+  DeleteGearAttributeDefResult,
+  GearAttributeDefSummary,
+  ListGearAttributeDefsActionInput,
+  UpdateGearAttributeDefInput,
+  UpdateGearAttributeDefResult,
+} from "#/features/gear/server/attributes-actions.server";
 import type {
   CreateGearTagInput,
   CreateGearTagResult,
@@ -58,12 +95,14 @@ import type {
   CheckinLoansResult,
   CheckoutLoansInput,
   CheckoutLoansResult,
+  CheckoutSkipReason,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
   ListLoansActionResult,
   LoanDetail,
   LoanSummary,
+  MyLoansResult,
 } from "#/features/gear/server/loans-actions.server";
 import type {
   AddToCartResult,
@@ -85,23 +124,50 @@ import type { BulkResult } from "#/features/gear/server/gear-bulk-actions.server
 // without pulling the whole schema file into the client bundle. Keep in
 // sync with `drizzle/schema.ts` — the schema is the database-side
 // source of truth.
-export const GEAR_LIFECYCLE_VALUES = ["active", "retired"] as const;
-export type GearLifecycle = (typeof GEAR_LIFECYCLE_VALUES)[number];
+export const GEAR_STATUS_VALUES = [
+  "active",
+  "retired",
+  "lost",
+  "disposed",
+] as const;
+export type GearStatus = (typeof GEAR_STATUS_VALUES)[number];
 
 export const GEAR_CONDITION_VALUES = [
   "serviceable",
   "needs_repair",
-  "missing",
-  "lost",
+  "unsafe",
 ] as const;
 export type GearCondition = (typeof GEAR_CONDITION_VALUES)[number];
 
-export const GEAR_CONDITION_GRADE_VALUES = [
-  "excellent",
-  "good",
-  "fair",
+export const GEAR_WHEREABOUTS_VALUES = [
+  "cave",
+  "repair",
+  "officer",
+  "missing",
 ] as const;
-export type GearConditionGrade = (typeof GEAR_CONDITION_GRADE_VALUES)[number];
+export type GearWhereabouts = (typeof GEAR_WHEREABOUTS_VALUES)[number];
+
+export const GEAR_TRACKING_VALUES = ["coded", "counted"] as const;
+export type GearTracking = (typeof GEAR_TRACKING_VALUES)[number];
+
+export const GEAR_ACQUISITION_KIND_VALUES = [
+  "purchased",
+  "donated",
+  "found",
+  "warranty_replacement",
+] as const;
+export type GearAcquisitionKind = (typeof GEAR_ACQUISITION_KIND_VALUES)[number];
+
+export const GEAR_ATTRIBUTE_KIND_VALUES = [
+  "text",
+  "number",
+  "select",
+  "boolean",
+] as const;
+export type GearAttributeKind = (typeof GEAR_ATTRIBUTE_KIND_VALUES)[number];
+
+export const GEAR_ATTRIBUTE_LEVEL_VALUES = ["model", "item"] as const;
+export type GearAttributeLevel = (typeof GEAR_ATTRIBUTE_LEVEL_VALUES)[number];
 
 export const GEAR_INSPECTION_RESULT_VALUES = [
   "pass",
@@ -153,6 +219,7 @@ export type {
   CheckinLoansResult,
   CheckoutLoansInput,
   CheckoutLoansResult,
+  CheckoutSkipReason,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
@@ -162,7 +229,8 @@ export type {
   MemberSearchResult,
   RecordGearInspectionInput,
   RecordGearInspectionResult,
-  RetireGearResult,
+  DeactivateGearResult,
+  ReleaseCodeResult,
 };
 
 // ── input schemas ───────────────────────────────────────────────────────
@@ -186,11 +254,25 @@ const acquiredAtSchema = z
 
 export const listGearInputSchema = z.object({
   typePublicId: z.string().min(1).optional(),
+  modelPublicId: z.string().min(1).optional(),
   tagPublicIds: z.array(z.string().min(1)).optional(),
-  lifecycle: z.enum(GEAR_LIFECYCLE_VALUES).optional(),
+  status: z.enum(GEAR_STATUS_VALUES).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
+  whereabouts: z.enum(GEAR_WHEREABOUTS_VALUES).optional(),
+  availability: z.enum(GEAR_AVAILABILITY).optional(),
+  attributes: z
+    .array(
+      z.object({
+        defPublicId: z.string().min(1),
+        values: z.array(z.string().min(1).max(500)).min(1).max(50),
+      }),
+    )
+    .max(20)
+    .optional(),
+  inspection: z.enum(["overdue", "due_soon", "never"]).optional(),
+  serviceLife: z.enum(["expired", "expiring", "unknown"]).optional(),
   q: z.string().max(200).optional(),
-  sort: z.enum(["code", "created_at", "updated_at"]).optional(),
+  sort: z.enum(["code", "created_at", "updated_at", "model"]).optional(),
   dir: z.enum(["asc", "desc"]).optional(),
   page: z.number().int().min(1).optional(),
   perPage: z.number().int().min(1).max(250).optional(),
@@ -203,26 +285,40 @@ const thumbnailDataUrlSchema = z
   .max(600 * 1024)
   .regex(/^data:image\/(webp|jpeg|png);base64,/, "Invalid image data URL");
 
+/** Answers to officer-defined attributes. The value is the raw string
+ *  the control produced; `null` clears it. Coercion into the two
+ *  storage columns happens once, server-side. */
+const attributeValueInputSchema = z
+  .array(
+    z.object({
+      defPublicId: z.string().min(1),
+      value: z.string().max(500).nullable(),
+    }),
+  )
+  .max(100);
+
 export const createGearInputSchema = z.object({
-  typePublicId: z.string().min(1),
+  // The product this unit is. Manufacturer, MSRP and service life come
+  // from the model now, so they are no longer per-item fields.
+  modelPublicId: z.string().min(1),
   code: z.string().max(64).nullable(),
-  // Description is the primary heading on the gear card — required end
-  // to end. `.trim()` before `.min(1)` so whitespace-only strings fail.
-  description: z.string().trim().min(1, "Description is required").max(500),
-  // null = no thumbnail (omit on create).
+  // null = no thumbnail (omit on create); falls back to the model's
+  // product shot at render time.
   thumbnailDataUrl: thumbnailDataUrlSchema.nullable(),
   acquiredAt: acquiredAtSchema,
+  manufacturedAt: acquiredAtSchema.optional(),
   acquisitionCostCents: z.number().int().min(0).nullable(),
+  acquisitionKind: z.enum(GEAR_ACQUISITION_KIND_VALUES).nullable().optional(),
   // Optional on the wire — omit means "unknown / not provided" on
   // create, and "no change" on edit. The action normalizes undefined
   // to null at the boundary.
-  msrpCents: z.number().int().min(0).nullable().optional(),
-  manufacturer: z.string().trim().max(100).nullable().optional(),
   serialNumber: z.string().trim().max(100).nullable().optional(),
-  conditionGrade: z.enum(GEAR_CONDITION_GRADE_VALUES).nullable().optional(),
   notesMarkdown: z.string().max(10_000).nullable(),
   condition: z.enum(GEAR_CONDITION_VALUES),
+  whereabouts: z.enum(GEAR_WHEREABOUTS_VALUES).optional(),
+  whereaboutsNote: z.string().trim().max(500).nullable().optional(),
   tagPublicIds: z.array(z.string().min(1)),
+  attributes: attributeValueInputSchema.optional(),
 });
 
 const editGearInputSchema = createGearInputSchema
@@ -236,12 +332,13 @@ const editGearInputSchema = createGearInputSchema
     thumbnailDataUrl: thumbnailDataUrlSchema.nullable().optional(),
   });
 
-const retireGearInputSchema = z.object({
+const deactivateGearInputSchema = z.object({
   publicId: z.string().min(1),
+  status: z.enum(["retired", "lost", "disposed"]),
   reason: z.string().max(500).nullable(),
 });
 
-const unretireGearInputSchema = z.object({
+const reactivateGearInputSchema = z.object({
   publicId: z.string().min(1),
 });
 
@@ -249,6 +346,7 @@ const gearTypeInputSchema = z.object({
   name: z.string().min(1).max(80),
   prefix: z.string().max(8).nullable(),
   description: z.string().max(500).nullable(),
+  inspectionIntervalDays: z.number().int().min(1).max(3650).nullable(),
 });
 
 const editGearTypeInputSchema = gearTypeInputSchema.extend({
@@ -276,16 +374,95 @@ const deleteGearTagInputSchema = z.object({
   publicId: z.string().min(1),
 });
 
+const listGearModelBrowseInputSchema = z.object({
+  typePublicId: z.string().min(1).optional(),
+  q: z.string().max(200).optional(),
+});
+
+// ── sweeps ─────────────────────────────────────────────────────────────
+
+const recordSweepEntryInputSchema = z.object({
+  gearCode: z.string().trim().min(1).max(64).optional(),
+  itemPublicId: z.string().min(1).optional(),
+  modelPublicId: z.string().min(1).optional(),
+  quantityCounted: z.number().int().min(0).max(9999).optional(),
+});
+
+const closeSweepInputSchema = z.object({
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+const getSweepInputSchema = z.object({
+  publicId: z.string().min(1),
+});
+
+// ── holds ──────────────────────────────────────────────────────────────
+
+const listGearHoldsInputSchema = z.object({
+  liveOnly: z.boolean().optional(),
+  gearPublicId: z.string().min(1).optional(),
+  modelPublicId: z.string().min(1).optional(),
+});
+
+const placeGearHoldInputSchema = z.object({
+  gearPublicId: z.string().min(1).optional(),
+  gearCode: z.string().trim().min(1).max(64).optional(),
+  itemPublicId: z.string().min(1).optional(),
+  modelPublicId: z.string().min(1).optional(),
+  quantity: z.number().int().min(1).max(999).optional(),
+  reason: z.string().trim().min(1).max(300),
+  startsAtMs: z.number().int(),
+  endsAtMs: z.number().int(),
+});
+
+const releaseGearHoldInputSchema = z.object({
+  publicId: z.string().min(1),
+});
+
+// ── attribute definitions ──────────────────────────────────────────────
+
+const listGearAttributeDefsInputSchema = z.object({
+  typePublicId: z.string().min(1).optional(),
+  level: z.enum(GEAR_ATTRIBUTE_LEVEL_VALUES).optional(),
+  includeArchived: z.boolean().optional(),
+});
+
+const createGearAttributeDefInputSchema = z.object({
+  label: z.string().min(1).max(60),
+  kind: z.enum(GEAR_ATTRIBUTE_KIND_VALUES),
+  level: z.enum(GEAR_ATTRIBUTE_LEVEL_VALUES),
+  options: z.array(z.string().min(1).max(60)).max(50).nullable(),
+  unit: z.string().max(12).nullable(),
+  required: z.boolean(),
+  typePublicIds: z.array(z.string().min(1)).max(100),
+});
+
+const updateGearAttributeDefInputSchema = z.object({
+  publicId: z.string().min(1),
+  label: z.string().min(1).max(60).optional(),
+  options: z.array(z.string().min(1).max(60)).max(50).nullable().optional(),
+  unit: z.string().max(12).nullable().optional(),
+  required: z.boolean().optional(),
+  position: z.number().int().min(0).max(1000).optional(),
+  archived: z.boolean().optional(),
+  typePublicIds: z.array(z.string().min(1)).max(100).optional(),
+});
+
+const deleteGearAttributeDefInputSchema = z.object({
+  publicId: z.string().min(1),
+});
+
 // ── multi-select bulk-action input schemas ─────────────────────────────
 
 const publicIdArraySchema = z.array(z.string().min(1)).min(1).max(500);
 
-const bulkRetireInputSchema = z.object({
+const bulkDeactivateInputSchema = z.object({
   publicIds: publicIdArraySchema,
+  status: z.enum(["retired", "lost", "disposed"]),
   reason: z.string().max(500).nullable(),
 });
 
-const bulkUnretireInputSchema = z.object({
+const bulkReactivateInputSchema = z.object({
   publicIds: publicIdArraySchema,
 });
 
@@ -303,22 +480,24 @@ const bulkImportInputSchema = z.object({
   rows: z
     .array(
       z.object({
+        // The import addresses a type + product by name and creates
+        // the model on demand, because a CSV of forty draws shouldn't
+        // require the officer to pre-create the model by hand.
         typePublicId: z.string().min(1),
-        code: z.string().max(64).nullable(),
-        // Required at the wire level. The action also re-checks and
-        // skips with `missing_description` for any row that slipped
-        // through the client validation.
-        description: z.string().max(500),
-        acquiredAt: acquiredAtSchema,
-        acquisitionCostCents: z.number().int().min(0).nullable(),
-        // Optional passthroughs — see BulkImportRow.
-        msrpCents: z.number().int().min(0).nullable().optional(),
+        modelName: z.string().trim().min(1).max(200),
         manufacturer: z.string().trim().max(100).nullable().optional(),
-        serialNumber: z.string().trim().max(100).nullable().optional(),
-        conditionGrade: z
-          .enum(GEAR_CONDITION_GRADE_VALUES)
+        code: z.string().max(64).nullable(),
+        description: z.string().max(500).nullable().optional(),
+        acquiredAt: acquiredAtSchema,
+        manufacturedAt: acquiredAtSchema.optional(),
+        acquisitionCostCents: z.number().int().min(0).nullable(),
+        acquisitionKind: z
+          .enum(GEAR_ACQUISITION_KIND_VALUES)
           .nullable()
           .optional(),
+        // Optional passthroughs — see BulkImportRow.
+        msrpCents: z.number().int().min(0).nullable().optional(),
+        serialNumber: z.string().trim().max(100).nullable().optional(),
         tagNames: z.array(z.string().min(1).max(40)).max(50).optional(),
       }),
     )
@@ -330,12 +509,7 @@ const isoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
 
-const conditionSchema = z.enum([
-  "serviceable",
-  "needs_repair",
-  "missing",
-  "lost",
-]);
+const conditionSchema = z.enum(GEAR_CONDITION_VALUES);
 
 const bulkImportLoansInputSchema = z.object({
   rows: z
@@ -374,16 +548,33 @@ const listGearLabelsInputSchema = z.object({
 
 // ── inspections ────────────────────────────────────────────────────────
 
-const listGearInspectionsInputSchema = z.object({
-  gearPublicId: z.string().min(1),
-});
+// Either a coded piece or a counted model, never both — the same XOR
+// the `gear_inspections` row carries, enforced here so a malformed
+// payload never reaches the action.
+const inspectionTargetShape = {
+  gearPublicId: z.string().min(1).optional(),
+  modelPublicId: z.string().min(1).optional(),
+};
 
-const recordGearInspectionInputSchema = z.object({
-  gearPublicId: z.string().min(1),
-  inspectedAt: z.number().int().nonnegative(),
-  result: z.enum(GEAR_INSPECTION_RESULT_VALUES),
-  notes: z.string().max(2_000).nullable(),
-});
+const namesExactlyOneTarget = (v: {
+  gearPublicId?: string;
+  modelPublicId?: string;
+}) => (v.gearPublicId === undefined) !== (v.modelPublicId === undefined);
+
+const TARGET_MESSAGE = "name either a piece of gear or a model, not both";
+
+const listGearInspectionsInputSchema = z
+  .object(inspectionTargetShape)
+  .refine(namesExactlyOneTarget, { message: TARGET_MESSAGE });
+
+const recordGearInspectionInputSchema = z
+  .object({
+    ...inspectionTargetShape,
+    inspectedAt: z.number().int().nonnegative(),
+    result: z.enum(GEAR_INSPECTION_RESULT_VALUES),
+    notes: z.string().max(2_000).nullable(),
+  })
+  .refine(namesExactlyOneTarget, { message: TARGET_MESSAGE });
 
 // ── loans ──────────────────────────────────────────────────────────────
 
@@ -406,6 +597,12 @@ const checkoutLoansInputSchema = z.object({
     .min(1)
     .max(50),
   notes: z.string().max(2_000).nullable(),
+  // Officer overrides. Declared here or Zod strips them and the action
+  // never sees the flag the desk sent — `gear:manage` is re-checked in
+  // `checkoutLoansAction`, so accepting them at the boundary grants
+  // nothing on its own.
+  overrideStanding: z.boolean().optional(),
+  overrideHolds: z.boolean().optional(),
 });
 
 const checkinLoansInputSchema = z.object({
@@ -503,20 +700,28 @@ export const editGearFn = createServerFn({ method: "POST" })
     return editGearAction(data);
   });
 
-export const retireGearFn = createServerFn({ method: "POST" })
-  .validator(retireGearInputSchema)
-  .handler(async ({ data }): Promise<RetireGearResult> => {
-    const { retireGearAction } =
+export const deactivateGearFn = createServerFn({ method: "POST" })
+  .validator(deactivateGearInputSchema)
+  .handler(async ({ data }): Promise<DeactivateGearResult> => {
+    const { deactivateGearAction } =
       await import("#/features/gear/server/gear-actions.server");
-    return retireGearAction(data);
+    return deactivateGearAction(data);
   });
 
-export const unretireGearFn = createServerFn({ method: "POST" })
-  .validator(unretireGearInputSchema)
+export const reactivateGearFn = createServerFn({ method: "POST" })
+  .validator(reactivateGearInputSchema)
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const { unretireGearAction } =
+    const { reactivateGearAction } =
       await import("#/features/gear/server/gear-actions.server");
-    return unretireGearAction(data);
+    return reactivateGearAction(data);
+  });
+
+export const releaseGearCodeFn = createServerFn({ method: "POST" })
+  .validator(reactivateGearInputSchema)
+  .handler(async ({ data }): Promise<ReleaseCodeResult> => {
+    const { releaseGearItemCodeAction } =
+      await import("#/features/gear/server/gear-actions.server");
+    return releaseGearItemCodeAction(data);
   });
 
 export const suggestCodeForTypeFn = createServerFn({ method: "GET" })
@@ -591,38 +796,194 @@ export const deleteGearTagFn = createServerFn({ method: "POST" })
     return deleteGearTagAction(data);
   });
 
+// ── sweeps ─────────────────────────────────────────────────────────────
+
+export type {
+  CloseSweepResult,
+  GearSweepDetail,
+  GearSweepSummary,
+  RecordSweepEntryInput,
+  RecordSweepEntryResult,
+  StartSweepResult,
+  UncodedItemRow,
+};
+
+export const getOpenSweepFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<GearSweepDetail | null> => {
+    const { getOpenSweepAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return getOpenSweepAction();
+  },
+);
+
+export const listUncodedSweepCandidatesFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<UncodedItemRow[]> => {
+  const { listUncodedSweepCandidatesAction } =
+    await import("#/features/gear/server/sweeps-actions.server");
+  return listUncodedSweepCandidatesAction();
+});
+
+export const listSweepsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<GearSweepSummary[]> => {
+    const { listSweepsAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return listSweepsAction();
+  },
+);
+
+export const getSweepFn = createServerFn({ method: "GET" })
+  .validator(getSweepInputSchema)
+  .handler(async ({ data }): Promise<GearSweepDetail | null> => {
+    const { getSweepAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return getSweepAction(data);
+  });
+
+export const startSweepFn = createServerFn({ method: "POST" }).handler(
+  async (): Promise<StartSweepResult> => {
+    const { startSweepAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return startSweepAction();
+  },
+);
+
+export const recordSweepEntryFn = createServerFn({ method: "POST" })
+  .validator(recordSweepEntryInputSchema)
+  .handler(async ({ data }): Promise<RecordSweepEntryResult> => {
+    const { recordSweepEntryAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return recordSweepEntryAction(data);
+  });
+
+export const closeSweepFn = createServerFn({ method: "POST" })
+  .validator(closeSweepInputSchema)
+  .handler(async ({ data }): Promise<CloseSweepResult> => {
+    const { closeSweepAction } =
+      await import("#/features/gear/server/sweeps-actions.server");
+    return closeSweepAction(data);
+  });
+
+// ── holds ──────────────────────────────────────────────────────────────
+
+export type {
+  GearHoldSummary,
+  ListGearHoldsActionInput,
+  PlaceGearHoldInput,
+  PlaceGearHoldResult,
+  ReleaseGearHoldResult,
+};
+
+export const listGearHoldsFn = createServerFn({ method: "GET" })
+  .validator(listGearHoldsInputSchema)
+  .handler(async ({ data }): Promise<GearHoldSummary[]> => {
+    const { listGearHoldsAction } =
+      await import("#/features/gear/server/holds-actions.server");
+    return listGearHoldsAction(data);
+  });
+
+export const placeGearHoldFn = createServerFn({ method: "POST" })
+  .validator(placeGearHoldInputSchema)
+  .handler(async ({ data }): Promise<PlaceGearHoldResult> => {
+    const { placeGearHoldAction } =
+      await import("#/features/gear/server/holds-actions.server");
+    return placeGearHoldAction(data);
+  });
+
+export const releaseGearHoldFn = createServerFn({ method: "POST" })
+  .validator(releaseGearHoldInputSchema)
+  .handler(async ({ data }): Promise<ReleaseGearHoldResult> => {
+    const { releaseGearHoldAction } =
+      await import("#/features/gear/server/holds-actions.server");
+    return releaseGearHoldAction(data);
+  });
+
+// ── attribute definitions ──────────────────────────────────────────────
+
+export type { GearModelSummaryDto, GearModelBrowseDto };
+
+export const listGearModelBrowseFn = createServerFn({ method: "GET" })
+  .validator(listGearModelBrowseInputSchema)
+  .handler(async ({ data }): Promise<GearModelBrowseDto[]> => {
+    const { listGearModelBrowseAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return listGearModelBrowseAction(data);
+  });
+
+export type {
+  CreateGearAttributeDefInput,
+  CreateGearAttributeDefResult,
+  DeleteGearAttributeDefResult,
+  GearAttributeDefSummary,
+  ListGearAttributeDefsActionInput,
+  UpdateGearAttributeDefInput,
+  UpdateGearAttributeDefResult,
+};
+
+export const listGearAttributeDefsFn = createServerFn({ method: "GET" })
+  .validator(listGearAttributeDefsInputSchema)
+  .handler(async ({ data }): Promise<GearAttributeDefSummary[]> => {
+    const { listGearAttributeDefsAction } =
+      await import("#/features/gear/server/attributes-actions.server");
+    return listGearAttributeDefsAction(data);
+  });
+
+export const createGearAttributeDefFn = createServerFn({ method: "POST" })
+  .validator(createGearAttributeDefInputSchema)
+  .handler(async ({ data }): Promise<CreateGearAttributeDefResult> => {
+    const { createGearAttributeDefAction } =
+      await import("#/features/gear/server/attributes-actions.server");
+    return createGearAttributeDefAction(data);
+  });
+
+export const updateGearAttributeDefFn = createServerFn({ method: "POST" })
+  .validator(updateGearAttributeDefInputSchema)
+  .handler(async ({ data }): Promise<UpdateGearAttributeDefResult> => {
+    const { updateGearAttributeDefAction } =
+      await import("#/features/gear/server/attributes-actions.server");
+    return updateGearAttributeDefAction(data);
+  });
+
+export const deleteGearAttributeDefFn = createServerFn({ method: "POST" })
+  .validator(deleteGearAttributeDefInputSchema)
+  .handler(async ({ data }): Promise<DeleteGearAttributeDefResult> => {
+    const { deleteGearAttributeDefAction } =
+      await import("#/features/gear/server/attributes-actions.server");
+    return deleteGearAttributeDefAction(data);
+  });
+
 export type { BulkResult };
 
-export const bulkRetireGearFn = createServerFn({ method: "POST" })
-  .validator(bulkRetireInputSchema)
+export const bulkDeactivateGearFn = createServerFn({ method: "POST" })
+  .validator(bulkDeactivateInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
-    const { bulkRetireGearAction } =
+    const { bulkDeactivateGearAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
-    return bulkRetireGearAction(data);
+    return bulkDeactivateGearAction(data);
   });
 
-export const bulkUnretireGearFn = createServerFn({ method: "POST" })
-  .validator(bulkUnretireInputSchema)
+export const bulkReactivateGearFn = createServerFn({ method: "POST" })
+  .validator(bulkReactivateInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
-    const { bulkUnretireGearAction } =
+    const { bulkReactivateGearAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
-    return bulkUnretireGearAction(data);
+    return bulkReactivateGearAction(data);
   });
 
-export const bulkSetGearConditionFn = createServerFn({ method: "POST" })
+export const bulkSetGearItemConditionFn = createServerFn({ method: "POST" })
   .validator(bulkSetConditionInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
-    const { bulkSetGearConditionAction } =
+    const { bulkSetGearItemConditionAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
-    return bulkSetGearConditionAction(data);
+    return bulkSetGearItemConditionAction(data);
   });
 
-export const bulkAddGearTagsFn = createServerFn({ method: "POST" })
+export const bulkAddGearItemTagsFn = createServerFn({ method: "POST" })
   .validator(bulkAddTagsInputSchema)
   .handler(async ({ data }): Promise<BulkResult> => {
-    const { bulkAddGearTagsAction } =
+    const { bulkAddGearItemTagsAction } =
       await import("#/features/gear/server/gear-bulk-actions.server");
-    return bulkAddGearTagsAction(data);
+    return bulkAddGearItemTagsAction(data);
   });
 
 export const listGearInspectionsFn = createServerFn({ method: "GET" })
@@ -700,7 +1061,7 @@ export const getLoanDetailFn = createServerFn({ method: "GET" })
   });
 
 export const listMyLoansFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ active: LoanSummary[]; history: LoanSummary[] }> => {
+  async (): Promise<MyLoansResult> => {
     const { listMyLoansAction } =
       await import("#/features/gear/server/loans-actions.server");
     return listMyLoansAction();
@@ -723,20 +1084,20 @@ export const getMemberForLoanFn = createServerFn({ method: "GET" })
     return getMemberForLoanAction(data);
   });
 
-export const searchGearByCodeFn = createServerFn({ method: "GET" })
+export const searchItemsByCodeFn = createServerFn({ method: "GET" })
   .validator(gearCodeSearchInputSchema)
   .handler(async ({ data }): Promise<GearLookupRow[]> => {
-    const { searchGearByCodeAction } =
+    const { searchItemsByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
-    return searchGearByCodeAction(data);
+    return searchItemsByCodeAction(data);
   });
 
-export const getGearByCodeFn = createServerFn({ method: "GET" })
+export const getItemByCodeFn = createServerFn({ method: "GET" })
   .validator(gearByCodeInputSchema)
   .handler(async ({ data }): Promise<GearLookupRow | null> => {
-    const { getGearByCodeAction } =
+    const { getItemByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
-    return getGearByCodeAction(data);
+    return getItemByCodeAction(data);
   });
 
 // ── cart shells ────────────────────────────────────────────────────────
@@ -798,4 +1159,109 @@ export const resolveCartTokenFn = createServerFn({ method: "POST" })
     const { resolveCartTokenAction } =
       await import("#/features/gear/server/cart-actions.server");
     return resolveCartTokenAction(data);
+  });
+
+// ── gear models ─────────────────────────────────────────────────────────
+
+const listGearModelsInputSchema = z.object({
+  typePublicId: z.string().min(1).optional(),
+});
+
+const gearModelInputSchema = z.object({
+  typePublicId: z.string().min(1),
+  name: z.string().trim().min(1).max(200),
+  manufacturer: z.string().trim().max(100).nullable(),
+  tracking: z.enum(GEAR_TRACKING_VALUES),
+  description: z.string().max(1000).nullable(),
+  msrpCents: z.number().int().min(0).nullable(),
+  serviceLifeYears: z.number().int().min(1).max(100).nullable(),
+  manufacturedAtMs: z.number().int().nonnegative().nullable(),
+  inspectionIntervalDays: z.number().int().min(1).max(3650).nullable(),
+  // Scheme-restricted: `z.url()` alone accepts `javascript:` and
+  // `data:`, and `gear:manage` is delegable — see the public-pages rule.
+  productUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .regex(/^https?:\/\//, "must be an http(s) URL")
+    .nullable(),
+  attributes: attributeValueInputSchema.optional(),
+});
+
+export const listGearModelsFn = createServerFn({ method: "GET" })
+  .validator(listGearModelsInputSchema)
+  .handler(async ({ data }): Promise<GearModelSummaryDto[]> => {
+    const { listGearModelsAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return listGearModelsAction(data);
+  });
+
+export const createGearModelFn = createServerFn({ method: "POST" })
+  .validator(gearModelInputSchema)
+  .handler(async ({ data }): Promise<CreateGearModelResult> => {
+    const { createGearModelAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return createGearModelAction(data);
+  });
+
+export const updateGearModelFn = createServerFn({ method: "POST" })
+  .validator(
+    // `typePublicId` is omitted rather than merely ignored — see
+    // `UpdateGearModelInput`. Accepting a field the action drops reads
+    // as a supported type change that silently does nothing.
+    gearModelInputSchema
+      .omit({ typePublicId: true })
+      .partial()
+      .extend({
+        publicId: z.string().min(1),
+      }),
+  )
+  .handler(async ({ data }): Promise<UpdateGearModelResult> => {
+    const { updateGearModelAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return updateGearModelAction(data);
+  });
+
+export const deleteGearModelFn = createServerFn({ method: "POST" })
+  .validator(z.object({ publicId: z.string().min(1) }))
+  .handler(async ({ data }): Promise<DeleteGearModelResult> => {
+    const { deleteGearModelAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return deleteGearModelAction(data);
+  });
+
+export type { CountedModelForInspectionDto };
+
+/** The counted-gear inspection worklist. `gear:inspect`, not
+ *  `gear:manage` — see the action. */
+export const listCountedModelsForInspectionFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<CountedModelForInspectionDto[]> => {
+  const { listCountedModelsForInspectionAction } =
+    await import("#/features/gear/server/models-actions.server");
+  return listCountedModelsForInspectionAction();
+});
+
+export const setGearModelStockFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      publicId: z.string().min(1),
+      stock: z
+        .array(
+          z.object({
+            condition: z.enum(GEAR_CONDITION_VALUES),
+            // Capped well above any club's draw bin. The point of the
+            // ceiling is that a fat-fingered "380" is a typo somebody
+            // has to notice, not a quantity the cave silently owns.
+            quantity: z.number().int().min(0).max(10_000),
+          }),
+        )
+        .min(1)
+        .max(GEAR_CONDITION_VALUES.length),
+    }),
+  )
+  .handler(async ({ data }): Promise<SetGearModelStockResult> => {
+    const { setGearModelStockAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return setGearModelStockAction(data);
   });

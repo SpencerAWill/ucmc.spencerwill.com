@@ -1,4 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import {
+  ACQUISITION_KIND_LABEL,
+  CONDITION_LABEL,
+} from "#/features/gear/lib/labels";
 import imageCompression from "browser-image-compression";
 import { ImagePlus, Trash2 } from "lucide-react";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
@@ -25,23 +29,31 @@ import {
 import {
   gearSuggestedCodeQueryOptions,
   gearTagsQueryOptions,
+  gearModelsQueryOptions,
   gearTypesQueryOptions,
 } from "#/features/gear/api/queries";
 import { useCreateGear } from "#/features/gear/api/use-create-gear";
 import { useEditGear } from "#/features/gear/api/use-edit-gear";
+import {
+  GearAttributeFields,
+  attributeFormValuesFrom,
+  attributeInputsFrom,
+} from "#/features/gear/components/gear-attribute-fields";
+import type { AttributeFormValues } from "#/features/gear/components/gear-attribute-fields";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import { toDateInputValue } from "#/lib/date-format";
 import {
-  GEAR_CONDITION_GRADE_VALUES,
+  GEAR_ACQUISITION_KIND_VALUES,
   GEAR_CONDITION_VALUES,
 } from "#/features/gear/server/gear-fns";
 import type {
   GearCondition,
-  GearConditionGrade,
+  GearAcquisitionKind,
   GearDetail,
   GearSummary,
 } from "#/features/gear/server/gear-fns";
+import { useCreateGearModel } from "#/features/gear/api/use-create-gear-model";
 
 // Lazy-load the TipTap editor the same way `field.MarkdownField` does
 // — keeps the ~265 KB-gz editor bundle off any route that doesn't
@@ -62,23 +74,10 @@ function MarkdownEditorFallback({ rows }: { rows: number }) {
   );
 }
 
-const CONDITION_LABEL: Record<GearCondition, string> = {
-  serviceable: "Serviceable",
-  needs_repair: "Needs repair",
-  missing: "Missing",
-  lost: "Lost",
-};
-
-const CONDITION_GRADE_LABEL: Record<GearConditionGrade, string> = {
-  excellent: "Excellent",
-  good: "Good",
-  fair: "Fair",
-};
-
 // Sentinel value for "no grade" — `<Select>` can't accept an empty
 // string as an item value, so we round-trip through a literal that
 // won't collide with any real enum member.
-const CONDITION_GRADE_NONE = "__none__";
+const ACQUISITION_KIND_NONE = "__none__";
 
 export type GearFormMode =
   | { mode: "create" }
@@ -127,6 +126,13 @@ function GearForm({
   // never received the real value we shouldn't offer to overwrite it.
   const hasDetailFields = isEdit && "serialNumber" in intent.gear;
   const showSerialNumber = !isEdit || hasDetailFields;
+  // Attribute answers ride on GearDetail too, and the same rule applies
+  // for the same reason: a form that never received them must not offer
+  // to overwrite them. Sending `attributes: []` from the list would be
+  // read as "every answer cleared", which `resolveAttributeWrites` turns
+  // into "<label> is required" the moment the type has a required
+  // item-level definition — the officer simply can't save from there.
+  const showAttributes = !isEdit || hasDetailFields;
   const { data: types } = useQuery(gearTypesQueryOptions());
   const { data: tags } = useQuery(gearTagsQueryOptions());
   const createMutation = useCreateGear();
@@ -138,9 +144,6 @@ function GearForm({
   const [code, setCode] = useState<string>(
     isEdit ? (intent.gear.code ?? "") : "",
   );
-  const [description, setDescription] = useState<string>(
-    isEdit ? intent.gear.description : "",
-  );
   const [acquiredAtIso, setAcquiredAtIso] = useState<string>(
     isEdit && intent.gear.acquiredAt
       ? toDateInputValue(intent.gear.acquiredAt)
@@ -151,25 +154,79 @@ function GearForm({
       ? (intent.gear.acquisitionCostCents / 100).toFixed(2)
       : "",
   );
-  const [msrpDollars, setMsrpDollars] = useState<string>(
-    isEdit && intent.gear.msrpCents !== null
-      ? (intent.gear.msrpCents / 100).toFixed(2)
+  const [manufacturedAt, setManufacturedAt] = useState<string>(
+    isEdit && intent.gear.manufacturedAt !== null
+      ? toDateInputValue(intent.gear.manufacturedAt)
       : "",
   );
-  const [manufacturer, setManufacturer] = useState<string>(
-    isEdit ? (intent.gear.manufacturer ?? "") : "",
+  const [modelPublicId, setModelPublicId] = useState<string>(
+    isEdit ? intent.gear.model.publicId : "",
   );
+  // The type select scopes the model list and drives the code
+  // suggestion; the model is what the item actually references.
+  const { data: models } = useQuery(
+    gearModelsQueryOptions(typePublicId || null),
+  );
+  // Inline creation, because an officer adding the club's first pair of
+  // draws shouldn't have to leave the sheet to define the product first.
+  // Editing a model's MSRP and service life is a separate surface.
+  const [newModelOpen, setNewModelOpen] = useState(false);
+  const [newModelName, setNewModelName] = useState("");
+  const [newModelManufacturer, setNewModelManufacturer] = useState("");
+  const createModel = useCreateGearModel();
+
+  const handleCreateModel = () => {
+    if (!typePublicId || newModelName.trim().length === 0) return;
+    createModel.mutate(
+      {
+        typePublicId,
+        name: newModelName.trim(),
+        manufacturer:
+          newModelManufacturer.trim().length === 0
+            ? null
+            : newModelManufacturer.trim(),
+        tracking: "coded",
+        description: null,
+        msrpCents: null,
+        serviceLifeYears: null,
+        manufacturedAtMs: null,
+        inspectionIntervalDays: null,
+        productUrl: null,
+        attributes: attributeInputsFrom(newModelAttributes),
+      },
+      {
+        onSuccess: (result) => {
+          if (result.ok) {
+            setModelPublicId(result.publicId);
+            setNewModelOpen(false);
+            setNewModelName("");
+            setNewModelManufacturer("");
+            setNewModelAttributes({});
+          } else {
+            setError(
+              result.reason === "invalid_attribute"
+                ? result.message
+                : result.reason === "name_in_use"
+                  ? "A model with that name already exists for this type."
+                  : "Pick a type first.",
+            );
+          }
+        },
+        onError: () => setError("Couldn't create the model."),
+      },
+    );
+  };
   const [serialNumber, setSerialNumber] = useState<string>(
     isEdit && "serialNumber" in intent.gear
       ? (intent.gear.serialNumber ?? "")
       : "",
   );
-  const [conditionGrade, setConditionGrade] = useState<
-    GearConditionGrade | typeof CONDITION_GRADE_NONE
+  const [acquisitionKind, setAcquisitionKind] = useState<
+    GearAcquisitionKind | typeof ACQUISITION_KIND_NONE
   >(
-    isEdit && intent.gear.conditionGrade !== null
-      ? intent.gear.conditionGrade
-      : CONDITION_GRADE_NONE,
+    isEdit && intent.gear.acquisitionKind !== null
+      ? intent.gear.acquisitionKind
+      : ACQUISITION_KIND_NONE,
   );
   const [notes, setNotes] = useState<string>(
     isEdit && "notesMarkdown" in intent.gear
@@ -182,6 +239,20 @@ function GearForm({
   const [tagPublicIds, setTagPublicIds] = useState<string[]>(
     isEdit ? intent.gear.tags.map((t) => t.publicId) : [],
   );
+  // Seeded from whatever the detail payload carried; the model-level
+  // answers riding along in that same list are filtered out by the
+  // fields block, which only knows about item-level definitions.
+  const [attributeValues, setAttributeValues] = useState<AttributeFormValues>(
+    isEdit && "attributes" in intent.gear
+      ? attributeFormValuesFrom(
+          intent.gear.attributes,
+          new Set(intent.gear.attributes.map((a) => a.defPublicId)),
+        )
+      : {},
+  );
+  // Model-level answers, collected only while creating a model inline.
+  const [newModelAttributes, setNewModelAttributes] =
+    useState<AttributeFormValues>({});
   // Thumbnail state is a tri-state at the form layer:
   //   - newDataUrl !== null → user picked a new image; send it
   //   - cleared === true    → user removed an existing thumbnail; send null
@@ -255,13 +326,8 @@ function GearForm({
 
   const handleSubmit = () => {
     setError(null);
-    if (!typePublicId) {
-      setError("Pick a type first.");
-      return;
-    }
-    const trimmedDescription = description.trim();
-    if (trimmedDescription.length === 0) {
-      setError("Description is required.");
+    if (!modelPublicId) {
+      setError("Pick a model first.");
       return;
     }
     const acquiredAtMs =
@@ -280,12 +346,12 @@ function GearForm({
       setError("Cost must be a non-negative number.");
       return;
     }
-    const msrp =
-      msrpDollars.trim().length > 0
-        ? Math.round(Number(msrpDollars) * 100)
-        : null;
-    if (msrp !== null && (!Number.isFinite(msrp) || msrp < 0)) {
-      setError("MSRP must be a non-negative number.");
+    const manufacturedAtMs =
+      manufacturedAt.trim().length === 0
+        ? null
+        : Date.parse(`${manufacturedAt}T00:00:00Z`);
+    if (manufacturedAtMs !== null && Number.isNaN(manufacturedAtMs)) {
+      setError("Date of manufacture isn't a valid date.");
       return;
     }
     const trimmedSerial =
@@ -298,15 +364,13 @@ function GearForm({
     // change. Only send it on edit when the caller gave us a
     // detail-shaped source so it round-trips safely.
     const basePayload = {
-      typePublicId,
+      modelPublicId,
       code: code.trim().length === 0 ? null : code.trim(),
-      description: trimmedDescription,
       acquiredAt: acquiredAtMs,
+      manufacturedAt: manufacturedAtMs,
       acquisitionCostCents: cents,
-      msrpCents: msrp,
-      manufacturer: manufacturer.trim().length === 0 ? null : manufacturer,
-      conditionGrade:
-        conditionGrade === CONDITION_GRADE_NONE ? null : conditionGrade,
+      acquisitionKind:
+        acquisitionKind === ACQUISITION_KIND_NONE ? null : acquisitionKind,
       notesMarkdown: notes.trim().length === 0 ? null : notes,
       condition,
       tagPublicIds,
@@ -324,6 +388,9 @@ function GearForm({
       if (hasDetailFields) {
         editPayload.serialNumber = trimmedSerial;
       }
+      if (showAttributes) {
+        editPayload.attributes = attributeInputsFrom(attributeValues);
+      }
       if (newThumbnailDataUrl !== null) {
         editPayload.thumbnailDataUrl = newThumbnailDataUrl;
       } else if (thumbnailCleared) {
@@ -335,7 +402,11 @@ function GearForm({
             toast.success("Gear updated");
             onClose();
           } else {
-            setError(`Code "${result.code}" is already in use.`);
+            setError(
+              result.reason === "invalid_attribute"
+                ? result.message
+                : `Code "${result.code}" is already in use.`,
+            );
           }
         },
         onError: () => setError("Couldn't save changes."),
@@ -347,6 +418,7 @@ function GearForm({
         ...basePayload,
         serialNumber: trimmedSerial,
         thumbnailDataUrl: newThumbnailDataUrl,
+        attributes: attributeInputsFrom(attributeValues),
       },
       {
         onSuccess: (result) => {
@@ -356,7 +428,11 @@ function GearForm({
             );
             onClose();
           } else {
-            setError(`Code "${result.code}" is already in use.`);
+            setError(
+              result.reason === "invalid_attribute"
+                ? result.message
+                : `Code "${result.code}" is already in use.`,
+            );
           }
         },
         onError: () => setError("Couldn't add gear."),
@@ -376,11 +452,136 @@ function GearForm({
         disabled={submitting}
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-0 px-4 pb-4"
       >
-        {/* Thumbnail picker. The clickable preview IS the upload
-         * affordance — empty state shows an "Add" hint, populated state
-         * shows the image and clicking it re-opens the file picker
-         * (replace). Remove is a separate text button only when there's
-         * something to remove. */}
+        {/* Type and Code sit on one row — type drives the suggested
+         * code prefix, so visually pairing them makes the cause-effect
+         * obvious. Stack on the narrowest viewports so the type-select
+         * trigger doesn't get squished. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_minmax(8rem,1fr)]">
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-type">Type</Label>
+            <Select value={typePublicId} onValueChange={setTypePublicId}>
+              <SelectTrigger id="gear-type" className="w-full">
+                <SelectValue placeholder="Select a type…" />
+              </SelectTrigger>
+              <SelectContent>
+                {(types ?? []).map((t) => (
+                  <SelectItem key={t.publicId} value={t.publicId}>
+                    {t.name}
+                    {t.prefix ? (
+                      <span className="ml-2 font-mono text-xs text-muted-foreground">
+                        {t.prefix}
+                      </span>
+                    ) : null}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="gear-code">Code</Label>
+            <Input
+              id="gear-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder={suggested.data?.suggestion || "CH4"}
+              maxLength={64}
+            />
+            <p className="text-xs text-muted-foreground">
+              Laminated tag. Blank for unlabeled.
+            </p>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="gear-model">Model</Label>
+          <Select
+            value={modelPublicId}
+            onValueChange={setModelPublicId}
+            disabled={!typePublicId}
+          >
+            <SelectTrigger id="gear-model" className="w-full">
+              <SelectValue
+                placeholder={
+                  typePublicId ? "Select a model…" : "Pick a type first"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {(models ?? []).map((m) => (
+                <SelectItem key={m.publicId} value={m.publicId}>
+                  {m.manufacturer ? `${m.manufacturer} ` : ""}
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {newModelOpen ? (
+            <div className="space-y-2 rounded-md border p-3">
+              {/* Manufacturer first, matching the models dialog and the
+               * way every list renders the pair: "Petzl Corax". */}
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  aria-label="New model manufacturer"
+                  value={newModelManufacturer}
+                  onChange={(e) => setNewModelManufacturer(e.target.value)}
+                  placeholder="Petzl"
+                  maxLength={100}
+                />
+                <Input
+                  aria-label="New model name"
+                  value={newModelName}
+                  onChange={(e) => setNewModelName(e.target.value)}
+                  placeholder="Corax"
+                  maxLength={200}
+                />
+              </div>
+              {/* Model-level attributes belong to the product, so they
+               * are answered while the product is being defined — not
+               * later, per item, forty times over. */}
+              <GearAttributeFields
+                typePublicId={typePublicId || null}
+                level="model"
+                values={newModelAttributes}
+                onChange={setNewModelAttributes}
+                idPrefix="new-model"
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCreateModel}
+                  disabled={
+                    newModelName.trim().length === 0 || createModel.isPending
+                  }
+                >
+                  Create model
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setNewModelOpen(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0"
+              disabled={!typePublicId}
+              onClick={() => setNewModelOpen(true)}
+            >
+              New model…
+            </Button>
+          )}
+          <p className="text-xs text-muted-foreground">
+            The product this unit is. Manufacturer, MSRP and service life live
+            on the model, so they're set once for the whole fleet.
+          </p>
+        </div>
         <div className="space-y-1.5">
           <Label>Thumbnail</Label>
           <div className="flex items-start gap-3">
@@ -438,81 +639,11 @@ function GearForm({
             />
           </div>
         </div>
-
-        {/* Type and Code sit on one row — type drives the suggested
-         * code prefix, so visually pairing them makes the cause-effect
-         * obvious. Stack on the narrowest viewports so the type-select
-         * trigger doesn't get squished. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_minmax(8rem,1fr)]">
-          <div className="space-y-1.5">
-            <Label htmlFor="gear-type">Type</Label>
-            <Select value={typePublicId} onValueChange={setTypePublicId}>
-              <SelectTrigger id="gear-type" className="w-full">
-                <SelectValue placeholder="Select a type…" />
-              </SelectTrigger>
-              <SelectContent>
-                {(types ?? []).map((t) => (
-                  <SelectItem key={t.publicId} value={t.publicId}>
-                    {t.name}
-                    {t.prefix ? (
-                      <span className="ml-2 font-mono text-xs text-muted-foreground">
-                        {t.prefix}
-                      </span>
-                    ) : null}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="gear-code">Code</Label>
-            <Input
-              id="gear-code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder={suggested.data?.suggestion || "CH4"}
-              maxLength={64}
-            />
-            <p className="text-xs text-muted-foreground">
-              Laminated tag. Blank for unlabeled.
-            </p>
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="gear-description">
-            Description / model
-            <span className="text-destructive" aria-hidden>
-              {" *"}
-            </span>
-          </Label>
-          <Input
-            id="gear-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Black Diamond Momentum, size M"
-            maxLength={500}
-            required
-            aria-required
-          />
-          <p className="text-xs text-muted-foreground">
-            Primary heading on the gear card.
-          </p>
-        </div>
         <div
           className={
             showSerialNumber ? "grid grid-cols-2 gap-3" : "space-y-1.5"
           }
         >
-          <div className="space-y-1.5">
-            <Label htmlFor="gear-manufacturer">Manufacturer</Label>
-            <Input
-              id="gear-manufacturer"
-              value={manufacturer}
-              onChange={(e) => setManufacturer(e.target.value)}
-              placeholder="Petzl"
-              maxLength={100}
-            />
-          </div>
           {showSerialNumber ? (
             <div className="space-y-1.5">
               <Label htmlFor="gear-serial">Serial number</Label>
@@ -551,47 +682,44 @@ function GearForm({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="gear-msrp">MSRP (USD)</Label>
+            <Label htmlFor="gear-manufactured">Date of manufacture</Label>
             <Input
-              id="gear-msrp"
-              type="number"
-              step="0.01"
-              min="0"
-              value={msrpDollars}
-              onChange={(e) => setMsrpDollars(e.target.value)}
-              placeholder="84.95"
+              id="gear-manufactured"
+              type="date"
+              value={manufacturedAt}
+              onChange={(e) => setManufacturedAt(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Manufacturer's listed price — used for replacement-value
-              reporting.
+              Off the tag. Service life runs from here, not from when we bought
+              it.
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="gear-condition-grade">Condition grade</Label>
+            <Label htmlFor="gear-acquisition-kind">Acquisition</Label>
             <Select
-              value={conditionGrade}
+              value={acquisitionKind}
               onValueChange={(v) =>
-                setConditionGrade(
-                  v as GearConditionGrade | typeof CONDITION_GRADE_NONE,
+                setAcquisitionKind(
+                  v as GearAcquisitionKind | typeof ACQUISITION_KIND_NONE,
                 )
               }
             >
-              <SelectTrigger id="gear-condition-grade" className="w-full">
+              <SelectTrigger id="gear-acquisition-kind" className="w-full">
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={CONDITION_GRADE_NONE}>
-                  <span className="text-muted-foreground">No grade</span>
+                <SelectItem value={ACQUISITION_KIND_NONE}>
+                  <span className="text-muted-foreground">Unknown</span>
                 </SelectItem>
-                {GEAR_CONDITION_GRADE_VALUES.map((g) => (
-                  <SelectItem key={g} value={g}>
-                    {CONDITION_GRADE_LABEL[g]}
+                {GEAR_ACQUISITION_KIND_VALUES.map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {ACQUISITION_KIND_LABEL[k]}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Subjective wear level — independent of repair status.
+              Tells a zero cost apart from a missing receipt.
             </p>
           </div>
         </div>
@@ -613,6 +741,21 @@ function GearForm({
             </SelectContent>
           </Select>
         </div>
+        {/* Item-level attributes — the ones that vary unit to unit.
+         * Renders nothing when the type has no definitions attached, so
+         * a club that never defines any sees the form it had before,
+         * and nothing when the caller handed us a summary: controls
+         * seeded blank from answers we never received would invite the
+         * officer to overwrite them with nothing. */}
+        {showAttributes ? (
+          <GearAttributeFields
+            typePublicId={typePublicId || null}
+            level="item"
+            values={attributeValues}
+            onChange={setAttributeValues}
+            idPrefix="gear"
+          />
+        ) : null}
         <div className="space-y-1.5">
           <Label>Tags</Label>
           <GearTagMultiselect

@@ -22,11 +22,17 @@ vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByEmail: async () => true,
 }));
 
-const { createGearAction, listGearLabelsAction, retireGearAction } =
-  await import("#/features/gear/server/gear-actions.server");
+const {
+  createGearAction,
+  listGearLabelsAction,
+  deactivateGearAction,
+  releaseGearItemCodeAction,
+} = await import("#/features/gear/server/gear-actions.server");
 const { createGearTypeAction } =
   await import("#/features/gear/server/gear-types-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -70,9 +76,40 @@ async function createTypeOk(): Promise<string> {
     name: `Harness ${crypto.randomUUID()}`,
     prefix: "CH",
     description: null,
+    inspectionIntervalDays: null,
   });
   if (!r.ok) throw new Error("createGearType failed");
   return r.publicId;
+}
+
+/**
+ * Creates the model on demand so a test can keep naming a type and get
+ * a working item. The model layer is real in production — officers pick
+ * a product — but a test asserting retire semantics shouldn't have to
+ * care, so one model per type is created lazily and reused.
+ */
+const modelByType = new Map<string, string>();
+
+async function modelForType(typePublicId: string): Promise<string> {
+  const cached = modelByType.get(typePublicId);
+  if (cached !== undefined) return cached;
+  const result = await createGearModelAction({
+    typePublicId,
+    name: `Model for ${typePublicId}`,
+    manufacturer: null,
+    description: null,
+    tracking: "coded",
+    msrpCents: null,
+    serviceLifeYears: null,
+    manufacturedAtMs: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!result.ok) {
+    throw new Error(`createGearModel failed: ${JSON.stringify(result)}`);
+  }
+  modelByType.set(typePublicId, result.publicId);
+  return result.publicId;
 }
 
 async function createGearOk(input: {
@@ -81,9 +118,8 @@ async function createGearOk(input: {
   description?: string;
 }): Promise<string> {
   const r = await createGearAction({
-    typePublicId: input.typePublicId,
+    modelPublicId: await modelForType(input.typePublicId),
     code: input.code,
-    description: input.description ?? "Test gear",
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,
@@ -97,12 +133,22 @@ async function createGearOk(input: {
 
 beforeEach(async () => {
   cookieJar.clear();
+  modelByType.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
   await db.delete(schema.gearInspections);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
@@ -152,15 +198,41 @@ describe("listGearLabelsAction", () => {
     expect(labels.map((l) => l.code)).toEqual(["CH1"]);
   });
 
-  it("skips retired gear (retire NULLs the code)", async () => {
+  it("still labels retired gear, which keeps its code", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk();
     const active = await createGearOk({ typePublicId, code: "CH1" });
     const willRetire = await createGearOk({ typePublicId, code: "CH2" });
-    await retireGearAction({ publicId: willRetire, reason: null });
+    await deactivateGearAction({
+      publicId: willRetire,
+      status: "retired",
+      reason: null,
+    });
 
+    // Retirement no longer NULLs the code, so a retired piece is still
+    // printable. Reprinting a label for gear that is on the shelf
+    // pending disposal is legitimate; what stops it going out is the
+    // desk, not the absence of a tag.
     const labels = await listGearLabelsAction({
       publicIds: [active, willRetire],
+    });
+    expect(labels.map((l) => l.code)).toEqual(["CH1", "CH2"]);
+  });
+
+  it("skips gear whose code was explicitly released", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk();
+    const active = await createGearOk({ typePublicId, code: "CH1" });
+    const released = await createGearOk({ typePublicId, code: "CH2" });
+    await deactivateGearAction({
+      publicId: released,
+      status: "retired",
+      reason: null,
+    });
+    await releaseGearItemCodeAction({ publicId: released });
+
+    const labels = await listGearLabelsAction({
+      publicIds: [active, released],
     });
     expect(labels.map((l) => l.code)).toEqual(["CH1"]);
   });

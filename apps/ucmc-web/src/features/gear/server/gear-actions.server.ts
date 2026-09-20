@@ -17,18 +17,35 @@ import {
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
 import {
-  getGearByPublicId,
+  getGearItemByPublicId,
   getGearLabelsByPublicIds,
   getGearTypeByPublicId,
   getGearTagsByPublicIds,
-  insertGear,
-  listGear,
-  listTagsForGearIds,
-  markGearRetired,
-  markGearUnretired,
-  setGearTags,
-  updateGearById,
+  insertGearItem,
+  listGearItems,
+  listTagsForItemIds,
+  markGearItemDeactivated,
+  markGearItemReactivated,
+  releaseGearItemCode,
+  setGearItemTags,
+  updateGearItemById,
 } from "#/features/gear/server/repo.server";
+import { getGearModelByPublicId } from "#/features/gear/server/models-repo.server";
+import {
+  resolveAttributeFilters,
+  resolveAttributeWrites,
+  toValueDtos,
+} from "#/features/gear/server/attributes-actions.server";
+import type { AttributeFacetInput } from "#/features/gear/server/attributes-actions.server";
+import {
+  listAttributeValuesForItems,
+  listAttributeValuesForModels,
+  setItemAttributeValues,
+} from "#/features/gear/server/attributes-repo.server";
+import type {
+  GearAttributeValueDto,
+  GearAttributeValueInput,
+} from "#/features/gear/lib/attributes";
 import {
   decodeGearThumbnailDataUrl,
   deleteGearThumbnail,
@@ -37,14 +54,22 @@ import {
   putGearThumbnail,
 } from "#/features/gear/server/gear-image.server";
 import type {
-  ListGearOptions,
-  ListGearResult,
+  ListGearItemOptions,
+  ListGearItemsResult,
 } from "#/features/gear/server/repo.server";
+import { gearAvailability } from "#/features/gear/lib/availability";
+import { inspectionState, serviceLifeState } from "#/features/gear/lib/safety";
+import type {
+  InspectionState,
+  ServiceLifeState,
+} from "#/features/gear/lib/safety";
+import type { GearAvailability } from "#/features/gear/lib/availability";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { eq } from "drizzle-orm";
 
 import { getDb, isUniqueViolation, schema } from "#/server/db";
+import { gearItemName } from "#/features/gear/lib/labels";
 
 // ── public types ────────────────────────────────────────────────────────
 
@@ -59,37 +84,79 @@ export interface GearTypeSummary {
   name: string;
   prefix: string | null;
   description: string | null;
+  /** Default inspection cadence in days for items of this type, or null
+   *  when the club doesn't track one. A model may override it. */
+  inspectionIntervalDays: number | null;
+}
+
+export interface GearModelSummary {
+  publicId: string;
+  name: string;
+  manufacturer: string | null;
+  tracking: schema.GearTracking;
+  /** Officer-only (same gate as `acquisitionCostCents`). */
+  msrpCents: number | null;
+  serviceLifeYears: number | null;
+  imageKey: string | null;
 }
 
 export interface GearSummary {
   publicId: string;
   code: string | null;
-  description: string;
-  /** R2 key under the `gear/` prefix, or null when no thumbnail has
-   *  been uploaded. The client resolves it to a public CDN URL via
-   *  `gearThumbnailUrlFor`. */
+  /** What to call this piece: its product's name, brand included.
+   *  Wholly derived from the model — see `gearItemName`. */
+  name: string;
+  /** R2 key for this unit's own photo, falling back to the model's
+   *  product shot. Null when neither exists; the client resolves it to
+   *  a public CDN URL via `gearThumbnailUrlFor`. */
   thumbnailKey: string | null;
-  lifecycle: schema.GearLifecycle;
+  status: schema.GearStatus;
   condition: schema.GearCondition;
-  /** Coarse wear grade (excellent/good/fair) carried over from the
-   *  legacy paper inventory. Orthogonal to `condition`. Null when no
-   *  grade has been assigned. */
-  conditionGrade: schema.GearConditionGrade | null;
+  whereabouts: schema.GearWhereabouts;
+  whereaboutsAsOf: Temporal.Instant | null;
+  whereaboutsNote: string | null;
+  /** Date of manufacture — the clock service life runs from, which is
+   *  NOT acquisition. Null when nobody has read it off the tag. */
+  manufacturedAt: Temporal.Instant | null;
   acquiredAt: Temporal.Instant | null;
+  /** Officer-only. */
   acquisitionCostCents: number | null;
-  /** Officer-only (same gate as `acquisitionCostCents`). */
-  msrpCents: number | null;
-  manufacturer: string | null;
-  retiredAt: Temporal.Instant | null;
-  retiredReason: string | null;
+  acquisitionKind: schema.GearAcquisitionKind | null;
+  deactivatedAt: Temporal.Instant | null;
+  deactivatedReason: string | null;
   createdAt: Temporal.Instant;
   updatedAt: Temporal.Instant;
+  model: GearModelSummary;
   type: { publicId: string; name: string; prefix: string | null };
   tags: GearTagSummary[];
+  /** The rollup members browse by — see `lib/availability.ts` for the
+   *  precedence. Derived, never stored. */
+  availability: GearAvailability;
+  /** When an open loan exists, the date it comes back. Null otherwise.
+   *  "On loan, back Thursday" is the answer a member actually wants. */
+  availableFrom: Temporal.Instant | null;
+  /** True when the viewer is the one holding it. Cheaper here than
+   *  making every call site compare ids. */
+  isMine: boolean;
+  /** Why it's held, when it is. Carried on the row because "Held for
+   *  the Red River trip" is a real answer and "Unavailable" is not —
+   *  the reason is written by officers for exactly this audience. */
+  holdReason: string | null;
+  holdEndsAt: Temporal.Instant | null;
+  /** The two derived safety clocks — see `lib/safety.ts`. Neither
+   *  blocks checkout; both exist so the backlog is filterable. */
+  lastInspectedAt: Temporal.Instant | null;
+  inspection: InspectionState;
+  serviceLife: ServiceLifeState;
 }
 
 export interface GearDetail extends GearSummary {
   notesMarkdown: string | null;
+  /** Answers recorded against this piece and against its model, in one
+   *  list. A member reading a harness page does not care which level
+   *  "Size: M" was typed at, and splitting them into two sections
+   *  would make the page argue with itself. */
+  attributes: GearAttributeValueDto[];
   /** Manufacturer's serial number. Officer-only (same gate as
    *  `acquisitionCostCents` / `msrpCents`) — stripped for callers
    *  without `gear:manage`. */
@@ -109,17 +176,25 @@ export interface GearDetail extends GearSummary {
 export interface GearLabel {
   publicId: string;
   code: string;
-  description: string;
+  name: string;
   typeName: string;
 }
 
 export interface ListGearActionInput {
   typePublicId?: string;
+  modelPublicId?: string;
   tagPublicIds?: string[];
-  lifecycle?: schema.GearLifecycle;
+  status?: schema.GearStatus;
   condition?: schema.GearCondition;
+  whereabouts?: schema.GearWhereabouts;
+  availability?: GearAvailability;
+  /** Facet selections — one entry per definition, values OR'd within
+   *  it and AND'd across entries. */
+  attributes?: AttributeFacetInput[];
+  inspection?: "overdue" | "due_soon" | "never";
+  serviceLife?: "expired" | "expiring" | "unknown";
   q?: string;
-  sort?: "code" | "created_at" | "updated_at";
+  sort?: "code" | "created_at" | "updated_at" | "model";
   dir?: "asc" | "desc";
   page?: number;
   perPage?: number;
@@ -135,29 +210,76 @@ export interface ListGearActionResult {
 // ── helpers ─────────────────────────────────────────────────────────────
 
 function toSummary(
-  row: Awaited<ReturnType<typeof listGear>>["rows"][number],
+  row: Awaited<ReturnType<typeof listGearItems>>["rows"][number],
   tags: GearTagSummary[],
   canSeeCost: boolean,
+  viewerUserId: string | null,
 ): GearSummary {
+  const now = Temporal.Now.instant();
+  const inspection = inspectionState({
+    // Model overrides type — a dry rope may need looking at more often
+    // than ropes in general.
+    intervalDays:
+      row.modelInspectionIntervalDays ?? row.typeInspectionIntervalDays,
+    lastInspectedAt: row.lastInspectedAt,
+    now,
+  });
+  const serviceLife = serviceLifeState({
+    serviceLifeYears: row.serviceLifeYears,
+    manufacturedAt: row.manufacturedAt,
+    now,
+  });
+  const availability = gearAvailability({
+    status: row.status,
+    condition: row.condition,
+    whereabouts: row.whereabouts,
+    hasOpenLoan: row.openLoanId !== null,
+    hasActiveHold: row.activeHoldId !== null,
+  });
   return {
+    availability,
+    availableFrom: row.openLoanDueAt,
+    // Only surfaced when the hold is what is actually blocking. A hold
+    // sitting behind an open loan or a repair flag would otherwise
+    // explain the wrong thing.
+    holdReason: availability === "on_hold" ? row.activeHoldReason : null,
+    holdEndsAt: availability === "on_hold" ? row.activeHoldEndsAt : null,
+    lastInspectedAt: row.lastInspectedAt,
+    inspection,
+    serviceLife,
+    isMine: viewerUserId !== null && row.openLoanMemberUserId === viewerUserId,
     publicId: row.publicId,
     code: row.code,
-    description: row.description,
-    thumbnailKey: row.thumbnailKey,
-    lifecycle: row.lifecycle,
+    name: gearItemName({
+      manufacturer: row.manufacturer,
+      name: row.modelName,
+    }),
+    thumbnailKey: row.thumbnailKey ?? row.modelImageKey,
+    status: row.status,
     condition: row.condition,
-    conditionGrade: row.conditionGrade,
+    whereabouts: row.whereabouts,
+    whereaboutsAsOf: row.whereaboutsAsOf,
+    whereaboutsNote: row.whereaboutsNote,
+    manufacturedAt: row.manufacturedAt,
     acquiredAt: row.acquiredAt,
     // Cost is officer-only: budget detail shouldn't be readable by
     // every approved member. The UI hides the field, but stripping it
     // here keeps the JSON response honest even for a direct fetch.
     acquisitionCostCents: canSeeCost ? row.acquisitionCostCents : null,
-    msrpCents: canSeeCost ? row.msrpCents : null,
-    manufacturer: row.manufacturer,
-    retiredAt: row.retiredAt,
-    retiredReason: row.retiredReason,
+    acquisitionKind: row.acquisitionKind,
+    deactivatedAt: row.deactivatedAt,
+    deactivatedReason: row.deactivatedReason,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    model: {
+      publicId: row.modelPublicId,
+      name: row.modelName,
+      manufacturer: row.manufacturer,
+      tracking: "coded",
+      msrpCents: canSeeCost ? row.msrpCents : null,
+      serviceLifeYears: row.serviceLifeYears,
+      imageKey: row.modelImageKey,
+    },
     type: {
       publicId: row.typePublicId,
       name: row.typeName,
@@ -165,6 +287,22 @@ function toSummary(
     },
     tags,
   };
+}
+
+async function resolveModelId(modelPublicId: string): Promise<string> {
+  return (await resolveModel(modelPublicId)).id;
+}
+
+/** The type comes back too: attribute definitions are scoped to types,
+ *  and the item form only ever names a model. */
+async function resolveModel(
+  modelPublicId: string,
+): Promise<{ id: string; typeId: string }> {
+  const model = await getGearModelByPublicId(modelPublicId);
+  if (!model) {
+    throw new Error(`Gear model not found: ${modelPublicId}`);
+  }
+  return { id: model.id, typeId: model.typeId };
 }
 
 async function resolveTypeId(typePublicId: string): Promise<string> {
@@ -202,17 +340,27 @@ export async function listGearAction(
 ): Promise<ListGearActionResult> {
   const principal = await requireGearReader();
   const canSeeCost = principal.permissions.includes("gear:manage");
-  const repoOptions: ListGearOptions = {
-    lifecycle: input.lifecycle,
+  const repoOptions: ListGearItemOptions = {
+    status: input.status,
     condition: input.condition,
+    whereabouts: input.whereabouts,
+    availability: input.availability,
+    inspection: input.inspection,
+    serviceLife: input.serviceLife,
     q: input.q,
     sort: input.sort,
     dir: input.dir,
     page: input.page,
     perPage: input.perPage,
   };
+  if (input.attributes && input.attributes.length > 0) {
+    repoOptions.attributes = await resolveAttributeFilters(input.attributes);
+  }
   if (input.typePublicId) {
     repoOptions.typeId = await resolveTypeId(input.typePublicId);
+  }
+  if (input.modelPublicId) {
+    repoOptions.modelId = await resolveModelId(input.modelPublicId);
   }
   if (input.tagPublicIds && input.tagPublicIds.length > 0) {
     repoOptions.tagIds = await resolveTagIds(input.tagPublicIds);
@@ -227,11 +375,11 @@ export async function listGearAction(
       };
     }
   }
-  const result: ListGearResult = await listGear(repoOptions);
+  const result: ListGearItemsResult = await listGearItems(repoOptions);
   // Officers (gear:manage) see internal tags; everyone else only gets
   // public-visibility ones. Filtering at the repo layer means the
   // internal tag publicIds never reach a non-officer client at all.
-  const tagsByGearId = await listTagsForGearIds(
+  const tagsByGearId = await listTagsForItemIds(
     result.rows.map((r) => r.id),
     { includeInternal: canSeeCost },
   );
@@ -245,6 +393,7 @@ export async function listGearAction(
           visibility: t.visibility,
         })),
         canSeeCost,
+        principal.userId,
       ),
     ),
     total: result.total,
@@ -274,11 +423,11 @@ export async function getGearDetailAction(input: {
   const principal = await requireGearReader();
   const canSeeCost = principal.permissions.includes("gear:manage");
   const canSeeBorrower = principal.permissions.includes("gear:loan");
-  const row = await getGearByPublicId(input.publicId);
+  const row = await getGearItemByPublicId(input.publicId);
   if (!row) {
     throw new Error("Gear not found");
   }
-  const tagsByGearId = await listTagsForGearIds([row.id], {
+  const tagsByGearId = await listTagsForItemIds([row.id], {
     includeInternal: canSeeCost,
   });
   const summary = toSummary(
@@ -289,15 +438,16 @@ export async function getGearDetailAction(input: {
       visibility: t.visibility,
     })),
     canSeeCost,
+    principal.userId,
   );
 
   // Optional "currently on loan" join. Stripped of the borrower's name
   // for callers who don't have gear:loan AND aren't the borrower
   // themselves — the existence of an open loan is fine to surface, but
   // the identity of who has it leaks more than we want.
-  const { getOpenLoanForGear } =
+  const { getOpenLoanForItem } =
     await import("#/features/gear/server/loans-repo.server");
-  const openLoan = await getOpenLoanForGear(row.id);
+  const openLoan = await getOpenLoanForItem(row.id);
   let currentLoan: GearDetail["currentLoan"] = null;
   if (openLoan) {
     let memberFullName: string | null = null;
@@ -317,9 +467,20 @@ export async function getGearDetailAction(input: {
     };
   }
 
+  const [itemValues, modelValues] = await Promise.all([
+    listAttributeValuesForItems([row.id]),
+    listAttributeValuesForModels([row.modelId]),
+  ]);
+
   return {
     ...summary,
     notesMarkdown: row.notesMarkdown,
+    // Model answers first: they describe the product, and the
+    // per-piece ones read as refinements of it.
+    attributes: [
+      ...toValueDtos(modelValues.get(row.modelId)),
+      ...toValueDtos(itemValues.get(row.id)),
+    ],
     // Serial rides the same officer-only gate as the financial fields.
     // Leaking serials to all approved members hands a thief a shopping
     // list — name/brand alone isn't enough to flip a piece, but serial
@@ -330,12 +491,10 @@ export async function getGearDetailAction(input: {
 }
 
 export interface CreateGearInput {
-  typePublicId: string;
+  /** Which product this unit is. Required — a one-off donation gets a
+   *  thin model of its own rather than a null here. */
+  modelPublicId: string;
   code: string | null;
-  /** Required free-form description / model (the primary heading on
-   *  the gear card). zod enforces min-1 on the wire; this type
-   *  reflects that. */
-  description: string;
   /** Optional base64 `data:image/...` URL for the gear thumbnail. The
    *  action decodes, content-hashes, and uploads to R2. Null on omit. */
   thumbnailDataUrl: string | null;
@@ -345,13 +504,23 @@ export interface CreateGearInput {
   // Extended attributes carried over from the legacy paper inventory.
   // Optional on the wire (omit = unknown / not supplied). The action
   // normalizes `undefined` to `null` at the boundary.
-  msrpCents?: number | null;
-  manufacturer?: string | null;
   serialNumber?: string | null;
-  conditionGrade?: schema.GearConditionGrade | null;
+  /** Date of manufacture in ms since epoch. The safety clock for soft
+   *  goods runs from here, not from `acquiredAt`. */
+  manufacturedAt?: number | null;
+  acquisitionKind?: schema.GearAcquisitionKind | null;
   notesMarkdown: string | null;
   condition: schema.GearCondition;
+  whereabouts?: schema.GearWhereabouts;
+  /** Free text explaining an off-cave whereabouts ("lent to the shop
+   *  for a re-stitch"). Accepted on create for the same reason
+   *  `whereabouts` is: a piece can arrive already somewhere else. */
+  whereaboutsNote?: string | null;
   tagPublicIds: string[];
+  /** Answers to the item-level attribute definitions attached to this
+   *  model's type. Omitted entirely by callers that predate them (the
+   *  bulk importer), which is why it is optional. */
+  attributes?: GearAttributeValueInput[];
 }
 
 function msToInstant(ms: number | null): Temporal.Instant | null {
@@ -371,16 +540,32 @@ async function uploadThumbnail(
 
 export type CreateGearResult =
   | { ok: true; publicId: string; code: string | null }
-  | { ok: false; reason: "code_in_use"; code: string };
+  | { ok: false; reason: "code_in_use"; code: string }
+  | { ok: false; reason: "invalid_attribute"; message: string };
 
 export async function createGearAction(
   input: CreateGearInput,
 ): Promise<CreateGearResult> {
   const principal = await requireGearManager();
-  const typeId = await resolveTypeId(input.typePublicId);
+  const model = await resolveModel(input.modelPublicId);
+  const modelId = model.id;
   const tagIds = await resolveTagIds(input.tagPublicIds);
   const code = normalizeCode(input.code);
-  const id = `g_${uuidv7()}`;
+  // Resolved before the insert and the thumbnail upload: a rejected
+  // attribute must not leave a half-made item behind.
+  const attributes = await resolveAttributeWrites({
+    typeId: model.typeId,
+    level: "item",
+    inputs: input.attributes ?? [],
+  });
+  if (!attributes.ok) {
+    return {
+      ok: false,
+      reason: "invalid_attribute",
+      message: attributes.message,
+    };
+  }
+  const id = `gi_${uuidv7()}`;
   const publicId = generatePublicId();
   // Upload thumbnail BEFORE the DB insert so a content-hash collision
   // or oversized payload fails the whole create — we don't want a gear
@@ -391,21 +576,21 @@ export async function createGearAction(
       ? await uploadThumbnail(id, input.thumbnailDataUrl)
       : null;
   try {
-    await insertGear({
+    await insertGearItem({
       id,
       publicId,
-      typeId,
+      modelId,
       code,
-      description: input.description,
       thumbnailKey,
+      manufacturedAt: msToInstant(input.manufacturedAt ?? null),
       acquiredAt: msToInstant(input.acquiredAt),
       acquisitionCostCents: input.acquisitionCostCents,
-      msrpCents: input.msrpCents,
-      manufacturer: normalizeOptionalText(input.manufacturer),
+      acquisitionKind: input.acquisitionKind ?? null,
       serialNumber: normalizeOptionalText(input.serialNumber),
-      conditionGrade: input.conditionGrade,
       notesMarkdown: input.notesMarkdown,
       condition: input.condition,
+      whereabouts: input.whereabouts,
+      whereaboutsNote: normalizeOptionalText(input.whereaboutsNote),
       createdBy: principal.userId,
     });
   } catch (err) {
@@ -428,23 +613,23 @@ export async function createGearAction(
     throw err;
   }
   if (tagIds.length > 0) {
-    await setGearTags({ gearId: id, tagIds, assignedBy: principal.userId });
+    await setGearItemTags({ itemId: id, tagIds, assignedBy: principal.userId });
   }
+  await setItemAttributeValues(id, attributes.writes);
   await recordAuditEvent({
     actorUserId: principal.userId,
     action: "gear.added",
     targetType: "gear",
     targetId: id,
-    metadata: { typeId, code },
+    metadata: { modelId, code },
   });
   return { ok: true, publicId, code };
 }
 
 export interface EditGearInput {
   publicId: string;
-  typePublicId: string;
+  modelPublicId: string;
   code: string | null;
-  description: string;
   /** Three-state thumbnail control:
    *   - omit / `undefined` → keep current key untouched
    *   - a `data:image/...` URL → upload + replace
@@ -455,43 +640,60 @@ export interface EditGearInput {
   acquisitionCostCents: number | null;
   // Same omit-means-no-change semantics as `thumbnailDataUrl`. Pass
   // `null` to clear the field, omit to leave it unchanged.
-  msrpCents?: number | null;
-  manufacturer?: string | null;
   serialNumber?: string | null;
-  conditionGrade?: schema.GearConditionGrade | null;
+  manufacturedAt?: number | null;
+  acquisitionKind?: schema.GearAcquisitionKind | null;
   notesMarkdown: string | null;
   condition: schema.GearCondition;
+  whereabouts?: schema.GearWhereabouts;
+  whereaboutsNote?: string | null;
   tagPublicIds: string[];
+  /** Omit to leave every answer untouched — the same omit-means-no-
+   *  change semantics the other optional fields here use. */
+  attributes?: GearAttributeValueInput[];
 }
 
 export type EditGearResult =
   | { ok: true }
-  | { ok: false; reason: "code_in_use"; code: string };
+  | { ok: false; reason: "code_in_use"; code: string }
+  | { ok: false; reason: "invalid_attribute"; message: string };
 
 export async function editGearAction(
   input: EditGearInput,
 ): Promise<EditGearResult> {
   const principal = await requireGearManager();
-  const existing = await getGearByPublicId(input.publicId);
+  const existing = await getGearItemByPublicId(input.publicId);
   if (!existing) {
     throw new Error("Gear not found");
   }
-  const typeId = await resolveTypeId(input.typePublicId);
+  const model = await resolveModel(input.modelPublicId);
+  const modelId = model.id;
   const tagIds = await resolveTagIds(input.tagPublicIds);
   const code = normalizeCode(input.code);
+  const attributes =
+    input.attributes === undefined
+      ? null
+      : await resolveAttributeWrites({
+          typeId: model.typeId,
+          level: "item",
+          inputs: input.attributes,
+        });
+  if (attributes !== null && !attributes.ok) {
+    return {
+      ok: false,
+      reason: "invalid_attribute",
+      message: attributes.message,
+    };
+  }
   const changedFields: string[] = [];
-  const patch: Parameters<typeof updateGearById>[1] = {};
-  if (typeId !== existing.typeId) {
-    patch.typeId = typeId;
-    changedFields.push("type");
+  const patch: Parameters<typeof updateGearItemById>[1] = {};
+  if (modelId !== existing.modelId) {
+    patch.modelId = modelId;
+    changedFields.push("model");
   }
   if (code !== existing.code) {
     patch.code = code;
     changedFields.push("code");
-  }
-  if (input.description !== existing.description) {
-    patch.description = input.description;
-    changedFields.push("description");
   }
   const existingAcquiredAtMs = existing.acquiredAt?.epochMilliseconds ?? null;
   if (input.acquiredAt !== existingAcquiredAtMs) {
@@ -502,16 +704,21 @@ export async function editGearAction(
     patch.acquisitionCostCents = input.acquisitionCostCents;
     changedFields.push("acquisition_cost_cents");
   }
-  if (input.msrpCents !== undefined && input.msrpCents !== existing.msrpCents) {
-    patch.msrpCents = input.msrpCents;
-    changedFields.push("msrp_cents");
+  const existingManufacturedAtMs =
+    existing.manufacturedAt?.epochMilliseconds ?? null;
+  if (
+    input.manufacturedAt !== undefined &&
+    input.manufacturedAt !== existingManufacturedAtMs
+  ) {
+    patch.manufacturedAt = msToInstant(input.manufacturedAt);
+    changedFields.push("manufactured_at");
   }
-  if (input.manufacturer !== undefined) {
-    const next = normalizeOptionalText(input.manufacturer);
-    if (next !== existing.manufacturer) {
-      patch.manufacturer = next;
-      changedFields.push("manufacturer");
-    }
+  if (
+    input.acquisitionKind !== undefined &&
+    input.acquisitionKind !== existing.acquisitionKind
+  ) {
+    patch.acquisitionKind = input.acquisitionKind;
+    changedFields.push("acquisition_kind");
   }
   if (input.serialNumber !== undefined) {
     const next = normalizeOptionalText(input.serialNumber);
@@ -521,11 +728,22 @@ export async function editGearAction(
     }
   }
   if (
-    input.conditionGrade !== undefined &&
-    input.conditionGrade !== existing.conditionGrade
+    input.whereabouts !== undefined &&
+    input.whereabouts !== existing.whereabouts
   ) {
-    patch.conditionGrade = input.conditionGrade;
-    changedFields.push("condition_grade");
+    patch.whereabouts = input.whereabouts;
+    // `missing` is inferred from a dated sweep, so an undated one tells
+    // a manager nothing. Stamp now when an officer sets it by hand.
+    patch.whereaboutsAsOf =
+      input.whereabouts === "missing" ? Temporal.Now.instant() : null;
+    changedFields.push("whereabouts");
+  }
+  if (input.whereaboutsNote !== undefined) {
+    const next = normalizeOptionalText(input.whereaboutsNote);
+    if (next !== existing.whereaboutsNote) {
+      patch.whereaboutsNote = next;
+      changedFields.push("whereabouts_note");
+    }
   }
   if (input.notesMarkdown !== existing.notesMarkdown) {
     patch.notesMarkdown = input.notesMarkdown;
@@ -557,7 +775,7 @@ export async function editGearAction(
   }
   if (Object.keys(patch).length > 0) {
     try {
-      await updateGearById(existing.id, patch);
+      await updateGearItemById(existing.id, patch);
     } catch (err) {
       if (isUniqueViolation(err) && code !== null) {
         return { ok: false, reason: "code_in_use", code };
@@ -565,9 +783,12 @@ export async function editGearAction(
       throw err;
     }
   }
+  if (attributes !== null) {
+    await setItemAttributeValues(existing.id, attributes.writes);
+  }
   // Always reconcile tags — caller passes the desired full set.
-  const tagDiff = await setGearTags({
-    gearId: existing.id,
+  const tagDiff = await setGearItemTags({
+    itemId: existing.id,
     tagIds,
     assignedBy: principal.userId,
   });
@@ -610,62 +831,125 @@ export async function editGearAction(
   return { ok: true };
 }
 
-export type RetireGearResult = { ok: true } | { ok: false; reason: "on_loan" };
+export type DeactivateGearResult =
+  | { ok: true }
+  | { ok: false; reason: "on_loan" };
 
-export async function retireGearAction(input: {
+/**
+ * Move an item to a terminal status — `retired` (worn / aged out),
+ * `lost` (written off) or `disposed` (sold, given away).
+ *
+ * **Does not touch the code.** Retiring used to NULL it so the string
+ * could be reissued; codes are no longer recycled, so the label stays
+ * bound to this item and every historical mention of "CH93" resolves to
+ * one thing. `releaseGearItemCodeAction` frees one deliberately.
+ */
+export async function deactivateGearAction(input: {
   publicId: string;
+  status: Exclude<schema.GearStatus, "active">;
   reason: string | null;
-}): Promise<RetireGearResult> {
+}): Promise<DeactivateGearResult> {
   const principal = await requireGearManager();
-  const existing = await getGearByPublicId(input.publicId);
+  const existing = await getGearItemByPublicId(input.publicId);
   if (!existing) {
     throw new Error("Gear not found");
   }
-  if (existing.lifecycle === "retired") {
+  if (existing.status === input.status) {
     return { ok: true };
   }
-  // Block retire while the piece is on an open loan — retiring NULLs
-  // the code, which would orphan the borrower's "see what I have out"
-  // view. The FK is also RESTRICT as a defense-in-depth measure, but
-  // we surface this as a typed result instead of letting the FK throw.
-  const { getOpenLoanForGear } =
+  // Blocked while the item is on an open loan: the borrower's "what do
+  // I have out" view would lose it, and closing someone else's loan by
+  // a side effect of retiring is not a decision this action should
+  // make. The FK is RESTRICT as defense-in-depth; this surfaces it as a
+  // typed result rather than letting the FK throw.
+  const { getOpenLoanForItem } =
     await import("#/features/gear/server/loans-repo.server");
-  const openLoan = await getOpenLoanForGear(existing.id);
+  const openLoan = await getOpenLoanForItem(existing.id);
   if (openLoan) {
     return { ok: false, reason: "on_loan" };
   }
-  await markGearRetired({
+  await markGearItemDeactivated({
     id: existing.id,
-    retiredBy: principal.userId,
+    status: input.status,
+    deactivatedBy: principal.userId,
     reason: input.reason,
   });
   await recordAuditEvent({
     actorUserId: principal.userId,
-    action: "gear.retired",
+    action: "gear.deactivated",
     targetType: "gear",
     targetId: existing.id,
-    metadata: { priorCode: existing.code, reason: input.reason },
+    metadata: {
+      status: input.status,
+      code: existing.code,
+      reason: input.reason,
+    },
   });
   return { ok: true };
 }
 
-export async function unretireGearAction(input: {
+/**
+ * Undo a mis-click. The prior `deactivatedReason` is deliberately left
+ * on the row — the old un-retire nulled it, which destroyed the record
+ * of why a harness was pulled the moment someone reversed the call.
+ */
+export async function reactivateGearAction(input: {
   publicId: string;
 }): Promise<{ ok: true }> {
   const principal = await requireGearManager();
-  const existing = await getGearByPublicId(input.publicId);
+  const existing = await getGearItemByPublicId(input.publicId);
   if (!existing) {
     throw new Error("Gear not found");
   }
-  if (existing.lifecycle === "active") {
+  if (existing.status === "active") {
     return { ok: true };
   }
-  await markGearUnretired(existing.id);
+  await markGearItemReactivated(existing.id);
   await recordAuditEvent({
     actorUserId: principal.userId,
-    action: "gear.unretired",
+    action: "gear.reactivated",
     targetType: "gear",
     targetId: existing.id,
+    metadata: {
+      priorStatus: existing.status,
+      priorReason: existing.deactivatedReason,
+    },
+  });
+  return { ok: true };
+}
+
+/**
+ * Free a code from an already-deactivated item so it can be reissued.
+ *
+ * The entire code-recycling story: deliberate, one item at a time, and
+ * audited with the prior value. Refused on an active item — that would
+ * silently un-label something still in service.
+ */
+export type ReleaseCodeResult =
+  | { ok: true }
+  | { ok: false; reason: "still_active" | "no_code" };
+
+export async function releaseGearItemCodeAction(input: {
+  publicId: string;
+}): Promise<ReleaseCodeResult> {
+  const principal = await requireGearManager();
+  const existing = await getGearItemByPublicId(input.publicId);
+  if (!existing) {
+    throw new Error("Gear not found");
+  }
+  if (existing.status === "active") {
+    return { ok: false, reason: "still_active" };
+  }
+  if (existing.code === null) {
+    return { ok: false, reason: "no_code" };
+  }
+  await releaseGearItemCode(existing.id);
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "gear.code_released",
+    targetType: "gear",
+    targetId: existing.id,
+    metadata: { priorCode: existing.code },
   });
   return { ok: true };
 }
@@ -691,9 +975,9 @@ export async function suggestCodeForTypeAction(input: {
   if (prefix.length === 0) {
     return { suggestion: "" };
   }
-  const { listActiveCodesForType } =
+  const { listCodesForType } =
     await import("#/features/gear/server/repo.server");
-  const codes = await listActiveCodesForType(type.id);
+  const codes = await listCodesForType(type.id);
   let maxSuffix = 0;
   let found = false;
   for (const code of codes) {

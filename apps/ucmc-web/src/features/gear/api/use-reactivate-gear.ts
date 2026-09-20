@@ -4,13 +4,13 @@ import {
   GEAR_QUERY_KEY,
   gearDetailQueryKey,
 } from "#/features/gear/api/query-keys";
-import { retireGearFn } from "#/features/gear/server/gear-fns";
+import { reactivateGearFn } from "#/features/gear/server/gear-fns";
 
-export function useRetireGear() {
+export function useReactivateGear() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { publicId: string; reason: string | null }) =>
-      retireGearFn({ data: input }),
+    mutationFn: (input: { publicId: string }) =>
+      reactivateGearFn({ data: input }),
     onSuccess: async (_result, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: GEAR_QUERY_KEY }),

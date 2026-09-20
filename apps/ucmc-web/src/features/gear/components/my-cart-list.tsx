@@ -27,6 +27,8 @@ const AVAILABILITY_COPY: Record<
   loanable: { label: "Available", variant: "secondary" },
   on_loan: { label: "Currently on loan", variant: "destructive" },
   not_serviceable: { label: "Out for repair", variant: "destructive" },
+  not_in_cave: { label: "Not in the cave", variant: "destructive" },
+  on_hold: { label: "Held for a trip", variant: "destructive" },
   retired: { label: "Retired", variant: "destructive" },
   no_code: { label: "Code cleared — ask an officer", variant: "destructive" },
 };
@@ -156,7 +158,7 @@ function CartItemRowDisplay({
                 params={{ publicId: item.publicId }}
                 className="truncate text-sm font-medium hover:underline"
               >
-                {item.description}
+                {item.name}
               </Link>
             </div>
             <p className="text-xs text-muted-foreground">{item.typeName}</p>
@@ -168,7 +170,7 @@ function CartItemRowDisplay({
             <Button
               variant="ghost"
               size="icon"
-              aria-label={`Remove ${item.code ?? item.description} from cart`}
+              aria-label={`Remove ${item.code ?? item.name} from cart`}
               onClick={onRemove}
             >
               <X className="size-4" />

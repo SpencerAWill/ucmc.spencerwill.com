@@ -42,32 +42,26 @@ import type {
   ParseGearCsvError,
   ParsedGearRow,
 } from "#/features/gear/lib/parse-gear-csv";
-import { GEAR_CONDITION_GRADE_VALUES } from "#/features/gear/server/gear-fns";
+import { GEAR_ACQUISITION_KIND_VALUES } from "#/features/gear/server/gear-fns";
 import type {
   BulkImportResult,
   BulkImportSkipped,
-  GearConditionGrade,
+  GearAcquisitionKind,
   GearTypeSummary,
 } from "#/features/gear/server/gear-fns";
+import { ACQUISITION_KIND_LABEL } from "#/features/gear/lib/labels";
 
 const MAX_ROWS = 200;
 
 // Sentinel for the condition-grade `<Select>` — same trick as the
 // singular gear form, since shadcn's Select can't take an empty value.
-const CONDITION_GRADE_NONE = "__none__";
-
-const CONDITION_GRADE_LABEL: Record<GearConditionGrade, string> = {
-  excellent: "Excellent",
-  good: "Good",
-  fair: "Fair",
-};
+const ACQUISITION_KIND_NONE = "__none__";
 
 interface RowState {
   /** Stable key so React doesn't remount inputs as the array shifts. */
   key: string;
   typePublicId: string;
   code: string;
-  description: string;
   /** YYYY-MM-DD string (matches `<input type="date">`). */
   acquiredAt: string;
   /** Dollar amount as typed, e.g. "60.00". Converted to cents at submit. */
@@ -76,7 +70,11 @@ interface RowState {
   msrpDollars: string;
   manufacturer: string;
   serialNumber: string;
-  conditionGrade: GearConditionGrade | typeof CONDITION_GRADE_NONE;
+  /** Product name. Required by the import — it decides which model the
+   *  item lands under. The parser fills it from a legacy sheet's
+   *  `description` column when there is no `model` one. */
+  modelName: string;
+  acquisitionKind: GearAcquisitionKind | typeof ACQUISITION_KIND_NONE;
   /** Raw comma-separated text. Split + trimmed at submit. */
   tagsInput: string;
 }
@@ -86,13 +84,13 @@ function makeRow(initial: Partial<RowState> = {}): RowState {
     key: crypto.randomUUID(),
     typePublicId: initial.typePublicId ?? "",
     code: initial.code ?? "",
-    description: initial.description ?? "",
     acquiredAt: initial.acquiredAt ?? "",
     costDollars: initial.costDollars ?? "",
     msrpDollars: initial.msrpDollars ?? "",
     manufacturer: initial.manufacturer ?? "",
     serialNumber: initial.serialNumber ?? "",
-    conditionGrade: initial.conditionGrade ?? CONDITION_GRADE_NONE,
+    modelName: initial.modelName ?? "",
+    acquisitionKind: initial.acquisitionKind ?? ACQUISITION_KIND_NONE,
     tagsInput: initial.tagsInput ?? "",
   };
 }
@@ -108,22 +106,23 @@ function rowHasContent(row: RowState): boolean {
   return (
     row.typePublicId.length > 0 ||
     row.code.trim().length > 0 ||
-    row.description.trim().length > 0 ||
     row.acquiredAt.length > 0 ||
     row.costDollars.trim().length > 0 ||
     row.msrpDollars.trim().length > 0 ||
     row.manufacturer.trim().length > 0 ||
     row.serialNumber.trim().length > 0 ||
-    row.conditionGrade !== CONDITION_GRADE_NONE ||
+    row.modelName.trim().length > 0 ||
+    row.acquisitionKind !== ACQUISITION_KIND_NONE ||
     row.tagsInput.trim().length > 0
   );
 }
 
 function rowIsValid(row: RowState): boolean {
-  // Type and description are required. Code, acquired, and cost are
-  // optional per row. Cost must parse if present.
+  // Type and a product name are required; the model is what the item
+  // lands under and items carry no text of their own. Code, acquired
+  // and cost are optional per row. Cost must parse if present.
   if (row.typePublicId.length === 0) return false;
-  if (row.description.trim().length === 0) return false;
+  if (row.modelName.trim().length === 0) return false;
   if (row.costDollars.trim().length > 0) {
     const n = Number(row.costDollars);
     if (!Number.isFinite(n) || n < 0) return false;
@@ -228,7 +227,6 @@ export function GearBulkImportSheet({
         makeRow({
           typePublicId: r.typePublicId,
           code: r.code ?? "",
-          description: r.description,
           acquiredAt: r.acquiredAt !== null ? msToIso(r.acquiredAt) : "",
           costDollars:
             r.acquisitionCostCents !== null
@@ -238,7 +236,8 @@ export function GearBulkImportSheet({
             r.msrpCents !== null ? (r.msrpCents / 100).toFixed(2) : "",
           manufacturer: r.manufacturer ?? "",
           serialNumber: r.serialNumber ?? "",
-          conditionGrade: r.conditionGrade ?? CONDITION_GRADE_NONE,
+          modelName: r.modelName,
+          acquisitionKind: r.acquisitionKind ?? ACQUISITION_KIND_NONE,
           tagsInput: r.tagNames.join(", "),
         }),
       );
@@ -293,8 +292,6 @@ export function GearBulkImportSheet({
     const payload = validRows.map((row) => ({
       typePublicId: row.typePublicId,
       code: row.code.trim().length === 0 ? null : row.code.trim(),
-      // rowIsValid guarantees a non-empty description here.
-      description: row.description.trim(),
       acquiredAt:
         row.acquiredAt.length === 0
           ? null
@@ -311,8 +308,11 @@ export function GearBulkImportSheet({
         row.manufacturer.trim().length === 0 ? null : row.manufacturer.trim(),
       serialNumber:
         row.serialNumber.trim().length === 0 ? null : row.serialNumber.trim(),
-      conditionGrade:
-        row.conditionGrade === CONDITION_GRADE_NONE ? null : row.conditionGrade,
+      modelName: row.modelName.trim(),
+      acquisitionKind:
+        row.acquisitionKind === ACQUISITION_KIND_NONE
+          ? null
+          : row.acquisitionKind,
       tagNames: splitTagsInput(row.tagsInput),
     }));
     try {
@@ -396,7 +396,7 @@ export function GearBulkImportSheet({
               />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Columns: type (name or prefix, required), code, description,
+              Columns: type (name or prefix, required), model (required), code,
               acquired_at (YYYY-MM-DD), cost. Money cells are always read as
               dollars (60 and 60.00 both = $60.00). Header row optional.
               Header-only extras: manufacturer, serial_number, msrp,
@@ -578,23 +578,6 @@ function GearImportRow({
             maxLength={64}
           />
         </div>
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <Label className="text-xs" htmlFor={`description-${row.key}`}>
-            Description
-            <span className="text-destructive" aria-hidden>
-              {" *"}
-            </span>
-          </Label>
-          <Input
-            id={`description-${row.key}`}
-            value={row.description}
-            onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Black Diamond Momentum, size M"
-            maxLength={500}
-            required
-            aria-required
-          />
-        </div>
         <div className="flex flex-col gap-1">
           <Label className="text-xs" htmlFor={`manufacturer-${row.key}`}>
             Manufacturer
@@ -631,29 +614,45 @@ function GearImportRow({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label className="text-xs" htmlFor={`grade-${row.key}`}>
-            Condition grade
+          <Label className="text-xs" htmlFor={`model-${row.key}`}>
+            Model
+            <span className="text-destructive" aria-hidden>
+              {" *"}
+            </span>
+          </Label>
+          <Input
+            id={`model-${row.key}`}
+            className="h-9"
+            value={row.modelName}
+            placeholder="Petzl Corax"
+            onChange={(e) => onChange({ modelName: e.target.value })}
+            aria-required
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs" htmlFor={`acq-kind-${row.key}`}>
+            Acquisition
           </Label>
           <Select
-            value={row.conditionGrade}
+            value={row.acquisitionKind}
             onValueChange={(v) =>
               onChange({
-                conditionGrade: v as
-                  | GearConditionGrade
-                  | typeof CONDITION_GRADE_NONE,
+                acquisitionKind: v as
+                  | GearAcquisitionKind
+                  | typeof ACQUISITION_KIND_NONE,
               })
             }
           >
-            <SelectTrigger id={`grade-${row.key}`} className="h-9 w-full">
+            <SelectTrigger id={`acq-kind-${row.key}`} className="h-9 w-full">
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={CONDITION_GRADE_NONE}>
-                <span className="text-muted-foreground">No grade</span>
+              <SelectItem value={ACQUISITION_KIND_NONE}>
+                <span className="text-muted-foreground">Unknown</span>
               </SelectItem>
-              {GEAR_CONDITION_GRADE_VALUES.map((g) => (
-                <SelectItem key={g} value={g}>
-                  {CONDITION_GRADE_LABEL[g]}
+              {GEAR_ACQUISITION_KIND_VALUES.map((k) => (
+                <SelectItem key={k} value={k}>
+                  {ACQUISITION_KIND_LABEL[k]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -724,8 +723,8 @@ function skippedLabel(s: BulkImportSkipped): string {
       return `code "${s.code ?? ""}" already in use`;
     case "code_duplicate_in_import":
       return `code "${s.code ?? ""}" appears twice in this import`;
-    case "missing_description":
-      return "description is required";
+    case "missing_model_name":
+      return "a model name is required";
     case "tag_not_found": {
       const list =
         s.missingTags && s.missingTags.length > 0

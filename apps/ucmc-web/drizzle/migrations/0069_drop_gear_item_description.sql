@@ -1,0 +1,35 @@
+-- Drop `gear_items.description`. The item's display name is derived
+-- from its model instead.
+--
+-- Hand-written, like every migration since 0060: `db:generate` cannot
+-- run against the stale meta snapshots (see CLAUDE.md).
+--
+-- Why the column goes:
+--
+--   * **It duplicated `notes_markdown`, not the model.** The item
+--     already carries long-form per-unit prose that renders on the
+--     detail page and is covered by the search predicate. A second,
+--     shorter free-text field beside it left officers guessing which
+--     one "buckle replaced in 2024" belonged in, and that guess has no
+--     right answer. Distinguishing marks now go in the notes.
+--
+--   * **In practice it held the product name.** Before the model layer
+--     it was the required catch-all for name, size and notes, so it
+--     filled up with "Black Diamond Momentum, size M" — the
+--     manufacturer, the product and an attribute, all of which now have
+--     their own homes. Every read path already coalesced it to the
+--     model's name when it was empty, so the display name was half
+--     derived and half typed, and which half you got depended on
+--     whether an officer had filled a field the form used to insist on.
+--
+-- Values are discarded rather than folded into `notes_markdown`: prod
+-- has no gear, and what dev holds is the duplicated product name this
+-- change exists to stop storing.
+--
+-- A plain DROP COLUMN, not the drop-and-recreate 0068 used. That was
+-- affordable because the gear tables were empty everywhere; by the time
+-- this lands dev may hold data somebody cares about. SQLite has
+-- supported DROP COLUMN since 3.35 and D1 is well past it. The column
+-- carries no index, no constraint and no foreign key, so nothing else
+-- has to be rebuilt around it.
+ALTER TABLE `gear_items` DROP COLUMN `description`;

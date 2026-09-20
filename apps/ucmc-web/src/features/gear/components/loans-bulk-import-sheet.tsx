@@ -54,8 +54,7 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CONDITION_OPTIONS: { value: GearCondition; label: string }[] = [
   { value: "serviceable", label: "Serviceable" },
   { value: "needs_repair", label: "Needs repair" },
-  { value: "missing", label: "Missing" },
-  { value: "lost", label: "Lost" },
+  { value: "unsafe", label: "Unsafe" },
 ];
 
 interface RowState {

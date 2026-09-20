@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { LoanSubjectLink } from "#/features/gear/components/loan-subject-link";
 import { formatDate, formatRelative } from "#/lib/date-format";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
@@ -38,9 +38,29 @@ export function MyGearList() {
   }
   const active = data?.active ?? [];
   const history = data?.history ?? [];
+  const standing = data?.standing;
 
   return (
     <div className="space-y-6">
+      {/* Standing goes above the list, not beside an item: it is a fact
+          about the member, and finding out at the desk that you're
+          blocked is the outcome this banner exists to prevent. */}
+      {standing && standing.standing !== "good" ? (
+        <Alert
+          variant={standing.standing === "blocked" ? "destructive" : "default"}
+        >
+          <AlertTitle>
+            {standing.standing === "blocked"
+              ? "You can't check out more gear yet"
+              : "You have overdue gear"}
+          </AlertTitle>
+          <AlertDescription>
+            {standing.standing === "blocked"
+              ? `Something is ${standing.worstDaysOverdue} days overdue. Bring it back to the cave and you'll be able to borrow again straight away.`
+              : `Something is ${standing.worstDaysOverdue} days overdue. At ${standing.blockAfterDays} days you won't be able to check out anything new.`}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <section className="space-y-2">
         <h2 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
           Currently out
@@ -78,11 +98,7 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
     loan.returnedAt === null && loan.dueAt.epochMilliseconds < Date.now();
   return (
     <li>
-      <Link
-        to="/gear/$publicId"
-        params={{ publicId: loan.gearPublicId }}
-        className="block"
-      >
+      <LoanSubjectLink publicId={loan.gearPublicId} className="block">
         <Card className="overflow-hidden p-0 transition-shadow hover:shadow-md">
           <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[7rem_1fr]">
             <div className="bg-muted">
@@ -102,7 +118,8 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
                   {loan.code ?? "—"}
                 </span>
                 <span className="truncate text-sm font-medium">
-                  {loan.gearDescription}
+                  {loan.quantity > 1 ? `${loan.quantity} × ` : ""}
+                  {loan.gearName}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">{loan.typeName}</p>
@@ -124,7 +141,7 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
             </div>
           </div>
         </Card>
-      </Link>
+      </LoanSubjectLink>
     </li>
   );
 }

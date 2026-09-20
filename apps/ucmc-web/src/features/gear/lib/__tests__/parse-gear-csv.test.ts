@@ -7,10 +7,10 @@ const TYPES = [
 ];
 
 describe("parseGearCsv extended columns", () => {
-  it("threads manufacturer, serial, msrp, condition_grade, tags through", async () => {
+  it("threads manufacturer, serial, msrp, acquisition_kind, tags through", async () => {
     const csv = [
-      "type,code,description,acquired_at,cost,manufacturer,serial_number,msrp,condition_grade,tags",
-      'CH,CH1,Petzl Sama,2024-06-01,60.00,Petzl,ABC-123,84.95,good,"color:red, size:m"',
+      "type,code,description,model,acquired_at,cost,manufacturer,serial_number,msrp,acquisition_kind,tags",
+      'CH,CH1,blue tape,Sama,2024-06-01,60.00,Petzl,ABC-123,84.95,donated,"color:red, size:m"',
     ].join("\n");
     const { rows, errors } = await parseGearCsv(csv, TYPES);
     expect(errors).toEqual([]);
@@ -18,26 +18,26 @@ describe("parseGearCsv extended columns", () => {
     expect(rows[0]).toMatchObject({
       typePublicId: "type_harness",
       code: "CH1",
-      description: "Petzl Sama",
+      modelName: "Sama",
       acquisitionCostCents: 6000,
       msrpCents: 8495,
       manufacturer: "Petzl",
       serialNumber: "ABC-123",
-      conditionGrade: "good",
+      acquisitionKind: "donated",
       tagNames: ["color:red", "size:m"],
     });
   });
 
-  it("rejects an out-of-range condition_grade as a parse error", async () => {
+  it("rejects an out-of-range acquisition_kind as a parse error", async () => {
     const csv = [
-      "type,description,condition_grade",
-      "CH,Petzl Sama,perfect",
+      "type,description,acquisition_kind",
+      "CH,Petzl Sama,stolen",
     ].join("\n");
     const { rows, errors } = await parseGearCsv(csv, TYPES);
     expect(rows).toHaveLength(1);
-    expect(rows[0].conditionGrade).toBeNull();
+    expect(rows[0].acquisitionKind).toBeNull();
     expect(errors).toHaveLength(1);
-    expect(errors[0].message).toMatch(/condition_grade must be/);
+    expect(errors[0].message).toMatch(/acquisition_kind must be/);
   });
 
   it("reads integer cost/msrp cells as dollars (not cents)", async () => {
@@ -57,15 +57,14 @@ describe("parseGearCsv extended columns", () => {
     expect(rows[1].msrpCents).toBe(25000);
   });
 
-  it("rejects `status` as a condition_grade alias", async () => {
-    // `status` was dropped from the header set because it's too
-    // generic — the user's legacy `Status` column gets renamed to
-    // `condition_grade` before import.
+  it("rejects `status` as an acquisition_kind alias", async () => {
+    // `status` is deliberately not in the header set: it is too generic
+    // and would collide with the item status column on other sheets.
     const csv = ["type,description,status", "CH,Petzl Sama,good"].join("\n");
     const { rows, errors } = await parseGearCsv(csv, TYPES);
     expect(errors).toEqual([]);
     expect(rows).toHaveLength(1);
-    expect(rows[0].conditionGrade).toBeNull();
+    expect(rows[0].acquisitionKind).toBeNull();
   });
 
   it("leaves extended fields null when the columns are absent", async () => {
@@ -77,8 +76,50 @@ describe("parseGearCsv extended columns", () => {
       manufacturer: null,
       serialNumber: null,
       msrpCents: null,
-      conditionGrade: null,
+      acquisitionKind: null,
       tagNames: [],
     });
+  });
+});
+
+describe("parseGearCsv required columns", () => {
+  it("imports a sheet with no description column at all", async () => {
+    // The model carries the product name now, so a row only needs
+    // distinguishing marks when it has any. This sheet was rejected
+    // line-by-line with "Missing description".
+    const csv = ["type,model,code", "CH,Sama,CH1"].join("\n");
+    const { rows, errors } = await parseGearCsv(csv, TYPES);
+    expect(errors).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      code: "CH1",
+      modelName: "Sama",
+    });
+  });
+
+  it("reads `model` as the product", async () => {
+    const csv = ["type,model_name,code", "CH,Sama,CH1"].join("\n");
+    const { rows } = await parseGearCsv(csv, TYPES);
+    expect(rows[0]).toMatchObject({ modelName: "Sama" });
+    // Items carry no text of their own since migration 0069.
+    expect(rows[0]).not.toHaveProperty("description");
+  });
+
+  it("still takes the model name from a description-only sheet", async () => {
+    // A pile of one-offs: each distinct description becomes its own
+    // model, which is exactly right for that shape of inventory.
+    const csv = ["type,description", "CH,Petzl Sama"].join("\n");
+    const { rows, errors } = await parseGearCsv(csv, TYPES);
+    expect(errors).toEqual([]);
+    expect(rows[0]).toMatchObject({
+      modelName: "Petzl Sama",
+    });
+  });
+
+  it("flags a row that names no product at all", async () => {
+    const csv = ["type,model,code", "CH,,CH1"].join("\n");
+    const { rows, errors } = await parseGearCsv(csv, TYPES);
+    expect(rows).toEqual([]);
+    expect(errors).toEqual([{ line: 2, message: "Missing model" }]);
   });
 });

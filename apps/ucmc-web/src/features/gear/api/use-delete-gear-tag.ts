@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
+  GEAR_DETAIL_QUERY_KEY,
   GEAR_QUERY_KEY,
   GEAR_TAGS_QUERY_KEY,
 } from "#/features/gear/api/query-keys";
@@ -17,6 +18,7 @@ export function useDeleteGearTag() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: GEAR_TAGS_QUERY_KEY }),
         queryClient.invalidateQueries({ queryKey: GEAR_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: GEAR_DETAIL_QUERY_KEY }),
       ]);
     },
   });

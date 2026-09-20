@@ -34,9 +34,9 @@ import { uuidv7 } from "uuidv7";
 import { computeDueAt } from "#/features/gear/lib/loan-duration";
 import {
   insertLoans,
-  lookupBackfillGearByCode,
+  lookupBackfillItemByCode,
   lookupBackfillMemberByEmail,
-  getOpenLoanForGear,
+  getOpenLoanForItem,
 } from "#/features/gear/server/loans-repo.server";
 import { requireGearLoanManager } from "#/features/gear/server/permissions.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
@@ -121,7 +121,7 @@ export async function bulkImportLoansAction(
   >();
   const gearCache = new Map<
     string,
-    Awaited<ReturnType<typeof lookupBackfillGearByCode>>
+    Awaited<ReturnType<typeof lookupBackfillItemByCode>>
   >();
 
   for (let i = 0; i < input.rows.length; i++) {
@@ -146,7 +146,7 @@ export async function bulkImportLoansAction(
 
     let gear = gearCache.get(trimmedCode);
     if (gear === undefined) {
-      gear = await lookupBackfillGearByCode(trimmedCode);
+      gear = await lookupBackfillItemByCode(trimmedCode);
       gearCache.set(trimmedCode, gear);
     }
     if (!gear) {
@@ -204,7 +204,7 @@ export async function bulkImportLoansAction(
       // pre-existing, or from a prior row in THIS import that already
       // landed) blocks adding another open one. Returned rows skip
       // this check — they don't touch the partial unique index.
-      const existingOpen = await getOpenLoanForGear(gear.id);
+      const existingOpen = await getOpenLoanForItem(gear.id);
       if (existingOpen) {
         skipped.push({
           rowIndex: i,
@@ -224,7 +224,9 @@ export async function bulkImportLoansAction(
         {
           id: loanId,
           publicId: loanPublicId,
-          gearId: gear.id,
+          itemId: gear.id,
+          modelId: null,
+          quantity: 1,
           memberUserId: member.userId,
           checkedOutByUserId: principal.userId,
           checkedOutAt,

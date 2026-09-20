@@ -52,9 +52,28 @@ export const AUDIT_ACTIONS = [
   "member.claimed",
   "gear.added",
   "gear.updated",
+  // Superseded by `gear.deactivated` / `gear.reactivated` when the
+  // lifecycle column gained `lost` and `disposed`. Kept so historical
+  // rows written under the old names still resolve in the viewer —
+  // nothing emits them any more.
   "gear.retired",
   "gear.unretired",
+  "gear.deactivated",
+  "gear.reactivated",
+  "gear.code_released",
   "gear.tags_changed",
+  "gear_model.created",
+  "gear_model.updated",
+  "gear_model.deleted",
+  "gear_model.stock_adjusted",
+  "gear_stock.adjusted",
+  "gear_hold.placed",
+  "gear_hold.released",
+  "gear_sweep.started",
+  "gear_sweep.closed",
+  "gear_attribute.created",
+  "gear_attribute.updated",
+  "gear_attribute.deleted",
   "gear_type.created",
   "gear_type.updated",
   "gear_type.deleted",

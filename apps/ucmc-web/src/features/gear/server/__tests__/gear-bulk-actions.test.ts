@@ -22,18 +22,20 @@ vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByEmail: async () => true,
 }));
 
-const { createGearAction, retireGearAction } =
+const { createGearAction, deactivateGearAction } =
   await import("#/features/gear/server/gear-actions.server");
 const { createGearTypeAction } =
   await import("#/features/gear/server/gear-types-actions.server");
 const { createGearTagAction } =
   await import("#/features/gear/server/gear-tags-actions.server");
 const {
-  bulkAddGearTagsAction,
-  bulkRetireGearAction,
-  bulkSetGearConditionAction,
-  bulkUnretireGearAction,
+  bulkAddGearItemTagsAction,
+  bulkDeactivateGearAction,
+  bulkSetGearItemConditionAction,
+  bulkReactivateGearAction,
 } = await import("#/features/gear/server/gear-bulk-actions.server");
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -78,9 +80,40 @@ async function createTypeOk(): Promise<string> {
     name: `Harness ${crypto.randomUUID()}`,
     prefix: "CH",
     description: null,
+    inspectionIntervalDays: null,
   });
   if (!r.ok) throw new Error("createGearType failed");
   return r.publicId;
+}
+
+/**
+ * Creates the model on demand so a test can keep naming a type and get
+ * a working item. The model layer is real in production — officers pick
+ * a product — but a test asserting retire semantics shouldn't have to
+ * care, so one model per type is created lazily and reused.
+ */
+const modelByType = new Map<string, string>();
+
+async function modelForType(typePublicId: string): Promise<string> {
+  const cached = modelByType.get(typePublicId);
+  if (cached !== undefined) return cached;
+  const result = await createGearModelAction({
+    typePublicId,
+    name: `Model for ${typePublicId}`,
+    manufacturer: null,
+    description: null,
+    tracking: "coded",
+    msrpCents: null,
+    serviceLifeYears: null,
+    manufacturedAtMs: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!result.ok) {
+    throw new Error(`createGearModel failed: ${JSON.stringify(result)}`);
+  }
+  modelByType.set(typePublicId, result.publicId);
+  return result.publicId;
 }
 
 async function createGearOk(input: {
@@ -89,9 +122,8 @@ async function createGearOk(input: {
   condition?: schema.GearCondition;
 }): Promise<string> {
   const r = await createGearAction({
-    typePublicId: input.typePublicId,
+    modelPublicId: await modelForType(input.typePublicId),
     code: input.code,
-    description: "Test gear",
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,
@@ -122,12 +154,22 @@ function parseMetadata(row: { metadataJson: string | null }) {
 
 beforeEach(async () => {
   cookieJar.clear();
+  modelByType.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
   await db.delete(schema.gearInspections);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
@@ -145,33 +187,41 @@ describe("bulk-action authorization", () => {
 
     await signInAsRegularMember();
     await expect(
-      bulkRetireGearAction({ publicIds: [g1], reason: null }),
+      bulkDeactivateGearAction({
+        publicIds: [g1],
+        status: "retired",
+        reason: null,
+      }),
     ).rejects.toThrow("Forbidden: missing gear:manage");
-    await expect(bulkUnretireGearAction({ publicIds: [g1] })).rejects.toThrow(
+    await expect(bulkReactivateGearAction({ publicIds: [g1] })).rejects.toThrow(
       "Forbidden: missing gear:manage",
     );
     await expect(
-      bulkSetGearConditionAction({
+      bulkSetGearItemConditionAction({
         publicIds: [g1],
         condition: "needs_repair",
       }),
     ).rejects.toThrow("Forbidden: missing gear:manage");
     await expect(
-      bulkAddGearTagsAction({ publicIds: [g1], tagPublicIds: [] }),
+      bulkAddGearItemTagsAction({ publicIds: [g1], tagPublicIds: [] }),
     ).rejects.toThrow("Forbidden: missing gear:manage");
   });
 
   it("rejects unauthenticated callers", async () => {
     cookieJar.clear();
     await expect(
-      bulkRetireGearAction({ publicIds: ["nope"], reason: null }),
+      bulkDeactivateGearAction({
+        publicIds: ["nope"],
+        status: "retired",
+        reason: null,
+      }),
     ).rejects.toThrow("Not signed in");
   });
 });
 
-// ── bulkRetireGearAction ───────────────────────────────────────────────
+// ── bulkDeactivateGearAction ───────────────────────────────────────────────
 
-describe("bulkRetireGearAction", () => {
+describe("bulkDeactivateGearAction", () => {
   it("retires active pieces, skips already-retired, emits one audit row per affected", async () => {
     const managerId = await signInAsManager();
     const typePublicId = await createTypeOk();
@@ -179,22 +229,27 @@ describe("bulkRetireGearAction", () => {
     const b = await createGearOk({ typePublicId, code: "CH2" });
     const c = await createGearOk({ typePublicId, code: "CH3" });
     // Pre-retire `c` so it shows up as skipped in the bulk call.
-    await retireGearAction({ publicId: c, reason: null });
+    await deactivateGearAction({
+      publicId: c,
+      status: "retired",
+      reason: null,
+    });
 
-    const result = await bulkRetireGearAction({
+    const result = await bulkDeactivateGearAction({
       publicIds: [a, b, c],
+      status: "retired",
       reason: "end of season",
     });
     expect(result).toEqual({ affected: 2, skipped: 1 });
 
     // Two bulk audit rows from this call (single-retire of `c` above
     // doesn't carry `bulk: true`).
-    const bulkRetires = (await loadAuditRows("gear.retired")).filter((r) =>
+    const bulkRetires = (await loadAuditRows("gear.deactivated")).filter((r) =>
       Boolean(parseMetadata(r).bulk),
     );
     expect(bulkRetires).toHaveLength(2);
     expect(bulkRetires.every((r) => r.actorUserId === managerId)).toBe(true);
-    const codes = bulkRetires.map((r) => parseMetadata(r).priorCode).sort();
+    const codes = bulkRetires.map((r) => parseMetadata(r).code).sort();
     expect(codes).toEqual(["CH1", "CH2"]);
     expect(
       bulkRetires.every((r) => parseMetadata(r).reason === "end of season"),
@@ -205,50 +260,59 @@ describe("bulkRetireGearAction", () => {
     await signInAsManager();
     const typePublicId = await createTypeOk();
     const a = await createGearOk({ typePublicId, code: "CH1" });
-    await retireGearAction({ publicId: a, reason: null });
+    await deactivateGearAction({
+      publicId: a,
+      status: "retired",
+      reason: null,
+    });
 
-    const result = await bulkRetireGearAction({
+    const result = await bulkDeactivateGearAction({
       publicIds: [a, "does-not-exist"],
+      status: "retired",
       reason: null,
     });
     expect(result).toEqual({ affected: 0, skipped: 2 });
-    const bulkRetires = (await loadAuditRows("gear.retired")).filter((r) =>
+    const bulkRetires = (await loadAuditRows("gear.deactivated")).filter((r) =>
       Boolean(parseMetadata(r).bulk),
     );
     expect(bulkRetires).toHaveLength(0);
   });
 });
 
-// ── bulkUnretireGearAction ─────────────────────────────────────────────
+// ── bulkReactivateGearAction ─────────────────────────────────────────────
 
-describe("bulkUnretireGearAction", () => {
-  it("unretires only retired pieces and emits gear.unretired audit", async () => {
+describe("bulkReactivateGearAction", () => {
+  it("reactivates only deactivated pieces and emits gear.reactivated audit", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk();
     const a = await createGearOk({ typePublicId, code: "CH1" });
     const b = await createGearOk({ typePublicId, code: "CH2" });
-    await retireGearAction({ publicId: a, reason: null });
+    await deactivateGearAction({
+      publicId: a,
+      status: "retired",
+      reason: null,
+    });
     // `b` stays active.
 
-    const result = await bulkUnretireGearAction({ publicIds: [a, b] });
+    const result = await bulkReactivateGearAction({ publicIds: [a, b] });
     expect(result).toEqual({ affected: 1, skipped: 1 });
-    const bulkUnretires = (await loadAuditRows("gear.unretired")).filter((r) =>
-      Boolean(parseMetadata(r).bulk),
+    const bulkUnretires = (await loadAuditRows("gear.reactivated")).filter(
+      (r) => Boolean(parseMetadata(r).bulk),
     );
     expect(bulkUnretires).toHaveLength(1);
   });
 });
 
-// ── bulkSetGearConditionAction ─────────────────────────────────────────
+// ── bulkSetGearItemConditionAction ─────────────────────────────────────────
 
-describe("bulkSetGearConditionAction", () => {
+describe("bulkSetGearItemConditionAction", () => {
   it("sets the condition on every resolved piece and emits gear.updated audit", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk();
     const a = await createGearOk({ typePublicId, code: "CH1" });
     const b = await createGearOk({ typePublicId, code: "CH2" });
 
-    const result = await bulkSetGearConditionAction({
+    const result = await bulkSetGearItemConditionAction({
       publicIds: [a, b, "missing-id"],
       condition: "needs_repair",
     });
@@ -266,9 +330,9 @@ describe("bulkSetGearConditionAction", () => {
   });
 });
 
-// ── bulkAddGearTagsAction ──────────────────────────────────────────────
+// ── bulkAddGearItemTagsAction ──────────────────────────────────────────────
 
-describe("bulkAddGearTagsAction", () => {
+describe("bulkAddGearItemTagsAction", () => {
   it("attaches tags to every resolved piece and emits gear.tags_changed", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk();
@@ -277,7 +341,7 @@ describe("bulkAddGearTagsAction", () => {
     const tag1 = await createTagOk("outdoor");
     const tag2 = await createTagOk("winter");
 
-    const result = await bulkAddGearTagsAction({
+    const result = await bulkAddGearItemTagsAction({
       publicIds: [a, b],
       tagPublicIds: [tag1, tag2],
     });
@@ -305,7 +369,7 @@ describe("bulkAddGearTagsAction", () => {
     const typePublicId = await createTypeOk();
     const a = await createGearOk({ typePublicId, code: "CH1" });
 
-    const result = await bulkAddGearTagsAction({
+    const result = await bulkAddGearItemTagsAction({
       publicIds: [a],
       tagPublicIds: [],
     });

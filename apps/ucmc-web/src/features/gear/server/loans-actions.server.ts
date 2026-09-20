@@ -18,6 +18,7 @@
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import { CLUB_TIME_ZONE } from "#/config/time";
 import {
   computeDueAt,
   MAX_LOAN_DURATION_DAYS,
@@ -27,22 +28,25 @@ import {
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
 import {
-  getGearByPublicId,
-  updateGearById,
+  getGearItemByPublicId,
+  updateGearItemById,
 } from "#/features/gear/server/repo.server";
 import {
   extendLoanDueAt,
-  getGearByCode,
+  getItemByCode,
   getLoanByPublicId,
-  getOpenLoanForGear,
+  getActiveHoldForItem,
+  getOpenLoanForItem,
   insertLoans,
   listLoans,
   listLoansForMember,
   markLoanReturned,
   getApprovedMemberByPublicId,
   searchApprovedMembers,
-  searchGearByCode,
+  searchItemsByCode,
 } from "#/features/gear/server/loans-repo.server";
+import { gearCaveStanding } from "#/server/gear/gear-cave-standing.server";
+import type { GearCaveStanding } from "#/server/gear/gear-cave-standing.server";
 import type {
   GearCodeSearchRow,
   LoanListRow,
@@ -61,9 +65,15 @@ import { getDb, isUniqueViolation, schema } from "#/server/db";
 
 export interface LoanSummary {
   publicId: string;
-  gearPublicId: string;
+  /** Null for a counted loan — there is no single unit to link to. */
+  gearPublicId: string | null;
   code: string | null;
-  gearDescription: string;
+  gearName: string;
+  /** How many units this loan covers, and how many are back. Always 1
+   *  and 0 for a coded loan; for a counted one the quantity IS the
+   *  loan — "six draws" — and the list surfaces had no way to say so. */
+  quantity: number;
+  quantityReturned: number;
   thumbnailKey: string | null;
   typeName: string;
   memberPublicId: string;
@@ -87,9 +97,11 @@ export interface LoanDetail extends LoanSummary {
 function toSummary(row: LoanListRow): LoanSummary {
   return {
     publicId: row.publicId,
-    gearPublicId: row.gearPublicId,
+    gearPublicId: row.itemPublicId,
     code: row.code,
-    gearDescription: row.description,
+    gearName: row.name,
+    quantity: row.quantity,
+    quantityReturned: row.quantityReturned,
     thumbnailKey: row.thumbnailKey,
     typeName: row.typeName,
     memberPublicId: row.memberPublicId,
@@ -110,13 +122,21 @@ export interface CheckoutLoansInput {
   memberPublicId: string;
   items: Array<{ gearPublicId: string; durationDays: number }>;
   notes: string | null;
+  /** Officer overrides, both `gear:manage`-gated and both audited. A
+   *  non-manager passing either is ignored rather than rejected — the
+   *  desk UI only offers them to a manager, so a request carrying one
+   *  is a stale client, not an attack worth a distinct error. */
+  overrideStanding?: boolean;
+  overrideHolds?: boolean;
 }
 
 export type CheckoutSkipReason =
   | "not_found"
   | "retired"
   | "not_serviceable"
-  | "already_on_loan";
+  | "already_on_loan"
+  | "on_hold"
+  | "member_blocked";
 
 export type CheckoutResult =
   | {
@@ -159,6 +179,39 @@ export async function checkoutLoansAction(
     throw new Error("Member not found or not approved");
   }
   const now = Temporal.Now.instant();
+
+  // Cave standing is checked once per batch, not per item: it is a
+  // property of the borrower, so a blocked member fails every row and
+  // re-reading their overdue list ten times would just be ten queries
+  // for the same answer.
+  //
+  // The officer override is deliberate and audited rather than silent —
+  // `gear:manage` is the same grant that can retire gear, so someone
+  // holding it deciding "let them take the rope anyway" is a judgement
+  // the system should permit and record, not prevent.
+  const standing = await gearCaveStanding({
+    memberUserId: member.userId,
+    now,
+    timeZone: CLUB_TIME_ZONE,
+  });
+  //
+  // Both flags are resolved through the same `gear:manage` check:
+  // `requireGearLoanManager` above only asserts `gear:loan`, which is
+  // deliberately delegable to a desk keeper who holds nothing else, so
+  // reading either flag raw would hand that keeper the override.
+  const canOverride = principal.permissions.includes("gear:manage");
+  const overrideStanding = input.overrideStanding === true && canOverride;
+  const overrideHolds = input.overrideHolds === true && canOverride;
+  if (standing.standing === "blocked" && !overrideStanding) {
+    return {
+      results: input.items.map((item) => ({
+        ok: false as const,
+        gearPublicId: item.gearPublicId,
+        reason: "member_blocked" as const,
+      })),
+    };
+  }
+
   const results: CheckoutResult[] = [];
   const validRows: Array<{
     insert: Parameters<typeof insertLoans>[0][number];
@@ -175,7 +228,7 @@ export async function checkoutLoansAction(
   // per-row resolution outcomes. The bulk insert + audit fan-out
   // happens after the loop in two D1 round-trips.
   for (const item of input.items) {
-    const gear = await getGearByPublicId(item.gearPublicId);
+    const gear = await getGearItemByPublicId(item.gearPublicId);
     if (!gear) {
       results.push({
         ok: false,
@@ -184,7 +237,7 @@ export async function checkoutLoansAction(
       });
       continue;
     }
-    if (gear.lifecycle === "retired") {
+    if (gear.status !== "active") {
       results.push({
         ok: false,
         gearPublicId: item.gearPublicId,
@@ -200,7 +253,7 @@ export async function checkoutLoansAction(
       });
       continue;
     }
-    const existing = await getOpenLoanForGear(gear.id);
+    const existing = await getOpenLoanForItem(gear.id);
     if (existing) {
       results.push({
         ok: false,
@@ -208,6 +261,20 @@ export async function checkoutLoansAction(
         reason: "already_on_loan",
       });
       continue;
+    }
+    // A live hold blocks the desk the same way it blocks the member —
+    // a warning nobody has to act on gets trampled, and then holds stop
+    // being trusted. Officers pass `overrideHolds` to proceed.
+    if (!overrideHolds) {
+      const held = await getActiveHoldForItem(gear.id, now);
+      if (held) {
+        results.push({
+          ok: false,
+          gearPublicId: item.gearPublicId,
+          reason: "on_hold",
+        });
+        continue;
+      }
     }
     const duration = Math.min(
       MAX_LOAN_DURATION_DAYS,
@@ -220,7 +287,12 @@ export async function checkoutLoansAction(
       insert: {
         id,
         publicId,
-        gearId: gear.id,
+        // Coded checkout: one named item, quantity 1. Counted checkout
+        // (a quantity against a model) comes in with the desk's
+        // counted pane and sets `modelId` instead.
+        itemId: gear.id,
+        modelId: null,
+        quantity: 1,
         memberUserId: member.userId,
         checkedOutByUserId: principal.userId,
         checkedOutAt: now,
@@ -252,7 +324,10 @@ export async function checkoutLoansAction(
         code: row.code,
       });
     }
-    await emitCheckoutAudits(principal.userId, member.userId, validRows);
+    await emitCheckoutAudits(principal.userId, member.userId, validRows, {
+      overrideStanding,
+      overrideHolds,
+    });
     return { results };
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
@@ -284,7 +359,10 @@ export async function checkoutLoansAction(
       throw innerErr;
     }
   }
-  await emitCheckoutAudits(principal.userId, member.userId, survivors);
+  await emitCheckoutAudits(principal.userId, member.userId, survivors, {
+    overrideStanding,
+    overrideHolds,
+  });
   return { results };
 }
 
@@ -292,24 +370,35 @@ async function emitCheckoutAudits(
   actorUserId: string,
   memberUserId: string,
   rows: Array<{
-    insert: { gearId: string; dueAt: Temporal.Instant };
+    insert: {
+      itemId: string | null;
+      modelId: string | null;
+      dueAt: Temporal.Instant;
+    };
     code: string | null;
     durationDays: number;
   }>,
+  /** Recorded on every row of the batch. An override is a judgement an
+   *  officer made about this checkout, so it belongs on the event the
+   *  audit page shows, not only in the desk's memory. */
+  overrides: { overrideStanding: boolean; overrideHolds: boolean },
 ): Promise<void> {
   await recordAuditEvents(
     rows.map((r) => ({
       actorUserId,
       action: "loan.checked_out" as const,
       targetType: "gear",
-      targetId: r.insert.gearId,
+      targetId: r.insert.itemId ?? r.insert.modelId,
       metadata: {
         memberUserId,
-        gearId: r.insert.gearId,
+        itemId: r.insert.itemId,
+        modelId: r.insert.modelId,
         dueAt: r.insert.dueAt.epochMilliseconds,
         code: r.code,
         durationDays: r.durationDays,
         bulk: true,
+        overrideStanding: overrides.overrideStanding,
+        overrideHolds: overrides.overrideHolds,
       },
     })),
   );
@@ -352,7 +441,7 @@ export async function checkinLoansAction(
     [];
 
   for (const item of input.items) {
-    const gear = await getGearByPublicId(item.gearPublicId);
+    const gear = await getGearItemByPublicId(item.gearPublicId);
     if (!gear) {
       results.push({
         ok: false,
@@ -361,7 +450,7 @@ export async function checkinLoansAction(
       });
       continue;
     }
-    const loan = await getOpenLoanForGear(gear.id);
+    const loan = await getOpenLoanForItem(gear.id);
     if (!loan) {
       results.push({
         ok: false,
@@ -376,6 +465,10 @@ export async function checkinLoansAction(
       returnedToUserId: principal.userId,
       checkinNotes: item.notes,
       conditionAtReturn: item.conditionAtReturn,
+      // A coded loan is all-or-nothing: the single unit either came
+      // back or it did not, and check-in here only ever means it did.
+      quantityReturned: loan.quantity,
+      quantityLost: 0,
     });
 
     // If the officer noted a condition change, update the gear too
@@ -385,7 +478,7 @@ export async function checkinLoansAction(
       item.conditionAtReturn !== null &&
       item.conditionAtReturn !== gear.condition
     ) {
-      await updateGearById(gear.id, { condition: item.conditionAtReturn });
+      await updateGearItemById(gear.id, { condition: item.conditionAtReturn });
       auditPayloads.push({
         actorUserId: principal.userId,
         action: "gear.updated",
@@ -475,7 +568,7 @@ export async function extendLoanAction(input: {
     actorUserId: principal.userId,
     action: "loan.extended",
     targetType: "gear",
-    targetId: loan.gearId,
+    targetId: loan.itemId ?? loan.modelId,
     metadata: {
       loanId: loan.id,
       priorDueAt,
@@ -584,15 +677,38 @@ export async function getLoanDetailAction(input: {
 
 // ── member-side read ────────────────────────────────────────────────────
 
-export async function listMyLoansAction(): Promise<{
+export interface MyLoansResult {
   active: LoanSummary[];
   history: LoanSummary[];
-}> {
+  /** The member's own cave standing. Bundled with the loans rather than
+   *  fetched separately because the page renders them together and the
+   *  two would otherwise be able to disagree across a refetch — a banner
+   *  saying "you're blocked" above a list showing nothing overdue. */
+  standing: {
+    standing: GearCaveStanding;
+    worstDaysOverdue: number;
+    flagAfterDays: number;
+    blockAfterDays: number;
+  };
+}
+
+export async function listMyLoansAction(): Promise<MyLoansResult> {
   const principal = await requireGearReader();
   const { active, history } = await listLoansForMember(principal.userId);
+  const standing = await gearCaveStanding({
+    memberUserId: principal.userId,
+    now: Temporal.Now.instant(),
+    timeZone: CLUB_TIME_ZONE,
+  });
   return {
     active: active.map(toSummary),
     history: history.map(toSummary),
+    standing: {
+      standing: standing.standing,
+      worstDaysOverdue: standing.worstDaysOverdue,
+      flagAfterDays: standing.flagAfterDays,
+      blockAfterDays: standing.blockAfterDays,
+    },
   };
 }
 
@@ -614,16 +730,16 @@ export async function getMemberForLoanAction(input: {
 
 export type GearLookupRow = GearCodeSearchRow;
 
-export async function searchGearByCodeAction(input: {
+export async function searchItemsByCodeAction(input: {
   q: string;
 }): Promise<GearLookupRow[]> {
   await requireGearLoanManager();
-  return searchGearByCode(input.q);
+  return searchItemsByCode(input.q);
 }
 
-export async function getGearByCodeAction(input: {
+export async function getItemByCodeAction(input: {
   code: string;
 }): Promise<GearLookupRow | null> {
   await requireGearLoanManager();
-  return getGearByCode(input.code);
+  return getItemByCode(input.code);
 }

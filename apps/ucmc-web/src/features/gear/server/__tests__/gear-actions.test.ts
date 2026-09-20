@@ -28,9 +28,10 @@ const {
   editGearAction,
   getGearDetailAction,
   listGearAction,
-  retireGearAction,
+  deactivateGearAction,
+  releaseGearItemCodeAction,
   suggestCodeForTypeAction,
-  unretireGearAction,
+  reactivateGearAction,
 } = await import("#/features/gear/server/gear-actions.server");
 const {
   createGearTypeAction,
@@ -44,6 +45,8 @@ const {
   editGearTagAction,
   listGearTagsAction,
 } = await import("#/features/gear/server/gear-tags-actions.server");
+const { createGearModelAction } =
+  await import("#/features/gear/server/models-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -99,6 +102,7 @@ async function createTypeOk(input: {
     name: input.name,
     prefix: input.prefix ?? null,
     description: input.description ?? null,
+    inspectionIntervalDays: null,
   });
   if (!result.ok) {
     throw new Error(`createGearType failed: ${result.reason}`);
@@ -106,21 +110,50 @@ async function createTypeOk(input: {
   return result.publicId;
 }
 
+/**
+ * Creates the model on demand so a test can keep naming a type and get
+ * a working item. The model layer is real in production — officers pick
+ * a product — but a test asserting retire semantics shouldn't have to
+ * care, so one model per type is created lazily and reused.
+ */
+const modelByType = new Map<string, string>();
+
+async function modelForType(typePublicId: string): Promise<string> {
+  const cached = modelByType.get(typePublicId);
+  if (cached !== undefined) return cached;
+  const result = await createGearModelAction({
+    typePublicId,
+    name: `Model for ${typePublicId}`,
+    manufacturer: null,
+    description: null,
+    tracking: "coded",
+    msrpCents: null,
+    serviceLifeYears: null,
+    manufacturedAtMs: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!result.ok) {
+    throw new Error(`createGearModel failed: ${JSON.stringify(result)}`);
+  }
+  modelByType.set(typePublicId, result.publicId);
+  return result.publicId;
+}
+
 async function createGearOk(input: {
   typePublicId: string;
   code?: string | null;
-  description?: string;
+  notesMarkdown?: string;
   tagPublicIds?: string[];
   condition?: schema.GearCondition;
 }): Promise<string> {
   const result = await createGearAction({
-    typePublicId: input.typePublicId,
+    modelPublicId: await modelForType(input.typePublicId),
     code: input.code ?? null,
-    description: input.description ?? "Test gear",
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,
-    notesMarkdown: null,
+    notesMarkdown: input.notesMarkdown ?? null,
     condition: input.condition ?? "serviceable",
     tagPublicIds: input.tagPublicIds ?? [],
   });
@@ -143,6 +176,7 @@ async function createTagOk(
 
 beforeEach(async () => {
   cookieJar.clear();
+  modelByType.clear();
   const db = getDb();
   // Order matters: cascade FKs do the rest, but auditLog has SET NULL
   // on actor/target so it survives user deletes and must be cleared
@@ -151,7 +185,16 @@ beforeEach(async () => {
   await db.delete(schema.gearInspections);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
-  await db.delete(schema.gear);
+  await db.delete(schema.gearHolds);
+  await db.delete(schema.gearInventorySweepEntries);
+  await db.delete(schema.gearInventorySweeps);
+  await db.delete(schema.gearItemAttributeValues);
+  await db.delete(schema.gearModelAttributeValues);
+  await db.delete(schema.gearAttributeDefTypes);
+  await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearItems);
+  await db.delete(schema.gearStockLevels);
+  await db.delete(schema.gearModels);
   await db.delete(schema.gearTags);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
@@ -171,9 +214,8 @@ describe("authorization", () => {
     await signInAsRegularMember();
     await expect(
       createGearAction({
-        typePublicId: "nope",
+        modelPublicId: "nope",
         code: null,
-        description: "Test gear",
         thumbnailDataUrl: null,
         acquiredAt: null,
         acquisitionCostCents: null,
@@ -195,20 +237,31 @@ describe("authorization", () => {
     expect(list.rows[0]?.code).toBe("CH1");
   });
 
-  it("round-trips msrp, manufacturer, serial, condition grade through create + detail", async () => {
+  it("serves model attributes through detail, gating cost to officers", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
-    const created = await createGearAction({
+    const model = await createGearModelAction({
       typePublicId,
+      name: "Sama",
+      manufacturer: "Petzl",
+      description: null,
+      tracking: "coded",
+      msrpCents: 7500,
+      serviceLifeYears: 10,
+      manufacturedAtMs: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+    if (!model.ok) throw new Error("model seed failed");
+    const created = await createGearAction({
+      modelPublicId: model.publicId,
       code: "CH1",
-      description: "Petzl Sama",
       thumbnailDataUrl: null,
       acquiredAt: null,
+      manufacturedAt: Date.UTC(2019, 5, 1),
       acquisitionCostCents: 6000,
-      msrpCents: 7500,
-      manufacturer: " Petzl ",
+      acquisitionKind: "donated",
       serialNumber: " ABC-123 ",
-      conditionGrade: "good",
       notesMarkdown: null,
       condition: "serviceable",
       tagPublicIds: [],
@@ -216,49 +269,56 @@ describe("authorization", () => {
     if (!created.ok) throw new Error("seed failed");
 
     const detail = await getGearDetailAction({ publicId: created.publicId });
-    expect(detail.msrpCents).toBe(7500);
-    expect(detail.manufacturer).toBe("Petzl");
+    expect(detail.model.name).toBe("Sama");
+    expect(detail.model.manufacturer).toBe("Petzl");
+    expect(detail.model.msrpCents).toBe(7500);
+    expect(detail.model.serviceLifeYears).toBe(10);
     expect(detail.serialNumber).toBe("ABC-123");
-    expect(detail.conditionGrade).toBe("good");
+    expect(detail.acquisitionKind).toBe("donated");
+    // Manufacture date is the clock service life runs from, and it is
+    // deliberately distinct from `acquiredAt` (null here).
+    expect(detail.manufacturedAt?.epochMilliseconds).toBe(Date.UTC(2019, 5, 1));
+    expect(detail.acquiredAt).toBeNull();
 
-    // Manufacturer + grade are public; msrp is officer-only (same gate
-    // as acquisition cost).
+    // The product identity is public; money and serials are officer-only.
     await signInAsRegularMember();
     const memberDetail = await getGearDetailAction({
       publicId: created.publicId,
     });
-    expect(memberDetail.manufacturer).toBe("Petzl");
-    expect(memberDetail.conditionGrade).toBe("good");
-    expect(memberDetail.msrpCents).toBeNull();
+    expect(memberDetail.model.manufacturer).toBe("Petzl");
+    expect(memberDetail.model.msrpCents).toBeNull();
+    expect(memberDetail.acquisitionCostCents).toBeNull();
+    expect(memberDetail.serialNumber).toBeNull();
   });
 
-  it("editGearAction diffs the new attributes and emits gear.updated", async () => {
+  it("editGearAction diffs the item attributes and emits gear.updated", async () => {
     const actorId = await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
     const publicId = await createGearOk({ typePublicId, code: "CH1" });
+    const modelPublicId = await modelForType(typePublicId);
 
     const result = await editGearAction({
       publicId,
-      typePublicId,
+      modelPublicId,
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
+      manufacturedAt: Date.UTC(2020, 0, 15),
       acquisitionCostCents: null,
-      msrpCents: 4500,
-      manufacturer: "Black Diamond",
+      acquisitionKind: "purchased",
       serialNumber: null,
-      conditionGrade: "fair",
       notesMarkdown: null,
-      condition: "serviceable",
+      condition: "needs_repair",
       tagPublicIds: [],
     });
     expect(result.ok).toBe(true);
 
     const detail = await getGearDetailAction({ publicId });
-    expect(detail.msrpCents).toBe(4500);
-    expect(detail.manufacturer).toBe("Black Diamond");
-    expect(detail.conditionGrade).toBe("fair");
+    expect(detail.condition).toBe("needs_repair");
+    expect(detail.acquisitionKind).toBe("purchased");
+    expect(detail.manufacturedAt?.epochMilliseconds).toBe(
+      Date.UTC(2020, 0, 15),
+    );
 
     const audit = await getDb()
       .select()
@@ -270,7 +330,11 @@ describe("authorization", () => {
       changedFields: string[];
     };
     expect(meta.changedFields).toEqual(
-      expect.arrayContaining(["msrp_cents", "manufacturer", "condition_grade"]),
+      expect.arrayContaining([
+        "manufactured_at",
+        "acquisition_kind",
+        "condition",
+      ]),
     );
     // serialNumber went from null → null: not a change.
     expect(meta.changedFields).not.toContain("serial_number");
@@ -285,9 +349,8 @@ describe("authorization", () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
     const created = await createGearAction({
-      typePublicId,
+      modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -300,15 +363,17 @@ describe("authorization", () => {
 
     const result = await editGearAction({
       publicId: created.publicId,
-      typePublicId,
+      modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Renamed",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
       // serialNumber intentionally omitted — simulates list-page edit.
       notesMarkdown: null,
-      condition: "serviceable",
+      // Something has to actually change, or no `gear.updated` row is
+      // emitted and the audit assertion below passes vacuously. It used
+      // to be the description flipping to null that made the row.
+      condition: "needs_repair",
       tagPublicIds: [],
     });
     expect(result.ok).toBe(true);
@@ -320,28 +385,39 @@ describe("authorization", () => {
       .select()
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, "gear.updated"));
+    expect(audit).toHaveLength(1);
     const meta = JSON.parse(audit[0]?.metadataJson ?? "{}") as {
       changedFields: string[];
     };
+    expect(meta.changedFields).toContain("condition");
     expect(meta.changedFields).not.toContain("serial_number");
   });
 
   it("strips officer-only fields (cost, msrp, serial) for non-manager readers", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
-    // Seed gear with non-null values on every officer-gated field so
-    // the strip is observable.
-    const created = await createGearAction({
+    const model = await createGearModelAction({
       typePublicId,
+      name: "Sama",
+      manufacturer: "Petzl",
+      description: null,
+      tracking: "coded",
+      msrpCents: 8495,
+      serviceLifeYears: null,
+      manufacturedAtMs: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+    if (!model.ok) throw new Error("model seed failed");
+    // Seed non-null values on every officer-gated field so the strip is
+    // observable.
+    const created = await createGearAction({
+      modelPublicId: model.publicId,
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: 6000,
-      msrpCents: 8495,
-      manufacturer: "Petzl",
       serialNumber: "ABC-123",
-      conditionGrade: "good",
       notesMarkdown: null,
       condition: "serviceable",
       tagPublicIds: [],
@@ -351,30 +427,29 @@ describe("authorization", () => {
     // Manager view: every field is present.
     const managerList = await listGearAction({});
     expect(managerList.rows[0]?.acquisitionCostCents).toBe(6000);
-    expect(managerList.rows[0]?.msrpCents).toBe(8495);
-    expect(managerList.rows[0]?.manufacturer).toBe("Petzl");
+    expect(managerList.rows[0]?.model.msrpCents).toBe(8495);
+    expect(managerList.rows[0]?.model.manufacturer).toBe("Petzl");
     const managerDetail = await getGearDetailAction({
       publicId: created.publicId,
     });
     expect(managerDetail.acquisitionCostCents).toBe(6000);
-    expect(managerDetail.msrpCents).toBe(8495);
+    expect(managerDetail.model.msrpCents).toBe(8495);
     expect(managerDetail.serialNumber).toBe("ABC-123");
 
-    // Regular member view: financial + serial are null; brand and
-    // grade remain visible (intentional — useful for browsing).
+    // Regular member view: money and serial are null; the product
+    // identity stays visible, which is the point of browsing.
     await signInAsRegularMember();
     const memberList = await listGearAction({});
     expect(memberList.rows[0]?.acquisitionCostCents).toBeNull();
-    expect(memberList.rows[0]?.msrpCents).toBeNull();
-    expect(memberList.rows[0]?.manufacturer).toBe("Petzl");
+    expect(memberList.rows[0]?.model.msrpCents).toBeNull();
+    expect(memberList.rows[0]?.model.manufacturer).toBe("Petzl");
     const memberDetail = await getGearDetailAction({
       publicId: created.publicId,
     });
     expect(memberDetail.acquisitionCostCents).toBeNull();
-    expect(memberDetail.msrpCents).toBeNull();
+    expect(memberDetail.model.msrpCents).toBeNull();
     expect(memberDetail.serialNumber).toBeNull();
-    expect(memberDetail.manufacturer).toBe("Petzl");
-    expect(memberDetail.conditionGrade).toBe("good");
+    expect(memberDetail.model.manufacturer).toBe("Petzl");
   });
 });
 
@@ -396,6 +471,7 @@ describe("gear types", () => {
       name: "Climbing Harness",
       prefix: "HRN",
       description: null,
+      inspectionIntervalDays: null,
     });
     expect(edit.ok).toBe(true);
 
@@ -410,6 +486,7 @@ describe("gear types", () => {
       name: "Harness",
       prefix: "X",
       description: null,
+      inspectionIntervalDays: null,
     });
     expect(dup).toEqual({ ok: false, reason: "name_in_use" });
   });
@@ -433,7 +510,7 @@ describe("gear lifecycle", () => {
 
     const detail = await getGearDetailAction({ publicId });
     expect(detail.code).toBe("CH93");
-    expect(detail.lifecycle).toBe("active");
+    expect(detail.status).toBe("active");
     expect(detail.condition).toBe("serviceable");
     expect(detail.type.name).toBe("Harness");
 
@@ -450,6 +527,53 @@ describe("gear lifecycle", () => {
     expect(meta.code).toBe("CH93");
   });
 
+  it("records the whereabouts note a create supplies", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const result = await createGearAction({
+      modelPublicId: await modelForType(typePublicId),
+      code: "CH94",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      whereabouts: "repair",
+      // The schema accepted this and the insert dropped it on the
+      // floor, so a piece could arrive at the shop with no record of
+      // why until somebody re-typed it through the edit form.
+      whereaboutsNote: "at the shop for a re-stitch",
+      tagPublicIds: [],
+    });
+    if (!result.ok) throw new Error("createGear failed");
+
+    const detail = await getGearDetailAction({ publicId: result.publicId });
+    expect(detail.whereabouts).toBe("repair");
+    expect(detail.whereaboutsNote).toBe("at the shop for a re-stitch");
+    // Only `missing` means "unseen since", so nothing else is stamped.
+    expect(detail.whereaboutsAsOf).toBeNull();
+  });
+
+  it("stamps whereaboutsAsOf for a piece created as missing", async () => {
+    await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const result = await createGearAction({
+      modelPublicId: await modelForType(typePublicId),
+      code: "CH95",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      whereabouts: "missing",
+      tagPublicIds: [],
+    });
+    if (!result.ok) throw new Error("createGear failed");
+
+    const detail = await getGearDetailAction({ publicId: result.publicId });
+    expect(detail.whereaboutsAsOf).not.toBeNull();
+  });
+
   it("rolls back the R2 thumbnail when createGear fails on code_in_use", async () => {
     // A 1×1 PNG, ~70 bytes, comfortably under the 600 KB wire cap and
     // the 400 KB R2 cap. Any decodable image works; the test asserts
@@ -461,9 +585,8 @@ describe("gear lifecycle", () => {
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
 
     const first = await createGearAction({
-      typePublicId,
+      modelPublicId: await modelForType(typePublicId),
       code: "CH7",
-      description: "Test gear",
       thumbnailDataUrl,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -480,9 +603,8 @@ describe("gear lifecycle", () => {
     const beforeKeys = before.objects.map((o) => o.key).sort();
 
     const dup = await createGearAction({
-      typePublicId,
+      modelPublicId: await modelForType(typePublicId),
       code: "CH7",
-      description: "Different gear, same code",
       thumbnailDataUrl,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -506,9 +628,8 @@ describe("gear lifecycle", () => {
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
     await createGearOk({ typePublicId, code: "CH1" });
     const dup = await createGearAction({
-      typePublicId,
+      modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -519,59 +640,119 @@ describe("gear lifecycle", () => {
     expect(dup).toEqual({ ok: false, reason: "code_in_use", code: "CH1" });
   });
 
-  it("retiring NULLs the code and captures priorCode in audit metadata", async () => {
+  it("deactivating KEEPS the code and records it in audit metadata", async () => {
     const actorId = await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
     const publicId = await createGearOk({ typePublicId, code: "CH93" });
 
-    const retired = await retireGearAction({
+    const retired = await deactivateGearAction({
       publicId,
+      status: "retired",
       reason: "snapped buckle",
     });
     expect(retired.ok).toBe(true);
 
     const detail = await getGearDetailAction({ publicId });
-    expect(detail.code).toBeNull();
-    expect(detail.lifecycle).toBe("retired");
-    expect(detail.retiredReason).toBe("snapped buckle");
+    // The old behaviour NULLed this to free the string for reuse. Codes
+    // are no longer recycled, so "CH93" stays bound to this harness and
+    // every historical mention of it resolves to one thing.
+    expect(detail.code).toBe("CH93");
+    expect(detail.status).toBe("retired");
+    expect(detail.deactivatedReason).toBe("snapped buckle");
 
     const audit = await getDb()
       .select()
       .from(schema.auditLog)
-      .where(eq(schema.auditLog.action, "gear.retired"));
+      .where(eq(schema.auditLog.action, "gear.deactivated"));
     expect(audit).toHaveLength(1);
     expect(audit[0]?.actorUserId).toBe(actorId);
     const meta = JSON.parse(audit[0]?.metadataJson ?? "{}") as Record<
       string,
       unknown
     >;
-    expect(meta.priorCode).toBe("CH93");
+    expect(meta.code).toBe("CH93");
+    expect(meta.status).toBe("retired");
     expect(meta.reason).toBe("snapped buckle");
   });
 
-  it("frees the code for reuse after retirement", async () => {
+  it("refuses to reissue a retired piece's code", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
     const first = await createGearOk({ typePublicId, code: "CH93" });
-    await retireGearAction({ publicId: first, reason: null });
+    await deactivateGearAction({
+      publicId: first,
+      status: "retired",
+      reason: null,
+    });
 
-    // Reissue CH93 on a fresh piece.
+    // The unique index still holds the retired row's code.
+    const reissue = await createGearAction({
+      modelPublicId: await modelForType(typePublicId),
+      code: "CH93",
+      thumbnailDataUrl: null,
+      acquiredAt: null,
+      acquisitionCostCents: null,
+      notesMarkdown: null,
+      condition: "serviceable",
+      tagPublicIds: [],
+    });
+    expect(reissue).toEqual({
+      ok: false,
+      reason: "code_in_use",
+      code: "CH93",
+    });
+  });
+
+  it("releases a retired piece's code so it can be reissued", async () => {
+    const actorId = await signInAsManager();
+    const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
+    const first = await createGearOk({ typePublicId, code: "CH93" });
+
+    // Releasing an ACTIVE item is refused — that would silently
+    // un-label something still in service.
+    expect(await releaseGearItemCodeAction({ publicId: first })).toEqual({
+      ok: false,
+      reason: "still_active",
+    });
+
+    await deactivateGearAction({
+      publicId: first,
+      status: "retired",
+      reason: null,
+    });
+    expect(await releaseGearItemCodeAction({ publicId: first })).toEqual({
+      ok: true,
+    });
+    expect((await getGearDetailAction({ publicId: first })).code).toBeNull();
+
+    const audit = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear.code_released"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.actorUserId).toBe(actorId);
+    expect(
+      (JSON.parse(audit[0]?.metadataJson ?? "{}") as { priorCode?: string })
+        .priorCode,
+    ).toBe("CH93");
+
+    // Now the string is genuinely free.
     const reissued = await createGearOk({ typePublicId, code: "CH93" });
     const detail = await getGearDetailAction({ publicId: reissued });
     expect(detail.code).toBe("CH93");
-    expect(detail.lifecycle).toBe("active");
+    expect(detail.status).toBe("active");
   });
 
   it("unretires a previously retired piece", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
     const publicId = await createGearOk({ typePublicId, code: "CH1" });
-    await retireGearAction({ publicId, reason: null });
-    const result = await unretireGearAction({ publicId });
+    await deactivateGearAction({ publicId, status: "retired", reason: null });
+    const result = await reactivateGearAction({ publicId });
     expect(result.ok).toBe(true);
     const detail = await getGearDetailAction({ publicId });
-    expect(detail.lifecycle).toBe("active");
-    expect(detail.retiredReason).toBeNull();
+    expect(detail.status).toBe("active");
+    expect(detail.deactivatedAt).toBeNull();
   });
 
   it("edit-rename of code emits gear.updated with priorCode", async () => {
@@ -581,9 +762,8 @@ describe("gear lifecycle", () => {
 
     const result = await editGearAction({
       publicId,
-      typePublicId,
+      modelPublicId: await modelForType(typePublicId),
       code: "CH2",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -627,9 +807,8 @@ describe("tags + list filters", () => {
 
     await editGearAction({
       publicId: gearPublicId,
-      typePublicId,
+      modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -668,9 +847,8 @@ describe("tags + list filters", () => {
     // remove. `outdoor` is unchanged and must not appear in either array.
     await editGearAction({
       publicId: gearPublicId,
-      typePublicId,
+      modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Test gear",
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,
@@ -759,33 +937,38 @@ describe("tags + list filters", () => {
       condition: "needs_repair",
     });
     const retired = await createGearOk({ typePublicId, code: "CH2" });
-    await retireGearAction({ publicId: retired, reason: null });
+    await deactivateGearAction({
+      publicId: retired,
+      status: "retired",
+      reason: null,
+    });
 
-    const activeOnly = await listGearAction({ lifecycle: "active" });
+    const activeOnly = await listGearAction({ status: "active" });
     expect(activeOnly.rows.map((r) => r.publicId)).toEqual([active]);
 
     const broken = await listGearAction({ condition: "needs_repair" });
     expect(broken.rows.map((r) => r.publicId)).toEqual([active]);
   });
 
-  it("searches across code, description, and notes", async () => {
+  it("searches across code and notes", async () => {
+    // The item's own `description` was a third search target until
+    // migration 0069 dropped the column. Notes is where per-unit prose
+    // lives now, and the product is reachable through the model's name
+    // and manufacturer.
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
-    await createGearOk({
-      typePublicId,
-      code: "CH1",
-      description: "Black Diamond Momentum",
-    });
+    await createGearOk({ typePublicId, code: "CH1" });
     await createGearOk({
       typePublicId,
       code: "CH2",
-      description: "Petzl Sama",
+      notesMarkdown: "Bought secondhand from a Petzl rep.",
     });
     await listGearTagsAction(); // sanity touch
 
-    const result = await listGearAction({ q: "petzl" });
-    expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]?.code).toBe("CH2");
+    expect((await listGearAction({ q: "CH1" })).rows).toHaveLength(1);
+    const byNotes = await listGearAction({ q: "petzl" });
+    expect(byNotes.rows).toHaveLength(1);
+    expect(byNotes.rows[0]?.code).toBe("CH2");
   });
 
   it("sorts by the requested key in the requested direction", async () => {
@@ -812,13 +995,13 @@ describe("tags + list filters", () => {
     // sort were ignored, the code tiebreaker would answer CH1 first.
     const db = getDb();
     await db
-      .update(schema.gear)
+      .update(schema.gearItems)
       .set({ createdAt: Temporal.Instant.from("2024-01-01T00:00:00Z") })
-      .where(eq(schema.gear.publicId, older));
+      .where(eq(schema.gearItems.publicId, older));
     await db
-      .update(schema.gear)
+      .update(schema.gearItems)
       .set({ createdAt: Temporal.Instant.from("2025-06-01T00:00:00Z") })
-      .where(eq(schema.gear.publicId, newer));
+      .where(eq(schema.gearItems.publicId, newer));
 
     // `dir` is the caller's now, but leaving it off must not silently
     // flip a date sort to oldest-first just because `asc` is the more
@@ -871,14 +1054,22 @@ describe("suggestCodeForType", () => {
     expect(suggestion).toBe("");
   });
 
-  it("skips retired pieces when computing the next number", async () => {
+  it("counts retired pieces when computing the next number", async () => {
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
     const a = await createGearOk({ typePublicId, code: "CH1" });
     const b = await createGearOk({ typePublicId, code: "CH2" });
-    await retireGearAction({ publicId: b, reason: null });
+    await deactivateGearAction({
+      publicId: b,
+      status: "retired",
+      reason: null,
+    });
+    // Retired codes are NOT skipped. They still hold the unique index,
+    // so suggesting CH2 here would hand the officer a code their own
+    // save then rejects — the exact bug the old `active`-only filter
+    // would have caused once retirement stopped nulling codes.
     const { suggestion } = await suggestCodeForTypeAction({ typePublicId });
-    expect(suggestion).toBe("CH2");
+    expect(suggestion).toBe("CH3");
     // sanity: a is still active so we don't suggest CH1.
     expect(a).toBeTruthy();
   });
