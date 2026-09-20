@@ -637,6 +637,7 @@ export const auditAction = [
   "gear_model.created",
   "gear_model.updated",
   "gear_model.deleted",
+  "gear_model.stock_adjusted",
   "gear_stock.adjusted",
   "gear_hold.placed",
   "gear_hold.released",

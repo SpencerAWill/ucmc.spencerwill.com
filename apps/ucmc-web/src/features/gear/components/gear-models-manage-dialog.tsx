@@ -14,7 +14,7 @@
  * Creating still wants a type, because a model hangs off one.
  */
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Edit, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Boxes, Edit, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -49,6 +49,7 @@ import {
 } from "#/features/gear/api/queries";
 import { useCreateGearModel } from "#/features/gear/api/use-create-gear-model";
 import { useDeleteGearModel } from "#/features/gear/api/use-delete-gear-model";
+import { useSetGearModelStock } from "#/features/gear/api/use-set-gear-model-stock";
 import { useUpdateGearModel } from "#/features/gear/api/use-update-gear-model";
 import {
   GearAttributeFields,
@@ -56,9 +57,13 @@ import {
   attributeInputsFrom,
 } from "#/features/gear/components/gear-attribute-fields";
 import type { AttributeFormValues } from "#/features/gear/components/gear-attribute-fields";
-import { TRACKING_LABEL } from "#/features/gear/lib/labels";
-import { GEAR_TRACKING_VALUES } from "#/features/gear/server/gear-fns";
+import { CONDITION_LABEL, TRACKING_LABEL } from "#/features/gear/lib/labels";
+import {
+  GEAR_CONDITION_VALUES,
+  GEAR_TRACKING_VALUES,
+} from "#/features/gear/server/gear-fns";
 import type {
+  GearCondition,
   GearModelSummaryDto,
   GearTracking,
 } from "#/features/gear/server/gear-fns";
@@ -66,7 +71,8 @@ import type {
 type Mode =
   | { kind: "list" }
   | { kind: "create" }
-  | { kind: "edit"; model: GearModelSummaryDto };
+  | { kind: "edit"; model: GearModelSummaryDto }
+  | { kind: "stock"; model: GearModelSummaryDto };
 
 export function GearModelsManageDialog({
   open,
@@ -146,7 +152,9 @@ export function GearModelsManageDialog({
                 ? "Gear models"
                 : mode.kind === "create"
                   ? "New model"
-                  : `Edit ${mode.model.name}`}
+                  : mode.kind === "stock"
+                    ? `Stock — ${mode.model.name}`
+                    : `Edit ${mode.model.name}`}
             </DialogTitle>
             <DialogDescription>
               The product a piece of gear is — "BD HotForge 12cm". Everything
@@ -180,12 +188,18 @@ export function GearModelsManageDialog({
                 scoped={typePublicId.length > 0}
                 onCreate={() => setMode({ kind: "create" })}
                 onEdit={(model) => setMode({ kind: "edit", model })}
+                onEditStock={(model) => setMode({ kind: "stock", model })}
                 onDelete={(model) => {
                   setDeleteError(null);
                   setPendingDelete(model);
                 }}
               />
             </div>
+          ) : mode.kind === "stock" ? (
+            <StockPane
+              model={mode.model}
+              onDone={() => setMode({ kind: "list" })}
+            />
           ) : (
             <FormPane
               mode={mode}
@@ -244,6 +258,7 @@ function ListPane({
   isLoading,
   onCreate,
   onEdit,
+  onEditStock,
   onDelete,
   canCreate,
   scoped,
@@ -252,6 +267,7 @@ function ListPane({
   isLoading: boolean;
   onCreate: () => void;
   onEdit: (model: GearModelSummaryDto) => void;
+  onEditStock: (model: GearModelSummaryDto) => void;
   onDelete: (model: GearModelSummaryDto) => void;
   /** A new model needs a type to hang off, so creating still wants one
    *  picked even though browsing no longer does. */
@@ -303,6 +319,11 @@ function ListPane({
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {[
+                      // Counted models lead with what's in the bin:
+                      // it's the number an officer opened this dialog
+                      // to check, and the one the item list can't show
+                      // because there are no item rows to count.
+                      model.tracking === "counted" ? stockSummary(model) : null,
                       model.msrpCents !== null
                         ? `$${(model.msrpCents / 100).toFixed(2)}`
                         : null,
@@ -321,6 +342,16 @@ function ListPane({
                   </p>
                 </ItemContent>
                 <ItemActions>
+                  {model.tracking === "counted" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEditStock(model)}
+                      aria-label={`Stock for ${model.name}`}
+                    >
+                      <Boxes className="size-4" />
+                    </Button>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -602,6 +633,176 @@ function FormPane({
         </Button>
         <Button type="submit" disabled={pending || name.trim().length === 0}>
           {isEdit ? "Save" : "Create model"}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+/** Quantity in a bucket, defaulting to zero: a missing row and a zero
+ *  row mean the same thing, and the editor shouldn't make the officer
+ *  care which one the database happens to hold. */
+function quantityOf(model: GearModelSummaryDto, condition: GearCondition) {
+  return model.stock.find((s) => s.condition === condition)?.quantity ?? 0;
+}
+
+function stockSummary(model: GearModelSummaryDto): string {
+  const parts = GEAR_CONDITION_VALUES.filter(
+    (condition) => quantityOf(model, condition) > 0,
+  ).map(
+    (condition) =>
+      `${quantityOf(model, condition)} ${CONDITION_LABEL[condition].toLowerCase()}`,
+  );
+  return parts.length === 0 ? "No stock recorded" : parts.join(" · ");
+}
+
+/**
+ * The counted model's stock editor.
+ *
+ * Absolute quantities, one box per condition bucket, because that is
+ * the shape the answer arrives in: somebody counts the bin and types
+ * what they saw. Deltas would make them do the arithmetic the database
+ * is better at.
+ *
+ * `On loan` is read-only and deliberately shown: stock counts every unit
+ * the club owns, units out with members included, so "38 serviceable"
+ * with six out means 32 on the shelf. Without the second number the
+ * first one reads as a shelf count and the save refusal below it looks
+ * arbitrary.
+ */
+function StockPane({
+  model,
+  onDone,
+}: {
+  model: GearModelSummaryDto;
+  onDone: () => void;
+}) {
+  const [quantities, setQuantities] = useState<Record<GearCondition, string>>(
+    () =>
+      Object.fromEntries(
+        GEAR_CONDITION_VALUES.map((condition) => [
+          condition,
+          String(quantityOf(model, condition)),
+        ]),
+      ) as Record<GearCondition, string>,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const mutation = useSetGearModelStock();
+
+  const parsed = GEAR_CONDITION_VALUES.map((condition) => ({
+    condition,
+    quantity: Number(quantities[condition]),
+  }));
+  const allValid = parsed.every(
+    (row) => Number.isInteger(row.quantity) && row.quantity >= 0,
+  );
+  const total = allValid
+    ? parsed.reduce((sum, row) => sum + row.quantity, 0)
+    : 0;
+  const serviceable = allValid
+    ? (parsed.find((row) => row.condition === "serviceable")?.quantity ?? 0)
+    : 0;
+  const takeable = Math.max(0, serviceable - model.onLoan - model.onHold);
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!allValid) {
+      setError("Quantities must be whole numbers, zero or more.");
+      return;
+    }
+    mutation.mutate(
+      { publicId: model.publicId, stock: parsed },
+      {
+        onSuccess: (result) => {
+          if (result.ok) {
+            toast.success(`Saved stock for ${model.name}`);
+            onDone();
+            return;
+          }
+          setError(
+            result.reason === "below_on_loan"
+              ? `${result.onLoan} ${result.onLoan === 1 ? "unit is" : "units are"} out on loan, so the serviceable count can't go below that. Check those in first, or write them off at check-in.`
+              : result.reason === "not_counted"
+                ? "This model tracks its units individually, so its count comes from those pieces."
+                : "That model no longer exists.",
+          );
+        },
+        onError: () => setError("Couldn't save the stock."),
+      },
+    );
+  };
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <fieldset disabled={mutation.isPending} className="space-y-4 border-0">
+        <div className="space-y-2">
+          {GEAR_CONDITION_VALUES.map((condition) => (
+            <div
+              key={condition}
+              className="flex items-center justify-between gap-3"
+            >
+              <Label htmlFor={`stock-${condition}`} className="font-normal">
+                {CONDITION_LABEL[condition]}
+              </Label>
+              <Input
+                id={`stock-${condition}`}
+                type="number"
+                min={0}
+                max={10_000}
+                inputMode="numeric"
+                className="w-24"
+                value={quantities[condition]}
+                onChange={(e) =>
+                  setQuantities((prev) => ({
+                    ...prev,
+                    [condition]: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          ))}
+        </div>
+
+        <dl className="space-y-1 border-t pt-3 text-sm">
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Total owned</dt>
+            <dd className="tabular-nums">{total}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Out on loan</dt>
+            <dd className="tabular-nums">{model.onLoan}</dd>
+          </div>
+          {model.onHold > 0 ? (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Held</dt>
+              <dd className="tabular-nums">{model.onHold}</dd>
+            </div>
+          ) : null}
+          <div className="flex justify-between gap-3 font-medium">
+            <dt>Takeable now</dt>
+            <dd className="tabular-nums">{takeable}</dd>
+          </div>
+        </dl>
+
+        <p className="text-xs text-muted-foreground">
+          Counts every unit the club owns, including the ones out with members.
+          Moving units between buckets is how a repair is recorded — they don't
+          appear or vanish.
+        </p>
+
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </fieldset>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={mutation.isPending}>
+          Save stock
         </Button>
       </DialogFooter>
     </form>

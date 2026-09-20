@@ -20,7 +20,9 @@ import {
   getGearModelByPublicId,
   insertGearModel,
   listGearModels,
+  listStockForModel,
   listStockForModelIds,
+  setStockLevel,
   updateGearModelById,
 } from "#/features/gear/server/models-repo.server";
 import {
@@ -63,6 +65,11 @@ export interface GearModelSummaryDto {
   /** Counted models only: quantity per condition bucket. Empty for
    *  coded models, which count their item rows instead. */
   stock: Array<{ condition: schema.GearCondition; quantity: number }>;
+  /** Counted models only, 0 for coded ones. Stock counts units out on
+   *  loan, so the editor needs both numbers to show what is actually on
+   *  the shelf — and a serviceable count below `onLoan` is refused. */
+  onLoan: number;
+  onHold: number;
   /** Model-level answers — the ones true of every unit. */
   attributes: GearAttributeValueDto[];
 }
@@ -81,12 +88,16 @@ export async function listGearModelsAction(
     typeId = type.id;
   }
   const rows = await listGearModels({ typeId });
-  const stockByModel = await listStockForModelIds(
-    rows.filter((r) => r.tracking === "counted").map((r) => r.id),
-  );
-  const valuesByModel = await listAttributeValuesForModels(
-    rows.map((r) => r.id),
-  );
+  const countedIds = rows
+    .filter((r) => r.tracking === "counted")
+    .map((r) => r.id);
+  const [stockByModel, onLoanByModel, heldByModel, valuesByModel] =
+    await Promise.all([
+      listStockForModelIds(countedIds),
+      openLoanQuantityForModels(countedIds),
+      liveHeldQuantityForModels(countedIds, Temporal.Now.instant()),
+      listAttributeValuesForModels(rows.map((r) => r.id)),
+    ]);
   return rows.map((r) => ({
     publicId: r.publicId,
     name: r.name,
@@ -105,6 +116,8 @@ export async function listGearModelsAction(
       prefix: r.typePrefix,
     },
     stock: stockByModel.get(r.id) ?? [],
+    onLoan: onLoanByModel.get(r.id) ?? 0,
+    onHold: heldByModel.get(r.id) ?? 0,
     attributes: toValueDtos(valuesByModel.get(r.id)),
   }));
 }
@@ -461,4 +474,97 @@ export async function listGearModelBrowseAction(
       attributes: toValueDtos(valuesByModel.get(row.modelId)),
     };
   });
+}
+
+// ── counted stock ──────────────────────────────────────────────────────
+
+export interface SetGearModelStockInput {
+  publicId: string;
+  /** Absolute quantity per condition bucket. Buckets the caller leaves
+   *  out are untouched — the editor sends all three, but an omission
+   *  should mean "no change" rather than "zero". */
+  stock: Array<{ condition: schema.GearCondition; quantity: number }>;
+}
+
+export type SetGearModelStockResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "not_counted" }
+  | { ok: false; reason: "below_on_loan"; onLoan: number };
+
+/**
+ * The write path for counted stock. Until now `gear_stock_levels` was
+ * read by browse, the sweep reconciliation and the model list, and
+ * written by nothing at all — so a model flipped to `counted` had no
+ * items (blocked by design) and no way to enter a quantity, and read
+ * "0 takeable" forever. Marking a model counted was a dead end.
+ *
+ * Absolute quantities rather than deltas, because that is the shape the
+ * answer arrives in: somebody counts the bin and types what they saw.
+ * The audit row carries the before and after for each bucket it moved,
+ * which is where the delta lives.
+ */
+export async function setGearModelStockAction(
+  input: SetGearModelStockInput,
+): Promise<SetGearModelStockResult> {
+  const principal = await requireGearManager();
+  const existing = await getGearModelByPublicId(input.publicId);
+  if (!existing) {
+    return { ok: false, reason: "not_found" };
+  }
+  // A coded model counts its item rows. Accepting quantities for one
+  // would create a second, disagreeing answer to "how many are there".
+  if (existing.tracking !== "counted") {
+    return { ok: false, reason: "not_counted" };
+  }
+  const before = await listStockForModel(existing.id);
+  const quantityOf = (
+    rows: Array<{ condition: schema.GearCondition; quantity: number }>,
+    condition: schema.GearCondition,
+  ) => rows.find((r) => r.condition === condition)?.quantity ?? 0;
+
+  // Stock counts everything the club owns in a bucket, units out on
+  // loan included, and `takeable` is serviceable minus what is out. So
+  // a serviceable count below the open loan quantity doesn't describe
+  // any real cave: it would clamp takeable to zero and quietly disagree
+  // with the loan table. Refused with the number, so the officer can
+  // see what they're up against rather than guess why the save bounced.
+  const nextServiceable = input.stock.find(
+    (s) => s.condition === "serviceable",
+  );
+  if (nextServiceable !== undefined) {
+    const onLoan =
+      (await openLoanQuantityForModels([existing.id])).get(existing.id) ?? 0;
+    if (nextServiceable.quantity < onLoan) {
+      return { ok: false, reason: "below_on_loan", onLoan };
+    }
+  }
+
+  const changed: Array<{
+    condition: schema.GearCondition;
+    from: number;
+    to: number;
+  }> = [];
+  for (const row of input.stock) {
+    const from = quantityOf(before, row.condition);
+    if (from === row.quantity) {
+      continue;
+    }
+    await setStockLevel({
+      modelId: existing.id,
+      condition: row.condition,
+      quantity: row.quantity,
+    });
+    changed.push({ condition: row.condition, from, to: row.quantity });
+  }
+  if (changed.length === 0) {
+    return { ok: true };
+  }
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "gear_model.stock_adjusted",
+    targetType: "gear",
+    targetId: existing.id,
+    metadata: { name: existing.name, changed },
+  });
+  return { ok: true };
 }

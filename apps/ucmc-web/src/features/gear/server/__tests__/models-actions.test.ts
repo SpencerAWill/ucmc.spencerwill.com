@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, schema } from "#/server/db";
@@ -30,6 +31,7 @@ const {
   createGearModelAction,
   deleteGearModelAction,
   listGearModelsAction,
+  setGearModelStockAction,
   updateGearModelAction,
 } = await import("#/features/gear/server/models-actions.server");
 const { createGearAttributeDefAction } =
@@ -96,6 +98,7 @@ beforeEach(async () => {
   await db.delete(schema.gearModelAttributeValues);
   await db.delete(schema.gearAttributeDefTypes);
   await db.delete(schema.gearAttributeDefs);
+  await db.delete(schema.gearLoans);
   await db.delete(schema.gearItems);
   await db.delete(schema.gearStockLevels);
   await db.delete(schema.gearModels);
@@ -343,5 +346,160 @@ describe("deleteGearModelAction", () => {
     const publicId = await createModel(typePublicId);
     expect(await deleteGearModelAction({ publicId })).toEqual({ ok: true });
     expect(await listGearModelsAction({ typePublicId })).toEqual([]);
+  });
+});
+
+describe("setGearModelStockAction", () => {
+  /** The internal id, for the tests that need to plant a loan row. */
+  async function modelIdOf(publicId: string): Promise<string> {
+    const rows = await getDb()
+      .select({ id: schema.gearModels.id })
+      .from(schema.gearModels)
+      .where(eq(schema.gearModels.publicId, publicId));
+    const id = rows.at(0)?.id;
+    if (!id) throw new Error("model not found");
+    return id;
+  }
+
+  it("is the write path counted stock never had", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const publicId = await createModel(typePublicId, { tracking: "counted" });
+
+    // Before this action existed, `gear_stock_levels` was read by
+    // browse, the model list and the sweep reconciliation, and written
+    // by nothing — so a counted model reported an empty bin forever.
+    expect((await listGearModelsAction({ typePublicId })).at(0)?.stock).toEqual(
+      [],
+    );
+
+    expect(
+      await setGearModelStockAction({
+        publicId,
+        stock: [
+          { condition: "serviceable", quantity: 38 },
+          { condition: "needs_repair", quantity: 4 },
+          { condition: "unsafe", quantity: 0 },
+        ],
+      }),
+    ).toEqual({ ok: true });
+
+    const model = (await listGearModelsAction({ typePublicId })).at(0);
+    expect(model?.stock).toEqual(
+      expect.arrayContaining([
+        { condition: "serviceable", quantity: 38 },
+        { condition: "needs_repair", quantity: 4 },
+      ]),
+    );
+  });
+
+  it("refuses a coded model, which counts its item rows instead", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const publicId = await createModel(typePublicId, { tracking: "coded" });
+
+    expect(
+      await setGearModelStockAction({
+        publicId,
+        stock: [{ condition: "serviceable", quantity: 5 }],
+      }),
+    ).toEqual({ ok: false, reason: "not_counted" });
+  });
+
+  it("refuses a serviceable count below what is out on loan", async () => {
+    const managerId = await signInAsManager();
+    const typePublicId = await createType();
+    const publicId = await createModel(typePublicId, { tracking: "counted" });
+    await setGearModelStockAction({
+      publicId,
+      stock: [{ condition: "serviceable", quantity: 38 }],
+    });
+    await getDb()
+      .insert(schema.gearLoans)
+      .values({
+        id: `gl_${crypto.randomUUID()}`,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        itemId: null,
+        modelId: await modelIdOf(publicId),
+        quantity: 6,
+        quantityReturned: 0,
+        memberUserId: managerId,
+        checkedOutAt: Temporal.Now.instant(),
+        dueAt: Temporal.Now.instant().add({ hours: 72 }),
+        returnedAt: null,
+      });
+
+    // Stock counts units out on loan, so four-on-the-shelf with six out
+    // is not a cave that exists: it would clamp `takeable` to zero and
+    // disagree with the loan table about how many draws the club has.
+    expect(
+      await setGearModelStockAction({
+        publicId,
+        stock: [{ condition: "serviceable", quantity: 4 }],
+      }),
+    ).toEqual({ ok: false, reason: "below_on_loan", onLoan: 6 });
+
+    // Six is the floor, not a refusal.
+    expect(
+      await setGearModelStockAction({
+        publicId,
+        stock: [{ condition: "serviceable", quantity: 6 }],
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("audits only the buckets that moved, with their before and after", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const publicId = await createModel(typePublicId, { tracking: "counted" });
+    await setGearModelStockAction({
+      publicId,
+      stock: [
+        { condition: "serviceable", quantity: 40 },
+        { condition: "needs_repair", quantity: 0 },
+      ],
+    });
+    await getDb().delete(schema.auditLog);
+
+    await setGearModelStockAction({
+      publicId,
+      stock: [
+        // Unchanged: four went to the repair pile out of forty, so only
+        // one bucket actually moved.
+        { condition: "serviceable", quantity: 40 },
+        { condition: "needs_repair", quantity: 4 },
+      ],
+    });
+
+    const rows = await getDb()
+      .select({
+        action: schema.auditLog.action,
+        metadataJson: schema.auditLog.metadataJson,
+      })
+      .from(schema.auditLog);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.action).toBe("gear_model.stock_adjusted");
+    expect(JSON.parse(rows[0]?.metadataJson ?? "{}").changed).toEqual([
+      { condition: "needs_repair", from: 0, to: 4 },
+    ]);
+  });
+
+  it("writes nothing at all when the counts come back identical", async () => {
+    await signInAsManager();
+    const typePublicId = await createType();
+    const publicId = await createModel(typePublicId, { tracking: "counted" });
+    await setGearModelStockAction({
+      publicId,
+      stock: [{ condition: "serviceable", quantity: 12 }],
+    });
+    await getDb().delete(schema.auditLog);
+
+    expect(
+      await setGearModelStockAction({
+        publicId,
+        stock: [{ condition: "serviceable", quantity: 12 }],
+      }),
+    ).toEqual({ ok: true });
+    expect(await getDb().select().from(schema.auditLog)).toHaveLength(0);
   });
 });

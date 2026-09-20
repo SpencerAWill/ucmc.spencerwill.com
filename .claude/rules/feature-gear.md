@@ -19,6 +19,12 @@ The cave owns fleets, not one-offs, so the product is modelled separately from t
 
 **Coded vs counted (`gear_models.tracking`).** Quickdraws and pre-cut slings carry no labels — the desk hands out six and counts six back. A `counted` model has **no item rows at all**; `gear_stock_levels` holds a quantity per condition bucket. Giving each draw a row anyway was fake precision: when five of six come back, nothing knows which one is gone. `tracking` lives on the **model**, not the type, so a special alpine draw set can be coded while everyday draws stay counted.
 
+**Stock is written by `setGearModelStockAction` — the Stock button beside Edit on a counted model's row.** It takes absolute quantities per bucket, because that is the shape the answer arrives in: somebody counts the bin and types what they saw. The delta lives in the audit row (`gear_model.stock_adjusted`), which records only the buckets that actually moved. Until it existed, `gear_stock_levels` was read by browse, the model list and the sweep reconciliation and written by **nothing at all**, so marking a model `counted` was a dead end — no items allowed, no quantity enterable, "0 takeable" forever.
+
+- **A serviceable count below the open loan quantity is refused** (`below_on_loan`, with the number). Stock counts every unit the club owns, the ones out with members included, and `takeable` is serviceable minus what is out — so a lower count would clamp `takeable` to zero and disagree with the loan table about how many draws the club has.
+- **The editor shows `onLoan` and `onHold` beside the boxes** (both on `GearModelSummaryDto`, zero for coded models). "38 serviceable" reads as a shelf count unless the six that are out are on screen next to it, and without them the refusal above looks arbitrary.
+- Buckets the caller omits are left alone, matching `attributes: undefined` on a model edit. The editor sends all three; an omission means "no change", not "zero".
+
 ## Three state axes, not one column
 
 The old `lifecycle` + `condition` pair mixed three questions. They are now independent:
@@ -289,6 +295,6 @@ The `models` view on `/gear` — one card per product, with its units bucketed. 
 
 ## Not built yet
 
-Counted stock is still only half-wired — `gear_stock_levels` and the dual-shape loan table are enforced, but the desk can't yet hand out a quantity, and nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), and qualification gating are deliberately deferred.
+Counted stock is entered and reported, but **the desk still can't hand out a quantity** — checkout resolves a code, and the counted pane behind it is unbuilt. Nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), and qualification gating are deliberately deferred.
 
 **No attribute definitions are seeded.** Which attributes exist, at which level, with which options in which order, is the cave's call — a guessed set would be worse than an empty one, because officers would edit around it rather than replace it.

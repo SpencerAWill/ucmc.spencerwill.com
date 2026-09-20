@@ -15,6 +15,7 @@ import type {
   CreateGearModelResult,
   DeleteGearModelResult,
   GearModelSummaryDto,
+  SetGearModelStockResult,
   UpdateGearModelResult,
 } from "#/features/gear/server/models-actions.server";
 import type {
@@ -1208,4 +1209,28 @@ export const deleteGearModelFn = createServerFn({ method: "POST" })
     const { deleteGearModelAction } =
       await import("#/features/gear/server/models-actions.server");
     return deleteGearModelAction(data);
+  });
+
+export const setGearModelStockFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      publicId: z.string().min(1),
+      stock: z
+        .array(
+          z.object({
+            condition: z.enum(GEAR_CONDITION_VALUES),
+            // Capped well above any club's draw bin. The point of the
+            // ceiling is that a fat-fingered "380" is a typo somebody
+            // has to notice, not a quantity the cave silently owns.
+            quantity: z.number().int().min(0).max(10_000),
+          }),
+        )
+        .min(1)
+        .max(GEAR_CONDITION_VALUES.length),
+    }),
+  )
+  .handler(async ({ data }): Promise<SetGearModelStockResult> => {
+    const { setGearModelStockAction } =
+      await import("#/features/gear/server/models-actions.server");
+    return setGearModelStockAction(data);
   });
