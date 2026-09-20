@@ -28,15 +28,22 @@ import type { GearSummary } from "#/features/gear/server/gear-fns";
 import {
   CONDITION_LABEL,
   CONDITION_VARIANT,
-  STATUS_LABEL,
-  STATUS_VARIANT,
+  availabilityBadge,
+  availabilityNote,
   isTerminalStatus,
 } from "#/features/gear/lib/labels";
 
 /**
  * Dense tabular view of the gear list. No thumbnails — meant for
- * officers scanning hundreds of items at once. Mobile drops the
- * Type column to keep the row legible.
+ * officers scanning hundreds of items at once.
+ *
+ * Availability leads the state columns, because the table is where an
+ * officer with hundreds of pieces works and the rollup is the question
+ * being asked. It used to show `condition` alone, which meant a row on
+ * loan, a row missing and a row held all read "Serviceable" — one of
+ * the three axes, and not the one anybody came for. Manufacturer is
+ * gone to pay for the space: it belongs to the model, is identical
+ * down every run of rows for a product, and is one click away.
  */
 export function GearTableView({
   rows,
@@ -83,9 +90,9 @@ export function GearTableView({
             ) : null}
             <TableHead className="w-22">Code</TableHead>
             <TableHead>Description</TableHead>
-            <TableHead className="hidden sm:table-cell">Type</TableHead>
-            <TableHead className="hidden md:table-cell">Manufacturer</TableHead>
-            <TableHead className="hidden sm:table-cell">Condition</TableHead>
+            <TableHead className="hidden sm:table-cell">Availability</TableHead>
+            <TableHead className="hidden md:table-cell">Type</TableHead>
+            <TableHead className="hidden md:table-cell">Condition</TableHead>
             <TableHead className="w-12 text-right">
               <span className="sr-only">Actions</span>
             </TableHead>
@@ -94,6 +101,8 @@ export function GearTableView({
         <TableBody>
           {rows.map((g) => {
             const isInactive = isTerminalStatus(g.status);
+            const badge = availabilityBadge(g);
+            const note = availabilityNote(g);
             return (
               <TableRow
                 key={g.publicId}
@@ -131,38 +140,36 @@ export function GearTableView({
                   >
                     {g.description}
                   </Link>
-                  {/* On mobile, fold type + condition into the
-                   * description cell so the row stays readable. */}
+                  {/* Below sm the state columns are gone, so the row's
+                   * answer to "can I take this out" folds in here. It
+                   * leads, ahead of type and condition. */}
                   <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground sm:hidden">
-                    <span>{g.type.name}</span>
-                    <span>·</span>
-                    <span>{CONDITION_LABEL[g.condition]}</span>
-                    {isInactive ? (
-                      <span>· {STATUS_LABEL[g.status].toLowerCase()}</span>
-                    ) : null}
+                    <span className="font-medium text-foreground">
+                      {badge.label}
+                    </span>
+                    {note ? <span>· {note}</span> : null}
+                    <span>· {g.type.name}</span>
+                    <span>· {CONDITION_LABEL[g.condition]}</span>
                   </div>
-                </TableCell>
-                <TableCell className="hidden text-sm sm:table-cell">
-                  {g.type.name}
-                </TableCell>
-                <TableCell className="hidden text-sm md:table-cell">
-                  {g.model.manufacturer ? (
-                    g.model.manufacturer
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    <Badge variant={CONDITION_VARIANT[g.condition]}>
-                      {CONDITION_LABEL[g.condition]}
-                    </Badge>
-                    {isInactive ? (
-                      <Badge variant={STATUS_VARIANT[g.status]}>
-                        {STATUS_LABEL[g.status]}
-                      </Badge>
+                  <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 text-xs">
+                    <Badge variant={badge.variant}>{badge.label}</Badge>
+                    {note ? (
+                      <span className="text-muted-foreground">{note}</span>
                     ) : null}
                   </div>
+                </TableCell>
+                <TableCell className="hidden text-sm md:table-cell">
+                  {g.type.name}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <Badge
+                    variant={CONDITION_VARIANT[g.condition]}
+                    className="text-xs"
+                  >
+                    {CONDITION_LABEL[g.condition]}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-0">

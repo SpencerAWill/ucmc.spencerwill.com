@@ -36,7 +36,8 @@ Loan state is **derived from `gear_loans` and never mirrored** onto the item —
 - `unsafe` is a hard loan block with **no override**. `needs_repair` is overridable by an officer with a confirm.
 - Only an inspection may raise `condition`; anyone can lower it at check-in.
 - Display labels live in **`lib/labels.ts`**, not per-component — six private copies had already drifted. So does **`isTerminalStatus`**: "is this still club property" is `status !== "active"`, and every surface that spelled it `status === "retired"` silently excluded `lost` and `disposed`, offering "Retire" on an item already written off and no way back to active. The inverse action is **"Reactivate"**, which is accurate for all three.
-- **`availabilityBadge` reaches past the rollup for the terminal bucket.** `gearAvailability` collapses all three terminal statuses into `retired` — right for "can I borrow this", wrong as the word on a card, where a lost harness read "Retired". The rollup keeps its five values (the filter is built on them) and the badge names the raw status.
+- **`availabilityBadge` reaches past the rollup for the terminal bucket.** `gearAvailability` collapses all three terminal statuses into `retired` — right for "can I borrow this", wrong as the word on a card, where a lost harness read "Retired". The rollup keeps its five values (the filter is built on them) and the badge names the raw status. It reaches past `on_loan` too, for the same kind of reason: a loan whose date has gone reads **"Overdue"**, destructive, matching what `/gear/loans` and `/my/gear` already said about the same row.
+- **`availabilityNote` is the half-sentence beside the badge** — "back Sep 23", "was due 2 weeks ago", the hold's reason, or where the piece is. `Unavailable` alone was the entire story for a piece at the shop, missing, or out with an officer: exactly the three cases with no condition badge next to them to account for it.
 
 ## Codes are never recycled
 
