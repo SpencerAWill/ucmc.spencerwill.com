@@ -25,9 +25,9 @@ import {
   CONDITION_LABEL,
   CONDITION_VARIANT,
   availabilityBadge,
+  availabilityNote,
   isTerminalStatus,
 } from "#/features/gear/lib/labels";
-import { formatDate } from "#/lib/date-format";
 
 // Falls back to the static placeholder SVG when the gear row has no
 // uploaded thumbnail. Per-gear keys live under `gear/<gearId>/...` and
@@ -77,6 +77,7 @@ export function GearCard({
 }) {
   const isInactive = isTerminalStatus(gear.status);
   const badge = availabilityBadge(gear);
+  const note = availabilityNote(gear);
   const subtitleParts = [gear.type.name, gear.code].filter(
     (p): p is string => p !== null,
   );
@@ -150,10 +151,8 @@ export function GearCard({
                 ask. The raw condition only earns a badge when it adds
                 something the rollup didn't already say. */}
             <Badge variant={badge.variant}>{badge.label}</Badge>
-            {gear.availability === "on_loan" && gear.availableFrom !== null ? (
-              <span className="text-xs text-muted-foreground">
-                back {formatDate(gear.availableFrom)}
-              </span>
+            {note ? (
+              <span className="text-xs text-muted-foreground">{note}</span>
             ) : null}
             {gear.condition !== "serviceable" ? (
               <Badge variant={CONDITION_VARIANT[gear.condition]}>

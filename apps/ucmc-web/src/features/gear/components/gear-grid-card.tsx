@@ -24,8 +24,8 @@ import type { GearSummary } from "#/features/gear/server/gear-fns";
 import {
   CONDITION_LABEL,
   CONDITION_VARIANT,
-  STATUS_LABEL,
-  STATUS_VARIANT,
+  availabilityBadge,
+  availabilityNote,
   isTerminalStatus,
 } from "#/features/gear/lib/labels";
 
@@ -55,6 +55,8 @@ export function GearGridCard({
   onUnretire: () => void;
 }) {
   const isInactive = isTerminalStatus(gear.status);
+  const badge = availabilityBadge(gear);
+  const note = availabilityNote(gear);
   const subtitleParts = [gear.type.name, gear.code].filter(
     (p): p is string => p !== null,
   );
@@ -120,14 +122,21 @@ export function GearGridCard({
             ))}
           </p>
         ) : null}
+        {note ? (
+          <p className="truncate text-xs text-muted-foreground" title={note}>
+            {note}
+          </p>
+        ) : null}
         <div className="mt-auto flex items-center justify-between gap-1 pt-2">
+          {/* Availability leads; `availabilityBadge` already names the
+              real terminal status, so there is no separate status badge
+              to add beside it. Condition only earns one when it says
+              something the rollup didn't. */}
           <div className="flex flex-wrap items-center gap-1 text-xs">
-            <Badge variant={CONDITION_VARIANT[gear.condition]}>
-              {CONDITION_LABEL[gear.condition]}
-            </Badge>
-            {isInactive ? (
-              <Badge variant={STATUS_VARIANT[gear.status]}>
-                {STATUS_LABEL[gear.status]}
+            <Badge variant={badge.variant}>{badge.label}</Badge>
+            {gear.condition !== "serviceable" ? (
+              <Badge variant={CONDITION_VARIANT[gear.condition]}>
+                {CONDITION_LABEL[gear.condition]}
               </Badge>
             ) : null}
           </div>
