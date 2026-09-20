@@ -126,11 +126,23 @@ export function GearHoldsManageDialog({
                   <li key={hold.publicId}>
                     <Item variant="outline" size="sm">
                       <ItemContent>
+                        {/* Both halves of the identity. A coded hold used
+                            to read "HN07" with no idea what that is, and
+                            a counted one "4 × Djinn Axess" with no idea
+                            which pieces — each surface showing exactly
+                            the half the other was missing. */}
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">
-                            {hold.itemCode
-                              ? hold.itemCode
-                              : `${hold.quantity} × ${hold.modelName}`}
+                            {hold.itemCode ? (
+                              <>
+                                <span className="font-mono">
+                                  {hold.itemCode}
+                                </span>{" "}
+                                · {hold.modelName}
+                              </>
+                            ) : (
+                              `${hold.quantity} × ${hold.modelName}`
+                            )}
                           </span>
                           <Badge
                             variant={hold.isLive ? "default" : "secondary"}
@@ -145,17 +157,21 @@ export function GearHoldsManageDialog({
                         <p className="text-xs text-muted-foreground">
                           {hold.reason} · {formatDate(hold.startsAt)} –{" "}
                           {formatDate(hold.endsAt)}
+                          {hold.heldByName ? ` · ${hold.heldByName}` : ""}
                         </p>
                       </ItemContent>
                       {hold.releasedAt === null ? (
                         <ItemActions>
+                          {/* Labelled, not a bare undo arrow: releasing
+                              somebody else's trip reservation is not a
+                              guessable icon. */}
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onRelease(hold)}
-                            aria-label="Release"
                           >
                             <Undo2 className="size-4" />
+                            Release
                           </Button>
                         </ItemActions>
                       ) : null}

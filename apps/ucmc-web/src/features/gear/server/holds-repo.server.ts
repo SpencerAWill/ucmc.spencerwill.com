@@ -33,6 +33,7 @@ export interface GearHoldRow {
   endsAt: Temporal.Instant;
   releasedAt: Temporal.Instant | null;
   heldByUserId: string | null;
+  heldByName: string | null;
   createdAt: Temporal.Instant;
 }
 
@@ -61,6 +62,9 @@ const HOLD_COLUMNS = {
   endsAt: schema.gearHolds.endsAt,
   releasedAt: schema.gearHolds.releasedAt,
   heldByUserId: schema.gearHolds.heldByUserId,
+  /** Who set it aside. The officer deciding whether to release someone
+   *  else's reservation needs to know whose it is. */
+  heldByName: schema.profiles.fullName,
   createdAt: schema.gearHolds.createdAt,
 } as const;
 
@@ -76,6 +80,10 @@ function holdsWithSubject() {
     .innerJoin(
       schema.gearTypes,
       eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .leftJoin(
+      schema.profiles,
+      eq(schema.profiles.userId, schema.gearHolds.heldByUserId),
     );
 }
 

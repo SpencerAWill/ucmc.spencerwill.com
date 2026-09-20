@@ -51,6 +51,10 @@ export interface GearHoldSummary {
   /** Derived, not stored: unreleased and inside its window. Computed
    *  server-side so the badge can't disagree with the filter. */
   isLive: boolean;
+  /** Who set it aside, for the officer weighing up whether to release
+   *  somebody else's reservation. Null when the placer's account is
+   *  gone or carries no profile. */
+  heldByName: string | null;
 }
 
 function toSummary(row: GearHoldRow, now: Temporal.Instant): GearHoldSummary {
@@ -71,6 +75,7 @@ function toSummary(row: GearHoldRow, now: Temporal.Instant): GearHoldSummary {
       row.releasedAt === null &&
       Temporal.Instant.compare(row.startsAt, now) <= 0 &&
       Temporal.Instant.compare(row.endsAt, now) > 0,
+    heldByName: row.heldByName,
   };
 }
 
@@ -107,7 +112,16 @@ export async function listGearHoldsAction(
     options.modelId = model.id;
   }
   const rows = await listGearHolds(options);
-  return rows.map((row) => toSummary(row, now));
+  const summaries = rows.map((row) => toSummary(row, now));
+  // Live first. The list is ordered by when each hold was placed, which
+  // put a lapsed reservation from three weeks ago above the one covering
+  // Saturday — and the live ones are the only rows an officer can
+  // actually act on. Stable within each group, so the underlying order
+  // still shows through.
+  return [
+    ...summaries.filter((h) => h.isLive),
+    ...summaries.filter((h) => !h.isLive),
+  ];
 }
 
 export interface PlaceGearHoldInput {

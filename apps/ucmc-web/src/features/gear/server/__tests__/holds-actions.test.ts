@@ -48,6 +48,15 @@ async function seedUser(roleId: string): Promise<string> {
       status: "approved",
     });
   await attachPrimaryEmail(id, `${crypto.randomUUID()}@example.com`);
+  // A profile, because the holds list names who placed each hold and
+  // the name comes from here.
+  await getDb().insert(schema.profiles).values({
+    userId: id,
+    fullName: "Dana Officer",
+    preferredName: "Dana",
+    phone: "+15555550100",
+    ucAffiliation: "student",
+  });
   await getDb()
     .insert(schema.userRoles)
     .values({ userId: id, roleId })
@@ -137,6 +146,7 @@ beforeEach(async () => {
   await db.delete(schema.gearModels);
   await db.delete(schema.gearTypes);
   await db.delete(schema.userRoles);
+  await db.delete(schema.profiles);
   await db.delete(schema.sessions);
   await db.delete(schema.userEmails);
   await db.delete(schema.users);
@@ -344,6 +354,35 @@ describe("releaseGearHoldAction", () => {
     expect(all).toHaveLength(1);
     expect(all[0]?.isLive).toBe(false);
     expect(await listGearHoldsAction({ liveOnly: true })).toEqual([]);
+  });
+
+  it("lists live holds above lapsed ones, and names who placed them", async () => {
+    // The underlying order is by when each was placed, which floated a
+    // reservation that lapsed three weeks ago above the one covering
+    // Saturday — and the live ones are the only rows an officer can act
+    // on. Who set it aside is the fact that decides whether to release
+    // somebody else's.
+    await signInAsManager();
+    await seedCodedItem("CH110");
+    await seedCodedItem("CH111");
+    const lapsed = await placeGearHoldAction({
+      gearCode: "CH110",
+      reason: "Trip that already happened",
+      ...window(-20, -6),
+    });
+    const live = await placeGearHoldAction({
+      gearCode: "CH111",
+      reason: "Saturday session",
+      ...window(-1, 6),
+    });
+    if (!lapsed.ok || !live.ok) throw new Error("place failed");
+
+    const all = await listGearHoldsAction();
+    expect(all.map((h) => h.publicId)).toEqual([
+      live.publicId,
+      lapsed.publicId,
+    ]);
+    expect(all[0]?.heldByName).toBeTruthy();
   });
 
   it("audits both ends of a hold", async () => {
