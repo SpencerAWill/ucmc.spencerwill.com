@@ -99,7 +99,7 @@ export function GearDetailCard({
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               {gear.tags.map((tag) => (
                 <Badge key={tag.publicId} variant="outline">
-                  #{tag.name}
+                  {tag.name}
                 </Badge>
               ))}
             </div>

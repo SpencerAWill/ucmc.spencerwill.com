@@ -270,7 +270,7 @@ function TagsPopover({ tags }: { tags: GearSummary["tags"] }) {
         <div className="flex flex-wrap gap-1.5">
           {tags.map((t) => (
             <Badge key={t.publicId} variant="outline">
-              #{t.name}
+              {t.name}
             </Badge>
           ))}
         </div>

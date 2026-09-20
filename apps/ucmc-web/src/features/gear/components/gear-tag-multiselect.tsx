@@ -64,7 +64,7 @@ export function GearTagMultiselect({
           if (result.ok) {
             onChange([...selectedPublicIds, result.publicId]);
             setQuery("");
-            toast.success(`Tag #${result.name} created`);
+            toast.success(`Tag ${result.name} created`);
           } else if (result.reason === "name_in_use") {
             toast.error("That tag already exists.");
           } else {
@@ -124,7 +124,7 @@ export function GearTagMultiselect({
                             isSelected ? "opacity-100" : "opacity-0"
                           }`}
                         />
-                        #{tag.name}
+                        {tag.name}
                       </button>
                     </li>
                   );
@@ -138,7 +138,7 @@ export function GearTagMultiselect({
                       disabled={createTag.isPending}
                     >
                       <Plus className="size-4" />
-                      Create #{normalizedQuery}
+                      Create {normalizedQuery}
                     </button>
                   </li>
                 ) : null}
@@ -153,7 +153,7 @@ export function GearTagMultiselect({
             .filter((t) => selected.has(t.publicId))
             .map((t) => (
               <Badge key={t.publicId} variant="outline">
-                #{t.name}
+                {t.name}
                 <button
                   type="button"
                   className="ml-1 -mr-1 text-muted-foreground hover:text-foreground"

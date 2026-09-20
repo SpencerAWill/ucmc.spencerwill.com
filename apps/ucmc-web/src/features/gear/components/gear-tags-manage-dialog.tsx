@@ -69,7 +69,7 @@ export function GearTagsManageDialog({
       { publicId: pendingDelete.publicId },
       {
         onSuccess: () => {
-          toast.success(`Tag #${pendingDelete.name} deleted`);
+          toast.success(`Tag ${pendingDelete.name} deleted`);
           setPendingDelete(null);
         },
         onError: () => toast.error("Couldn't delete the tag."),
@@ -109,11 +109,11 @@ export function GearTagsManageDialog({
                 ? "Gear tags"
                 : mode.kind === "create"
                   ? "New tag"
-                  : `Edit #${mode.tag.name}`}
+                  : `Edit ${mode.tag.name}`}
             </DialogTitle>
             <DialogDescription>
-              Non-exclusive labels (e.g. <code>#outdoor</code>,{" "}
-              <code>#winter</code>). Officers can mark a tag as
+              Non-exclusive labels (e.g. <code>outdoor</code>,{" "}
+              <code>winter</code>). Officers can mark a tag as
               <strong> Internal</strong> to keep it hidden from non-manager
               members.
             </DialogDescription>
@@ -141,7 +141,7 @@ export function GearTagsManageDialog({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete #{pendingDelete?.name}?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {pendingDelete?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
               Removes the tag from every gear row that carries it. Gear itself
               is untouched.
@@ -206,7 +206,7 @@ function ListPane({
                 <ItemContent>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="w-fit">
-                      #{t.name}
+                      {t.name}
                     </Badge>
                     {t.visibility === "internal" ? (
                       <Badge variant="secondary" className="gap-1">
@@ -261,7 +261,7 @@ function FormPane({
         {
           onSuccess: (result) => {
             if (result.ok) {
-              toast.success(`Saved #${result.name}`);
+              toast.success(`Saved ${result.name}`);
               onDone();
               return;
             }
@@ -281,7 +281,7 @@ function FormPane({
       {
         onSuccess: (result) => {
           if (result.ok) {
-            toast.success(`Created #${result.name}`);
+            toast.success(`Created ${result.name}`);
             onDone();
             return;
           }
