@@ -427,7 +427,22 @@ export async function listGearModelBrowseAction(
               (onLoanByModel.get(row.modelId) ?? 0) -
               (heldByModel.get(row.modelId) ?? 0),
           )
-        : row.available;
+        : // Not `row.available`: an untagged piece counts as available
+          // in the rollup — it is in the cave and nothing is wrong with
+          // it — but the desk has nothing to scan, so promising it
+          // under "1 of 2 available" sent a member for a harness they
+          // would be refused.
+          row.availableTakeable;
+    // A counted model's flagged stock is its "needs attention" number.
+    // Coded models got theirs from the item rollup and counted ones
+    // reported nothing, so two draws waiting on a gate repair simply
+    // vanished from a card that still called the other eighteen fine.
+    const unavailable =
+      row.tracking === "counted"
+        ? stock
+            .filter((s) => s.condition !== "serviceable")
+            .reduce((sum, s) => sum + s.quantity, 0)
+        : row.unavailable;
     return {
       publicId: row.modelPublicId,
       name: row.modelName,
@@ -439,7 +454,7 @@ export async function listGearModelBrowseAction(
       available: row.available,
       onLoan: row.onLoan,
       onHold: row.onHold,
-      unavailable: row.unavailable,
+      unavailable,
       retired: row.retired,
       stock,
       takeable,

@@ -1332,6 +1332,9 @@ export interface GearModelBrowseRow {
   typeName: string;
   total: number;
   available: number;
+  /** `available` minus the untagged — what the desk could actually hand
+   *  over. See the column comment in `listGearModelBrowseRows`. */
+  availableTakeable: number;
   onLoan: number;
   onHold: number;
   unavailable: number;
@@ -1381,6 +1384,15 @@ export async function listGearModelBrowseRows(
       // intermediate state during setup.
       total: sql<number>`sum(case when ${schema.gearItems.id} is not null then 1 else 0 end)`,
       available: bucket("available"),
+      // What a member could actually walk out with, which is `available`
+      // minus the untagged. An uncoded piece is genuinely available in
+      // the rollup's sense — active, serviceable, in the cave, nobody
+      // has it — and the item list is right to say so. But the desk
+      // cannot scan it out, so counting it under "1 of 2 available"
+      // promised a harness that would be refused on arrival.
+      availableTakeable: sql<number>`sum(case when ${availabilityWhere(
+        "available",
+      )} and ${schema.gearItems.code} is not null then 1 else 0 end)`,
       onLoan: bucket("on_loan"),
       onHold: bucket("on_hold"),
       unavailable: bucket("unavailable"),
@@ -1422,6 +1434,7 @@ export async function listGearModelBrowseRows(
     ...row,
     total: Number(row.total),
     available: Number(row.available),
+    availableTakeable: Number(row.availableTakeable),
     onLoan: Number(row.onLoan),
     onHold: Number(row.onHold),
     unavailable: Number(row.unavailable),

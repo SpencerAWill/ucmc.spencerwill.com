@@ -92,7 +92,7 @@ async function seedModel(tracking: "coded" | "counted") {
   return { publicId: model.publicId, id: rows.at(0)?.id ?? "" };
 }
 
-async function addItem(modelPublicId: string, code: string) {
+async function addItem(modelPublicId: string, code: string | null) {
   const item = await createGearAction({
     modelPublicId,
     code,
@@ -224,6 +224,41 @@ describe("listGearModelBrowseAction", () => {
     // 12 owned − 3 still out − 2 held = 7. A member borrowing draws
     // has no reason to learn the cave counts them by the binful.
     expect(browse[0]?.takeable).toBe(7);
+  });
+
+  it("doesn't promise an untagged piece the desk can't hand over", async () => {
+    // An uncoded piece is genuinely `available` in the rollup — active,
+    // serviceable, in the cave, nobody has it — and the item list is
+    // right to say so. But nothing can scan it out, so counting it in
+    // "1 of 2 available" sent a member for a harness they'd be refused.
+    await signInAsManager();
+    await seedType();
+    const model = await seedModel("coded");
+    await addItem(model.publicId, "CH40");
+    await addItem(model.publicId, null);
+
+    const browse = await listGearModelBrowseAction();
+    expect(browse[0]?.available).toBe(2);
+    expect(browse[0]?.takeable).toBe(1);
+  });
+
+  it("counts a counted model's flagged stock as needing attention", async () => {
+    // Coded models got this from the item rollup; counted ones reported
+    // nothing, so two draws waiting on a gate repair vanished from a
+    // card still calling the other eighteen fine.
+    await signInAsManager();
+    await seedType();
+    const model = await seedModel("counted");
+    await getDb()
+      .insert(schema.gearStockLevels)
+      .values([
+        { modelId: model.id, condition: "serviceable", quantity: 18 },
+        { modelId: model.id, condition: "needs_repair", quantity: 2 },
+      ]);
+
+    const browse = await listGearModelBrowseAction();
+    expect(browse[0]?.unavailable).toBe(2);
+    expect(browse[0]?.takeable).toBe(18);
   });
 
   it("shows a model that has no units yet", async () => {
