@@ -55,6 +55,8 @@ const {
 } = await import("#/features/gear/server/loans-actions.server");
 const { createGearModelAction } =
   await import("#/features/gear/server/models-actions.server");
+const { placeGearHoldAction } =
+  await import("#/features/gear/server/holds-actions.server");
 const { listLoans } = await import("#/features/gear/server/loans-repo.server");
 const { openSession } = await import("#/server/auth/session.server");
 
@@ -112,6 +114,38 @@ async function signInAsMember(
     fullName,
   );
   await assignRole(user.id, "role_member");
+  await signInAs(user.id);
+  return user;
+}
+
+/**
+ * A keeper holding `gear:loan` and NOT `gear:manage` — the delegable
+ * desk tier. Ad-hoc role so the test pins the permission rather than a
+ * seeded role's evolving grants.
+ */
+async function signInAsDeskKeeper(
+  fullName = "Kit Keeper",
+): Promise<{ id: string; publicId: string }> {
+  const db = getDb();
+  await db
+    .insert(schema.roles)
+    .values({
+      id: "role_test_gear_keeper",
+      name: "test_gear_keeper",
+      displayName: "Test gear keeper",
+      description: "Holds gear:loan without gear:manage",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.rolePermissions)
+    .values({ roleId: "role_test_gear_keeper", permissionId: "perm_gear_loan" })
+    .onConflictDoNothing();
+  const user = await seedUser(
+    `keeper-${crypto.randomUUID()}@example.com`,
+    fullName,
+  );
+  await assignRole(user.id, "role_member");
+  await assignRole(user.id, "role_test_gear_keeper");
   await signInAs(user.id);
   return user;
 }
@@ -378,6 +412,92 @@ describe("checkoutLoansAction", () => {
     // And the DB ended up with two open loans, one per gear — not three.
     const openLoans = await getDb().select().from(schema.gearLoans);
     expect(openLoans).toHaveLength(2);
+  });
+});
+
+// ── officer overrides ──────────────────────────────────────────────────
+
+describe("checkoutLoansAction hold override", () => {
+  /** Seeds a member, a held piece, and leaves the caller signed in as
+   *  whoever `signIn` says. The hold itself needs `gear:manage`, so it
+   *  is always placed by an admin first. */
+  async function seedHeldPiece(): Promise<{
+    gearPublicId: string;
+    memberPublicId: string;
+  }> {
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const gearPublicId = await createGearOk({ typePublicId, code: "CH1" });
+    const member = await seedUser("borrower@example.com", "Borrower One");
+    const now = Date.now();
+    const hold = await placeGearHoldAction({
+      gearPublicId,
+      reason: "Held for the Red River trip",
+      startsAtMs: now - 3600_000,
+      endsAtMs: now + 86_400_000,
+    });
+    if (!hold.ok) throw new Error(`placeGearHold failed: ${hold.reason}`);
+    return { gearPublicId, memberPublicId: member.publicId };
+  }
+
+  it("refuses a held piece when no override is passed", async () => {
+    const { gearPublicId, memberPublicId } = await seedHeldPiece();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [{ gearPublicId, durationDays: 7 }],
+      notes: null,
+    });
+
+    expect(result.results).toEqual([
+      { ok: false, gearPublicId, reason: "on_hold" },
+    ]);
+  });
+
+  it("lets a gear:manage officer override the hold, and records it", async () => {
+    const { gearPublicId, memberPublicId } = await seedHeldPiece();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [{ gearPublicId, durationDays: 7 }],
+      notes: null,
+      overrideHolds: true,
+    });
+
+    expect(result.results.every((r) => r.ok)).toBe(true);
+    const audits = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "loan.checked_out"));
+    expect(audits).toHaveLength(1);
+    // The override is the judgement the officer made; it belongs on the
+    // event, not only in the desk's memory.
+    const metadataJson = audits.at(0)?.metadataJson;
+    const md = metadataJson
+      ? (JSON.parse(metadataJson) as Record<string, unknown>)
+      : {};
+    expect(md.overrideHolds).toBe(true);
+    expect(md.overrideStanding).toBe(false);
+  });
+
+  it("ignores overrideHolds from a gear:loan keeper without gear:manage", async () => {
+    const { gearPublicId, memberPublicId } = await seedHeldPiece();
+    // `gear:loan` is delegable on its own, so the desk tier must not
+    // inherit the override that comes with `gear:manage`.
+    await signInAsDeskKeeper();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [{ gearPublicId, durationDays: 7 }],
+      notes: null,
+      overrideHolds: true,
+    });
+
+    expect(result.results).toEqual([
+      { ok: false, gearPublicId, reason: "on_hold" },
+    ]);
+    const loans = await getDb().select().from(schema.gearLoans);
+    expect(loans).toHaveLength(0);
   });
 });
 

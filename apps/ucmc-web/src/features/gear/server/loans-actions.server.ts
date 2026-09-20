@@ -117,8 +117,8 @@ export interface CheckoutLoansInput {
   notes: string | null;
   /** Officer overrides, both `gear:manage`-gated and both audited. A
    *  non-manager passing either is ignored rather than rejected — the
-   *  desk UI never offers them, so a request carrying one is a stale
-   *  client, not an attack worth a distinct error. */
+   *  desk UI only offers them to a manager, so a request carrying one
+   *  is a stale client, not an attack worth a distinct error. */
   overrideStanding?: boolean;
   overrideHolds?: boolean;
 }
@@ -187,9 +187,14 @@ export async function checkoutLoansAction(
     now,
     timeZone: CLUB_TIME_ZONE,
   });
-  const overrideStanding =
-    input.overrideStanding === true &&
-    principal.permissions.includes("gear:manage");
+  //
+  // Both flags are resolved through the same `gear:manage` check:
+  // `requireGearLoanManager` above only asserts `gear:loan`, which is
+  // deliberately delegable to a desk keeper who holds nothing else, so
+  // reading either flag raw would hand that keeper the override.
+  const canOverride = principal.permissions.includes("gear:manage");
+  const overrideStanding = input.overrideStanding === true && canOverride;
+  const overrideHolds = input.overrideHolds === true && canOverride;
   if (standing.standing === "blocked" && !overrideStanding) {
     return {
       results: input.items.map((item) => ({
@@ -253,7 +258,7 @@ export async function checkoutLoansAction(
     // A live hold blocks the desk the same way it blocks the member —
     // a warning nobody has to act on gets trampled, and then holds stop
     // being trusted. Officers pass `overrideHolds` to proceed.
-    if (!input.overrideHolds) {
+    if (!overrideHolds) {
       const held = await getActiveHoldForItem(gear.id, now);
       if (held) {
         results.push({
@@ -312,7 +317,10 @@ export async function checkoutLoansAction(
         code: row.code,
       });
     }
-    await emitCheckoutAudits(principal.userId, member.userId, validRows);
+    await emitCheckoutAudits(principal.userId, member.userId, validRows, {
+      overrideStanding,
+      overrideHolds,
+    });
     return { results };
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
@@ -344,7 +352,10 @@ export async function checkoutLoansAction(
       throw innerErr;
     }
   }
-  await emitCheckoutAudits(principal.userId, member.userId, survivors);
+  await emitCheckoutAudits(principal.userId, member.userId, survivors, {
+    overrideStanding,
+    overrideHolds,
+  });
   return { results };
 }
 
@@ -360,6 +371,10 @@ async function emitCheckoutAudits(
     code: string | null;
     durationDays: number;
   }>,
+  /** Recorded on every row of the batch. An override is a judgement an
+   *  officer made about this checkout, so it belongs on the event the
+   *  audit page shows, not only in the desk's memory. */
+  overrides: { overrideStanding: boolean; overrideHolds: boolean },
 ): Promise<void> {
   await recordAuditEvents(
     rows.map((r) => ({
@@ -375,6 +390,8 @@ async function emitCheckoutAudits(
         code: r.code,
         durationDays: r.durationDays,
         bulk: true,
+        overrideStanding: overrides.overrideStanding,
+        overrideHolds: overrides.overrideHolds,
       },
     })),
   );

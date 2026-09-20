@@ -149,6 +149,24 @@ audited rather than absent: the grant that can retire gear can also
 decide "let them take the rope anyway", and the system should record
 that rather than prevent it.
 
+### The desk overrides
+
+`overrideStanding` (a blocked member) and `overrideHolds` (a held piece)
+are the only two refusals an officer can push through; `SKIP_OVERRIDE_FLAG`
+in `lib/availability.ts` is the table, and everything absent from it is a
+hard stop. Both are **`gear:manage`-gated inside the action**, not by the
+`requireGearLoanManager` gate that admits the caller: `gear:loan` is
+delegable to a keeper who holds nothing else, so reading either flag raw
+would hand that keeper the override. Both land in the `loan.checked_out`
+metadata on every row of the batch.
+
+The affordance appears in the checkout pane **only after the server has
+actually refused something**, below the batch rather than per row — a
+blocked member refuses every row at once, and a per-row button would
+invite clicking through the same decision six times. The retry submits
+only the overridable rows, so a hard-stop row stays on screen with its
+reason instead of being swept along.
+
 ## Loans are dual-shape
 
 Each loan names **either** a coded item (`item_id`) **or** a counted model with a quantity (`model_id` + `quantity`, "six draws"). A CHECK constraint enforces exactly one. Every read path LEFT JOINs items and resolves the model through `coalesce(loans.model_id, items.model_id)` — one query serves both kinds, rather than two near-identical tables and two of every query behind `/my/gear`, the overdue list and member standing.

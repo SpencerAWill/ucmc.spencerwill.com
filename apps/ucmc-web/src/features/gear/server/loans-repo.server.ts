@@ -522,7 +522,7 @@ export async function listLoansForMember(
 /**
  * Open loans that are past due for one member, newest-overdue first.
  * Backs the member-standing check — see
- * `src/server/gear/member-standing.server.ts`, which owns the
+ * `src/server/gear/gear-cave-standing.server.ts`, which owns the
  * flag/block thresholds.
  */
 export async function listOverdueLoansForMember(

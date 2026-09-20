@@ -2,6 +2,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "#/components/ui/dialog";
 import { Label } from "#/components/ui/label";
 import {
   Table,
@@ -11,6 +19,7 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import { Textarea } from "#/components/ui/textarea";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { fetchGearByCode } from "#/features/gear/api/queries";
 import { useCheckoutLoans } from "#/features/gear/api/use-checkout-loans";
 import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
@@ -18,6 +27,8 @@ import { DueDatePicker } from "#/features/gear/components/due-date-picker";
 import { CheckoutItemRow } from "#/features/gear/components/gear-desk-item-row";
 import { GearCodeSearchCombobox } from "#/features/gear/components/gear-code-search-combobox";
 import { MemberSearchCombobox } from "#/features/gear/components/member-search-combobox";
+import { SKIP_OVERRIDE_FLAG } from "#/features/gear/lib/availability";
+import type { CheckoutOverrideFlag } from "#/features/gear/lib/availability";
 import { isCartToken } from "#/features/gear/lib/cart-token";
 import { DEFAULT_LOAN_DURATION_DAYS } from "#/features/gear/lib/loan-duration";
 import {
@@ -27,7 +38,7 @@ import {
 import type {
   CartItemAvailability,
   CartItemRow,
-  CheckoutLoansResult,
+  CheckoutSkipReason,
   GearLookupRow,
   MemberSearchResult,
 } from "#/features/gear/server/gear-fns";
@@ -36,12 +47,13 @@ interface CheckoutItem {
   row: GearLookupRow;
   durationDays: number;
   error?: string;
+  /** Set only by a server refusal, and only for the rows the server
+   *  actually refused. `error` alone can't drive the override affordance
+   *  — cart rows carry a pre-submit `error` the server never saw. */
+  blocked?: CheckoutSkipReason;
 }
 
-const SKIP_LABEL: Record<
-  Extract<CheckoutLoansResult["results"][number], { ok: false }>["reason"],
-  string
-> = {
+const SKIP_LABEL: Record<CheckoutSkipReason, string> = {
   not_found: "No longer in inventory",
   retired: "No longer active in the collection",
   not_serviceable: "Condition isn't serviceable",
@@ -111,6 +123,12 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     DEFAULT_LOAN_DURATION_DAYS,
   );
   const checkout = useCheckoutLoans();
+  const { hasPermission } = useAuth();
+  // `gear:loan` runs the desk; overriding a hold or a blocked member is
+  // the `gear:manage` grant's call, and the action re-checks it. The
+  // gate here only decides whether the button is worth showing.
+  const canOverride = hasPermission("gear:manage");
+  const [overrideOpen, setOverrideOpen] = useState(false);
 
   const addRow = (row: GearLookupRow) => {
     setItems((prev) => {
@@ -221,27 +239,36 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     }
   };
 
-  const submit = () => {
+  /**
+   * Submit one batch. `rows` is the whole list on a first attempt and
+   * only the overridable refusals on a retry, so the result handler
+   * reconciles per row rather than replacing the list wholesale —
+   * a hard-stop row the retry left out must stay on screen with its
+   * reason, not vanish because it wasn't in this response.
+   */
+  const runCheckout = (
+    rows: CheckoutItem[],
+    overrides: Partial<Record<CheckoutOverrideFlag, boolean>>,
+  ) => {
     if (!member) {
       toast.error("Pick a member first.");
       return;
     }
-    if (items.length === 0) {
+    if (rows.length === 0) {
       toast.error("Add at least one gear piece.");
       return;
     }
-    if (items.some((i) => i.error)) {
-      toast.error("Remove unavailable items before checking out.");
-      return;
-    }
+    const submittedIds = new Set(rows.map((r) => r.row.publicId));
+    const untouched = items.filter((i) => !submittedIds.has(i.row.publicId));
     checkout.mutate(
       {
         memberPublicId: member.publicId,
-        items: items.map((i) => ({
+        items: rows.map((i) => ({
           gearPublicId: i.row.publicId,
           durationDays: i.durationDays,
         })),
         notes: notes.trim() || null,
+        ...overrides,
       },
       {
         onSuccess: (data) => {
@@ -256,21 +283,23 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
           }
           // Keep skipped rows in the form with their reason so the
           // officer can fix and retry without re-adding.
-          setItems((prev) => {
-            const skippedIds = new Set(skipped.map((s) => s.gearPublicId));
-            return prev
-              .filter((i) => skippedIds.has(i.row.publicId))
-              .map((i) => {
-                const reason = skipped.find(
-                  (s) => s.gearPublicId === i.row.publicId,
-                );
-                return {
-                  ...i,
-                  error: reason ? SKIP_LABEL[reason.reason] : undefined,
-                };
-              });
-          });
-          if (skipped.length === 0) {
+          setItems((prev) =>
+            prev.flatMap((item) => {
+              if (!submittedIds.has(item.row.publicId)) return [item];
+              const refusal = skipped.find(
+                (sk) => sk.gearPublicId === item.row.publicId,
+              );
+              if (!refusal) return [];
+              return [
+                {
+                  ...item,
+                  error: SKIP_LABEL[refusal.reason],
+                  blocked: refusal.reason,
+                },
+              ];
+            }),
+          );
+          if (skipped.length === 0 && untouched.length === 0) {
             setMember(null);
             setNotes("");
             onSuccess();
@@ -280,6 +309,36 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
           toast.error("Couldn't process the checkout. Please try again.");
         },
       },
+    );
+  };
+
+  const submit = () => {
+    if (items.some((i) => i.error)) {
+      toast.error("Remove unavailable items before checking out.");
+      return;
+    }
+    runCheckout(items, {});
+  };
+
+  // Rows the server refused for a reason an officer is allowed to push
+  // through, paired with the flag each one wants. Anything else the
+  // server refused stays put and stays a hard stop.
+  const overridable = items.flatMap((item) => {
+    const reason = item.blocked;
+    if (reason === undefined) return [];
+    const flag = SKIP_OVERRIDE_FLAG[reason];
+    return flag === undefined ? [] : [{ item, reason, flag }];
+  });
+  const overrideFlags = Array.from(new Set(overridable.map((o) => o.flag)));
+  const overrideReasons = Array.from(
+    new Set(overridable.map((o) => SKIP_LABEL[o.reason])),
+  );
+
+  const confirmOverride = () => {
+    setOverrideOpen(false);
+    runCheckout(
+      overridable.map((o) => o.item),
+      Object.fromEntries(overrideFlags.map((flag) => [flag, true])),
     );
   };
 
@@ -407,6 +466,32 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
         />
       </div>
 
+      {/* Override lives below the batch, not on the row: a blocked
+          member refuses every row at once, and a per-row button would
+          invite clicking through the same decision six times. It only
+          appears once the server has actually refused something, so
+          the ordinary path never shows a way around the rules. */}
+      {canOverride && overridable.length > 0 ? (
+        <div className="space-y-2 rounded-md border border-dashed border-destructive/50 bg-destructive/5 p-3">
+          <p className="text-sm font-medium">
+            {overridable.length} {overridable.length === 1 ? "piece" : "pieces"}{" "}
+            refused: {overrideReasons.join("; ")}.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            You can check {overridable.length === 1 ? "it" : "them"} out anyway.
+            The override is recorded against your name in the audit log.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOverrideOpen(true)}
+            disabled={checkout.isPending}
+          >
+            Override and check out
+          </Button>
+        </div>
+      ) : null}
+
       <div className="flex justify-end">
         <Button
           onClick={submit}
@@ -417,6 +502,38 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
             : `Check out ${items.length || ""} ${items.length === 1 ? "item" : "items"}`.trim()}
         </Button>
       </div>
+
+      <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Override and check out?</DialogTitle>
+            <DialogDescription>
+              {overrideReasons.join("; ")}. Checking out anyway is recorded
+              against your name, with the reason, on every piece in this batch.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="space-y-1 text-sm">
+            {overridable.map((o) => (
+              <li key={o.item.row.publicId} className="flex gap-2">
+                <span className="font-mono font-semibold">
+                  {o.item.row.code}
+                </span>
+                <span className="text-muted-foreground">
+                  {SKIP_LABEL[o.reason]}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOverrideOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmOverride} disabled={checkout.isPending}>
+              Override and check out
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -92,6 +92,7 @@ import type {
   CheckinLoansResult,
   CheckoutLoansInput,
   CheckoutLoansResult,
+  CheckoutSkipReason,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
@@ -215,6 +216,7 @@ export type {
   CheckinLoansResult,
   CheckoutLoansInput,
   CheckoutLoansResult,
+  CheckoutSkipReason,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
@@ -577,6 +579,12 @@ const checkoutLoansInputSchema = z.object({
     .min(1)
     .max(50),
   notes: z.string().max(2_000).nullable(),
+  // Officer overrides. Declared here or Zod strips them and the action
+  // never sees the flag the desk sent — `gear:manage` is re-checked in
+  // `checkoutLoansAction`, so accepting them at the boundary grants
+  // nothing on its own.
+  overrideStanding: z.boolean().optional(),
+  overrideHolds: z.boolean().optional(),
 });
 
 const checkinLoansInputSchema = z.object({

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,6 +38,16 @@ vi.mock("#/features/gear/server/gear-fns", () => ({
 vi.mock("#/features/gear/api/queries", () => ({
   fetchGearByCode: fetchGearByCodeMock,
 }));
+
+// The override affordance is `gear:manage`-gated; the permission list
+// is per-test so both sides of that gate are reachable.
+const viewerPermissions = vi.hoisted<{ current: string[] }>(() => ({
+  current: ["gear:loan"],
+}));
+vi.mock("#/features/auth/api/use-auth", async () => {
+  const { authStub } = await import("#/test-support/auth-stub");
+  return { useAuth: () => authStub(viewerPermissions.current) };
+});
 
 const checkoutMutateMock = vi.hoisted(() => vi.fn());
 vi.mock("#/features/gear/api/use-checkout-loans", () => ({
@@ -115,6 +125,7 @@ beforeEach(() => {
   toastWarningMock.mockReset();
   checkoutMutateMock.mockReset();
   scannerOnResult.current = null;
+  viewerPermissions.current = ["gear:loan"];
 });
 
 // ── tests ───────────────────────────────────────────────────────────────
@@ -244,5 +255,98 @@ describe("GearDeskCheckoutPane cart-token branch", () => {
       expect(fetchGearByCodeMock).toHaveBeenCalledWith("CR42"),
     );
     expect(resolveCartTokenFnMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("GearDeskCheckoutPane officer override", () => {
+  /** Scans one loanable piece in, submits, then replays the server
+   *  refusing it — the only way a row gets a `blocked` reason. */
+  async function refuseOnePiece(
+    reason: "on_hold" | "already_on_loan",
+  ): Promise<void> {
+    resolveCartTokenFnMock.mockResolvedValue({
+      ok: true,
+      cart: {
+        memberPublicId: "u_member_public",
+        memberFullName: "Cart Member",
+        primaryEmail: "member@example.com",
+        items: [
+          {
+            publicId: "gear_a",
+            code: "CR1",
+            description: "Test piece A",
+            typeName: "Harness",
+            thumbnailKey: null,
+            status: "active",
+            condition: "serviceable",
+            hasOpenLoan: false,
+            availability: "loanable",
+            addedAt: 1,
+          },
+        ],
+      },
+    });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    await scannerOnResult.current!(`${CART_TOKEN_PREFIX}token-abc`);
+    await waitFor(() =>
+      expect(screen.getByTestId("row-CR1")).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /^Check out/ }));
+    const onSuccess = checkoutMutateMock.mock.calls[0]?.[1]?.onSuccess;
+    act(() => {
+      onSuccess({
+        results: [{ ok: false, gearPublicId: "gear_a", reason }],
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("error-CR1")).toBeInTheDocument(),
+    );
+  }
+
+  it("offers no override to a keeper without gear:manage", async () => {
+    viewerPermissions.current = ["gear:loan"];
+    await refuseOnePiece("on_hold");
+
+    expect(
+      screen.queryByRole("button", { name: "Override and check out" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers no override for a refusal that isn't overridable", async () => {
+    viewerPermissions.current = ["gear:loan", "gear:manage"];
+    // A piece someone else already has out doesn't come back because an
+    // officer clicked twice.
+    await refuseOnePiece("already_on_loan");
+
+    expect(
+      screen.queryByRole("button", { name: "Override and check out" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("resubmits the held row with overrideHolds after a confirm", async () => {
+    viewerPermissions.current = ["gear:loan", "gear:manage"];
+    await refuseOnePiece("on_hold");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Override and check out" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Override and check out" }),
+    );
+
+    expect(checkoutMutateMock).toHaveBeenCalledTimes(2);
+    expect(checkoutMutateMock.mock.calls[1]?.[0]).toMatchObject({
+      memberPublicId: "u_member_public",
+      items: [{ gearPublicId: "gear_a", durationDays: expect.any(Number) }],
+      overrideHolds: true,
+    });
+    // Only the flag the refusal called for — a hold override is not a
+    // standing override.
+    expect(checkoutMutateMock.mock.calls[1]?.[0]).not.toHaveProperty(
+      "overrideStanding",
+    );
   });
 });

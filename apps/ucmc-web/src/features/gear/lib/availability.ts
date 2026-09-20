@@ -12,6 +12,7 @@
  * filters and the desk all agree without another round-trip.
  */
 import type {
+  CheckoutSkipReason,
   GearCondition,
   GearStatus,
   GearWhereabouts,
@@ -118,3 +119,27 @@ export const BLOCKED_REASON_MESSAGE: Record<CheckoutBlockedReason, string> = {
 export function isOverridableBlock(reason: CheckoutBlockedReason): boolean {
   return reason === "needs_repair" || reason === "on_hold";
 }
+
+/** The two flags `checkoutLoansAction` accepts, both `gear:manage`-gated
+ *  and both recorded on the resulting audit event. */
+export type CheckoutOverrideFlag = "overrideStanding" | "overrideHolds";
+
+/**
+ * Which desk refusals an officer may override, and the flag each one
+ * wants on the retry.
+ *
+ * Deliberately a separate table from `isOverridableBlock` above, not a
+ * re-derivation of it: that one answers "can this member take this
+ * item", in the item's vocabulary, before a submit. This one answers
+ * "can the desk push this batch through anyway", in the server's
+ * post-submit skip vocabulary, where `member_blocked` is a property of
+ * the whole batch and `on_hold` of one row. Everything absent here is
+ * a hard stop — a retired piece does not come back because an officer
+ * clicked twice.
+ */
+export const SKIP_OVERRIDE_FLAG: Partial<
+  Record<CheckoutSkipReason, CheckoutOverrideFlag>
+> = {
+  on_hold: "overrideHolds",
+  member_blocked: "overrideStanding",
+};
