@@ -17,6 +17,7 @@ import {
 } from "#/features/gear/lib/safety";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearDetail } from "#/features/gear/server/gear-fns";
+import { GearTagChip } from "#/features/gear/components/gear-tag-chip";
 import {
   CONDITION_LABEL,
   CONDITION_VARIANT,
@@ -98,9 +99,7 @@ export function GearDetailCard({
           {gear.tags.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               {gear.tags.map((tag) => (
-                <Badge key={tag.publicId} variant="outline">
-                  {tag.name}
-                </Badge>
+                <GearTagChip key={tag.publicId} name={tag.name} />
               ))}
             </div>
           ) : null}

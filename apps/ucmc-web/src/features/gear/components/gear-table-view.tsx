@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
+import { GearTagChip } from "#/features/gear/components/gear-tag-chip";
 import {
   CONDITION_LABEL,
   CONDITION_VARIANT,
@@ -269,9 +270,7 @@ function TagsPopover({ tags }: { tags: GearSummary["tags"] }) {
       >
         <div className="flex flex-wrap gap-1.5">
           {tags.map((t) => (
-            <Badge key={t.publicId} variant="outline">
-              {t.name}
-            </Badge>
+            <GearTagChip key={t.publicId} name={t.name} />
           ))}
         </div>
       </PopoverContent>

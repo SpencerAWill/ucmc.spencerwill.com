@@ -2,7 +2,6 @@ import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import {
@@ -12,6 +11,7 @@ import {
 } from "#/components/ui/popover";
 import { useCreateGearTag } from "#/features/gear/api/use-create-gear-tag";
 import type { GearTagSummary } from "#/features/gear/server/gear-fns";
+import { GearTagChip } from "#/features/gear/components/gear-tag-chip";
 
 /**
  * Multi-select tag picker with inline create-tag-on-empty-search. Driven
@@ -152,17 +152,16 @@ export function GearTagMultiselect({
           {allTags
             .filter((t) => selected.has(t.publicId))
             .map((t) => (
-              <Badge key={t.publicId} variant="outline">
-                {t.name}
+              <GearTagChip key={t.publicId} name={t.name}>
                 <button
                   type="button"
-                  className="ml-1 -mr-1 text-muted-foreground hover:text-foreground"
+                  className="-mr-0.5 ml-0.5 text-muted-foreground hover:text-foreground"
                   onClick={() => toggle(t.publicId)}
                   aria-label={`Remove ${t.name}`}
                 >
                   ×
                 </button>
-              </Badge>
+              </GearTagChip>
             ))}
         </div>
       ) : null}

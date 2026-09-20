@@ -43,6 +43,7 @@ import { useCreateGearTag } from "#/features/gear/api/use-create-gear-tag";
 import { useDeleteGearTag } from "#/features/gear/api/use-delete-gear-tag";
 import { useEditGearTag } from "#/features/gear/api/use-edit-gear-tag";
 import type { GearTagSummary } from "#/features/gear/server/gear-fns";
+import { GearTagChip } from "#/features/gear/components/gear-tag-chip";
 
 type Mode =
   | { kind: "list" }
@@ -205,9 +206,7 @@ function ListPane({
               <Item variant="outline" size="sm">
                 <ItemContent>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="w-fit">
-                      {t.name}
-                    </Badge>
+                    <GearTagChip name={t.name} />
                     {t.visibility === "internal" ? (
                       <Badge variant="secondary" className="gap-1">
                         <Lock className="size-3" />

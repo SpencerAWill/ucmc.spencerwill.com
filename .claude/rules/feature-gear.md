@@ -56,6 +56,8 @@ Browse is `gear:read` (auto-granted to `role_member`); create/edit/deactivate/im
 
 **The new surfaces deliberately introduce no permissions of their own.** They are the same officer surface as the items they group, and a permission costs a migration plus a seed plus a role grant — worth spending only when a surface can be delegated separately, which none of these can.
 
+Tags render through **`GearTagChip`**, not `Badge`: a notched luggage-tag silhouette with an eyelet, muted fill, no border. They used to be pills prefixed with `#`, and the hash was the only thing separating them from the state chips beside them — so removing it (they are chips, not hashtags) meant the difference had to move into the shape. A tag is a label somebody chose to stick on; `Available` and `Needs repair` are facts the system derived, and the two should not look alike.
+
 Tags have a `visibility` column (`public`/`internal`) — **internal tags are stripped at the repo layer for non-officers, not just in the UI.** Tags are for multi-valued, cross-cutting labels (`dry-treated`, `instruction-only`). Per-type scales like harness size belong in `gear_attribute_defs`: tag names are globally unique (one `"M"` shared by harnesses and jackets) and the tag filter is **AND-only**, so "M or L" as tags returns nothing.
 
 ## Custom attributes, at two levels
