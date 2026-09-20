@@ -79,7 +79,7 @@ function row(overrides: Partial<MyCartResult["items"][number]>) {
   return {
     publicId: "gear_a",
     code: "CR1",
-    description: "Test piece",
+    name: "Petzl Corax",
     typeName: "Harness",
     thumbnailKey: null,
     status: "active" as const,

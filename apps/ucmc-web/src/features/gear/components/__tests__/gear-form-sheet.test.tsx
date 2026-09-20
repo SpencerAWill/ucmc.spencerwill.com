@@ -63,7 +63,6 @@ vi.mock("#/features/gear/components/gear-tag-multiselect", () => ({
 const summary: GearSummary = {
   publicId: "gear_1",
   code: "CH1",
-  description: "blue tape on the spine",
   thumbnailKey: null,
   status: "active",
   condition: "serviceable",

@@ -106,9 +106,8 @@ export function GearInspectionFormDialog({
         <DialogHeader>
           <DialogTitle>Log inspection</DialogTitle>
           <DialogDescription>
-            Record a safety check on {gear.code ?? gear.description}.
-            Inspections are append-only — to correct a mistake, log a new
-            inspection.
+            Record a safety check on {gear.code ?? gear.name}. Inspections are
+            append-only — to correct a mistake, log a new inspection.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

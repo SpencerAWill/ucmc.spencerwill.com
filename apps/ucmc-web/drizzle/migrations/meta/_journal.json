@@ -484,6 +484,13 @@
       "when": 1779477596945,
       "tag": "0068_gear_model_layer",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1779477596946,
+      "tag": "0069_drop_gear_item_description",
+      "breakpoints": true
     }
   ]
 }

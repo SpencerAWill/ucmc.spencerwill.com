@@ -79,7 +79,7 @@ export function LoanExtendDialog({
         <DialogHeader>
           <DialogTitle>Extend loan</DialogTitle>
           <DialogDescription>
-            Pick a new due date for {loan.code ?? loan.gearDescription}.
+            Pick a new due date for {loan.code ?? loan.gearName}.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">

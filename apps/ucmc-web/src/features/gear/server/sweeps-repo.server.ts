@@ -12,6 +12,7 @@ import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { Temporal } from "temporal-polyfill";
 
 import { getDb, schema } from "#/server/db";
+import { gearItemName } from "#/features/gear/lib/labels";
 
 export interface GearSweepRow {
   id: string;
@@ -170,7 +171,7 @@ export async function countSweepEntries(sweepId: string): Promise<number> {
 
 export interface UncodedItemRow {
   publicId: string;
-  description: string;
+  name: string;
   typeName: string;
   /** Already logged in this sweep. The picker keeps them listed and
    *  ticked rather than dropping them, so an officer working down a
@@ -197,7 +198,6 @@ export async function listUncodedActiveItems(
   const rows = await getDb()
     .select({
       publicId: schema.gearItems.publicId,
-      itemDescription: schema.gearItems.description,
       modelName: schema.gearModels.name,
       manufacturer: schema.gearModels.manufacturer,
       typeName: schema.gearTypes.name,
@@ -225,9 +225,7 @@ export async function listUncodedActiveItems(
     .orderBy(schema.gearTypes.name, schema.gearModels.name);
   return rows.map((r) => ({
     publicId: r.publicId,
-    description:
-      r.itemDescription ??
-      [r.manufacturer, r.modelName].filter(Boolean).join(" "),
+    name: gearItemName({ manufacturer: r.manufacturer, name: r.modelName }),
     typeName: r.typeName,
     seen: r.seenItemId !== null,
   }));

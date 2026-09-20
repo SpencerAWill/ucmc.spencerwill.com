@@ -68,7 +68,7 @@ export interface LoanSummary {
   /** Null for a counted loan — there is no single unit to link to. */
   gearPublicId: string | null;
   code: string | null;
-  gearDescription: string;
+  gearName: string;
   /** How many units this loan covers, and how many are back. Always 1
    *  and 0 for a coded loan; for a counted one the quantity IS the
    *  loan — "six draws" — and the list surfaces had no way to say so. */
@@ -99,7 +99,7 @@ function toSummary(row: LoanListRow): LoanSummary {
     publicId: row.publicId,
     gearPublicId: row.itemPublicId,
     code: row.code,
-    gearDescription: row.description,
+    gearName: row.name,
     quantity: row.quantity,
     quantityReturned: row.quantityReturned,
     thumbnailKey: row.thumbnailKey,

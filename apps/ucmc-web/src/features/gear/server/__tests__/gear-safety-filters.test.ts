@@ -77,8 +77,8 @@ async function seedModel(overrides: {
     typePublicId,
     name: `Mammut ${crypto.randomUUID()}`,
     manufacturer: null,
-    tracking: "coded",
     description: null,
+    tracking: "coded",
     msrpCents: null,
     serviceLifeYears: overrides.serviceLifeYears ?? null,
     inspectionIntervalDays: overrides.inspectionIntervalDays ?? null,
@@ -96,7 +96,6 @@ async function seedItem(
   const item = await createGearAction({
     modelPublicId,
     code,
-    description: null,
     thumbnailDataUrl: null,
     acquiredAt: null,
     manufacturedAt: opts.manufacturedAtMs ?? null,

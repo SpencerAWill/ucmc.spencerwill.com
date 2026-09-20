@@ -405,7 +405,7 @@ function ActiveSweepPane({
               {uncoded.map((u) => (
                 <option key={u.publicId} value={u.publicId}>
                   {u.seen ? "✓ " : ""}
-                  {u.typeName} — {u.description}
+                  {u.typeName} — {u.name}
                 </option>
               ))}
             </NativeSelect>

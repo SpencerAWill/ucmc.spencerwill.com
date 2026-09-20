@@ -64,7 +64,7 @@ export function CheckoutItemRow({
   return (
     <>
       <TableRow
-        title={`${row.typeName} · ${row.description}`}
+        title={`${row.typeName} · ${row.name}`}
         className={error ? "border-destructive/40" : undefined}
       >
         <TableCell className={CODE_CELL_CLASS}>{row.code}</TableCell>
@@ -147,7 +147,7 @@ export function CheckinItemRow({
   return (
     <>
       <TableRow
-        title={`${row.typeName} · ${row.description}`}
+        title={`${row.typeName} · ${row.name}`}
         className={error ? "border-destructive/40" : undefined}
       >
         <TableCell className={CODE_CELL_CLASS}>{row.code}</TableCell>

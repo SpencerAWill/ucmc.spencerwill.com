@@ -10,10 +10,11 @@
  *                                  OR its prefix; case-insensitive
  *   - code           (optional) — freeform short identifier; left blank
  *                                  for unlabeled gear
- *   - description    (optional) — this unit's distinguishing marks
- *                                  ("blue tape on the spine"). The model
- *                                  supplies the product name, so most
- *                                  rows have nothing to say here
+ *   - description    (legacy) — read ONLY as a fallback product name
+ *                                  for a sheet that predates the
+ *                                  `model` column. Items carry no
+ *                                  description of their own any more,
+ *                                  so nothing is stored from it
  *   - acquired_at    (optional) — ISO date (YYYY-MM-DD); parsed to ms
  *   - cost / price / amount (optional) — **always interpreted as
  *                                  dollars**, integer or decimal. `60`
@@ -28,9 +29,9 @@
  *                                  demand; a CSV of forty draws lands
  *                                  on one model, not forty. A legacy
  *                                  sheet carrying only `description`
- *                                  still imports: the description
- *                                  becomes the model name, which is
- *                                  right for a pile of one-offs.
+ *                                  still imports: that column becomes
+ *                                  the model name, which is right for a
+ *                                  pile of one-offs.
  *   - acquisition_kind (optional) — purchased|donated|found|
  *                                  warranty_replacement if present
  *   - tags           (optional) — comma-separated list of tag NAMES; the
@@ -51,9 +52,6 @@ import type { GearAcquisitionKind } from "#/features/gear/server/gear-fns";
 export interface ParsedGearRow {
   typePublicId: string;
   code: string | null;
-  /** Null when the sheet has no description column, or the cell is
-   *  blank — the model carries the product name. */
-  description: string | null;
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
   msrpCents: number | null;
@@ -363,10 +361,11 @@ export async function parseGearCsv(
       errors.push({ line, message: acquisitionKind.error });
     }
     // The model name is what the import groups items under. Falling
-    // back to the description keeps single-column legacy sheets
-    // importable: each distinct description becomes its own model,
+    // back to the legacy `description` column keeps single-column
+    // sheets importable: each distinct value becomes its own model,
     // which is exactly right for a pile of one-offs and harmless for a
-    // fleet the officer can merge afterwards.
+    // fleet the officer can merge afterwards. Nothing else is read from
+    // that column — items no longer store text of their own.
     const modelName = modelNameCell.length > 0 ? modelNameCell : description;
     // What a row cannot go without: it has to land on some product.
     if (modelName.length === 0) {
@@ -376,7 +375,6 @@ export async function parseGearCsv(
     rows.push({
       typePublicId,
       code: code.length === 0 ? null : code,
-      description: description.length === 0 ? null : description,
       acquiredAt: acquired.value,
       acquisitionCostCents: cost.value,
       msrpCents: msrp.value,

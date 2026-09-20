@@ -96,7 +96,6 @@ async function addItem(modelPublicId: string, code: string | null) {
   const item = await createGearAction({
     modelPublicId,
     code,
-    description: null,
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,

@@ -114,7 +114,7 @@ export const ATTRIBUTE_LEVEL_HINT: Record<GearAttributeLevel, string> = {
  * list read "Corax" six times over while the models view a tab away
  * read "Petzl Corax", and `/gear/loans` read a third thing again.
  */
-export function gearFallbackName(model: {
+export function gearItemName(model: {
   manufacturer: string | null;
   name: string;
 }): string {

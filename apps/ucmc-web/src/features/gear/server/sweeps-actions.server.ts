@@ -199,7 +199,7 @@ export async function recordSweepEntryAction(
       quantityCounted: 1,
       seenByUserId: principal.userId,
     });
-    return { ok: true, label: item.code ?? item.description ?? item.modelName };
+    return { ok: true, label: item.code ?? item.modelName };
   }
 
   if (input.gearCode) {

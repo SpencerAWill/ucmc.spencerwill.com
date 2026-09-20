@@ -300,10 +300,6 @@ export const createGearInputSchema = z.object({
   // from the model now, so they are no longer per-item fields.
   modelPublicId: z.string().min(1),
   code: z.string().max(64).nullable(),
-  // Distinguishing marks for this unit, e.g. "blue tape on the spine".
-  // Optional: the model supplies the name, so most items have nothing
-  // to say here.
-  description: z.string().trim().max(500).nullable(),
   // null = no thumbnail (omit on create); falls back to the model's
   // product shot at render time.
   thumbnailDataUrl: thumbnailDataUrlSchema.nullable(),

@@ -62,7 +62,6 @@ interface RowState {
   key: string;
   typePublicId: string;
   code: string;
-  description: string;
   /** YYYY-MM-DD string (matches `<input type="date">`). */
   acquiredAt: string;
   /** Dollar amount as typed, e.g. "60.00". Converted to cents at submit. */
@@ -72,8 +71,8 @@ interface RowState {
   manufacturer: string;
   serialNumber: string;
   /** Product name. Required by the import — it decides which model the
-   *  item lands under, and the parser falls back to the description
-   *  when the CSV has no model column. */
+   *  item lands under. The parser fills it from a legacy sheet's
+   *  `description` column when there is no `model` one. */
   modelName: string;
   acquisitionKind: GearAcquisitionKind | typeof ACQUISITION_KIND_NONE;
   /** Raw comma-separated text. Split + trimmed at submit. */
@@ -85,7 +84,6 @@ function makeRow(initial: Partial<RowState> = {}): RowState {
     key: crypto.randomUUID(),
     typePublicId: initial.typePublicId ?? "",
     code: initial.code ?? "",
-    description: initial.description ?? "",
     acquiredAt: initial.acquiredAt ?? "",
     costDollars: initial.costDollars ?? "",
     msrpDollars: initial.msrpDollars ?? "",
@@ -108,7 +106,6 @@ function rowHasContent(row: RowState): boolean {
   return (
     row.typePublicId.length > 0 ||
     row.code.trim().length > 0 ||
-    row.description.trim().length > 0 ||
     row.acquiredAt.length > 0 ||
     row.costDollars.trim().length > 0 ||
     row.msrpDollars.trim().length > 0 ||
@@ -121,17 +118,11 @@ function rowHasContent(row: RowState): boolean {
 }
 
 function rowIsValid(row: RowState): boolean {
-  // Type and a product name are required; the description is the
-  // per-unit note and is optional, matching the server. Code,
-  // acquired, and cost are optional per row. Cost must parse if
-  // present.
+  // Type and a product name are required; the model is what the item
+  // lands under and items carry no text of their own. Code, acquired
+  // and cost are optional per row. Cost must parse if present.
   if (row.typePublicId.length === 0) return false;
-  if (
-    row.modelName.trim().length === 0 &&
-    row.description.trim().length === 0
-  ) {
-    return false;
-  }
+  if (row.modelName.trim().length === 0) return false;
   if (row.costDollars.trim().length > 0) {
     const n = Number(row.costDollars);
     if (!Number.isFinite(n) || n < 0) return false;
@@ -236,7 +227,6 @@ export function GearBulkImportSheet({
         makeRow({
           typePublicId: r.typePublicId,
           code: r.code ?? "",
-          description: r.description ?? "",
           acquiredAt: r.acquiredAt !== null ? msToIso(r.acquiredAt) : "",
           costDollars:
             r.acquisitionCostCents !== null
@@ -302,8 +292,6 @@ export function GearBulkImportSheet({
     const payload = validRows.map((row) => ({
       typePublicId: row.typePublicId,
       code: row.code.trim().length === 0 ? null : row.code.trim(),
-      description:
-        row.description.trim().length === 0 ? null : row.description.trim(),
       acquiredAt:
         row.acquiredAt.length === 0
           ? null
@@ -320,12 +308,7 @@ export function GearBulkImportSheet({
         row.manufacturer.trim().length === 0 ? null : row.manufacturer.trim(),
       serialNumber:
         row.serialNumber.trim().length === 0 ? null : row.serialNumber.trim(),
-      // Falls back to the description so a sheet with no model column
-      // still imports — each distinct description becomes its own model.
-      modelName:
-        row.modelName.trim().length > 0
-          ? row.modelName.trim()
-          : row.description.trim(),
+      modelName: row.modelName.trim(),
       acquisitionKind:
         row.acquisitionKind === ACQUISITION_KIND_NONE
           ? null
@@ -413,7 +396,7 @@ export function GearBulkImportSheet({
               />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Columns: type (name or prefix, required), code, description,
+              Columns: type (name or prefix, required), model (required), code,
               acquired_at (YYYY-MM-DD), cost. Money cells are always read as
               dollars (60 and 60.00 both = $60.00). Header row optional.
               Header-only extras: manufacturer, serial_number, msrp,
@@ -595,18 +578,6 @@ function GearImportRow({
             maxLength={64}
           />
         </div>
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <Label className="text-xs" htmlFor={`description-${row.key}`}>
-            Description
-          </Label>
-          <Input
-            id={`description-${row.key}`}
-            value={row.description}
-            onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Blue tape on the spine"
-            maxLength={500}
-          />
-        </div>
         <div className="flex flex-col gap-1">
           <Label className="text-xs" htmlFor={`manufacturer-${row.key}`}>
             Manufacturer
@@ -653,7 +624,7 @@ function GearImportRow({
             id={`model-${row.key}`}
             className="h-9"
             value={row.modelName}
-            placeholder="Falls back to description"
+            placeholder="Petzl Corax"
             onChange={(e) => onChange({ modelName: e.target.value })}
             aria-required
           />

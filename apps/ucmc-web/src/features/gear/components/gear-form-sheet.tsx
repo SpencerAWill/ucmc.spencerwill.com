@@ -144,9 +144,6 @@ function GearForm({
   const [code, setCode] = useState<string>(
     isEdit ? (intent.gear.code ?? "") : "",
   );
-  const [description, setDescription] = useState<string>(
-    isEdit ? intent.gear.description : "",
-  );
   const [acquiredAtIso, setAcquiredAtIso] = useState<string>(
     isEdit && intent.gear.acquiredAt
       ? toDateInputValue(intent.gear.acquiredAt)
@@ -332,9 +329,6 @@ function GearForm({
       setError("Pick a model first.");
       return;
     }
-    // No longer required: the model supplies the product name, so this
-    // field is now only for per-unit distinguishing marks.
-    const trimmedDescription = description.trim();
     const acquiredAtMs =
       acquiredAtIso.length > 0
         ? Date.parse(`${acquiredAtIso}T00:00:00Z`)
@@ -371,7 +365,6 @@ function GearForm({
     const basePayload = {
       modelPublicId,
       code: code.trim().length === 0 ? null : code.trim(),
-      description: trimmedDescription.length === 0 ? null : trimmedDescription,
       acquiredAt: acquiredAtMs,
       manufacturedAt: manufacturedAtMs,
       acquisitionCostCents: cents,
@@ -588,39 +581,6 @@ function GearForm({
             on the model, so they're set once for the whole fleet.
           </p>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="gear-description">Distinguishing marks</Label>
-          <Input
-            id="gear-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Blue tape on the spine"
-            maxLength={500}
-          />
-          {/* Not required, matching the schema: the model supplies the
-              name, so most pieces have nothing to say here. It was
-              marked required with "Black Diamond Momentum, size M" for a
-              placeholder, which made every officer re-type the product
-              and the size — the two things the model layer and the
-              attributes exist to stop duplicating. */}
-          <p className="text-xs text-muted-foreground">
-            Optional. What tells this unit apart from the others like it — the
-            card falls back to the model's name.
-          </p>
-        </div>
-
-        {/* Thumbnail picker, below the identity fields rather than
-         * above them. It used to open the form, so the first thing an
-         * officer met was an optional photo — and per-unit photos are
-         * the less useful kind now that the product shot lives on the
-         * model and every unit falls back to it. Type, code and model
-         * are what the form is for.
-         *
-         * The clickable preview IS the upload affordance — empty state
-         * shows an "Add" hint, populated state shows the image and
-         * clicking it re-opens the file picker (replace). Remove is a
-         * separate text button only when there's something to
-         * remove. */}
         <div className="space-y-1.5">
           <Label>Thumbnail</Label>
           <div className="flex items-start gap-3">

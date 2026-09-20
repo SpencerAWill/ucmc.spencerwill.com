@@ -69,7 +69,7 @@ import { generatePublicId } from "#/server/auth/ids";
 import { eq } from "drizzle-orm";
 
 import { getDb, isUniqueViolation, schema } from "#/server/db";
-import { gearFallbackName } from "#/features/gear/lib/labels";
+import { gearItemName } from "#/features/gear/lib/labels";
 
 // ── public types ────────────────────────────────────────────────────────
 
@@ -103,10 +103,9 @@ export interface GearModelSummary {
 export interface GearSummary {
   publicId: string;
   code: string | null;
-  /** The item's own distinguishing note ("blue tape on the spine"), or
-   *  the product name when it has none. Items no longer carry the
-   *  product identity themselves — the model does. */
-  description: string;
+  /** What to call this piece: its product's name, brand included.
+   *  Wholly derived from the model — see `gearItemName`. */
+  name: string;
   /** R2 key for this unit's own photo, falling back to the model's
    *  product shot. Null when neither exists; the client resolves it to
    *  a public CDN URL via `gearThumbnailUrlFor`. */
@@ -177,7 +176,7 @@ export interface GearDetail extends GearSummary {
 export interface GearLabel {
   publicId: string;
   code: string;
-  description: string;
+  name: string;
   typeName: string;
 }
 
@@ -251,12 +250,10 @@ function toSummary(
     isMine: viewerUserId !== null && row.openLoanMemberUserId === viewerUserId,
     publicId: row.publicId,
     code: row.code,
-    description:
-      row.description ??
-      gearFallbackName({
-        manufacturer: row.manufacturer,
-        name: row.modelName,
-      }),
+    name: gearItemName({
+      manufacturer: row.manufacturer,
+      name: row.modelName,
+    }),
     thumbnailKey: row.thumbnailKey ?? row.modelImageKey,
     status: row.status,
     condition: row.condition,
@@ -498,10 +495,6 @@ export interface CreateGearInput {
    *  thin model of its own rather than a null here. */
   modelPublicId: string;
   code: string | null;
-  /** Distinguishing marks for this unit. Optional now that the model
-   *  carries the product identity; it used to be the required
-   *  catch-all for name, size and notes at once. */
-  description: string | null;
   /** Optional base64 `data:image/...` URL for the gear thumbnail. The
    *  action decodes, content-hashes, and uploads to R2. Null on omit. */
   thumbnailDataUrl: string | null;
@@ -588,7 +581,6 @@ export async function createGearAction(
       publicId,
       modelId,
       code,
-      description: normalizeOptionalText(input.description),
       thumbnailKey,
       manufacturedAt: msToInstant(input.manufacturedAt ?? null),
       acquiredAt: msToInstant(input.acquiredAt),
@@ -638,7 +630,6 @@ export interface EditGearInput {
   publicId: string;
   modelPublicId: string;
   code: string | null;
-  description: string | null;
   /** Three-state thumbnail control:
    *   - omit / `undefined` → keep current key untouched
    *   - a `data:image/...` URL → upload + replace
@@ -703,11 +694,6 @@ export async function editGearAction(
   if (code !== existing.code) {
     patch.code = code;
     changedFields.push("code");
-  }
-  const nextDescription = normalizeOptionalText(input.description);
-  if (nextDescription !== existing.description) {
-    patch.description = nextDescription;
-    changedFields.push("description");
   }
   const existingAcquiredAtMs = existing.acquiredAt?.epochMilliseconds ?? null;
   if (input.acquiredAt !== existingAcquiredAtMs) {

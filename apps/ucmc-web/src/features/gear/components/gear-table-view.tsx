@@ -116,7 +116,7 @@ export function GearTableView({
                     <Checkbox
                       checked={selectedPublicIds.has(g.publicId)}
                       onCheckedChange={() => onToggleSelect(g.publicId)}
-                      aria-label={`Select ${g.code ?? g.description}`}
+                      aria-label={`Select ${g.code ?? g.name}`}
                     />
                   </TableCell>
                 ) : null}
@@ -139,7 +139,7 @@ export function GearTableView({
                     params={{ publicId: g.publicId }}
                     className="block truncate underline-offset-4 hover:underline"
                   >
-                    {g.description}
+                    {g.name}
                   </Link>
                   {/* Below sm the state columns are gone, so the row's
                    * answer to "can I take this out" folds in here. It
@@ -182,7 +182,7 @@ export function GearTableView({
                             variant="ghost"
                             size="icon"
                             className="size-8"
-                            aria-label={`Actions for ${g.code ?? g.description}`}
+                            aria-label={`Actions for ${g.code ?? g.name}`}
                           >
                             <MoreVertical className="size-4" />
                           </Button>

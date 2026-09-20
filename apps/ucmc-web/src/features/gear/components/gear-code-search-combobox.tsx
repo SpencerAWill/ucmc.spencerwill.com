@@ -100,7 +100,7 @@ export function GearCodeSearchCombobox({
               <span className="flex flex-1 flex-col">
                 <span className="font-mono font-medium">{row.code}</span>
                 <span className="text-xs text-muted-foreground">
-                  {row.typeName} · {row.description}
+                  {row.typeName} · {row.name}
                 </span>
               </span>
               {mode === "checkin" && row.openLoanMemberFullName ? (

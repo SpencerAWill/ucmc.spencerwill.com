@@ -125,8 +125,8 @@ async function modelForType(typePublicId: string): Promise<string> {
     typePublicId,
     name: `Model for ${typePublicId}`,
     manufacturer: null,
-    tracking: "coded",
     description: null,
+    tracking: "coded",
     msrpCents: null,
     serviceLifeYears: null,
     inspectionIntervalDays: null,
@@ -142,18 +142,17 @@ async function modelForType(typePublicId: string): Promise<string> {
 async function createGearOk(input: {
   typePublicId: string;
   code?: string | null;
-  description?: string;
+  notesMarkdown?: string;
   tagPublicIds?: string[];
   condition?: schema.GearCondition;
 }): Promise<string> {
   const result = await createGearAction({
     modelPublicId: await modelForType(input.typePublicId),
     code: input.code ?? null,
-    description: input.description ?? "Test gear",
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,
-    notesMarkdown: null,
+    notesMarkdown: input.notesMarkdown ?? null,
     condition: input.condition ?? "serviceable",
     tagPublicIds: input.tagPublicIds ?? [],
   });
@@ -216,7 +215,6 @@ describe("authorization", () => {
       createGearAction({
         modelPublicId: "nope",
         code: null,
-        description: "Test gear",
         thumbnailDataUrl: null,
         acquiredAt: null,
         acquisitionCostCents: null,
@@ -245,8 +243,8 @@ describe("authorization", () => {
       typePublicId,
       name: "Sama",
       manufacturer: "Petzl",
-      tracking: "coded",
       description: null,
+      tracking: "coded",
       msrpCents: 7500,
       serviceLifeYears: 10,
       inspectionIntervalDays: null,
@@ -256,7 +254,6 @@ describe("authorization", () => {
     const created = await createGearAction({
       modelPublicId: model.publicId,
       code: "CH1",
-      description: "blue tape on the belay loop",
       thumbnailDataUrl: null,
       acquiredAt: null,
       manufacturedAt: Date.UTC(2019, 5, 1),
@@ -302,7 +299,6 @@ describe("authorization", () => {
       publicId,
       modelPublicId,
       code: "CH1",
-      description: "scuffed buckle",
       thumbnailDataUrl: null,
       acquiredAt: null,
       manufacturedAt: Date.UTC(2020, 0, 15),
@@ -336,7 +332,6 @@ describe("authorization", () => {
         "manufactured_at",
         "acquisition_kind",
         "condition",
-        "description",
       ]),
     );
     // serialNumber went from null → null: not a change.
@@ -354,7 +349,6 @@ describe("authorization", () => {
     const created = await createGearAction({
       modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -369,13 +363,15 @@ describe("authorization", () => {
       publicId: created.publicId,
       modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Renamed",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
       // serialNumber intentionally omitted — simulates list-page edit.
       notesMarkdown: null,
-      condition: "serviceable",
+      // Something has to actually change, or no `gear.updated` row is
+      // emitted and the audit assertion below passes vacuously. It used
+      // to be the description flipping to null that made the row.
+      condition: "needs_repair",
       tagPublicIds: [],
     });
     expect(result.ok).toBe(true);
@@ -387,9 +383,11 @@ describe("authorization", () => {
       .select()
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, "gear.updated"));
+    expect(audit).toHaveLength(1);
     const meta = JSON.parse(audit[0]?.metadataJson ?? "{}") as {
       changedFields: string[];
     };
+    expect(meta.changedFields).toContain("condition");
     expect(meta.changedFields).not.toContain("serial_number");
   });
 
@@ -400,8 +398,8 @@ describe("authorization", () => {
       typePublicId,
       name: "Sama",
       manufacturer: "Petzl",
-      tracking: "coded",
       description: null,
+      tracking: "coded",
       msrpCents: 8495,
       serviceLifeYears: null,
       inspectionIntervalDays: null,
@@ -413,7 +411,6 @@ describe("authorization", () => {
     const created = await createGearAction({
       modelPublicId: model.publicId,
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: 6000,
@@ -533,7 +530,6 @@ describe("gear lifecycle", () => {
     const result = await createGearAction({
       modelPublicId: await modelForType(typePublicId),
       code: "CH94",
-      description: null,
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -561,7 +557,6 @@ describe("gear lifecycle", () => {
     const result = await createGearAction({
       modelPublicId: await modelForType(typePublicId),
       code: "CH95",
-      description: null,
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -589,7 +584,6 @@ describe("gear lifecycle", () => {
     const first = await createGearAction({
       modelPublicId: await modelForType(typePublicId),
       code: "CH7",
-      description: "Test gear",
       thumbnailDataUrl,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -608,7 +602,6 @@ describe("gear lifecycle", () => {
     const dup = await createGearAction({
       modelPublicId: await modelForType(typePublicId),
       code: "CH7",
-      description: "Different gear, same code",
       thumbnailDataUrl,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -634,7 +627,6 @@ describe("gear lifecycle", () => {
     const dup = await createGearAction({
       modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -694,7 +686,6 @@ describe("gear lifecycle", () => {
     const reissue = await createGearAction({
       modelPublicId: await modelForType(typePublicId),
       code: "CH93",
-      description: null,
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -770,7 +761,6 @@ describe("gear lifecycle", () => {
       publicId,
       modelPublicId: await modelForType(typePublicId),
       code: "CH2",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -816,7 +806,6 @@ describe("tags + list filters", () => {
       publicId: gearPublicId,
       modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Test gear",
       thumbnailDataUrl: null,
       acquiredAt: null,
       acquisitionCostCents: null,
@@ -857,7 +846,6 @@ describe("tags + list filters", () => {
       publicId: gearPublicId,
       modelPublicId: await modelForType(typePublicId),
       code: "CH1",
-      description: "Test gear",
       acquiredAt: null,
       acquisitionCostCents: null,
       notesMarkdown: null,
@@ -959,24 +947,25 @@ describe("tags + list filters", () => {
     expect(broken.rows.map((r) => r.publicId)).toEqual([active]);
   });
 
-  it("searches across code, description, and notes", async () => {
+  it("searches across code and notes", async () => {
+    // The item's own `description` was a third search target until
+    // migration 0069 dropped the column. Notes is where per-unit prose
+    // lives now, and the product is reachable through the model's name
+    // and manufacturer.
     await signInAsManager();
     const typePublicId = await createTypeOk({ name: "Harness", prefix: "CH" });
-    await createGearOk({
-      typePublicId,
-      code: "CH1",
-      description: "Black Diamond Momentum",
-    });
+    await createGearOk({ typePublicId, code: "CH1" });
     await createGearOk({
       typePublicId,
       code: "CH2",
-      description: "Petzl Sama",
+      notesMarkdown: "Bought secondhand from a Petzl rep.",
     });
     await listGearTagsAction(); // sanity touch
 
-    const result = await listGearAction({ q: "petzl" });
-    expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]?.code).toBe("CH2");
+    expect((await listGearAction({ q: "CH1" })).rows).toHaveLength(1);
+    const byNotes = await listGearAction({ q: "petzl" });
+    expect(byNotes.rows).toHaveLength(1);
+    expect(byNotes.rows[0]?.code).toBe("CH2");
   });
 
   it("sorts by the requested key in the requested direction", async () => {

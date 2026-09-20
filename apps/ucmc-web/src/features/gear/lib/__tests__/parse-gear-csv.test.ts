@@ -18,7 +18,6 @@ describe("parseGearCsv extended columns", () => {
     expect(rows[0]).toMatchObject({
       typePublicId: "type_harness",
       code: "CH1",
-      description: "blue tape",
       modelName: "Sama",
       acquisitionCostCents: 6000,
       msrpCents: 8495,
@@ -94,15 +93,16 @@ describe("parseGearCsv required columns", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       code: "CH1",
-      description: null,
       modelName: "Sama",
     });
   });
 
-  it("reads `model` as the product, not as the description", async () => {
+  it("reads `model` as the product", async () => {
     const csv = ["type,model_name,code", "CH,Sama,CH1"].join("\n");
     const { rows } = await parseGearCsv(csv, TYPES);
-    expect(rows[0]).toMatchObject({ description: null, modelName: "Sama" });
+    expect(rows[0]).toMatchObject({ modelName: "Sama" });
+    // Items carry no text of their own since migration 0069.
+    expect(rows[0]).not.toHaveProperty("description");
   });
 
   it("still takes the model name from a description-only sheet", async () => {
@@ -112,7 +112,6 @@ describe("parseGearCsv required columns", () => {
     const { rows, errors } = await parseGearCsv(csv, TYPES);
     expect(errors).toEqual([]);
     expect(rows[0]).toMatchObject({
-      description: "Petzl Sama",
       modelName: "Petzl Sama",
     });
   });

@@ -53,7 +53,7 @@ export function LoanCard({ loan }: { loan: LoanSummary }) {
                       the row used to name the product alone, which read
                       as a single item. */}
                   {loan.quantity > 1 ? `${loan.quantity} × ` : ""}
-                  {loan.gearDescription}
+                  {loan.gearName}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">

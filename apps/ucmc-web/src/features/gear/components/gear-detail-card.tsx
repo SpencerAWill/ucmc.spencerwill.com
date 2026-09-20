@@ -73,8 +73,8 @@ export function GearDetailCard({
             )}
             <div>
               <CardTitle>{gear.type.name}</CardTitle>
-              {gear.description ? (
-                <CardDescription>{gear.description}</CardDescription>
+              {gear.name ? (
+                <CardDescription>{gear.name}</CardDescription>
               ) : null}
             </div>
           </div>

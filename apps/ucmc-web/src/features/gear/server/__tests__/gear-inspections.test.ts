@@ -102,7 +102,6 @@ async function signInAsInspector(fullName = "Ivy Inspector"): Promise<string> {
       id: "role_test_gear_inspector",
       name: "test_gear_inspector",
       displayName: "Test gear inspector",
-      description: "Holds gear:inspect without gear:manage",
     })
     .onConflictDoNothing();
   await db
@@ -139,8 +138,8 @@ async function modelForType(typePublicId: string): Promise<string> {
     typePublicId,
     name: `Model for ${typePublicId}`,
     manufacturer: null,
-    tracking: "coded",
     description: null,
+    tracking: "coded",
     msrpCents: null,
     serviceLifeYears: null,
     inspectionIntervalDays: null,
@@ -164,7 +163,6 @@ async function createGearOk(): Promise<string> {
   const gearResult = await createGearAction({
     modelPublicId: await modelForType(typeResult.publicId),
     code: "CH1",
-    description: "Test harness",
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,

@@ -92,7 +92,7 @@ function cartItemToCheckoutItem(
   const row: GearLookupRow = {
     publicId: cartItem.publicId,
     code: cartItem.code,
-    description: cartItem.description,
+    name: cartItem.name,
     typeName: cartItem.typeName,
     thumbnailKey: cartItem.thumbnailKey,
     status: cartItem.status,

@@ -142,7 +142,6 @@ describe("GearDeskCheckoutPane cart-token branch", () => {
           {
             publicId: "gear_a",
             code: "CR1",
-            description: "Test piece A",
             typeName: "Harness",
             thumbnailKey: null,
             status: "active",
@@ -182,7 +181,6 @@ describe("GearDeskCheckoutPane cart-token branch", () => {
           {
             publicId: "gear_a",
             code: "CR1",
-            description: "Loanable",
             typeName: "Harness",
             thumbnailKey: null,
             status: "active",
@@ -194,7 +192,6 @@ describe("GearDeskCheckoutPane cart-token branch", () => {
           {
             publicId: "gear_b",
             code: "CR2",
-            description: "Already out",
             typeName: "Harness",
             thumbnailKey: null,
             status: "active",
@@ -274,7 +271,6 @@ describe("GearDeskCheckoutPane officer override", () => {
           {
             publicId: "gear_a",
             code: "CR1",
-            description: "Test piece A",
             typeName: "Harness",
             thumbnailKey: null,
             status: "active",

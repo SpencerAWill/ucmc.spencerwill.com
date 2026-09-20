@@ -96,7 +96,7 @@ export type CartItemAvailability =
 
 /**
  * Hydrated cart row. Shaped to drop into the desk pane's existing
- * `GearLookupRow` consumers (description, code, type, lifecycle,
+ * `GearLookupRow` consumers (name, code, type, lifecycle,
  * condition, hasOpenLoan) plus an explicit `availability` and the
  * `addedAt` timestamp for stable client-side ordering.
  */
@@ -106,7 +106,8 @@ export interface CartItemRow {
    *  in the cart; the row then surfaces with `availability: "no_code"`
    *  so the member sees a deliberate flag instead of a silent drop. */
   code: string | null;
-  description: string;
+  /** The product's name, derived from the model. */
+  name: string;
   typeName: string;
   thumbnailKey: string | null;
   status: schema.GearStatus;
@@ -241,7 +242,7 @@ async function hydrateCartItems(
     items.push({
       publicId: row.publicId,
       code: row.code,
-      description: row.description,
+      name: row.name,
       typeName: row.typeName,
       thumbnailKey: row.thumbnailKey,
       status: row.status,

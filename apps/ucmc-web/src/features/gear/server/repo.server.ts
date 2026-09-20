@@ -13,7 +13,7 @@ import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { GearAvailability } from "#/features/gear/lib/availability";
 import { DUE_SOON_DAYS, EXPIRING_SOON_DAYS } from "#/features/gear/lib/safety";
 import { getDb, likeContains, schema } from "#/server/db";
-import { gearFallbackName } from "#/features/gear/lib/labels";
+import { gearItemName } from "#/features/gear/lib/labels";
 
 /**
  * One physical unit, with its model and type flattened in. Members never
@@ -27,7 +27,6 @@ export interface GearItemRow {
   modelId: string;
   code: string | null;
   serialNumber: string | null;
-  description: string | null;
   thumbnailKey: string | null;
   manufacturedAt: Temporal.Instant | null;
   acquiredAt: Temporal.Instant | null;
@@ -81,7 +80,6 @@ const ITEM_COLUMNS = {
   modelId: schema.gearItems.modelId,
   code: schema.gearItems.code,
   serialNumber: schema.gearItems.serialNumber,
-  description: schema.gearItems.description,
   thumbnailKey: schema.gearItems.thumbnailKey,
   manufacturedAt: schema.gearItems.manufacturedAt,
   acquiredAt: schema.gearItems.acquiredAt,
@@ -241,7 +239,6 @@ function itemWhere(filters: ListGearItemFilters) {
     clauses.push(
       or(
         likeContains(schema.gearItems.code, q),
-        likeContains(schema.gearItems.description, q),
         likeContains(schema.gearItems.notesMarkdown, q),
         likeContains(schema.gearModels.name, q),
         likeContains(schema.gearModels.manufacturer, q),
@@ -625,7 +622,6 @@ export async function insertGearItem(input: {
   modelId: string;
   code: string | null;
   serialNumber: string | null;
-  description: string | null;
   thumbnailKey: string | null;
   manufacturedAt: Temporal.Instant | null;
   acquiredAt: Temporal.Instant | null;
@@ -877,7 +873,7 @@ export async function bulkAddGearItemTags(input: {
 export interface GearLabelRow {
   publicId: string;
   code: string;
-  description: string;
+  name: string;
   typeName: string;
 }
 
@@ -890,7 +886,6 @@ export async function getGearLabelsByPublicIds(
     .select({
       publicId: schema.gearItems.publicId,
       code: schema.gearItems.code,
-      description: schema.gearItems.description,
       modelName: schema.gearModels.name,
       manufacturer: schema.gearModels.manufacturer,
       typeName: schema.gearTypes.name,
@@ -913,14 +908,10 @@ export async function getGearLabelsByPublicIds(
       {
         publicId: row.publicId,
         code: row.code,
-        // The label wants the product, not the per-unit scribble: an
-        // item's `description` is now optional and usually empty.
-        description:
-          row.description ??
-          gearFallbackName({
-            manufacturer: row.manufacturer,
-            name: row.modelName,
-          }),
+        name: gearItemName({
+          manufacturer: row.manufacturer,
+          name: row.modelName,
+        }),
         typeName: row.typeName,
       },
     ];

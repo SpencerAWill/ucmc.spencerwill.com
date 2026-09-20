@@ -139,10 +139,9 @@ export async function bulkImportGearAction(
   for (let i = 0; i < input.rows.length; i++) {
     const row = input.rows[i];
     const code = normalizeCode(row.code);
-    // Description is now optional — the model carries the product name,
-    // so a row only needs distinguishing marks when it has any. What the
-    // row cannot go without is a model name.
-    const description = (row.description ?? "").trim();
+    // The model name is what a row cannot go without: it is the only
+    // thing that names the product, now that items carry no text of
+    // their own.
     if (row.modelName.trim().length === 0) {
       skipped.push({ rowIndex: i, reason: "missing_model_name", code });
       continue;
@@ -248,7 +247,6 @@ export async function bulkImportGearAction(
         publicId,
         modelId,
         code,
-        description: normalizeOptional(description),
         // Bulk import doesn't support thumbnails — officers can upload
         // per-piece via the singular Add/Edit sheet after the fact.
         thumbnailKey: null,

@@ -20,7 +20,7 @@
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { getDb, likeContains, schema } from "#/server/db";
-import { gearFallbackName } from "#/features/gear/lib/labels";
+import { gearItemName } from "#/features/gear/lib/labels";
 
 // ── shared row shapes ──────────────────────────────────────────────────
 
@@ -37,9 +37,9 @@ export interface LoanListRow {
   modelPublicId: string;
   modelName: string;
   manufacturer: string | null;
-  /** What to show as the loan's subject: the item's own distinguishing
-   *  note when it has one, otherwise the product name. */
-  description: string;
+  /** The loan's subject, named after its product. Derived — items no
+   *  longer carry a description of their own. */
+  name: string;
   thumbnailKey: string | null;
   typeName: string;
   quantity: number;
@@ -72,7 +72,6 @@ const LOAN_COLUMNS = {
   itemId: schema.gearLoans.itemId,
   itemPublicId: schema.gearItems.publicId,
   code: schema.gearItems.code,
-  itemDescription: schema.gearItems.description,
   itemThumbnailKey: schema.gearItems.thumbnailKey,
   modelId: schema.gearModels.id,
   modelPublicId: schema.gearModels.publicId,
@@ -107,7 +106,6 @@ interface RawLoanRow {
   itemId: string | null;
   itemPublicId: string | null;
   code: string | null;
-  itemDescription: string | null;
   itemThumbnailKey: string | null;
   modelId: string;
   modelPublicId: string;
@@ -141,9 +139,7 @@ function toLoanRow(r: RawLoanRow): LoanListRow {
     modelPublicId: r.modelPublicId,
     modelName: r.modelName,
     manufacturer: r.manufacturer,
-    description:
-      r.itemDescription ??
-      gearFallbackName({ manufacturer: r.manufacturer, name: r.modelName }),
+    name: gearItemName({ manufacturer: r.manufacturer, name: r.modelName }),
     thumbnailKey: r.itemThumbnailKey ?? r.modelImageKey,
     typeName: r.typeName,
     quantity: r.quantity,
@@ -302,7 +298,7 @@ export interface ListLoansFilters {
   /** "active" → returnedAt IS NULL. "history" → returnedAt IS NOT NULL. */
   tab?: "active" | "history";
   memberUserId?: string;
-  /** Free-text against item code, item description, model name, member
+  /** Free-text against item code, model name, manufacturer, member
    *  full name, or member primary email (LIKE %q%). */
   q?: string;
   /** Active-only filter: due before now. */
@@ -353,8 +349,8 @@ export async function listLoans(
     clauses.push(
       or(
         likeContains(schema.gearItems.code, q),
-        likeContains(schema.gearItems.description, q),
         likeContains(schema.gearModels.name, q),
+        likeContains(schema.gearModels.manufacturer, q),
         likeContains(schema.profiles.fullName, q),
         likeContains(schema.userEmails.email, q),
       ),
@@ -717,7 +713,7 @@ export async function lookupBackfillItemByCode(
 export interface GearCartHydrationRow {
   publicId: string;
   code: string | null;
-  description: string;
+  name: string;
   typeName: string;
   thumbnailKey: string | null;
   status: schema.GearStatus;
@@ -748,7 +744,6 @@ export async function getCartHydrationRowsByPublicIds(
     .select({
       publicId: schema.gearItems.publicId,
       code: schema.gearItems.code,
-      itemDescription: schema.gearItems.description,
       modelName: schema.gearModels.name,
       manufacturer: schema.gearModels.manufacturer,
       typeName: schema.gearTypes.name,
@@ -794,9 +789,7 @@ export async function getCartHydrationRowsByPublicIds(
   return rows.map((r) => ({
     publicId: r.publicId,
     code: r.code,
-    description:
-      r.itemDescription ??
-      gearFallbackName({ manufacturer: r.manufacturer, name: r.modelName }),
+    name: gearItemName({ manufacturer: r.manufacturer, name: r.modelName }),
     typeName: r.typeName,
     thumbnailKey: r.itemThumbnailKey ?? r.modelImageKey,
     status: r.status,
@@ -819,7 +812,7 @@ export async function getCartHydrationRowsByPublicIds(
 export interface GearCodeSearchRow {
   publicId: string;
   code: string;
-  description: string;
+  name: string;
   typeName: string;
   thumbnailKey: string | null;
   status: schema.GearStatus;
@@ -835,7 +828,6 @@ export interface GearCodeSearchRow {
 const CODE_SEARCH_COLUMNS = {
   publicId: schema.gearItems.publicId,
   code: schema.gearItems.code,
-  itemDescription: schema.gearItems.description,
   modelName: schema.gearModels.name,
   manufacturer: schema.gearModels.manufacturer,
   typeName: schema.gearTypes.name,
@@ -851,7 +843,6 @@ const CODE_SEARCH_COLUMNS = {
 function toCodeSearchRow(r: {
   publicId: string;
   code: string | null;
-  itemDescription: string | null;
   modelName: string;
   manufacturer: string | null;
   typeName: string;
@@ -867,9 +858,7 @@ function toCodeSearchRow(r: {
   return {
     publicId: r.publicId,
     code: r.code,
-    description:
-      r.itemDescription ??
-      gearFallbackName({ manufacturer: r.manufacturer, name: r.modelName }),
+    name: gearItemName({ manufacturer: r.manufacturer, name: r.modelName }),
     typeName: r.typeName,
     thumbnailKey: r.itemThumbnailKey ?? r.modelImageKey,
     status: r.status,

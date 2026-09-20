@@ -12,7 +12,6 @@ import { createGearInputSchema } from "#/features/gear/server/gear-fns";
 const baseInput = {
   typePublicId: "type1",
   code: "CH1",
-  description: "Test",
   thumbnailDataUrl: null,
   acquiredAt: null,
   acquisitionCostCents: null,

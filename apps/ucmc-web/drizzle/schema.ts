@@ -1099,10 +1099,11 @@ export const gearItems = sqliteTable(
     // one item at a time, never a mode the system runs in.
     code: text("code"),
     serialNumber: text("serial_number"),
-    // Distinguishing marks for this unit ("blue tape on the spine").
-    // Optional now that the model carries the product identity — this
-    // column used to be the required catch-all for name, size and notes.
-    description: text("description"),
+    // No per-item `description`. It duplicated `notesMarkdown`, which
+    // already holds per-unit prose and is searchable, and in practice it
+    // held the product name — which the model carries. An item's display
+    // name is derived from its model (see `gearItemName`). Dropped in
+    // migration 0069.
     // Overrides the model's `imageKey` when set.
     thumbnailKey: text("thumbnail_key"),
     // The safety clock for soft goods. See `serviceLifeYears`.

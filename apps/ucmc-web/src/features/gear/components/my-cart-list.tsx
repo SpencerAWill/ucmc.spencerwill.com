@@ -158,7 +158,7 @@ function CartItemRowDisplay({
                 params={{ publicId: item.publicId }}
                 className="truncate text-sm font-medium hover:underline"
               >
-                {item.description}
+                {item.name}
               </Link>
             </div>
             <p className="text-xs text-muted-foreground">{item.typeName}</p>
@@ -170,7 +170,7 @@ function CartItemRowDisplay({
             <Button
               variant="ghost"
               size="icon"
-              aria-label={`Remove ${item.code ?? item.description} from cart`}
+              aria-label={`Remove ${item.code ?? item.name} from cart`}
               onClick={onRemove}
             >
               <X className="size-4" />

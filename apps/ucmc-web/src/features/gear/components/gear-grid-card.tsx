@@ -74,7 +74,7 @@ export function GearGridCard({
           to="/gear/$publicId"
           params={{ publicId: gear.publicId }}
           className="block aspect-square bg-muted"
-          aria-label={`Open ${gear.description}`}
+          aria-label={`Open ${gear.name}`}
         >
           <img
             src={
@@ -94,7 +94,7 @@ export function GearGridCard({
             onCheckedChange={() => onToggleSelect()}
             onClick={(e) => e.stopPropagation()}
             className="absolute top-2 left-2 size-7 rounded-md border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
-            aria-label={`Select ${gear.code ?? gear.description}`}
+            aria-label={`Select ${gear.code ?? gear.name}`}
           />
         ) : null}
       </div>
@@ -106,7 +106,7 @@ export function GearGridCard({
             params={{ publicId: gear.publicId }}
             className="line-clamp-2 underline-offset-4 hover:underline"
           >
-            {gear.description}
+            {gear.name}
           </Link>
         </h3>
         {subtitleParts.length > 0 ? (
@@ -158,7 +158,7 @@ export function GearGridCard({
                     variant="ghost"
                     size="icon"
                     className="size-8"
-                    aria-label={`Actions for ${gear.code ?? gear.description}`}
+                    aria-label={`Actions for ${gear.code ?? gear.name}`}
                   >
                     <MoreVertical className="size-4" />
                   </Button>

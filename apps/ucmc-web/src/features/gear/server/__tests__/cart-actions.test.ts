@@ -150,8 +150,8 @@ async function modelForType(typePublicId: string): Promise<string> {
     typePublicId,
     name: `Model for ${typePublicId}`,
     manufacturer: null,
-    tracking: "coded",
     description: null,
+    tracking: "coded",
     msrpCents: null,
     serviceLifeYears: null,
     inspectionIntervalDays: null,
@@ -172,7 +172,6 @@ async function createGearOk(input: {
   const r = await createGearAction({
     modelPublicId: await modelForType(input.typePublicId),
     code: input.code,
-    description: "Cart test gear",
     thumbnailDataUrl: null,
     acquiredAt: null,
     acquisitionCostCents: null,
