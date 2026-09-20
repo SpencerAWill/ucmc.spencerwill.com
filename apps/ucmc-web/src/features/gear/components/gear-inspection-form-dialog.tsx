@@ -15,10 +15,8 @@ import { Label } from "#/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group";
 import { Textarea } from "#/components/ui/textarea";
 import { useRecordGearInspection } from "#/features/gear/api/use-record-gear-inspection";
-import type {
-  GearInspectionResultValue,
-  GearSummary,
-} from "#/features/gear/server/gear-fns";
+import type { GearInspectionTarget } from "#/features/gear/api/use-record-gear-inspection";
+import type { GearInspectionResultValue } from "#/features/gear/server/gear-fns";
 
 const RESULT_VALUES: readonly GearInspectionResultValue[] = [
   "pass",
@@ -41,18 +39,25 @@ function todayIsoDate(): string {
 }
 
 export function GearInspectionFormDialog({
-  gear,
+  target,
+  label,
   open,
   onOpenChange,
 }: {
-  gear: GearSummary;
+  /** A coded piece or a counted model. The dialog is identical either
+   *  way — an inspection is an inspection — so the two share it rather
+   *  than growing a near-copy for the model layer. */
+  target: GearInspectionTarget;
+  /** What to call the thing being inspected: a code for a piece, the
+   *  product name for a model. */
+  label: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [date, setDate] = useState<string>(todayIsoDate());
   const [result, setResult] = useState<GearInspectionResultValue>("pass");
   const [notes, setNotes] = useState<string>("");
-  const record = useRecordGearInspection(gear.publicId);
+  const record = useRecordGearInspection(target);
 
   // Reset the form whenever the dialog reopens so an officer logging
   // a second inspection in a row doesn't see stale "fail" + notes.
@@ -83,13 +88,21 @@ export function GearInspectionFormDialog({
     const trimmedNotes = notes.trim();
     record.mutate(
       {
-        gearPublicId: gear.publicId,
+        ...(target.kind === "item"
+          ? { gearPublicId: target.publicId }
+          : { modelPublicId: target.publicId }),
         inspectedAt,
         result,
         notes: trimmedNotes.length === 0 ? null : trimmedNotes,
       },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          if (!result.ok) {
+            toast.error(
+              "This model tracks its units individually, so inspections belong on the pieces themselves.",
+            );
+            return;
+          }
           toast.success("Inspection recorded");
           onOpenChange(false);
         },
@@ -106,8 +119,8 @@ export function GearInspectionFormDialog({
         <DialogHeader>
           <DialogTitle>Log inspection</DialogTitle>
           <DialogDescription>
-            Record a safety check on {gear.code ?? gear.name}. Inspections are
-            append-only — to correct a mistake, log a new inspection.
+            Record a safety check on {label}. Inspections are append-only — to
+            correct a mistake, log a new inspection.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

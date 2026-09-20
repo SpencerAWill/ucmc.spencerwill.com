@@ -547,16 +547,33 @@ const listGearLabelsInputSchema = z.object({
 
 // ── inspections ────────────────────────────────────────────────────────
 
-const listGearInspectionsInputSchema = z.object({
-  gearPublicId: z.string().min(1),
-});
+// Either a coded piece or a counted model, never both — the same XOR
+// the `gear_inspections` row carries, enforced here so a malformed
+// payload never reaches the action.
+const inspectionTargetShape = {
+  gearPublicId: z.string().min(1).optional(),
+  modelPublicId: z.string().min(1).optional(),
+};
 
-const recordGearInspectionInputSchema = z.object({
-  gearPublicId: z.string().min(1),
-  inspectedAt: z.number().int().nonnegative(),
-  result: z.enum(GEAR_INSPECTION_RESULT_VALUES),
-  notes: z.string().max(2_000).nullable(),
-});
+const namesExactlyOneTarget = (v: {
+  gearPublicId?: string;
+  modelPublicId?: string;
+}) => (v.gearPublicId === undefined) !== (v.modelPublicId === undefined);
+
+const TARGET_MESSAGE = "name either a piece of gear or a model, not both";
+
+const listGearInspectionsInputSchema = z
+  .object(inspectionTargetShape)
+  .refine(namesExactlyOneTarget, { message: TARGET_MESSAGE });
+
+const recordGearInspectionInputSchema = z
+  .object({
+    ...inspectionTargetShape,
+    inspectedAt: z.number().int().nonnegative(),
+    result: z.enum(GEAR_INSPECTION_RESULT_VALUES),
+    notes: z.string().max(2_000).nullable(),
+  })
+  .refine(namesExactlyOneTarget, { message: TARGET_MESSAGE });
 
 // ── loans ──────────────────────────────────────────────────────────────
 

@@ -376,3 +376,146 @@ describe("recordGearInspectionAction", () => {
     ).rejects.toThrow("Gear not found");
   });
 });
+
+describe("counted models are inspected as a batch", () => {
+  async function createCountedModel(): Promise<string> {
+    const typeResult = await createGearTypeAction({
+      name: `Quickdraw ${crypto.randomUUID()}`,
+      prefix: "QD",
+      description: null,
+      inspectionIntervalDays: 365,
+    });
+    if (!typeResult.ok) throw new Error("createGearType failed");
+    const result = await createGearModelAction({
+      typePublicId: typeResult.publicId,
+      name: `HotWire ${crypto.randomUUID()}`,
+      manufacturer: "Black Diamond",
+      description: null,
+      tracking: "counted",
+      msrpCents: null,
+      serviceLifeYears: null,
+      inspectionIntervalDays: null,
+      productUrl: null,
+    });
+    if (!result.ok) throw new Error("createGearModel failed");
+    return result.publicId;
+  }
+
+  it("records against the model, which had no way to be inspected at all", async () => {
+    await signInAsManager();
+    const modelPublicId = await createCountedModel();
+
+    // A counted model has no item rows, so before this the whole
+    // category — draws, slings, the shortest-lived soft goods in the
+    // cave — had no inspection record available to it.
+    const result = await recordGearInspectionAction({
+      modelPublicId,
+      inspectedAt: Date.now(),
+      result: "advisory",
+      notes: "Four slings fuzzing at the bar-tack.",
+    });
+    expect(result).toMatchObject({ ok: true });
+
+    const rows = await listGearInspectionsAction({ modelPublicId });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].result).toBe("advisory");
+    expect(rows[0].notes).toBe("Four slings fuzzing at the bar-tack.");
+  });
+
+  it("hangs the row off model_id, leaving item_id null", async () => {
+    await signInAsManager();
+    const modelPublicId = await createCountedModel();
+    await recordGearInspectionAction({
+      modelPublicId,
+      inspectedAt: Date.now(),
+      result: "pass",
+      notes: null,
+    });
+
+    const rows = await getDb()
+      .select({
+        itemId: schema.gearInspections.itemId,
+        modelId: schema.gearInspections.modelId,
+      })
+      .from(schema.gearInspections);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].itemId).toBeNull();
+    expect(rows[0].modelId).not.toBeNull();
+  });
+
+  it("refuses a coded model, whose units are inspected one at a time", async () => {
+    await signInAsManager();
+    const gearPublicId = await createGearOk();
+    const gear = await getDb()
+      .select({ modelId: schema.gearItems.modelId })
+      .from(schema.gearItems);
+    const models = await getDb()
+      .select({
+        id: schema.gearModels.id,
+        publicId: schema.gearModels.publicId,
+      })
+      .from(schema.gearModels);
+    const modelPublicId =
+      models.find((m) => m.id === gear[0]?.modelId)?.publicId ?? "";
+
+    expect(
+      await recordGearInspectionAction({
+        modelPublicId,
+        inspectedAt: Date.now(),
+        result: "pass",
+        notes: null,
+      }),
+    ).toEqual({ ok: false, reason: "not_counted" });
+
+    // The read answers empty rather than refusing: a coded model has no
+    // batch history, which is a fact about it, not a broken request.
+    expect(await listGearInspectionsAction({ modelPublicId })).toEqual([]);
+    // …and the piece's own log is untouched by the refused write.
+    expect(await listGearInspectionsAction({ gearPublicId })).toEqual([]);
+  });
+
+  it("keeps a model's batch log separate from its type's pieces", async () => {
+    await signInAsManager();
+    const modelPublicId = await createCountedModel();
+    const gearPublicId = await createGearOk();
+    await recordGearInspectionAction({
+      modelPublicId,
+      inspectedAt: Date.now(),
+      result: "pass",
+      notes: "Batch.",
+    });
+    await recordGearInspectionAction({
+      gearPublicId,
+      inspectedAt: Date.now(),
+      result: "fail",
+      notes: "One harness.",
+    });
+
+    expect(
+      (await listGearInspectionsAction({ modelPublicId })).map((r) => r.notes),
+    ).toEqual(["Batch."]);
+    expect(
+      (await listGearInspectionsAction({ gearPublicId })).map((r) => r.notes),
+    ).toEqual(["One harness."]);
+  });
+
+  it("records which layer was inspected in the audit row", async () => {
+    await signInAsManager();
+    const modelPublicId = await createCountedModel();
+    await getDb().delete(schema.auditLog);
+    await recordGearInspectionAction({
+      modelPublicId,
+      inspectedAt: Date.now(),
+      result: "pass",
+      notes: null,
+    });
+
+    const rows = await getDb()
+      .select({ metadataJson: schema.auditLog.metadataJson })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "gear_inspection.recorded"));
+    // Without it, a reader of the log can't tell a batch check of forty
+    // draws from one harness.
+    expect(JSON.parse(rows[0]?.metadataJson ?? "{}").level).toBe("model");
+  });
+});

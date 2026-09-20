@@ -1,33 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { formatDate } from "#/lib/date-format";
 import { ClipboardCheck, Plus } from "lucide-react";
 import { useState } from "react";
 
-import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 import { gearInspectionsQueryOptions } from "#/features/gear/api/queries";
 import { GearInspectionFormDialog } from "#/features/gear/components/gear-inspection-form-dialog";
-import type {
-  GearInspectionResultValue,
-  GearInspectionSummary,
-  GearSummary,
-} from "#/features/gear/server/gear-fns";
-
-const RESULT_LABEL: Record<GearInspectionResultValue, string> = {
-  pass: "Pass",
-  fail: "Fail",
-  advisory: "Advisory",
-};
-
-const RESULT_VARIANT: Record<
-  GearInspectionResultValue,
-  "secondary" | "destructive" | "outline"
-> = {
-  pass: "secondary",
-  fail: "destructive",
-  advisory: "outline",
-};
+import { GearInspectionList } from "#/features/gear/components/gear-inspection-list";
+import type { GearSummary } from "#/features/gear/server/gear-fns";
 
 export function GearInspectionsSection({
   gear,
@@ -42,7 +22,6 @@ export function GearInspectionsSection({
   const { data, isLoading } = useQuery(
     gearInspectionsQueryOptions(gear.publicId),
   );
-  const inspections = data ?? [];
 
   return (
     <Card>
@@ -59,52 +38,16 @@ export function GearInspectionsSection({
         ) : null}
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : inspections.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No inspections recorded yet.
-          </p>
-        ) : (
-          <ul className="divide-y">
-            {inspections.map((entry) => (
-              <InspectionRow key={entry.publicId} entry={entry} />
-            ))}
-          </ul>
-        )}
+        <GearInspectionList inspections={data ?? []} isLoading={isLoading} />
       </CardContent>
       {canInspect ? (
         <GearInspectionFormDialog
-          gear={gear}
+          target={{ kind: "item", publicId: gear.publicId }}
+          label={gear.code ?? gear.name}
           open={logOpen}
           onOpenChange={setLogOpen}
         />
       ) : null}
     </Card>
-  );
-}
-
-function InspectionRow({ entry }: { entry: GearInspectionSummary }) {
-  return (
-    <li className="py-3 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Badge variant={RESULT_VARIANT[entry.result]}>
-            {RESULT_LABEL[entry.result]}
-          </Badge>
-          <span className="text-sm font-medium">
-            {formatDate(entry.inspectedAt)}
-          </span>
-        </div>
-        <span className="text-xs text-muted-foreground">
-          by {entry.inspectorName ?? "Unknown"}
-        </span>
-      </div>
-      {entry.notes ? (
-        <p className="mt-1.5 text-sm whitespace-pre-wrap text-muted-foreground">
-          {entry.notes}
-        </p>
-      ) : null}
-    </li>
   );
 }

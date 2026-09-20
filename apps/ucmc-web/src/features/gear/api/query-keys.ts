@@ -73,6 +73,12 @@ export const gearSuggestedCodeQueryKey = (typePublicId: string) =>
 export const gearInspectionsQueryKey = (gearPublicId: string) =>
   ["gear", "inspections", gearPublicId] as const;
 
+/** Batch inspections recorded against a counted model. Keyed apart from
+ *  the per-item log because they answer about different things — forty
+ *  draws looked over at once, not one harness. */
+export const gearModelInspectionsQueryKey = (modelPublicId: string) =>
+  ["gear", "inspections", "model", modelPublicId] as const;
+
 export const gearLabelsQueryKey = (publicIds: readonly string[]) =>
   ["gear", "labels", [...publicIds].sort().join(",")] as const;
 

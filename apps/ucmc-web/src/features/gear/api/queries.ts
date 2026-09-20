@@ -22,6 +22,7 @@ import {
   gearCodeSearchQueryKey,
   gearDetailQueryKey,
   gearInspectionsQueryKey,
+  gearModelInspectionsQueryKey,
   gearLabelsQueryKey,
   gearSuggestedCodeQueryKey,
   loanDetailQueryKey,
@@ -204,6 +205,15 @@ export function gearInspectionsQueryOptions(gearPublicId: string) {
   return {
     queryKey: gearInspectionsQueryKey(gearPublicId),
     queryFn: () => listGearInspectionsFn({ data: { gearPublicId } }),
+  } as const;
+}
+
+/** The batch inspection log for a counted model — the same read, aimed
+ *  at the other half of the row's item/model XOR. */
+export function gearModelInspectionsQueryOptions(modelPublicId: string) {
+  return {
+    queryKey: gearModelInspectionsQueryKey(modelPublicId),
+    queryFn: () => listGearInspectionsFn({ data: { modelPublicId } }),
   } as const;
 }
 

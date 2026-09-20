@@ -269,6 +269,15 @@ Two refusals are typed rather than left to the database: `has_items` on a coded 
 - **Close excludes four things from the missing sweep**, each for its own reason: on an open loan (legitimately absent — marking it missing accuses the borrower of losing what they signed out), at `repair`, with an `officer`, and **under a live hold** (all three absent by arrangement). The hold exclusion was missed at first, which had the close calling a piece missing while the hold explaining its absence — with a named officer and a written reason — sat beside it in the same UI. An **expired** hold shields nothing, matching how it releases itself everywhere else. An item **already** `missing` is deliberately _not_ excluded: it is still unseen, and re-stamping is how "missing since March" stays true rather than freezing at the first sweep that noticed.
 - **Counted shortfalls are reported, never written off.** `expected` is total stock; `counted + onLoan` is what the sweep accounts for. A miscount is likelier than four lost draws, so the write-off stays somebody's decision. A surplus is reported as nothing — it means a miscount upward or stale stock, neither of which is a loss to chase.
 
+## Inspections, at both levels
+
+`gear_inspections` carries the same `item_id` / `model_id` XOR as loans, holds and sweep entries, and for the same reason: a counted model has no item rows, so "looked over all the draws" has nowhere else to hang. Both halves are reachable — a coded piece from the inspection log on its detail page, a counted model from the **Inspections** button beside Stock on its row in the models dialog.
+
+- The write **refuses a coded model** (`not_counted`): its units are inspected one at a time, by code, and a batch row would record "all of them are fine" while saying nothing about which harness was in somebody's hands. The **read answers with an empty list instead** — a coded model has no batch history, which is a fact about it rather than a broken request.
+- The audit row carries `level: "item" | "model"`, because otherwise a reader can't tell a batch check of forty draws from one harness.
+- `GearInspectionFormDialog` and `GearInspectionList` are shared by both surfaces rather than copied per layer — an inspection reads the same either way.
+- **Batch inspections are `gear:manage`-reachable only**, because the models dialog is. The action itself is `requireGearInspector` like the item path, so opening a counted-gear surface to `gear:inspect` is a UI change, not a permissions one. Known gap: a trip leader can log a failed rope but not a fuzzing sling.
+
 ## The two safety clocks
 
 `lib/safety.ts` — `inspectionState` and `serviceLifeState`. Both are **derived, never stored**: storing either would need a cron to keep it true and a way for it to disagree with the inspection log, the same reasoning that keeps loan state off the item row.
