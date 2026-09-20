@@ -89,28 +89,35 @@ export interface SweepEntryRow {
 export async function listSweepEntries(
   sweepId: string,
 ): Promise<SweepEntryRow[]> {
-  return getDb()
-    .select({
-      itemId: schema.gearInventorySweepEntries.itemId,
-      itemPublicId: schema.gearItems.publicId,
-      itemCode: schema.gearItems.code,
-      modelId: schema.gearInventorySweepEntries.modelId,
-      modelName: schema.gearModels.name,
-      quantityCounted: schema.gearInventorySweepEntries.quantityCounted,
-      seenAt: schema.gearInventorySweepEntries.seenAt,
-      seenByUserId: schema.gearInventorySweepEntries.seenByUserId,
-    })
-    .from(schema.gearInventorySweepEntries)
-    .leftJoin(
-      schema.gearItems,
-      eq(schema.gearItems.id, schema.gearInventorySweepEntries.itemId),
-    )
-    .leftJoin(
-      schema.gearModels,
-      eq(schema.gearModels.id, schema.gearInventorySweepEntries.modelId),
-    )
-    .where(eq(schema.gearInventorySweepEntries.sweepId, sweepId))
-    .orderBy(desc(schema.gearInventorySweepEntries.seenAt));
+  return (
+    getDb()
+      .select({
+        itemId: schema.gearInventorySweepEntries.itemId,
+        itemPublicId: schema.gearItems.publicId,
+        itemCode: schema.gearItems.code,
+        modelId: schema.gearInventorySweepEntries.modelId,
+        modelName: schema.gearModels.name,
+        quantityCounted: schema.gearInventorySweepEntries.quantityCounted,
+        seenAt: schema.gearInventorySweepEntries.seenAt,
+        seenByUserId: schema.gearInventorySweepEntries.seenByUserId,
+      })
+      .from(schema.gearInventorySweepEntries)
+      .leftJoin(
+        schema.gearItems,
+        eq(schema.gearItems.id, schema.gearInventorySweepEntries.itemId),
+      )
+      // Reach the model through whichever side the entry names — the
+      // same coalesce the hold queries use. Joining on the entry's own
+      // `model_id` alone left every coded entry with a null model name,
+      // so the logged list could only show bare codes and an officer
+      // couldn't tell a mis-scanned HL01 from the HN01 they meant.
+      .leftJoin(
+        schema.gearModels,
+        sql`${schema.gearModels.id} = coalesce(${schema.gearInventorySweepEntries.modelId}, ${schema.gearItems.modelId})`,
+      )
+      .where(eq(schema.gearInventorySweepEntries.sweepId, sweepId))
+      .orderBy(desc(schema.gearInventorySweepEntries.seenAt))
+  );
 }
 
 /**

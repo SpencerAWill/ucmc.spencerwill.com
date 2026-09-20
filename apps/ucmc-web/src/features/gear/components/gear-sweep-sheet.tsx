@@ -170,7 +170,14 @@ function ActiveSweepPane({
   const [quantity, setQuantity] = useState("");
   const [itemPublicId, setItemPublicId] = useState("");
   const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // Paired with the control that raised it. One shared slot at the
+  // bottom of the pane put "No piece with that code." a couple of
+  // hundred pixels below the box that produced it, past an unrelated
+  // bordered card, while the offending code sat in the input unmarked.
+  const [error, setError] = useState<{
+    field: "code" | "count" | "uncoded";
+    message: string;
+  } | null>(null);
   const codeRef = useRef<HTMLInputElement>(null);
   const { data: types } = useQuery(gearTypesQueryOptions());
   const { data: models } = useQuery({
@@ -212,9 +219,10 @@ function ActiveSweepPane({
             codeRef.current?.focus();
             return;
           }
-          setError(messageFor(result.reason));
+          setError({ field: "code", message: messageFor(result.reason) });
         },
-        onError: () => setError("Couldn't record that."),
+        onError: () =>
+          setError({ field: "code", message: "Couldn't record that." }),
       },
     );
   };
@@ -233,9 +241,10 @@ function ActiveSweepPane({
             setItemPublicId("");
             return;
           }
-          setError(messageFor(result.reason));
+          setError({ field: "uncoded", message: messageFor(result.reason) });
         },
-        onError: () => setError("Couldn't record that."),
+        onError: () =>
+          setError({ field: "uncoded", message: "Couldn't record that." }),
       },
     );
   };
@@ -257,9 +266,10 @@ function ActiveSweepPane({
             setQuantity("");
             return;
           }
-          setError(messageFor(result.reason));
+          setError({ field: "count", message: messageFor(result.reason) });
         },
-        onError: () => setError("Couldn't record that."),
+        onError: () =>
+          setError({ field: "count", message: "Couldn't record that." }),
       },
     );
   };
@@ -277,6 +287,7 @@ function ActiveSweepPane({
           <Input
             id="sweep-code"
             ref={codeRef}
+            aria-invalid={error?.field === "code"}
             autoFocus
             value={code}
             onChange={(e) => setCode(e.target.value)}
@@ -302,6 +313,11 @@ function ActiveSweepPane({
           Enter logs it and clears the box. Logging the same piece twice is fine
           — several people work one sweep.
         </p>
+        {error?.field === "code" ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error.message}
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-1.5 rounded-md border p-3">
@@ -365,6 +381,11 @@ function ActiveSweepPane({
           A later count replaces an earlier one rather than adding to it — two
           people each counting the whole bin is likelier than two splitting it.
         </p>
+        {error?.field === "count" ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error.message}
+          </p>
+        ) : null}
       </div>
 
       {/* Untagged pieces have no code to type, so the scan box can't
@@ -401,13 +422,12 @@ function ActiveSweepPane({
             These carry no tag, so nobody can scan them. A tick means this sweep
             has already accounted for it.
           </p>
+          {error?.field === "uncoded" ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error.message}
+            </p>
+          ) : null}
         </div>
-      ) : null}
-
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
       ) : null}
 
       {sweep.entries.length > 0 ? (
@@ -419,8 +439,19 @@ function ActiveSweepPane({
                 <Item variant="outline" size="sm">
                   <ItemContent>
                     <span className="text-sm">
-                      {entry.itemCode ??
-                        `${entry.quantityCounted} × ${entry.modelName ?? "model"}`}
+                      {entry.itemCode ? (
+                        <>
+                          <span className="font-mono">{entry.itemCode}</span>
+                          {entry.modelName ? (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              · {entry.modelName}
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        `${entry.quantityCounted} × ${entry.modelName ?? "model"}`
+                      )}
                     </span>
                   </ItemContent>
                 </Item>
