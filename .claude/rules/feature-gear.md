@@ -195,7 +195,7 @@ Native `BarcodeDetector` on Chrome / Edge / Android Chrome / Safari iOS 17+ / Sa
 
 **Eligibility checks for `status` and `condition` are intentionally relaxed** — a piece retired today may have been serviceable when loaned years ago. The partial unique index still gates open backfill rows, surfaced as an `already_on_loan` skip. Audit events carry `bulk: true, backfill: true`. **Backfill does NOT mutate an item's `condition` from `condition_at_return`** — the historical condition belongs on the loan row only.
 
-Gear bulk import **creates models on demand** from a `model` / `model_name` CSV column, falling back to the description when the column is absent, so a sheet of forty draws lands on one model rather than forty.
+Gear bulk import **creates models on demand** from a `model` / `model_name` CSV column, falling back to the description when the column is absent, so a sheet of forty draws lands on one model rather than forty. **The model name is the required cell, not the description** — the description is the per-unit note and is optional everywhere (parser, sheet and action), and a row naming no product at all is the one the parser refuses. `model` is deliberately **not** a description alias any more; reading it into both columns stamped the product name onto every item's distinguishing-marks field as well.
 
 ## Member cart (`/my/gear/cart`)
 

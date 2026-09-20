@@ -38,8 +38,8 @@ import type { schema } from "#/server/db";
 export interface BulkImportRow {
   typePublicId: string;
   code: string | null;
-  /** Required free-form description / model. Rows with empty
-   *  description are skipped with `missing_description`. */
+  /** This unit's distinguishing marks. Optional — the model carries
+   *  the product name, so most rows have nothing to say here. */
   description?: string | null;
   /** Acquisition date as ms since epoch, or null. */
   acquiredAt: number | null;
@@ -77,7 +77,7 @@ export interface BulkImportSkipped {
     | "type_not_found"
     | "code_in_use"
     | "code_duplicate_in_import"
-    | "missing_description"
+    | "missing_model_name"
     | "tag_not_found"
     | "invalid";
   code: string | null;
@@ -144,7 +144,7 @@ export async function bulkImportGearAction(
     // row cannot go without is a model name.
     const description = (row.description ?? "").trim();
     if (row.modelName.trim().length === 0) {
-      skipped.push({ rowIndex: i, reason: "missing_description", code });
+      skipped.push({ rowIndex: i, reason: "missing_model_name", code });
       continue;
     }
 

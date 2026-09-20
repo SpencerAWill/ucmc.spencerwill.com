@@ -121,10 +121,17 @@ function rowHasContent(row: RowState): boolean {
 }
 
 function rowIsValid(row: RowState): boolean {
-  // Type and description are required. Code, acquired, and cost are
-  // optional per row. Cost must parse if present.
+  // Type and a product name are required; the description is the
+  // per-unit note and is optional, matching the server. Code,
+  // acquired, and cost are optional per row. Cost must parse if
+  // present.
   if (row.typePublicId.length === 0) return false;
-  if (row.description.trim().length === 0) return false;
+  if (
+    row.modelName.trim().length === 0 &&
+    row.description.trim().length === 0
+  ) {
+    return false;
+  }
   if (row.costDollars.trim().length > 0) {
     const n = Number(row.costDollars);
     if (!Number.isFinite(n) || n < 0) return false;
@@ -229,7 +236,7 @@ export function GearBulkImportSheet({
         makeRow({
           typePublicId: r.typePublicId,
           code: r.code ?? "",
-          description: r.description,
+          description: r.description ?? "",
           acquiredAt: r.acquiredAt !== null ? msToIso(r.acquiredAt) : "",
           costDollars:
             r.acquisitionCostCents !== null
@@ -295,8 +302,8 @@ export function GearBulkImportSheet({
     const payload = validRows.map((row) => ({
       typePublicId: row.typePublicId,
       code: row.code.trim().length === 0 ? null : row.code.trim(),
-      // rowIsValid guarantees a non-empty description here.
-      description: row.description.trim(),
+      description:
+        row.description.trim().length === 0 ? null : row.description.trim(),
       acquiredAt:
         row.acquiredAt.length === 0
           ? null
@@ -591,18 +598,13 @@ function GearImportRow({
         <div className="flex flex-col gap-1 sm:col-span-2">
           <Label className="text-xs" htmlFor={`description-${row.key}`}>
             Description
-            <span className="text-destructive" aria-hidden>
-              {" *"}
-            </span>
           </Label>
           <Input
             id={`description-${row.key}`}
             value={row.description}
             onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Black Diamond Momentum, size M"
+            placeholder="Blue tape on the spine"
             maxLength={500}
-            required
-            aria-required
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -643,6 +645,9 @@ function GearImportRow({
         <div className="flex flex-col gap-1">
           <Label className="text-xs" htmlFor={`model-${row.key}`}>
             Model
+            <span className="text-destructive" aria-hidden>
+              {" *"}
+            </span>
           </Label>
           <Input
             id={`model-${row.key}`}
@@ -650,6 +655,7 @@ function GearImportRow({
             value={row.modelName}
             placeholder="Falls back to description"
             onChange={(e) => onChange({ modelName: e.target.value })}
+            aria-required
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -746,8 +752,8 @@ function skippedLabel(s: BulkImportSkipped): string {
       return `code "${s.code ?? ""}" already in use`;
     case "code_duplicate_in_import":
       return `code "${s.code ?? ""}" appears twice in this import`;
-    case "missing_description":
-      return "description is required";
+    case "missing_model_name":
+      return "a model name is required";
     case "tag_not_found": {
       const list =
         s.missingTags && s.missingTags.length > 0

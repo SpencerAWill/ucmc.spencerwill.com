@@ -82,3 +82,45 @@ describe("parseGearCsv extended columns", () => {
     });
   });
 });
+
+describe("parseGearCsv required columns", () => {
+  it("imports a sheet with no description column at all", async () => {
+    // The model carries the product name now, so a row only needs
+    // distinguishing marks when it has any. This sheet was rejected
+    // line-by-line with "Missing description".
+    const csv = ["type,model,code", "CH,Sama,CH1"].join("\n");
+    const { rows, errors } = await parseGearCsv(csv, TYPES);
+    expect(errors).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      code: "CH1",
+      description: null,
+      modelName: "Sama",
+    });
+  });
+
+  it("reads `model` as the product, not as the description", async () => {
+    const csv = ["type,model_name,code", "CH,Sama,CH1"].join("\n");
+    const { rows } = await parseGearCsv(csv, TYPES);
+    expect(rows[0]).toMatchObject({ description: null, modelName: "Sama" });
+  });
+
+  it("still takes the model name from a description-only sheet", async () => {
+    // A pile of one-offs: each distinct description becomes its own
+    // model, which is exactly right for that shape of inventory.
+    const csv = ["type,description", "CH,Petzl Sama"].join("\n");
+    const { rows, errors } = await parseGearCsv(csv, TYPES);
+    expect(errors).toEqual([]);
+    expect(rows[0]).toMatchObject({
+      description: "Petzl Sama",
+      modelName: "Petzl Sama",
+    });
+  });
+
+  it("flags a row that names no product at all", async () => {
+    const csv = ["type,model,code", "CH,,CH1"].join("\n");
+    const { rows, errors } = await parseGearCsv(csv, TYPES);
+    expect(rows).toEqual([]);
+    expect(errors).toEqual([{ line: 2, message: "Missing model" }]);
+  });
+});

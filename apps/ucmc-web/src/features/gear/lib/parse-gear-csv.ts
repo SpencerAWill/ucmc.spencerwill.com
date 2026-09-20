@@ -10,7 +10,10 @@
  *                                  OR its prefix; case-insensitive
  *   - code           (optional) — freeform short identifier; left blank
  *                                  for unlabeled gear
- *   - description    (required) — primary heading on the gear card
+ *   - description    (optional) — this unit's distinguishing marks
+ *                                  ("blue tape on the spine"). The model
+ *                                  supplies the product name, so most
+ *                                  rows have nothing to say here
  *   - acquired_at    (optional) — ISO date (YYYY-MM-DD); parsed to ms
  *   - cost / price / amount (optional) — **always interpreted as
  *                                  dollars**, integer or decimal. `60`
@@ -23,7 +26,11 @@
  *                                  layer, a row names its product and
  *                                  the import creates the model on
  *                                  demand; a CSV of forty draws lands
- *                                  on one model, not forty.
+ *                                  on one model, not forty. A legacy
+ *                                  sheet carrying only `description`
+ *                                  still imports: the description
+ *                                  becomes the model name, which is
+ *                                  right for a pile of one-offs.
  *   - acquisition_kind (optional) — purchased|donated|found|
  *                                  warranty_replacement if present
  *   - tags           (optional) — comma-separated list of tag NAMES; the
@@ -44,7 +51,9 @@ import type { GearAcquisitionKind } from "#/features/gear/server/gear-fns";
 export interface ParsedGearRow {
   typePublicId: string;
   code: string | null;
-  description: string;
+  /** Null when the sheet has no description column, or the cell is
+   *  blank — the model carries the product name. */
+  description: string | null;
   acquiredAt: number | null;
   acquisitionCostCents: number | null;
   msrpCents: number | null;
@@ -77,7 +86,11 @@ export interface GearTypeLookupEntry {
 
 const TYPE_HEADERS = new Set(["type", "gear type", "kind"]);
 const CODE_HEADERS = new Set(["code", "short id", "short_id", "id", "tag"]);
-const DESCRIPTION_HEADERS = new Set(["description", "model", "notes"]);
+// `model` is deliberately NOT a description alias any more: under the
+// model layer it names the product, and reading it into both columns
+// stamped the product name onto every item's distinguishing-marks
+// field as well.
+const DESCRIPTION_HEADERS = new Set(["description", "notes"]);
 const ACQUIRED_AT_HEADERS = new Set([
   "acquired_at",
   "acquired at",
@@ -327,10 +340,6 @@ export async function parseGearCsv(
     const code = cols.code === -1 ? "" : normalize(row[cols.code]);
     const description =
       cols.description === -1 ? "" : normalize(row[cols.description]);
-    if (description.length === 0) {
-      errors.push({ line, message: "Missing description" });
-      continue;
-    }
     const acquiredAtCell =
       cols.acquiredAt === -1 ? "" : normalize(row[cols.acquiredAt]);
     const costCell = cols.cost === -1 ? "" : normalize(row[cols.cost]);
@@ -359,10 +368,15 @@ export async function parseGearCsv(
     // which is exactly right for a pile of one-offs and harmless for a
     // fleet the officer can merge afterwards.
     const modelName = modelNameCell.length > 0 ? modelNameCell : description;
+    // What a row cannot go without: it has to land on some product.
+    if (modelName.length === 0) {
+      errors.push({ line, message: "Missing model" });
+      continue;
+    }
     rows.push({
       typePublicId,
       code: code.length === 0 ? null : code,
-      description,
+      description: description.length === 0 ? null : description,
       acquiredAt: acquired.value,
       acquisitionCostCents: cost.value,
       msrpCents: msrp.value,
