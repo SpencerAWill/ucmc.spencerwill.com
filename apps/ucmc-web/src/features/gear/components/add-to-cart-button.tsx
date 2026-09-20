@@ -41,12 +41,24 @@ interface AddToCartButtonProps {
 
 type AddToCartFailureReason = Extract<AddToCartResult, { ok: false }>["reason"];
 
-const REASON_COPY: Record<AddToCartFailureReason, string> = {
+/**
+ * The two refusals that are about the cart rather than the piece. Every
+ * other reason the action can return is a `CheckoutBlockedReason` and
+ * gets its wording from `BLOCKED_REASON_MESSAGE`, so the toast a member
+ * sees after a stale click matches the tooltip that was on the button
+ * before it.
+ */
+const CART_REASON_COPY: Record<"not_found" | "already_in_cart", string> = {
   not_found: "That piece is no longer in inventory.",
-  retired: "That piece has been retired.",
-  no_code: "Ask an officer to tag this piece before adding it to a cart.",
   already_in_cart: "Already in your cart.",
 };
+
+function failureCopy(reason: AddToCartFailureReason): string {
+  if (reason === "not_found" || reason === "already_in_cart") {
+    return CART_REASON_COPY[reason];
+  }
+  return BLOCKED_REASON_MESSAGE[reason];
+}
 
 /**
  * Member-facing "Add to cart" affordance for /gear list cards and the
@@ -112,7 +124,7 @@ export function AddToCartButton({
             toast.success(`Added ${code} to your cart.`);
             return;
           }
-          toast.error(REASON_COPY[result.reason]);
+          toast.error(failureCopy(result.reason));
         },
         onError: (err: unknown) => {
           toast.error(

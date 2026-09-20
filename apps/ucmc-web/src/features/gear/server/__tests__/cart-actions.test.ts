@@ -381,18 +381,50 @@ describe("getMyCartAction availability", () => {
     expect(officer.id).toBeTruthy();
   });
 
-  it("reports 'not_serviceable' when condition is not 'serviceable'", async () => {
+  it("reports 'not_serviceable' when a carted piece is flagged later", async () => {
+    // The row has to go in while it's loanable: `addToCartAction` now
+    // refuses a piece that's already flagged. Degrading afterwards is
+    // the case hydration exists for — somebody reported the harness at
+    // check-in while it was sitting in another member's cart.
     const typePublicId = await createTypeOk();
-    const gearPublicId = await createGearOk({
-      typePublicId,
-      code: "CR8",
-      condition: "needs_repair",
-    });
+    const gearPublicId = await createGearOk({ typePublicId, code: "CR8" });
     await signInAsApprovedMemberWithWaiver();
     await addToCartAction({ gearPublicId });
 
+    await getDb()
+      .update(schema.gearItems)
+      .set({ condition: "needs_repair" })
+      .where(eq(schema.gearItems.publicId, gearPublicId));
+
     const cart = await getMyCartAction();
     expect(cart.items[0]?.availability).toBe("not_serviceable");
+  });
+
+  it("refuses to cart a piece that's already flagged", async () => {
+    const typePublicId = await createTypeOk();
+    const gearPublicId = await createGearOk({
+      typePublicId,
+      code: "CR8B",
+      condition: "needs_repair",
+    });
+    await signInAsApprovedMemberWithWaiver();
+
+    const result = await addToCartAction({ gearPublicId });
+    expect(result).toEqual({ ok: false, reason: "needs_repair" });
+    expect((await getMyCartAction()).items).toHaveLength(0);
+  });
+
+  it("refuses to cart a piece that isn't in the cave", async () => {
+    const typePublicId = await createTypeOk();
+    const gearPublicId = await createGearOk({ typePublicId, code: "CR8C" });
+    await getDb()
+      .update(schema.gearItems)
+      .set({ whereabouts: "missing" })
+      .where(eq(schema.gearItems.publicId, gearPublicId));
+    await signInAsApprovedMemberWithWaiver();
+
+    const result = await addToCartAction({ gearPublicId });
+    expect(result).toEqual({ ok: false, reason: "not_in_cave" });
   });
 
   it("prunes hard-deleted gear silently", async () => {

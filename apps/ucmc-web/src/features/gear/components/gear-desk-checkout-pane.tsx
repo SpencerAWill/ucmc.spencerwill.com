@@ -75,6 +75,8 @@ const SKIP_LABEL: Record<CheckoutSkipReason, string> = {
 const CART_AVAILABILITY_LABEL: Partial<Record<CartItemAvailability, string>> = {
   on_loan: "Already checked out to someone else",
   not_serviceable: "Condition isn't serviceable",
+  not_in_cave: "Not in the cave",
+  on_hold: "Held for a trip",
   retired: "Retired since the cart was built",
 };
 

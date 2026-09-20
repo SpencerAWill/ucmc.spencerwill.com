@@ -719,7 +719,9 @@ export interface GearCartHydrationRow {
   thumbnailKey: string | null;
   status: schema.GearStatus;
   condition: schema.GearCondition;
+  whereabouts: schema.GearWhereabouts;
   hasOpenLoan: boolean;
+  hasActiveHold: boolean;
 }
 
 /**
@@ -734,9 +736,11 @@ export interface GearCartHydrationRow {
  */
 export async function getCartHydrationRowsByPublicIds(
   publicIds: string[],
+  now: Temporal.Instant,
 ): Promise<GearCartHydrationRow[]> {
   if (publicIds.length === 0) return [];
   const db = getDb();
+  const nowMs = now.epochMilliseconds;
   const rows = await db
     .select({
       publicId: schema.gearItems.publicId,
@@ -748,11 +752,23 @@ export async function getCartHydrationRowsByPublicIds(
       modelImageKey: schema.gearModels.imageKey,
       status: schema.gearItems.status,
       condition: schema.gearItems.condition,
+      whereabouts: schema.gearItems.whereabouts,
       // PK of the joined row is the only non-nullable column we can
       // use to detect a hit through the LEFT JOIN (`returnedAt` is
       // NULL both when there's no loan and when there's an open loan,
       // since the JOIN filter is `returnedAt IS NULL`).
       loanId: schema.gearLoans.id,
+      // Correlated EXISTS rather than a second LEFT JOIN: two
+      // overlapping holds on one item would fan the row out, and the
+      // cart only needs the boolean. Mirrors `liveWhere` in
+      // holds-repo.server.ts — unreleased and inside its window.
+      hasActiveHold: sql<number>`EXISTS (
+        SELECT 1 FROM ${schema.gearHolds}
+        WHERE ${schema.gearHolds.itemId} = ${schema.gearItems.id}
+          AND ${schema.gearHolds.releasedAt} IS NULL
+          AND ${schema.gearHolds.startsAt} <= ${nowMs}
+          AND ${schema.gearHolds.endsAt} > ${nowMs}
+      )`,
     })
     .from(schema.gearItems)
     .innerJoin(
@@ -779,7 +795,9 @@ export async function getCartHydrationRowsByPublicIds(
     thumbnailKey: r.itemThumbnailKey ?? r.modelImageKey,
     status: r.status,
     condition: r.condition,
+    whereabouts: r.whereabouts,
     hasOpenLoan: r.loanId !== null,
+    hasActiveHold: r.hasActiveHold === 1,
   }));
 }
 

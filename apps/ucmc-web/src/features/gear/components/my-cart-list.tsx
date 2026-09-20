@@ -27,6 +27,8 @@ const AVAILABILITY_COPY: Record<
   loanable: { label: "Available", variant: "secondary" },
   on_loan: { label: "Currently on loan", variant: "destructive" },
   not_serviceable: { label: "Out for repair", variant: "destructive" },
+  not_in_cave: { label: "Not in the cave", variant: "destructive" },
+  on_hold: { label: "Held for a trip", variant: "destructive" },
   retired: { label: "Retired", variant: "destructive" },
   no_code: { label: "Code cleared — ask an officer", variant: "destructive" },
 };

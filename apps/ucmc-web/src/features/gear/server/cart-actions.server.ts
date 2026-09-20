@@ -16,8 +16,14 @@
  *     as the rest of the checkout-desk surface.
  */
 import { eq } from "drizzle-orm";
+import { Temporal } from "temporal-polyfill";
 
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
+import {
+  gearAvailability,
+  itemBlockedReason,
+} from "#/features/gear/lib/availability";
+import type { CheckoutBlockedReason } from "#/features/gear/lib/availability";
 import {
   getCart,
   getToken,
@@ -33,7 +39,9 @@ import { getGearItemByPublicId } from "#/features/gear/server/repo.server";
 import {
   getApprovedMemberByPublicId,
   getCartHydrationRowsByPublicIds,
+  getOpenLoanForItem,
 } from "#/features/gear/server/loans-repo.server";
+import { liveHoldForItem } from "#/features/gear/server/holds-repo.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
@@ -81,6 +89,8 @@ export type CartItemAvailability =
   | "loanable"
   | "on_loan"
   | "not_serviceable"
+  | "not_in_cave"
+  | "on_hold"
   | "retired"
   | "no_code";
 
@@ -115,7 +125,13 @@ export type AddToCartResult =
   | { ok: true }
   | {
       ok: false;
-      reason: "not_found" | "retired" | "no_code" | "already_in_cart";
+      reason:
+        | "not_found"
+        | "already_in_cart"
+        /** The rest are `CheckoutBlockedReason` values, passed through
+         *  so the client can render the message it already has for
+         *  them rather than inventing a second set of words. */
+        | CheckoutBlockedReason;
     };
 
 export type MintCartTokenResult =
@@ -142,12 +158,61 @@ export type ResolveCartTokenResult =
 // ── hydration ──────────────────────────────────────────────────────────
 
 /**
+ * Why a cart row can't be handed over, in the cart's own vocabulary.
+ *
+ * Both the ordering and the set of cases come from `itemBlockedReason`
+ * rather than being spelled out again here — this used to be its own
+ * if-ladder and had drifted, missing `whereabouts` and holds entirely,
+ * so a harness that went to the repair shop or got reserved for a trip
+ * after it landed in somebody's cart still read "Available" right up to
+ * the desk.
+ *
+ * `unsafe` and `needs_repair` both land on `not_serviceable`: the cart
+ * is telling a member their piece isn't coming, and the difference
+ * between the two is a decision for the officer in front of them.
+ */
+function cartAvailabilityOf(row: {
+  status: schema.GearStatus;
+  condition: schema.GearCondition;
+  whereabouts: schema.GearWhereabouts;
+  hasOpenLoan: boolean;
+  hasActiveHold: boolean;
+  code: string | null;
+}): CartItemAvailability {
+  const reason = itemBlockedReason({
+    status: row.status,
+    condition: row.condition,
+    whereabouts: row.whereabouts,
+    availability: gearAvailability(row),
+    code: row.code,
+  });
+  switch (reason) {
+    case null:
+      return "loanable";
+    case "retired":
+      return "retired";
+    case "no_code":
+      return "no_code";
+    case "on_loan":
+      return "on_loan";
+    case "unsafe":
+    case "needs_repair":
+      return "not_serviceable";
+    case "not_in_cave":
+      return "not_in_cave";
+    case "on_hold":
+      return "on_hold";
+    default:
+      // `not_waiver_current` / `has_overdue` belong to the member, not
+      // the row, and are enforced by `requireCartMember` and the desk.
+      return "loanable";
+  }
+}
+
+/**
  * Resolve every cart entry to a hydrated row in one D1 round-trip.
  * Missing publicIds (gear hard-deleted) drop out — the caller persists
  * the trimmed entries so subsequent reads stay O(remaining).
- *
- * Availability priority mirrors `checkoutLoansAction`'s skip order:
- * retired → not_serviceable → on_loan → no_code → loanable.
  */
 async function hydrateCartItems(
   cart: StoredCart,
@@ -156,7 +221,10 @@ async function hydrateCartItems(
     return { items: [], prunedCart: cart };
   }
   const publicIds = cart.items.map((i) => i.gearPublicId);
-  const rows = await getCartHydrationRowsByPublicIds(publicIds);
+  const rows = await getCartHydrationRowsByPublicIds(
+    publicIds,
+    Temporal.Now.instant(),
+  );
   const byPublicId = new Map(rows.map((r) => [r.publicId, r]));
 
   const items: CartItemRow[] = [];
@@ -170,22 +238,6 @@ async function hydrateCartItems(
     }
     survivingEntries.push(entry);
 
-    let availability: CartItemAvailability;
-    // Any terminal status, not just `retired` — a `lost` or `disposed`
-    // item is equally un-loanable, and the member-facing label for all
-    // three is the same.
-    if (row.status !== "active") {
-      availability = "retired";
-    } else if (row.condition !== "serviceable") {
-      availability = "not_serviceable";
-    } else if (row.hasOpenLoan) {
-      availability = "on_loan";
-    } else if (row.code === null) {
-      availability = "no_code";
-    } else {
-      availability = "loanable";
-    }
-
     items.push({
       publicId: row.publicId,
       code: row.code,
@@ -195,7 +247,7 @@ async function hydrateCartItems(
       status: row.status,
       condition: row.condition,
       hasOpenLoan: row.hasOpenLoan,
-      availability,
+      availability: cartAvailabilityOf(row),
       addedAt: entry.addedAt,
     });
   }
@@ -242,13 +294,26 @@ export async function addToCartAction(input: {
   if (!gear) {
     return { ok: false, reason: "not_found" };
   }
-  if (gear.status !== "active") {
-    return { ok: false, reason: "retired" };
-  }
-  if (gear.code === null) {
-    // No scannable code means the desk pane couldn't ingest this row
-    // even if cart-scanned. Force the officer to tag the piece first.
-    return { ok: false, reason: "no_code" };
+  // The same predicate the browse button disables on, so a member who
+  // gets past a stale page lands on the same answer rather than a
+  // cart that fills with gear the desk will refuse. It used to check
+  // terminal status and a null code only.
+  const checkedAt = Temporal.Now.instant();
+  const blocked = itemBlockedReason({
+    status: gear.status,
+    condition: gear.condition,
+    whereabouts: gear.whereabouts,
+    availability: gearAvailability({
+      status: gear.status,
+      condition: gear.condition,
+      whereabouts: gear.whereabouts,
+      hasOpenLoan: (await getOpenLoanForItem(gear.id)) !== null,
+      hasActiveHold: (await liveHoldForItem(gear.id, checkedAt)) !== null,
+    }),
+    code: gear.code,
+  });
+  if (blocked !== null) {
+    return { ok: false, reason: blocked };
   }
   const cart = await getCart(principal.userId);
   if (cart.items.some((i) => i.gearPublicId === input.gearPublicId)) {
