@@ -32,6 +32,7 @@ import {
   gearModelsQueryOptions,
   gearTypesQueryOptions,
   openSweepQueryOptions,
+  uncodedSweepCandidatesQueryOptions,
 } from "#/features/gear/api/queries";
 import { useCloseSweep } from "#/features/gear/api/use-close-sweep";
 import { useRecordSweepEntry } from "#/features/gear/api/use-record-sweep-entry";
@@ -167,6 +168,7 @@ function ActiveSweepPane({
   const [typePublicId, setTypePublicId] = useState("");
   const [modelPublicId, setModelPublicId] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [itemPublicId, setItemPublicId] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const codeRef = useRef<HTMLInputElement>(null);
@@ -175,8 +177,10 @@ function ActiveSweepPane({
     ...gearModelsQueryOptions(typePublicId || null),
     enabled: typePublicId.length > 0,
   });
+  const { data: uncodedRows } = useQuery(uncodedSweepCandidatesQueryOptions());
   const recordMutation = useRecordSweepEntry();
 
+  const uncoded = uncodedRows ?? [];
   const countedModels = (models ?? []).filter((m) => m.tracking === "counted");
 
   const messageFor = (reason: string) =>
@@ -206,6 +210,27 @@ function ActiveSweepPane({
             // appearing in the list below is the confirmation.
             setCode("");
             codeRef.current?.focus();
+            return;
+          }
+          setError(messageFor(result.reason));
+        },
+        onError: () => setError("Couldn't record that."),
+      },
+    );
+  };
+
+  const submitUncoded = () => {
+    if (itemPublicId.length === 0) {
+      return;
+    }
+    setError(null);
+    recordMutation.mutate(
+      { itemPublicId },
+      {
+        onSuccess: (result) => {
+          if (result.ok) {
+            toast.success(`Logged ${result.label}`);
+            setItemPublicId("");
             return;
           }
           setError(messageFor(result.reason));
@@ -341,6 +366,43 @@ function ActiveSweepPane({
           people each counting the whole bin is likelier than two splitting it.
         </p>
       </div>
+
+      {/* Untagged pieces have no code to type, so the scan box can't
+          reach them. Without this they went unlogged at every sweep and
+          were marked missing at every close, for ever. */}
+      {uncoded.length > 0 ? (
+        <div className="space-y-1.5 rounded-md border p-3">
+          <Label>Log an untagged piece</Label>
+          <div className="flex gap-2">
+            <NativeSelect
+              className="w-full"
+              aria-label="Untagged piece"
+              value={itemPublicId}
+              onChange={(e) => setItemPublicId(e.target.value)}
+            >
+              <option value="">Pick a piece…</option>
+              {uncoded.map((u) => (
+                <option key={u.publicId} value={u.publicId}>
+                  {u.seen ? "✓ " : ""}
+                  {u.typeName} — {u.description}
+                </option>
+              ))}
+            </NativeSelect>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={submitUncoded}
+              disabled={recordMutation.isPending || itemPublicId.length === 0}
+            >
+              Log
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            These carry no tag, so nobody can scan them. A tick means this sweep
+            has already accounted for it.
+          </p>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="text-sm text-destructive" role="alert">

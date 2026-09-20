@@ -60,6 +60,7 @@ import type {
   RecordSweepEntryResult,
   StartSweepResult,
 } from "#/features/gear/server/sweeps-actions.server";
+import type { UncodedItemRow } from "#/features/gear/server/sweeps-repo.server";
 import type {
   GearHoldSummary,
   ListGearHoldsActionInput,
@@ -384,6 +385,7 @@ const listGearModelBrowseInputSchema = z.object({
 
 const recordSweepEntryInputSchema = z.object({
   gearCode: z.string().trim().min(1).max(64).optional(),
+  itemPublicId: z.string().min(1).optional(),
   modelPublicId: z.string().min(1).optional(),
   quantityCounted: z.number().int().min(0).max(9999).optional(),
 });
@@ -407,6 +409,7 @@ const listGearHoldsInputSchema = z.object({
 const placeGearHoldInputSchema = z.object({
   gearPublicId: z.string().min(1).optional(),
   gearCode: z.string().trim().min(1).max(64).optional(),
+  itemPublicId: z.string().min(1).optional(),
   modelPublicId: z.string().min(1).optional(),
   quantity: z.number().int().min(1).max(999).optional(),
   reason: z.string().trim().min(1).max(300),
@@ -787,6 +790,7 @@ export type {
   RecordSweepEntryInput,
   RecordSweepEntryResult,
   StartSweepResult,
+  UncodedItemRow,
 };
 
 export const getOpenSweepFn = createServerFn({ method: "GET" }).handler(
@@ -796,6 +800,14 @@ export const getOpenSweepFn = createServerFn({ method: "GET" }).handler(
     return getOpenSweepAction();
   },
 );
+
+export const listUncodedSweepCandidatesFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<UncodedItemRow[]> => {
+  const { listUncodedSweepCandidatesAction } =
+    await import("#/features/gear/server/sweeps-actions.server");
+  return listUncodedSweepCandidatesAction();
+});
 
 export const listSweepsFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<GearSweepSummary[]> => {

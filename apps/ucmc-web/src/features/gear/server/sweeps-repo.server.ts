@@ -161,6 +161,71 @@ export async function countSweepEntries(sweepId: string): Promise<number> {
   return rows[0]?.value ?? 0;
 }
 
+export interface UncodedItemRow {
+  publicId: string;
+  description: string;
+  typeName: string;
+  /** Already logged in this sweep. The picker keeps them listed and
+   *  ticked rather than dropping them, so an officer working down a
+   *  shelf can see what they've already accounted for. */
+  seen: boolean;
+}
+
+/**
+ * Active pieces with no code, for the sweep's untagged-piece picker.
+ *
+ * A code is the only handle the scan box has, so an unlabelled item
+ * could never be logged — and, being active and in the cave, it was
+ * then marked missing at every single close, for ever. The fix is a way
+ * to log it rather than an exclusion: the cave really does want to know
+ * whether the untagged harness on the shelf is still there.
+ *
+ * Unfiltered by type: uncoded items are the exception rather than the
+ * rule (a fresh-in-box piece nobody has laminated a tag for yet), so
+ * the whole list is short enough to put in one picker.
+ */
+export async function listUncodedActiveItems(
+  sweepId: string,
+): Promise<UncodedItemRow[]> {
+  const rows = await getDb()
+    .select({
+      publicId: schema.gearItems.publicId,
+      itemDescription: schema.gearItems.description,
+      modelName: schema.gearModels.name,
+      manufacturer: schema.gearModels.manufacturer,
+      typeName: schema.gearTypes.name,
+      seenItemId: schema.gearInventorySweepEntries.itemId,
+    })
+    .from(schema.gearItems)
+    .innerJoin(
+      schema.gearModels,
+      eq(schema.gearModels.id, schema.gearItems.modelId),
+    )
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .leftJoin(
+      schema.gearInventorySweepEntries,
+      and(
+        eq(schema.gearInventorySweepEntries.itemId, schema.gearItems.id),
+        eq(schema.gearInventorySweepEntries.sweepId, sweepId),
+      ),
+    )
+    .where(
+      and(eq(schema.gearItems.status, "active"), isNull(schema.gearItems.code)),
+    )
+    .orderBy(schema.gearTypes.name, schema.gearModels.name);
+  return rows.map((r) => ({
+    publicId: r.publicId,
+    description:
+      r.itemDescription ??
+      [r.manufacturer, r.modelName].filter(Boolean).join(" "),
+    typeName: r.typeName,
+    seen: r.seenItemId !== null,
+  }));
+}
+
 export interface UnseenItemRow {
   id: string;
   publicId: string;

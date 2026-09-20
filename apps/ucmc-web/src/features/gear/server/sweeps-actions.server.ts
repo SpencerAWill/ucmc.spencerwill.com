@@ -17,7 +17,10 @@ import {
   requireGearManager,
   requireGearReader,
 } from "#/features/gear/server/permissions.server";
-import { getGearItemByCode } from "#/features/gear/server/repo.server";
+import {
+  getGearItemByCode,
+  getGearItemByPublicId,
+} from "#/features/gear/server/repo.server";
 import { getGearModelByPublicId } from "#/features/gear/server/models-repo.server";
 import {
   countSweepEntries,
@@ -26,13 +29,17 @@ import {
   insertSweep,
   listSweepEntries,
   listSweeps,
+  listUncodedActiveItems,
   listUnseenActiveItems,
   markItemsMissing,
   markSweepClosed,
   reconcileCountedModels,
   upsertSweepEntry,
 } from "#/features/gear/server/sweeps-repo.server";
-import type { CountedReconciliationRow } from "#/features/gear/server/sweeps-repo.server";
+import type {
+  CountedReconciliationRow,
+  UncodedItemRow,
+} from "#/features/gear/server/sweeps-repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 
@@ -54,6 +61,22 @@ export interface GearSweepEntrySummary {
 
 export interface GearSweepDetail extends GearSweepSummary {
   entries: GearSweepEntrySummary[];
+}
+
+/**
+ * The untagged pieces an officer can log by hand during the open sweep.
+ *
+ * Empty when no sweep is running: there is nothing to log into.
+ */
+export async function listUncodedSweepCandidatesAction(): Promise<
+  UncodedItemRow[]
+> {
+  await requireGearManager();
+  const sweep = await getOpenSweep();
+  if (!sweep) {
+    return [];
+  }
+  return listUncodedActiveItems(sweep.id);
 }
 
 export async function getOpenSweepAction(): Promise<GearSweepDetail | null> {
@@ -120,9 +143,14 @@ export async function startSweepAction(): Promise<StartSweepResult> {
 }
 
 export interface RecordSweepEntryInput {
-  /** Exactly one: a coded piece by the code on its tag, or a counted
-   *  model with the number found in the bin. */
+  /** Exactly one: a coded piece by the code on its tag, an untagged
+   *  piece picked from the list, or a counted model with the number
+   *  found in the bin. */
   gearCode?: string;
+  /** An unlabelled piece, chosen rather than typed — it has no code to
+   *  scan, which used to make it unloggable and therefore missing at
+   *  every close. */
+  itemPublicId?: string;
   modelPublicId?: string;
   quantityCounted?: number;
 }
@@ -147,11 +175,31 @@ export async function recordSweepEntryAction(
   if (!sweep) {
     return { ok: false, reason: "no_open_sweep" };
   }
-  const names = [input.gearCode, input.modelPublicId].filter(
-    (v) => v !== undefined && v.length > 0,
-  );
+  const names = [
+    input.gearCode,
+    input.itemPublicId,
+    input.modelPublicId,
+  ].filter((v) => v !== undefined && v.length > 0);
   if (names.length !== 1) {
     return { ok: false, reason: "subject_required" };
+  }
+
+  if (input.itemPublicId) {
+    const item = await getGearItemByPublicId(input.itemPublicId);
+    if (!item) {
+      return { ok: false, reason: "not_found" };
+    }
+    if (item.status !== "active") {
+      return { ok: false, reason: "item_not_active" };
+    }
+    await upsertSweepEntry({
+      sweepId: sweep.id,
+      itemId: item.id,
+      modelId: null,
+      quantityCounted: 1,
+      seenByUserId: principal.userId,
+    });
+    return { ok: true, label: item.code ?? item.description ?? item.modelName };
   }
 
   if (input.gearCode) {

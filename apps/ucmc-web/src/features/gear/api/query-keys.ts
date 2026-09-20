@@ -41,6 +41,13 @@ export function gearAttributeDefsQueryKey(input: {
  *  changes both. */
 export const GEAR_SWEEPS_QUERY_KEY = ["gear", "sweeps"] as const;
 export const OPEN_SWEEP_QUERY_KEY = ["gear", "sweeps", "open"] as const;
+/** Untagged pieces the open sweep can still log. Sits under the sweeps
+ *  prefix so logging one, or closing the sweep, refreshes it. */
+export const UNCODED_SWEEP_CANDIDATES_QUERY_KEY = [
+  "gear",
+  "sweeps",
+  "uncoded",
+] as const;
 export const sweepDetailQueryKey = (publicId: string) =>
   ["gear", "sweeps", "detail", publicId] as const;
 

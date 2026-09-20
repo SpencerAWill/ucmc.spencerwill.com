@@ -32,6 +32,7 @@ const { createGearModelAction } =
 const {
   closeSweepAction,
   getOpenSweepAction,
+  listUncodedSweepCandidatesAction,
   recordSweepEntryAction,
   startSweepAction,
 } = await import("#/features/gear/server/sweeps-actions.server");
@@ -88,7 +89,7 @@ async function seedCatalog() {
   codedModelPublicId = model.publicId;
 }
 
-async function addItem(code: string): Promise<string> {
+async function addItem(code: string | null): Promise<string> {
   const result = await createGearAction({
     modelPublicId: codedModelPublicId,
     code,
@@ -278,6 +279,44 @@ describe("closeSweepAction", () => {
       expect((await whereaboutsOf(publicId)).whereabouts).toBe(whereabouts);
     },
   );
+
+  it("lets an untagged piece be logged, so it isn't missing for ever", async () => {
+    // An unlabelled piece has no code, and the code box was the only way
+    // in — so it went unlogged at every sweep and was marked missing at
+    // every close, permanently, no matter how plainly it sat on the
+    // shelf. It is pickable by publicId instead.
+    await signInAsManager();
+    await seedCatalog();
+    const untagged = await addItem(null);
+    await startSweepAction();
+
+    const candidates = await listUncodedSweepCandidatesAction();
+    expect(candidates.map((c) => c.publicId)).toContain(untagged);
+    expect(candidates.find((c) => c.publicId === untagged)?.seen).toBe(false);
+
+    const logged = await recordSweepEntryAction({ itemPublicId: untagged });
+    expect(logged.ok).toBe(true);
+    expect(
+      (await listUncodedSweepCandidatesAction()).find(
+        (c) => c.publicId === untagged,
+      )?.seen,
+    ).toBe(true);
+
+    const result = await closeSweepAction();
+    if (!result.ok) throw new Error("close failed");
+    expect(result.markedMissing).toEqual([]);
+    expect((await whereaboutsOf(untagged)).whereabouts).toBe("cave");
+  });
+
+  it("still marks an untagged piece nobody logged", async () => {
+    await signInAsManager();
+    await seedCatalog();
+    const untagged = await addItem(null);
+    await startSweepAction();
+    const result = await closeSweepAction();
+    if (!result.ok) throw new Error("close failed");
+    expect(result.markedMissing.map((m) => m.publicId)).toEqual([untagged]);
+  });
 
   it("leaves held gear alone — also absent by arrangement", async () => {
     // A hold is somebody saying out loud that they pulled this from the

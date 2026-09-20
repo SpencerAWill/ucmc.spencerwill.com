@@ -11,6 +11,7 @@ import {
   gearHoldsQueryKey,
   GEAR_SWEEPS_QUERY_KEY,
   OPEN_SWEEP_QUERY_KEY,
+  UNCODED_SWEEP_CANDIDATES_QUERY_KEY,
   sweepDetailQueryKey,
   gearModelBrowseQueryKey,
   gearModelsQueryKey,
@@ -38,6 +39,7 @@ import {
   listGearLabelsFn,
   listGearAttributeDefsFn,
   getOpenSweepFn,
+  listUncodedSweepCandidatesFn,
   getSweepFn,
   listGearHoldsFn,
   listSweepsFn,
@@ -166,6 +168,13 @@ export function openSweepQueryOptions() {
   return {
     queryKey: OPEN_SWEEP_QUERY_KEY,
     queryFn: () => getOpenSweepFn(),
+  } as const;
+}
+
+export function uncodedSweepCandidatesQueryOptions() {
+  return {
+    queryKey: UNCODED_SWEEP_CANDIDATES_QUERY_KEY,
+    queryFn: () => listUncodedSweepCandidatesFn(),
   } as const;
 }
 
