@@ -84,23 +84,15 @@ export function GearGridCard({
           />
         </Link>
         {onToggleSelect && canManage ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onToggleSelect();
-            }}
-            className="absolute top-2 left-2 flex size-7 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
+          // See gear-card.tsx: a Checkbox already renders a <button>, so it
+          // has to be the plate rather than sit inside one.
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggleSelect()}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-2 left-2 size-7 rounded-md border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
             aria-label={`Select ${gear.code ?? gear.description}`}
-          >
-            <Checkbox
-              checked={selected}
-              className="pointer-events-none size-4"
-              tabIndex={-1}
-              aria-hidden
-            />
-          </button>
+          />
         ) : null}
       </div>
 

@@ -107,23 +107,16 @@ export function GearCard({
             />
           </Link>
           {onToggleSelect && canManage ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onToggleSelect();
-              }}
-              className="absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
+            // The Checkbox IS the plate: it renders its own <button>, so
+            // wrapping it in one nests a button inside a button — invalid
+            // HTML that React reports as a hydration error on every row.
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => onToggleSelect()}
+              onClick={(e) => e.stopPropagation()}
+              className="absolute top-1.5 left-1.5 size-6 rounded-md border-border bg-background/90 shadow-sm transition-opacity hover:bg-background"
               aria-label={`Select ${gear.code ?? gear.description}`}
-            >
-              <Checkbox
-                checked={selected}
-                className="pointer-events-none size-4"
-                tabIndex={-1}
-                aria-hidden
-              />
-            </button>
+            />
           ) : null}
         </div>
 
