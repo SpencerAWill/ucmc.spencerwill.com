@@ -51,6 +51,7 @@ import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import {
   GEAR_CONDITION_VALUES,
   GEAR_STATUS_VALUES,
+  GEAR_WHEREABOUTS_VALUES,
 } from "#/features/gear/server/gear-fns";
 import { GEAR_AVAILABILITY } from "#/features/gear/lib/availability";
 import {
@@ -77,6 +78,7 @@ const searchSchema = z.object({
   status: z.enum(GEAR_STATUS_VALUES).optional(),
   availability: z.enum(GEAR_AVAILABILITY).optional(),
   condition: z.enum(GEAR_CONDITION_VALUES).optional(),
+  whereabouts: z.enum(GEAR_WHEREABOUTS_VALUES).optional(),
   q: z.string().optional(),
   sort: z.enum(SORT_VALUES).optional(),
   dir: z.enum(DIR_VALUES).optional(),
@@ -116,6 +118,7 @@ const RESULT_SET_KEYS = [
   "status",
   "availability",
   "condition",
+  "whereabouts",
   "q",
 ] as const;
 
@@ -151,6 +154,7 @@ function GearIndexPage() {
     status: value.status ?? "active",
     availability: value.availability ?? null,
     condition: value.condition ?? null,
+    whereabouts: value.whereabouts ?? null,
     q: value.q ?? "",
     sort: value.sort ?? "code",
     dir: value.dir ?? DEFAULT_DIR[value.sort ?? "code"],
@@ -180,6 +184,9 @@ function GearIndexPage() {
       ...("status" in next ? { status: next.status } : {}),
       ...("availability" in next
         ? { availability: next.availability ?? undefined }
+        : {}),
+      ...("whereabouts" in next
+        ? { whereabouts: next.whereabouts ?? undefined }
         : {}),
       ...("condition" in next
         ? { condition: next.condition ?? undefined }
@@ -270,6 +277,7 @@ function GearIndexPage() {
     status: toolbarState.status,
     availability: toolbarState.availability ?? undefined,
     condition: toolbarState.condition ?? undefined,
+    whereabouts: toolbarState.whereabouts ?? undefined,
     inspection: toolbarState.inspection ?? undefined,
     serviceLife: toolbarState.serviceLife ?? undefined,
     q: toolbarState.q.length > 0 ? toolbarState.q : undefined,

@@ -34,7 +34,10 @@ import {
   gearTypesQueryOptions,
 } from "#/features/gear/api/queries";
 import { GearTagMultiselect } from "#/features/gear/components/gear-tag-multiselect";
-import { GEAR_CONDITION_VALUES } from "#/features/gear/server/gear-fns";
+import {
+  GEAR_CONDITION_VALUES,
+  GEAR_WHEREABOUTS_VALUES,
+} from "#/features/gear/server/gear-fns";
 import {
   AVAILABILITY_LABEL,
   GEAR_AVAILABILITY,
@@ -43,8 +46,13 @@ import type { GearAvailability } from "#/features/gear/lib/availability";
 import type {
   GearCondition,
   GearStatus,
+  GearWhereabouts,
 } from "#/features/gear/server/gear-fns";
-import { CONDITION_LABEL, STATUS_LABEL } from "#/features/gear/lib/labels";
+import {
+  CONDITION_LABEL,
+  STATUS_LABEL,
+  WHEREABOUTS_LABEL,
+} from "#/features/gear/lib/labels";
 
 const STATUS_VALUES = ["active", "retired"] as const;
 
@@ -133,6 +141,10 @@ export interface GearToolbarState {
   status: GearStatus;
   availability: GearAvailability | null;
   condition: GearCondition | null;
+  /** The third axis. Without it an officer could not ask the one
+   *  question a sweep exists to answer — what is missing — nor find
+   *  what is sitting at the repair shop. */
+  whereabouts: GearWhereabouts | null;
   q: string;
   sort: GearItemSortKey;
   dir: SortDirection;
@@ -225,6 +237,15 @@ export function GearToolbar({
           },
         ]
       : []),
+    ...(state.whereabouts !== null
+      ? [
+          {
+            key: `whereabouts:${state.whereabouts}`,
+            label: WHEREABOUTS_LABEL[state.whereabouts],
+            onRemove: () => onChange({ whereabouts: null }),
+          },
+        ]
+      : []),
     ...(state.modelPublicId !== null
       ? [
           {
@@ -290,6 +311,7 @@ export function GearToolbar({
       status: "active",
       availability: null,
       condition: null,
+      whereabouts: null,
       attributes: {},
       inspection: null,
       serviceLife: null,
@@ -417,6 +439,37 @@ export function GearToolbar({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                Whereabouts
+              </Label>
+              <Select
+                value={state.whereabouts ?? "__any__"}
+                onValueChange={(v) =>
+                  onChange({
+                    whereabouts:
+                      v === "__any__" ? null : (v as GearWhereabouts),
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Anywhere" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__any__">Anywhere</SelectItem>
+                  {GEAR_WHEREABOUTS_VALUES.map((w) => (
+                    <SelectItem key={w} value={w}>
+                      {WHEREABOUTS_LABEL[w]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Where a piece is when nobody has it out. "Missing" is what a
+                sweep writes when nobody logged it.
+              </p>
             </div>
 
             <div className="space-y-1.5">

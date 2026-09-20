@@ -42,6 +42,7 @@ const filteredState: GearToolbarState = {
   status: "retired",
   availability: "on_loan",
   condition: "needs_repair",
+  whereabouts: "missing",
   inspection: "overdue",
   serviceLife: "expired",
   q: "",
