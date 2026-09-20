@@ -21,11 +21,12 @@ import {
 import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
-import { CONDITION_LABEL, CONDITION_VARIANT } from "#/features/gear/lib/labels";
 import {
-  AVAILABILITY_LABEL,
-  AVAILABILITY_VARIANT,
-} from "#/features/gear/lib/availability";
+  CONDITION_LABEL,
+  CONDITION_VARIANT,
+  availabilityBadge,
+  isTerminalStatus,
+} from "#/features/gear/lib/labels";
 import { formatDate } from "#/lib/date-format";
 
 // Falls back to the static placeholder SVG when the gear row has no
@@ -74,7 +75,8 @@ export function GearCard({
   onRetire: () => void;
   onUnretire: () => void;
 }) {
-  const isRetired = gear.status === "retired";
+  const isInactive = isTerminalStatus(gear.status);
+  const badge = availabilityBadge(gear);
   const subtitleParts = [gear.type.name, gear.code].filter(
     (p): p is string => p !== null,
   );
@@ -154,9 +156,7 @@ export function GearCard({
             {/* Availability leads: it is the question a member came to
                 ask. The raw condition only earns a badge when it adds
                 something the rollup didn't already say. */}
-            <Badge variant={AVAILABILITY_VARIANT[gear.availability]}>
-              {AVAILABILITY_LABEL[gear.availability]}
-            </Badge>
+            <Badge variant={badge.variant}>{badge.label}</Badge>
             {gear.availability === "on_loan" && gear.availableFrom !== null ? (
               <span className="text-xs text-muted-foreground">
                 back {formatDate(gear.availableFrom)}
@@ -200,10 +200,10 @@ export function GearCard({
                   <Edit className="size-4" />
                   Edit
                 </DropdownMenuItem>
-                {isRetired ? (
+                {isInactive ? (
                   <DropdownMenuItem onSelect={onUnretire}>
                     <RotateCcw className="size-4" />
-                    Unretire
+                    Reactivate
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem onSelect={onRetire}>

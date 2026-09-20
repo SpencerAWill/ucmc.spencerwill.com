@@ -35,7 +35,8 @@ Loan state is **derived from `gear_loans` and never mirrored** onto the item —
 - `missing` is the only state **inferred from absence**, at the close of an inventory sweep, which is why `whereabouts_as_of` exists. An item on an open loan is legitimately absent and can never be marked missing.
 - `unsafe` is a hard loan block with **no override**. `needs_repair` is overridable by an officer with a confirm.
 - Only an inspection may raise `condition`; anyone can lower it at check-in.
-- Display labels live in **`lib/labels.ts`**, not per-component — six private copies had already drifted.
+- Display labels live in **`lib/labels.ts`**, not per-component — six private copies had already drifted. So does **`isTerminalStatus`**: "is this still club property" is `status !== "active"`, and every surface that spelled it `status === "retired"` silently excluded `lost` and `disposed`, offering "Retire" on an item already written off and no way back to active. The inverse action is **"Reactivate"**, which is accurate for all three.
+- **`availabilityBadge` reaches past the rollup for the terminal bucket.** `gearAvailability` collapses all three terminal statuses into `retired` — right for "can I borrow this", wrong as the word on a card, where a lost harness read "Retired". The rollup keeps its five values (the filter is built on them) and the badge names the raw status.
 
 ## Codes are never recycled
 

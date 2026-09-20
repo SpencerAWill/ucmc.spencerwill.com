@@ -25,7 +25,13 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
-import { CONDITION_LABEL, CONDITION_VARIANT } from "#/features/gear/lib/labels";
+import {
+  CONDITION_LABEL,
+  CONDITION_VARIANT,
+  STATUS_LABEL,
+  STATUS_VARIANT,
+  isTerminalStatus,
+} from "#/features/gear/lib/labels";
 
 /**
  * Dense tabular view of the gear list. No thumbnails — meant for
@@ -87,7 +93,7 @@ export function GearTableView({
         </TableHeader>
         <TableBody>
           {rows.map((g) => {
-            const isRetired = g.status === "retired";
+            const isInactive = isTerminalStatus(g.status);
             return (
               <TableRow
                 key={g.publicId}
@@ -131,7 +137,9 @@ export function GearTableView({
                     <span>{g.type.name}</span>
                     <span>·</span>
                     <span>{CONDITION_LABEL[g.condition]}</span>
-                    {isRetired ? <span>· retired</span> : null}
+                    {isInactive ? (
+                      <span>· {STATUS_LABEL[g.status].toLowerCase()}</span>
+                    ) : null}
                   </div>
                 </TableCell>
                 <TableCell className="hidden text-sm sm:table-cell">
@@ -149,8 +157,10 @@ export function GearTableView({
                     <Badge variant={CONDITION_VARIANT[g.condition]}>
                       {CONDITION_LABEL[g.condition]}
                     </Badge>
-                    {isRetired ? (
-                      <Badge variant="outline">Retired</Badge>
+                    {isInactive ? (
+                      <Badge variant={STATUS_VARIANT[g.status]}>
+                        {STATUS_LABEL[g.status]}
+                      </Badge>
                     ) : null}
                   </div>
                 </TableCell>
@@ -174,10 +184,10 @@ export function GearTableView({
                             <Edit className="size-4" />
                             Edit
                           </DropdownMenuItem>
-                          {isRetired ? (
+                          {isInactive ? (
                             <DropdownMenuItem onSelect={() => onUnretire(g)}>
                               <RotateCcw className="size-4" />
-                              Unretire
+                              Reactivate
                             </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem onSelect={() => onRetire(g)}>

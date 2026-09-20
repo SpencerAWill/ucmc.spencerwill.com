@@ -15,6 +15,7 @@ import { GearFormSheet } from "#/features/gear/components/gear-form-sheet";
 import { GearInspectionsSection } from "#/features/gear/components/gear-inspections-section";
 import { GearLabelsDialog } from "#/features/gear/components/gear-labels-dialog";
 import { GearRetireDialog } from "#/features/gear/components/gear-retire-dialog";
+import { isTerminalStatus } from "#/features/gear/lib/labels";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 export const Route = createFileRoute("/gear/$publicId")({
@@ -54,7 +55,7 @@ function GearDetailPage() {
       </PageContainer>
     );
   }
-  const isRetired = data.status === "retired";
+  const isInactive = isTerminalStatus(data.status);
   return (
     <PageContainer width="app" className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -92,7 +93,7 @@ function GearDetailPage() {
               <Edit className="size-4" />
               Edit
             </Button>
-            {isRetired ? (
+            {isInactive ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -100,14 +101,14 @@ function GearDetailPage() {
                   unretire.mutate(
                     { publicId },
                     {
-                      onSuccess: () => toast.success("Gear unretired"),
-                      onError: () => toast.error("Couldn't unretire."),
+                      onSuccess: () => toast.success("Gear reactivated"),
+                      onError: () => toast.error("Couldn't reactivate."),
                     },
                   )
                 }
               >
                 <RotateCcw className="size-4" />
-                Unretire
+                Reactivate
               </Button>
             ) : (
               <Button

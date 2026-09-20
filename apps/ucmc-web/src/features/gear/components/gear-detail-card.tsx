@@ -24,6 +24,7 @@ import {
   STATUS_VARIANT,
   WHEREABOUTS_LABEL,
   WHEREABOUTS_VARIANT,
+  isTerminalStatus,
 } from "#/features/gear/lib/labels";
 
 // Mirrors the placeholder used on the list page so the detail view
@@ -41,7 +42,7 @@ export function GearDetailCard({
    *  officer-only since it leaks budget detail. */
   canManage: boolean;
 }) {
-  const isRetired = gear.status === "retired";
+  const isInactive = isTerminalStatus(gear.status);
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -154,9 +155,14 @@ export function GearDetailCard({
             <dt className="text-xs text-muted-foreground">Added</dt>
             <dd>{formatDate(gear.createdAt)}</dd>
           </div>
-          {isRetired && gear.deactivatedAt ? (
+          {/* Gated on the whole terminal set, not on `retired` alone:
+              an item recorded as lost or disposed has a deactivation
+              date and a reason too, and neither rendered anywhere. */}
+          {isInactive && gear.deactivatedAt ? (
             <div>
-              <dt className="text-xs text-muted-foreground">Retired</dt>
+              <dt className="text-xs text-muted-foreground">
+                {STATUS_LABEL[gear.status]}
+              </dt>
               <dd>{formatDate(gear.deactivatedAt)}</dd>
             </div>
           ) : null}
@@ -206,7 +212,7 @@ export function GearDetailCard({
               : ""}
           </p>
         ) : null}
-        {isRetired && gear.deactivatedReason ? (
+        {isInactive && gear.deactivatedReason ? (
           <p className="text-sm text-muted-foreground">
             <span className="font-medium">Reason:</span>{" "}
             {gear.deactivatedReason}

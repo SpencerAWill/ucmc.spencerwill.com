@@ -21,7 +21,13 @@ import {
 import { AddToCartButton } from "#/features/gear/components/add-to-cart-button";
 import { gearThumbnailUrlFor } from "#/features/gear/lib/thumbnail-url";
 import type { GearSummary } from "#/features/gear/server/gear-fns";
-import { CONDITION_LABEL, CONDITION_VARIANT } from "#/features/gear/lib/labels";
+import {
+  CONDITION_LABEL,
+  CONDITION_VARIANT,
+  STATUS_LABEL,
+  STATUS_VARIANT,
+  isTerminalStatus,
+} from "#/features/gear/lib/labels";
 
 const GEAR_PLACEHOLDER_SRC = "/gear-placeholder.svg";
 
@@ -48,7 +54,7 @@ export function GearGridCard({
   onRetire: () => void;
   onUnretire: () => void;
 }) {
-  const isRetired = gear.status === "retired";
+  const isInactive = isTerminalStatus(gear.status);
   const subtitleParts = [gear.type.name, gear.code].filter(
     (p): p is string => p !== null,
   );
@@ -127,7 +133,11 @@ export function GearGridCard({
             <Badge variant={CONDITION_VARIANT[gear.condition]}>
               {CONDITION_LABEL[gear.condition]}
             </Badge>
-            {isRetired ? <Badge variant="outline">Retired</Badge> : null}
+            {isInactive ? (
+              <Badge variant={STATUS_VARIANT[gear.status]}>
+                {STATUS_LABEL[gear.status]}
+              </Badge>
+            ) : null}
           </div>
           <div className="flex items-center gap-0">
             <AddToCartButton
@@ -153,10 +163,10 @@ export function GearGridCard({
                     <Edit className="size-4" />
                     Edit
                   </DropdownMenuItem>
-                  {isRetired ? (
+                  {isInactive ? (
                     <DropdownMenuItem onSelect={onUnretire}>
                       <RotateCcw className="size-4" />
-                      Unretire
+                      Reactivate
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem onSelect={onRetire}>
