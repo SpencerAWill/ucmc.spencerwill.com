@@ -72,6 +72,35 @@ function SweepBody() {
   const { data: sweep, isLoading } = useQuery(openSweepQueryOptions());
   const [report, setReport] = useState<CloseReport | null>(null);
   const startMutation = useStartSweep();
+  // The close mutation lives here rather than in `ActiveSweepPane`,
+  // and that placement is the whole fix for a report nobody ever saw.
+  //
+  // `useCloseSweep`'s `onSuccess` awaits invalidating the open-sweep
+  // query. React Query awaits the hook-level callback before running
+  // the per-call ones, so by the time it gets to them the query has
+  // already resolved to null, this component has re-rendered, and
+  // `ActiveSweepPane` — the component that called `mutate` — is
+  // unmounted. React Query drops `mutate`-level callbacks on unmount,
+  // so `onClosed` never fired and `setReport` never ran: the sheet
+  // jumped straight back to "No sweep is running" having silently
+  // marked every unseen piece missing.
+  const closeMutation = useCloseSweep();
+
+  const closeSweep = (notes: string) => {
+    closeMutation.mutate(
+      { notes: notes.trim().length === 0 ? null : notes },
+      {
+        onSuccess: (result) => {
+          if (result.ok) {
+            setReport(result);
+            return;
+          }
+          toast.error("The sweep was closed by someone else.");
+        },
+        onError: () => toast.error("Couldn't close the sweep."),
+      },
+    );
+  };
 
   if (isLoading) {
     return <p className="px-4 text-sm text-muted-foreground">Loading…</p>;
@@ -116,15 +145,23 @@ function SweepBody() {
     );
   }
 
-  return <ActiveSweepPane sweep={sweep} onClosed={setReport} />;
+  return (
+    <ActiveSweepPane
+      sweep={sweep}
+      onClose={closeSweep}
+      closing={closeMutation.isPending}
+    />
+  );
 }
 
 function ActiveSweepPane({
   sweep,
-  onClosed,
+  onClose,
+  closing,
 }: {
   sweep: GearSweepDetail;
-  onClosed: (report: CloseReport) => void;
+  onClose: (notes: string) => void;
+  closing: boolean;
 }) {
   const [code, setCode] = useState("");
   const [typePublicId, setTypePublicId] = useState("");
@@ -139,7 +176,6 @@ function ActiveSweepPane({
     enabled: typePublicId.length > 0,
   });
   const recordMutation = useRecordSweepEntry();
-  const closeMutation = useCloseSweep();
 
   const countedModels = (models ?? []).filter((m) => m.tracking === "counted");
 
@@ -344,22 +380,8 @@ function ActiveSweepPane({
         />
         <Button
           className="w-full"
-          onClick={() =>
-            closeMutation.mutate(
-              { notes: notes.trim().length === 0 ? null : notes },
-              {
-                onSuccess: (result) => {
-                  if (result.ok) {
-                    onClosed(result);
-                    return;
-                  }
-                  setError("The sweep was closed by someone else.");
-                },
-                onError: () => setError("Couldn't close the sweep."),
-              },
-            )
-          }
-          disabled={closeMutation.isPending}
+          onClick={() => onClose(notes)}
+          disabled={closing}
         >
           <CheckCircle2 className="size-4" />
           Close sweep and mark what's missing
