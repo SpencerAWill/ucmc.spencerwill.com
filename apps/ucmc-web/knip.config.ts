@@ -126,20 +126,6 @@ const config: KnipConfig = {
     // Referenced by string ("typescript") in the flat config's
     // `settings["import/resolver"]`, never imported.
     "eslint-import-resolver-typescript",
-
-    // ── Unused dependencies: real findings, tracked for follow-up. ───────
-    // Each of these resolves to zero references in `src/`, `test/`, `e2e/`,
-    // `drizzle/` or `scripts/`. Removing them is a separate commit so this
-    // one doesn't touch the lockfile.
-    "@faker-js/faker",
-    "@tanstack/match-sorter-utils",
-    "@tanstack/react-table",
-    "@tanstack/react-virtual",
-    // A transitive dep of `@tanstack/react-start`'s Vite plugin, which is
-    // what actually generates the route tree. Our direct declaration is
-    // redundant — nothing in this package imports it.
-    "@tanstack/router-plugin",
-    "@tiptap/extension-character-count",
   ],
 
   /**
