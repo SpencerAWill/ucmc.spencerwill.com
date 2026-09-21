@@ -120,7 +120,7 @@ jobs:
         run: pnpm --filter @ucmc/infra exec tsc --noEmit
 
   a11y:
-    name: Accessibility (axe-core)
+    name: Browser specs (axe-core, gear scanner)
     if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
@@ -176,6 +176,27 @@ jobs:
           SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
           MAILPIT_URL: ""
         run: pnpm --filter ucmc-web e2e a11y.spec.ts
+
+      # The gear-desk scanner's decode path: a real camera frame (via
+      # Chromium's fake-capture flags) through the ZXing WASM we serve
+      # from /zxing-wasm/. It runs in this job rather than its own
+      # because the setup is identical — browser, migrations, dev
+      # server — and a second job would pay all of it twice.
+      #
+      # Linux Chromium ships no native BarcodeDetector, so this
+      # exercises the ponyfill path, which is exactly the one that
+      # shipped broken. Both specs fail against a stale WASM binary.
+      - name: Run gear-scanner specs
+        env:
+          CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+          APP_BASE_URL: http://localhost:3000
+          WEBAUTHN_RP_ID: localhost
+          WEBAUTHN_RP_NAME: UCMC (ci)
+          RESEND_FROM: noreply@localhost
+          RESEND_FROM_NAME: UCMC (ci)
+          SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
+          MAILPIT_URL: ""
+        run: pnpm --filter ucmc-web e2e gear-scanner.spec.ts
 
       - name: Upload Playwright report on failure
         if: failure()
