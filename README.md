@@ -95,8 +95,18 @@ To run manually:
 pnpm exec eslint .
 pnpm exec prettier --write .
 pnpm --filter ucmc-web typecheck
+pnpm --filter ucmc-web knip
 cd infra && pnpm typecheck
 ```
+
+[Knip](https://knip.dev) reports unused files, exports, exported types and
+dependencies — the module-graph half of dead-code detection that ESLint's
+unused-locals rule structurally cannot see. It runs in CI alongside
+lint/typecheck/test. Its config, `apps/ucmc-web/knip.config.ts`, carries the
+rationale for every entry point and every suppression; read it before adding
+either, because most of this app's real entry points (file-based routes, the
+Worker entry, stories, both vitest pools) are reached by convention rather
+than by an import.
 
 ### Web App
 
@@ -119,6 +129,7 @@ pnpm --filter ucmc-web dev          # start the dev server on http://localhost:3
 pnpm --filter ucmc-web build        # production build
 pnpm --filter ucmc-web test         # run Vitest unit tests
 pnpm --filter ucmc-web typecheck    # tsc --noEmit
+pnpm --filter ucmc-web knip         # unused files, exports and dependencies
 pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006
 pnpm --filter ucmc-web deploy:dev   # build and deploy to dev (dev.ucmc.spencerwill.com)
 pnpm --filter ucmc-web deploy:prod  # build and deploy to prod (ucmc.spencerwill.com)

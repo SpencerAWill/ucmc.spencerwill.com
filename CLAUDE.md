@@ -15,13 +15,15 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 ## Commands
 
 - `pnpm install` · `pnpm commit` · `pnpm exec eslint .` · `pnpm exec prettier --write .`
-- `pnpm --filter ucmc-web {dev,build,test,typecheck,lint,storybook,e2e,e2e:ui}`
+- `pnpm --filter ucmc-web {dev,build,test,typecheck,lint,knip,storybook,e2e,e2e:ui}`
 - `pnpm --filter ucmc-web {deploy:dev,deploy:prod}`
 - `pnpm --filter ucmc-web {db:migrate:local,db:seed:local}` — remote sysadmin seeding is the `seed-admin.yml` GitHub Action, not a script
 
 **Migrations are hand-written, not generated.** `db:generate` exists but does not currently run: the drizzle meta snapshots have been stale since `0059`, so `drizzle-kit generate` diffs against a snapshot eight migrations behind, tries to resolve the gap as a set of table renames, and blocks on an interactive prompt that fails outright without a TTY. Migrations `0060`+ are all hand-written SQL with an explanatory header, and the `meta/_journal.json` entry is added by hand alongside. Follow that pattern; regenerating the snapshots is its own piece of work.
 
 - `cd infra && pulumi {preview,up}`
+
+**`knip` must stay green.** It reports unused files, exports, exported types and dependencies — the module-graph findings ESLint can't see, and the thing that will tell us a migration shim (`permission-aliases.ts`, `LEGACY_SETTING_KEYS`, `LEGACY_HERO_SETTING_KEYS`) has lost its last call site. Most entry points here are reached by convention, not by an import, so **a new route, story, script or vitest pool may need a `knip.config.ts` entry.** Every suppression in that file is commented with why; add findings to it only after establishing they're false positives, and prefer `entry` over `ignore` for vendored catalogs so knip still follows their imports.
 
 **Run lint as `pnpm --filter ucmc-web lint`, the way CI does.** The web ESLint config resolves `import/no-restricted-paths` zones against `process.cwd()`; from the repo root those zones match nothing, and the rule **fails open** — silently passing rather than erroring.
 

@@ -22,7 +22,7 @@ Prereq: `RESEND_MANAGEMENT_API_KEY` (full-access) as a GitHub env secret on both
 
 ## Workflows
 
-- `ci.yml` — per-PR. A paths-filter gates web lint/typecheck/vitest and the browser-spec job (axe a11y + the gear-scanner decode specs, sharing one dev server) and infra lint/typecheck + `pulumi preview`; the workspace audit always runs.
+- `ci.yml` — per-PR. A paths-filter gates web lint/typecheck/knip/vitest, the browser-spec job (axe a11y + the gear-scanner decode specs, sharing one dev server), and infra lint/typecheck + `pulumi preview`; the workspace audit always runs.
 - `deploy.yml` — push-to-main auto-deploys dev with infra-dev → web-dev chaining; prod via `workflow_dispatch` with environment approval. It rewrites `wrangler.jsonc`'s placeholder `database_id` / KV id from Pulumi outputs, and supplies vars via `--var` flags plus `wrangler secret put`.
 - `seed-admin.yml` — manual sysadmin promotion. Remote sysadmin seeding is this Action, **not** a script.
 - `lint-pr.yaml` — PR title lint.
