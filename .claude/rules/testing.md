@@ -43,7 +43,10 @@ Playwright drives Chromium against a freshly-spawned dev server.
 
 - `e2e/fixtures/mailpit.ts` polls Mailpit for magic links.
 - `e2e/fixtures/hydration.ts` — **`waitForHydration(page)` polls `window.$_TSR.hydrated`; premature interaction is the source of every flake.**
-- `e2e/fixtures/db.ts` seeds via `wrangler d1 execute`.
+- `e2e/fixtures/db.ts` seeds via `wrangler d1 execute`. **`seedSession(email)` returns a session id that IS the `ucmc_session` cookie value** — the cookie holds the opaque id and nothing derived from it. A spec whose subject isn't sign-in should use it: no Mailpit, so the spec can run in CI, and several seconds faster. A spec testing the sign-in flow itself still goes through the real magic link.
+- `e2e/fixtures/fake-camera.ts` writes a single-frame Y4M of a QR for Chromium's `--use-file-for-fake-video-capture`. Hand-rolled (text header + planar YUV) because `qrcode` hands over the module matrix and an ffmpeg dependency for three loops is a poor trade.
 - The webServer config sets `E2E_BYPASS_RATE_LIMIT=1` and clears Turnstile keys: the 10/60s budget can't cover a suite from one IP, and Turnstile blocks `networkidle` and steals focus.
 
-Only `a11y.spec.ts` runs in CI today.
+`a11y.spec.ts` and `gear-scanner.spec.ts` run in CI; everything else is local-only because it needs the Mailpit sidecar, which the workflow doesn't have.
+
+**`gear-scanner.spec.ts` is the only test that exercises a real decode.** The component tests stub `BarcodeScanner` wholesale and `gear-loans.spec.ts` drives the desk through the code-search combobox, so the camera → `BarcodeDetector` → ZXing WASM path had no coverage at all — which is how a stale `zxing_reader.wasm` shipped and silently decoded nothing for months. Linux Chromium has no native `BarcodeDetector`, so CI exercises the ponyfill path, the one that broke. **Both cases fail against a stale binary** — verified, and that is the point of them. `launchOptions` can't live in a `describe`, so the spec launches Chromium itself rather than splitting one file per camera frame.
