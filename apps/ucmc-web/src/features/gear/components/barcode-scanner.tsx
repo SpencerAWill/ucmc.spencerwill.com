@@ -17,14 +17,20 @@ import { Switch } from "#/components/ui/switch";
  * rip through a batch with viewfinder and items-list visible at the
  * same time. Hybrid runtime:
  *
- *   1. If the browser ships `BarcodeDetector` natively (Chrome / Edge /
- *      Android Chrome / Safari iOS 17+ / Safari macOS 17+), use it
- *      directly — zero deps, zero WASM, fastest path.
- *   2. Otherwise (Firefox, pre-17 Safari) lazy-load the
- *      `barcode-detector` ponyfill and point its WASM source at the
- *      locally-vendored copy in `public/zxing-wasm/`. The CDN default
- *      would be blocked by our CSP's `connect-src 'self'`; the local
- *      copy keeps everything same-origin.
+ *   1. If the browser ships `BarcodeDetector` natively (Chrome, Edge
+ *      and Android Chrome), use it directly — zero deps, zero WASM,
+ *      fastest path. The feature test below is the authority; this
+ *      list is just orientation.
+ *   2. Otherwise (Firefox and Safari, which have not shipped the
+ *      Barcode Detection API) lazy-load the `barcode-detector`
+ *      ponyfill and point its WASM source at the same-origin copy in
+ *      `public/zxing-wasm/`. The CDN default would be blocked by our
+ *      CSP's `connect-src 'self'`. That copy is written at build time
+ *      by `scripts/sync-zxing-wasm.ts` from the installed `zxing-wasm`
+ *      — it MUST match the glue JS exactly. A hand-vendored binary
+ *      from an older release instantiates cleanly (same import/export
+ *      surface) and then throws on every decode, which the loop below
+ *      now surfaces rather than swallowing.
  *
  * SSR safety: every `navigator` / `window` / `BarcodeDetector` read
  * lives inside `useEffect`, so the component renders cleanly during
@@ -82,8 +88,9 @@ async function loadBarcodeDetector(): Promise<BarcodeDetectorCtor> {
   mod.prepareZXingModule({
     overrides: {
       locateFile: (path: string, prefix: string) => {
-        // Redirect WASM fetches to our locally-vendored copy. Same
-        // origin → `connect-src 'self'` is enough.
+        // Redirect WASM fetches to the build-time copy written by
+        // `scripts/sync-zxing-wasm.ts`. Same origin → `connect-src
+        // 'self'` is enough.
         if (path.endsWith(".wasm")) return `/zxing-wasm/${path}`;
         return prefix + path;
       },
@@ -216,11 +223,24 @@ export function BarcodeScanner({
         const SAME_CODE_COOLDOWN_MS = 1500;
         let lastFired: { code: string; at: number } | null = null;
 
+        // A `detect()` throw is usually transient — the browser rejects
+        // on a frame that isn't ready yet — so one failure means nothing
+        // and retrying is right. A detector that throws on EVERY frame is
+        // a different animal: it's broken, and the old code's blanket
+        // swallow made that indistinguishable from "no barcode in view".
+        // A stale vendored WASM did exactly that for the whole ponyfill
+        // path and nobody noticed, because the preview kept running and
+        // the scanner looked healthy. Count consecutive failures and
+        // surface the dead detector instead of spinning forever.
+        const DETECT_FAILURE_LIMIT = 30;
+        const failures = { consecutive: 0 };
+
         const scan = async () => {
           if (flags.cancelled) return;
           if (video.readyState >= 2) {
             try {
               const results = await detector.detect(video);
+              failures.consecutive = 0;
               const first = results[0]?.rawValue;
               if (first) {
                 const now = performance.now();
@@ -238,8 +258,13 @@ export function BarcodeScanner({
                 }
               }
             } catch {
-              // Per-frame detect failures are transient (browser may
-              // throw on a not-ready video frame). Ignore and retry.
+              failures.consecutive += 1;
+              if (failures.consecutive >= DETECT_FAILURE_LIMIT) {
+                setError(
+                  "Scanner can't read the camera feed. Reload the page; if it keeps happening the barcode reader needs attention.",
+                );
+                return;
+              }
             }
           }
           rafRef.current = requestAnimationFrame(() => {

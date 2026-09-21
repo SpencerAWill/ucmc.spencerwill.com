@@ -7,8 +7,10 @@
   },
   "scripts": {
     "generate:sitemap": "tsx scripts/generate-sitemap.ts",
-    "dev": "pnpm run generate:sitemap && vite dev --port 3000",
-    "build": "pnpm run generate:sitemap && vite build",
+    "sync:wasm": "tsx scripts/sync-zxing-wasm.ts",
+    "prepare:assets": "pnpm run generate:sitemap && pnpm run sync:wasm",
+    "dev": "pnpm run prepare:assets && vite dev --port 3000",
+    "build": "pnpm run prepare:assets && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
