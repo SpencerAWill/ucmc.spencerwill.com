@@ -29,7 +29,6 @@ jobs:
           filters: |
             web:
               - 'apps/ucmc-web/**'
-              - 'libs/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - '.github/workflows/ci.yml'
