@@ -209,7 +209,11 @@ Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`
 
 ### Barcode scanning is hand-rolled
 
-Native `BarcodeDetector` on Chrome / Edge / Android Chrome / Safari iOS 17+ / Safari macOS 17+ (zero deps, zero WASM), with a `barcode-detector/ponyfill` fallback for Firefox / pre-17 Safari. **The ZXing WASM the ponyfill needs is vendored locally** at `public/zxing-wasm/zxing_reader.wasm` and served same-origin via `prepareZXingModule({ overrides.locateFile })` so `connect-src 'self'` stays sufficient. Format whitelist is `["code_128", "qr_code"]`. CSP needs `script-src 'wasm-unsafe-eval'`; `Permissions-Policy: camera=(self)` is scoped to `/gear/loans*` only (`server/headers.server.ts` `securityHeadersForPath`).
+Native `BarcodeDetector` on Chrome / Edge / Android Chrome (zero deps, zero WASM), with a `barcode-detector/ponyfill` fallback for Firefox and Safari, neither of which has shipped the Barcode Detection API. The component feature-tests rather than sniffing, so that list is orientation only. Format whitelist is `["code_128", "qr_code"]`. CSP needs `script-src 'wasm-unsafe-eval'`; `Permissions-Policy: camera=(self)` is scoped to `/gear/loans*` only (`server/headers.server.ts` `securityHeadersForPath`).
+
+**The ZXing WASM the ponyfill needs is copied into `public/zxing-wasm/` at build time by `scripts/sync-zxing-wasm.ts`** (chained into `dev` and `build` via `prepare:assets`, output gitignored) and served same-origin via `prepareZXingModule({ overrides.locateFile })` so `connect-src 'self'` stays sufficient. It resolves the binary _through_ `barcode-detector` so it always copies the exact nested `zxing-wasm` the ponyfill will load.
+
+**It was hand-vendored and committed, and that is what broke the scanner.** The Emscripten glue JS and its `.wasm` are one artifact split across two files. They keep the same import/export surface across releases, so a stale binary instantiates cleanly and then throws `RuntimeError: table index is out of bounds` on the first decode. The `barcode-detector` 3.1.3 → 3.2.0 bump in #144 left the committed binary behind, and because the scan loop swallowed per-frame `detect()` errors, every ponyfill-path browser had a live camera preview that silently decoded nothing — no error, no toast, for months. The loop now counts consecutive `detect()` failures and surfaces a dead detector after 30, and `e2e/gear-scanner.spec.ts` drives a real QR through a real camera (Chromium fake-capture) so the decode seam is covered at all — see the testing rule.
 
 ### Backfill
 

@@ -213,3 +213,39 @@ export function execD1(sql: string): string {
     }
   }
 }
+
+/**
+ * Insert a live session row for the user owning `email` and return its
+ * id — which IS the value of the `ucmc_session` cookie, since the
+ * session cookie holds the opaque session id and nothing derived from
+ * it (see `src/server/auth/session-cookie.server.ts`).
+ *
+ * Lets a spec arrive signed-in without a magic-link round-trip, and so
+ * without Mailpit. That matters for anything that has to run in CI:
+ * the workflow has no Mailpit sidecar, which is why every email-driven
+ * spec is local-only today. It is also several seconds faster per
+ * sign-in.
+ *
+ * Use it when the spec is about something *after* authentication. A
+ * spec whose subject is the sign-in flow itself must still go through
+ * the real magic link.
+ */
+export function seedSession(email: string): string {
+  // uuidv7-shaped, matching `insertSessionRow`. The format isn't load-
+  // bearing — the column is an opaque primary key — but staying close
+  // to production keeps a debugging session from chasing a red herring.
+  const sid = randomUUID();
+  const nowMs = Date.now();
+  const expiresMs = nowMs + 30 * 24 * 60 * 60 * 1000; // SESSION_TTL_MS
+  const escapedEmail = `'${email.replace(/'/g, "''")}'`;
+  execD1(`
+INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at)
+SELECT '${sid}', user_id, ${nowMs}, ${nowMs}, ${expiresMs}
+FROM user_emails WHERE email = ${escapedEmail} AND is_primary = 1;
+`);
+  return sid;
+}
+
+/** Cookie name for the seeded session over plain http (the `__Host-`
+ *  prefix is only used when APP_BASE_URL is https). */
+export const SESSION_COOKIE_NAME = "ucmc_session";
