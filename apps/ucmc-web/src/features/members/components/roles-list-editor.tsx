@@ -8,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -140,97 +141,105 @@ export function RolesListEditor() {
                       <GripVertical className="size-4" />
                     </SortableItemHandle>
 
+                    {/* Two lines: the display name, then a row of
+                        chips. The role's *identifier* (`role.name`) used
+                        to be the second line, and on a phone it was the
+                        widest thing in the row while being the least
+                        useful — nobody administering roles is matching
+                        on `trip_leader` when "Trip Leader" sits directly
+                        above it. Handing that line to the chips instead
+                        pulls three of them out of the row's horizontal
+                        run, which is what was squeezing the name. The
+                        identifier still drives every behavioural branch
+                        here; it is just no longer rendered. */}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="block truncate font-medium">
+                            {role.displayName}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs">
+                          {role.description ?? "No description."}
+                        </TooltipContent>
+                      </Tooltip>
+
+                      {/* Counts as icon + number chips rather than
+                          "7 member(s) / 11 perm(s)" prose: at a glance
+                          the list is a comparison between roles, and two
+                          narrow tabular-nums chips scan down the column
+                          in a way wrapped prose doesn't. The tooltip
+                          carries the wording for sighted users;
+                          `role="img"` + aria-label carries it for screen
+                          readers, which never reach a tooltip on a
+                          non-focusable badge. The role is load-bearing:
+                          `Badge` renders a bare <span>, and aria-label
+                          is ignored on an element left with the implicit
+                          `generic` role. */}
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {role.isOfficer ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant="secondary"
+                                className="gap-1 px-1.5 text-xs"
+                                role="img"
+                                aria-label="Officer role"
+                              >
+                                <Star className="size-3" />
+                                officer
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Surfaces on the public home page
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="truncate font-medium">
-                              {role.displayName}
-                            </span>
+                            <Badge
+                              variant="secondary"
+                              className="gap-1 px-1.5 tabular-nums"
+                              role="img"
+                              aria-label={
+                                isAnonymous
+                                  ? "Not applicable to members"
+                                  : `${role.memberCount} member(s)`
+                              }
+                            >
+                              <Users className="size-3" />
+                              {isAnonymous ? "—" : role.memberCount}
+                            </Badge>
                           </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-xs">
-                            {role.description ?? "No description."}
+                          <TooltipContent>
+                            {isAnonymous
+                              ? "Applies to signed-out visitors, so it has no members"
+                              : `${role.memberCount} member(s) hold this role`}
                           </TooltipContent>
                         </Tooltip>
-                        {role.isProtected ? (
-                          <Badge variant="outline" className="text-xs">
-                            protected
-                          </Badge>
-                        ) : null}
-                        {role.isOfficer ? (
-                          <Badge
-                            variant="secondary"
-                            className="text-xs"
-                            title="Surfaces on the public home page"
-                          >
-                            <Star className="mr-1 size-3" />
-                            officer
-                          </Badge>
-                        ) : null}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="secondary"
+                              className="gap-1 px-1.5 tabular-nums"
+                              role="img"
+                              aria-label={
+                                isAdmin
+                                  ? "All permissions"
+                                  : `${role.permissionIds.length} permission(s)`
+                              }
+                            >
+                              <KeyRound className="size-3" />
+                              {isAdmin ? "All" : role.permissionIds.length}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {isAdmin
+                              ? "System admin automatically holds every permission"
+                              : `${role.permissionIds.length} permission(s) granted`}
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {role.name}
-                      </p>
-                    </div>
-
-                    {/* Counts as icon + number badges rather than
-                        "7 member(s) / 11 perm(s)" prose: at a glance the
-                        list is a comparison between roles, and two
-                        narrow tabular-nums badges scan down the column
-                        in a way wrapped prose doesn't. Narrow enough to
-                        survive on mobile, where the prose was hidden
-                        outright. The tooltip carries the wording for
-                        sighted users; `role="img"` + aria-label carries
-                        it for screen readers, which never reach a
-                        tooltip on a non-focusable badge. The role is
-                        load-bearing: `Badge` renders a bare <span>, and
-                        aria-label is ignored on an element left with the
-                        implicit `generic` role. */}
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="secondary"
-                            className="gap-1 px-1.5 tabular-nums"
-                            role="img"
-                            aria-label={
-                              isAnonymous
-                                ? "Not applicable to members"
-                                : `${role.memberCount} member(s)`
-                            }
-                          >
-                            <Users className="size-3" />
-                            {isAnonymous ? "—" : role.memberCount}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {isAnonymous
-                            ? "Applies to signed-out visitors, so it has no members"
-                            : `${role.memberCount} member(s) hold this role`}
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="secondary"
-                            className="gap-1 px-1.5 tabular-nums"
-                            role="img"
-                            aria-label={
-                              isAdmin
-                                ? "All permissions"
-                                : `${role.permissionIds.length} permission(s)`
-                            }
-                          >
-                            <KeyRound className="size-3" />
-                            {isAdmin ? "All" : role.permissionIds.length}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {isAdmin
-                            ? "System admin automatically holds every permission"
-                            : `${role.permissionIds.length} permission(s) granted`}
-                        </TooltipContent>
-                      </Tooltip>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1">
@@ -252,21 +261,59 @@ export function RolesListEditor() {
                         </TooltipTrigger>
                         <TooltipContent>Edit</TooltipContent>
                       </Tooltip>
-                      {!role.isProtected ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setDeleteTarget(role)}
-                              aria-label={`Delete ${role.displayName}`}
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Delete</TooltipContent>
-                        </Tooltip>
-                      ) : null}
+                      {/* A protected role keeps its trash icon, greyed
+                          out, instead of the row carrying a "protected"
+                          chip. The chip spent a slot in the row's
+                          horizontal run stating a fact that only matters
+                          at the moment someone reaches for delete — and
+                          it left protected rows one control short, so
+                          the action column didn't line up down the list.
+
+                          `aria-disabled` rather than `disabled`, and
+                          that is what makes the explanation reachable: a
+                          `disabled` button takes no pointer events (so
+                          the tooltip never opens) and no focus (so a
+                          keyboard or screen-reader user never hears
+                          why). This one stays hoverable and focusable
+                          and refuses in its own handler. The tap path
+                          gets a toast, because a phone has no hover and
+                          the tooltip would otherwise be the only place
+                          the reason lives. */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-disabled={role.isProtected || undefined}
+                            className={
+                              role.isProtected
+                                ? "text-muted-foreground/50 hover:bg-transparent hover:text-muted-foreground/50"
+                                : "text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20"
+                            }
+                            onClick={() => {
+                              if (role.isProtected) {
+                                toast.info(
+                                  `${role.displayName} is a protected role and can’t be deleted.`,
+                                );
+                                return;
+                              }
+                              setDeleteTarget(role);
+                            }}
+                            aria-label={
+                              role.isProtected
+                                ? `Delete ${role.displayName} (protected — can’t be deleted)`
+                                : `Delete ${role.displayName}`
+                            }
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {role.isProtected
+                            ? "Protected role — can’t be deleted"
+                            : "Delete"}
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </li>
                 </SortableItem>
@@ -276,8 +323,13 @@ export function RolesListEditor() {
         </SortableContent>
       </Sortable>
 
+      {/* The reorder bar's bleed tracks `PageContainer`'s gutter,
+          `px-4 sm:px-6`. It said `md:` before, so between `sm` and `md`
+          the bar sat 8px inside the page's own edge. It also wraps below
+          `sm`: the message and both buttons on one line pushed the
+          buttons off the right of a phone. */}
       {orderDirty ? (
-        <div className="sticky bottom-0 mt-4 -mx-4 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
+        <div className="sticky bottom-0 mt-4 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
           <span className="text-sm text-muted-foreground">
             Order changed. Save to persist or discard to revert.
           </span>
