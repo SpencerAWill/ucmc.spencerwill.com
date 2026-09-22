@@ -65,6 +65,23 @@ TanStack Start's import-protection plugin blocks `*.server.*` from the client gr
 
 **`@base-ui/react` is a single-component exception**: `combobox.tsx` only, because shadcn's Combobox has no Radix implementation. Don't reach for Base UI for anything else — a second parallel primitive stack is worse than either one alone. Standardizing on Base UI would be a deliberate full-catalog migration, not something to drift into per-component.
 
+## Responsive collections (tables vs. stacked rows)
+
+A collection has **two sanctioned narrow-viewport treatments, and the choice is decided by the reader's task, not by consistency with the last one written.**
+
+| Task the surface serves                                                          | Treatment                                                                                     | Reference implementation                                                       |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Compare a value down the list** — scan availability, spot the overdue one      | Keep the table, hide the columns that aren't being compared                                   | `gear-table-view.tsx` (`hidden sm:table-cell`, `hidden md:table-cell`)         |
+| **Find one record and act on it** — match a name against a paper, tap the action | Stack each row: identity on top, secondary fields demoted to one meta line, action full-width | `members.waivers.tsx` (`<ul className="sm:hidden">` + `hidden sm:block` table) |
+
+Two different patterns is **not** the inconsistency — an undocumented choice is, because the next person flips a coin. If a surface genuinely serves both tasks, the comparison wins: a column you can scan is worth more than a row you can read, and the stacked form can't do it at all.
+
+**A stacked row is a different element, not a restyled table.** `display: block` on `tr`/`td` looks identical and silently destroys the table's semantics — the rows stop being rows for assistive tech, so a screen-reader user loses the column associations the markup was chosen for. Render the two trees. (Shopify Polaris reached the same conclusion: `IndexTable`'s `condensed` mode swaps the `<table>` for a `<ul>` rather than restyling it.)
+
+**Bulk selection is kept at phone width here, which is a deliberate divergence.** Polaris suppresses bulk actions in `condensed` mode on the grounds that multi-select doesn't belong on a phone. `/members/waivers` keeps it because the use case is concrete and specifically mobile: an officer stands at a meeting with a stack of signed waivers and ticks down the list. Weigh it per surface — the general case is that Polaris is right.
+
+Whichever treatment is used, **an `overflow-x-auto` wrapper takes `overflow-y-hidden` with it.** Per CSS Overflow 3 a non-`visible` value on one axis computes the other from `visible` to `auto`, so the wrapper otherwise captures vertical scroll as well and a touch-drag slides the content inside its own box. `e2e/mobile-overflow.spec.ts` guards the related failure — anything reaching outside `PageContainer`'s gutter widens the document and makes the whole page scroll sideways.
+
 ## TypeScript & observability
 
 - `strict: true`, path alias `#/*` → `./src/*` (mirrored in `package.json` `imports`), `@cloudflare/workers-types` globally typed.
