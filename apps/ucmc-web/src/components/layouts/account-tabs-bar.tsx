@@ -72,11 +72,31 @@ export function AccountTabsBar() {
      * phone, which looked broken. `border-b` lives on the container so the
      * underline runs the full visual width even after the row scrolls.
      * Per-link `whitespace-nowrap` keeps individual labels intact.
+     *
+     * The negative margin and the re-applied padding must BOTH track
+     * `PageContainer`'s gutter, which is `px-4 sm:px-6` — not a flat
+     * `px-6`. A flat `-mx-6` under a `px-4` container hangs the bar 8px
+     * past each edge of its own parent, and because nothing in the shell
+     * clips the overflow, that widened the document and let the whole
+     * page side-scroll on a phone. The bar is the only element on `/my`
+     * that reaches outside the gutter, which is why it was the one that
+     * did it.
      */
-    <div className="-mx-6 mb-6 border-b border-border">
+    <div className="-mx-4 mb-6 border-b border-border sm:-mx-6">
       <nav
         aria-label="Account sections"
-        className="flex gap-1 overflow-x-auto px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        /*
+         * `overflow-y-hidden` is not redundant with `overflow-x-auto`.
+         * Per CSS Overflow 3, when one axis is set to anything other
+         * than `visible` the other axis' `visible` computes to `auto` —
+         * so `overflow-x-auto` alone left this row vertically scrollable
+         * too, and a touch-drag on a phone dragged the labels up and
+         * down inside their own 40px box. `touch-action: pan-x` is the
+         * belt to that braces: it tells the compositor this row only
+         * ever consumes horizontal pans, so a mostly-vertical swipe
+         * scrolls the page instead of being captured here.
+         */
+        className="flex touch-pan-x gap-1 overflow-x-auto overflow-y-hidden px-4 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden"
       >
         {visibleTabs.map((tab) => {
           const isActive = tab.to === active;

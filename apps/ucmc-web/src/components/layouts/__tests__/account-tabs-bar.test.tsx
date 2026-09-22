@@ -105,6 +105,43 @@ describe("AccountTabsBar", () => {
     }
   });
 
+  // Both of these pin a *mobile* defect that only reproduces on a
+  // touch device, so a rendered assertion on the class list is the only
+  // regression guard available in this pool. `e2e/mobile-overflow.spec.ts`
+  // covers the observable half.
+  it("mirrors PageContainer's responsive gutter in its bleed and its padding", () => {
+    // The bar is the one element on `/my` that reaches outside the
+    // gutter, and it has to reach out by exactly what the container
+    // reached in: `px-4 sm:px-6`. A flat `-mx-6`/`px-6` (what shipped)
+    // overhangs a `px-4` container by 8px per side, widening the
+    // document and letting the whole page side-scroll on a phone.
+    render(<AccountTabsBar />);
+
+    const nav = screen.getByRole("navigation", { name: "Account sections" });
+    const bleed = nav.parentElement;
+
+    expect(bleed?.className).toMatch(/(^| )-mx-4( |$)/);
+    expect(bleed?.className).toMatch(/(^| )sm:-mx-6( |$)/);
+    expect(nav.className).toMatch(/(^| )px-4( |$)/);
+    expect(nav.className).toMatch(/(^| )sm:px-6( |$)/);
+    // A flat -mx-6 is the specific regression: it must not come back.
+    expect(bleed?.className).not.toMatch(/(^| )-mx-6( |$)/);
+  });
+
+  it("scrolls horizontally only, and claims only horizontal pans", () => {
+    // `overflow-x-auto` alone is not enough. Per CSS Overflow 3, a
+    // non-`visible` value on one axis computes the other axis'
+    // `visible` to `auto` — so the row was vertically scrollable too and
+    // a touch-drag slid the labels around inside their own 40px box.
+    render(<AccountTabsBar />);
+
+    const nav = screen.getByRole("navigation", { name: "Account sections" });
+
+    expect(nav.className).toMatch(/(^| )overflow-x-auto( |$)/);
+    expect(nav.className).toMatch(/(^| )overflow-y-hidden( |$)/);
+    expect(nav.className).toMatch(/(^| )touch-pan-x( |$)/);
+  });
+
   it("spotlights the current tab visually, not just via aria-current", () => {
     // The highlight is the point of the bar: a keyboard/AT-only signal
     // would leave a sighted member unable to see where they are.
