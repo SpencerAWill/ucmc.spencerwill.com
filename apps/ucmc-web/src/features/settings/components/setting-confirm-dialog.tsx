@@ -28,7 +28,9 @@ export function SettingConfirmDialog<TValue>({
   meta: SettingMeta;
   pending: TValue | null;
   setPending: (next: TValue | null) => void;
-  persist: (value: TValue) => Promise<void>;
+  /** Resolves true when the value was written; the dialog closes either
+   *  way, and the row renders `saver.error` on a failure. */
+  persist: (value: TValue) => Promise<boolean>;
   isPending: boolean;
 }) {
   if (!meta.confirm) {

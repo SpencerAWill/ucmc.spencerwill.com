@@ -31,6 +31,14 @@ One audit action covers every change: `settings_updated`, with `targetType: "sit
 
 Keys ending in `Url` / `Email` get `<input type="url">` / `type="email"` for free via `inferInputType` in `setting-row.tsx` — **name new keys accordingly**.
 
+## How a row is edited
+
+**Booleans apply on change; everything else is click-to-edit.** A switch carries its own commit — you can see what you did and undo it in one tap — while a text value gets a pencil at rest, opening an `InputGroup` with tick/cross (Enter saves, Escape cancels, the same contract as `passkey-section`'s rename). That split is the shape of the page, not an inconsistency: every write is an audit event and several settings are live kill switches, so a text change earns a deliberate commit, but forty permanently-mounted inputs with forty Save buttons is what the page looked like before, and on a phone each row cost two stacked full-width blocks for an interaction that is overwhelmingly _reading_ a value.
+
+**The editor closes on success, not on submit**, and that is the part a refactor breaks silently. A value rejected by the registry schema is exactly when the admin needs their text still on screen; the row behind the editor renders the canonical value, so closing would discard the edit and read as the row ignoring them. `useSettingSaver.requestSave` therefore resolves a **`SaveOutcome`** (`"saved" | "failed" | "confirming"`) rather than returning void. `"confirming"` is its own outcome because nothing has been written yet — the value is parked in `pending` and `SettingConfirmDialog` owns it from there, so a caller that closed on it would be guessing. `setting-row.test.tsx` pins both failure paths.
+
+`persist` catches a rejected `mutateAsync` and sets `error`. Every caller reaches it through a `void`, so before that a dropped connection was an unhandled rejection and nothing on screen — the row simply appeared not to respond.
+
 ## The public subset
 
 `getPublicSiteContactFn` is a curated allowlist in `settings-actions-read.server.ts` carrying `contact.clubEmail` plus the three social URLs, read by both the app footer and the landing page's "Where to find us" block. Both render through the shared presentational `<SocialIconLinks>` (`src/components/social-icon-links.tsx`), which takes plain URL strings rather than reading the query itself — that keeps it out of `src/features/` and lets a blank URL mean "no such account" (the icon is dropped; an `href=""` would resolve as a same-origin reload).

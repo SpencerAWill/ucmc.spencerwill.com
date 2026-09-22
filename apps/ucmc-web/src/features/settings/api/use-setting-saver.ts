@@ -19,25 +19,50 @@ import type {
  * `pending` carries the proposed value across the open → confirm hop, so
  * a gated control must render the canonical value (not the proposal)
  * until the user actually confirms.
+ *
+ * `requestSave` resolves with the outcome so a caller can react to it —
+ * an inline editor needs to know whether to close itself, and closing on
+ * submit rather than on success throws away what the member typed the
+ * moment the value fails validation. `"confirming"` is its own outcome
+ * because the write hasn't happened yet: the confirm dialog owns it from
+ * there, and a caller that closed on `"confirming"` would be guessing.
  */
+/**
+ * What a save attempt did. `"confirming"` means nothing has been written
+ * yet — the value is parked in `pending` and the confirm dialog decides.
+ */
+export type SaveOutcome = "saved" | "failed" | "confirming";
+
 export function useSettingSaver<TKey extends SettingKey>(settingKey: TKey) {
   const mutation = useUpdateSetting();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<SettingValue<TKey> | null>(null);
   const meta = getMeta(settingKey);
 
-  async function persist(nextValue: SettingValue<TKey>): Promise<void> {
+  /** Resolves true when the value was actually written. */
+  async function persist(nextValue: SettingValue<TKey>): Promise<boolean> {
     setError(null);
-    const result = await mutation.mutateAsync({
-      key: settingKey,
-      value: nextValue,
-    } as Parameters<ReturnType<typeof useUpdateSetting>["mutateAsync"]>[0]);
-    if (!result.ok) {
-      setError(
-        result.reason === "invalid_value"
-          ? "Value failed validation. Check the format and try again."
-          : "Unknown setting key. The registry may be out of sync.",
-      );
+    try {
+      const result = await mutation.mutateAsync({
+        key: settingKey,
+        value: nextValue,
+      } as Parameters<ReturnType<typeof useUpdateSetting>["mutateAsync"]>[0]);
+      if (!result.ok) {
+        setError(
+          result.reason === "invalid_value"
+            ? "Value failed validation. Check the format and try again."
+            : "Unknown setting key. The registry may be out of sync.",
+        );
+        return false;
+      }
+      return true;
+    } catch {
+      // `mutateAsync` rejects on a transport failure, and every caller
+      // reached this through a `void`, so a dropped connection used to
+      // surface as an unhandled rejection and nothing on screen — the
+      // row simply appeared not to respond.
+      setError("Couldn’t reach the server. Check your connection and retry.");
+      return false;
     }
   }
 
@@ -46,12 +71,14 @@ export function useSettingSaver<TKey extends SettingKey>(settingKey: TKey) {
    * setting's metadata requires it, so reset-to-default and a direct
    * toggle are gated identically.
    */
-  function requestSave(nextValue: SettingValue<TKey>): void {
+  async function requestSave(
+    nextValue: SettingValue<TKey>,
+  ): Promise<SaveOutcome> {
     if (meta.confirm) {
       setPending(nextValue);
-      return;
+      return "confirming";
     }
-    void persist(nextValue);
+    return (await persist(nextValue)) ? "saved" : "failed";
   }
 
   return {
