@@ -29,6 +29,38 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      // The mobile spec is the mobile projects' business. Without this
+      // it would also run at 1280px, where it passes trivially and
+      // says nothing.
+      testIgnore: /mobile-.*\.spec\.ts/,
+    },
+    /*
+     * Two mobile projects, and `testMatch` confines both to the
+     * `mobile-*` specs rather than re-running the whole suite at phone
+     * width. That is not thrift — most of the suite is *hostile* to it.
+     * `gear-scanner.spec.ts` launches its own Chromium with fake-camera
+     * flags and would ignore the project's device entirely; the passkey
+     * specs drive a WebAuthn virtual authenticator over CDP, which
+     * WebKit has no equivalent for. Broadening a mobile project means
+     * reckoning with those, not just adding a viewport.
+     *
+     * Both engines are here because they fail differently. The two
+     * defects that prompted this — a bleed that overhung its container
+     * and a row that scrolled on the wrong axis — are layout, and
+     * reproduce in either. But `overflow` axis computation and
+     * `touch-action` handling are exactly the areas where WebKit and
+     * Blink have diverged before, and iOS Safari is what the membership
+     * actually carries.
+     */
+    {
+      name: "mobile-safari",
+      use: { ...devices["iPhone 14"] },
+      testMatch: /mobile-.*\.spec\.ts/,
+    },
+    {
+      name: "mobile-chrome",
+      use: { ...devices["Pixel 7"] },
+      testMatch: /mobile-.*\.spec\.ts/,
     },
   ],
 
