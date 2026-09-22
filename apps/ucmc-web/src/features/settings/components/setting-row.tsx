@@ -168,9 +168,14 @@ function RowFooter<TKey extends SettingKey>({
   onOpenHistory: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 pt-1">
+    <div className="flex items-center gap-2 pt-1">
       <LastEditedLine entry={entry} />
-      <div className="flex items-center gap-1">
+      {/* `ml-auto` rather than `justify-between` on the parent: a
+          setting that has never been edited renders no last-edited
+          line, and `justify-between` with one child pushed these icons
+          to the *left* edge, so the column of history buttons zig-zagged
+          down the page. An auto margin pins them right either way. */}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         {isCustomized ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -178,12 +183,12 @@ function RowFooter<TKey extends SettingKey>({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-7"
+                className="size-9 sm:size-7"
                 aria-label="Reset to default"
                 disabled={!canReset}
                 onClick={onReset}
               >
-                <RotateCcw className="size-3.5" />
+                <RotateCcw className="size-4 sm:size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Reset to default</TooltipContent>
@@ -195,11 +200,11 @@ function RowFooter<TKey extends SettingKey>({
               type="button"
               variant="ghost"
               size="icon"
-              className="size-7"
+              className="size-9 sm:size-7"
               aria-label="Edit history"
               onClick={onOpenHistory}
             >
-              <History className="size-3.5" />
+              <History className="size-4 sm:size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Edit history</TooltipContent>
