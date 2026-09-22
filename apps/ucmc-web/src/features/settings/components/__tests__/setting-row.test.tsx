@@ -175,6 +175,31 @@ describe("SettingRow (text setting)", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 
+  it("keeps reset and history reachable while editing", async () => {
+    // They are the row's trailing cluster in both states on purpose:
+    // only the leading part swaps, so the flexible element absorbs the
+    // width change and these two don't relocate when editing starts.
+    // jsdom can't measure that, but it can pin that they never
+    // unmount — which is the half a refactor is likely to break by
+    // moving them back into a state-specific branch.
+    const user = userEvent.setup();
+    renderRow();
+
+    const reachable = () => [
+      screen.queryByRole("button", { name: "Edit history" }),
+      screen.queryByRole("button", { name: "Reset to default" }),
+    ];
+
+    // `contact.clubEmail` here is customized (its seeded value differs
+    // from the registry default), so both buttons are present.
+    expect(reachable().every(Boolean)).toBe(true);
+
+    await user.click(editButton());
+
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(reachable().every(Boolean)).toBe(true);
+  });
+
   it("refuses an unchanged save", async () => {
     // Every write is an audit event, so a no-op save would append a row
     // recording that nothing happened.

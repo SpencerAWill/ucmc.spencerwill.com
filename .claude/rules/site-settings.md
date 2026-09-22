@@ -37,6 +37,10 @@ Keys ending in `Url` / `Email` get `<input type="url">` / `type="email"` for fre
 
 **The editor closes on success, not on submit**, and that is the part a refactor breaks silently. A value rejected by the registry schema is exactly when the admin needs their text still on screen; the row behind the editor renders the canonical value, so closing would discard the edit and read as the row ignoring them. `useSettingSaver.requestSave` therefore resolves a **`SaveOutcome`** (`"saved" | "failed" | "confirming"`) rather than returning void. `"confirming"` is its own outcome because nothing has been written yet — the value is parked in `pending` and `SettingConfirmDialog` owns it from there, so a caller that closed on it would be guessing. `setting-row.test.tsx` pins both failure paths.
 
+**Reset-to-default and edit-history ride with the row's control, not in a footer.** `RowActions` is the trailing element of the value row for a text setting and of the header row beside the switch for a boolean, which leaves the footer position holding nothing but `LastEditedLine` — and that returns null for a setting nobody has changed, so an untouched row has no footer at all. As an icons-only footer it was a whole extra row of dead space on most of the forty-odd cards.
+
+**The cluster is the trailing element in both edit states on purpose.** Only the leading part of the value row swaps — value + pencil at rest, the editor and its own tick/cross while editing — so the flexible element absorbs the width change and reset/history stay exactly where the eye left them. A control that relocates when you start typing is worse than the row being a line taller. `setting-row.test.tsx` pins that they never unmount, which is the half a refactor is likely to break by moving them into a state-specific branch.
+
 `persist` catches a rejected `mutateAsync` and sets `error`. Every caller reaches it through a `void`, so before that a dropped connection was an unhandled rejection and nothing on screen — the row simply appeared not to respond.
 
 ## The public subset
