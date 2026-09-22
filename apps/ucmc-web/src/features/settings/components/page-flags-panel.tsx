@@ -377,7 +377,7 @@ function FlagRow({
         checked={value}
         disabled={saver.isPending}
         aria-label={meta.label}
-        onCheckedChange={(checked) => saver.requestSave(checked)}
+        onCheckedChange={(checked) => void saver.requestSave(checked)}
       />
       <Label
         className={[
@@ -418,7 +418,7 @@ function FlagRow({
           className="size-6 shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/row:opacity-100"
           aria-label={`Reset ${meta.label} to default`}
           disabled={saver.isPending}
-          onClick={() => saver.requestSave(defaultValue)}
+          onClick={() => void saver.requestSave(defaultValue)}
         >
           <RotateCcw className="size-3" />
         </Button>
