@@ -12,6 +12,7 @@ import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { WAIVER_VERSION } from "#/config/legal";
+import { cn } from "#/lib/utils";
 import { formatDate } from "#/lib/date-format";
 import { currentWaiverCycle } from "#/config/waiver-cycle";
 import {
@@ -221,6 +222,9 @@ function QueueTable({
   };
 
   const someSelected = selected.size > 0;
+  // One flag for both controls in the bulk bar so they can't disagree
+  // about whether a submit is possible.
+  const bulkDisabled = !someSelected || bulkAttest.isPending;
   const queueExceedsCap = queue.length > BULK_ATTEST_MAX;
 
   return (
@@ -238,10 +242,36 @@ function QueueTable({
             ) : null}
           </p>
         ) : null}
-        {/* Bulk action bar — visible only when something is selected, which
-            can only happen for verifiers (the checkboxes are theirs). */}
-        {someSelected ? (
-          <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-3 sm:flex-row sm:items-end">
+        {/* Bulk action bar — present for the whole session rather than
+            mounted on first selection, and inert until something is
+            selected.
+
+            It used to render only while `someSelected`, so ticking the
+            first checkbox inserted a ~76px block above the list and
+            pushed every row down under the officer's finger — the row
+            they had just tapped was no longer where they tapped it, and
+            un-ticking it yanked everything back. That is the worst
+            possible moment for the list to move: the gesture this bar
+            exists to support is working down a stack of papers ticking
+            rows in sequence.
+
+            It stays gated on `canVerify`, not shown-and-disabled to
+            everyone, because a read-only viewer (`waivers:view` without
+            `waivers:verify`) has no checkboxes at all — for them the bar
+            could never become live, and a permanently dead control is
+            noise rather than stability.
+
+            Real `disabled`, not `aria-disabled`: unlike the protected
+            role's delete button there is no hidden reason to convey. The
+            control is unavailable, the browser says so, and the reason
+            is the empty selection the officer is looking at. */}
+        {canVerify ? (
+          <div
+            className={cn(
+              "flex flex-col gap-2 rounded-md border bg-muted/40 p-3 transition-opacity sm:flex-row sm:items-end",
+              !someSelected && "opacity-60",
+            )}
+          >
             <div className="flex-1 space-y-1">
               <Label htmlFor="bulk-notes" className="text-xs">
                 Optional note (applied to all selected attestations)
@@ -252,12 +282,18 @@ function QueueTable({
                 onChange={(e) => setBulkNotes(e.target.value)}
                 placeholder="e.g. collected at 9/2 fall kickoff"
                 maxLength={500}
+                disabled={bulkDisabled}
               />
             </div>
-            <Button onClick={onAttestSelected} disabled={bulkAttest.isPending}>
+            {/* The count is dropped from the label at zero rather than
+                rendering "Attest 0 selected", which reads as a thing
+                you could do. */}
+            <Button onClick={onAttestSelected} disabled={bulkDisabled}>
               {bulkAttest.isPending
                 ? "Attesting..."
-                : `Attest ${selected.size} selected`}
+                : someSelected
+                  ? `Attest ${selected.size} selected`
+                  : "Attest selected"}
             </Button>
           </div>
         ) : null}

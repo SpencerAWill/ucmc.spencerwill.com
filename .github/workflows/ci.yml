@@ -208,14 +208,19 @@ jobs:
           MAILPIT_URL: ""
         run: pnpm --filter ucmc-web e2e gear-scanner.spec.ts
 
-      # Walks every public and signed-in route at two phone widths and
-      # fails if anything made the document wider than the viewport.
-      # Cheap to keep honest and easy to regress: the utilities that
-      # cause it (`-mx-*`, a fixed `w-[Npx]`) are each reasonable in
-      # isolation, and the symptom — the whole page scrolling sideways
-      # — is invisible at desktop width. Needs no Mailpit; it seeds its
-      # officer session directly.
-      - name: Run mobile-overflow specs
+      # The phone-width specs, in both mobile projects. `mobile-` rather
+      # than a file name so a spec added to the set is picked up without
+      # a workflow edit — the projects' own `testMatch` already scopes
+      # that prefix. None of them need Mailpit; they seed sessions
+      # directly.
+      #
+      # `mobile-overflow` walks every route and fails if anything made
+      # the document wider than the viewport — easy to regress, since
+      # each cause (`-mx-*`, a fixed `w-[Npx]`) is reasonable in
+      # isolation and the symptom is invisible at desktop width.
+      # `mobile-waiver-queue` measures that selecting a member doesn't
+      # move the rows under the officer's finger.
+      - name: Run mobile specs
         env:
           CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
           APP_BASE_URL: http://localhost:3000
@@ -225,7 +230,7 @@ jobs:
           RESEND_FROM_NAME: UCMC (ci)
           SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
           MAILPIT_URL: ""
-        run: pnpm --filter ucmc-web e2e mobile-overflow.spec.ts
+        run: pnpm --filter ucmc-web e2e mobile-
 
       - name: Upload Playwright report on failure
         if: failure()
