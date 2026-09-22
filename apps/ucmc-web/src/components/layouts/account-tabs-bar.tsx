@@ -14,6 +14,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 
 import { cn } from "#/lib/utils";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
@@ -65,6 +66,40 @@ export function AccountTabsBar() {
 
   const active = activeAccountTabFromPath(pathname);
 
+  /*
+   * Scroll the active tab into view.
+   *
+   * Six tabs don't fit a phone, so the row scrolls — and it starts at
+   * `scrollLeft: 0` every time. Landing on `/my/security` or
+   * `/my/preferences` from the sidebar therefore showed a tab bar with
+   * the current tab clipped at the right edge or off it entirely: the
+   * page's own highlight, off screen, on the one surface whose job is
+   * saying where you are.
+   *
+   * `nav.scrollLeft = …` rather than `tab.scrollIntoView()`, and that
+   * matters: `scrollIntoView` walks every scrollable ancestor, so it
+   * would also scroll the *document* — landing on a deep tab would jump
+   * the page down past the greeting. Assigning `scrollLeft` touches this
+   * one element and nothing else.
+   *
+   * The target centres the tab in the row and clamps at 0, so the first
+   * two tabs don't get pulled away from the left edge, where the row
+   * reads correctly already.
+   */
+  const navRef = useRef<HTMLElement | null>(null);
+  const activeRef = useRef<HTMLAnchorElement | null>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    const tab = activeRef.current;
+    if (!nav || !tab) {
+      return;
+    }
+    nav.scrollLeft = Math.max(
+      0,
+      tab.offsetLeft - (nav.clientWidth - tab.offsetWidth) / 2,
+    );
+  }, [active]);
+
   return (
     /*
      * The row is allowed to overflow horizontally on narrow viewports
@@ -84,6 +119,7 @@ export function AccountTabsBar() {
      */
     <div className="-mx-4 mb-6 border-b border-border sm:-mx-6">
       <nav
+        ref={navRef}
         aria-label="Account sections"
         /*
          * `overflow-y-hidden` is not redundant with `overflow-x-auto`.
@@ -105,6 +141,7 @@ export function AccountTabsBar() {
             <Link
               key={tab.to}
               to={tab.to}
+              ref={isActive ? activeRef : undefined}
               aria-current={isActive ? "page" : undefined}
               /*
                * Active state is computed from the pathname and resolved
