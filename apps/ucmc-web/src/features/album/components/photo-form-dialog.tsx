@@ -213,7 +213,7 @@ export function PhotoFormDialog({
                   <img
                     src={existingImageUrl}
                     alt={form.altText || "Current photo"}
-                    className="max-h-[30dvh] max-w-full rounded-md sm:max-h-[40vh]"
+                    className="max-h-[30dvh] max-w-full rounded-md sm:max-h-[40dvh]"
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">

@@ -232,7 +232,7 @@ export function AvatarEditor({
                   src={workingUrl}
                   alt="Selected file, awaiting crop"
                   onLoad={onImageLoad}
-                  className="max-h-[60vh] max-w-full"
+                  className="max-h-[60dvh] max-w-full"
                 />
               </ReactCrop>
             </div>

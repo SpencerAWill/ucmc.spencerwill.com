@@ -69,7 +69,7 @@ export function SettingHistoryDialog({
           // the dialog rather than pushing the dialog itself past the
           // viewport. `overscroll-contain` keeps the page underneath
           // from scrolling when the list reaches its top/bottom.
-          <div className="max-h-[60vh] overflow-y-auto overscroll-contain rounded-md border">
+          <div className="max-h-[60dvh] overflow-y-auto overscroll-contain rounded-md border">
             <ol className="divide-y text-sm">
               {entries.map((entry) => (
                 <li

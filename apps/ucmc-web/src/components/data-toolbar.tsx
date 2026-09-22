@@ -355,7 +355,7 @@ function FiltersSlot({
               Narrow the list below.
             </DrawerDescription>
           </DrawerHeader>
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto px-4 pb-8">
+          <div className="max-h-[60dvh] space-y-4 overflow-y-auto px-4 pb-8">
             {body}
           </div>
         </DrawerContent>

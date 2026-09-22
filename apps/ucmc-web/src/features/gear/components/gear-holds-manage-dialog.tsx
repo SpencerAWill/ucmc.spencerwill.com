@@ -121,7 +121,7 @@ export function GearHoldsManageDialog({
                 </EmptyHeader>
               </Empty>
             ) : (
-              <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
+              <ul className="max-h-[50dvh] space-y-2 overflow-y-auto">
                 {(holds ?? []).map((hold) => (
                   <li key={hold.publicId}>
                     <Item variant="outline" size="sm">
@@ -283,7 +283,7 @@ function FormPane({ onDone }: { onDone: () => void }) {
     <form onSubmit={onSubmit} className="space-y-4">
       <fieldset
         disabled={placeMutation.isPending}
-        className="max-h-[55vh] space-y-4 overflow-y-auto border-0"
+        className="max-h-[55dvh] space-y-4 overflow-y-auto border-0"
       >
         <div className="space-y-1.5">
           <Label htmlFor="hold-subject">What's being held</Label>

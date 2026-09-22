@@ -72,7 +72,7 @@ export function EditAffordance({
         Edit
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-4 overflow-hidden">
+        <DialogContent className="flex max-h-[85dvh] max-w-2xl flex-col gap-4 overflow-hidden">
           <DialogHeader>
             <DialogTitle>{label}</DialogTitle>
             <DialogDescription className="sr-only">

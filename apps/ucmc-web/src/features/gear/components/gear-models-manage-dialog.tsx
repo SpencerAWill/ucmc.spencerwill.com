@@ -305,7 +305,7 @@ function ListPane({
           </EmptyHeader>
         </Empty>
       ) : (
-        <ul className="max-h-[45vh] space-y-2 overflow-y-auto">
+        <ul className="max-h-[45dvh] space-y-2 overflow-y-auto">
           {models.map((model) => (
             <li key={model.publicId}>
               <Item variant="outline" size="sm">
@@ -542,7 +542,7 @@ function FormPane({
     <form onSubmit={onSubmit} className="space-y-4">
       <fieldset
         disabled={pending}
-        className="max-h-[55vh] space-y-4 overflow-y-auto border-0"
+        className="max-h-[55dvh] space-y-4 overflow-y-auto border-0"
       >
         {/* Manufacturer first: the name is the model proper, so the
          * pair reads the way it is spoken and printed — "Black Diamond

@@ -200,7 +200,7 @@ function ListPane({
           </EmptyHeader>
         </Empty>
       ) : (
-        <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
+        <ul className="max-h-[50dvh] space-y-2 overflow-y-auto">
           {tags.map((t) => (
             <li key={t.publicId}>
               <Item variant="outline" size="sm">

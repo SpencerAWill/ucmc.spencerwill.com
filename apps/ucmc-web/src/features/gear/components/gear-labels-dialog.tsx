@@ -58,7 +58,7 @@ export function GearLabelsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] w-[min(95vw,900px)] !max-w-none overflow-y-auto sm:max-w-none">
+      <DialogContent className="max-h-[90dvh] w-[min(95vw,900px)] !max-w-none overflow-y-auto sm:max-w-none">
         <DialogHeader>
           <DialogTitle>Print labels</DialogTitle>
           <DialogDescription>

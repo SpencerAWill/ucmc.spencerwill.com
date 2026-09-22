@@ -129,7 +129,7 @@ function ListPane({
     );
   }
   return (
-    <ul className="max-h-[55vh] space-y-2 overflow-y-auto">
+    <ul className="max-h-[55dvh] space-y-2 overflow-y-auto">
       {models.map((model) => (
         <li key={model.publicId}>
           <Item variant="outline" size="sm">
@@ -182,7 +182,7 @@ function ModelPane({ model }: { model: CountedModelForInspectionDto }) {
           Log inspection
         </Button>
       </div>
-      <div className="max-h-[45vh] overflow-y-auto">
+      <div className="max-h-[45dvh] overflow-y-auto">
         <GearInspectionList inspections={data ?? []} isLoading={isLoading} />
       </div>
       <GearInspectionFormDialog
