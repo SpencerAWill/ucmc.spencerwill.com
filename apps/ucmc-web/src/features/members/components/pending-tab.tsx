@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarIcon, Check, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { DateRange } from "react-day-picker";
+import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
@@ -108,6 +109,27 @@ export function PendingTab({
   // callback only needs to clear the local selection.
   const onMutationSuccess = () => {
     setSelected(new Set());
+  };
+
+  /*
+   * Approving or rejecting a registration is the most consequential
+   * thing on this page — it decides whether someone is in the club, and
+   * it writes an audit row either way. A failure used to be completely
+   * silent: the rows stay put, which is indistinguishable from "the
+   * request hasn't finished", so the officer clicks again.
+   *
+   * Success is *not* toasted for the bulk path, because the rows leaving
+   * the queue is already unambiguous feedback for a deliberate bulk
+   * action the officer just confirmed a count for. The per-row buttons
+   * do toast, for the opposite reason: one row vanishing from a long
+   * list is easy to miss, and on a phone the row that vanished was under
+   * the officer's thumb.
+   */
+  const onBulkError = (verb: "approve" | "reject") => (err: Error) => {
+    toast.error(
+      err.message ||
+        `Couldn’t ${verb} those registrations. Nothing was changed.`,
+    );
   };
 
   const bulkApprove = useApproveRegistrations();
@@ -217,6 +239,7 @@ export function PendingTab({
                 onClick={() =>
                   bulkReject.mutate([...selected], {
                     onSuccess: onMutationSuccess,
+                    onError: onBulkError("reject"),
                   })
                 }
               >
@@ -230,6 +253,7 @@ export function PendingTab({
                 onClick={() =>
                   bulkApprove.mutate([...selected], {
                     onSuccess: onMutationSuccess,
+                    onError: onBulkError("approve"),
                   })
                 }
               >
@@ -367,7 +391,17 @@ function RegistrationRow({
               size="icon"
               className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={disabled || rowPending}
-              onClick={() => reject.mutate([registration.userId])}
+              onClick={() =>
+                reject.mutate([registration.userId], {
+                  onSuccess: () =>
+                    toast.success(`Rejected ${name ?? registration.email}`),
+                  onError: (err) =>
+                    toast.error(
+                      err.message ||
+                        `Couldn’t reject ${name ?? registration.email}.`,
+                    ),
+                })
+              }
             >
               <X className="size-4" />
               <span className="sr-only">Reject</span>
@@ -382,7 +416,17 @@ function RegistrationRow({
               size="icon"
               className="size-8 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
               disabled={disabled || rowPending}
-              onClick={() => approve.mutate([registration.userId])}
+              onClick={() =>
+                approve.mutate([registration.userId], {
+                  onSuccess: () =>
+                    toast.success(`Approved ${name ?? registration.email}`),
+                  onError: (err) =>
+                    toast.error(
+                      err.message ||
+                        `Couldn’t approve ${name ?? registration.email}.`,
+                    ),
+                })
+              }
             >
               <Check className="size-4" />
               <span className="sr-only">Approve</span>
