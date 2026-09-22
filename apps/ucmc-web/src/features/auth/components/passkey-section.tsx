@@ -26,6 +26,11 @@ import {
   ItemTitle,
 } from "#/components/ui/item";
 import { Skeleton } from "#/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "#/components/ui/tooltip";
 import { passkeyListQueryOptions } from "#/features/auth/api/queries";
 import { useRemovePasskey } from "#/features/auth/api/use-remove-passkey";
 import { useRenamePasskey } from "#/features/auth/api/use-rename-passkey";
@@ -226,8 +231,36 @@ function PasskeyRow({
       ) : (
         <>
           <ItemContent className="min-w-0">
-            <ItemTitle className="w-full min-w-0">
+            {/* The rename affordance sits *beside the name*, not over in
+                the actions column, because that is the thing it edits —
+                and because on a phone the actions column is where the
+                destructive button lives, so a mis-tap there should never
+                be able to land on a rename. Icon-only: "Rename" as a
+                label cost a third of the row's width next to "Remove",
+                which is what squeezed the name itself down to a few
+                characters. The accessible name carries the wording. */}
+            <ItemTitle className="w-full min-w-0 gap-1">
               <span className="min-w-0 flex-1 truncate">{label}</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="-my-1 shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-label={`Rename ${label}`}
+                    onClick={() => {
+                      // Re-seed from the stored value so a previously
+                      // abandoned edit doesn't reappear.
+                      setDraft(passkey.nickname ?? "");
+                      onEdit();
+                    }}
+                  >
+                    <Pencil />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Rename</TooltipContent>
+              </Tooltip>
             </ItemTitle>
             <ItemDescription>
               Registered {formatDate(passkey.createdAt)}
@@ -237,26 +270,19 @@ function PasskeyRow({
             </ItemDescription>
           </ItemContent>
           <ItemActions>
+            {/* Keeps its text label where the rename gave one up:
+                removing a passkey can lock a member out of their own
+                account if it was their only one, and that is not a
+                thing to leave to icon recognition. The destructive
+                colour is the second signal — it read as a peer of
+                "Rename" while both were neutral ghost buttons. */}
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              aria-label={`Rename ${label}`}
-              onClick={() => {
-                // Re-seed from the stored value so a previously
-                // abandoned edit doesn't reappear.
-                setDraft(passkey.nickname ?? "");
-                onEdit();
-              }}
-            >
-              <Pencil className="mr-1 size-3.5" />
-              Rename
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20"
               disabled={removal.isPending}
+              aria-label={`Remove ${label}`}
               onClick={() => removal.mutate(passkey.credentialId)}
             >
               Remove
