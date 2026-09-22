@@ -287,7 +287,7 @@ function ListPane({
           </EmptyHeader>
         </Empty>
       ) : (
-        <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
+        <ul className="max-h-[50dvh] space-y-2 overflow-y-auto">
           {defs.map((def) => (
             <li key={def.publicId}>
               <Item variant="outline" size="sm">
@@ -459,7 +459,7 @@ function FormPane({
     <form onSubmit={onSubmit} className="space-y-4">
       <fieldset
         disabled={pending}
-        className="max-h-[55vh] space-y-4 overflow-y-auto border-0"
+        className="max-h-[55dvh] space-y-4 overflow-y-auto border-0"
       >
         <div className="space-y-1.5">
           <Label htmlFor="attr-label">Name</Label>

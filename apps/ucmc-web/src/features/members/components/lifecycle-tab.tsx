@@ -7,6 +7,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Undo2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
 import { Checkbox } from "#/components/ui/checkbox";
@@ -34,6 +35,10 @@ interface LifecycleConfig {
   bulkPendingLabel: string;
   rowTooltip: string;
   rowSrLabel: string;
+  /** Past tense, for the success toast: "Reactivated 3 members". */
+  successVerb: string;
+  /** Lead-in for the failure toast when the error carries no message. */
+  failureLabel: string;
   icon: typeof Undo2;
 }
 
@@ -45,6 +50,8 @@ const LIFECYCLE_CONFIG: Record<LifecycleKind, LifecycleConfig> = {
     bulkPendingLabel: "Moving...",
     rowTooltip: "Move to pending",
     rowSrLabel: "Un-reject",
+    successVerb: "Moved back to pending",
+    failureLabel: "Couldn’t un-reject",
     icon: Undo2,
   },
   deactivated: {
@@ -54,6 +61,8 @@ const LIFECYCLE_CONFIG: Record<LifecycleKind, LifecycleConfig> = {
     bulkPendingLabel: "Reactivating...",
     rowTooltip: "Reactivate",
     rowSrLabel: "Reactivate",
+    successVerb: "Reactivated",
+    failureLabel: "Couldn’t reactivate",
     icon: RotateCcw,
   },
 };
@@ -162,11 +171,31 @@ export function LifecycleTab({
               size="sm"
               variant="outline"
               disabled={bulkMutation.isPending || selected.size === 0}
-              onClick={() =>
+              onClick={() => {
+                // Captured before the mutation runs: `onMutationSuccess`
+                // clears the selection, so reading `selected.size` from
+                // inside the callback would always report 0.
+                const count = selected.size;
                 bulkMutation.mutate([...selected], {
-                  onSuccess: onMutationSuccess,
-                })
-              }
+                  onSuccess: async () => {
+                    await onMutationSuccess();
+                    toast.success(
+                      `${config.successVerb} ${count} member${count === 1 ? "" : "s"}`,
+                    );
+                  },
+                  // Without this a failed bulk action was completely
+                  // silent: the rows stay put, which is exactly what
+                  // "nothing has happened yet" looks like, so an officer
+                  // clicks again.
+                  onError: (err) => {
+                    toast.error(
+                      err instanceof Error && err.message
+                        ? err.message
+                        : `${config.failureLabel} those members.`,
+                    );
+                  },
+                });
+              }}
             >
               <Icon className="mr-1 size-3.5" />
               {bulkMutation.isPending
@@ -263,7 +292,23 @@ function LifecycleRow({
             size="icon"
             className="size-8"
             disabled={disabled || mutation.isPending}
-            onClick={() => mutation.mutate([member.userId], { onSuccess })}
+            onClick={() =>
+              mutation.mutate([member.userId], {
+                onSuccess: async () => {
+                  await onSuccess();
+                  toast.success(
+                    `${config.successVerb} ${name ?? member.email}`,
+                  );
+                },
+                onError: (err) => {
+                  toast.error(
+                    err instanceof Error && err.message
+                      ? err.message
+                      : `${config.failureLabel} ${name ?? member.email}.`,
+                  );
+                },
+              })
+            }
           >
             <Icon className="size-4" />
             <span className="sr-only">{config.rowSrLabel}</span>

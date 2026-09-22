@@ -12,6 +12,7 @@ import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { WAIVER_VERSION } from "#/config/legal";
+import { cn } from "#/lib/utils";
 import { formatDate } from "#/lib/date-format";
 import { currentWaiverCycle } from "#/config/waiver-cycle";
 import {
@@ -221,6 +222,9 @@ function QueueTable({
   };
 
   const someSelected = selected.size > 0;
+  // One flag for both controls in the bulk bar so they can't disagree
+  // about whether a submit is possible.
+  const bulkDisabled = !someSelected || bulkAttest.isPending;
   const queueExceedsCap = queue.length > BULK_ATTEST_MAX;
 
   return (
@@ -238,10 +242,36 @@ function QueueTable({
             ) : null}
           </p>
         ) : null}
-        {/* Bulk action bar — visible only when something is selected, which
-            can only happen for verifiers (the checkboxes are theirs). */}
-        {someSelected ? (
-          <div className="flex flex-col gap-2 rounded-md border bg-muted/40 p-3 sm:flex-row sm:items-end">
+        {/* Bulk action bar — present for the whole session rather than
+            mounted on first selection, and inert until something is
+            selected.
+
+            It used to render only while `someSelected`, so ticking the
+            first checkbox inserted a ~76px block above the list and
+            pushed every row down under the officer's finger — the row
+            they had just tapped was no longer where they tapped it, and
+            un-ticking it yanked everything back. That is the worst
+            possible moment for the list to move: the gesture this bar
+            exists to support is working down a stack of papers ticking
+            rows in sequence.
+
+            It stays gated on `canVerify`, not shown-and-disabled to
+            everyone, because a read-only viewer (`waivers:view` without
+            `waivers:verify`) has no checkboxes at all — for them the bar
+            could never become live, and a permanently dead control is
+            noise rather than stability.
+
+            Real `disabled`, not `aria-disabled`: unlike the protected
+            role's delete button there is no hidden reason to convey. The
+            control is unavailable, the browser says so, and the reason
+            is the empty selection the officer is looking at. */}
+        {canVerify ? (
+          <div
+            className={cn(
+              "flex flex-col gap-2 rounded-md border bg-muted/40 p-3 transition-opacity sm:flex-row sm:items-end",
+              !someSelected && "opacity-60",
+            )}
+          >
             <div className="flex-1 space-y-1">
               <Label htmlFor="bulk-notes" className="text-xs">
                 Optional note (applied to all selected attestations)
@@ -252,17 +282,54 @@ function QueueTable({
                 onChange={(e) => setBulkNotes(e.target.value)}
                 placeholder="e.g. collected at 9/2 fall kickoff"
                 maxLength={500}
+                disabled={bulkDisabled}
               />
             </div>
-            <Button onClick={onAttestSelected} disabled={bulkAttest.isPending}>
+            {/* The count is dropped from the label at zero rather than
+                rendering "Attest 0 selected", which reads as a thing
+                you could do. */}
+            <Button onClick={onAttestSelected} disabled={bulkDisabled}>
               {bulkAttest.isPending
                 ? "Attesting..."
-                : `Attest ${selected.size} selected`}
+                : someSelected
+                  ? `Attest ${selected.size} selected`
+                  : "Attest selected"}
             </Button>
           </div>
         ) : null}
 
-        <div className="overflow-x-auto">
+        {/* Two renderings of one queue, not a table that has been
+            squeezed. The table has four data columns plus a checkbox and
+            an action; at 390px that is ~55px a column, and the email —
+            the thing an officer matches against the paper in their hand
+            — wrapped to three lines while the affiliation badge and the
+            date fought over the rest. A list row can put the identity on
+            top and demote affiliation and date to one meta line beneath
+            it, which is the shape of the task: read a name, find it on
+            the stack of papers, tap Attest.
+
+            `queue` is the single source of data and `queueRowLabel` the
+            single source of the display name, so the two renderings can
+            disagree about layout but not about content. */}
+        <ul className="space-y-2 sm:hidden">
+          {queue.map((member) => (
+            <QueueCard
+              key={member.userId}
+              member={member}
+              canVerify={canVerify}
+              selected={selected.has(member.userId)}
+              onToggle={() => toggle(member.userId)}
+              onAttest={() => onAttestOne(member.userId, queueRowLabel(member))}
+              attesting={attest.isPending}
+            />
+          ))}
+        </ul>
+
+        {/* `overflow-y-hidden` alongside `overflow-x-auto`: a
+            non-`visible` value on one axis computes the other axis'
+            `visible` to `auto`, which leaves the wrapper capturing
+            vertical scroll as well. */}
+        <div className="hidden overflow-x-auto overflow-y-hidden sm:block">
           <table className="w-full text-sm">
             <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
@@ -293,8 +360,7 @@ function QueueTable({
             </thead>
             <tbody>
               {queue.map((member) => {
-                const label =
-                  member.preferredName ?? member.fullName ?? member.email;
+                const label = queueRowLabel(member);
                 return (
                   <tr key={member.userId} className="border-b last:border-0">
                     {canVerify ? (
@@ -340,5 +406,133 @@ function QueueTable({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * The name an officer reads off the row.
+ *
+ * One function rather than the expression inlined in each rendering: the
+ * mobile list and the desktop table are separate markup, and a display
+ * name that differed between them would be a genuinely confusing bug to
+ * chase — the same member, two labels, depending on the width of the
+ * window.
+ */
+function queueRowLabel(member: MemberNeedingAttestation): string {
+  return member.preferredName ?? member.fullName ?? member.email;
+}
+
+/**
+ * One queued member as a stacked row, for viewports below `sm`.
+ *
+ * Identity on the first two lines (the name, then the email that gets
+ * matched against the paper), affiliation and approval date demoted to a
+ * single meta line, and the action on its own row so it gets a full
+ * 44px-tall target instead of being wedged into a table cell. The
+ * checkbox is the row's leading column at both sizes, so the selection
+ * gesture doesn't move as the layout changes.
+ *
+ * The whole row is a label for its checkbox, which is the part a table
+ * cell can't do: on a phone the reachable target for "select this
+ * member" should be the member, not a 16px box beside them. The Attest
+ * button is outside that label — nesting a button inside a label makes
+ * a tap on it toggle the checkbox too.
+ */
+function QueueCard({
+  member,
+  canVerify,
+  selected,
+  onToggle,
+  onAttest,
+  attesting,
+}: {
+  member: MemberNeedingAttestation;
+  canVerify: boolean;
+  selected: boolean;
+  onToggle: () => void;
+  onAttest: () => void;
+  attesting: boolean;
+}) {
+  const label = queueRowLabel(member);
+
+  return (
+    <li className="rounded-md border p-3">
+      <div className="flex items-start gap-3">
+        {canVerify ? (
+          <Checkbox
+            id={`queue-${member.userId}`}
+            aria-label={`Select ${label}`}
+            checked={selected}
+            onCheckedChange={onToggle}
+            className="mt-0.5 shrink-0"
+          />
+        ) : null}
+        {/* A `<label>` only when there is a control for it to label.
+            Read-only viewers (`waivers:view` without `waivers:verify`)
+            get no checkbox, and a label pointing at nothing is a
+            promise of interactivity the row can't keep. */}
+        <Identity
+          as={canVerify ? "label" : "div"}
+          htmlFor={canVerify ? `queue-${member.userId}` : undefined}
+        >
+          <div className="font-medium break-words">{label}</div>
+          {/* `break-all`, not `truncate`: a truncated address is
+              useless for the one thing it is here to do, which is match
+              a member against a signed paper. A long uc.edu address
+              wrapping over two lines is the lesser cost. */}
+          <div className="text-xs break-all text-muted-foreground">
+            {member.email}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            {member.ucAffiliation ? (
+              <Badge variant="outline" className="text-xs">
+                {member.ucAffiliation}
+              </Badge>
+            ) : null}
+            <span>
+              Approved {member.approvedAt ? formatDate(member.approvedAt) : "—"}
+            </span>
+          </div>
+        </Identity>
+      </div>
+      {canVerify ? (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onAttest}
+          disabled={attesting}
+          className="mt-3 w-full"
+        >
+          Attest
+        </Button>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * The identity block of a queue card, as a `<label>` for verifiers and a
+ * plain `<div>` for read-only viewers.
+ *
+ * Split out only so the branch doesn't duplicate four nested elements;
+ * the reason for the branch is on the call site.
+ */
+function Identity({
+  as,
+  htmlFor,
+  children,
+}: {
+  as: "label" | "div";
+  htmlFor: string | undefined;
+  children: React.ReactNode;
+}) {
+  const className = "min-w-0 flex-1 space-y-0.5";
+
+  return as === "label" ? (
+    <label htmlFor={htmlFor} className={className}>
+      {children}
+    </label>
+  ) : (
+    <div className={className}>{children}</div>
   );
 }

@@ -114,7 +114,7 @@ function GazetteIssuePage() {
         <iframe
           src={downloadUrl}
           title={`${displayTitle} — PDF reader`}
-          className="block h-[80vh] w-full rounded-md"
+          className="block h-[80dvh] w-full rounded-md"
         />
       </div>
     </PageContainer>

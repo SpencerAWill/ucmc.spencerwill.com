@@ -1,14 +1,19 @@
 /**
  * Avatar editor for the /account profile tab. Flow:
  *   1. user picks a file →
- *   2. browser-image-compression normalizes orientation + downsizes to a
- *      reasonable working size (8 MP iPhone shots otherwise blow up the
- *      <img> we hand to ReactCrop) →
+ *   2. `normalizeImageFile` fixes EXIF orientation and downsizes to a
+ *      working size (8 MP iPhone shots otherwise blow up the <img> we
+ *      hand to ReactCrop) →
  *   3. user picks a circular crop in a Dialog →
  *   4. we draw the crop into a 256×256 canvas, encode WebP at q=0.85 →
  *   5. POST as a `data:` URL via uploadAvatarFn.
+ *
+ * Steps 2 and 4 go through `#/lib/image-upload` rather than being
+ * hand-rolled here, which is how they were written first. Three surfaces
+ * had their own copy of this and each was broken on mobile Safari in a
+ * different way; the module note explains what the shared version knows
+ * about HEIC, worker decodes and `toBlob`'s silent PNG fallback.
  */
-import imageCompression from "browser-image-compression";
 import { Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import ReactCrop, { centerCrop, makeAspectCrop } from "react-image-crop";
@@ -29,6 +34,12 @@ import {
   removeAvatarFn,
   uploadAvatarFn,
 } from "#/features/auth/server/server-fns";
+import {
+  encodeCanvasToDataUrl,
+  IMAGE_UPLOAD_ACCEPT,
+  imageUploadErrorMessage,
+  normalizeImageFile,
+} from "#/lib/image-upload";
 
 const OUTPUT_SIZE = 256;
 const OUTPUT_QUALITY = 0.85;
@@ -72,14 +83,16 @@ export function AvatarEditor({
     try {
       // Normalizes EXIF orientation (canvas alone rotates iPhone photos
       // sideways) and shrinks the working image to keep the crop UI snappy.
-      const normalized = await imageCompression(file, {
-        maxWidthOrHeight: WORKING_MAX_DIMENSION,
-        useWebWorker: true,
+      const normalized = await normalizeImageFile(file, {
+        maxDimension: WORKING_MAX_DIMENSION,
         fileType: "image/jpeg",
       });
       setWorkingUrl(URL.createObjectURL(normalized));
-    } catch {
-      toast.error("Couldn’t read that image. Try another file.");
+    } catch (err) {
+      // The real reason, not a fixed string: on a phone this is usually
+      // an oversized file or a decode the platform can't do, and each
+      // wants a different next step from the member.
+      toast.error(imageUploadErrorMessage(err));
       reset();
     }
   }
@@ -114,6 +127,9 @@ export function AvatarEditor({
       reset();
       await onChanged?.();
     } catch (err) {
+      // An `ImageUploadError` is already member-facing, so it passes
+      // through; a server rejection keeps its message because the avatar
+      // action's are written to be read ("Avatar exceeds … bytes").
       toast.error(
         err instanceof Error && err.message
           ? err.message
@@ -179,7 +195,7 @@ export function AvatarEditor({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept={IMAGE_UPLOAD_ACCEPT}
         className="hidden"
         onChange={onFileChosen}
       />
@@ -216,7 +232,7 @@ export function AvatarEditor({
                   src={workingUrl}
                   alt="Selected file, awaiting crop"
                   onLoad={onImageLoad}
-                  className="max-h-[60vh] max-w-full"
+                  className="max-h-[60dvh] max-w-full"
                 />
               </ReactCrop>
             </div>
@@ -261,21 +277,9 @@ async function renderCroppedWebp(
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(image, sx, sy, sw, sh, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
-  const blob: Blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Encoding failed"))),
-      "image/webp",
-      OUTPUT_QUALITY,
-    );
-  });
-  return await blobToDataUrl(blob);
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+  // `encodeCanvasToDataUrl` checks that the browser actually produced
+  // WebP: `toBlob` falls back to PNG silently on an unsupported type,
+  // and `DATA_URL_RE` in the avatar action would then reject it with a
+  // message about content types that means nothing to a member.
+  return await encodeCanvasToDataUrl(canvas, OUTPUT_QUALITY);
 }

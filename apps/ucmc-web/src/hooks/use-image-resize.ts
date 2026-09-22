@@ -32,14 +32,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
-const OUTPUT_QUALITY = 0.92;
+import {
+  clampWorkingDimension,
+  encodeCanvasToDataUrl,
+  IMAGE_UPLOAD_ACCEPT,
+  imageUploadErrorMessage,
+  MAX_SOURCE_BYTES,
+} from "#/lib/image-upload";
 
-/**
- * Reject an oversized source before decoding it. A decoded bitmap costs
- * ~4 bytes per pixel, so this is the guard that keeps a 50 MB TIFF-ish
- * PNG from allocating gigabytes in a phone browser.
- */
-const MAX_SOURCE_BYTES = 12 * 1024 * 1024;
+const OUTPUT_QUALITY = 0.92;
 
 export interface UseImageResizeOptions {
   /**
@@ -150,7 +151,9 @@ export function useImageResize(
       }
       setError(null);
       if (file.size > MAX_SOURCE_BYTES) {
-        setError("That image is too large. Pick one under 12 MB.");
+        setError(
+          `That image is too large. Pick one under ${Math.round(MAX_SOURCE_BYTES / 1024 / 1024)} MB.`,
+        );
         return;
       }
       setIsProcessing(true);
@@ -159,9 +162,14 @@ export function useImageResize(
         const resized = await resizeToFit(objectUrl, maxDimension);
         setPreviewUrl(objectUrl);
         setResult(resized);
-      } catch {
+      } catch (err) {
         URL.revokeObjectURL(objectUrl);
-        setError("That file couldn't be read as an image.");
+        // The message comes from the thrown error rather than being a
+        // fixed string: "couldn't be read as an image" is wrong for the
+        // two failures a phone actually hits — an unsupported WebP
+        // encoder and a canvas over the platform's area cap — and a
+        // member told the wrong cause just retries the same file.
+        setError(imageUploadErrorMessage(err));
       } finally {
         setIsProcessing(false);
       }
@@ -174,12 +182,10 @@ export function useImageResize(
   const fileInputProps = useMemo(
     () => ({
       type: "file" as const,
-      // Narrower than `image/*`: the encode path accepts anything the
-      // browser can decode, but SVG is deliberately excluded. It would
-      // rasterize fine here, yet accepting it invites someone to wire a
-      // pass-through later, and an inline SVG is a script-execution
-      // surface on a page anonymous visitors load.
-      accept: "image/png,image/jpeg,image/webp",
+      // Narrower than `image/*` — see `IMAGE_UPLOAD_ACCEPT` for both
+      // reasons (SVG is a script-execution surface; a generic `image/*`
+      // makes iOS hand over an undecodable HEIC).
+      accept: IMAGE_UPLOAD_ACCEPT,
       className: "hidden",
       onChange: onFileChosen,
     }),
@@ -214,11 +220,11 @@ export async function resizeToFit(
   if (naturalWidth === 0 || naturalHeight === 0) {
     throw new Error("Image has no intrinsic size");
   }
-  const scale = Math.min(
-    maxDimension / naturalWidth,
-    maxDimension / naturalHeight,
-    1,
-  );
+  // Clamped against the platform's canvas-area cap: past it, iOS Safari
+  // doesn't throw — `drawImage` paints nothing — so an unclamped
+  // `maxDimension` yields a blank logo rather than an error.
+  const bound = clampWorkingDimension(maxDimension);
+  const scale = Math.min(bound / naturalWidth, bound / naturalHeight, 1);
   // Round, then floor at 1: a very wide banner scaled to fit could
   // otherwise round its short edge to 0 and produce a zero-area canvas.
   const widthPx = Math.max(1, Math.round(naturalWidth * scale));
@@ -236,19 +242,11 @@ export async function resizeToFit(
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(image, 0, 0, widthPx, heightPx);
 
-  const blob: Blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Encoding failed"))),
-      "image/webp",
-      OUTPUT_QUALITY,
-    );
-  });
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+  // `encodeCanvasToDataUrl` rather than an inline `toBlob`: an
+  // unsupported type falls back to PNG silently, and a lossless PNG of
+  // the same logo clears the sponsor action's 1.4 MB data-URL cap, which
+  // surfaced to the member as a Zod string-too-long error.
+  const dataUrl = await encodeCanvasToDataUrl(canvas, OUTPUT_QUALITY);
   return { dataUrl, widthPx, heightPx };
 }
 

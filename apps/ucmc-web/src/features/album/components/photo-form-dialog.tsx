@@ -5,6 +5,7 @@ import "react-image-crop/dist/ReactCrop.css";
 import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
+import { ImagePickerError } from "#/components/image-picker-error";
 import {
   Dialog,
   DialogContent,
@@ -212,7 +213,7 @@ export function PhotoFormDialog({
                   <img
                     src={existingImageUrl}
                     alt={form.altText || "Current photo"}
-                    className="max-h-[30dvh] max-w-full rounded-md sm:max-h-[40vh]"
+                    className="max-h-[30dvh] max-w-full rounded-md sm:max-h-[40dvh]"
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -246,6 +247,7 @@ export function PhotoFormDialog({
                   ) : null}
                 </div>
                 <input ref={crop.fileInputRef} {...crop.fileInputProps} />
+                <ImagePickerError message={crop.error} />
               </div>
             </div>
 

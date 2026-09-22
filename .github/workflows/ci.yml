@@ -124,11 +124,13 @@ jobs:
         run: pnpm --filter @ucmc/infra exec tsc --noEmit
 
   a11y:
-    name: Browser specs (axe-core, gear scanner)
+    name: Browser specs (axe-core, gear scanner, mobile overflow)
     if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Three spec files in two engines, plus a WebKit download. 15 was
+    # enough for axe + scanner alone.
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -143,8 +145,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright browser
-        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium
+      # WebKit as well as Chromium: the mobile-overflow spec runs in
+      # both engines, because `overflow` axis computation and
+      # `touch-action` are areas where they have diverged before and
+      # iOS Safari is what the membership actually carries.
+      - name: Install Playwright browsers
+        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium webkit
 
       # Apply Drizzle migrations to the Miniflare-backed local D1 before
       # the dev server boots. Without this, the home-page loader queries
@@ -201,6 +207,30 @@ jobs:
           SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
           MAILPIT_URL: ""
         run: pnpm --filter ucmc-web e2e gear-scanner.spec.ts
+
+      # The phone-width specs, in both mobile projects. `mobile-` rather
+      # than a file name so a spec added to the set is picked up without
+      # a workflow edit — the projects' own `testMatch` already scopes
+      # that prefix. None of them need Mailpit; they seed sessions
+      # directly.
+      #
+      # `mobile-overflow` walks every route and fails if anything made
+      # the document wider than the viewport — easy to regress, since
+      # each cause (`-mx-*`, a fixed `w-[Npx]`) is reasonable in
+      # isolation and the symptom is invisible at desktop width.
+      # `mobile-waiver-queue` measures that selecting a member doesn't
+      # move the rows under the officer's finger.
+      - name: Run mobile specs
+        env:
+          CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+          APP_BASE_URL: http://localhost:3000
+          WEBAUTHN_RP_ID: localhost
+          WEBAUTHN_RP_NAME: UCMC (ci)
+          RESEND_FROM: noreply@localhost
+          RESEND_FROM_NAME: UCMC (ci)
+          SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
+          MAILPIT_URL: ""
+        run: pnpm --filter ucmc-web e2e mobile-
 
       - name: Upload Playwright report on failure
         if: failure()

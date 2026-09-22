@@ -14,6 +14,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 
 import { cn } from "#/lib/utils";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
@@ -65,6 +66,40 @@ export function AccountTabsBar() {
 
   const active = activeAccountTabFromPath(pathname);
 
+  /*
+   * Scroll the active tab into view.
+   *
+   * Six tabs don't fit a phone, so the row scrolls — and it starts at
+   * `scrollLeft: 0` every time. Landing on `/my/security` or
+   * `/my/preferences` from the sidebar therefore showed a tab bar with
+   * the current tab clipped at the right edge or off it entirely: the
+   * page's own highlight, off screen, on the one surface whose job is
+   * saying where you are.
+   *
+   * `nav.scrollLeft = …` rather than `tab.scrollIntoView()`, and that
+   * matters: `scrollIntoView` walks every scrollable ancestor, so it
+   * would also scroll the *document* — landing on a deep tab would jump
+   * the page down past the greeting. Assigning `scrollLeft` touches this
+   * one element and nothing else.
+   *
+   * The target centres the tab in the row and clamps at 0, so the first
+   * two tabs don't get pulled away from the left edge, where the row
+   * reads correctly already.
+   */
+  const navRef = useRef<HTMLElement | null>(null);
+  const activeRef = useRef<HTMLAnchorElement | null>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    const tab = activeRef.current;
+    if (!nav || !tab) {
+      return;
+    }
+    nav.scrollLeft = Math.max(
+      0,
+      tab.offsetLeft - (nav.clientWidth - tab.offsetWidth) / 2,
+    );
+  }, [active]);
+
   return (
     /*
      * The row is allowed to overflow horizontally on narrow viewports
@@ -72,11 +107,32 @@ export function AccountTabsBar() {
      * phone, which looked broken. `border-b` lives on the container so the
      * underline runs the full visual width even after the row scrolls.
      * Per-link `whitespace-nowrap` keeps individual labels intact.
+     *
+     * The negative margin and the re-applied padding must BOTH track
+     * `PageContainer`'s gutter, which is `px-4 sm:px-6` — not a flat
+     * `px-6`. A flat `-mx-6` under a `px-4` container hangs the bar 8px
+     * past each edge of its own parent, and because nothing in the shell
+     * clips the overflow, that widened the document and let the whole
+     * page side-scroll on a phone. The bar is the only element on `/my`
+     * that reaches outside the gutter, which is why it was the one that
+     * did it.
      */
-    <div className="-mx-6 mb-6 border-b border-border">
+    <div className="-mx-4 mb-6 border-b border-border sm:-mx-6">
       <nav
+        ref={navRef}
         aria-label="Account sections"
-        className="flex gap-1 overflow-x-auto px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        /*
+         * `overflow-y-hidden` is not redundant with `overflow-x-auto`.
+         * Per CSS Overflow 3, when one axis is set to anything other
+         * than `visible` the other axis' `visible` computes to `auto` —
+         * so `overflow-x-auto` alone left this row vertically scrollable
+         * too, and a touch-drag on a phone dragged the labels up and
+         * down inside their own 40px box. `touch-action: pan-x` is the
+         * belt to that braces: it tells the compositor this row only
+         * ever consumes horizontal pans, so a mostly-vertical swipe
+         * scrolls the page instead of being captured here.
+         */
+        className="flex touch-pan-x gap-1 overflow-x-auto overflow-y-hidden px-4 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden"
       >
         {visibleTabs.map((tab) => {
           const isActive = tab.to === active;
@@ -85,6 +141,7 @@ export function AccountTabsBar() {
             <Link
               key={tab.to}
               to={tab.to}
+              ref={isActive ? activeRef : undefined}
               aria-current={isActive ? "page" : undefined}
               /*
                * Active state is computed from the pathname and resolved

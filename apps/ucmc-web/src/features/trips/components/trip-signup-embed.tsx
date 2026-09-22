@@ -86,12 +86,19 @@ export function TripSignupEmbed({ waiverCurrent }: { waiverCurrent: boolean }) {
        * when a browser refuses to frame third-party content (strict
        * tracking-protection modes block this one). Height is fixed
        * because the frame is cross-origin: there is no way to read the
-       * form's content height, so the iframe scrolls internally. */}
+       * form's content height, so the iframe scrolls internally.
+       *
+       * The floor is responsive because the wrapper clips rather than
+       * scrolls (it has to, for the rounded corners): a flat 640px floor
+       * on a 667px-tall phone left the bottom of the form outside the
+       * visible viewport with no way to reach it — the wrapper swallowed
+       * the overflow and the iframe's own scroll couldn't help, because
+       * the clipped part was the iframe's own bottom edge. */}
       <div className="overflow-hidden rounded-md border bg-muted/30">
         <iframe
           src={SIGNUP_FORM_EMBED_URL}
           title="Trip sign-up form"
-          className="block h-[80vh] min-h-[640px] w-full"
+          className="block h-[80dvh] min-h-[28rem] w-full sm:min-h-[640px]"
         />
       </div>
     </div>

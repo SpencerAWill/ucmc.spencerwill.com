@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   LogOut,
@@ -336,7 +337,13 @@ function MemberManageActions({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => reactivate.mutate([member.userId])}
+          onClick={() =>
+            reactivate.mutate([member.userId], {
+              onSuccess: () => toast.success("Account reactivated"),
+              onError: (err) =>
+                toast.error(err.message || "Couldn’t reactivate that account."),
+            })
+          }
           disabled={reactivate.isPending}
         >
           <UserPlus className="mr-1 size-3.5" />
@@ -348,7 +355,15 @@ function MemberManageActions({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => unreject.mutate([member.userId])}
+          onClick={() =>
+            unreject.mutate([member.userId], {
+              onSuccess: () => toast.success("Moved back to pending"),
+              onError: (err) =>
+                toast.error(
+                  err.message || "Couldn’t move that registration back.",
+                ),
+            })
+          }
           disabled={unreject.isPending}
         >
           <Undo2 className="mr-1 size-3.5" />
@@ -388,7 +403,17 @@ function MemberManageActions({
               variant="destructive"
               onClick={() =>
                 deactivate.mutate([member.userId], {
-                  onSuccess: () => setConfirmAction(null),
+                  onSuccess: () => {
+                    setConfirmAction(null);
+                    toast.success("Account deactivated");
+                  },
+                  // The dialog closing on success was the only signal,
+                  // so a *failure* left it open with no explanation —
+                  // which reads as an unresponsive button.
+                  onError: (err) =>
+                    toast.error(
+                      err.message || "Couldn’t deactivate that account.",
+                    ),
                 })
               }
               disabled={deactivate.isPending}
@@ -460,7 +485,17 @@ function RevokeSessionsButton({
               variant="destructive"
               onClick={() =>
                 revoke.mutate(member.userId, {
-                  onSuccess: () => setOpen(false),
+                  onSuccess: () => {
+                    setOpen(false);
+                    toast.success("Signed out of every device");
+                  },
+                  // A silent failure here is the dangerous one: the
+                  // officer has just been told the account is signed
+                  // out everywhere, and acts on that, when it isn't.
+                  onError: (err) =>
+                    toast.error(
+                      err.message || "Couldn’t revoke those sessions.",
+                    ),
                 })
               }
               disabled={revoke.isPending}

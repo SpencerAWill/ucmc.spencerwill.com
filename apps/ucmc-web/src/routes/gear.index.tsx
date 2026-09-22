@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   Boxes,
   ChevronDown,
@@ -496,7 +497,23 @@ function GearIndexPage() {
             setFormOpen(true);
           }}
           onRetire={(g) => setRetiring(g)}
-          onUnretire={(g) => unretireMutation.mutate({ publicId: g.publicId })}
+          /* Retiring a piece toasts (see `gear-retire-dialog`); this
+             is the inverse action from the same menu and said nothing
+             at all, which made the pair read as unreliable — you took
+             the same kind of action twice and were told about one. */
+          onUnretire={(g) =>
+            unretireMutation.mutate(
+              { publicId: g.publicId },
+              {
+                onSuccess: () =>
+                  toast.success(`${g.code ?? "Gear"} back in service`),
+                onError: () =>
+                  toast.error(
+                    `Couldn’t bring ${g.code ?? "that piece"} back into service. Please try again.`,
+                  ),
+              },
+            )
+          }
           onPageChange={(p) => set({ page: p })}
           onPerPageChange={(pp) => set({ perPage: pp, page: undefined })}
         />

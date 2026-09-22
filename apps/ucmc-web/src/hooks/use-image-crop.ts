@@ -17,12 +17,24 @@
  * Visual layout of the crop UI is left to the caller — this hook just
  * supplies the ref, props, and rendering function.
  */
-import imageCompression from "browser-image-compression";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, SyntheticEvent } from "react";
 import { centerCrop, makeAspectCrop } from "react-image-crop";
 import type { PercentCrop, PixelCrop } from "react-image-crop";
 
+import {
+  encodeCanvasToDataUrl,
+  IMAGE_UPLOAD_ACCEPT,
+  imageUploadErrorMessage,
+  normalizeImageFile,
+} from "#/lib/image-upload";
+
+/**
+ * Requested working size. `normalizeImageFile` clamps it down to what
+ * the platform's canvas can actually hold — 2400² is 5.76 M px, over
+ * iOS Safari's low canvas-area cap, and past that cap the crop UI shows
+ * a blank image rather than failing.
+ */
 const WORKING_MAX_DIMENSION = 2400;
 const OUTPUT_QUALITY = 0.85;
 
@@ -55,6 +67,16 @@ export interface UseImageCropOptions {
  */
 export interface UseImageCropResult {
   workingUrl: string | null;
+  /**
+   * Set when the picked file was rejected or couldn't be decoded, and
+   * cleared on the next pick. Callers must render it: before it existed
+   * `onFileChosen` was an `async` handler with no `catch`, so every
+   * decode failure became an unhandled promise rejection — the picker
+   * closed, nothing appeared, and the only trace was a library-internal
+   * message in the console. That is the whole of the "image uploads
+   * throw weird errors on iOS" report.
+   */
+  error: string | null;
   crop: PercentCrop | undefined;
   imgRef: React.RefObject<HTMLImageElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
@@ -101,6 +123,7 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [workingUrl, setWorkingUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [crop, setCrop] = useState<PercentCrop | undefined>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | undefined>();
 
@@ -123,6 +146,7 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
    */
   const reset = useCallback(() => {
     setWorkingUrl(null);
+    setError(null);
     setCrop(undefined);
     setCompletedCrop(undefined);
     if (fileInputRef.current) {
@@ -135,12 +159,25 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
     if (!file) {
       return;
     }
-    const normalized = await imageCompression(file, {
-      maxWidthOrHeight: WORKING_MAX_DIMENSION,
-      useWebWorker: true,
-      fileType: "image/jpeg",
-    });
-    setWorkingUrl(URL.createObjectURL(normalized));
+    setError(null);
+    try {
+      // Normalized to JPEG rather than left alone: the result is only
+      // ever drawn into a canvas, so alpha is irrelevant here, and the
+      // round trip is what fixes EXIF orientation — a canvas ignores
+      // the rotation tag, so an iPhone portrait photo would crop
+      // sideways.
+      const normalized = await normalizeImageFile(file, {
+        maxDimension: WORKING_MAX_DIMENSION,
+        fileType: "image/jpeg",
+      });
+      setWorkingUrl(URL.createObjectURL(normalized));
+    } catch (err) {
+      // An `async` onChange handler that throws produces an unhandled
+      // rejection and nothing else — no state change, no message, and a
+      // dialog that just sits there. Landing it in `error` is what makes
+      // the failure visible.
+      setError(imageUploadErrorMessage(err));
+    }
   }, []);
 
   const onImageLoad = useCallback(
@@ -184,19 +221,11 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(image, sx, sy, sw, sh, 0, 0, outputWidth, outputHeight);
 
-    const blob: Blob = await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("Encoding failed"))),
-        "image/webp",
-        OUTPUT_QUALITY,
-      );
-    });
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
+    // Not an inline `toBlob`: an unsupported `type` makes it fall back
+    // to PNG *silently*, and the album action accepts only
+    // `data:image/webp`, so the failure surfaced from a server-side
+    // validator instead of from here.
+    return await encodeCanvasToDataUrl(canvas, OUTPUT_QUALITY);
     // Identity changes only when the completed crop or the output size
     // does, never on an unrelated render — a consumer can hold this in a
     // dep array and get one re-run per actual crop change.
@@ -207,7 +236,10 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
   const fileInputProps = useMemo(
     () => ({
       type: "file" as const,
-      accept: "image/*",
+      // Not `image/*`: that makes the iOS Photos picker hand over the
+      // original HEIC, which nothing downstream can decode. An explicit
+      // list without HEIC makes iOS transcode to JPEG on selection.
+      accept: IMAGE_UPLOAD_ACCEPT,
       className: "hidden",
       onChange: onFileChosen,
     }),
@@ -243,6 +275,7 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
 
   return {
     workingUrl,
+    error,
     crop,
     imgRef,
     fileInputRef,
