@@ -5,6 +5,7 @@ import "react-image-crop/dist/ReactCrop.css";
 import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
+import { ImagePickerError } from "#/components/image-picker-error";
 import { Label } from "#/components/ui/label";
 import { Separator } from "#/components/ui/separator";
 import { Textarea } from "#/components/ui/textarea";
@@ -243,6 +244,7 @@ export function AboutEditor({
           id="about-image"
           {...crop.fileInputProps}
         />
+        <ImagePickerError message={crop.error} />
       </section>
 
       <div className="flex justify-end">

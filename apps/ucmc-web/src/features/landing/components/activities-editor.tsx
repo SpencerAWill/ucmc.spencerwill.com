@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { SortableItem, SortableList } from "#/components/sortable-list";
 import { Button } from "#/components/ui/button";
+import { ImagePickerError } from "#/components/image-picker-error";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
@@ -359,6 +360,7 @@ function ActivityForm({
           id="activity-image"
           {...crop.fileInputProps}
         />
+        <ImagePickerError message={crop.error} />
       </div>
 
       <div className="flex justify-end gap-2 pt-2">

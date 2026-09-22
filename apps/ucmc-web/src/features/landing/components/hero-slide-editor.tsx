@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import type { HeroPage } from "#/features/landing/lib/hero-pages";
 
 import { Button } from "#/components/ui/button";
+import { ImagePickerError } from "#/components/image-picker-error";
 import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
 import { useCreateHeroSlide } from "#/features/landing/api/use-create-hero-slide";
@@ -151,6 +152,7 @@ export function HeroSlideEditor({
           id="slide-image"
           {...crop.fileInputProps}
         />
+        <ImagePickerError message={crop.error} />
       </div>
 
       <div className="space-y-2">
