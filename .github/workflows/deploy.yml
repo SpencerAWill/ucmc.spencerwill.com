@@ -214,6 +214,77 @@ jobs:
           FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
           FEEDBACK_GITHUB_REPO: ${{ vars.FEEDBACK_GITHUB_REPO }}
 
+      # ── Post-deploy verification ──────────────────────────────────────
+      #
+      # Until now this workflow applied D1 migrations and pushed a worker
+      # with nothing checking the result: a deploy that 500s on every
+      # request, or whose client bundle throws on hydration, looked
+      # exactly like a good one until a human loaded the site.
+      #
+      # These steps live INSIDE the deploy job rather than in a job of
+      # their own on purpose. A separate job would re-run checkout,
+      # setup-node and `pnpm install` — roughly two minutes of runner
+      # time — to learn something this job can check directly, and would
+      # need `app_base_url` plumbed through as a job output to do it.
+      # Here, a failure also turns the deploy job itself red, which is
+      # what "fail loudly" has to mean.
+      - name: Wait for the deployment to answer
+        run: |
+          url="${{ steps.pulumi.outputs.app_base_url }}"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url/" || true)
+            if [ "$code" = "200" ]; then
+              echo "$url answered 200 after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${i}: $url returned '${code}'"
+            sleep 5
+          done
+          echo "::error::$url never returned 200 within ~150s of deploying" >&2
+          exit 1
+
+      # Keyed on the resolved Playwright version, same as the CI jobs, so
+      # a deploy usually restores the binaries instead of downloading
+      # them. Chromium only — the smoke project is Desktop Chrome.
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          version=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter ucmc-web exec playwright install-deps chromium
+
+      # `PLAYWRIGHT_BASE_URL` both points the run at the deployed worker
+      # and suppresses the `webServer` block in playwright.config.ts —
+      # there is no dev server for this run to own. The `smoke` project
+      # is read-only and unauthenticated (see e2e/smoke.spec.ts); it must
+      # stay that way, because dev is a real environment.
+      - name: Post-deploy smoke test (dev)
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.pulumi.outputs.app_base_url }}
+        run: pnpm --filter ucmc-web e2e --project=smoke
+
+      - name: Upload smoke report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-smoke-dev
+          path: apps/ucmc-web/playwright-report/
+          retention-days: 7
+
   infra-prod:
     name: Infra — deploy prod
     if: github.event_name == 'workflow_dispatch' && inputs.environment == 'prod'
@@ -362,3 +433,74 @@ jobs:
           TURNSTILE_SECRET_KEY: ${{ steps.pulumi.outputs.turnstile_secret_key }}
           FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
           FEEDBACK_GITHUB_REPO: ${{ vars.FEEDBACK_GITHUB_REPO }}
+
+      # ── Post-deploy verification ──────────────────────────────────────
+      #
+      # Until now this workflow applied D1 migrations and pushed a worker
+      # with nothing checking the result: a deploy that 500s on every
+      # request, or whose client bundle throws on hydration, looked
+      # exactly like a good one until a human loaded the site.
+      #
+      # These steps live INSIDE the deploy job rather than in a job of
+      # their own on purpose. A separate job would re-run checkout,
+      # setup-node and `pnpm install` — roughly two minutes of runner
+      # time — to learn something this job can check directly, and would
+      # need `app_base_url` plumbed through as a job output to do it.
+      # Here, a failure also turns the deploy job itself red, which is
+      # what "fail loudly" has to mean.
+      - name: Wait for the deployment to answer
+        run: |
+          url="${{ steps.pulumi.outputs.app_base_url }}"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url/" || true)
+            if [ "$code" = "200" ]; then
+              echo "$url answered 200 after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${i}: $url returned '${code}'"
+            sleep 5
+          done
+          echo "::error::$url never returned 200 within ~150s of deploying" >&2
+          exit 1
+
+      # Keyed on the resolved Playwright version, same as the CI jobs, so
+      # a deploy usually restores the binaries instead of downloading
+      # them. Chromium only — the smoke project is Desktop Chrome.
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          version=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter ucmc-web exec playwright install-deps chromium
+
+      # `PLAYWRIGHT_BASE_URL` both points the run at the deployed worker
+      # and suppresses the `webServer` block in playwright.config.ts —
+      # there is no dev server for this run to own. The `smoke` project
+      # is read-only and unauthenticated (see e2e/smoke.spec.ts); it must
+      # stay that way, because prod is a real environment.
+      - name: Post-deploy smoke test (prod)
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.pulumi.outputs.app_base_url }}
+        run: pnpm --filter ucmc-web e2e --project=smoke
+
+      - name: Upload smoke report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-smoke-prod
+          path: apps/ucmc-web/playwright-report/
+          retention-days: 7

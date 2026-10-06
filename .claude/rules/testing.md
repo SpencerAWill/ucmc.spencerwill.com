@@ -39,7 +39,7 @@ Prefer asserting the _reason_ a thing is written the way it is, not just that it
 
 ## E2E
 
-Playwright drives a freshly-spawned dev server. Three projects: `chromium` (Desktop Chrome) runs everything, and `mobile-safari` (iPhone 14 / WebKit) + `mobile-chrome` (Pixel 7) are confined by `testMatch` to the `mobile-*` specs.
+Playwright drives a freshly-spawned dev server. Four projects: `chromium` (Desktop Chrome) runs everything, `mobile-safari` (iPhone 14 / WebKit) + `mobile-chrome` (Pixel 7) are confined by `testMatch` to the `mobile-*` specs, and `smoke` is confined to `smoke.spec.ts` and runs only after a deploy.
 
 **That confinement is deliberate, and widening it means reckoning with two specs, not just adding a viewport.** `gear-scanner.spec.ts` launches its own Chromium with fake-camera flags and would ignore the project's device entirely; the passkey specs drive a WebAuthn virtual authenticator over CDP, which WebKit has no equivalent for. `chromium` correspondingly carries `testIgnore` for the mobile specs — at 1280px they pass trivially and say nothing.
 
@@ -57,6 +57,18 @@ Two details about the Mailpit sidecar in CI:
 
 - **`MAILPIT_URL` must be `http://localhost:8025`, not the fixture's `http://mailpit:8025` default.** GitHub service containers publish to the runner's loopback; the Docker-network hostname that works in the devcontainer does not resolve on a runner.
 - **The job waits on `/api/v1/info` before running specs.** GitHub starts the container but does not wait for the process inside it to bind, and the mailpit fixture clears the inbox in a `beforeEach` and throws when that request fails — so losing the race reads as an unrelated failure in whichever spec happens to run first, not as "Mailpit wasn't up".
+
+### `smoke.spec.ts` — the only spec that runs against a real deployment
+
+`deploy.yml` used to apply D1 migrations and push a worker to production with nothing checking the result. A deploy that 500s on every request, or one whose client bundle throws on hydration, was indistinguishable from a good one until a human loaded the site.
+
+The smoke steps live **inside** the `web-dev` / `web-prod` jobs, not in jobs of their own: a separate job would re-run checkout, setup-node and `pnpm install` to learn something the deploy job can check directly, and would need `app_base_url` plumbed through as a job output. Inside, a smoke failure also turns the deploy red, which is what "fail loudly" has to mean.
+
+- **`PLAYWRIGHT_BASE_URL` does double duty.** It sets `baseURL` _and_ suppresses the `webServer` block — booting `pnpm dev` against a remote target would waste two minutes and then test the wrong thing. Anything that reads `BASE_URL` must keep that coupling in mind.
+- **The spec must stay read-only and unauthenticated.** It runs against production. No sign-in, no seeding, no mutation.
+- **It asserts hydration, which is the half a `curl` cannot see.** SSR HTML comes back fine from a worker whose client bundle is broken — a module reaching for `cloudflare:workers` outside SSR, a chunk 404ing against a stale asset manifest — and the page then looks correct while responding to nothing. It carries the same `#main` height guard as `mobile-overflow.spec.ts`, for the same reason: an error boundary also returns 200 and hydrates.
+- **`/health` is asserted through its `<h1>`, not a test id.** `report.status` is `pass` only when every probe passed, so the heading covers `d1:read`, `r2:head`, KV and the email provider in one assertion — and the page returns 200 either way, which is why curling it proves nothing. The per-probe rows are scraped into the failure message so a red deploy names the broken binding.
+- **It is confined to its own project rather than left in `chromium`.** Against a Miniflare dev server the `/health` assertion is either vacuous or flaky depending on which local binding happens to be warm, and a smoke test that is routinely yellow on PRs stops being read on the one run that matters.
 
 **`mobile-overflow.spec.ts` asserts one thing across every public and signed-in route: nothing makes the document wider than the viewport.** That is a whole bug class which is invisible at desktop width and unmistakable on a phone — one element reaches past the page gutter, nothing clips it, the document grows, and the _entire page_ scrolls sideways, header included, and stays that way across client-side navigations. It is easy to reintroduce because each cause (`-mx-*` that doesn't match `PageContainer`'s `px-4 sm:px-6`, a fixed `w-[Npx]`, `whitespace-nowrap` on something long) is reasonable in isolation.
 
