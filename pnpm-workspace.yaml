@@ -150,6 +150,22 @@ peerDependencyRules:
     "eslint-plugin-jsx-a11y>eslint": "10"
     "tiptap-markdown>@tiptap/core": "3"
 
+# `pnpm audit --audit-level high --prod` runs in CI (the `Audit` job). The two
+# dated entries below are TIME-BOXED: both advisories have a real fix that is
+# simply still inside our 7-day `minimumReleaseAge` quarantine, so we suppress
+# the finding rather than bypass the supply-chain delay. DELETE each entry in
+# the same change that adds its override — they are not permanent exemptions,
+# and leaving one behind blinds the audit to the next advisory on that package.
 auditConfig:
   ignoreGhsas:
     - GHSA-rmmr-r34h-pfm5
+    # source-map-js GHSA-68fv-2mgg-jv7q (event-loop DoS via indexed source-map
+    # section offsets). Fixed in 1.2.2, published 2026-09-30 — clears quarantine
+    # 2026-10-07. Pin `source-map-js@<1.2.2` and drop this line on/after then.
+    - GHSA-68fv-2mgg-jv7q
+    # http-cache-semantics GHSA-ch52-4w7c-c8xp (max-stale can disclose cross-user
+    # cached responses). The advisory claims 4.2.1 but no such version was ever
+    # published; 4.3.0 (2026-10-04) is the real fix and clears quarantine
+    # 2026-10-11. Reached only via Pulumi's bundled npm/arborist tree. Pin
+    # `http-cache-semantics@<4.3.0` and drop this line on/after then.
+    - GHSA-ch52-4w7c-c8xp
