@@ -66,6 +66,48 @@ if (
     }) as MediaQueryList;
 }
 
+// Node 25 promoted Web Storage to a real global, and its `localStorage` is
+// lazily backed by the file named by `--localstorage-file`. With no such
+// flag Node warns and resolves the global to an empty object. Vitest's
+// jsdom environment installs the jsdom window ON the Node global rather
+// than beside it, so that broken object SHADOWS jsdom's own `Storage`:
+// `window.localStorage.setItem` and `.clear` are both `undefined`, and any
+// test that touches storage dies on an unrelated-looking TypeError.
+// CI and the devcontainer run Node 24, which has no such global, so this
+// only ever bites on a newer host — which is exactly why it is worth
+// pinning here instead of leaving it to whoever upgrades next.
+// The guard is a no-op wherever a real Storage is already in place, so
+// jsdom's implementation is left alone on Node 24.
+if (
+  typeof window !== "undefined" &&
+  typeof (window.localStorage as Partial<Storage>).setItem !== "function"
+) {
+  const entries = new Map<string, string>();
+
+  const memoryStorage = {
+    get length() {
+      return entries.size;
+    },
+    key: (index: number) => Array.from(entries.keys())[index] ?? null,
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      entries.set(String(key), String(value));
+    },
+    removeItem: (key: string) => {
+      entries.delete(key);
+    },
+    clear: () => {
+      entries.clear();
+    },
+  } as Storage;
+
+  // Node's global is an accessor, so a plain assignment would not take.
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    get: () => memoryStorage,
+  });
+}
+
 // Testing Library appends rendered output to document.body for each test;
 // without explicit cleanup, queries from one test leak into the next.
 afterEach(() => {
