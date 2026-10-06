@@ -15,7 +15,13 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: process.env.CI ? "github" : "list",
+  // On CI, both reporters: `github` annotates the failing line in the PR
+  // diff, `html` writes the `playwright-report/` directory that the
+  // workflow uploads on failure. With `github` alone that upload step
+  // silently archived nothing — there was no report to collect, which
+  // only became obvious once the full suite ran there and a failure
+  // actually needed a trace to diagnose.
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
 
   use: {
     baseURL: BASE_URL,

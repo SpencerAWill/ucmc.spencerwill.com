@@ -5,6 +5,19 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
 
+# One in-flight run per PR. Pushing a fixup used to start a second full
+# run alongside the first — the history shows three complete runs of the
+# same PR inside eight minutes, every one of them superseded before it
+# finished. Nothing downstream consumes a cancelled run, so this is pure
+# recovered capacity, and it matters more now that the E2E jobs run the
+# whole Playwright suite rather than three specs.
+#
+# `pulumi-preview` keeps its own narrower group: it comments on the PR, so
+# it wants to be cancellable independently of the rest of the run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   # Computes once per run which side of the monorepo changed; downstream
   # jobs use these outputs as their `if:` gate. Replaces the workflow-level
@@ -123,16 +136,72 @@ jobs:
       - name: Type check
         run: pnpm --filter @ucmc/infra exec tsc --noEmit
 
-  a11y:
-    name: Browser specs (axe-core, gear scanner, mobile overflow)
+  # ── E2E ───────────────────────────────────────────────────────────────
+  #
+  # Two jobs, split by browser matrix rather than by spec name, running in
+  # parallel so the suite costs one job's wall-clock rather than two.
+  #
+  # The split used to be "the three specs that work without Mailpit" vs
+  # "everything else, local-only" — 10 of 14 specs, including every
+  # sign-in, gear-desk and member-management flow, never ran on a PR. A
+  # Mailpit service container removes the reason for that, so the only
+  # remaining reason to split is the browser download: `e2e-mobile` needs
+  # WebKit, `e2e-desktop` doesn't.
+  #
+  # Each job selects by Playwright PROJECT, not by file name, and that is
+  # what keeps the two in sync without a workflow edit. The projects'
+  # own `testMatch`/`testIgnore` in playwright.config.ts already partition
+  # the suite — `mobile-*` to the two mobile projects, everything else to
+  # chromium — so a spec added tomorrow runs in CI by construction. The
+  # previous arrangement named files in the workflow, which is precisely
+  # how 10 specs stayed uncovered.
+  e2e-desktop:
+    name: E2E — desktop Chromium (full suite)
     if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
-    # Three spec files in two engines, plus a WebKit download. 15 was
-    # enough for axe + scanner alone.
-    timeout-minutes: 25
+    # The whole chromium project, serially: `workers: 1`, because the
+    # specs share one local D1 through `wrangler d1 execute` and cannot be
+    # parallelised, with `retries: 2` on CI.
+    timeout-minutes: 30
     permissions:
       contents: read
+
+    # Magic-link, passkey, preadd and claim flows all need a mailbox. The
+    # app POSTs to `${MAILPIT_URL}/api/v1/send` over HTTP (see
+    # src/server/email/resend.ts) and the Playwright fixture polls the
+    # same REST API, so only the 8025 listener matters — the devcontainer
+    # also publishes SMTP on 1025, which nothing here speaks.
+    services:
+      mailpit:
+        image: axllent/mailpit:v1.28
+        ports:
+          - 8025:8025
+
+    # Worker env vars are passthrough placeholders — the dev server's
+    # first SSR request crashes without APP_BASE_URL / SESSION_SECRET /
+    # WEBAUTHN_RP_ID populated. None of these are secrets in the test
+    # environment; they exist only to satisfy module-load assertions on a
+    # transient runner. Job-level rather than repeated per step, now that
+    # there is more than one spec invocation to keep in agreement.
+    env:
+      # CLOUDFLARE_INCLUDE_PROCESS_ENV makes wrangler v4 forward process
+      # env into the worker. The devcontainer sets this in
+      # docker-compose; CI has to opt in explicitly.
+      CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+      APP_BASE_URL: http://localhost:3000
+      WEBAUTHN_RP_ID: localhost
+      WEBAUTHN_RP_NAME: UCMC (ci)
+      RESEND_FROM: noreply@localhost
+      RESEND_FROM_NAME: UCMC (ci)
+      SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
+      # Service containers publish to the runner's loopback, not to a
+      # Docker network hostname: `http://mailpit:8025` — the devcontainer
+      # default baked into the fixture — does not resolve here. Read by
+      # the Playwright fixture directly, and by the worker via the
+      # webServer env block in playwright.config.ts.
+      MAILPIT_URL: http://localhost:8025
+
     steps:
       - uses: actions/checkout@v7
 
@@ -145,98 +214,164 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # WebKit as well as Chromium: the mobile-overflow spec runs in
-      # both engines, because `overflow` axis computation and
-      # `touch-action` are areas where they have diverged before and
-      # iOS Safari is what the membership actually carries.
+      # Chromium only. WebKit is `e2e-mobile`'s business and downloading
+      # it here would add minutes for nothing: the passkey specs drive a
+      # WebAuthn virtual authenticator over CDP, which WebKit has no
+      # equivalent for, and gear-scanner launches its own Chromium with
+      # fake-camera flags.
+      # Cache the browser binaries, keyed on the resolved Playwright
+      # version rather than the lockfile — the lockfile changes on every
+      # dependency bump, and a key that churns is a cache that never hits.
+      # The binaries are the expensive part (~130 MB Chromium, ~90 MB
+      # WebKit, downloaded and extracted on a cold runner); the apt
+      # packages behind `--with-deps` are not cacheable, so a hit still
+      # pays `install-deps`, which is much the cheaper half.
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          version=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+
       - name: Install Playwright browsers
-        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium webkit
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter ucmc-web exec playwright install-deps chromium
 
       # Apply Drizzle migrations to the Miniflare-backed local D1 before
       # the dev server boots. Without this, the home-page loader queries
-      # `landingContentQueryOptions` which selects from tables that
-      # don't exist yet — Vite returns 500 on every request, and
-      # Playwright's webServer probe treats every 500 as "not ready" and
-      # times out after 120 s. Local dev applies migrations once via
+      # `landingContentQueryOptions` which selects from tables that don't
+      # exist yet — Vite returns 500 on every request, and Playwright's
+      # webServer probe treats every 500 as "not ready" and times out
+      # after 120 s. Local dev applies migrations once via
       # `db:migrate:local`; CI starts from zero state on each runner.
       - name: Apply local D1 migrations
         run: pnpm --filter ucmc-web db:migrate:local
 
-      # Runs axe-core against every public + auth-entry route. Fails the
-      # job on any `serious` or `critical` violation (WCAG 2.1 AA gate
-      # per UC EIT 9.2.1). The spec doesn't need Mailpit, so no sidecar
-      # is required.
-      #
-      # Worker env vars are passthrough placeholders — the dev server's
-      # first SSR request crashes without APP_BASE_URL / SESSION_SECRET
-      # / WEBAUTHN_RP_ID populated. None of these are secrets in the
-      # test environment; they exist only to satisfy module-load
-      # assertions on a transient runner.
-      - name: Run axe-core specs
-        env:
-          # CLOUDFLARE_INCLUDE_PROCESS_ENV makes wrangler v4 forward
-          # process env into the worker. The devcontainer sets this in
-          # docker-compose; CI has to opt in explicitly.
-          CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
-          APP_BASE_URL: http://localhost:3000
-          WEBAUTHN_RP_ID: localhost
-          WEBAUTHN_RP_NAME: UCMC (ci)
-          RESEND_FROM: noreply@localhost
-          RESEND_FROM_NAME: UCMC (ci)
-          SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
-          MAILPIT_URL: ""
-        run: pnpm --filter ucmc-web e2e a11y.spec.ts
+      # GitHub starts the service container but does not wait for the
+      # process inside it to bind. The mailpit fixture clears the inbox in
+      # a `beforeEach` and throws if that request fails, so losing this
+      # race surfaces as an unrelated-looking failure in whichever spec
+      # happens to run first.
+      - name: Wait for Mailpit
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sSf http://localhost:8025/api/v1/info > /dev/null 2>&1; then
+              echo "mailpit ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "mailpit did not become ready within 30s" >&2
+          exit 1
 
-      # The gear-desk scanner's decode path: a real camera frame (via
-      # Chromium's fake-capture flags) through the ZXing WASM we serve
-      # from /zxing-wasm/. It runs in this job rather than its own
-      # because the setup is identical — browser, migrations, dev
-      # server — and a second job would pay all of it twice.
-      #
-      # Linux Chromium ships no native BarcodeDetector, so this
-      # exercises the ponyfill path, which is exactly the one that
-      # shipped broken. Both specs fail against a stale WASM binary.
-      - name: Run gear-scanner specs
-        env:
-          CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
-          APP_BASE_URL: http://localhost:3000
-          WEBAUTHN_RP_ID: localhost
-          WEBAUTHN_RP_NAME: UCMC (ci)
-          RESEND_FROM: noreply@localhost
-          RESEND_FROM_NAME: UCMC (ci)
-          SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
-          MAILPIT_URL: ""
-        run: pnpm --filter ucmc-web e2e gear-scanner.spec.ts
-
-      # The phone-width specs, in both mobile projects. `mobile-` rather
-      # than a file name so a spec added to the set is picked up without
-      # a workflow edit — the projects' own `testMatch` already scopes
-      # that prefix. None of them need Mailpit; they seed sessions
-      # directly.
-      #
-      # `mobile-overflow` walks every route and fails if anything made
-      # the document wider than the viewport — easy to regress, since
-      # each cause (`-mx-*`, a fixed `w-[Npx]`) is reasonable in
-      # isolation and the symptom is invisible at desktop width.
-      # `mobile-waiver-queue` measures that selecting a member doesn't
-      # move the rows under the officer's finger.
-      - name: Run mobile specs
-        env:
-          CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
-          APP_BASE_URL: http://localhost:3000
-          WEBAUTHN_RP_ID: localhost
-          WEBAUTHN_RP_NAME: UCMC (ci)
-          RESEND_FROM: noreply@localhost
-          RESEND_FROM_NAME: UCMC (ci)
-          SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
-          MAILPIT_URL: ""
-        run: pnpm --filter ucmc-web e2e mobile-
+      # The whole chromium project: the axe-core WCAG 2.1 AA gate, the
+      # real ZXing WASM decode, and the 10 flows that until now only ran
+      # on a developer's laptop.
+      - name: Run E2E specs
+        run: pnpm --filter ucmc-web e2e --project=chromium
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report-a11y
+          name: playwright-report-desktop
+          path: apps/ucmc-web/playwright-report/
+          retention-days: 7
+
+  e2e-mobile:
+    name: E2E — mobile Safari + Chrome
+    if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
+    needs: paths
+    runs-on: ubuntu-latest
+    # Two specs in two engines, plus a WebKit download.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    env:
+      CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+      APP_BASE_URL: http://localhost:3000
+      WEBAUTHN_RP_ID: localhost
+      WEBAUTHN_RP_NAME: UCMC (ci)
+      RESEND_FROM: noreply@localhost
+      RESEND_FROM_NAME: UCMC (ci)
+      SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
+      # No Mailpit here on purpose: both mobile specs seed their session
+      # directly via `seedSession`, so this job needs no mailbox and pays
+      # for no service container.
+      MAILPIT_URL: ""
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Both engines, because they fail differently. `overflow` axis
+      # computation and `touch-action` handling are exactly the areas
+      # where WebKit and Blink have diverged before, and iOS Safari is
+      # what the membership actually carries.
+      # Cache the browser binaries, keyed on the resolved Playwright
+      # version rather than the lockfile — the lockfile changes on every
+      # dependency bump, and a key that churns is a cache that never hits.
+      # The binaries are the expensive part (~130 MB Chromium, ~90 MB
+      # WebKit, downloaded and extracted on a cold runner); the apt
+      # packages behind `--with-deps` are not cacheable, so a hit still
+      # pays `install-deps`, which is much the cheaper half.
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          version=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium-webkit
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium webkit
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter ucmc-web exec playwright install-deps chromium webkit
+
+      - name: Apply local D1 migrations
+        run: pnpm --filter ucmc-web db:migrate:local
+
+      # `mobile-overflow` walks every route and fails if anything made the
+      # document wider than the viewport — easy to regress, since each
+      # cause (`-mx-*`, a fixed `w-[Npx]`) is reasonable in isolation and
+      # the symptom is invisible at desktop width. `mobile-waiver-queue`
+      # measures that selecting a member doesn't move the rows under the
+      # officer's finger.
+      - name: Run mobile specs
+        run: pnpm --filter ucmc-web e2e --project=mobile-safari --project=mobile-chrome
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-mobile
           path: apps/ucmc-web/playwright-report/
           retention-days: 7
 
