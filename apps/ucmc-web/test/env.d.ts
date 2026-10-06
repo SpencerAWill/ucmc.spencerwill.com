@@ -11,6 +11,10 @@ declare global {
   namespace Cloudflare {
     interface Env extends WorkerEnv {
       TEST_MIGRATIONS: D1Migration[];
+      // Un-migrated scratch database for migration-upgrade tests; see
+      // `d1Databases` in vitest.workers.config.ts. Nothing in `src/`
+      // may read this binding.
+      MIGRATIONS_DB: D1Database;
     }
   }
 }
