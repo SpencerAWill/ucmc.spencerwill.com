@@ -34,9 +34,10 @@ Prereq: `RESEND_MANAGEMENT_API_KEY` (full-access) as a GitHub env secret on both
 
 `workflow-lint` runs **actionlint** (schema, `${{ }}` expression types, and shellcheck over every `run:` body) and **zizmor** (security shapes: template injection, credential persistence, dangerous triggers, cache poisoning). Both install from pinned release tarballs verified against a SHA-256 in the job's `env:` — **bump the version and the checksum together**, or the job fails on the integrity check.
 
-Two rules the fixes follow, and both bite again the moment someone writes a new step:
+Three rules the fixes follow, and each bites again the moment someone writes a new step:
 
 - **Never interpolate `${{ }}` into a `run:` body.** The expansion is substituted into the shell source _before_ the shell parses it, so the value becomes code, not data. Pass it through `env:` and reference `$VAR`.
+- **A step that curls a deployed URL must send browser headers.** Cloudflare scores a bare `curl/8.x` from a datacenter ASN as a bot and 403s it at the edge, before the Worker is reached. GitHub runners sit on Microsoft ranges, so the request is refused instantly and identically on every retry — it looks like a broken deploy, not like a block, and the same URL serves 200 to any browser and to `curl` from a residential IP. `deploy.yml`'s "Wait for the deployment to answer" shipped without them and 403'd 30/30 on every run it ever had. It now sends the same `User-Agent` / `Accept` / `Accept-Language` the Playwright smoke test does, so the cheap precursor and the real check sit on the same side of the bot score, and dumps the final response headers on failure — `cf-mitigated` names a Cloudflare block and `cf-ray` is what Security Events is searchable by.
 - **`actions/checkout` sets `persist-credentials: false`** everywhere. Nothing here pushes, and the default leaves a usable token in `.git/config` for every later step.
 
 **`deploy.yml` runs `d1 migrations apply` _before_ `wrangler deploy`.** That ordering opens a window where the previous Worker runs against the new schema — see the `rename-permission-or-setting` skill for what that means for renames.

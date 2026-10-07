@@ -244,10 +244,31 @@ jobs:
           # `${{ }}` expansion is substituted into the shell source before
           # the shell parses it, so the value lands as code, not data.
           BASE_URL: ${{ steps.pulumi.outputs.app_base_url }}
+          # **Browser headers are load-bearing, not cosmetic.** Cloudflare
+          # scores a bare `curl/8.x` arriving from a datacenter ASN as a
+          # bot and 403s it at the edge, before the request ever reaches
+          # the Worker. GitHub runners are on Microsoft ranges, so from
+          # the day this gate landed it returned 403 on all 30 attempts
+          # of every run — instantly, not after a wait — while the same
+          # URL served 200 to any browser and to `curl` from a
+          # residential IP. It read as "the deploy is broken" and was
+          # neither a timing problem nor a Worker problem.
+          #
+          # These are what the Playwright smoke test below already sends,
+          # which is the point: the cheap precursor and the real check
+          # should land on the same side of the bot score, or the
+          # precursor fails the job before the real one gets to run.
+          PROBE_UA: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
         run: |
           url="$BASE_URL"
+          headers="$RUNNER_TEMP/deploy-probe-headers.txt"
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url/" || true)
+            code=$(curl -s -o /dev/null -D "$headers" -w '%{http_code}' \
+              --max-time 10 \
+              -A "$PROBE_UA" \
+              -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
+              -H 'Accept-Language: en-US,en;q=0.9' \
+              "$url/" || true)
             if [ "$code" = "200" ]; then
               echo "$url answered 200 after ${i} attempt(s)"
               exit 0
@@ -256,6 +277,16 @@ jobs:
             sleep 5
           done
           echo "::error::$url never returned 200 within ~150s of deploying" >&2
+          # Self-diagnosing on the way out. A Worker that is genuinely
+          # broken and an edge that refused the runner are
+          # indistinguishable from the status code alone, and telling
+          # them apart cost a full investigation once already.
+          # `cf-mitigated` names a Cloudflare block outright, and
+          # `cf-ray` is the key Security Events is searchable by — so a
+          # future failure identifies its own cause in the job log
+          # instead of sending someone back to the dashboard.
+          echo "last response headers:" >&2
+          sed -n '1,40p' "$headers" >&2 || true
           exit 1
 
       # Keyed on the resolved Playwright version, same as the CI jobs, so
@@ -477,10 +508,31 @@ jobs:
           # `${{ }}` expansion is substituted into the shell source before
           # the shell parses it, so the value lands as code, not data.
           BASE_URL: ${{ steps.pulumi.outputs.app_base_url }}
+          # **Browser headers are load-bearing, not cosmetic.** Cloudflare
+          # scores a bare `curl/8.x` arriving from a datacenter ASN as a
+          # bot and 403s it at the edge, before the request ever reaches
+          # the Worker. GitHub runners are on Microsoft ranges, so from
+          # the day this gate landed it returned 403 on all 30 attempts
+          # of every run — instantly, not after a wait — while the same
+          # URL served 200 to any browser and to `curl` from a
+          # residential IP. It read as "the deploy is broken" and was
+          # neither a timing problem nor a Worker problem.
+          #
+          # These are what the Playwright smoke test below already sends,
+          # which is the point: the cheap precursor and the real check
+          # should land on the same side of the bot score, or the
+          # precursor fails the job before the real one gets to run.
+          PROBE_UA: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
         run: |
           url="$BASE_URL"
+          headers="$RUNNER_TEMP/deploy-probe-headers.txt"
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url/" || true)
+            code=$(curl -s -o /dev/null -D "$headers" -w '%{http_code}' \
+              --max-time 10 \
+              -A "$PROBE_UA" \
+              -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
+              -H 'Accept-Language: en-US,en;q=0.9' \
+              "$url/" || true)
             if [ "$code" = "200" ]; then
               echo "$url answered 200 after ${i} attempt(s)"
               exit 0
@@ -489,6 +541,16 @@ jobs:
             sleep 5
           done
           echo "::error::$url never returned 200 within ~150s of deploying" >&2
+          # Self-diagnosing on the way out. A Worker that is genuinely
+          # broken and an edge that refused the runner are
+          # indistinguishable from the status code alone, and telling
+          # them apart cost a full investigation once already.
+          # `cf-mitigated` names a Cloudflare block outright, and
+          # `cf-ray` is the key Security Events is searchable by — so a
+          # future failure identifies its own cause in the job log
+          # instead of sending someone back to the dashboard.
+          echo "last response headers:" >&2
+          sed -n '1,40p' "$headers" >&2 || true
           exit 1
 
       # Keyed on the resolved Playwright version, same as the CI jobs, so
