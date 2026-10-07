@@ -201,10 +201,13 @@ export { resendFromName };
 // deliberately via `pulumi state` if a real rotation is needed.
 const resendOwnerStack = cfg.get("resendOwnerStack");
 
+/** Stand-in for a Resend id on a stack that borrows rather than owns. */
+const BORROWED_FROM_OWNER = "borrowed-from-owner-stack";
+
 let resendApiKeyOutput: pulumi.Output<string>;
 let resendFromEmailOutput: pulumi.Output<string>;
-let resendDomainIdOutput: pulumi.Output<string> | undefined;
-let resendApiKeyIdOutput: pulumi.Output<string> | undefined;
+let resendDomainIdOutput: pulumi.Output<string>;
+let resendApiKeyIdOutput: pulumi.Output<string>;
 
 if (resendOwnerStack) {
   const ownerRef = new pulumi.StackReference(
@@ -216,6 +219,14 @@ if (resendOwnerStack) {
   resendFromEmailOutput = ownerRef.requireOutput(
     "resendFromEmail",
   ) as pulumi.Output<string>;
+  // A borrowing stack owns no Resend resources, so it has no ids to
+  // report. These were left `undefined`, which made every `pulumi up`
+  // on dev emit two `Undefined value (resendDomainId) will not show as
+  // a stack output` warnings. Nothing consumes either output — they
+  // are a record of what the owning stack provisioned — so the fix is
+  // to say so rather than to say nothing.
+  resendDomainIdOutput = pulumi.output(BORROWED_FROM_OWNER);
+  resendApiKeyIdOutput = pulumi.output(BORROWED_FROM_OWNER);
 } else {
   const resend = new ResendDomain(
     `ucmc-web-${stack}-resend`,

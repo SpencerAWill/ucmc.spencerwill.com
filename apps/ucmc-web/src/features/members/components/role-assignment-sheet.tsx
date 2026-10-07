@@ -184,8 +184,8 @@ export function RoleAssignmentSheet({
       {/* System admin confirmation */}
       <AlertDialog
         open={sysAdminConfirm !== null}
-        onOpenChange={(open) => {
-          if (!open) {
+        onOpenChange={(confirmOpen) => {
+          if (!confirmOpen) {
             setSysAdminConfirm(null);
           }
         }}

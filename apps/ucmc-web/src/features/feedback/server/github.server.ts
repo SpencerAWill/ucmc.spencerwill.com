@@ -18,6 +18,7 @@
  */
 import { env } from "#/server/cloudflare-env";
 import type { FeedbackKind } from "#/features/feedback/server/limits";
+import { errorMessage, log } from "#/server/log/log.server";
 import { redactString } from "#/server/log/redact.server";
 
 const MAX_LOGGED_ERROR_BODY = 500;
@@ -67,9 +68,10 @@ export async function mirrorToGithub(input: {
         raw.length > MAX_LOGGED_ERROR_BODY
           ? `${raw.slice(0, MAX_LOGGED_ERROR_BODY)}…`
           : raw;
-      console.error(
-        `[feedback] GitHub mirror returned ${res.status}: ${redactString(truncated)}`,
-      );
+      log.error("feedback.github_mirror_rejected", {
+        status: res.status,
+        body: redactString(truncated),
+      });
       return null;
     }
     const json: unknown = await res.json();
@@ -85,9 +87,7 @@ export async function mirrorToGithub(input: {
     }
     return { number: json.number, url: json.html_url };
   } catch (err) {
-    console.error(
-      `[feedback] GitHub mirror threw: ${redactString(String(err))}`,
-    );
+    log.error("feedback.github_mirror_threw", { error: errorMessage(err) });
     return null;
   }
 }

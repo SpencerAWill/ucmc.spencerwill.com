@@ -23,7 +23,7 @@ import {
 } from "#/features/feedback/server/repo.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { redactString } from "#/server/log/redact.server";
+import { errorMessage, log } from "#/server/log/log.server";
 import { checkFeedbackRateLimit } from "#/server/rate-limit.server";
 import { readSetting } from "#/server/settings/settings-repo.server";
 
@@ -192,9 +192,7 @@ export async function submitFeedbackAction(
       await setGithubIssue(id, result.number, result.url);
     }
   } catch (err) {
-    console.error(
-      `[feedback] mirror/setGithubIssue failed: ${redactString(String(err))}`,
-    );
+    log.error("feedback.mirror_failed", { error: errorMessage(err) });
   }
 
   return { id };

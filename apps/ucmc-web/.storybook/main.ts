@@ -13,11 +13,11 @@ const config: StorybookConfig = {
     // Strings prefixed with `.` match subdomains (Vite's allowedHosts syntax).
     allowedHosts: ["localhost", "127.0.0.1", ".github.dev", ".app.github.dev"],
   },
-  async viteFinal(config) {
+  async viteFinal(viteConfig) {
     const { default: tailwindcss } = await import("@tailwindcss/vite");
-    config.plugins = config.plugins || [];
-    config.plugins.push(tailwindcss());
-    return config;
+    viteConfig.plugins = viteConfig.plugins || [];
+    viteConfig.plugins.push(tailwindcss());
+    return viteConfig;
   },
 };
 export default config;
