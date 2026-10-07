@@ -1,0 +1,49 @@
+# zizmor — static analysis for GitHub Actions workflows.
+# https://docs.zizmor.sh
+#
+# Run in CI by the `workflow-lint` job in ci.yml, and locally with
+# `zizmor .github/workflows/`.
+#
+# Everything zizmor reported was either FIXED or is ignored below with a
+# reason. Nothing is silenced merely because it was noisy — the whole
+# point of adding the tool is the findings. Fixed in the same change:
+# every `actions/checkout` now sets `persist-credentials: false`
+# (artipacked), and every `${{ }}` expansion has been moved out of `run:`
+# bodies into `env:` blocks (template-injection), because an expansion is
+# substituted into the shell source before the shell parses it — the
+# value lands as code rather than data.
+rules:
+  # `lint-pr.yaml` uses `pull_request_target`, which zizmor correctly
+  # calls fundamentally dangerous: it runs with the base repository's
+  # token on a pull request whose contents an outsider controls.
+  #
+  # It is required here and defanged. `amannn/action-semantic-pull-request`
+  # reads the PR *title* through the API, which needs a token a fork's
+  # `pull_request` run does not get. The job never checks out the PR, runs
+  # no code from it, and holds `pull-requests: read` and nothing else — so
+  # there is no attacker-controlled code to execute and no write to
+  # misuse. The danger in this trigger is the combination with a checkout
+  # of untrusted code; that combination does not exist here.
+  #
+  # If this job ever gains a `checkout`, remove this entry and rethink it.
+  dangerous-triggers:
+    ignore:
+      - lint-pr.yaml
+
+  # `setup-node` with `cache: pnpm` in workflows that deploy. The concern
+  # is real in general: a poisoned dependency cache would be restored into
+  # a build whose output ships to production.
+  #
+  # It does not reach these workflows, because GitHub's cache scoping is
+  # the control. A cache written on a feature branch is readable only from
+  # that branch and its descendants; `main` cannot read it. Every job
+  # listed here runs on `main` or via `workflow_dispatch`, so it restores
+  # only caches that a `main` run wrote — i.e. caches produced by the same
+  # trusted code path as the deploy itself.
+  #
+  # Dropping `cache: pnpm` from these jobs would cost roughly a minute per
+  # deploy job to defend against a path that scoping already closes.
+  cache-poisoning:
+    ignore:
+      - deploy.yml
+      - seed-admin.yml

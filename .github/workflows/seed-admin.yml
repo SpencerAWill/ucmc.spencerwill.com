@@ -55,27 +55,36 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
-      - uses: pulumi/setup-pulumi@v2
+      - uses: pulumi/setup-pulumi@b374ceb6168550de27c6eba92e01c1a774040e11 # v2.0.0
 
       - name: Fetch D1 UUID from Pulumi
         id: pulumi
         working-directory: infra
         run: |
-          pulumi stack select ${{ github.event.inputs.environment }}
+          pulumi stack select "$TARGET_ENV"
           echo "database_id=$(pulumi stack output d1DatabaseId)" >> "$GITHUB_OUTPUT"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          # Through `env`, not interpolated into the script. A `${{ }}`
+          # expansion is substituted into the shell source *before* the
+          # shell parses it, so the value becomes code rather than data.
+          # This input is a constrained `choice`, which makes it hard to
+          # abuse rather than safe — and the same file already passes
+          # `EMAIL` this way, so the pattern was established.
+          TARGET_ENV: ${{ github.event.inputs.environment }}
 
       # wrangler looks up D1 databases by NAME from wrangler.jsonc, not by
       # UUID. Same mechanism web-deploy.yml uses: sed-inject the real
@@ -84,8 +93,10 @@ jobs:
       # placeholders so the replacement only touches its own entry.
       - name: Resolve deploy-time parameters
         id: env
+        env:
+          TARGET_ENV: ${{ github.event.inputs.environment }}
         run: |
-          case "${{ github.event.inputs.environment }}" in
+          case "$TARGET_ENV" in
             dev)
               echo "db_name=ucmc-web-dev" >> "$GITHUB_OUTPUT"
               echo "placeholder=00000000-0000-0000-0000-000000000000" >> "$GITHUB_OUTPUT"
@@ -102,7 +113,10 @@ jobs:
           esac
 
       - name: Inject D1 UUID into wrangler.jsonc
-        run: sed -i "s/${{ steps.env.outputs.placeholder }}/${{ steps.pulumi.outputs.database_id }}/" apps/ucmc-web/wrangler.jsonc
+        env:
+          PLACEHOLDER: ${{ steps.env.outputs.placeholder }}
+          DATABASE_ID: ${{ steps.pulumi.outputs.database_id }}
+        run: sed -i "s/$PLACEHOLDER/$DATABASE_ID/" apps/ucmc-web/wrangler.jsonc
 
       # Generate the seed SQL in /tmp with shell-level escaping (double
       # any embedded single quotes — the stricter regex above means this
@@ -112,7 +126,15 @@ jobs:
           EMAIL: ${{ github.event.inputs.email }}
         run: |
           EMAIL_NORM="$(echo "$EMAIL" | tr '[:upper:]' '[:lower:]' | xargs)"
-          EMAIL_SQL="$(echo "$EMAIL_NORM" | sed "s/'/''/g")"
+          # SQL-escape by doubling single quotes. The quote is held in a
+          # variable because `\'` inside the replacement of a
+          # double-quoted `${var//…}` is a literal backslash-quote, not an
+          # escaped quote — that spelling silently produced
+          # `o\'\'brien@uc.edu`. Verified to match the `sed "s/'/''/g"`
+          # this replaced, which shellcheck SC2001 flagged as a needless
+          # subprocess.
+          SQ="'"
+          EMAIL_SQL="${EMAIL_NORM//$SQ/$SQ$SQ}"
           USER_ID="user_$(uuidgen | tr '[:upper:]' '[:lower:]')"
           USER_EMAIL_ID="uem_$(uuidgen | tr '[:upper:]' '[:lower:]')"
           PUBLIC_ID="$(LC_ALL=C tr -dc '0-9a-z' </dev/urandom | head -c 12)"
@@ -146,7 +168,7 @@ jobs:
           cat /tmp/seed-admin.sql
 
       - name: Apply seed SQL to remote D1
-        uses: cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -168,7 +190,7 @@ jobs:
           SQL
 
       - name: Verify promotion
-        uses: cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
