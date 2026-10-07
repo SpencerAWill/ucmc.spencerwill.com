@@ -61,27 +61,39 @@ for (const path of PUBLIC_ROUTES) {
   });
 }
 
-test("smoke: /health reports every binding passing", async ({ page }) => {
-  await page.goto("/health");
-  await waitForHydration(page);
+// Tagged `@deployed` because it can only be answered by a real
+// deployment. The build-mode run in CI (`E2E_PREVIEW=1`, below) excludes
+// it: against `vite preview` the worker's outbound fetch to a
+// loopback Mailpit does not arrive, where the dev server's does —
+// verified both ways — so the email probe reports `fail` for a reason
+// that says nothing about the build. The infrastructure probes are also
+// Miniflare there, so a `pass` would be about Miniflare rather than
+// about D1, R2 and KV.
+test(
+  "smoke: /health reports every binding passing",
+  { tag: "@deployed" },
+  async ({ page }) => {
+    await page.goto("/health");
+    await waitForHydration(page);
 
-  // The <h1> is driven by `report.status`, which health.server.ts sets to
-  // "pass" only when every individual probe passed — so this single
-  // assertion covers d1:read, r2:head, kv and the email provider. Pinning
-  // the heading rather than adding a `data-testid` keeps the smoke test
-  // from reaching into production markup to make itself easier to write.
-  const heading = page.getByRole("heading", { level: 1 });
+    // The <h1> is driven by `report.status`, which health.server.ts sets to
+    // "pass" only when every individual probe passed — so this single
+    // assertion covers d1:read, r2:head, kv and the email provider. Pinning
+    // the heading rather than adding a `data-testid` keeps the smoke test
+    // from reaching into production markup to make itself easier to write.
+    const heading = page.getByRole("heading", { level: 1 });
 
-  // /health returns 200 whether the probes pass or fail — the verdict is
-  // in the body, which is exactly why curling it proves nothing. Read the
-  // per-probe rows first so a red deploy names the broken binding instead
-  // of only reporting that the heading was wrong.
-  const probes = (await page.locator("section ul > li").allInnerTexts()).join(
-    "\n",
-  );
+    // /health returns 200 whether the probes pass or fail — the verdict is
+    // in the body, which is exactly why curling it proves nothing. Read the
+    // per-probe rows first so a red deploy names the broken binding instead
+    // of only reporting that the heading was wrong.
+    const probes = (await page.locator("section ul > li").allInnerTexts()).join(
+      "\n",
+    );
 
-  await expect(
-    heading,
-    `deployed worker reported unhealthy. Probes:\n${probes}`,
-  ).toHaveText("All systems operational");
-});
+    await expect(
+      heading,
+      `deployed worker reported unhealthy. Probes:\n${probes}`,
+    ).toHaveText("All systems operational");
+  },
+);

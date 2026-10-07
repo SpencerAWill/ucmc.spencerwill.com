@@ -7,7 +7,26 @@ import { defineConfig, devices } from "@playwright/test";
 // against a remote target would waste two minutes and then test the
 // wrong thing.
 const EXTERNAL_BASE_URL = process.env.PLAYWRIGHT_BASE_URL;
-const BASE_URL = EXTERNAL_BASE_URL ?? "http://localhost:3000";
+
+/**
+ * Run against the PRODUCTION BUILD instead of the dev server.
+ *
+ * `vite dev` and `vite build` do not produce the same worker, and a
+ * whole class of defect exists only in the second: the client-bundle
+ * `cloudflare:workers` stub, SSR bundling, chunk splitting, an asset
+ * manifest that doesn't match what was emitted. Dev transforms modules
+ * on demand and papers over all of it, so a suite that only ever drives
+ * `pnpm dev` cannot see any of it until a deploy does.
+ *
+ * `vite preview` serves `dist/` through workerd via
+ * @cloudflare/vite-plugin — the same artifact `wrangler deploy` ships,
+ * reading the `dist/server/wrangler.json` the build snapshotted.
+ */
+const PREVIEW = process.env.E2E_PREVIEW === "1";
+
+const BASE_URL =
+  EXTERNAL_BASE_URL ??
+  (PREVIEW ? "http://localhost:4173" : "http://localhost:3000");
 
 // Mailpit sidecar from .devcontainer/docker-compose.yml. Tests poll it for
 // magic-link tokens during the sign-in flow; the dev server is configured
@@ -105,12 +124,20 @@ export default defineConfig({
   webServer: EXTERNAL_BASE_URL
     ? undefined
     : {
-        command: "pnpm run dev",
+        // The build is part of the command rather than a prior CI step
+        // so Playwright owns readiness and teardown for both modes, and
+        // so `E2E_PREVIEW=1 pnpm e2e --project=smoke` works locally with
+        // no setup. The env block below is applied to the BUILD too,
+        // which is what bakes the empty Turnstile key into the bundle.
+        command: PREVIEW
+          ? "pnpm run build && pnpm run preview"
+          : "pnpm run dev",
+        // A cold build is minutes, not seconds.
+        timeout: PREVIEW ? 300_000 : 120_000,
         url: BASE_URL,
         reuseExistingServer: !process.env.CI,
         stdout: "pipe",
         stderr: "pipe",
-        timeout: 120_000,
         env: {
           MAILPIT_URL,
           // Disable Turnstile in e2e — the widget polls Cloudflare's CDN

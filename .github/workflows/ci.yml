@@ -294,6 +294,30 @@ jobs:
       - name: Run E2E specs
         run: pnpm --filter ucmc-web e2e --project=chromium
 
+      # The suite above drives `vite dev`, which is NOT the worker that
+      # ships. `vite build` splits chunks, stubs `cloudflare:workers` out
+      # of the client bundle, bundles for SSR and writes an asset
+      # manifest; dev transforms modules on demand and papers over all of
+      # it. A bundle that throws on hydration, or a chunk that 404s
+      # against a stale manifest, is invisible until a deploy.
+      #
+      # `E2E_PREVIEW=1` points the Playwright webServer at
+      # `pnpm build && pnpm preview`, which serves `dist/` through
+      # workerd — the same artifact `wrangler deploy` ships.
+      #
+      # `@deployed` is excluded: that tag marks the `/health` assertion,
+      # which needs a real deployment. Against `vite preview` the
+      # worker's outbound fetch to a loopback Mailpit does not arrive
+      # (the dev server's does — verified both ways), so the email probe
+      # would fail for a reason that says nothing about the build, and
+      # D1/R2/KV there are Miniflare rather than the real bindings.
+      # `deploy.yml` runs the full smoke, tag included, after each
+      # deploy.
+      - name: Smoke-test the production build
+        env:
+          E2E_PREVIEW: "1"
+        run: pnpm --filter ucmc-web e2e --project=smoke --grep-invert "@deployed"
+
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
