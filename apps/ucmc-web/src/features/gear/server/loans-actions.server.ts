@@ -48,6 +48,10 @@ import {
 import { gearCaveStanding } from "#/server/gear/gear-cave-standing.server";
 import type { GearCaveStanding } from "#/server/gear/gear-cave-standing.server";
 import type {
+  LoanSortDirection,
+  LoanSortKey,
+} from "#/features/gear/lib/loan-sort";
+import type {
   GearCodeSearchRow,
   LoanListRow,
   ListLoansOptions,
@@ -588,7 +592,8 @@ export interface ListLoansActionInput {
   memberPublicId?: string;
   q?: string;
   overdueOnly?: boolean;
-  sort?: "due_at" | "checked_out_at";
+  sort?: LoanSortKey;
+  dir?: LoanSortDirection;
   page?: number;
   perPage?: number;
 }
@@ -609,6 +614,7 @@ export async function listLoansAction(
     q: input.q,
     overdueOnly: input.overdueOnly,
     sort: input.sort,
+    dir: input.dir,
     page: input.page,
     perPage: input.perPage,
   };

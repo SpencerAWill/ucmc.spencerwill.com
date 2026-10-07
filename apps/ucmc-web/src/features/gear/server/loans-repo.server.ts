@@ -20,6 +20,11 @@
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { getDb, likeContains, schema } from "#/server/db";
+import { DEFAULT_LOAN_SORT_DIRECTION } from "#/features/gear/lib/loan-sort";
+import type {
+  LoanSortDirection,
+  LoanSortKey,
+} from "#/features/gear/lib/loan-sort";
 import { gearItemName } from "#/features/gear/lib/labels";
 
 // ── shared row shapes ──────────────────────────────────────────────────
@@ -306,7 +311,8 @@ export interface ListLoansFilters {
 }
 
 export interface ListLoansOptions extends ListLoansFilters {
-  sort?: "due_at" | "checked_out_at";
+  sort?: LoanSortKey;
+  dir?: LoanSortDirection;
   page?: number;
   perPage?: number;
 }
@@ -359,10 +365,10 @@ export async function listLoans(
   const where = clauses.length === 0 ? undefined : and(...clauses);
   const sort =
     options.sort ?? (options.tab === "history" ? "checked_out_at" : "due_at");
-  const orderBy =
-    sort === "due_at"
-      ? [asc(schema.gearLoans.dueAt)]
-      : [desc(schema.gearLoans.checkedOutAt)];
+  const dir = options.dir ?? DEFAULT_LOAN_SORT_DIRECTION[sort];
+  const sortColumn =
+    sort === "due_at" ? schema.gearLoans.dueAt : schema.gearLoans.checkedOutAt;
+  const orderBy = [dir === "asc" ? asc(sortColumn) : desc(sortColumn)];
   const rows = await db
     .select(LOAN_COLUMNS)
     .from(schema.gearLoans)

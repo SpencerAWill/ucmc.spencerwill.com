@@ -207,6 +207,14 @@ Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`
 
 **The audit action list exists twice** — `auditAction` in `drizzle/schema.ts` (the column enum) and `AUDIT_ACTIONS` in `features/audit/server/audit-fns.ts` (the filter dropdown). Nothing keeps them in sync; add to both.
 
+### The loans list toolbar
+
+`/gear/loans` uses the shared `<DataToolbar />` like `/gear` and `/members`; the bespoke two-row `LoanFilterBar` is gone. Three loans-specific decisions:
+
+- **The Active/History tabs sit above the toolbar, not in it.** They pick which dataset is on screen; every toolbar slot narrows the one already picked. The connected group's value is that its controls are in the same place on every list page.
+- **Sorting carries a direction**, and the per-key default is in `lib/loan-sort.ts` (`due_at` → `asc`, so most-overdue-first; `checked_out_at` → `desc`). The contract lives in `lib/` rather than beside `listLoans` because the repo applies it, the route puts it in the URL and the toolbar offers it — and two of those three are client code. The route omits `dir` from the URL whenever it matches the default, so a shared link carries only what the sender actually changed.
+- **The "Overdue only" chip is suppressed on the History tab**, where its checkbox is hidden — otherwise a tab switch strands a chip with no control behind it and a filter count nobody can clear.
+
 ### Barcode scanning is hand-rolled
 
 Native `BarcodeDetector` on Chrome / Edge / Android Chrome (zero deps, zero WASM), with a `barcode-detector/ponyfill` fallback for Firefox and Safari, neither of which has shipped the Barcode Detection API. The component feature-tests rather than sniffing, so that list is orientation only. Format whitelist is `["code_128", "qr_code"]`. CSP needs `script-src 'wasm-unsafe-eval'`; `Permissions-Policy: camera=(self)` is scoped to `/gear/loans*` only (`server/headers.server.ts` `securityHeadersForPath`).

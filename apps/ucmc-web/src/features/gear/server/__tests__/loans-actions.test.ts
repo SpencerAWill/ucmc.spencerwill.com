@@ -829,3 +829,56 @@ describe("getMemberForLoanAction", () => {
     expect(found).toBeNull();
   });
 });
+
+// ── sort direction ─────────────────────────────────────────────────────
+
+describe("listLoansAction sort direction", () => {
+  it("defaults due_at to soonest-first and honours an explicit flip", async () => {
+    await signInAsLoanManager();
+    const member = await seedUser(
+      `borrower-${crypto.randomUUID()}@example.com`,
+      "Borrower One",
+    );
+    const typeId = await createTypeOk();
+    const dueSoon = await createGearOk({ typePublicId: typeId, code: "CH1" });
+    const dueLater = await createGearOk({ typePublicId: typeId, code: "CH2" });
+
+    const checkout = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [
+        { gearPublicId: dueSoon, durationDays: 1 },
+        { gearPublicId: dueLater, durationDays: 30 },
+      ],
+      notes: null,
+    });
+    const loanFor = new Map(
+      checkout.results.flatMap((r) =>
+        r.ok ? [[r.gearPublicId, r.loanPublicId] as const] : [],
+      ),
+    );
+    const soonLoan = loanFor.get(dueSoon);
+    const laterLoan = loanFor.get(dueLater);
+    expect(soonLoan).toBeDefined();
+    expect(laterLoan).toBeDefined();
+
+    const order = async (input: Parameters<typeof listLoansAction>[0]) =>
+      (await listLoansAction(input)).rows.map((r) => r.publicId);
+
+    // Omitting `dir` has to keep the pre-direction behaviour: due date
+    // ascending, so the most overdue loan is the first thing an officer
+    // sees. A uniform `asc`/`desc` default would have silently reversed
+    // one of the two keys.
+    expect(await order({ tab: "active" })).toEqual([soonLoan, laterLoan]);
+    expect(await order({ tab: "active", sort: "due_at" })).toEqual([
+      soonLoan,
+      laterLoan,
+    ]);
+    expect(await order({ tab: "active", sort: "due_at", dir: "asc" })).toEqual([
+      soonLoan,
+      laterLoan,
+    ]);
+    expect(await order({ tab: "active", sort: "due_at", dir: "desc" })).toEqual(
+      [laterLoan, soonLoan],
+    );
+  });
+});

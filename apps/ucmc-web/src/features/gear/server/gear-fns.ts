@@ -634,6 +634,7 @@ const listLoansInputSchema = z.object({
   q: z.string().max(200).optional(),
   overdueOnly: z.boolean().optional(),
   sort: z.enum(["due_at", "checked_out_at"]).optional(),
+  dir: z.enum(["asc", "desc"]).optional(),
   page: z.number().int().min(1).optional(),
   perPage: z.number().int().min(1).max(250).optional(),
 });
