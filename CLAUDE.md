@@ -15,7 +15,7 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 ## Commands
 
 - `pnpm install` · `pnpm commit` · `pnpm exec eslint .` · `pnpm exec prettier --write .`
-- `pnpm --filter ucmc-web {dev,build,test,test:coverage,typecheck,lint,knip,storybook,e2e,e2e:ui}`
+- `pnpm --filter ucmc-web {dev,build,test,test:coverage,test:mutation,typecheck,lint,knip,storybook,e2e,e2e:ui}`
 - `pnpm --filter ucmc-web {deploy:dev,deploy:prod}`
 - `pnpm --filter ucmc-web {db:migrate:local,db:seed:local}` — remote sysadmin seeding is the `seed-admin.yml` GitHub Action, not a script
 

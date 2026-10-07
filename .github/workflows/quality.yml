@@ -58,3 +58,47 @@ jobs:
           name: coverage-html
           path: apps/ucmc-web/coverage/
           retention-days: 30
+
+  mutation:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    # Re-runs the test suite once per mutant. Scoped to three pure
+    # modules it takes seconds; it is here rather than in ci.yml because
+    # that property stops holding the moment the scope widens, and
+    # because nothing is blocked on the answer.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Runs against `vitest.mutation.config.ts`, a plain-Node project
+      # that exists only for this: the `workers` pool boots workerd and
+      # applies 71 migrations per file, which is unaffordable once per
+      # mutant, and its compatibility with Stryker is unverified
+      # upstream. Only pure modules can be mutated there — see that
+      # config for why.
+      #
+      # `thresholds.break` is null: this reports, it does not gate. The
+      # score was 100% (76/76) when it landed.
+      - name: Run Stryker
+        run: pnpm --filter ucmc-web test:mutation
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-html
+          path: apps/ucmc-web/reports/mutation/
+          retention-days: 30

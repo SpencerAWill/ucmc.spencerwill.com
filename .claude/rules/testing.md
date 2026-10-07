@@ -60,6 +60,21 @@ Two layers, because they catch different things:
 
 **Only the waivers feature has exact-key tests so far.** The remaining features are mechanical to add and are not yet done; the structural layer covers them in the meantime.
 
+## Mutation testing
+
+`pnpm --filter ucmc-web test:mutation` (Stryker), and a weekly job in `quality.yml`. **A report, not a gate** — `thresholds.break` is `null`. Score when it landed: 100%, 76/76 mutants killed, in about 5 seconds.
+
+It runs against **`vitest.mutation.config.ts`, a plain-Node project that exists only for this** and is deliberately absent from `vitest.config.ts`'s `projects` (the files are already covered by the `workers` project; listing it would run them twice per `pnpm test`). The `workers` pool boots workerd and applies all 71 migrations per file, which is unaffordable once per mutant, and `@cloudflare/vitest-pool-workers` compatibility with Stryker is unverified upstream.
+
+**Only pure modules can be mutated.** Anything importing `cloudflare:workers`, directly or transitively through `#/server/db`, cannot resolve in that project. That constraint — not a judgement about importance — is what picks the list in `stryker.config.json`.
+
+Two configuration details that each cost a failed run:
+
+- **`plugins: ["@stryker-mutator/vitest-runner"]` is required.** pnpm's strict `node_modules` defeats Stryker's plugin auto-discovery, which fails with "no TestRunner plugins were loaded".
+- **`vitest.related` must be `false`.** It maps a mutated source file back to its tests through vitest's module graph, which does not resolve the `#/*` alias — so it finds nothing and Stryker exits with "No tests were executed".
+
+**It found four real gaps on its first run**, all since closed, and they are the argument for keeping it: dropping either anchor from `STRICT_EMAIL_PATTERN` survived the whole suite, and without the trailing `$`, `redactEmail("alice@example.com SECRET")` logs `a***@example.com SECRET` — the exact disclosure that helper exists to prevent. Also surviving: `https?` → `https` in `URL_PATTERN` (plain-http tokens unredacted), and collapsing `month === CUTOFF.month` to `true` in the waiver cutoff, which misdates any early-in-the-month day after August by a whole club year.
+
 ## Property-based tests (`*.property.test.ts`)
 
 `fast-check`, in the workers pool, for pure modules whose claim is _universally quantified_: `sanitize-filename`, `redact.server.ts`, the Temporal serialization adapters. A security claim like "no input leaks a secret-shaped value" can't be settled by a fixture list, because the list contains the inputs someone already handled.

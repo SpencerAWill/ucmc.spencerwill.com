@@ -129,6 +129,7 @@ pnpm --filter ucmc-web dev          # start the dev server on http://localhost:3
 pnpm --filter ucmc-web build        # production build
 pnpm --filter ucmc-web test         # run Vitest unit tests (both pools)
 pnpm --filter ucmc-web test:coverage     # same, with an Istanbul coverage report
+pnpm --filter ucmc-web test:mutation     # Stryker mutation testing (pure modules only)
 pnpm --filter ucmc-web typecheck    # tsc --noEmit
 pnpm --filter ucmc-web knip         # unused files, exports and dependencies
 pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006
