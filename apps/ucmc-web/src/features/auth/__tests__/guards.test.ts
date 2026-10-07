@@ -71,6 +71,25 @@ async function capture<T>(
   }
 }
 
+/**
+ * The value a captured guard threw, or a sentinel when it didn't throw.
+ *
+ * Exists so the throw-shape assertions below can be unconditional. The
+ * obvious spelling — `expect(result.ok).toBe(false)` then `if
+ * (!result.ok) { expect(isRedirect(result.thrown)) }` — needs the `if`
+ * only to narrow the union for TypeScript, but an assertion inside a
+ * branch is one that does nothing when the branch isn't taken, and
+ * `vitest/no-conditional-expect` cannot tell the two apart. Returning a
+ * sentinel keeps the narrowing here and lets `isRedirect(…)` /
+ * `isNotFound(…)` simply be false when the guard wrongly allowed the
+ * call through.
+ */
+function thrownBy(
+  result: { ok: true; value: unknown } | { ok: false; thrown: unknown },
+): unknown {
+  return result.ok ? "guard did not throw" : result.thrown;
+}
+
 describe("requireApproved", () => {
   it("returns the principal when status=approved + hasProfile", async () => {
     const client = clientWithPrincipal(makePrincipal());
@@ -231,9 +250,7 @@ describe("role preview ('View as')", () => {
       requirePermission(client, "settings:manage"),
     );
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(isRedirect(result.thrown)).toBe(true);
-    }
+    expect(isRedirect(thrownBy(result))).toBe(true);
   });
 
   it("404s a previewed role on a notFound-style route", async () => {
@@ -242,9 +259,7 @@ describe("role preview ('View as')", () => {
       requirePermissionOrNotFound(client, "members:manage"),
     );
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(isNotFound(result.thrown)).toBe(true);
-    }
+    expect(isNotFound(thrownBy(result))).toBe(true);
   });
 
   it("still allows what the previewed role does hold", async () => {
@@ -278,9 +293,7 @@ describe("role preview ('View as')", () => {
       requirePermission(client, "settings:manage"),
     );
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(isRedirect(result.thrown)).toBe(true);
-    }
+    expect(isRedirect(thrownBy(result))).toBe(true);
   });
 });
 

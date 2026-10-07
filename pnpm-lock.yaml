@@ -318,6 +318,9 @@ importers:
       '@vitest/coverage-istanbul':
         specifier: ^4.1.11
         version: 4.1.11(vitest@4.1.11)
+      '@vitest/eslint-plugin':
+        specifier: ^1.6.27
+        version: 1.6.27(@typescript-eslint/eslint-plugin@8.62.0(@typescript-eslint/parser@8.62.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)(vitest@4.1.11)
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
@@ -330,6 +333,9 @@ importers:
       eslint-plugin-jsx-a11y:
         specifier: ^6.10.2
         version: 6.10.2(eslint@10.5.0(jiti@2.7.0))
+      eslint-plugin-playwright:
+        specifier: ^2.12.0
+        version: 2.12.0(eslint@10.5.0(jiti@2.7.0))
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -4025,6 +4031,22 @@ packages:
     peerDependencies:
       vitest: 4.1.11
 
+  '@vitest/eslint-plugin@1.6.27':
+    resolution: {integrity: sha512-X1RCAfwbatG4GFbJ/1PIHP9MSZMt0JJThqbYID+vS4L783k6QGlLPe421wQE8dHXuGCcenVLsydiM4qzsYWxhg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@typescript-eslint/eslint-plugin': '*'
+      eslint: '>=8.57.0'
+      typescript: '>=5.0.0'
+      vitest: '*'
+    peerDependenciesMeta:
+      '@typescript-eslint/eslint-plugin':
+        optional: true
+      typescript:
+        optional: true
+      vitest:
+        optional: true
+
   '@vitest/expect@3.2.4':
     resolution: {integrity: sha512-Io0yyORnB6sikFlt8QW5K7slY4OjqNX9jmJQ02QDda8lyM6B5oNgVWoSoKPac8/kgnCUzuHQKrSLtu/uOqqrig==}
 
@@ -4882,6 +4904,12 @@ packages:
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
       eslint: '>=8.23.0'
+
+  eslint-plugin-playwright@2.12.0:
+    resolution: {integrity: sha512-7HpSKR/D2oCH4RKRauFskcrnDrHvLQKopW7Nen8lqrFZtx/SB+FgqVaH+zyQd32noZSZy9Lrsa+DsYrVUpn6hg==}
+    engines: {node: '>=16.9.0'}
+    peerDependencies:
+      eslint: '>=8.40.0'
 
   eslint-scope@9.1.2:
     resolution: {integrity: sha512-xS90H51cKw0jltxmvmHy2Iai1LIqrfbw57b79w/J7MfvDfkIkFZ+kj6zC3BjtUwh150HsSSdxXZcsuv72miDFQ==}
@@ -11084,6 +11112,18 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@vitest/eslint-plugin@1.6.27(@typescript-eslint/eslint-plugin@8.62.0(@typescript-eslint/parser@8.62.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)(vitest@4.1.11)':
+    dependencies:
+      '@typescript-eslint/scope-manager': 8.62.0
+      '@typescript-eslint/utils': 8.62.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint: 10.5.0(jiti@2.7.0)
+    optionalDependencies:
+      '@typescript-eslint/eslint-plugin': 8.62.0(@typescript-eslint/parser@8.62.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      typescript: 6.0.3
+      vitest: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.0.0)(@vitest/coverage-istanbul@4.1.11)(jsdom@29.1.1)(vite@8.1.0(@types/node@26.0.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+    transitivePeerDependencies:
+      - supports-color
+
   '@vitest/expect@3.2.4':
     dependencies:
       '@types/chai': 5.2.3
@@ -11944,6 +11984,11 @@ snapshots:
       ts-declaration-location: 1.0.7(typescript@6.0.3)
     transitivePeerDependencies:
       - typescript
+
+  eslint-plugin-playwright@2.12.0(eslint@10.5.0(jiti@2.7.0)):
+    dependencies:
+      eslint: 10.5.0(jiti@2.7.0)
+      globals: 17.7.0
 
   eslint-scope@9.1.2:
     dependencies:

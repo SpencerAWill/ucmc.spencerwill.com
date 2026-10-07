@@ -479,8 +479,17 @@ describe("revokeUserSessionsAction", () => {
     await signInAsAdmin();
     const targetId = await seedUser("target@example.com");
 
-    // Should not throw.
-    await revokeUserSessionsAction(targetId);
+    // "Should not throw" has to be asserted, not merely performed: with
+    // a bare call the test passes identically whether the action
+    // resolved, and says nothing about the state it left behind.
+    await expect(revokeUserSessionsAction(targetId)).resolves.not.toThrow();
+
+    const db = getDb();
+    const after = await db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.userId, targetId));
+    expect(after).toHaveLength(0);
   });
 });
 

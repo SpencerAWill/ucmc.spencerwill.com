@@ -145,23 +145,25 @@ describe.each(declaredTables)("$config.name", ({ config }) => {
       // optional produces a runtime constraint failure on a code path
       // that typechecks.
       const knownDrift = KNOWN_NULLABILITY_DRIFT[`${tableName}.${column.name}`];
-      if (knownDrift) {
-        expect(
-          live.notnull === 1,
-          `"${tableName}"."${column.name}" is recorded as known drift ` +
-            `(${knownDrift}) but now MATCHES schema.ts — the migration ` +
-            `landed, so delete its entry from KNOWN_NULLABILITY_DRIFT ` +
-            `rather than leaving this column unguarded`,
-        ).not.toBe(column.notNull);
-        continue;
-      }
+
+      // Expressed as "what should the database say", then asserted once.
+      // Branching around two different `expect` calls would make the
+      // assertion conditional, and an assertion inside a branch is one
+      // that silently does nothing when the branch isn't taken —
+      // `vitest/no-conditional-expect` is right to refuse it.
+      const expectedNotNull = knownDrift ? !column.notNull : column.notNull;
 
       expect(
         live.notnull === 1,
-        `"${tableName}"."${column.name}": database says ` +
-          `${live.notnull === 1 ? "NOT NULL" : "nullable"}, ` +
-          `schema.ts says ${column.notNull ? "NOT NULL" : "nullable"}`,
-      ).toBe(column.notNull);
+        knownDrift
+          ? `"${tableName}"."${column.name}" is recorded as known drift ` +
+              `(${knownDrift}) but now MATCHES schema.ts — the migration ` +
+              `landed, so delete its entry from KNOWN_NULLABILITY_DRIFT ` +
+              `rather than leaving this column unguarded`
+          : `"${tableName}"."${column.name}": database says ` +
+              `${live.notnull === 1 ? "NOT NULL" : "nullable"}, ` +
+              `schema.ts says ${column.notNull ? "NOT NULL" : "nullable"}`,
+      ).toBe(expectedNotNull);
 
       // SQLite stores the declared type verbatim, so this is a string
       // comparison against the DDL rather than against a resolved

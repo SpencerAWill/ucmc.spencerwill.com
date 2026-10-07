@@ -75,12 +75,6 @@ function queueList(page: Page) {
     .first();
 }
 
-function listTop(page: Page): Promise<number> {
-  return queueList(page).evaluate(
-    (el) => el.getBoundingClientRect().top + window.scrollY,
-  );
-}
-
 /**
  * `listTop`, once layout has actually run.
  *
@@ -96,17 +90,46 @@ function listTop(page: Page): Promise<number> {
  * is the *setup* being made honest, not the assertion being loosened —
  * the comparison below is still exact to a pixel.
  */
+function listTop(page: Page): Promise<number> {
+  return queueList(page).evaluate(
+    (el) => el.getBoundingClientRect().top + window.scrollY,
+  );
+}
+
 async function settledListTop(page: Page): Promise<number> {
+  // Driven from the test, re-resolving the locator on every poll, and
+  // that re-resolution is load-bearing: hydration can REPLACE the list
+  // container, and a reference captured once then goes detached, where
+  // `getBoundingClientRect()` reports zeros forever and the loop can
+  // never settle. (Tried it — the spec fails with "never settled".)
+  //
+  // `expect.poll` supplies the waiting, so there is no fixed sleep for
+  // `playwright/no-wait-for-timeout` to object to. Same 4s budget and
+  // same 100ms cadence as before; the predicate is still "two
+  // consecutive reads agree on a non-zero value".
   let previous = -1;
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const current = await listTop(page);
-    if (current > 0 && current === previous) {
-      return current;
-    }
-    previous = current;
-    await page.waitForTimeout(100);
-  }
-  throw new Error("The queue list's position never settled.");
+  let settled = -1;
+
+  await expect
+    .poll(
+      async () => {
+        const current = await listTop(page);
+        const agrees = current > 0 && current === previous;
+        previous = current;
+        if (agrees) {
+          settled = current;
+        }
+        return agrees;
+      },
+      {
+        timeout: 4000,
+        intervals: [100],
+        message: "the queue list's position never settled",
+      },
+    )
+    .toBe(true);
+
+  return settled;
 }
 
 test("selecting a member doesn't move the queue rows", async ({ page }) => {
