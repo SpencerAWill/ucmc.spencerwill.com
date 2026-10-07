@@ -4,6 +4,8 @@ import rootConfig from "../../eslint.config.js";
 import { tanstackConfig } from "@tanstack/eslint-config";
 import checkFile from "eslint-plugin-check-file";
 import jsxA11y from "eslint-plugin-jsx-a11y";
+import playwright from "eslint-plugin-playwright";
+import vitest from "@vitest/eslint-plugin";
 
 /**
  * Anchor a zone path to this config file rather than to the process cwd.
@@ -265,6 +267,81 @@ export default [
         "error",
         { "src/**/": "KEBAB_CASE" },
       ],
+    },
+  },
+  /**
+   * Test-file lint. `@tanstack/eslint-config` pulls in neither of these
+   * plugins (checked: it brings `@stylistic`, `import-x`, `n` and
+   * `typescript-eslint`), so nothing was catching the class of mistake
+   * that makes a test *pass while testing nothing*.
+   *
+   * These are deliberately narrow. The point is not style — it's the
+   * handful of rules where a violation means the suite is lying about
+   * what it covers, which is exactly what static analysis can see and a
+   * green run cannot.
+   */
+  {
+    files: ["src/**/__tests__/**/*.{ts,tsx}"],
+    plugins: { vitest },
+    rules: {
+      // A stray `.only` silently reduces a 1,576-test suite to one test
+      // and still reports success. This is the single highest-value rule
+      // here: CI goes green, and nothing about the output says that
+      // everything else was skipped.
+      "vitest/no-focused-tests": "error",
+      // `expect(x).toBe` with no call, `expect(x)` with no matcher, an
+      // `await` missing from an async matcher — each one typechecks and
+      // asserts nothing.
+      //
+      // `maxArgs: 2` is required, not a relaxation. The rule is derived
+      // from the Jest one, where `expect` takes a single argument; Vitest
+      // accepts `expect(value, message)` and this suite leans on it
+      // heavily to explain *why* a failure matters. At the default of 1
+      // the rule reports every one of those as an error.
+      "vitest/valid-expect": ["error", { maxArgs: 2 }],
+      // An assertion inside `if`/`catch` is skipped when the branch isn't
+      // taken, so the test passes whether or not the thing it describes
+      // happened.
+      "vitest/no-conditional-expect": "error",
+      // A test body with no assertion at all. Usually a refactor that
+      // moved the assertion out and left the test behind.
+      //
+      // `assertFunctionNames` has to name any shared helper that asserts
+      // on the caller's behalf, or the rule reports every test using one.
+      // Keep this list short: each entry is a promise that the named
+      // function always asserts.
+      "vitest/expect-expect": [
+        "error",
+        { assertFunctionNames: ["expect", "expectInvalidates"] },
+      ],
+      // `node:test`'s `test`/`describe` shadow Vitest's with an API that
+      // looks identical and reports to a runner that isn't running.
+      "vitest/no-import-node-test": "error",
+    },
+  },
+  {
+    files: ["e2e/**/*.ts"],
+    plugins: { playwright },
+    rules: {
+      // The defining Playwright mistake: a missing `await` on an
+      // assertion. `expect(locator).toBeVisible()` without it returns a
+      // promise nobody waits on, so the assertion resolves after the test
+      // has already passed — and it passes whether or not the element was
+      // ever there.
+      "playwright/missing-playwright-await": "error",
+      // `.only` in a spec, same reasoning as `vitest/no-focused-tests`,
+      // except CI also sets `forbidOnly` — so this turns a red CI run
+      // into a lint error caught before the push.
+      "playwright/no-focused-test": "error",
+      // Fixed sleeps are the flake source this suite already has an
+      // answer for: `waitForHydration` polls real state. A
+      // `waitForTimeout` is both slower than it needs to be and wrong on
+      // a loaded runner.
+      "playwright/no-wait-for-timeout": "error",
+      // An `expect` with no matcher, and conditional assertions — the
+      // same "passes while asserting nothing" shape as the vitest rules.
+      "playwright/valid-expect": "error",
+      "playwright/no-conditional-expect": "error",
     },
   },
   {

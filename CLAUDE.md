@@ -15,7 +15,7 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 ## Commands
 
 - `pnpm install` · `pnpm commit` · `pnpm exec eslint .` · `pnpm exec prettier --write .`
-- `pnpm --filter ucmc-web {dev,build,test,typecheck,lint,knip,storybook,e2e,e2e:ui}`
+- `pnpm --filter ucmc-web {dev,build,test,test:coverage,test:mutation,typecheck,lint,knip,storybook,e2e,e2e:ui}`
 - `pnpm --filter ucmc-web {deploy:dev,deploy:prod}`
 - `pnpm --filter ucmc-web {db:migrate:local,db:seed:local}` — remote sysadmin seeding is the `seed-admin.yml` GitHub Action, not a script
 
@@ -38,7 +38,7 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 - **Conventional Commits**, enforced by commitlint (Husky `commit-msg`). Scopes are validated against pnpm workspace names plus `devcontainer`; use `global` for repo-wide changes. `pnpm commit` walks you through it.
 - Husky `pre-commit` runs lint-staged, then `typecheck` for each package whose TypeScript changed (`apps/ucmc-web`, `infra`). Typecheck can't live inside lint-staged: `tsc` given explicit filenames ignores `tsconfig.json` entirely, so it has to run once per project, and lint-staged runs different globs concurrently — it would read files the formatters are still rewriting.
 - **Split multi-part work into sequenced commits that are each green and independently revertable.** Stage deliberately — `git add -A` sweeps up unrelated work in progress.
-- CI: `ci.yml` per-PR (paths-filtered), `deploy.yml` on push to main (dev auto, prod via `workflow_dispatch` + approval).
+- CI: `ci.yml` per-PR (paths-filtered), `deploy.yml` on push to main (dev auto, prod via `workflow_dispatch` + approval), `quality.yml` weekly. **Third-party actions are pinned to commit SHAs, and `${{ }}` never appears inside a `run:` body** — `workflow-lint` runs `actionlint` + `zizmor` and will fail on either. See `.claude/rules/infra.md`. **`quality.yml` is for reports, not gates** — coverage and anything else too slow to justify per-PR. Putting an advisory check in `ci.yml` is how a report becomes a merge blocker nobody chose.
 
 ## Always-on invariants
 

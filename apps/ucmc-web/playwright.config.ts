@@ -1,6 +1,32 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+// An externally-supplied base URL means we are pointed at a DEPLOYED
+// worker (the post-deploy smoke jobs in deploy.yml), not at a dev server
+// this config is responsible for. It therefore does double duty: it sets
+// `baseURL`, and it suppresses `webServer` below — booting `pnpm dev`
+// against a remote target would waste two minutes and then test the
+// wrong thing.
+const EXTERNAL_BASE_URL = process.env.PLAYWRIGHT_BASE_URL;
+
+/**
+ * Run against the PRODUCTION BUILD instead of the dev server.
+ *
+ * `vite dev` and `vite build` do not produce the same worker, and a
+ * whole class of defect exists only in the second: the client-bundle
+ * `cloudflare:workers` stub, SSR bundling, chunk splitting, an asset
+ * manifest that doesn't match what was emitted. Dev transforms modules
+ * on demand and papers over all of it, so a suite that only ever drives
+ * `pnpm dev` cannot see any of it until a deploy does.
+ *
+ * `vite preview` serves `dist/` through workerd via
+ * @cloudflare/vite-plugin — the same artifact `wrangler deploy` ships,
+ * reading the `dist/server/wrangler.json` the build snapshotted.
+ */
+const PREVIEW = process.env.E2E_PREVIEW === "1";
+
+const BASE_URL =
+  EXTERNAL_BASE_URL ??
+  (PREVIEW ? "http://localhost:4173" : "http://localhost:3000");
 
 // Mailpit sidecar from .devcontainer/docker-compose.yml. Tests poll it for
 // magic-link tokens during the sign-in flow; the dev server is configured
@@ -15,7 +41,13 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: process.env.CI ? "github" : "list",
+  // On CI, both reporters: `github` annotates the failing line in the PR
+  // diff, `html` writes the `playwright-report/` directory that the
+  // workflow uploads on failure. With `github` alone that upload step
+  // silently archived nothing — there was no report to collect, which
+  // only became obvious once the full suite ran there and a failure
+  // actually needed a trace to diagnose.
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
 
   use: {
     baseURL: BASE_URL,
@@ -31,8 +63,9 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
       // The mobile spec is the mobile projects' business. Without this
       // it would also run at 1280px, where it passes trivially and
-      // says nothing.
-      testIgnore: /mobile-.*\.spec\.ts/,
+      // says nothing. `smoke.spec.ts` is excluded for a different
+      // reason — see the `smoke` project below.
+      testIgnore: [/mobile-.*\.spec\.ts/, /smoke\.spec\.ts/],
     },
     /*
      * Two mobile projects, and `testMatch` confines both to the
@@ -62,34 +95,66 @@ export default defineConfig({
       use: { ...devices["Pixel 7"] },
       testMatch: /mobile-.*\.spec\.ts/,
     },
+    /*
+     * Post-deploy smoke. Selected explicitly (`--project=smoke`) by the
+     * `smoke-dev` / `smoke-prod` jobs in deploy.yml, against a real
+     * worker via PLAYWRIGHT_BASE_URL; `chromium` carries the matching
+     * `testIgnore` so `pnpm e2e` and the PR jobs never pick it up.
+     *
+     * Confining it is the point, not thrift. The spec asserts that
+     * `/health` finds live D1, R2 and KV bindings — against a Miniflare
+     * dev server that assertion is either vacuous or flaky depending on
+     * which local binding happens to be warm, and a smoke test that is
+     * routinely yellow on PRs stops being read on the one run that
+     * matters.
+     */
+    {
+      name: "smoke",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /smoke\.spec\.ts/,
+    },
   ],
 
   // Boots the dev server for the test run. `reuseExistingServer` lets a
   // dev who already has `pnpm dev` running skip the cold-start cost.
-  webServer: {
-    command: "pnpm run dev",
-    url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    stdout: "pipe",
-    stderr: "pipe",
-    timeout: 120_000,
-    env: {
-      MAILPIT_URL,
-      // Disable Turnstile in e2e — the widget polls Cloudflare's CDN
-      // continuously, blocking `networkidle` and stealing focus from
-      // the email input mid-keystroke. Empty string overrides
-      // .env.local; the form skips rendering the widget when unset and
-      // the server skips verification (per CLAUDE.md auth notes).
-      VITE_TURNSTILE_SITE_KEY: "",
-      TURNSTILE_SECRET_KEY: "",
-      // Bypass auth/health/upload rate limiters for the duration of the
-      // suite. The passkey spec hits 6 rate-limited endpoints per run,
-      // and dev-server reuse means runs share an IP bucket — without
-      // the bypass the second consecutive run would trip the
-      // 10 req/60 s budget. Production never sets this.
-      E2E_BYPASS_RATE_LIMIT: "1",
-    },
-  },
+  //
+  // Skipped entirely when PLAYWRIGHT_BASE_URL is set: the target is then
+  // an already-deployed worker and there is nothing for this config to
+  // start or own.
+  webServer: EXTERNAL_BASE_URL
+    ? undefined
+    : {
+        // The build is part of the command rather than a prior CI step
+        // so Playwright owns readiness and teardown for both modes, and
+        // so `E2E_PREVIEW=1 pnpm e2e --project=smoke` works locally with
+        // no setup. The env block below is applied to the BUILD too,
+        // which is what bakes the empty Turnstile key into the bundle.
+        command: PREVIEW
+          ? "pnpm run build && pnpm run preview"
+          : "pnpm run dev",
+        // A cold build is minutes, not seconds.
+        timeout: PREVIEW ? 300_000 : 120_000,
+        url: BASE_URL,
+        reuseExistingServer: !process.env.CI,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          MAILPIT_URL,
+          // Disable Turnstile in e2e — the widget polls Cloudflare's CDN
+          // continuously, blocking `networkidle` and stealing focus from
+          // the email input mid-keystroke. Empty string overrides
+          // .env.local; the form skips rendering the widget when unset and
+          // the server skips verification (per CLAUDE.md auth notes).
+          VITE_TURNSTILE_SITE_KEY: "",
+          TURNSTILE_SECRET_KEY: "",
+          // Bypass auth/health/upload rate limiters for the duration of the
+          // suite. The passkey spec hits 6 rate-limited endpoints per run,
+          // and dev-server reuse means runs share an IP bucket — without
+          // the bypass the second consecutive run would trip the
+          // 10 req/60 s budget. Production never sets this.
+          E2E_BYPASS_RATE_LIMIT: "1",
+        },
+      },
 
   // Surfaced to fixtures via `process.env.MAILPIT_URL` — kept here so a
   // single env var controls both webServer config and test polling.

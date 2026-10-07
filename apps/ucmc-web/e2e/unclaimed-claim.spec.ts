@@ -104,6 +104,6 @@ test("officer-pre-added unclaimed member can claim their account", async ({
   // "approved" (officer pre-add IS the approval signal) and NULLs the
   // placeholder columns. Approved users with profiles land on
   // /my/profile, not /register/pending.
-  await page.waitForURL(/\/my\/account/, { timeout: 15_000 });
-  await expect(page).toHaveURL(/\/my\/account/);
+  await page.waitForURL(/\/my\/profile/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/my\/profile/);
 });

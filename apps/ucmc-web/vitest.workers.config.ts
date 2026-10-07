@@ -44,6 +44,14 @@ export default defineConfig({
             RESEND_FROM_NAME: "UCMC Test",
             SESSION_SECRET: "test-session-secret-at-least-32-chars-long-xxx",
           },
+          // A SECOND, deliberately un-migrated D1. `test/apply-migrations.ts`
+          // migrates `env.DB` to head before every file, which makes it
+          // useless for testing an upgrade: there is no intermediate state
+          // left to upgrade from. `MIGRATIONS_DB` is never touched by the
+          // setup file, so `migration-upgrade.test.ts` can apply a prefix of
+          // TEST_MIGRATIONS, seed rows the way a live database would hold
+          // them, and then apply the remainder.
+          d1Databases: ["MIGRATIONS_DB"],
           compatibilityFlags: ["nodejs_compat"],
         },
         wrangler: { configPath: "./wrangler.jsonc" },

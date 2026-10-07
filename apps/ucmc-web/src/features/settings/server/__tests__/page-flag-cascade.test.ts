@@ -42,13 +42,21 @@ describe("page flag hierarchy", () => {
     // `SettingMeta.parent` is a bare string (it can't reference a type
     // derived from SETTINGS), so this is the check that catches a typo.
     for (const key of ALL_KEYS) {
-      const declared = SETTINGS[`pages.${key}` as never];
-      expect(declared).toBeDefined();
-      const parent = pageParentOf(key);
-      if (parent !== null) {
-        expect(ALL_KEYS).toContain(parent);
-      }
+      expect(SETTINGS[`pages.${key}` as never]).toBeDefined();
     }
+
+    // Collected and asserted as a set rather than asserted inside the
+    // loop's `if`: a conditional assertion does nothing on the keys that
+    // skip the branch, and this way a failure names every bad parent at
+    // once instead of stopping at the first.
+    const danglingParents = ALL_KEYS.map((key) => pageParentOf(key))
+      .filter((parent) => parent !== null)
+      .filter((parent) => !ALL_KEYS.includes(parent));
+
+    expect(
+      danglingParents,
+      "a page declares a parent that is not itself a page key — most likely a typo in `SettingMeta.parent`",
+    ).toEqual([]);
   });
 
   it("does not treat underscore-separated keys as nested", () => {
@@ -70,11 +78,19 @@ describe("effectivePageFlags", () => {
     const raw = { ...allOn(), members: false };
     const out = effectivePageFlags(raw);
 
-    for (const key of ALL_KEYS) {
-      if (pageParentOf(key) === "members" || key === "members") {
-        expect(out[key]).toBe(false);
-      }
-    }
+    const inMembersSection = ALL_KEYS.filter(
+      (key) => key === "members" || pageParentOf(key) === "members",
+    );
+
+    // Same reasoning as above: naming the keys that stayed on is more
+    // useful than failing on whichever one came first, and it can't
+    // quietly assert nothing if the filter ever matches no keys — the
+    // length check below catches that.
+    expect(inMembersSection.length).toBeGreaterThan(1);
+    expect(
+      inMembersSection.filter((key) => out[key] !== false),
+      "switching off the `members` section left one of its pages on",
+    ).toEqual([]);
   });
 
   it("leaves pages outside the section untouched", () => {

@@ -20,7 +20,7 @@ The easiest way to get started is with the included [dev container](https://cont
 
 The container provides:
 
-- Node.js 22
+- Node.js 24 (matches `.nvmrc`)
 - pnpm (via corepack)
 - Pulumi CLI
 - GitHub CLI
@@ -35,7 +35,7 @@ To use it, open the repo in VS Code and select **Reopen in Container** when prom
 
 #### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v24+)
+- [Node.js](https://nodejs.org/) — **v24**, pinned in `.nvmrc`. CI (`actions/setup-node` reads `node-version-file: .nvmrc`) and the devcontainer both run 24, so that is the only version the suite is verified against. `engines`/`devEngines` in the root `package.json` declare `>=24` as a floor and warn rather than fail, so a newer Node still installs — but see `test/setup-dom.ts` for the Node 25 Web Storage shim that newer runtimes need.
 - [pnpm](https://pnpm.io/) v11.1.2 (managed by corepack — `package.json#packageManager` pins it, so a `corepack enable` is all you need)
 - [Pulumi CLI](https://www.pulumi.com/docs/install/) (for infrastructure changes)
 
@@ -127,7 +127,9 @@ Common commands (run from the repo root):
 ```bash
 pnpm --filter ucmc-web dev          # start the dev server on http://localhost:3000
 pnpm --filter ucmc-web build        # production build
-pnpm --filter ucmc-web test         # run Vitest unit tests
+pnpm --filter ucmc-web test         # run Vitest unit tests (both pools)
+pnpm --filter ucmc-web test:coverage     # same, with an Istanbul coverage report
+pnpm --filter ucmc-web test:mutation     # Stryker mutation testing (pure modules only)
 pnpm --filter ucmc-web typecheck    # tsc --noEmit
 pnpm --filter ucmc-web knip         # unused files, exports and dependencies
 pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006

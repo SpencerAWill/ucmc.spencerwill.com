@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing. Runs weekly from quality.yml, never per-PR: it re-runs the suite once per mutant, so it is minutes of work to answer a question nobody is blocked on. Scoped to pure modules \u2014 see vitest.mutation.config.ts for why anything importing cloudflare:workers cannot be mutated here.",
+  "packageManager": "pnpm",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.mutation.config.ts",
+    "related": false
+  },
+  "mutate": [
+    "src/config/waiver-cycle.ts",
+    "src/lib/sanitize-filename.ts",
+    "src/server/log/redact.server.ts"
+  ],
+  "reporters": ["html", "clear-text", "progress"],
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "coverageAnalysis": "perTest",
+  "thresholds": {
+    "high": 90,
+    "low": 70,
+    "break": null
+  },
+  "tempDirName": "node_modules/.stryker-tmp",
+  "disableTypeChecks": true
+}

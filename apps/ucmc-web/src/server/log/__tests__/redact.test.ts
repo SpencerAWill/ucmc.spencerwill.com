@@ -36,6 +36,20 @@ describe("redactEmail", () => {
   });
 });
 
+it("refuses an address with text around it, rather than echoing the text", () => {
+  // `STRICT_EMAIL_PATTERN` is anchored at BOTH ends, and both anchors
+  // are load-bearing. Without the trailing `$`, `redactEmail` would
+  // treat the whole string as valid, split on the first `@`, and emit
+  // everything after it verbatim — so `alice@example.com SECRET` would
+  // log as `a***@example.com SECRET`. That is the exact disclosure
+  // this helper exists to prevent.
+  //
+  // Both mutants (dropping `^`, dropping `$`) survived the suite until
+  // this test; Stryker found them.
+  expect(redactEmail("alice@example.com SECRET-TOKEN")).toBe("<malformed>");
+  expect(redactEmail("prefix-junk alice@example.com")).toBe("<malformed>");
+});
+
 describe("redactUrl", () => {
   it("strips query string and fragment, keeps origin + path", () => {
     expect(
@@ -102,6 +116,21 @@ describe("redactString", () => {
         "Failed to send to alice@example.com via https://api.example/send?key=x",
       ),
     ).toBe("Failed to send to <email-redacted> via <url-redacted>");
+  });
+
+  it("redacts plain-http URLs, not just https", () => {
+    // `URL_PATTERN` is `https?`, and the `?` is the whole point: local
+    // dev and the Mailpit sidecar are both plain http, so a token in an
+    // http URL is exactly the one most likely to appear in a log line.
+    // Mutating `https?` to `https` survived the suite until this test —
+    // found by Stryker.
+    expect(
+      redactString("callback http://localhost:3000/auth?token=secret-abc here"),
+    ).toBe("callback <url-redacted> here");
+
+    expect(
+      redactString("callback http://localhost:3000/auth?token=secret-abc"),
+    ).not.toContain("secret-abc");
   });
 
   it("returns text unchanged when nothing matches", () => {

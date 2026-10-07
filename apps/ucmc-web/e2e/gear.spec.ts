@@ -82,16 +82,27 @@ test("officer creates a type, adds gear, retires it, and cannot reissue the code
     .getByRole("textbox", { name: /^new model manufacturer$/i })
     .fill("Petzl");
   await page.getByRole("button", { name: /^create model$/i }).click();
+  // Wait for the model to actually be selected before moving on.
+  // `handleCreateModel` fires a mutation whose `onSuccess` is what sets
+  // the combobox; without this the submit below races it, posts an item
+  // with no model, and the form rejects it — leaving the dialog open and
+  // the failure pointing at the missing success toast rather than at the
+  // race. Premature interaction is the source of every flake here
+  // (.claude/rules/testing.md).
+  await expect(page.getByRole("combobox", { name: /^model$/i })).toContainText(
+    `E2E Model ${runTag}`,
+    { timeout: 10_000 },
+  );
   // Code auto-fills to "{prefix}1" via the suggest-code helper since
   // this is the type's first piece. Overwrite explicitly just to be
   // deterministic against the auto-fill effect's timing.
   const codeInput = page.getByRole("textbox", { name: /^code$/i });
   await codeInput.fill(code);
-  // Optional now that the model carries the product name — this field
-  // is only for per-unit distinguishing marks.
-  await page
-    .getByRole("textbox", { name: /distinguishing marks/i })
-    .fill(`Test gear ${runTag}`);
+  // No per-unit description field: `0069_drop_gear_item_description`
+  // removed `gear_items.description` (the model carries the product
+  // name, and distinguishing marks go in Notes, a markdown editor
+  // rather than a textbox). Nothing below asserts on it, so the piece
+  // is created from type + model + code alone.
   // The sheet's submit button reuses the "Add gear" label; the toolbar
   // button behind the sheet overlay is hidden, so the role lookup
   // resolves to the visible submit.
@@ -127,17 +138,43 @@ test("officer creates a type, adds gear, retires it, and cannot reissue the code
   // STILL carries its code, which is the behaviour change: retirement
   // used to NULL it. Status lives in the Filters popover as a radio
   // group since the multi-view refactor.
-  await page.getByRole("button", { name: /^filters/i }).click();
+  /*
+   * The Filters trigger, matched by name AND by `aria-haspopup`.
+   *
+   * Name alone is not enough in either direction, which took three
+   * tries to pin down:
+   *   - `/^filters/i` breaks once a filter is applied, because the
+   *     count badge can land *inside* the accessible name — Playwright
+   *     computed it as both "Filters (1 active)" and "1 Filters
+   *     (1 active)" in different renders of the same page.
+   *   - dropping the anchor resolves to two elements, because "Clear
+   *     filters" appears beside it once a filter is active.
+   *
+   * `aria-haspopup="dialog"` is on the trigger and on nothing else here,
+   * so intersecting the two is stable against both.
+   */
+  const filtersTrigger = page
+    .getByRole("button", { name: /filters/i })
+    .and(page.locator('[aria-haspopup="dialog"]'));
+
+  await filtersTrigger.click();
   await page.getByRole("radio", { name: /^retired$/i }).check();
   await page.keyboard.press("Escape");
+  // Wait for the popover to actually close. While it is open the
+  // background is `aria-hidden`, so the trigger is absent from the
+  // accessibility tree and the next `getByRole` click times out looking
+  // for a button that is on screen — the failure reads as "the Filters
+  // button disappeared" rather than "the popover was still open".
+  await expect(filtersTrigger).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByText(typeName).first()).toBeVisible();
   await expect(page.getByText(code).first()).toBeVisible();
 
   // ── 4. The code cannot be reissued ──────────────────────────────────
   // Switch back to the active filter so a successful create would show.
-  await page.getByRole("button", { name: /^filters/i }).click();
+  await filtersTrigger.click();
   await page.getByRole("radio", { name: /^active$/i }).check();
   await page.keyboard.press("Escape");
+  await expect(filtersTrigger).toHaveAttribute("aria-expanded", "false");
 
   await page.getByRole("button", { name: /^add gear$/i }).click();
   await page.getByRole("combobox", { name: /^type$/i }).click();
@@ -145,9 +182,6 @@ test("officer creates a type, adds gear, retires it, and cannot reissue the code
   await page.getByRole("combobox", { name: /^model$/i }).click();
   await page.getByRole("option", { name: /E2E Model/ }).click();
   await page.getByRole("textbox", { name: /^code$/i }).fill(code);
-  await page
-    .getByRole("textbox", { name: /distinguishing marks/i })
-    .fill(`Reissued ${runTag}`);
   await page.getByRole("button", { name: /^add gear$/i }).click();
 
   // The retired piece still holds the unique index, so the save is

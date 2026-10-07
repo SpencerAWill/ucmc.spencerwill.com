@@ -106,6 +106,15 @@ allowBuilds:
 # @pulumi/command nest) to >=3.252.0 pulls the patched OTel 2.x graph and drops the vulnerable 0.57.x
 # exporter set. Providers declare @pulumi/pulumi ^3.142.0, so any 3.x runtime is supported. The
 # resolver lands on the newest 3.x that has cleared the 7-day quarantine.
+# NOT a security override: `prosemirror-model` is deduplicated, not patched.
+# `@tiptap/pm` requires ^1.25.11 while every sibling ProseMirror package
+# requires only ^1.25.8 / ^1.25.0 / ^1.21.0 / ^1.0.0, so the resolver kept
+# 1.25.9 for them and 1.25.11 for @tiptap/pm. Two copies in one bundle makes
+# ProseMirror's `instanceof` checks fail across the boundary, and Tiptap says
+# so at runtime: "prosemirror-model is loaded more than once. Wrapping and
+# splitting nodes will fail." Every declared range is satisfied by 1.25.11,
+# so pinning the floor collapses them to one copy. Caught in the E2E server
+# log, not by a test — nothing asserts on console warnings.
 overrides:
   "@babel/core@<7.29.6": ">=7.29.6 <8.0.0"
   "@grpc/grpc-js@<1.14.5": ">=1.14.5"
@@ -129,6 +138,7 @@ overrides:
   "pacote@<21.5.1": ">=21.5.1 <22.0.0"
   "postcss@<8.5.23": ">=8.5.23 <9.0.0"
   "postcss-selector-parser@<7.1.3": ">=7.1.3 <8.0.0"
+  "prosemirror-model@<1.25.11": ">=1.25.11 <2.0.0"
   "prosemirror-view@<1.42.3": ">=1.42.3 <2.0.0"
   "protobufjs@<8.6.6": ">=8.6.6"
   "seroval@<1.6.3": ">=1.6.3 <2.0.0"

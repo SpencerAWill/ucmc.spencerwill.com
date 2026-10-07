@@ -22,9 +22,21 @@ Prereq: `RESEND_MANAGEMENT_API_KEY` (full-access) as a GitHub env secret on both
 
 ## Workflows
 
-- `ci.yml` — per-PR. A paths-filter gates web lint/typecheck/knip/vitest, the browser-spec job (axe a11y + the gear-scanner decode specs, sharing one dev server), and infra lint/typecheck + `pulumi preview`; the workspace audit always runs.
-- `deploy.yml` — push-to-main auto-deploys dev with infra-dev → web-dev chaining; prod via `workflow_dispatch` with environment approval. It rewrites `wrangler.jsonc`'s placeholder `database_id` / KV id from Pulumi outputs, and supplies vars via `--var` flags plus `wrangler secret put`.
+- `ci.yml` — per-PR, and the only gate. A paths-filter gates web lint/typecheck/knip/vitest, two parallel E2E jobs (`e2e-desktop` with a Mailpit service container, `e2e-mobile` for WebKit + Pixel), `workflow-lint`, and infra lint/typecheck + `pulumi preview`; the workspace audit always runs. A workflow-level `concurrency` group cancels superseded runs.
+- `deploy.yml` — push-to-main auto-deploys dev with infra-dev → web-dev chaining; prod via `workflow_dispatch` with environment approval. It rewrites `wrangler.jsonc`'s placeholder `database_id` / KV id from Pulumi outputs, and supplies vars via `--var` flags plus `wrangler secret put`. **Each deploy ends in a post-deploy smoke test** against the deployed URL (`--project=smoke`); a failure turns the deploy job red.
+- `quality.yml` — weekly (`schedule:`) + `workflow_dispatch`. **Reports, not gates**: coverage today, and the home for anything else too slow to justify per-PR. Putting an advisory check in `ci.yml` is how it becomes a merge blocker nobody chose.
 - `seed-admin.yml` — manual sysadmin promotion. Remote sysadmin seeding is this Action, **not** a script.
-- `lint-pr.yaml` — PR title lint.
+- `lint-pr.yaml` — PR title lint. Uses `pull_request_target` because reading a PR title needs a token a fork's `pull_request` run doesn't get; it never checks out the PR and holds `pull-requests: read` only. zizmor flags the trigger, and `.github/zizmor.yml` explains why it's ignored here.
+
+## Workflow hygiene
+
+**Every third-party action is pinned to a 40-character commit SHA with a `# vX.Y.Z` comment.** A tag is mutable — `@v7` is whatever the owner last pointed it at — so a tag pin trusts the action's owner continuously rather than once. Dependabot's `github-actions` ecosystem updates SHA pins and their comments natively, so this costs nothing to maintain. **Don't reintroduce a tag ref; `zizmor` will flag it.**
+
+`workflow-lint` runs **actionlint** (schema, `${{ }}` expression types, and shellcheck over every `run:` body) and **zizmor** (security shapes: template injection, credential persistence, dangerous triggers, cache poisoning). Both install from pinned release tarballs verified against a SHA-256 in the job's `env:` — **bump the version and the checksum together**, or the job fails on the integrity check.
+
+Two rules the fixes follow, and both bite again the moment someone writes a new step:
+
+- **Never interpolate `${{ }}` into a `run:` body.** The expansion is substituted into the shell source _before_ the shell parses it, so the value becomes code, not data. Pass it through `env:` and reference `$VAR`.
+- **`actions/checkout` sets `persist-credentials: false`** everywhere. Nothing here pushes, and the default leaves a usable token in `.git/config` for every later step.
 
 **`deploy.yml` runs `d1 migrations apply` _before_ `wrangler deploy`.** That ordering opens a window where the previous Worker runs against the new schema — see the `rename-permission-or-setting` skill for what that means for renames.

@@ -38,8 +38,8 @@ INSERT INTO gear_types (id, public_id, name, prefix, created_at, updated_at)
 VALUES ('${typeId}', '${typePublicId}', '${typeName}', 'EI', ${runTag}, ${runTag});
 INSERT INTO gear_models (id, public_id, type_id, name, tracking, created_at, updated_at)
 VALUES ('${modelId}', '${modelPublicId}', '${typeId}', 'E2E Inspect Model ${runTag}', 'coded', ${runTag}, ${runTag});
-INSERT INTO gear_items (id, public_id, model_id, code, description, status, condition, created_at, updated_at)
-VALUES ('${gearId}', '${gearPublicId}', '${modelId}', '${code}', 'Inspection target', 'active', 'serviceable', ${runTag}, ${runTag});
+INSERT INTO gear_items (id, public_id, model_id, code, status, condition, created_at, updated_at)
+VALUES ('${gearId}', '${gearPublicId}', '${modelId}', '${code}', 'active', 'serviceable', ${runTag}, ${runTag});
 `);
 
   // Sign in via magic link.

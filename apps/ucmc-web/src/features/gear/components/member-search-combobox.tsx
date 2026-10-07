@@ -51,6 +51,16 @@ export function MemberSearchCombobox({
         <Button
           variant="outline"
           role="combobox"
+          // `role="combobox"` does NOT take its accessible name from
+          // content, so the "Search by name or email…" span below names
+          // nothing — screen readers announce an unlabelled combobox.
+          // A real WCAG 4.1.2 defect, and one `a11y.spec.ts` can't see
+          // because it only walks public routes, not the gear desk.
+          aria-label={
+            selected
+              ? `Member: ${selected.fullName}`
+              : "Search by name or email"
+          }
           aria-expanded={open}
           disabled={disabled}
           className="w-full justify-between"

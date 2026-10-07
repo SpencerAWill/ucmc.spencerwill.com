@@ -67,6 +67,13 @@ const config: KnipConfig = {
 
     ".storybook/*.ts",
 
+    // Stryker's vitest project. Referenced only as a STRING from
+    // `stryker.config.json` (`vitest.configFile`), so knip cannot see
+    // the link and reports the file as unused. Declared as `entry`
+    // rather than `ignore` so knip still follows its imports and keeps
+    // seeing `temporal-polyfill` and the test files it includes.
+    "vitest.mutation.config.ts",
+
     // Flat ESLint config: the only importer of `@tanstack/eslint-config`,
     // `eslint-plugin-check-file` and `eslint-plugin-jsx-a11y`.
     "eslint.config.js",

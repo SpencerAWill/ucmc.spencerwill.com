@@ -466,11 +466,13 @@ describe("profileInputSchema bio", () => {
     ).join(" ");
     const result = profileInputSchema.safeParse(baseInput(bio));
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.some((i) => /At most/.test(i.message))).toBe(
-        true,
-      );
-    }
+    // Unconditional: `result.error` is only read when the parse failed,
+    // which the line above already asserts, and `?? []` keeps the
+    // assertion meaningful (an empty issue list fails) instead of
+    // hiding inside an `if` that a passing parse would skip.
+    expect(
+      (result.error?.issues ?? []).some((i) => /At most/.test(i.message)),
+    ).toBe(true);
   });
 
   it("accepts an empty bio", () => {
