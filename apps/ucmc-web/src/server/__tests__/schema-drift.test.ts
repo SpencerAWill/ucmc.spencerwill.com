@@ -55,20 +55,27 @@ const KNOWN_NULLABILITY_DRIFT: Record<string, string> = {
   // `0008_user_public_id` adds the column, backfills every existing row,
   // and indexes it — but SQLite's ALTER TABLE ADD COLUMN cannot add a
   // NOT NULL column without a default, so the constraint was never
-  // applied and nothing has tightened it since. schema.ts has said
-  // `.notNull()` the whole time.
+  // applied. schema.ts has said `.notNull()` the whole time.
   //
-  // The data is fine: every row was backfilled and every insert goes
-  // through Drizzle, which always supplies it. The hole is the missing
-  // constraint — and because SQLite permits multiple NULLs in a UNIQUE
-  // index, a raw-SQL insert that omitted it could produce several users
-  // with no public id and no error.
+  // **This entry is permanent, not a to-do.** #233 proposed the usual
+  // create-copy-drop-rename rebuild; it cannot be done on D1. The
+  // recipe is only safe with `PRAGMA foreign_keys = OFF`, SQLite makes
+  // that pragma a no-op inside a transaction, and D1 applies every
+  // migration file as one implicitly transactional batch. D1 accepts
+  // the pragma and ignores it. `users` is the parent of 40 foreign key
+  // edges across 28 tables, so the rebuild reports success while
+  // deleting the rows behind 7 ON DELETE CASCADE edges and blanking the
+  // columns behind 32 ON DELETE SET NULL ones. See the header of
+  // `0071_users_public_id_not_null.sql` for the measurements.
   //
-  // Closing it needs a table rebuild (create-copy-drop-rename, with the
-  // 27 referencing foreign keys and the indexes recreated), which is a
-  // data-model change with its own review, not a testing change.
-  // Tracked in #233 — delete this entry in the same change.
-  "users.public_id": "0008 could not add NOT NULL; never tightened",
+  // `0071` instead enforces presence with a BEFORE INSERT / BEFORE
+  // UPDATE trigger pair, which covers the two raw-SQL writers as well
+  // as Drizzle. So schema.ts's `.notNull()` is behaviourally TRUE — no
+  // writer can land a NULL — while `PRAGMA table_info` still reports
+  // the column nullable, which is the only thing this test can see.
+  // `migration-upgrade.test.ts` owns the proof that the triggers work;
+  // deleting this entry would just break the suite.
+  "users.public_id": "trigger-enforced; D1 cannot rebuild a parent table",
 };
 
 /** Every `sqliteTable` exported from `drizzle/schema.ts`, by its SQL name. */
