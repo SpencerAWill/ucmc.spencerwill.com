@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import {
@@ -28,6 +28,46 @@ import { waitForHydration } from "./fixtures/hydration";
  * Runs at two phone widths in two engines — see `playwright.config.ts`
  * for why the rest of the suite doesn't.
  */
+
+/**
+ * The officer session, seeded ONCE PER WORKER rather than once per test.
+ *
+ * `ensureApprovedUser` and `seedSession` each shell out to a full
+ * `wrangler d1 execute` — a CLI boot measured at 1.5–2.5 s locally and
+ * slower on a runner. Seeding them in a `beforeEach` paid that twice for
+ * every one of the 21 signed-in routes, in each of the two engines: 84
+ * wrangler boots per CI job, dwarfing the 88 page loads they existed to
+ * enable. Measured per-test on a laptop, a signed-in route cost ~2.4 s
+ * against ~0.7 s for a public one, and the whole gap was the seed.
+ *
+ * Sharing one session across the routes is sound *for this spec* and not
+ * in general: every test here is a `goto` plus a measurement, nothing
+ * writes, so there is no state for one route to leak into the next. A
+ * spec that mutates must keep seeding per test.
+ *
+ * It also stops the pollution `.claude/rules/testing.md` documents —
+ * `ensureApprovedUser` leaves an approved member with no current-cycle
+ * attestation, so each seed adds a permanent row to the local waiver
+ * queue. This spec was contributing 42 of them per run; it now
+ * contributes two.
+ *
+ * Worker-scoped rather than a `beforeAll` so it stays correct if the
+ * suite ever runs `workers: > 1` — each worker seeds its own officer.
+ */
+const test = base.extend<Record<never, never>, { officerSession: string }>({
+  officerSession: [
+    // Playwright requires the first parameter to be a destructuring
+    // pattern — it reads the property names to resolve fixture
+    // dependencies — and this fixture depends on none.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      const email = `mobile-overflow-${Date.now()}@example.com`;
+      ensureApprovedUser(email, { roles: ["role_system_admin"] });
+      await use(seedSession(email));
+    },
+    { scope: "worker" },
+  ],
+});
 
 /** Public routes, reachable with no session. */
 const PUBLIC_ROUTES = [
@@ -163,13 +203,11 @@ for (const path of PUBLIC_ROUTES) {
 }
 
 test.describe("signed in as an officer", () => {
-  test.beforeEach(async ({ context, baseURL }) => {
-    const email = `mobile-overflow-${Date.now()}@example.com`;
-    ensureApprovedUser(email, { roles: ["role_system_admin"] });
+  test.beforeEach(async ({ context, baseURL, officerSession }) => {
     await context.addCookies([
       {
         name: SESSION_COOKIE_NAME,
-        value: seedSession(email),
+        value: officerSession,
         url: baseURL ?? "http://localhost:3000",
       },
     ]);
