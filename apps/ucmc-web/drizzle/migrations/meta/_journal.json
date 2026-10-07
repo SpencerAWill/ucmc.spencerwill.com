@@ -498,6 +498,13 @@
       "when": 1779477596947,
       "tag": "0070_gear_model_manufactured_at",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1779477596948,
+      "tag": "0071_users_public_id_not_null",
+      "breakpoints": true
     }
   ]
 }

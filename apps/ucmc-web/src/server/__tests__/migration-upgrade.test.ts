@@ -209,6 +209,244 @@ describe("0025_user_emails backfills every address before dropping the column", 
   });
 });
 
+describe("0071_users_public_id_not_null closes the public-id hole", () => {
+  // 0008 could not add `public_id` as NOT NULL (SQLite's ALTER TABLE ADD
+  // COLUMN cannot, without a default), so the constraint was never
+  // applied and `schema.ts` has claimed `.notNull()` ever since. 0071
+  // backfills whatever is missing and enforces presence with a trigger
+  // pair rather than rebuilding the table.
+  //
+  // It is NOT a rebuild on purpose, and that is the thing most likely
+  // to be "corrected" by someone later: the create-copy-drop-rename
+  // recipe cannot be done on D1. It needs `PRAGMA foreign_keys = OFF`,
+  // SQLite makes that pragma a no-op inside a transaction, and D1 runs
+  // each migration file as one implicitly transactional batch. `users`
+  // is the parent of 40 foreign key edges across 28 tables, so the
+  // rebuild reports success while deleting the rows behind 7 cascade
+  // edges and blanking the columns behind 32 SET NULL ones. The
+  // child-survival cases below are what would catch that.
+  const BEFORE = "0070_gear_model_manufactured_at.sql";
+
+  /** Seeded with a public id, the way every live row actually looks. */
+  const WITH_ID = { id: "usr_has_id", publicId: "abc123def456" } as const;
+  /** The row 0008 could not have produced, but nothing prevented. */
+  const WITHOUT_ID = { id: "usr_null_id" } as const;
+
+  beforeEach(async () => {
+    await applyThrough(BEFORE);
+
+    for (const id of [WITH_ID.id, WITHOUT_ID.id]) {
+      await env.MIGRATIONS_DB.prepare(
+        `INSERT INTO users (id, status, created_at) VALUES (?, 'approved', 1700000)`,
+      )
+        .bind(id)
+        .run();
+    }
+    // Only one of the two gets a public id. That the other INSERT is
+    // accepted at all is the defect under test — before 0071 the column
+    // is nullable and the unique index permits unlimited NULLs.
+    await env.MIGRATIONS_DB.prepare(
+      `UPDATE users SET public_id = ? WHERE id = ?`,
+    )
+      .bind(WITH_ID.publicId, WITH_ID.id)
+      .run();
+
+    // Children across three shapes, all ON DELETE CASCADE: a plain
+    // child, a composite-PK join table, and the table the 0025 case
+    // already guards. All of them vanish if this migration is ever
+    // swapped for a table rebuild.
+    const role = await env.MIGRATIONS_DB.prepare(
+      `SELECT id FROM roles LIMIT 1`,
+    ).first<{ id: string }>();
+    expect(
+      role,
+      "migrations seed no roles, so this case cannot bind one",
+    ).not.toBeNull();
+
+    for (const userId of [WITH_ID.id, WITHOUT_ID.id]) {
+      await env.MIGRATIONS_DB.prepare(
+        `INSERT INTO user_emails (id, user_id, email, is_primary, verified_at, created_at)
+         VALUES (?, ?, ?, 1, 1700000, 1700000)`,
+      )
+        .bind(`uem_${userId}`, userId, `${userId}@uc.edu`)
+        .run();
+      await env.MIGRATIONS_DB.prepare(
+        `INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at)
+         VALUES (?, ?, 1700000, 1700000, 1800000)`,
+      )
+        .bind(`ses_${userId}`, userId)
+        .run();
+      await env.MIGRATIONS_DB.prepare(
+        `INSERT INTO emergency_contacts (id, user_id, name, phone, relationship, created_at)
+         VALUES (?, ?, 'Kin', '+15135550101', 'parent', 1700000)`,
+      )
+        .bind(`eme_${userId}`, userId)
+        .run();
+      await env.MIGRATIONS_DB.prepare(
+        `INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)`,
+      )
+        .bind(userId, role!.id)
+        .run();
+    }
+
+    await applyRest();
+  });
+
+  it("backfills the row that had no public id", async () => {
+    const row = await env.MIGRATIONS_DB.prepare(
+      `SELECT public_id FROM users WHERE id = ?`,
+    )
+      .bind(WITHOUT_ID.id)
+      .first<{ public_id: string }>();
+
+    // Shape matters as much as presence: the value lands in the same
+    // URLs and the same unique index as one `generatePublicId()`
+    // produced, so it has to pass for one — 12 chars, lowercase.
+    expect(row?.public_id).toMatch(/^[0-9a-f]{12}$/);
+  });
+
+  it("leaves an existing public id exactly as it was", async () => {
+    const row = await env.MIGRATIONS_DB.prepare(
+      `SELECT public_id, status, created_at FROM users WHERE id = ?`,
+    )
+      .bind(WITH_ID.id)
+      .first<{ public_id: string; status: string; created_at: number }>();
+
+    // A backfill whose WHERE clause reached further than NULL rows
+    // would reissue public ids and break every /members/$publicId link
+    // in existence — silently, since the new value is just as valid.
+    expect(row?.public_id).toBe(WITH_ID.publicId);
+    expect(row?.status).toBe("approved");
+    expect(row?.created_at).toBe(1700000);
+  });
+
+  it.each([
+    [
+      "an insert that omits the column",
+      `INSERT INTO users (id, status, created_at)
+       VALUES ('usr_omitted', 'approved', 1700000)`,
+    ],
+    [
+      "an insert that passes NULL explicitly",
+      `INSERT INTO users (id, public_id, status, created_at)
+       VALUES ('usr_explicit_null', NULL, 'approved', 1700000)`,
+    ],
+  ])("rejects %s", async (_label, sql) => {
+    // Both shapes, because the two raw-SQL writers that bypass Drizzle
+    // (`drizzle/seed.ts` and seed-admin.yml) would produce the first if
+    // someone dropped the column from their statement, and the second
+    // if a shell variable came through empty.
+    await expect(env.MIGRATIONS_DB.prepare(sql).run()).rejects.toThrow(
+      /NOT NULL constraint failed: users\.public_id/,
+    );
+  });
+
+  it("rejects an update that nulls the column back out", async () => {
+    await expect(
+      env.MIGRATIONS_DB.prepare(
+        `UPDATE users SET public_id = NULL WHERE id = ?`,
+      )
+        .bind(WITH_ID.id)
+        .run(),
+    ).rejects.toThrow(/NOT NULL constraint failed: users\.public_id/);
+  });
+
+  it("still accepts a well-formed insert and an unrelated update", async () => {
+    // The other half of a trigger: one that over-fires is a worse bug
+    // than the hole it closed, because it breaks sign-up rather than
+    // one member page.
+    await env.MIGRATIONS_DB.prepare(
+      `INSERT INTO users (id, public_id, status, created_at)
+       VALUES ('usr_fresh', 'fed210cba987', 'approved', 1700000)`,
+    ).run();
+
+    // `BEFORE UPDATE OF public_id` must not fire for a column it does
+    // not name, even on a row it would otherwise match.
+    await env.MIGRATIONS_DB.prepare(
+      `UPDATE users SET status = 'deactivated' WHERE id = 'usr_fresh'`,
+    ).run();
+
+    const row = await env.MIGRATIONS_DB.prepare(
+      `SELECT public_id, status FROM users WHERE id = 'usr_fresh'`,
+    ).first<{ public_id: string; status: string }>();
+    expect(row?.public_id).toBe("fed210cba987");
+    expect(row?.status).toBe("deactivated");
+  });
+
+  it("still rejects a duplicate public id", async () => {
+    // `users_public_id_unique` is untouched by this migration, which is
+    // itself worth pinning: the rebuild this replaced would have had to
+    // recreate it by hand.
+    await expect(
+      env.MIGRATIONS_DB.prepare(
+        `INSERT INTO users (id, public_id, status, created_at)
+         VALUES ('usr_dupe', ?, 'approved', 1700000)`,
+      )
+        .bind(WITH_ID.publicId)
+        .run(),
+    ).rejects.toThrow(/UNIQUE constraint failed: users\.public_id/);
+  });
+
+  it.each(["user_emails", "sessions", "emergency_contacts", "user_roles"])(
+    "leaves %s rows untouched",
+    async (table) => {
+      const row = await env.MIGRATIONS_DB.prepare(
+        `SELECT COUNT(*) AS n FROM "${table}" WHERE user_id IN (?, ?)`,
+      )
+        .bind(WITH_ID.id, WITHOUT_ID.id)
+        .first<{ n: number }>();
+
+      // Two seeded rows per table, one per user. Zero here means
+      // something dropped `users` — the cascade this migration exists
+      // to avoid, which raises no error and leaves a valid schema.
+      expect(
+        row?.n,
+        `${table} lost its rows; something dropped "users" while 28 ` +
+          `tables still referenced it`,
+      ).toBe(2);
+    },
+  );
+
+  it("keeps every foreign key into users intact", async () => {
+    const { results: tables } = await env.MIGRATIONS_DB.prepare(
+      `SELECT name FROM sqlite_master
+       WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'
+       ORDER BY name`,
+    ).all<{ name: string }>();
+
+    const edges: string[] = [];
+    for (const { name } of tables) {
+      const { results: fks } = await env.MIGRATIONS_DB.prepare(
+        `PRAGMA foreign_key_list("${name}")`,
+      ).all<{ table: string }>();
+      edges.push(...fks.filter((fk) => fk.table === "users").map(() => name));
+    }
+
+    // Counted, not listed, so adding a table that references `users`
+    // does not fail this — while a rebuild that silently dropped the
+    // references still does. 40 edges across 28 tables when 0071
+    // landed; the edge count is what the cascade risk scales with, so
+    // it is the number worth pinning.
+    expect(
+      edges.length,
+      `only ${edges.length} foreign key edges into users remain`,
+    ).toBeGreaterThanOrEqual(40);
+  });
+
+  it("reports no foreign key violations anywhere", async () => {
+    const { results } = await env.MIGRATIONS_DB.prepare(
+      `PRAGMA foreign_key_check`,
+    ).all<{ table: string; parent: string }>();
+
+    expect(
+      results,
+      `orphaned rows after 0071: ${results
+        .map((r) => `${r.table} -> ${r.parent}`)
+        .join(", ")}`,
+    ).toEqual([]);
+  });
+});
+
 describe("a populated database upgrades across the most recent migration", () => {
   // Deliberately expressed as "the last one", not as a file name: the
   // newest migration is the one nobody has run against real data yet, so
