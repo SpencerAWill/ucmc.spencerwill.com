@@ -12,6 +12,14 @@ paths:
 
 `pnpm --filter ucmc-web test` runs both pools.
 
+## Coverage
+
+`pnpm --filter ucmc-web test:coverage`, and a weekly HTML artifact from `quality.yml`. **It is a report, not a gate** — there are no thresholds, on purpose: picking a number before a baseline exists picks it out of the air, and a failing threshold teaches people to write tests that execute lines rather than tests that assert things. Baseline when it landed: 47.66% of statements.
+
+**The provider must stay `istanbul`.** V8 coverage is [unsupported in `@cloudflare/vitest-pool-workers`](https://developers.cloudflare.com/workers/testing/vitest-integration/known-issues/), which is where the whole server-side suite runs — switching to the faster default would silently report nothing for the half of the codebase that matters most, and the number would go _up_.
+
+Excluded from the denominator, each for a reason: `routeTree.gen.ts` (generated), `components/ui/**` (vendored shadcn, same rationale as its knip `entry`), tests/stories/`test-support`, and `*-fns.ts` — those are one-line shells that dynamic-import their action, and tests call the action directly, so counting them measures the boundary rather than the logic.
+
 ## `workers` pool — `*.test.ts`
 
 `vitest.workers.config.ts`. Runs in real workerd via `@cloudflare/vitest-pool-workers` (vitest 4.x + pool 0.16.x), wired as a Vite plugin (`cloudflareTest()`) — **there is no `defineWorkersConfig` / `poolOptions.workers` in this version.**

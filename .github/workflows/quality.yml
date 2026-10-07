@@ -1,0 +1,58 @@
+name: Quality
+
+# Periodic, not per-PR. Everything in this workflow is a REPORT that
+# informs what to write next, not a gate that blocks a merge — and each
+# job costs several times what it would save by running on every push.
+#
+# `ci.yml` stays the fast per-PR gate; this is where the slow, advisory
+# checks live.
+on:
+  schedule:
+    # Mondays, 06:00 UTC. Scheduled runs always use the default branch.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: quality
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Coverage report
+    runs-on: ubuntu-latest
+    # Instrumented runs are roughly 50% slower than the plain suite
+    # (~31 s vs ~21 s locally; more on a cold runner).
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # `istanbul`, not the default `v8` — V8 coverage is unsupported in
+      # @cloudflare/vitest-pool-workers, where the whole server-side suite
+      # runs, so the default provider reports nothing for the half of the
+      # codebase that matters most. See the comment in vitest.config.ts.
+      - name: Run tests with coverage
+        run: pnpm --filter ucmc-web test:coverage
+
+      # Uploaded rather than gated. There are no thresholds: picking one
+      # before a baseline exists is picking a number out of the air, and a
+      # failing threshold teaches people to write tests that execute lines
+      # instead of tests that assert things. The baseline at the time this
+      # landed was 47.66% of statements.
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-html
+          path: apps/ucmc-web/coverage/
+          retention-days: 30
