@@ -45,6 +45,21 @@ Prefer asserting the _reason_ a thing is written the way it is, not just that it
 - Pin type-level invariants with `@ts-expect-error` where a widened return type would silently collapse a discriminated union (`landing-actions.test.ts`).
 - Pin id↔name pairings that a later "tidy-up" would break (`permission-catalog.test.ts`).
 
+## Time
+
+`src/config/__tests__/club-clock.test.ts` is the only place that controls the clock, and it is worth reading before writing another date test.
+
+**Every calendar rule here takes an injectable `now` defaulting to `Temporal.Now.instant()`, and passing one explicitly tests the arithmetic while saying nothing about the branch production uses.** A change that made the default read UTC instead of `CLUB_TIME_ZONE` — or stopped reading the clock at all — passes every test that supplies its own instant. `vi.setSystemTime` is what covers that branch.
+
+**`vi.useFakeTimers()` does reach `Temporal` inside workerd**, because the polyfill derives `Temporal.Now` from `Date.now()`, which vitest replaces. Verified; don't assume it the other way round.
+
+**The two kinds of date arithmetic are not interchangeable, and the split is deliberate:**
+
+- **Exact elapsed time** (`instant.subtract({ milliseconds: DAYS * DAY_MS })`) for retention windows. The privacy-policy promise is about how long data is _kept_, so a DST transition must not change it. Calendar arithmetic would make a row survive an hour longer in March than in July.
+- **Calendar arithmetic in `CLUB_TIME_ZONE`** (`toZonedDateTimeISO(CLUB_TIME_ZONE)`) for anything a human reads off a calendar: the Aug 21 waiver rollover, a loan due "end of day", the March 1 officer archive.
+
+Using the wrong one is invisible for most of the year and wrong for a few hours around a transition — exactly the shape that reaches production. A 30-day window spanning spring-forward differs from 30 calendar days by precisely one hour, and the test pins that number rather than asserting the two are "close".
+
 ## E2E
 
 Playwright drives a freshly-spawned dev server. Four projects: `chromium` (Desktop Chrome) runs everything, `mobile-safari` (iPhone 14 / WebKit) + `mobile-chrome` (Pixel 7) are confined by `testMatch` to the `mobile-*` specs, and `smoke` is confined to `smoke.spec.ts` and runs only after a deploy.
