@@ -65,8 +65,9 @@ const KNOWN_NULLABILITY_DRIFT: Record<string, string> = {
   // with no public id and no error.
   //
   // Closing it needs a table rebuild (create-copy-drop-rename, with the
-  // foreign keys and indexes recreated), which is a data-model change
-  // with its own review, not a testing change. Tracked separately.
+  // 27 referencing foreign keys and the indexes recreated), which is a
+  // data-model change with its own review, not a testing change.
+  // Tracked in #233 — delete this entry in the same change.
   "users.public_id": "0008 could not add NOT NULL; never tightened",
 };
 
