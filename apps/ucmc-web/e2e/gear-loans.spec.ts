@@ -43,10 +43,10 @@ INSERT INTO gear_types (id, public_id, name, prefix, created_at, updated_at)
 VALUES ('${typeId}', '${typePublicId}', 'E2E Loan Type ${runTag}', 'LN', ${runTag}, ${runTag});
 INSERT INTO gear_models (id, public_id, type_id, name, tracking, created_at, updated_at)
 VALUES ('${modelId}', '${modelPublicId}', '${typeId}', 'E2E Model ${runTag}', 'coded', ${runTag}, ${runTag});
-INSERT INTO gear_items (id, public_id, model_id, code, description, status, condition, created_at, updated_at)
-VALUES ('${g1Id}', '${g1PublicId}', '${modelId}', '${code1}', 'Piece one', 'active', 'serviceable', ${runTag}, ${runTag});
-INSERT INTO gear_items (id, public_id, model_id, code, description, status, condition, created_at, updated_at)
-VALUES ('${g2Id}', '${g2PublicId}', '${modelId}', '${code2}', 'Piece two', 'active', 'serviceable', ${runTag}, ${runTag});
+INSERT INTO gear_items (id, public_id, model_id, code, status, condition, created_at, updated_at)
+VALUES ('${g1Id}', '${g1PublicId}', '${modelId}', '${code1}', 'active', 'serviceable', ${runTag}, ${runTag});
+INSERT INTO gear_items (id, public_id, model_id, code, status, condition, created_at, updated_at)
+VALUES ('${g2Id}', '${g2PublicId}', '${modelId}', '${code2}', 'active', 'serviceable', ${runTag}, ${runTag});
 `);
 
   // Sign in as the officer via magic link.
