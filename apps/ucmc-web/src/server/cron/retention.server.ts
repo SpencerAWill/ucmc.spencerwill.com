@@ -23,6 +23,7 @@
 import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
+import { errorMessage, log } from "#/server/log/log.server";
 import { getPublicBucket } from "#/server/r2";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -331,17 +332,15 @@ export async function runRetentionSweeps(
     try {
       counts[sweep.name] = await sweep.run();
     } catch (err) {
-      // Structured log goes to Workers Logs (Cloudflare dashboard,
-      // ~7d retention). The cron has no UI; logs are the only signal.
-      // eslint-disable-next-line no-console
-      console.error("retention.sweep_failed", {
+      // Goes to Workers Logs (Cloudflare dashboard, ~7d retention).
+      // The cron has no UI; logs are the only signal.
+      log.error("retention.sweep_failed", {
         sweep: sweep.name,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
     }
   }
 
-  // eslint-disable-next-line no-console
-  console.log("retention.sweeps_complete", counts);
+  log.info("retention.sweeps_complete", { ...counts });
   return counts;
 }

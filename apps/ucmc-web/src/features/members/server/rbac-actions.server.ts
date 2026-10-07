@@ -13,6 +13,7 @@ import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.ser
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { getDb, isUniqueViolation, schema } from "#/server/db";
+import { errorMessage, log } from "#/server/log/log.server";
 
 // ── constants ──────────────────────────────────────────────────────────
 
@@ -453,11 +454,10 @@ export async function setRolePermissionsAction(input: {
     try {
       await invalidateAnonymousPermissionsCache();
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("rbac.cache_invalidation_failed", {
+      log.error("rbac.cache_invalidation_failed", {
         scope: "anonymous_permissions",
         roleId: input.roleId,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
     }
   }

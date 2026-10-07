@@ -59,6 +59,13 @@ export interface WorkerEnv {
   // the Worker console. See docker-compose.yml for the sidecar config.
   MAILPIT_URL?: string;
 
+  // Logging threshold for `server/log/log.server.ts` — "debug" |
+  // "info" | "warn" | "error". Unset everywhere today, which is the
+  // point: `log.debug` lines can live in the code permanently and be
+  // turned on for one deployed worker during an incident without a
+  // code change. Anything unrecognised falls back to "info".
+  LOG_LEVEL?: string;
+
   // E2e-only escape hatch — when set to "1", auth/health/upload rate
   // limiters fail open (allow every request). The Playwright suite does
   // 6+ rate-limited calls per run and reuses the dev server between
