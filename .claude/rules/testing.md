@@ -45,6 +45,23 @@ Prefer asserting the _reason_ a thing is written the way it is, not just that it
 - Pin type-level invariants with `@ts-expect-error` where a widened return type would silently collapse a discriminated union (`landing-actions.test.ts`).
 - Pin id↔name pairings that a later "tidy-up" would break (`permission-catalog.test.ts`).
 
+## Property-based tests (`*.property.test.ts`)
+
+`fast-check`, in the workers pool, for pure modules whose claim is _universally quantified_: `sanitize-filename`, `redact.server.ts`, the Temporal serialization adapters. A security claim like "no input leaks a secret-shaped value" can't be settled by a fixture list, because the list contains the inputs someone already handled.
+
+**Write the property as the invariant, not as a convenient-looking proxy.** Both of these were wrong on the first try, and fast-check shrank each to a minimal counterexample rather than a random one:
+
+- `expect(redactEmail(e)).not.toContain(localPart)` fails on `.e@0.edu` — the local part also occurs inside the _preserved domain_.
+- Scoping that check to the output's local part fails on `--@-.com` — the first character is revealed by design, so when the local part repeats it, the "hidden" tail is a substring of what's allowed to show.
+
+Neither was a bug in the code. The real claim is **indistinguishability**: two addresses sharing a first character and a domain must produce the same output. State it that way.
+
+**Every generator needs an anti-vacuity guard.** `redactEmail` answers `<malformed>` for anything failing its strict pattern, so a generator that drifted into producing those would satisfy every assertion while testing nothing. The tests assert the output _isn't_ `<malformed>` before asserting anything about it.
+
+**Seeds are random on purpose.** A correct property holds for every seed; the flake a random seed produces is a wrong property, which is exactly what you want surfaced. A failure prints its seed and shrunk counterexample, so it reproduces.
+
+**CSV bulk import is deliberately not covered here.** Its entry points are permission-gated async actions needing DB and auth setup per run — fast-check would hammer that hundreds of times per property. It needs a pure parse function extracted first.
+
 ## Time
 
 `src/config/__tests__/club-clock.test.ts` is the only place that controls the clock, and it is worth reading before writing another date test.
