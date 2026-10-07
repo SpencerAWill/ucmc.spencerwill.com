@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useAuth } from "#/features/auth/api/use-auth";
-import { ViewModeProvider } from "#/features/auth/api/view-mode";
 import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
 
 // The permission resolution is the subject, so the session query is
@@ -66,11 +65,7 @@ function Probe() {
 }
 
 function renderProbe() {
-  return render(
-    <ViewModeProvider>
-      <Probe />
-    </ViewModeProvider>,
-  );
+  return render(<Probe />);
 }
 
 describe("useAuth().hasAnyPermission", () => {

@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "#/components/ui/tooltip";
 import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
-import { ViewModeProvider } from "#/features/auth/api/view-mode";
 import {
   PERMISSIONS_QUERY_KEY,
   roleQueryKey,
@@ -67,11 +66,12 @@ vi.mock("#/features/members/server/member-fns", () => ({
 
 /**
  * The sheet reads `useAuth()` for `roles:assign` (the Members tab's
- * write gate), so every render needs a seeded session and the
- * `ViewModeProvider` the hook resolves emulated roles through. The
- * `TooltipProvider` stands in for the one `SidebarProvider` supplies
- * in the real tree, which the row action buttons need.
- * `permissions` seeds the catalog the Permissions tab groups.
+ * write gate), so every render needs a seeded session — emulation is
+ * resolved from that payload by `effectivePermissions`, with no
+ * provider involved. The `TooltipProvider` stands in for the one
+ * `SidebarProvider` supplies in the real tree, which the row action
+ * buttons need. `permissions` seeds the catalog the Permissions tab
+ * groups.
  */
 function renderWithRole(
   role: RoleDetail,
@@ -107,17 +107,15 @@ function renderWithRole(
   });
   return render(
     <QueryClientProvider client={client}>
-      <ViewModeProvider>
-        <TooltipProvider>
-          <RoleEditorSheet
-            roleId={role.id}
-            roleName={role.name}
-            open
-            onOpenChange={() => {}}
-            initialTab={opts?.initialTab ?? "metadata"}
-          />
-        </TooltipProvider>
-      </ViewModeProvider>
+      <TooltipProvider>
+        <RoleEditorSheet
+          roleId={role.id}
+          roleName={role.name}
+          open
+          onOpenChange={() => {}}
+          initialTab={opts?.initialTab ?? "metadata"}
+        />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
