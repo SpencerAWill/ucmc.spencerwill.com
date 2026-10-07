@@ -345,6 +345,37 @@ export default [
     },
   },
   {
+    // Vendored shadcn catalog. The CLI writes these files and `shadcn
+    // add`/`diff` rewrites them wholesale, so they are kept byte-close
+    // to upstream — the same reason they carry an `entry` in
+    // knip.config.ts and an exclusion in the coverage config.
+    //
+    // Upstream's components consistently destructure `className` and
+    // `...props` inside nested subcomponents while the file's own
+    // prop types declare them at the top, so `no-shadow` fires on
+    // ordinary catalog code. Renaming them is a diff against upstream
+    // that the next `shadcn diff` reports forever; the rule is off
+    // here instead. It stays on everywhere else, which is where it
+    // catches anything.
+    files: ["src/components/ui/**/*.tsx"],
+    rules: {
+      "no-shadow": "off",
+    },
+  },
+  {
+    // Build-time CLI scripts, run by `prepare:assets` from a terminal.
+    // Their output IS the interface — `generate-sitemap` reports the
+    // path it wrote and `sync-zxing-wasm` reports which WASM binary it
+    // copied, which is how a stale `zxing_reader.wasm` gets noticed.
+    // They never run in a Worker, so `server/log/log.server.ts` (which
+    // logs to Workers Logs and imports `cloudflare:workers`) is the
+    // wrong tool.
+    files: ["scripts/**/*.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
+  {
     ignores: ["eslint.config.js"],
   },
 ];
