@@ -305,7 +305,15 @@ export default [
       "vitest/no-conditional-expect": "error",
       // A test body with no assertion at all. Usually a refactor that
       // moved the assertion out and left the test behind.
-      "vitest/expect-expect": "error",
+      //
+      // `assertFunctionNames` has to name any shared helper that asserts
+      // on the caller's behalf, or the rule reports every test using one.
+      // Keep this list short: each entry is a promise that the named
+      // function always asserts.
+      "vitest/expect-expect": [
+        "error",
+        { assertFunctionNames: ["expect", "expectInvalidates"] },
+      ],
       // `node:test`'s `test`/`describe` shadow Vitest's with an API that
       // looks identical and reports to a runner that isn't running.
       "vitest/no-import-node-test": "error",

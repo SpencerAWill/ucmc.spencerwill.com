@@ -45,6 +45,21 @@ Prefer asserting the _reason_ a thing is written the way it is, not just that it
 - Pin type-level invariants with `@ts-expect-error` where a widened return type would silently collapse a discriminated union (`landing-actions.test.ts`).
 - Pin id↔name pairings that a later "tidy-up" would break (`permission-catalog.test.ts`).
 
+## Mutation-hook cache contracts
+
+CLAUDE.md requires every mutation to live in a `use-*.ts` hook "with a fixed cache-invalidation contract". There are 98 of them, and until recently nothing enforced the second half of that sentence. **The failure it describes is silent:** a hook that drops a key leaves the officer looking at a queue that still lists the member they just attested, so they attest them again. No error is raised, and the server did its job correctly.
+
+Two layers, because they catch different things:
+
+- **`src/__tests__/mutation-hook-contract.test.tsx` — structural, all 98.** Reads source (importing 98 hooks would need every server-fn module mocked and would still only observe the ones a test invoked) and asserts each one manages _some_ cache. `NO_CACHE_BY_DESIGN` is self-clearing like `KNOWN_NULLABILITY_DRIFT`: an allowlisted hook that gains a cache call fails with "remove this entry".
+- **`features/waivers/api/__tests__/invalidation-contract.test.tsx` — behavioural, exact keys.** The pattern for the rest. Table-driven, so adding a hook means adding a row, and the row _is_ the contract.
+
+**Use `expectInvalidates` from `src/test-support/invalidation-contract.tsx`.** It renders against a REAL `QueryClient` with `invalidateQueries` spied, so the hook's own `useQueryClient()` resolves through normal wiring rather than agreeing with a stub. It compares keys as a **set** — the contract is which caches refresh, not the order `Promise.all` resolved them — and waits for `isSuccess`, because a hook that invalidates after an `await` otherwise reports zero keys and passes an emptiness check.
+
+`vitest/expect-expect` is configured with `assertFunctionNames: ["expect", "expectInvalidates"]`. **Adding another assertion helper means adding it there**, and each entry is a promise that the named function always asserts.
+
+**Only the waivers feature has exact-key tests so far.** The remaining features are mechanical to add and are not yet done; the structural layer covers them in the meantime.
+
 ## Property-based tests (`*.property.test.ts`)
 
 `fast-check`, in the workers pool, for pure modules whose claim is _universally quantified_: `sanitize-filename`, `redact.server.ts`, the Temporal serialization adapters. A security claim like "no input leaks a secret-shaped value" can't be settled by a fixture list, because the list contains the inputs someone already handled.
