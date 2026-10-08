@@ -10,8 +10,12 @@ import { extendLoanFn } from "#/features/gear/server/gear-fns";
 export function useExtendLoan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { publicId: string; newDueAt: number }) =>
-      extendLoanFn({ data: input }),
+    mutationFn: (input: {
+      publicId: string;
+      newDueAt: number;
+      overrideOverdue?: boolean;
+      overrideReason?: string | null;
+    }) => extendLoanFn({ data: input }),
     onSuccess: async (_data, input) => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: loanDetailQueryKey(input.publicId) }),

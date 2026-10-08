@@ -551,22 +551,66 @@ export type ExtendLoanResult =
   | { ok: true; dueAt: number }
   | {
       ok: false;
-      reason: "not_found" | "loan_returned" | "due_before_now";
+      reason:
+        | "not_found"
+        | "loan_returned"
+        | "due_before_now"
+        | "overdue_requires_override";
     };
 
+/**
+ * Push a loan's due date out.
+ *
+ * **Extending an ALREADY-OVERDUE loan is an override, not routine.**
+ * Standing is `daysOverdue(dueAt, now)`, so pushing the date out resets
+ * it — a one-day extension on a rope that is thirty days late turns a
+ * blocked member back into a good one. That made "extend" the silent
+ * escape hatch from the whole overdue apparatus, which is exactly the
+ * hole the reminder ladder would otherwise leak through.
+ *
+ * So it takes the same shape checkout already uses for blocked standing
+ * and live holds: routine for a loan that is not yet due (`gear:loan`,
+ * the delegable desk tier), an explicit, reasoned, audited override once
+ * it is (`gear:manage`). The judgement is permitted and recorded rather
+ * than prevented.
+ *
+ * Note what this deliberately does NOT do: there is still no cap on how
+ * far out, or how many times, a not-yet-due loan can be extended.
+ * `MAX_LOAN_DURATION_DAYS` remains checkout-only. That was a conscious
+ * scoping call (#224) — the standing escape is the part that made the
+ * ladder meaningless, and a length cap barely touches it.
+ */
 export async function extendLoanAction(input: {
   publicId: string;
   newDueAt: number;
+  /** Requires `gear:manage`; ignored without it. */
+  overrideOverdue?: boolean;
+  /** Why the overdue loan was extended. Recorded in the audit row. */
+  overrideReason?: string | null;
 }): Promise<ExtendLoanResult> {
   const principal = await requireGearLoanManager();
   const loan = await getLoanByPublicId(input.publicId);
   if (!loan) return { ok: false, reason: "not_found" };
   if (loan.returnedAt !== null) return { ok: false, reason: "loan_returned" };
+  const now = Temporal.Now.instant();
   const newDue = Temporal.Instant.fromEpochMilliseconds(input.newDueAt);
-  if (Temporal.Instant.compare(newDue, Temporal.Now.instant()) <= 0)
+  if (Temporal.Instant.compare(newDue, now) <= 0)
     return { ok: false, reason: "due_before_now" };
 
+  // Resolved through `gear:manage` on the REAL principal, like the
+  // checkout overrides: `requireGearLoanManager` above only asserts
+  // `gear:loan`, which is deliberately delegable to a desk keeper who
+  // holds nothing else, so reading the flag raw would hand that keeper
+  // the override. Role emulation can't fake it either, by design.
+  const canOverride = principal.permissions.includes("gear:manage");
+  const alreadyOverdue = Temporal.Instant.compare(now, loan.dueAt) > 0;
+  const overrideOverdue = input.overrideOverdue === true && canOverride;
+  if (alreadyOverdue && !overrideOverdue) {
+    return { ok: false, reason: "overdue_requires_override" };
+  }
+
   const priorDueAt = loan.dueAt.epochMilliseconds;
+  const priorReminderStage = loan.reminderStage;
   await extendLoanDueAt({ id: loan.id, newDueAt: newDue });
   await recordAuditEvent({
     actorUserId: principal.userId,
@@ -580,6 +624,15 @@ export async function extendLoanAction(input: {
       daysAdded: Math.round(
         (newDue.epochMilliseconds - priorDueAt) / (1000 * 60 * 60 * 24),
       ),
+      // Both recorded whether or not an override happened, so "how often
+      // is this used" is answerable from the audit page rather than by
+      // inference from the dates.
+      wasOverdue: alreadyOverdue,
+      overrideOverdue,
+      overrideReason: input.overrideReason ?? null,
+      // The ladder is reset by `extendLoanDueAt`; recording where it was
+      // means an unexplained silence afterwards is traceable.
+      priorReminderStage,
     },
   });
   return { ok: true, dueAt: newDue.epochMilliseconds };

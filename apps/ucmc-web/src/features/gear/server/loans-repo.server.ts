@@ -74,6 +74,10 @@ export interface LoanListRow {
   checkoutNotes: string | null;
   checkinNotes: string | null;
   conditionAtReturn: schema.GearCondition | null;
+  /** How far up the reminder ladder this loan has been emailed about. */
+  reminderStage: LoanReminderStageValue;
+  /** Officer-facing "when did we last chase them". */
+  lastRemindedAt: Temporal.Instant | null;
 }
 
 /**
@@ -108,6 +112,8 @@ const LOAN_COLUMNS = {
   checkoutNotes: schema.gearLoans.checkoutNotes,
   checkinNotes: schema.gearLoans.checkinNotes,
   conditionAtReturn: schema.gearLoans.conditionAtReturn,
+  reminderStage: schema.gearLoans.reminderStage,
+  lastRemindedAt: schema.gearLoans.lastRemindedAt,
 } as const;
 
 /**
@@ -142,6 +148,8 @@ interface RawLoanRow {
   checkoutNotes: string | null;
   checkinNotes: string | null;
   conditionAtReturn: schema.GearCondition | null;
+  reminderStage: LoanReminderStageValue;
+  lastRemindedAt: Temporal.Instant | null;
 }
 
 function toLoanRow(r: RawLoanRow): LoanListRow {
@@ -172,6 +180,8 @@ function toLoanRow(r: RawLoanRow): LoanListRow {
     checkoutNotes: r.checkoutNotes,
     checkinNotes: r.checkinNotes,
     conditionAtReturn: r.conditionAtReturn,
+    reminderStage: r.reminderStage,
+    lastRemindedAt: r.lastRemindedAt,
   };
 }
 
@@ -485,7 +495,16 @@ export async function extendLoanDueAt(input: {
 }): Promise<void> {
   await getDb()
     .update(schema.gearLoans)
-    .set({ dueAt: input.newDueAt })
+    .set({
+      dueAt: input.newDueAt,
+      // The ladder restarts with the new due date. It only ever climbs,
+      // so a loan left at `flagged` would stay silent through its whole
+      // extension and then jump straight back to `flagged` — the member
+      // would never get the courtesy nudge for the date they were
+      // actually given. `lastRemindedAt` is NOT cleared: when we last
+      // chased them is a historical fact, not ladder state.
+      reminderStage: "none",
+    })
     .where(eq(schema.gearLoans.id, input.id));
 }
 

@@ -1,6 +1,8 @@
+import { TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import {
   Dialog,
@@ -12,6 +14,8 @@ import {
 } from "#/components/ui/dialog";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import { Textarea } from "#/components/ui/textarea";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { useExtendLoan } from "#/features/gear/api/use-extend-loan";
 import type { LoanDetail } from "#/features/gear/server/gear-fns";
 import { toDateInputValue } from "#/lib/date-format";
@@ -32,13 +36,29 @@ export function LoanExtendDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const extend = useExtendLoan();
+  const { hasPermission } = useAuth();
   const [date, setDate] = useState(() => toIsoDate(loan.dueAt));
+  const [reason, setReason] = useState("");
 
   // Reset on each open so reopening doesn't carry a stale partial
   // edit from a prior session.
   useEffect(() => {
-    if (open) setDate(toIsoDate(loan.dueAt));
+    if (open) {
+      setDate(toIsoDate(loan.dueAt));
+      setReason("");
+    }
   }, [open, loan.dueAt]);
+
+  // Extending an already-overdue loan resets the member's cave standing,
+  // so the server treats it as a `gear:manage` override. Mirrored here
+  // only to explain the refusal before it happens — `hasPermission`
+  // rather than a payload-presence check, so role emulation narrows it
+  // the way it narrows everything else.
+  const isOverdue =
+    Temporal.Instant.compare(Temporal.Now.instant(), loan.dueAt) > 0;
+  const canOverride = hasPermission("gear:manage");
+  const needsReason = isOverdue && canOverride;
+  const blocked = isOverdue && !canOverride;
 
   const submit = () => {
     const [y, m, d] = date.split("-").map((n) => Number.parseInt(n, 10));
@@ -54,7 +74,12 @@ export function LoanExtendDialog({
       return;
     }
     extend.mutate(
-      { publicId: loan.publicId, newDueAt },
+      {
+        publicId: loan.publicId,
+        newDueAt,
+        overrideOverdue: isOverdue,
+        overrideReason: needsReason ? reason.trim() : null,
+      },
       {
         onSuccess: (result) => {
           if (result.ok) {
@@ -64,6 +89,10 @@ export function LoanExtendDialog({
             toast.error("This loan is already returned.");
           } else if (result.reason === "due_before_now") {
             toast.error("Pick a date in the future.");
+          } else if (result.reason === "overdue_requires_override") {
+            toast.error(
+              "This loan is already overdue — extending it needs gear:manage.",
+            );
           } else {
             toast.error("Couldn't find that loan.");
           }
@@ -82,6 +111,27 @@ export function LoanExtendDialog({
             Pick a new due date for {loan.code ?? loan.gearName}.
           </DialogDescription>
         </DialogHeader>
+        {blocked ? (
+          <Alert variant="destructive">
+            <TriangleAlert />
+            <AlertTitle>This loan is already overdue</AlertTitle>
+            <AlertDescription>
+              Extending it would reset the member&apos;s gear-cave standing, so
+              it needs <code>gear:manage</code>. Ask an officer who holds it.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {needsReason ? (
+          <Alert>
+            <TriangleAlert />
+            <AlertTitle>This loan is already overdue</AlertTitle>
+            <AlertDescription>
+              Extending it clears the member&apos;s overdue standing — if they
+              were flagged or blocked, they won&apos;t be any more. The reason
+              you give is recorded in the audit log.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <div className="space-y-1.5">
           <Label htmlFor="extend-date">New due date</Label>
           <Input
@@ -90,8 +140,21 @@ export function LoanExtendDialog({
             value={date}
             min={toIsoDate(Temporal.Now.instant().add({ hours: 24 }))}
             onChange={(e) => setDate(e.target.value)}
+            disabled={blocked}
           />
         </div>
+        {needsReason ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="extend-reason">Reason</Label>
+            <Textarea
+              id="extend-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Away on a trip, returning Monday…"
+              rows={2}
+            />
+          </div>
+        ) : null}
         <DialogFooter>
           <Button
             variant="outline"
@@ -100,8 +163,15 @@ export function LoanExtendDialog({
           >
             Cancel
           </Button>
-          <Button onClick={submit} disabled={extend.isPending}>
-            {extend.isPending ? "Saving…" : "Save"}
+          <Button
+            onClick={submit}
+            disabled={
+              extend.isPending ||
+              blocked ||
+              (needsReason && reason.trim().length === 0)
+            }
+          >
+            {extend.isPending ? "Saving…" : needsReason ? "Override" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>

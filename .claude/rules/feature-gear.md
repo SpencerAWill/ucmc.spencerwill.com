@@ -207,6 +207,16 @@ Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`
 
 **The audit action list exists twice** — `auditAction` in `drizzle/schema.ts` (the column enum) and `AUDIT_ACTIONS` in `features/audit/server/audit-fns.ts` (the filter dropdown). Nothing keeps them in sync; add to both.
 
+### Extending an overdue loan is an override
+
+Standing is `daysOverdue(dueAt, now)`, so pushing a due date out resets it — a **one-day** extension on a rope thirty days late turns a blocked member back into a good one. That made "extend" the silent escape hatch from the entire overdue apparatus, and it is what the reminder ladder would otherwise leak through.
+
+`extendLoanAction` therefore takes the shape checkout already uses for blocked standing and live holds: routine for a not-yet-due loan (`gear:loan`, the delegable desk tier), an explicit `gear:manage` override with a reason once the loan is overdue, both recorded in the `loan.extended` audit metadata (`wasOverdue`, `overrideOverdue`, `overrideReason`, `priorReminderStage`). The flag is resolved against `principal.permissions` on the **real** principal, like the checkout overrides — a desk keeper can't inherit it and emulation can't fake it. A `gear:manage` holder who doesn't _ask_ for the override is refused too: it is a judgement made on purpose, not one fallen into by clicking Save.
+
+**Extending resets `reminder_stage` to `none`** (but not `last_reminded_at`, which is a historical fact). The ladder only climbs, so a loan left at `flagged` would stay silent for its whole extension and then jump straight back to `flagged` — the member would never be told about the date they were actually given.
+
+**There is still no cap on length or count for a not-yet-due loan.** `MAX_LOAN_DURATION_DAYS` stays checkout-only. That is a deliberate scoping call from #224, not an oversight: the standing escape is what made the ladder meaningless, and a length cap barely touches it.
+
 ### The reminder ladder
 
 The daily job (`src/server/cron/gear-reminders.server.ts`) is what makes the overdue apparatus audible. Before it, the `/my/gear` banner was the only thing that ever told a member they were late, and nothing gave them a reason to open the page.

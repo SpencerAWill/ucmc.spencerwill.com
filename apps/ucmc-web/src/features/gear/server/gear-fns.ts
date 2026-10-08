@@ -626,6 +626,11 @@ const extendLoanInputSchema = z.object({
     .int()
     .min(0)
     .max(Date.UTC(2100, 0, 1)),
+  // Honoured only for a caller holding `gear:manage`; the action
+  // resolves that against the real principal and ignores the flag
+  // otherwise, so accepting it here grants nothing.
+  overrideOverdue: z.boolean().optional(),
+  overrideReason: z.string().trim().min(1).max(500).nullish(),
 });
 
 const listLoansInputSchema = z.object({
