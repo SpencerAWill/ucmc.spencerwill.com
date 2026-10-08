@@ -464,8 +464,17 @@ describe("a populated database upgrades across the most recent migration", () =>
 
     await applyThrough(names[names.length - 2]);
 
+    // `public_id` is spelled out rather than left to default, because
+    // this seed runs against head-minus-one and 0071 installed a trigger
+    // pair that rejects a users row without one. Omitting it worked only
+    // while 0071 was itself the newest migration and therefore outside
+    // the applied prefix — the next migration to land moved it inside,
+    // and the seed started failing for a reason that said nothing about
+    // the migration under test. A live row always has one anyway, which
+    // is what this seed is supposed to look like.
     await env.MIGRATIONS_DB.prepare(
-      `INSERT INTO users (id, status, created_at) VALUES ('usr_keep', 'approved', 1700000)`,
+      `INSERT INTO users (id, public_id, status, created_at)
+       VALUES ('usr_keep', 'aaaabbbbcccc', 'approved', 1700000)`,
     ).run();
     await env.MIGRATIONS_DB.prepare(
       `INSERT INTO user_emails (id, user_id, email, is_primary, verified_at, created_at)

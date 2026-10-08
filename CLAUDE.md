@@ -10,7 +10,7 @@
 | `infra/`         | Pulumi (TypeScript, stacks `dev` and `prod`)                                     |
 | `.devcontainer/` | Debian devcontainer: Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit       |
 
-Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** and loads when you open a matching file. Start there rather than asking for a tour: `web-architecture`, `data-and-bindings`, `auth-and-rbac`, `site-settings`, `compliance-and-waivers`, `dates-and-formats`, `testing`, `app-chrome`, `feature-*`, `infra`, `dependencies`, `devcontainer`.
+Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** and loads when you open a matching file. Start there rather than asking for a tour: `web-architecture`, `data-and-bindings`, `auth-and-rbac`, `site-settings`, `notifications`, `compliance-and-waivers`, `dates-and-formats`, `testing`, `app-chrome`, `feature-*`, `infra`, `dependencies`, `devcontainer`.
 
 ## Commands
 
@@ -52,6 +52,7 @@ These bite anywhere in the repo, so they live here rather than in a scoped rule.
 - **Features must not import each other.** `import/no-restricted-paths` enforces it; code three features need gets hoisted to `src/server/` or `src/components/`, not published as a third `FEATURE_PUBLIC_API`.
 - **Client-side permission gates read `hasPermission` / `hasAnyPermission`** (or `effectivePermissionsFor` on the server), **never `principal.permissions.includes()` and never the mere presence of a field in a server payload.** Both bypass role emulation silently — the server answers the _real_ principal by design.
 - **Permissions are DB rows; adding one needs a migration.** Site settings are not — a new entry in the Zod registry is the whole change.
+- **Notification categories are not DB rows either** — a new entry in `src/server/notifications/notification-registry.ts` is the whole change. `user_notification_preferences` is sparse: a row exists only when a member moves a category off its registry default. Whether a category can be switched off at all is the registry's `suppressible` field, not a branch in the senders.
 - **Wire the sidebar (`app-layout.tsx`) in the same change as any new public route**, and gate the entry on the flag of the page the link actually targets. This has been caught in review repeatedly.
 - **Legal and policy copy is legal review, not word-smithing** — `src/config/legal.ts` and the pages it feeds must match the canonical PDF byte-for-byte. Raise copy changes rather than tidying them.
 

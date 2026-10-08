@@ -505,6 +505,13 @@
       "when": 1779477596948,
       "tag": "0071_users_public_id_not_null",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1779477596949,
+      "tag": "0072_user_notification_preferences",
+      "breakpoints": true
     }
   ]
 }

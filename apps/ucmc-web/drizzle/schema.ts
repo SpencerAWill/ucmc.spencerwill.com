@@ -1,5 +1,12 @@
 // Define Drizzle table schemas here.
-// After edits, run: pnpm --filter ucmc-web db:generate
+//
+// After edits, hand-write the migration under `drizzle/migrations/` and
+// add its `meta/_journal.json` entry by hand. `db:generate` does NOT
+// run: the meta snapshots have been stale since 0059, so drizzle-kit
+// diffs against a snapshot many migrations behind, tries to resolve the
+// gap as table renames, and blocks on a prompt that fails without a
+// TTY. See CLAUDE.md.
+//
 // See: https://orm.drizzle.team/docs/sql-schema-declaration
 
 import { sql } from "drizzle-orm";
@@ -421,6 +428,70 @@ export const siteSettings = sqliteTable("site_settings", {
     onDelete: "set null",
   }),
 });
+
+export const notificationChannel = ["email"] as const;
+export type NotificationChannel = (typeof notificationChannel)[number];
+
+export const notificationPrefSource = ["user", "unsubscribe_link"] as const;
+export type NotificationPrefSource = (typeof notificationPrefSource)[number];
+
+/**
+ * Per-user notification preferences — the first persisted per-user
+ * preference in the app (theme is client-side; the "privacy" controls
+ * are export/delete buttons).
+ *
+ * Deliberately shaped like `site_settings`, one level down: the
+ * categories, their labels, their defaults and whether each may be
+ * switched off at all live in a zod registry in code
+ * (`src/server/notifications/notification-registry.ts`), and this table
+ * holds only the values that differ from it. **A missing row means the
+ * registry default**, so a member who has never opened the preferences
+ * tab has no rows here. A boolean column per category would have made
+ * every new category a migration.
+ *
+ * `channel` carries one value (`email`) today. It is in now rather than
+ * later because it is part of the composite primary key, and SQLite has
+ * no ALTER COLUMN — see migration 0071 for how unpleasant a key rebuild
+ * gets on D1.
+ *
+ * `source` separates a toggle on the preferences tab from a click on an
+ * unsubscribe link. These writes are **not** audited: the audit log
+ * records officer actions against the club, and a member changing their
+ * own email preference would be noise in it. This column plus
+ * `updatedAt` is the record.
+ *
+ * Categories the registry marks non-suppressible (the overdue-gear
+ * notice, which is a relationship message rather than a courtesy) never
+ * read this table, so a stray row cannot silence one.
+ */
+export const userNotificationPreferences = sqliteTable(
+  "user_notification_preferences",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Registry key, e.g. `gear.loan_due_soon`. */
+    category: text("category").notNull(),
+    channel: text("channel", { enum: notificationChannel }).notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull(),
+    source: text("source", { enum: notificationPrefSource }).notNull(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.category, t.channel] }),
+    // Serves the reminder cron's bulk opt-out read. Leads with
+    // `category` on purpose: the primary key already answers "this
+    // member's preferences", and the query that needs an index is the
+    // one asking for everyone who turned one category off.
+    index("user_notification_preferences_category_idx").on(
+      t.category,
+      t.channel,
+      t.enabled,
+    ),
+  ],
+);
 
 // Hero gallery slides for any page that renders a hero. Named
 // `landing_hero_slides` until migration 0065, when seven more public

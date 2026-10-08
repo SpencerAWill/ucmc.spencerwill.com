@@ -11,3 +11,8 @@ export const PROFILE_QUERY_KEY = ["account", "profile"] as const;
 export const PASSKEY_LIST_QUERY_KEY = ["account", "passkeys"] as const;
 
 export const MY_EMAILS_QUERY_KEY = ["account", "emails"] as const;
+
+export const MY_NOTIFICATION_PREFS_QUERY_KEY = [
+  "account",
+  "notification-prefs",
+] as const;

@@ -1,10 +1,12 @@
 import {
   MY_EMAILS_QUERY_KEY,
+  MY_NOTIFICATION_PREFS_QUERY_KEY,
   PASSKEY_LIST_QUERY_KEY,
   PROFILE_QUERY_KEY,
   SESSION_QUERY_KEY,
 } from "#/features/auth/api/query-keys";
 import { listMyEmailsFn } from "#/features/auth/server/email-fns";
+import { listMyNotificationPreferencesFn } from "#/features/auth/server/notification-prefs-fns";
 import { getProfileFn, getSessionFn } from "#/features/auth/server/server-fns";
 import { listPasskeysFn } from "#/features/auth/server/webauthn-fns";
 
@@ -64,5 +66,19 @@ export function myEmailsQueryOptions() {
       const result = await listMyEmailsFn();
       return result.ok ? result.emails : [];
     },
+  } as const;
+}
+
+/**
+ * The caller's notification preferences, every category resolved
+ * against the registry default.
+ *
+ * No `staleTime`: the list is small, read on one tab, and the only
+ * writer is the switch sitting next to it.
+ */
+export function myNotificationPreferencesQueryOptions() {
+  return {
+    queryKey: MY_NOTIFICATION_PREFS_QUERY_KEY,
+    queryFn: () => listMyNotificationPreferencesFn(),
   } as const;
 }
