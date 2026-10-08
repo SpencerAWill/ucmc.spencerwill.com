@@ -37,6 +37,12 @@ const MAILPIT_URL = process.env.MAILPIT_URL ?? "http://mailpit:8025";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Clears users left behind by previous runs before anything starts.
+  // Seeds key on `${prefix}-${Date.now()}@example.com`, so every run
+  // used to leave its users in the local D1 permanently — see
+  // `sweepSeededUsers` in e2e/fixtures/db.ts for why that became a
+  // correctness problem rather than untidiness.
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,

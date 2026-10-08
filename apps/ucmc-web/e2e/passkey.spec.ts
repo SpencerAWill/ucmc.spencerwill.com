@@ -2,7 +2,11 @@ import { ensureApprovedUser } from "./fixtures/db";
 import { waitForHydration } from "./fixtures/hydration";
 import { expect, test } from "./fixtures/mailpit";
 
-const PASSKEY_USER_EMAIL = "e2e-passkey@example.com";
+// Unique per run, like every other seeded address. A fixed one is a
+// cross-test assumption: it makes the spec depend on `ensureApprovedUser`
+// having wiped the previous run's rows, and two workers running this
+// file would race on the same `user_emails.email` UNIQUE.
+const PASSKEY_USER_EMAIL = `e2e-passkey-${Date.now()}@example.com`;
 
 /**
  * Full register-and-sign-back-in flow:

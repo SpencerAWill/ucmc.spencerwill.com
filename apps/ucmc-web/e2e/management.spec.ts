@@ -1,8 +1,6 @@
-import { randomUUID } from "node:crypto";
-
 import type { Page } from "@playwright/test";
 
-import { ensureApprovedUser, execD1, queryD1 } from "./fixtures/db";
+import { ensureApprovedUser, queryD1, seedUserWithStatus } from "./fixtures/db";
 import { waitForHydration } from "./fixtures/hydration";
 import { expect, test } from "./fixtures/mailpit";
 
@@ -24,46 +22,6 @@ import { expect, test } from "./fixtures/mailpit";
  * switch (defeating the regression check); only a real router-driven
  * navigation reproduces the production code path.
  */
-
-/** Insert a `users` row with the given status + a verified primary
- *  email. Bypasses the registration flow so deactivated/rejected
- *  rows can be set up directly. */
-function seedUserWithStatus(
-  email: string,
-  status: "approved" | "deactivated" | "rejected",
-): void {
-  const userId = `user_${randomUUID()}`;
-  const publicId = randomUUID().replace(/-/g, "").slice(0, 12);
-  const userEmailId = `uem_${randomUUID()}`;
-  const nowMs = Date.now();
-  const escapedEmail = `'${email.replace(/'/g, "''")}'`;
-  // Match what `deactivateMembersAction` / `rejectRegistrationsAction`
-  // would produce so the management page's queries treat the row
-  // identically to one that took the real path.
-  const statusTimestamp =
-    status === "deactivated"
-      ? `deactivated_at, ${nowMs}`
-      : status === "rejected"
-        ? `rejected_at, ${nowMs}`
-        : null;
-  const extraColumns = statusTimestamp
-    ? `, ${statusTimestamp.split(",")[0]}`
-    : "";
-  const extraValues = statusTimestamp
-    ? `, ${statusTimestamp.split(",")[1]}`
-    : "";
-
-  const sql = `
-DELETE FROM users WHERE id IN (SELECT user_id FROM user_emails WHERE email = ${escapedEmail});
-INSERT INTO users (id, public_id, status, created_at${extraColumns})
-VALUES ('${userId}', '${publicId}', '${status}', ${nowMs}${extraValues});
-INSERT INTO user_emails (id, user_id, email, is_primary, verified_at, created_at)
-VALUES ('${userEmailId}', '${userId}', ${escapedEmail}, 1, ${nowMs}, ${nowMs});
-INSERT INTO profiles (user_id, full_name, preferred_name, phone, uc_affiliation, updated_at)
-VALUES ('${userId}', 'E2E Tester', 'E2E', '+15555550100', 'student', ${nowMs});
-`;
-  execD1(sql);
-}
 
 /** Look up the current `users.status` for a given email (asserting on
  *  post-mutation DB state). */

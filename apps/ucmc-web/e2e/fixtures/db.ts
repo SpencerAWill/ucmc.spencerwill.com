@@ -1,8 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+
+// `currentWaiverCycle()` reads `Temporal.Now`, which the app installs in
+// its own entrypoints (`src/router.tsx`, `src/server-entry.ts`). Nothing
+// installs it in the Playwright process, so the fixture does.
+import "temporal-polyfill/global";
+
+import { WAIVER_VERSION } from "#/config/legal";
+import { currentWaiverCycle } from "#/config/waiver-cycle";
 
 const WEB_DIR = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
@@ -106,6 +114,28 @@ export interface SeededUserOptions {
    *  `["role_system_admin"]` for an officer with the role-bypass that
    *  grants every permission, including `members:manage`. */
   roles?: string[];
+  /**
+   * Whether to also write a current-cycle waiver attestation.
+   * **Defaults to `true`**, and the default is the point.
+   *
+   * The officer queue (`listMembersNeedingAttestationAction`) is every
+   * `status='approved'` user anti-joined against the holders of a live
+   * attestation, so an approved member seeded *without* one lands in
+   * that queue and stays there forever. Nothing cleans it up, so the
+   * local database had accumulated 487 such rows — enough that
+   * `boundingBox()` started returning null for rows `isVisible()`
+   * reported as visible, which is a false positive that looks exactly
+   * like a layout bug.
+   *
+   * It is also the realistic state: an approved member has handed in a
+   * signed waiver. Seeding one without an attestation models a member
+   * who was approved and then never signed, which is a specific case,
+   * not the default one.
+   *
+   * Pass `false` deliberately when the queue row IS the fixture —
+   * `mobile-waiver-queue.spec.ts` is the only such spec today.
+   */
+  attested?: boolean;
 }
 
 interface InsertUserOptions {
@@ -126,6 +156,11 @@ interface InsertUserOptions {
    *  confusing — keep the list to ids seeded by 0001_rbac_seed /
    *  0016_officer_roles_seed. */
   roles?: string[];
+  /** Write a live attestation for the current cycle. See
+   *  {@link SeededUserOptions.attested}. */
+  attested?: boolean;
+  deactivatedAt?: number | null;
+  rejectedAt?: number | null;
 }
 
 /**
@@ -166,8 +201,8 @@ function insertUser(options: InsertUserOptions): string {
 
     handle
       .prepare(
-        `INSERT INTO users (id, public_id, status, approved_at, placeholder_name, unclaimed_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (id, public_id, status, approved_at, placeholder_name, unclaimed_at, deactivated_at, rejected_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         userId,
@@ -176,6 +211,8 @@ function insertUser(options: InsertUserOptions): string {
         options.approvedAt ?? null,
         options.placeholderName ?? null,
         options.unclaimedAt ?? null,
+        options.deactivatedAt ?? null,
+        options.rejectedAt ?? null,
         nowMs,
       );
 
@@ -213,6 +250,32 @@ function insertUser(options: InsertUserOptions): string {
     for (const roleId of options.roles ?? []) {
       roleInsert.run(userId, roleId);
     }
+
+    if (options.attested) {
+      // `cycle` and `version` are imported, never recomputed: the match
+      // in `currentAttestationFilter` is `(cycle, version, revoked_at IS
+      // NULL)`, so a fixture that hard-coded either would silently stop
+      // satisfying the queue's anti-join after the Aug 21 rollover or a
+      // `WAIVER_VERSION` bump — and the symptom would be a slow return
+      // of the queue pollution this exists to prevent. (CLAUDE.md also
+      // forbids deriving the club year ad-hoc.)
+      //
+      // `attested_by` is null on purpose: no officer attested this, and
+      // the column is nullable precisely so an attestation can outlive
+      // its attestor.
+      handle
+        .prepare(
+          `INSERT INTO waiver_attestations (id, user_id, cycle, version, attested_at, attested_by)
+           VALUES (?, ?, ?, ?, ?, NULL)`,
+        )
+        .run(
+          `wa_${randomUUID()}`,
+          userId,
+          currentWaiverCycle(),
+          WAIVER_VERSION,
+          nowMs,
+        );
+    }
   });
 
   return userId;
@@ -248,6 +311,7 @@ export function ensureApprovedUser(
       phone: "+15555550100",
     },
     roles: options.roles ?? ["role_member"],
+    attested: options.attested ?? true,
   });
 }
 
@@ -305,6 +369,46 @@ export function seedPendingUserWithProfile(email: string): void {
  */
 export function seedUserWithoutProfile(email: string): void {
   insertUser({ email, status: "pending", verifiedAt: Date.now() });
+}
+
+/**
+ * Insert a user in a terminal management state — `approved`,
+ * `deactivated` or `rejected` — with a verified primary email and a
+ * profile, bypassing the registration flow so the member-management
+ * tabs can be driven directly.
+ *
+ * The status timestamp matches what `deactivateMembersAction` /
+ * `rejectRegistrationsAction` would write, so the management page's
+ * queries treat the row identically to one that took the real path.
+ *
+ * This lives here rather than in `management.spec.ts`, which had its
+ * own copy: that copy re-derived the `users` column list, hand-escaped
+ * its own SQL literals, and — once `ensureApprovedUser` started
+ * attesting — was the one remaining path that still dropped approved
+ * members into the waiver queue. A seed that knows the schema belongs
+ * with the other seeds that know the schema.
+ */
+export function seedUserWithStatus(
+  email: string,
+  status: "approved" | "deactivated" | "rejected",
+): void {
+  const nowMs = Date.now();
+  insertUser({
+    email,
+    status,
+    verifiedAt: nowMs,
+    approvedAt: status === "approved" ? nowMs : null,
+    deactivatedAt: status === "deactivated" ? nowMs : null,
+    rejectedAt: status === "rejected" ? nowMs : null,
+    // Only an approved member can sit in the officer queue, so only an
+    // approved one needs the attestation that keeps them out of it.
+    attested: status === "approved",
+    profile: {
+      fullName: "E2E Tester",
+      preferredName: "E2E",
+      phone: "+15555550100",
+    },
+  });
 }
 
 /**
@@ -367,3 +471,111 @@ export function seedSession(email: string): string {
 /** Cookie name for the seeded session over plain http (the `__Host-`
  *  prefix is only used when APP_BASE_URL is https). */
 export const SESSION_COOKIE_NAME = "ucmc_session";
+
+/**
+ * Domain every e2e seed addresses. RFC 2606 reserves `example.com` for
+ * documentation and testing, so no address under it can belong to a
+ * real person — which is what makes {@link sweepSeededUsers} safe to
+ * run against a developer's local database.
+ */
+export const E2E_EMAIL_DOMAIN = "example.com";
+
+/**
+ * Read `SEED_ADMIN_EMAIL` out of `.env.local`.
+ *
+ * `drizzle/seed.ts` promotes that address to sysadmin for local dev,
+ * and the sweep below must never delete it. Vite loads `.env.local`
+ * for the dev server, but nothing loads it for the Playwright process,
+ * so `process.env` alone would miss it — and the one case that matters
+ * is precisely a developer who pointed it at an `@example.com`
+ * address.
+ */
+function seedAdminEmail(): string | undefined {
+  const fromEnv = process.env.SEED_ADMIN_EMAIL?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  try {
+    const match = /^\s*SEED_ADMIN_EMAIL\s*=\s*(.+)$/m.exec(
+      readFileSync(join(WEB_DIR, ".env.local"), "utf8"),
+    );
+    return match?.[1].trim().replace(/^["']|["']$/g, "");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Delete every user seeded by a previous e2e run, and report how many
+ * went.
+ *
+ * **Why this has to exist.** Seeds key on a unique per-run address
+ * (`${prefix}-${Date.now()}@example.com`), which keeps runs from
+ * colliding but means every run leaves its users behind permanently.
+ * Nothing ever removed them: the local database had reached 523 users,
+ * 487 of them approved. That is not merely untidy — a long enough
+ * waiver queue makes `boundingBox()` return null for rows
+ * `isVisible()` reports as visible, and `mobile-waiver-queue.spec.ts`
+ * has already produced one false positive that way.
+ *
+ * Attesting by default (see {@link SeededUserOptions.attested}) stops
+ * the *queue* from growing, but not the user table; the pending,
+ * unclaimed and profile-less seeds leave rows regardless of waivers.
+ * This is the half that bounds the rest.
+ *
+ * **Why the whole domain rather than known prefixes.** The prefixes
+ * are not a convention anybody enforces. The accumulated rows carry
+ * `mobile-overflow-`, `waiver-shift-`, `waiver-inert-`, `e2e-` and a
+ * tail of one-off debugging ones (`dbg-`, `scratch-`, `hyd-`, `ux-`,
+ * `shot-`); a prefix list would have left roughly 40% of them behind
+ * and would silently miss whatever the next spec invents. The domain
+ * is the real invariant, and it cannot name a live mailbox.
+ *
+ * The one address under it that might not be disposable is a seed
+ * admin pointed at `example.com`, which is excluded explicitly.
+ *
+ * **Deleted in chunks, and that is not premature tuning.** The first
+ * run of this against the accumulated backlog is a 500-user cascading
+ * delete, and the dev server is already serving by the time global
+ * setup runs. One statement that size holds SQLite's write lock long
+ * enough to starve workerd, which has no busy timeout of its own and
+ * fails the request outright — observed as
+ * `database is locked: SQLITE_BUSY` in the worker log, taking an
+ * unrelated spec down with it. Chunking bounds each lock hold; steady
+ * state is one short transaction.
+ */
+export function sweepSeededUsers(): number {
+  const protectedEmail = seedAdminEmail() ?? "";
+  const handle = db();
+
+  const ids = handle
+    .prepare(
+      "SELECT user_id FROM user_emails WHERE email LIKE ? AND email <> ?",
+    )
+    .all(`%@${E2E_EMAIL_DOMAIN}`, protectedEmail)
+    .map((row) => (row as { user_id: string }).user_id);
+
+  let removed = 0;
+  const CHUNK_SIZE = 50;
+  for (let start = 0; start < ids.length; start += CHUNK_SIZE) {
+    const chunk = ids.slice(start, start + CHUNK_SIZE);
+    const placeholders = chunk.map(() => "?").join(",");
+    withTransaction((h) => {
+      // `gear_loans.member_user_id` is ON DELETE RESTRICT — the one FK
+      // to `users` that does not cascade, because production must not
+      // lose the record of who has a piece of gear out. It therefore
+      // blocks the delete, and the loan rows have to go first. Nothing
+      // references `gear_loans` in turn, so this is the only step the
+      // cascade can't do for us.
+      h.prepare(
+        `DELETE FROM gear_loans WHERE member_user_id IN (${placeholders})`,
+      ).run(...chunk);
+      removed += Number(
+        h
+          .prepare(`DELETE FROM users WHERE id IN (${placeholders})`)
+          .run(...chunk).changes,
+      );
+    });
+  }
+  return removed;
+}
