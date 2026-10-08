@@ -175,8 +175,11 @@ jobs:
     # The whole chromium project, serially: `workers: 1`, because the
     # specs share one local D1 and cannot be parallelised — two workers
     # would collide on `user_emails.email`'s global UNIQUE and on the
-    # delete-then-insert each seed opens with. Per-worker isolation is
-    # issue #238. `retries: 2` on CI.
+    # delete-then-insert each seed opens with. Investigated and declined
+    # in #238: this job and e2e-mobile run in parallel and are within
+    # ~15s of each other, so the remaining prize is ~70s. If it is ever
+    # wanted, `--shard=i/n` across runners is the cheaper route and needs
+    # no isolation work. `retries: 2` on CI.
     timeout-minutes: 30
     permissions:
       contents: read

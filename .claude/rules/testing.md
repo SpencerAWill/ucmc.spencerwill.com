@@ -142,7 +142,11 @@ Three things make this safe, and each is worth knowing before changing the fixtu
 
 **A `beforeEach` seed is no longer a performance decision.** The old guidance priced it at ~1.5–2.5 s per call; it is now microseconds-to-milliseconds. What still argues against one is state pollution, not time.
 
-**`workers: 1` still stands.** The speed-up does nothing about isolation: all workers would share this one file, colliding on `user_emails.email`'s global UNIQUE and on each seed's delete-then-insert. Per-worker databases are issue #238, and `persistState` on `@cloudflare/vite-plugin` is the hook for it. `drizzle/seed.ts` still shells out to wrangler — that is a once-per-invocation script, where the boot does not compound.
+**`workers: 1` is deliberate, not a leftover.** All workers would share this one SQLite file and collide on `user_emails.email`'s global UNIQUE and on each seed's delete-then-insert. Per-worker databases were investigated in #238 and **declined**: the two E2E jobs run in parallel, so the suite's wall-clock is the slower of them, and after the seeding speed-up they are within ~15 s of each other — the entire remaining prize is about 70 s.
+
+**If that 70 s is ever wanted, shard across runners rather than across workers.** `playwright test --shard=i/n` with a job matrix splits the suite over separate machines, and a separate runner is already a separate checkout, dev server and D1 — so the isolation problem does not need solving at all. It also keeps the select-by-project invariant above intact, since `--shard` divides whatever the projects already match. Per-worker `persistState` (the hook exists on `@cloudflare/vite-plugin`) buys the same number for a fixture rewrite plus N dev servers, which is why it was not taken.
+
+`drizzle/seed.ts` still shells out to wrangler — that is a once-per-invocation script, where the boot does not compound.
 
 ### Seeded state
 
