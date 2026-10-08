@@ -271,14 +271,47 @@ function GearForm({
     gearSuggestedCodeQueryOptions(typePublicId || null),
   );
 
-  // Auto-fill the code when type changes (create only, only if code is empty).
+  // The code field is auto-filled from the selected type's suggestion
+  // until the officer touches it, after which it is theirs and the sheet
+  // never writes to it again.
+  //
+  // That one flag replaces what used to be a `code` dependency on this
+  // effect. With `code` in the deps the effect re-ran on every keystroke,
+  // so clearing the field re-entered it with the `code.trim().length > 0`
+  // guard now satisfied and put the suggestion straight back — the "Blank
+  // for unlabeled" the hint underneath promises was unreachable the
+  // moment a type was picked.
+  //
+  // Ownership, rather than emptiness, is what the two remaining rules
+  // both need:
+  //
+  //   - An untouched suggestion FOLLOWS the type. Switching type after
+  //     the field auto-filled used to leave the old type's code in place,
+  //     so a rope could be saved carrying a harness prefix. Nothing
+  //     rejects that — the server enforces uniqueness only, and the
+  //     prefix is advisory — but `listCodesForType` scopes to the type,
+  //     so the stray code is invisible to BOTH counters: the rope's
+  //     ignores it for not matching the rope prefix, and the harness's
+  //     never sees it at all. The next harness is then suggested a code
+  //     that is already taken, and the officer gets `code_in_use` against
+  //     a code they cannot find on any harness.
+  //   - A blanked field STAYS blank across a type change. Clearing it is
+  //     a decision about this piece of gear ("no tag"), not about the
+  //     type, so re-arming on type change would reintroduce the same
+  //     argument with the officer. The input keeps the live suggestion as
+  //     its placeholder, so nothing is trapped — the value is still on
+  //     screen to retype.
+  //
+  // `code` stays out of the deps; the effect writes it and never reads
+  // it, so re-running on its own write is exactly the loop to avoid.
   const suggestion = suggested.data?.suggestion;
+  const codeTouched = useRef(false);
   useEffect(() => {
     if (isEdit) return;
     if (!suggestion) return;
-    if (code.trim().length > 0) return;
+    if (codeTouched.current) return;
     setCode(suggestion);
-  }, [isEdit, suggestion, typePublicId, code]);
+  }, [isEdit, suggestion, typePublicId]);
 
   const submitting = createMutation.isPending || editMutation.isPending;
 
@@ -482,7 +515,13 @@ function GearForm({
             <Input
               id="gear-code"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => {
+                // Any edit hands the field to the officer — including
+                // clearing it, which is why this is an ownership flag
+                // and not an emptiness check.
+                codeTouched.current = true;
+                setCode(e.target.value);
+              }}
               placeholder={suggested.data?.suggestion || "CH4"}
               maxLength={64}
             />
