@@ -5,17 +5,13 @@ import { SidebarNav } from "#/components/layouts/app-layout";
 import { SidebarProvider } from "#/components/ui/sidebar";
 import { authStub } from "#/test-support/auth-stub";
 
-// The nav's own logic is the subject; its heavy children (the bell, the
-// user menu) are stubbed so this doesn't drag in the announcements and
-// auth feature graphs. `Link` becomes a plain `<a>` so accessible-name
-// queries work without a router.
+// The nav's own logic is the subject; its heavy children (the user menu)
+// are stubbed so this doesn't drag in the auth feature graph. `Link`
+// becomes a plain `<a>` so accessible-name queries work without a router.
 const useAuthMock = vi.hoisted(() => vi.fn());
 const flagsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("#/features/auth/api/use-auth", () => ({ useAuth: useAuthMock }));
-vi.mock("#/features/announcements/components/announcements-bell", () => ({
-  AnnouncementsBell: () => null,
-}));
 vi.mock("#/features/auth/components/user-menu", () => ({
   UserMenu: () => null,
 }));
@@ -30,7 +26,7 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("#/features/settings/api/queries", () => ({
   publicFlagsQueryOptions: () => ({
     queryKey: ["public-flags"],
-    placeholderData: { pages: {}, announcements: false },
+    placeholderData: { pages: {} },
   }),
   publicSiteContactQueryOptions: () => ({
     queryKey: ["public-site-contact"],
@@ -77,7 +73,7 @@ const PAGES_ON = {
 } as const;
 
 function setFlags(pages: Record<string, boolean>) {
-  flagsMock.mockReturnValue({ pages, announcements: false });
+  flagsMock.mockReturnValue({ pages });
 }
 
 function setAuth(permissions: string[], isApproved = true) {

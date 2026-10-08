@@ -160,9 +160,9 @@ function DataAndDeletionSection() {
         <p className="text-sm text-muted-foreground">
           Permanently delete your account, profile, emergency contacts,
           passkeys, sessions, and waiver attestation history. This is immediate
-          and irreversible — there is no recovery on the other side. Authored
-          announcements stay (anonymized) so the timeline for other members
-          remains intact.
+          and irreversible — there is no recovery on the other side. Records you
+          created for other members — officer waiver attestations, gear and
+          feedback entries — stay (anonymized) so their history remains intact.
         </p>
         <AlertDialog open={open} onOpenChange={setOpen}>
           <AlertDialogTrigger asChild>

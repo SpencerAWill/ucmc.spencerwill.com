@@ -109,7 +109,6 @@ describe("isCacheablePublicPageRequest", () => {
 
   it.each([
     "/sign-in",
-    "/announcements",
     "/feedback",
     "/my/profile",
     "/members",

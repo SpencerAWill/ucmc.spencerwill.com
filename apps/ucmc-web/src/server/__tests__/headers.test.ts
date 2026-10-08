@@ -22,7 +22,6 @@ describe("securityHeadersForPath / Permissions-Policy", () => {
       "/gear/loan", // close-but-not-quite — shouldn't accidentally match
       "/my/gear",
       "/members",
-      "/announcements",
       "/audit",
     ]) {
       expect(permissionsPolicy(p)).toContain("camera=()");

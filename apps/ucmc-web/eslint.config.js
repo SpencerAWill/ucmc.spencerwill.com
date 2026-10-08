@@ -40,7 +40,6 @@ const zonePath = (rel) => new URL(rel, import.meta.url).pathname;
  */
 const FEATURES = [
   "album",
-  "announcements",
   "audit",
   "auth",
   "club-feedback",
@@ -189,7 +188,7 @@ export default [
     //      lib, hooks, config are feature-blind primitives.
     //      components/layouts/ is intentionally NOT scoped here because
     //      AppLayout is app-shell territory and legitimately renders
-    //      AnnouncementsBell + UserMenu.
+    //      UserMenu + ViewAsMenu.
     //   3. Features can't import routes. Routes compose features, not
     //      the reverse.
     //

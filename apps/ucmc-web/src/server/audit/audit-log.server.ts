@@ -112,8 +112,8 @@ export interface AuditEventInput {
   /** The user the action targets. Use this for any user-targeted
    *  event so the audit page can join across users + actions. */
   targetUserId?: string | null;
-  /** For non-user targets — role IDs, landing setting keys,
-   *  announcement IDs. Pair with `targetId`. */
+  /** For non-user targets — role IDs, landing setting keys, site
+   *  setting keys. Pair with `targetId`. */
   targetType?: string | null;
   targetId?: string | null;
   /** Non-PII context. Will be JSON-serialized. See module-level

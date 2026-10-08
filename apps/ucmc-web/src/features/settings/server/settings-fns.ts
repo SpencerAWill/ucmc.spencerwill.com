@@ -99,7 +99,7 @@ export const getPublicBrandingFn = createServerFn({
 /**
  * Public read of feature-flag state. No auth gate — "is this feature
  * visible?" isn't sensitive (anyone hitting the gated URL would get the
- * same answer back), and the sidebar / header bell need this synchronously
+ * same answer back), and the sidebar and tab bars need this synchronously
  * to decide whether to render. Each flag here corresponds to a boolean
  * setting in the registry; the allowlist is hand-maintained, not auto-
  * derived, so reclassifying a boolean setting can't accidentally surface
@@ -110,10 +110,6 @@ export type PublicFlags = {
   // each feedback surface accepts NEW submissions.
   siteFeedback: boolean;
   clubFeedback: boolean;
-  /** `features.announcements`. Not in `pages` — besides page reachability
-   *  it gates the header bell and the server write actions, so it can't
-   *  share the uniform "hide and 404" meaning the page flags have. */
-  announcements: boolean;
   // Per-page kill switches, keyed by the `pages.*` suffix. Each gates both
   // the page's route (via `requirePageFlag`) and its nav/tab entry. See
   // the registry's `pages` category for the full set.

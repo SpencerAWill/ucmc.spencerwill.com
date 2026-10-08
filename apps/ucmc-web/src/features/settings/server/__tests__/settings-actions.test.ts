@@ -332,12 +332,11 @@ describe("getPublicFlagsAction", () => {
     ] as const) {
       expect(flags.pages[key]).toBe(true);
     }
-    // Announcements is the exception — the feature isn't launched, so it
-    // ships default OFF.
-    // Announcements is a FEATURE flag, not a page flag — it also gates
-    // the header bell and the server write actions, so it sits at the
-    // top level of the snapshot rather than in the pages map.
-    expect(flags.announcements).toBe(false);
+    // Feature flags are NOT page flags — they govern behaviour rather than
+    // reachability, so they sit at the top level of the snapshot rather
+    // than in the pages map.
+    expect(flags.siteFeedback).toBe(true);
+    expect(flags.clubFeedback).toBe(true);
   });
 
   it("cascades a section switch to its children in the public snapshot", async () => {
@@ -475,11 +474,11 @@ describe("listSettingHistoryAction", () => {
     });
 
     // Two edits on a boolean setting → both audit rows carry value.
-    await updateSettingAction({ key: "features.announcements", value: true });
-    await updateSettingAction({ key: "features.announcements", value: false });
+    await updateSettingAction({ key: "gear.remindersEnabled", value: true });
+    await updateSettingAction({ key: "gear.remindersEnabled", value: false });
 
     const history = await listSettingHistoryAction({
-      key: "features.announcements",
+      key: "gear.remindersEnabled",
     });
     expect(history).toHaveLength(2);
     expect(history[0].booleanValue).toBe(false); // newest first

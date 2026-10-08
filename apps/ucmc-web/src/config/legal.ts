@@ -266,7 +266,6 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
     paragraphs: [
       "When you register, we collect your email, full legal name, preferred name, phone number, UC affiliation, optional bio, optional avatar, and one or more emergency contacts (name, phone, relationship). We also record the date you acknowledged UCMC's anti-hazing and non-discrimination policies, plus the version of those policies you ticked.",
       "When an officer attests your paper waiver for the current academic cycle, we record that attestation: the cycle, the waiver version, the officer who attested, and the timestamp. We do not record the contents of the waiver itself.",
-      "We capture the timestamp of your most recent visit to /announcements so the bell-icon unread count works.",
     ],
   },
   {
@@ -405,7 +404,7 @@ export const ABOUT_BODY: readonly LegalSection[] = [
     heading: "How we run",
     paragraphs: [
       "UCMC is governed by an elected officer board (President, Vice President, Treasurer, Secretary, Equipment Officer, Outings Officer) and a faculty advisor. Day-to-day operations — meetings, trips, gear lending, dues collection — happen at the club, not on this website.",
-      "The canonical UCMC roster is maintained by the Treasurer on UC's official CampusLINK platform per Bylaw 1.3. This site is an additive operational tool: it surfaces announcements, lets officers track paper-waiver attestations, and gives members a place to update their contact information. It is never a replacement for the official roster.",
+      "The canonical UCMC roster is maintained by the Treasurer on UC's official CampusLINK platform per Bylaw 1.3. This site is an additive operational tool: it lets officers track paper-waiver attestations, lends gear, and gives members a place to update their contact information. It is never a replacement for the official roster.",
     ],
   },
   {

@@ -506,8 +506,9 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
   // Drop the user row. Foreign-key cascades in schema.ts handle:
   //   profiles, emergency_contacts, sessions, passkey_credentials,
   //   user_roles, waiver_attestations.
-  // announcements.created_by is ON DELETE SET NULL, so authored
-  // announcements stay but lose the author attribution.
+  // Authorship columns elsewhere (`created_by` / `updated_by` /
+  // `attested_by`) are ON DELETE SET NULL, so the content stays but
+  // loses its author attribution.
   await db.delete(schema.users).where(eq(schema.users.id, principal.userId));
 
   // Audit AFTER the destructive work succeeds — recording before

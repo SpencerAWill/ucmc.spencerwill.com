@@ -4,7 +4,7 @@
  * Replaces the scattered `date-fns` (`format`, `formatDistanceToNowStrict`)
  * and `toLocaleDateString` / `Intl.RelativeTimeFormat` call sites, plus the
  * three duplicated hand-rolled `formatRelative` copies that lived in the
- * announcement / feedback / club-feedback cards.
+ * feedback / club-feedback cards.
  *
  * All absolute formats render in the viewer's local time zone — the runtime
  * default `Temporal.Instant.prototype.toLocaleString` uses — matching the
