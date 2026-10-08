@@ -99,6 +99,9 @@ export const loanDetailQueryKey = (publicId: string) =>
 
 export const MY_LOANS_QUERY_KEY = ["gear", "loans", "mine"] as const;
 
+/** The desk's prefill values, read from site settings. */
+export const LOAN_DEFAULTS_QUERY_KEY = ["gear", "loans", "defaults"] as const;
+
 // ── cart ───────────────────────────────────────────────────────────────
 
 export const MY_CART_QUERY_KEY = ["gear", "cart", "mine"] as const;

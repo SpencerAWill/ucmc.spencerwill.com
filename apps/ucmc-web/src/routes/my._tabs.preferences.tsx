@@ -20,6 +20,7 @@ import { Label } from "#/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { useDeleteMyAccount } from "#/features/auth/api/use-delete-my-account";
+import { NotificationPreferencesSection } from "#/features/auth/components/notification-preferences-section";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 /**
@@ -28,8 +29,11 @@ import { requirePageFlag } from "#/features/settings/api/page-guards";
  * here because downloading your data and deleting your account are
  * account-management concerns, not authentication surface.
  *
- * Future per-user preferences (email notifications, default trip
- * visibility, etc.) will persist to D1 and slot in under new section
+ * Email-notification switches persist to D1 through
+ * `user_notification_preferences`; the theme toggle above them does not
+ * — it is a client-side display choice, so it stays in local storage
+ * where it applies before any request resolves. Further per-user
+ * preferences (default trip visibility, etc.) slot in under new section
  * headers above the danger zone.
  */
 export const Route = createFileRoute("/my/_tabs/preferences")({
@@ -91,6 +95,8 @@ function PreferencesPage() {
           ))}
         </ToggleGroup>
       </section>
+
+      <NotificationPreferencesSection />
 
       <DataAndDeletionSection />
     </div>

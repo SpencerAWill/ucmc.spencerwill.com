@@ -16,8 +16,9 @@ import {
 } from "#/features/gear/api/queries";
 import { GearDeskTrigger } from "#/features/gear/components/gear-desk-trigger";
 import { LoanCard } from "#/features/gear/components/loan-card";
-import { LoanFilterBar } from "#/features/gear/components/loan-filter-bar";
-import type { LoanFilterState } from "#/features/gear/components/loan-filter-bar";
+import { DEFAULT_LOAN_SORT_DIRECTION } from "#/features/gear/lib/loan-sort";
+import { LoansToolbar } from "#/features/gear/components/loans-toolbar";
+import type { LoansToolbarState } from "#/features/gear/components/loans-toolbar";
 import { LoansBulkImportSheet } from "#/features/gear/components/loans-bulk-import-sheet";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
@@ -32,6 +33,11 @@ const loansSearchSchema = z.object({
   member: z.string().optional(),
   overdue: z.coerce.boolean().optional(),
   sort: z.enum(["due_at", "checked_out_at"]).optional(),
+  // Direction is its own param rather than being folded into `sort`
+  // ("due_at_desc") so the toolbar can flip it without re-deriving the
+  // key, and so an omitted value falls back per-key — due dates default
+  // ascending, checkout dates descending.
+  dir: z.enum(["asc", "desc"]).optional(),
   page: z.coerce.number().int().min(1).optional(),
   // Pin to the offered choices so a URL with `?perPage=37` doesn't
   // leave the Select trigger with an unmatched value. Out-of-range
@@ -72,15 +78,23 @@ function GearLoansPage() {
     memberForLoanByPublicIdQueryOptions(search.member ?? null),
   );
 
-  const filterState: LoanFilterState = {
+  const sort = search.sort ?? "due_at";
+  const toolbarState: LoansToolbarState = {
     tab: search.tab ?? "active",
     q: search.q ?? "",
     overdueOnly: search.overdue ?? false,
-    sort: search.sort ?? "due_at",
+    sort,
+    dir: search.dir ?? DEFAULT_LOAN_SORT_DIRECTION[sort],
     selectedMember,
   };
 
-  const onFilterChange = (next: LoanFilterState) => {
+  // The toolbar reports only what changed, so merge onto current state
+  // before writing the URL — otherwise a sort change would clear the
+  // member filter. Every param drops out of the URL at its default
+  // value, keeping a shared link down to what the sender actually
+  // narrowed by.
+  const onToolbarChange = (patch: Partial<LoansToolbarState>) => {
+    const next = { ...toolbarState, ...patch };
     void navigate({
       search: (prev) => ({
         ...prev,
@@ -88,6 +102,10 @@ function GearLoansPage() {
         q: next.q.trim().length === 0 ? undefined : next.q.trim(),
         overdue: next.overdueOnly ? true : undefined,
         sort: next.sort === "due_at" ? undefined : next.sort,
+        dir:
+          next.dir === DEFAULT_LOAN_SORT_DIRECTION[next.sort]
+            ? undefined
+            : next.dir,
         member: next.selectedMember?.publicId ?? undefined,
         page: undefined,
       }),
@@ -99,11 +117,12 @@ function GearLoansPage() {
 
   const { data, isLoading } = useQuery(
     loansListQueryOptions({
-      tab: filterState.tab,
+      tab: toolbarState.tab,
       memberPublicId: search.member,
       q: search.q,
-      overdueOnly: filterState.overdueOnly,
-      sort: filterState.sort,
+      overdueOnly: toolbarState.overdueOnly,
+      sort: toolbarState.sort,
+      dir: toolbarState.dir,
       page,
       perPage,
     }),
@@ -141,14 +160,14 @@ function GearLoansPage() {
           onOpenChange={setBulkImportOpen}
         />
       ) : null}
-      <LoanFilterBar state={filterState} onChange={onFilterChange} />
+      <LoansToolbar state={toolbarState} onChange={onToolbarChange} />
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading loans…</p>
       ) : rows.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>
-              {filterState.tab === "active"
+              {toolbarState.tab === "active"
                 ? "No active loans."
                 : "No loan history yet."}
             </EmptyTitle>

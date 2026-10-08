@@ -49,4 +49,4 @@ In `src/server/db/index.ts`, beside `isUniqueViolation` / `isForeignKeyViolation
 
 Local dev loads from `apps/ucmc-web/.env.local` per wrangler v4 `.env` precedence (`.dev.vars` is no longer used). The devcontainer sets `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` so host shell env wins over `.env.local`. Deployed envs get vars from Pulumi `--var` flags + `wrangler secret put` via `deploy.yml`.
 
-Email uses a three-tier fallback (`src/server/email/resend.ts`): Resend API if `RESEND_API_KEY`, else Mailpit at `MAILPIT_URL`, else a Worker console log.
+Email has **two** tiers (`src/server/email/resend.ts`): Resend API if `RESEND_API_KEY`, else Mailpit at `MAILPIT_URL`, **else it throws `EmailNotConfiguredError`**. The console-log "fallback" this used to describe was removed deliberately — it either dumped magic-link URLs into dashboard-readable Workers Logs or left users staring at a never-arriving email. See `notifications.md`.

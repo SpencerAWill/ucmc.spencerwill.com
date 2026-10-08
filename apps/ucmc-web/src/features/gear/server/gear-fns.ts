@@ -100,6 +100,7 @@ import type {
   GearLookupRow,
   ListLoansActionInput,
   ListLoansActionResult,
+  LoanDefaults,
   LoanDetail,
   LoanSummary,
   MyLoansResult,
@@ -224,6 +225,7 @@ export type {
   GearLookupRow,
   ListLoansActionInput,
   ListLoansActionResult,
+  LoanDefaults,
   LoanDetail,
   LoanSummary,
   MemberSearchResult,
@@ -626,6 +628,11 @@ const extendLoanInputSchema = z.object({
     .int()
     .min(0)
     .max(Date.UTC(2100, 0, 1)),
+  // Honoured only for a caller holding `gear:manage`; the action
+  // resolves that against the real principal and ignores the flag
+  // otherwise, so accepting it here grants nothing.
+  overrideOverdue: z.boolean().optional(),
+  overrideReason: z.string().trim().min(1).max(500).nullish(),
 });
 
 const listLoansInputSchema = z.object({
@@ -634,6 +641,7 @@ const listLoansInputSchema = z.object({
   q: z.string().max(200).optional(),
   overdueOnly: z.boolean().optional(),
   sort: z.enum(["due_at", "checked_out_at"]).optional(),
+  dir: z.enum(["asc", "desc"]).optional(),
   page: z.number().int().min(1).optional(),
   perPage: z.number().int().min(1).max(250).optional(),
 });
@@ -1043,6 +1051,14 @@ export const extendLoanFn = createServerFn({ method: "POST" })
       await import("#/features/gear/server/loans-actions.server");
     return extendLoanAction(data);
   });
+
+export const getLoanDefaultsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<LoanDefaults> => {
+    const { getLoanDefaultsAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return getLoanDefaultsAction();
+  },
+);
 
 export const listLoansFn = createServerFn({ method: "GET" })
   .validator(listLoansInputSchema)

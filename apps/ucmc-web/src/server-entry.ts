@@ -21,6 +21,7 @@ import startEntry from "@tanstack/react-start/server-entry";
 
 import { withPublicPageCache } from "./server/edge-cache";
 import type { WorkerFetchHandler } from "./server/edge-cache";
+import { isDailyCron } from "./server/cron/daily-schedule";
 import { errorMessage, log, runWithLogContext } from "./server/log/log.server";
 
 /**
@@ -71,7 +72,9 @@ export default {
     // branch each, rather than every job firing on every tick.
     //
     // Schedules currently wired (must match wrangler.jsonc):
-    //   - "0 8 * * *"   → daily retention sweeps
+    //   - "0 12 * * *"  → daily retention sweeps + gear reminders
+    //                     (08:00 EDT / 07:00 EST — see
+    //                     ./server/cron/daily-schedule)
     //   - "15 8 1 3 *"  → annual officer-archive snapshot (March 1)
     //
     // Every branch runs inside a log context carrying the cron
@@ -95,12 +98,45 @@ export default {
       return;
     }
 
-    // Default fallback: daily retention. Catches "0 8 * * *" plus any
-    // future daily schedules that piggyback on the same wakeup.
-    const { runRetentionSweeps } =
-      await import("./server/cron/retention.server");
+    // The daily tick, matched EXPLICITLY rather than as a fallback.
+    //
+    // This used to be `else { …retention… }`, which quietly made every
+    // unrecognised expression run the sweeps — so adding a second daily
+    // schedule for any reason would have run retention twice a day
+    // without a word. Matching the expression and warning on anything
+    // else turns that from a silent trap into a log line.
+    if (!isDailyCron(event.cron)) {
+      // An expression in wrangler.jsonc with no branch here is a
+      // misconfiguration. Say so instead of running something arbitrary.
+      log.warn("cron.unrecognised", { cron: event.cron });
+      return;
+    }
+
+    const [{ runRetentionSweeps }, { runGearLoanReminders }] =
+      await Promise.all([
+        import("./server/cron/retention.server"),
+        import("./server/cron/gear-reminders.server"),
+      ]);
     ctx.waitUntil(
-      runWithLogContext({ cron: event.cron }, () => runRetentionSweeps()),
+      runWithLogContext({ cron: event.cron }, async () => {
+        // Independent: a failed sweep must not cost members their
+        // reminders, and a provider outage must not stop the retention
+        // promises on /privacy from being kept. `allSettled`, not `all`.
+        const [sweeps, reminders] = await Promise.allSettled([
+          runRetentionSweeps(),
+          runGearLoanReminders({ now: Temporal.Now.instant() }),
+        ]);
+        if (sweeps.status === "rejected") {
+          log.error("retention.sweeps_failed", {
+            error: errorMessage(sweeps.reason),
+          });
+        }
+        if (reminders.status === "rejected") {
+          log.error("gear_reminders.run_failed", {
+            error: errorMessage(reminders.reason),
+          });
+        }
+      }),
     );
   },
 } satisfies {

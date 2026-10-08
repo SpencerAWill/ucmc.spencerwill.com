@@ -25,11 +25,28 @@
   // Cron schedules (must stay in sync with the dispatcher in
   // src/server-entry.ts):
   //
-  // "0 8 * * *"   — Daily retention sweeps. 08:00 UTC = 03:00 EST /
-  //                 04:00 EDT, overnight in the US Midwest. Daily
-  //                 rather than weekly so the privacy-page promises
-  //                 ("rejected after 30 days", etc.) never drift by
-  //                 more than a day.
+  // "0 12 * * *"  — Daily tick: retention sweeps AND gear loan
+  //                 reminders. 08:00 EDT / 07:00 EST in Cincinnati.
+  //
+  //                 The hour is chosen for the EMAILS. This was 08:00
+  //                 UTC when only the sweeps rode it — 03:00/04:00
+  //                 local, fine for DB deletes nobody sees and wrong for
+  //                 mail that can buzz a member's phone overnight.
+  //
+  //                 Cron triggers are UTC-only with no DST awareness, so
+  //                 the local hour drifts by one across the year and a
+  //                 single expression cannot hold 08:00. Pinning it
+  //                 needs a SECOND expression plus a gate that discards
+  //                 the wrong tick — built, then reverted, because every
+  //                 expression here costs two against the account (dev +
+  //                 prod are separate workers) and the Workers Free cap
+  //                 is 5. See src/server/cron/daily-schedule.ts before
+  //                 re-deriving it.
+  //
+  //                 Daily rather than weekly so the privacy-page
+  //                 promises ("rejected after 30 days", etc.) never
+  //                 drift by more than a day.
+  //
   //
   // "15 8 1 3 *"  — Annual officer-archive snapshot, March 1 at 08:15
   //                 UTC. Reads the current officers (from `roles` ⋈
@@ -37,14 +54,15 @@
   //                 under the school year of the just-completed term —
   //                 e.g. a March-1-2027 fire archives the 2026-27 board.
   //                 Idempotent: re-running on the same year skips if any
-  //                 row already exists for that start_year. Time offset
-  //                 from the retention sweep so the two log streams are
-  //                 visually distinguishable on March 1.
+  //                 row already exists for that start_year. Deliberately
+  //                 a different hour from the daily tick above so the
+  //                 two log streams stay visually distinguishable on
+  //                 March 1 — keep them apart if either moves.
   //
   // Same schedule for dev + prod; dev runs against an empty officer set
   // most of the time, which is fine — the archive job no-ops cleanly.
   "triggers": {
-    "crons": ["0 8 * * *", "15 8 1 3 *"],
+    "crons": ["0 12 * * *", "15 8 1 3 *"],
   },
   // Workers Logs: structured logs + invocation traces viewable in the
   // Cloudflare dashboard (~7 day retention) and streamable via `wrangler
@@ -154,7 +172,7 @@
       // these in lockstep with the top-level entries above and with
       // the dispatcher in src/server-entry.ts.
       "triggers": {
-        "crons": ["0 8 * * *", "15 8 1 3 *"],
+        "crons": ["0 12 * * *", "15 8 1 3 *"],
       },
       "d1_databases": [
         {

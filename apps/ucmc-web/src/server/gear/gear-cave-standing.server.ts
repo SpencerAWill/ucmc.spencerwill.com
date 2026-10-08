@@ -18,6 +18,7 @@
  * mean a cron to keep it true and a way for it to disagree with the loan
  * table; computing it at read time can't drift.
  */
+import { clubDayDifference } from "#/lib/club-days";
 import { readSetting } from "#/server/settings/settings-repo.server";
 
 export const GEAR_CAVE_STANDING = ["good", "flagged", "blocked"] as const;
@@ -40,9 +41,12 @@ export interface GearCaveStandingResult {
  *
  * Due dates are stamped at end-of-day Cincinnati time by `computeDueAt`,
  * so "one day overdue" has to mean "a whole club day has passed", not
- * "24 hours have elapsed since an instant". Reading calendar days off a
- * raw instant would also make the count differ between the worker (UTC)
- * and a member's browser.
+ * "24 hours have elapsed since an instant".
+ *
+ * The calendar arithmetic itself moved to `#/lib/club-days` when the
+ * loan reminder ladder needed the same answer from pure code: a "you are
+ * now flagged" email has to fire on the day the desk actually flags
+ * them, and two private copies of this would eventually disagree.
  */
 function daysOverdue(
   dueAt: Temporal.Instant,
@@ -50,9 +54,7 @@ function daysOverdue(
   timeZone: string,
 ): number {
   if (Temporal.Instant.compare(now, dueAt) <= 0) return 0;
-  const due = dueAt.toZonedDateTimeISO(timeZone).toPlainDate();
-  const today = now.toZonedDateTimeISO(timeZone).toPlainDate();
-  return due.until(today).days;
+  return clubDayDifference(dueAt, now, timeZone);
 }
 
 /**

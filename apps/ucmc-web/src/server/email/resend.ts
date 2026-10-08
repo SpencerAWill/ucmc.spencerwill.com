@@ -37,6 +37,29 @@ export interface EmailMessage {
   subject: string;
   text: string;
   html?: string;
+  /**
+   * Extra MIME headers. Today this carries `List-Unsubscribe` on
+   * courtesy mail only.
+   *
+   * **Not on transactional or relationship mail.** RFC 8058 one-click
+   * unsubscribe binds bulk senders (5,000+/day to Gmail) on marketing
+   * and subscribed messages and explicitly excludes transactional mail;
+   * putting an unsubscribe header on a magic link or an overdue-gear
+   * notice offers an opt-out that doesn't exist. See
+   * `.claude/rules/notifications.md`.
+   */
+  headers?: Record<string, string>;
+  /**
+   * Passed to Resend as `Idempotency-Key`, which dedupes identical
+   * sends for 24 hours.
+   *
+   * Belt and braces for the daily reminder cron: the `reminder_stage`
+   * column is what stops a second run re-sending, and this is what stops
+   * it if that column somehow doesn't get written — a worker evicted
+   * between the send and the stage advance, say. Ignored by Mailpit,
+   * which has no equivalent.
+   */
+  idempotencyKey?: string;
 }
 
 export async function sendEmail(message: EmailMessage): Promise<void> {
@@ -68,6 +91,11 @@ async function sendViaResend(message: EmailMessage): Promise<void> {
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
       "Content-Type": "application/json",
+      // Resend caps the key at 256 chars and expires it after 24h, which
+      // is comfortably longer than the gap between two daily cron ticks.
+      ...(message.idempotencyKey
+        ? { "Idempotency-Key": message.idempotencyKey.slice(0, 256) }
+        : {}),
     },
     body: JSON.stringify({
       from: `${env.RESEND_FROM_NAME} <${env.RESEND_FROM}>`,
@@ -75,6 +103,7 @@ async function sendViaResend(message: EmailMessage): Promise<void> {
       subject: message.subject,
       text: message.text,
       html: message.html,
+      headers: message.headers,
     }),
   });
 
@@ -101,6 +130,10 @@ async function sendViaMailpit(message: EmailMessage): Promise<void> {
       Subject: message.subject,
       Text: message.text,
       HTML: message.html ?? "",
+      // Mailpit renders these in its UI, which is how the e2e suite and
+      // local dev can see that a courtesy message carries
+      // `List-Unsubscribe` and a transactional one doesn't.
+      Headers: message.headers,
     }),
   });
 

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
@@ -20,7 +21,10 @@ import {
 } from "#/components/ui/table";
 import { Textarea } from "#/components/ui/textarea";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { fetchGearByCode } from "#/features/gear/api/queries";
+import {
+  fetchGearByCode,
+  loanDefaultsQueryOptions,
+} from "#/features/gear/api/queries";
 import { useCheckoutLoans } from "#/features/gear/api/use-checkout-loans";
 import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
 import { DueDatePicker } from "#/features/gear/components/due-date-picker";
@@ -121,9 +125,24 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   // change items already in the list (predictability over
   // cleverness — if we cascaded, "did I override CH7 yet?" becomes
   // ambiguous fast).
+  // `gear.defaultLoanDays` is the policy; the constant is only what the
+  // sheet shows for the instant before the query resolves. A long
+  // `staleTime` on the query keeps the number from moving under the
+  // officer mid-checkout, and `loan-duration.test.ts` pins the two
+  // values equal so there is no visible flicker on load.
+  const { data: loanDefaults } = useQuery(loanDefaultsQueryOptions());
   const [defaultDurationDays, setDefaultDurationDays] = useState<number>(
     DEFAULT_LOAN_DURATION_DAYS,
   );
+  // Adopt the configured default once, and only while the officer
+  // hasn't touched the control — changing it out from under a deliberate
+  // choice would be worse than showing the fallback a moment longer.
+  const [durationTouched, setDurationTouched] = useState(false);
+  useEffect(() => {
+    if (!durationTouched && loanDefaults) {
+      setDefaultDurationDays(loanDefaults.defaultLoanDays);
+    }
+  }, [durationTouched, loanDefaults]);
   const checkout = useCheckoutLoans();
   const { hasPermission } = useAuth();
   // `gear:loan` runs the desk; overriding a hold or a blocked member is
@@ -368,7 +387,13 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
             id="checkout-default-due"
             label=""
             durationDays={defaultDurationDays}
-            onDurationChange={setDefaultDurationDays}
+            onDurationChange={(days) => {
+              // Marks the control as deliberately set, so a late-arriving
+              // `gear.defaultLoanDays` can't overwrite the officer's own
+              // choice a beat after they made it.
+              setDurationTouched(true);
+              setDefaultDurationDays(days);
+            }}
             disabled={checkout.isPending}
           />
         </div>

@@ -1,14 +1,22 @@
 import { CLUB_TIME_ZONE } from "#/config/time";
 
 /**
- * Default loan duration for a new gear checkout, in days. The officer
- * may override per-row in the gear-desk checkout pane; this is the
- * baked-in default the UI prefills.
+ * Fallback loan duration, in days, for the window before the desk has
+ * read `gear.defaultLoanDays` from the server.
  *
- * Exported as a single constant (not per-type) so the policy is easy
- * to find and adjust club-wide. If we ever want per-type defaults
- * (e.g. tents lend for 14, harnesses for 7), add a `defaultLoanDays`
- * column to `gear_types` and resolve at checkout time.
+ * **The site setting is the policy; this is the prefill the sheet shows
+ * while the query is in flight.** It was the policy until the setting
+ * landed — leaving it a constant while the overdue thresholds beside it
+ * were tunable was the inconsistency #224 called out, since a setting
+ * needs no migration and a column does.
+ *
+ * The two numbers must agree, and `loan-duration.test.ts` pins that
+ * against the registry so a later tidy-up of either can't make the
+ * sheet flicker from one value to another on load.
+ *
+ * Still club-wide, not per-type. If officers ever want tents at 14 and
+ * harnesses at 7, that is a `default_loan_days` column on `gear_types`
+ * resolved at checkout — deliberately not built on speculation.
  */
 export const DEFAULT_LOAN_DURATION_DAYS = 7;
 

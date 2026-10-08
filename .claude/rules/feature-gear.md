@@ -207,6 +207,59 @@ Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`
 
 **The audit action list exists twice** — `auditAction` in `drizzle/schema.ts` (the column enum) and `AUDIT_ACTIONS` in `features/audit/server/audit-fns.ts` (the filter dropdown). Nothing keeps them in sync; add to both.
 
+### Loan length is a site setting
+
+`gear.defaultLoanDays` (default 7) is what the desk prefills; the officer still overrides per row, and `MAX_LOAN_DURATION_DAYS` (90) stays a code-enforced ceiling at checkout rather than a second knob. Leaving duration a constant while the overdue thresholds beside it were tunable was the inconsistency #224 called out — a setting needs no migration and a column does.
+
+`DEFAULT_LOAN_DURATION_DAYS` survives as the **fallback the sheet shows before the query resolves**, not as the policy. The two numbers must agree, and `loan-duration.test.ts` pins the constant against the registry default so neither can be tidied in isolation — if they drift, the officer watches the prefill jump on load, which reads as a bug in the sheet rather than a mismatch between two files.
+
+It is read through a **`gear:loan`-gated** server fn, not the public settings snapshot: loan length is officer-facing configuration, and that allowlist exists precisely so a setting can't go public by being reclassified. The pane adopts the configured value only while the officer hasn't touched the control, so a late response can't overwrite a deliberate choice.
+
+**Still club-wide, not per-type.** `gear_types` already owns `inspection_interval_days`, so a `default_loan_days` column beside it is coherent the day officers ask for tents at 14 and harnesses at 7 — it is not built on speculation.
+
+### Extending an overdue loan is an override
+
+Standing is `daysOverdue(dueAt, now)`, so pushing a due date out resets it — a **one-day** extension on a rope thirty days late turns a blocked member back into a good one. That made "extend" the silent escape hatch from the entire overdue apparatus, and it is what the reminder ladder would otherwise leak through.
+
+`extendLoanAction` therefore takes the shape checkout already uses for blocked standing and live holds: routine for a not-yet-due loan (`gear:loan`, the delegable desk tier), an explicit `gear:manage` override with a reason once the loan is overdue, both recorded in the `loan.extended` audit metadata (`wasOverdue`, `overrideOverdue`, `overrideReason`, `priorReminderStage`). The flag is resolved against `principal.permissions` on the **real** principal, like the checkout overrides — a desk keeper can't inherit it and emulation can't fake it. A `gear:manage` holder who doesn't _ask_ for the override is refused too: it is a judgement made on purpose, not one fallen into by clicking Save.
+
+**Extending resets `reminder_stage` to `none`** (but not `last_reminded_at`, which is a historical fact). The ladder only climbs, so a loan left at `flagged` would stay silent for its whole extension and then jump straight back to `flagged` — the member would never be told about the date they were actually given.
+
+**There is still no cap on length or count for a not-yet-due loan.** `MAX_LOAN_DURATION_DAYS` stays checkout-only. That is a deliberate scoping call from #224, not an oversight: the standing escape is what made the ladder meaningless, and a length cap barely touches it.
+
+### The reminder ladder
+
+The daily job (`src/server/cron/gear-reminders.server.ts`) is what makes the overdue apparatus audible. Before it, the `/my/gear` banner was the only thing that ever told a member they were late, and nothing gave them a reason to open the page.
+
+**The rungs are thresholds the system already computes**, so each email narrates a real state transition rather than nagging on an invented cadence: `due_soon` (`gear.dueSoonLeadDays`, default 2) → `overdue` (1 club day) → `flagged` (`gear.overdueFlagDays`) → `blocked` (`gear.overdueBlockDays`). Only the lead time is new; the other two are the settings `gearCaveStanding` reads, which is what stops the email and the desk disagreeing about the day somebody got flagged. **Terminal at `blocked`** — past that it's officer chasing.
+
+The policy is pure (`lib/loan-reminders.ts`, every input a parameter including `now`); the cron module is plumbing. Club-day arithmetic goes through `#/lib/club-days`, shared with `gearCaveStanding` so the two can't drift.
+
+Four things that are the way they are on purpose:
+
+- **`reminder_stage` is the dedupe; `last_reminded_at` is officer-facing.** The ladder only climbs, which makes the job idempotent (a same-day re-run sends nothing) and outage-tolerant (a missed day is caught at the right rung, not skipped forever — which a purely date-triggered ladder would do).
+- **Send, THEN advance.** A provider failure leaves the stage where it was so tomorrow retries; the reverse marks unsent mail as sent and the member never hears anything. The duplicate risk that creates is covered by a Resend idempotency key scoped to the club day.
+- **Grouped by member AND category.** Four overdue items is one email. The two categories are never merged, because they obey different opt-out rules and merging would put courtesy content inside mail that carries no unsubscribe.
+- **Migration `0073` backfills every open loan to the rung it already qualifies for.** Without that, the first run after deploy chases the entire overdue backlog — years-old CSV-imported rows included — in one morning, and the system is distrusted from day one.
+
+`gear.remindersEnabled` ships **off**. It is read first and short-circuits everything, so it is the switch to reach for during a bad send or a provider incident. See `notifications.md` for the preference model and the transactional-vs-courtesy line.
+
+**The reminders ride the daily tick rather than taking their own cron.** `server-entry.ts` routes any expression that isn't the March archive to its default branch, so a second daily schedule would silently run the retention sweeps twice a day. Adding one means making that branch explicit first.
+
+The tick is `0 12 * * *` — **08:00 EDT / 07:00 EST** in Cincinnati. The hour is chosen for the **emails**: it was 08:00 UTC when only the retention sweeps rode it, which is 03:00/04:00 local — fine for DB deletes nobody sees, wrong for mail that can buzz a member's phone overnight.
+
+**The one-hour DST drift is accepted, not overlooked.** Cron triggers are UTC-only with no DST awareness, so pinning 08:00 year-round needs a second expression plus a gate discarding the wrong tick. That was built and then reverted: `wrangler.jsonc` declares crons for two workers (dev + prod), so each expression costs **two** against the account, and the Workers Free cap is 5 — a third would make 6. See `server/cron/daily-schedule.ts` before re-deriving it, and `daily-schedule.test.ts`, which pins the drift at exactly one hour so moving the expression can't quietly move the hour members are mailed at.
+
+**Cloudflare documents no timing guarantee for cron triggers at all.** Nothing here needs better than hour-level accuracy, and both daily jobs are idempotent — retention re-sweeps whatever is still expired, and the ladder is built to catch a missed day at the right rung rather than skip it.
+
+### The loans list toolbar
+
+`/gear/loans` uses the shared `<DataToolbar />` like `/gear` and `/members`; the bespoke two-row `LoanFilterBar` is gone. Three loans-specific decisions:
+
+- **The Active/History tabs sit above the toolbar, not in it.** They pick which dataset is on screen; every toolbar slot narrows the one already picked. The connected group's value is that its controls are in the same place on every list page.
+- **Sorting carries a direction**, and the per-key default is in `lib/loan-sort.ts` (`due_at` → `asc`, so most-overdue-first; `checked_out_at` → `desc`). The contract lives in `lib/` rather than beside `listLoans` because the repo applies it, the route puts it in the URL and the toolbar offers it — and two of those three are client code. The route omits `dir` from the URL whenever it matches the default, so a shared link carries only what the sender actually changed.
+- **The "Overdue only" chip is suppressed on the History tab**, where its checkbox is hidden — otherwise a tab switch strands a chip with no control behind it and a filter count nobody can clear.
+
 ### Barcode scanning is hand-rolled
 
 Native `BarcodeDetector` on Chrome / Edge / Android Chrome (zero deps, zero WASM), with a `barcode-detector/ponyfill` fallback for Firefox and Safari, neither of which has shipped the Barcode Detection API. The component feature-tests rather than sniffing, so that list is orientation only. Format whitelist is `["code_128", "qr_code"]`. CSP needs `script-src 'wasm-unsafe-eval'`; `Permissions-Policy: camera=(self)` is scoped to `/gear/loans*` only (`server/headers.server.ts` `securityHeadersForPath`).

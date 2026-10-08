@@ -674,6 +674,164 @@ describe("extendLoanAction", () => {
     });
     expect(result).toEqual({ ok: false, reason: "due_before_now" });
   });
+
+  // ── the overdue gate ─────────────────────────────────────────────────
+  //
+  // Standing is `daysOverdue(dueAt, now)`, so pushing a due date out
+  // resets it — a ONE-DAY extension on a rope that is thirty days late
+  // turns a blocked member back into a good one. That made "extend" the
+  // silent escape hatch from the whole overdue apparatus.
+
+  /** When the ladder last chased the seeded overdue loan. */
+  const CHASED_AT = Temporal.Instant.fromEpochMilliseconds(1_770_000_000_000);
+
+  /** A loan already past due, with the due date written directly. */
+  async function overdueLoan(): Promise<{ publicId: string; id: string }> {
+    const typePublicId = await createTypeOk();
+    const gear = await createGearOk({ typePublicId, code: "CH9" });
+    const member = await seedUser(`late-${crypto.randomUUID()}@example.com`);
+    const checkout = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [{ gearPublicId: gear, durationDays: 7 }],
+      notes: null,
+    });
+    const publicId = checkout.results
+      .flatMap((r) => (r.ok ? [r.loanPublicId] : []))
+      .at(0)!;
+    const rows = await getDb()
+      .update(schema.gearLoans)
+      .set({
+        dueAt: Temporal.Now.instant().subtract({ hours: 24 * 30 }),
+        reminderStage: "flagged",
+        // Set so the "survives the extend" assertion below isn't
+        // vacuously true against a column that was never written.
+        lastRemindedAt: CHASED_AT,
+      })
+      .where(eq(schema.gearLoans.publicId, publicId))
+      .returning({ id: schema.gearLoans.id });
+    return { publicId, id: rows[0].id };
+  }
+
+  it("refuses a desk keeper extending an already-overdue loan", async () => {
+    await signInAsLoanManager();
+    const loan = await overdueLoan();
+    // `gear:loan` without `gear:manage` — the delegable desk tier.
+    await signInAsDeskKeeper();
+
+    const result = await extendLoanAction({
+      publicId: loan.publicId,
+      newDueAt: Date.now() + 86400_000,
+      // Passing the flag must not be enough; the action resolves it
+      // against the real principal's permissions.
+      overrideOverdue: true,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "overdue_requires_override",
+    });
+  });
+
+  it("refuses even a gear:manage holder who doesn't ask for the override", async () => {
+    await signInAsLoanManager();
+    const loan = await overdueLoan();
+
+    const result = await extendLoanAction({
+      publicId: loan.publicId,
+      newDueAt: Date.now() + 86400_000,
+    });
+
+    // Deliberate, not incidental: the override is a judgement an officer
+    // makes on purpose, not something they fall into by clicking Save.
+    expect(result).toEqual({
+      ok: false,
+      reason: "overdue_requires_override",
+    });
+  });
+
+  it("allows the override with gear:manage and records it", async () => {
+    await signInAsLoanManager();
+    const loan = await overdueLoan();
+
+    const result = await extendLoanAction({
+      publicId: loan.publicId,
+      newDueAt: Date.now() + 86400_000,
+      overrideOverdue: true,
+      overrideReason: "Away on a trip, back Monday",
+    });
+    expect(result.ok).toBe(true);
+
+    const audit = (await getDb().select().from(schema.auditLog))
+      .filter((r) => r.action === "loan.extended")
+      .at(0);
+    const metadata = JSON.parse(audit!.metadataJson ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    expect(metadata.wasOverdue).toBe(true);
+    expect(metadata.overrideOverdue).toBe(true);
+    expect(metadata.overrideReason).toBe("Away on a trip, back Monday");
+    // Where the ladder was before the reset, so an unexplained silence
+    // afterwards is traceable.
+    expect(metadata.priorReminderStage).toBe("flagged");
+  });
+
+  it("stays routine for a loan that is not yet due", async () => {
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const gear = await createGearOk({ typePublicId, code: "CH1" });
+    const member = await seedUser("ontime@example.com");
+    const checkout = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [{ gearPublicId: gear, durationDays: 7 }],
+      notes: null,
+    });
+    const loanPublicId = checkout.results
+      .flatMap((r) => (r.ok ? [r.loanPublicId] : []))
+      .at(0)!;
+    // A desk keeper with no `gear:manage` at all.
+    await signInAsDeskKeeper();
+
+    const result = await extendLoanAction({
+      publicId: loanPublicId,
+      newDueAt: Date.now() + 14 * 86400_000,
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("resets the reminder ladder so the new due date gets its own nudge", async () => {
+    await signInAsLoanManager();
+    const loan = await overdueLoan();
+
+    await extendLoanAction({
+      publicId: loan.publicId,
+      newDueAt: Date.now() + 14 * 86400_000,
+      overrideOverdue: true,
+      overrideReason: "Trip",
+    });
+
+    const row = (
+      await getDb()
+        .select({
+          stage: schema.gearLoans.reminderStage,
+          lastRemindedAt: schema.gearLoans.lastRemindedAt,
+        })
+        .from(schema.gearLoans)
+        .where(eq(schema.gearLoans.id, loan.id))
+    ).at(0);
+
+    // The ladder only climbs, so a loan left at `flagged` would stay
+    // silent for its whole extension and then jump straight back to
+    // `flagged` — the member would never hear about the date they were
+    // actually given.
+    expect(row?.stage).toBe("none");
+    // Not cleared: when we last chased them is a historical fact, not
+    // ladder state, and the loan detail page reads it.
+    expect(row?.lastRemindedAt?.epochMilliseconds).toBe(
+      CHASED_AT.epochMilliseconds,
+    );
+  });
 });
 
 // ── reads ──────────────────────────────────────────────────────────────
@@ -827,5 +985,58 @@ describe("getMemberForLoanAction", () => {
       publicId: "not-a-real-id",
     });
     expect(found).toBeNull();
+  });
+});
+
+// ── sort direction ─────────────────────────────────────────────────────
+
+describe("listLoansAction sort direction", () => {
+  it("defaults due_at to soonest-first and honours an explicit flip", async () => {
+    await signInAsLoanManager();
+    const member = await seedUser(
+      `borrower-${crypto.randomUUID()}@example.com`,
+      "Borrower One",
+    );
+    const typeId = await createTypeOk();
+    const dueSoon = await createGearOk({ typePublicId: typeId, code: "CH1" });
+    const dueLater = await createGearOk({ typePublicId: typeId, code: "CH2" });
+
+    const checkout = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [
+        { gearPublicId: dueSoon, durationDays: 1 },
+        { gearPublicId: dueLater, durationDays: 30 },
+      ],
+      notes: null,
+    });
+    const loanFor = new Map(
+      checkout.results.flatMap((r) =>
+        r.ok ? [[r.gearPublicId, r.loanPublicId] as const] : [],
+      ),
+    );
+    const soonLoan = loanFor.get(dueSoon);
+    const laterLoan = loanFor.get(dueLater);
+    expect(soonLoan).toBeDefined();
+    expect(laterLoan).toBeDefined();
+
+    const order = async (input: Parameters<typeof listLoansAction>[0]) =>
+      (await listLoansAction(input)).rows.map((r) => r.publicId);
+
+    // Omitting `dir` has to keep the pre-direction behaviour: due date
+    // ascending, so the most overdue loan is the first thing an officer
+    // sees. A uniform `asc`/`desc` default would have silently reversed
+    // one of the two keys.
+    expect(await order({ tab: "active" })).toEqual([soonLoan, laterLoan]);
+    expect(await order({ tab: "active", sort: "due_at" })).toEqual([
+      soonLoan,
+      laterLoan,
+    ]);
+    expect(await order({ tab: "active", sort: "due_at", dir: "asc" })).toEqual([
+      soonLoan,
+      laterLoan,
+    ]);
+    expect(await order({ tab: "active", sort: "due_at", dir: "desc" })).toEqual(
+      [laterLoan, soonLoan],
+    );
   });
 });
