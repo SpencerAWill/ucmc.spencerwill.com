@@ -53,12 +53,16 @@ export function CheckoutItemRow({
   durationDays,
   onDurationChange,
   error,
+  caveOpenWeekdays,
   onRemove,
 }: {
   row: GearLookupRow;
   durationDays: number;
   onDurationChange: (days: number) => void;
   error?: string | null;
+  /** ISO weekday numbers the gear cave is open; drives the picker's
+   *  advisory line. See `DueDatePicker`. */
+  caveOpenWeekdays?: readonly number[];
   onRemove: () => void;
 }) {
   return (
@@ -75,6 +79,7 @@ export function CheckoutItemRow({
             durationDays={durationDays}
             onDurationChange={onDurationChange}
             compact
+            caveOpenWeekdays={caveOpenWeekdays}
           />
         </TableCell>
         <TableCell className="w-10 align-middle">

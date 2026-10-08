@@ -23,6 +23,59 @@ export const DEFAULT_LOAN_DURATION_DAYS = 7;
 export const MAX_LOAN_DURATION_DAYS = 90;
 
 /**
+ * The loan length to prefill so the due date lands on a day the cave is
+ * actually open.
+ *
+ * **A default, not a rule.** Nothing on the server applies this: the desk
+ * uses it to pick what the date control starts on, and whatever the
+ * officer submits is what gets stored. `computeDueAt` is untouched, so
+ * extensions, the bulk importer and every historical row keep the dates
+ * they were given. Off-cycle checkouts and returns stay entirely possible
+ * — this only changes what the sheet suggests.
+ *
+ * The cave is open about two hours a week (#242). A Wednesday checkout
+ * with the 7-day default already lands on a Wednesday, which is where the
+ * club's rhythm comes from; every *other* weekday produced a due date on a
+ * day the cave is shut, so the member went overdue Wednesday morning and
+ * the first moment they could return was that evening. The reminder ladder
+ * is what made it audible — an overdue email nobody can act on.
+ *
+ * Rolls **forward only**, so the member keeps the full loan they were
+ * promised plus the wait for a door to be open — a Tuesday checkout
+ * becomes 8 days, never 6.
+ *
+ * Three cases deliberately pass straight through:
+ *   - `durationDays <= 0` — the exec-meeting loan-and-return, out and back
+ *     the same evening. Rolling that forward would push it a week.
+ *   - No open days configured — the summer, when there are no cave hours
+ *     at all and `gear.caveHoursNote` goes blank beside it.
+ *   - A roll that would breach `MAX_LOAN_DURATION_DAYS`. Checkout clamps
+ *     to the ceiling, so returning the longer value would just be clamped
+ *     back onto a shut day; the un-rolled default is the honest answer.
+ */
+export function defaultLoanDurationDays(
+  from: Temporal.PlainDate,
+  durationDays: number,
+  caveOpenWeekdays: readonly number[],
+): number {
+  if (durationDays <= 0 || caveOpenWeekdays.length === 0) {
+    return durationDays;
+  }
+  // At most six steps: any non-empty subset of the week contains an open
+  // day within a week of any starting point.
+  for (let offset = 0; offset < 7; offset += 1) {
+    const total = durationDays + offset;
+    if (total > MAX_LOAN_DURATION_DAYS) {
+      return durationDays;
+    }
+    if (caveOpenWeekdays.includes(from.add({ days: total }).dayOfWeek)) {
+      return total;
+    }
+  }
+  return durationDays;
+}
+
+/**
  * Compute the due timestamp given a starting moment and a duration.
  *
  * Always snaps to the *end of the due day* (23:59:59.999 local time)

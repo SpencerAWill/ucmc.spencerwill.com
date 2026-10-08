@@ -23,13 +23,17 @@ Route guards mirror the split: `requirePageFlag` for `pages.*`, **`requireFeatur
 
 ## The registry is the single source of truth
 
-`src/server/settings/settings-registry.ts`. Every setting declares its schema (`z.string()`, `z.boolean()`, `z.object({...})`, anything) and metadata (label, description, category, optional `flagKind` / `owner` / `expiresAt`) in one entry. The `SETTINGS` map drives types (`readSetting("the.key")` is type-narrowed), the discriminated update validator, the admin UI (auto-form by schema introspection, custom `editor` slot for freeform shapes), and the audit metadata branch (boolean values logged with value; non-boolean values logged with key only).
+`src/server/settings/settings-registry.ts`. Every setting declares its schema (`z.string()`, `z.boolean()`, `z.object({...})`, anything) and metadata (label, description, category, optional `flagKind` / `owner` / `expiresAt`) in one entry. The `SETTINGS` map drives types (`readSetting("the.key")` is type-narrowed), the discriminated update validator, the admin UI (auto-form by schema introspection, plus a _reserved_ `editor` slot for freeform shapes — see below, nothing maps it yet), and the audit metadata branch (boolean values logged with value; non-boolean values logged with key only).
 
 Storage is D1 (`site_settings`, `value_json TEXT` accepts any JSON shape) with **fail-open reads**: missing rows / parse errors / D1 throws all fall back to the schema default so the site keeps working on a fresh DB.
 
 One audit action covers every change: `settings_updated`, with `targetType: "site_setting"` + `targetId: <key>`.
 
 Keys ending in `Url` / `Email` get `<input type="url">` / `type="email"` for free via `inferInputType` in `setting-row.tsx` — **name new keys accordingly**.
+
+**Every setting is a scalar, and the admin UI currently requires that.** `autoFormType` answers `"string" | "boolean" | "number" | "unknown"`, and `SettingRow` has no `"unknown"` branch: it falls through to a text `<Input>` fed `String(value)` and computes `isDirty` with `!==`. For a scalar that is right; for an array or object it renders `"1,3"` into a control that writes a string back, and dirty-checking compares by reference. `isDefault` already JSON-compares, so the gap is the row, not the registry.
+
+So **a non-scalar schema means building the reserved `editor` slot first** (`SettingMeta.editor` records the key; nothing maps it yet). `auto-form-type.test.ts` asserts every entry in `SETTINGS` is renderable, which is what turns that into a failing test rather than a value quietly corrupted on save. `gear.caveOpenDays` is the setting that met this and stayed a string (`"Mon,Wed"`, parsed by `parseWeekdayList`) — a one-line list edited about once a semester did not justify being the first non-scalar. **A refinement is fine**: `.refine()` leaves the schema a `ZodString` as far as `unwrapDefault` is concerned, so validation can be arbitrarily strict without changing the renderer.
 
 ## How a row is edited
 

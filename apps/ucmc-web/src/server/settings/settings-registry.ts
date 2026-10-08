@@ -21,6 +21,8 @@
  */
 import { z } from "zod";
 
+import { parseWeekdayList } from "#/lib/weekdays";
+
 // ── Categories: groups rendered as sections on /settings ────────────────
 // Categories double as section headings on /settings, and each one answers
 // a different question:
@@ -797,6 +799,38 @@ export const SETTINGS = {
       label: "Gear cave hours",
       description:
         "Printed in every gear reminder email so a member knows when they can actually return something. The cave is open a couple of hours a week, so this is the most useful sentence those emails carry. Leave blank to omit the line entirely \u2014 e.g. over the summer when there are no hours.",
+      category: "features",
+      owner: "system_admin",
+      createdAt: "2026-10-08",
+    }),
+  // The structured counterpart to the free-text note above, and
+  // deliberately narrow: it decides ONE thing, the due date the gear desk
+  // prefills. It is not a schedule, it does not gate anything, and it
+  // never refuses a checkout — off-cycle loans and returns stay entirely
+  // possible. Break weeks and finals are not modelled; a real per-term
+  // calendar is a bigger feature than loan due dates justify (#242).
+  //
+  // A string rather than a weekday array because the settings page's
+  // auto-form renders scalars, and a one-line list a system admin edits
+  // about once a semester does not justify being the registry's first
+  // non-scalar value. `parseWeekdayList` is the single definition of
+  // valid, shared by this refinement and every reader.
+  //
+  // Blank means "no open days configured" — the prefill then falls
+  // straight back to `gear.defaultLoanDays`, which is the right summer
+  // behaviour and matches `gear.caveHoursNote` going blank beside it.
+  "gear.caveOpenDays": z
+    .string()
+    .trim()
+    .refine(
+      (value) => parseWeekdayList(value) !== null,
+      "Use comma-separated weekdays, e.g. `Wed` or `Mon,Wed`",
+    )
+    .default("Wed")
+    .register(registry, {
+      label: "Days the gear cave is open",
+      description:
+        "Used to pick the due date the gear desk prefills: a checkout gets the default loan length, then rolls forward to the first of these days, so a Tuesday checkout is due the following Wednesday rather than a day nobody can return on. The officer can still pick any date, and this never blocks a checkout or a return. Leave blank to prefill the plain loan length instead — e.g. over the summer.",
       category: "features",
       owner: "system_admin",
       createdAt: "2026-10-08",

@@ -217,6 +217,22 @@ It is read through a **`gear:loan`-gated** server fn, not the public settings sn
 
 **Still club-wide, not per-type.** `gear_types` already owns `inspection_interval_days`, so a `default_loan_days` column beside it is coherent the day officers ask for tents at 14 and harnesses at 7 — it is not built on speculation.
 
+### The cave's open days move the PREFILL, and nothing else
+
+The cave is open about two hours a week, so for every weekday except Wednesday `checkedOutAt + 7` named a day the member could not return on: they went overdue Wednesday morning and the first moment a door was open was that evening. The reminder ladder is what made it audible — an overdue email nobody can act on (#242).
+
+**`computeDueAt` was deliberately not touched.** The fix is a _default_, not a rule: `defaultLoanDurationDays` (in `lib/loan-duration.ts`) rolls `gear.defaultLoanDays` forward to the first day in `gear.caveOpenDays`, the desk prefills that, and **the server stores exactly what the officer submits**. The wire format is still `durationDays`, so there is no "did they mean it?" flag to get wrong, and extensions, `bulkImportLoansAction` and every historical row keep the dates they already had. Off-cycle checkouts and returns stay entirely possible — this is about what the system _defaults to_, never what it permits.
+
+Rolling is **forward-only**, so a Tuesday checkout becomes 8 days rather than 6: the member keeps the week they were promised plus the wait for a door. Three cases pass straight through — `durationDays <= 0` (the exec-meeting loan-and-return, handed back in the room), no open days configured (the summer, when `gear.caveHoursNote` goes blank beside it), and a roll that would breach `MAX_LOAN_DURATION_DAYS` (checkout clamps to the ceiling, so the rolled value would just be clamped back onto a shut day).
+
+`DueDatePicker` takes `caveOpenWeekdays` and renders an **advisory line**, never a rewrite or a refusal: the officer's pick and the submitted value must agree about what was just agreed with the member, and an off-cycle return is often arranged on purpose. `text-muted-foreground`, not `text-destructive`.
+
+**`gear.caveOpenDays` is free text (`"Wed"`, `"Mon,Wed"`), parsed by `parseWeekdayList` in `src/lib/weekdays.ts`** — the registry's `.refine()` and every reader share that one definition of valid. It is a string rather than a weekday array because `SettingRow` renders scalars and `autoFormType` answers `"unknown"` for anything else, with no branch behind it: an array would render `String(value)` into a text input and compare drafts by reference. `auto-form-type.test.ts` pins that **every** setting is renderable, so the next person to want a non-scalar finds out that the registry's reserved `editor` slot has to be built first.
+
+**Weekday numbers are ISO (Mon = 1 … Sun = 7), matching `Temporal.dayOfWeek`.** `Date.prototype.getDay()` is Sunday-0 and agrees with ISO on every other day, so a mixed-convention bug is invisible until somebody configures Sunday. `isoWeekdayFromDate` is the only sanctioned conversion, and both `weekdays.test.ts` and `due-date-picker.test.tsx` carry a Sunday case for exactly this reason.
+
+**Reads are fail-open, and that is not the same as "blank".** A garbage row never reaches `parseWeekdayList` — `readSetting` falls back to the schema default first — so an unparseable value keeps the configured Wednesday rather than degrading to "no open days". Blank is a _real_ configuration meaning the cave has no hours at all, so answering it on a bad read would silently switch the roll-forward off.
+
 ### Extending an overdue loan is an override
 
 Standing is `daysOverdue(dueAt, now)`, so pushing a due date out resets it — a **one-day** extension on a rope thirty days late turns a blocked member back into a good one. That made "extend" the silent escape hatch from the entire overdue apparatus, and it is what the reminder ladder would otherwise leak through.

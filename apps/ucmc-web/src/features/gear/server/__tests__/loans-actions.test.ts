@@ -48,6 +48,7 @@ const {
   checkinLoansAction,
   checkoutLoansAction,
   extendLoanAction,
+  getLoanDefaultsAction,
   getLoanDetailAction,
   getMemberForLoanAction,
   listLoansAction,
@@ -214,6 +215,7 @@ beforeEach(async () => {
   modelByType.clear();
   const db = getDb();
   await db.delete(schema.auditLog);
+  await db.delete(schema.siteSettings);
   await db.delete(schema.gearLoans);
   await db.delete(schema.gearTagAssignments);
   await db.delete(schema.gearHolds);
@@ -1038,5 +1040,66 @@ describe("listLoansAction sort direction", () => {
     expect(await order({ tab: "active", sort: "due_at", dir: "desc" })).toEqual(
       [laterLoan, soonLoan],
     );
+  });
+});
+
+// ── desk prefill defaults ───────────────────────────────────────────────
+
+describe("getLoanDefaultsAction", () => {
+  async function setSetting(key: string, value: unknown): Promise<void> {
+    await getDb()
+      .insert(schema.siteSettings)
+      .values({ key, valueJson: JSON.stringify(value) })
+      .onConflictDoUpdate({
+        target: schema.siteSettings.key,
+        set: { valueJson: JSON.stringify(value) },
+      });
+  }
+
+  it("requires gear:loan", async () => {
+    await signInAsMember();
+    await expect(getLoanDefaultsAction()).rejects.toThrow(
+      "Forbidden: missing gear:loan",
+    );
+  });
+
+  it("parses gear.caveOpenDays into ISO weekday numbers", async () => {
+    await signInAsLoanManager();
+    await setSetting("gear.caveOpenDays", "Mon,Wed");
+
+    // ISO numbering — the desk feeds these straight to
+    // `defaultLoanDurationDays`, which compares against `dayOfWeek`.
+    expect((await getLoanDefaultsAction()).caveOpenWeekdays).toEqual([1, 3]);
+  });
+
+  it("reports the registry default when nothing is stored", async () => {
+    await signInAsLoanManager();
+
+    expect(await getLoanDefaultsAction()).toEqual({
+      defaultLoanDays: 7,
+      caveOpenWeekdays: [3],
+    });
+  });
+
+  it("reports no open days for a blank setting", async () => {
+    await signInAsLoanManager();
+    await setSetting("gear.caveOpenDays", "");
+
+    // The summer. The desk then prefills the plain loan length.
+    expect((await getLoanDefaultsAction()).caveOpenWeekdays).toEqual([]);
+  });
+
+  it("falls back to the registry default on an unparseable row", async () => {
+    await signInAsLoanManager();
+    // The refinement guards writes, but a row written straight to D1 can
+    // still be garbage. `readSetting` is fail-open, so it never reaches
+    // the parser — the schema default does. Pinned because the
+    // alternative reading ("degrade to no open days") is the tempting
+    // one and is wrong: blank is a REAL configuration meaning the cave
+    // has no hours, so answering it on a bad read would silently switch
+    // the roll-forward off instead of keeping the configured behaviour.
+    await setSetting("gear.caveOpenDays", "Wensday");
+
+    expect((await getLoanDefaultsAction()).caveOpenWeekdays).toEqual([3]);
   });
 });

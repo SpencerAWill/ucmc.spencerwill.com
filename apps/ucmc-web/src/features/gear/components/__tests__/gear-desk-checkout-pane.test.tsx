@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
 import { GearDeskCheckoutPane } from "#/features/gear/components/gear-desk-checkout-pane";
+import type { LoanDefaults } from "#/features/gear/server/loans-actions.server";
 
 // ── module mocks ────────────────────────────────────────────────────────
 
@@ -37,12 +38,19 @@ vi.mock("#/features/gear/server/gear-fns", () => ({
 
 vi.mock("#/features/gear/api/queries", () => ({
   fetchGearByCode: fetchGearByCodeMock,
-  // The pane reads `gear.defaultLoanDays` for its duration prefill. The
-  // value is irrelevant to every case here, but the factory has to exist
-  // or `useQuery` throws before the component renders at all.
+  // The pane reads `gear.defaultLoanDays` and `gear.caveOpenDays` for its
+  // duration prefill. Neither value matters to any case here, but the
+  // factory has to exist or `useQuery` throws before the component
+  // renders at all — and the payload must be a COMPLETE `LoanDefaults`,
+  // because the prefill reads `caveOpenWeekdays.length` and a partial
+  // stub throws from inside an effect, which surfaces as every row in
+  // the pane failing to render rather than as a bad stub.
   loanDefaultsQueryOptions: () => ({
     queryKey: ["stub", "loan-defaults"],
-    queryFn: async () => ({ defaultLoanDays: 7 }),
+    queryFn: async (): Promise<LoanDefaults> => ({
+      defaultLoanDays: 7,
+      caveOpenWeekdays: [],
+    }),
   }),
 }));
 
