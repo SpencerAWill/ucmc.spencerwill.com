@@ -25,10 +25,13 @@ vi.mock("#/features/gear/api/use-create-gear-model", () => ({
   useCreateGearModel: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-// Per-test suggestion, so the auto-fill path is reachable. It was
-// hardcoded to `null`, which meant every test here ran with the effect
-// short-circuited and the code field behaving like a plain input.
-const suggestionMock = vi.hoisted(() => ({ value: null as string | null }));
+// Per-TYPE suggestions, so the auto-fill path is reachable at all and so
+// a type change actually changes the suggested code. It was hardcoded to
+// `null`, which meant every test here ran with the effect short-circuited
+// and the code field behaving like a plain input.
+const suggestionMock = vi.hoisted((): { byType: Record<string, string> } => ({
+  byType: {},
+}));
 
 vi.mock("#/features/gear/api/queries", () => {
   const stub = (data: unknown) => () => ({
@@ -38,6 +41,9 @@ vi.mock("#/features/gear/api/queries", () => {
   return {
     gearTypesQueryOptions: stub([
       { publicId: "type_1", name: "Harness", prefix: "CH" },
+      // A second type so switching between them is testable; the code
+      // suggestion is the only thing that differs by type here.
+      { publicId: "type_2", name: "Rope", prefix: "RP" },
     ]),
     gearModelsQueryOptions: stub([
       {
@@ -58,7 +64,10 @@ vi.mock("#/features/gear/api/queries", () => {
       // ever selected and make these tests assert the wrong thing.
       queryKey: ["stub", "suggestedCode", typePublicId],
       queryFn: async () => ({
-        suggestion: typePublicId === null ? "" : suggestionMock.value,
+        suggestion:
+          typePublicId === null
+            ? ""
+            : (suggestionMock.byType[typePublicId] ?? ""),
       }),
     }),
   };
@@ -154,17 +163,19 @@ function renderCreate() {
   );
 }
 
-/** Pick the only type the queries stub offers, which is what arms the
- *  suggested-code query. */
-async function selectHarnessType() {
+/** Pick a type, which is what arms the suggested-code query. */
+async function selectType(name: RegExp) {
   await userEvent.click(await screen.findByRole("combobox", { name: "Type" }));
-  await userEvent.click(await screen.findByRole("option", { name: /Harness/ }));
+  await userEvent.click(await screen.findByRole("option", { name }));
 }
+
+const selectHarnessType = () => selectType(/Harness/);
+const selectRopeType = () => selectType(/Rope/);
 
 beforeEach(() => {
   editMutateMock.mockReset();
   createMutateMock.mockReset();
-  suggestionMock.value = null;
+  suggestionMock.byType = {};
 });
 
 // ── tests ───────────────────────────────────────────────────────────────
@@ -195,7 +206,7 @@ describe("GearFormSheet edit payload", () => {
 
 describe("GearFormSheet suggested code", () => {
   it("fills an empty code field once the type's suggestion arrives", async () => {
-    suggestionMock.value = "CH4";
+    suggestionMock.byType = { type_1: "CH4", type_2: "RP7" };
     renderCreate();
     await selectHarnessType();
 
@@ -210,7 +221,7 @@ describe("GearFormSheet suggested code", () => {
     // and the suggestion went straight back in. "Blank for unlabeled" —
     // which the hint under the input promises, and which the submit path
     // maps to `code: null` — was unreachable once a type was picked.
-    suggestionMock.value = "CH4";
+    suggestionMock.byType = { type_1: "CH4", type_2: "RP7" };
     renderCreate();
     await selectHarnessType();
 
@@ -225,7 +236,7 @@ describe("GearFormSheet suggested code", () => {
   });
 
   it("submits a cleared code as null", async () => {
-    suggestionMock.value = "CH4";
+    suggestionMock.byType = { type_1: "CH4", type_2: "RP7" };
     renderCreate();
     await selectHarnessType();
 
@@ -245,12 +256,68 @@ describe("GearFormSheet suggested code", () => {
   it("does not clobber a code typed before the suggestion resolves", async () => {
     // The emptiness check moved inside the state updater; if it read a
     // stale closure instead, this hand-typed value would be overwritten.
-    suggestionMock.value = "CH4";
+    suggestionMock.byType = { type_1: "CH4", type_2: "RP7" };
     renderCreate();
     const codeInput = await screen.findByLabelText("Code");
     await userEvent.type(codeInput, "RESCUE-1");
     await selectHarnessType();
 
     await waitFor(() => expect(codeInput).toHaveValue("RESCUE-1"));
+  });
+});
+
+describe("GearFormSheet suggested code follows the type", () => {
+  beforeEach(() => {
+    suggestionMock.byType = { type_1: "CH4", type_2: "RP7" };
+  });
+
+  it("replaces an untouched suggestion when the type changes", async () => {
+    // Correcting a mis-picked type used to leave the old type's code
+    // behind, so a rope could be saved carrying a harness prefix. That
+    // code is then invisible to both counters — `listCodesForType` scopes
+    // to the type — and the next harness gets suggested a code already
+    // in use.
+    renderCreate();
+    await selectHarnessType();
+    const codeInput = await screen.findByLabelText("Code");
+    await waitFor(() => expect(codeInput).toHaveValue("CH4"));
+
+    await selectRopeType();
+
+    await waitFor(() => expect(codeInput).toHaveValue("RP7"));
+  });
+
+  it("keeps a hand-typed code when the type changes", async () => {
+    // The officer's own value is theirs. Replacing it on a type change
+    // would discard work they deliberately entered.
+    renderCreate();
+    await selectHarnessType();
+    const codeInput = await screen.findByLabelText("Code");
+    await waitFor(() => expect(codeInput).toHaveValue("CH4"));
+    await userEvent.clear(codeInput);
+    await userEvent.type(codeInput, "RESCUE-1");
+
+    await selectRopeType();
+
+    await waitFor(() => expect(codeInput).toHaveValue("RESCUE-1"));
+  });
+
+  it("keeps the field blank when the type changes after clearing", async () => {
+    // Clearing is a decision about this piece of gear ("no tag"), not
+    // about the type, so a type change must not re-arm the auto-fill —
+    // that would reintroduce the unblankable-field argument one step
+    // later. The placeholder still carries the live suggestion.
+    renderCreate();
+    await selectHarnessType();
+    const codeInput = await screen.findByLabelText("Code");
+    await waitFor(() => expect(codeInput).toHaveValue("CH4"));
+    await userEvent.clear(codeInput);
+
+    await selectRopeType();
+
+    await waitFor(() =>
+      expect(codeInput).toHaveAttribute("placeholder", "RP7"),
+    );
+    expect(codeInput).toHaveValue("");
   });
 });
