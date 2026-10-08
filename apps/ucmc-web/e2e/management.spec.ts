@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Page } from "@playwright/test";
 
-import { ensureApprovedUser, execD1 } from "./fixtures/db";
+import { ensureApprovedUser, execD1, queryD1 } from "./fixtures/db";
 import { waitForHydration } from "./fixtures/hydration";
 import { expect, test } from "./fixtures/mailpit";
 
@@ -68,20 +68,13 @@ VALUES ('${userId}', 'E2E Tester', 'E2E', '+15555550100', 'student', ${nowMs});
 /** Look up the current `users.status` for a given email (asserting on
  *  post-mutation DB state). */
 function readStatus(email: string): string | null {
-  const escapedEmail = `'${email.replace(/'/g, "''")}'`;
-  const out = execD1(
-    `SELECT u.status as status FROM users u JOIN user_emails ue ON ue.user_id = u.id WHERE ue.email = ${escapedEmail};`,
+  const rows = queryD1<{ status: string }>(
+    `SELECT u.status as status FROM users u
+     JOIN user_emails ue ON ue.user_id = u.id
+     WHERE ue.email = ?`,
+    email,
   );
-  // wrangler d1 execute --json returns an array of result objects;
-  // pluck the first row's `status` if any.
-  try {
-    const parsed = JSON.parse(out) as Array<{
-      results: Array<{ status: string }>;
-    }>;
-    return parsed[0]?.results?.[0]?.status ?? null;
-  } catch {
-    return null;
-  }
+  return rows[0]?.status ?? null;
 }
 
 /** Sign in as an officer (system_admin role) via the magic-link flow.

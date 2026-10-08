@@ -4,7 +4,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 
 import {
   ensureApprovedUser,
-  execD1,
+  queryD1,
   seedPendingUserWithProfile,
   seedSession,
   SESSION_COOKIE_NAME,
@@ -55,13 +55,12 @@ async function attachVirtualAuthenticator(
 
 /** Credentials on the account owning `email`. */
 function credentialCount(email: string): number {
-  const parsed = JSON.parse(
-    execD1(`
-SELECT COUNT(*) AS n FROM passkey_credentials
-WHERE user_id IN (SELECT user_id FROM user_emails WHERE email = '${email}');
-`),
-  ) as [{ results: [{ n: number }] }];
-  return parsed[0].results[0].n;
+  const rows = queryD1<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM passkey_credentials
+     WHERE user_id IN (SELECT user_id FROM user_emails WHERE email = ?)`,
+    email,
+  );
+  return rows[0].n;
 }
 
 /**

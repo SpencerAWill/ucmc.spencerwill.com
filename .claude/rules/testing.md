@@ -115,7 +115,7 @@ Playwright drives a freshly-spawned dev server. Four projects: `chromium` (Deskt
 
 - `e2e/fixtures/mailpit.ts` polls Mailpit for magic links.
 - `e2e/fixtures/hydration.ts` — **`waitForHydration(page)` polls `window.$_TSR.hydrated`; premature interaction is the source of every flake.**
-- `e2e/fixtures/db.ts` seeds via `wrangler d1 execute`. **`seedSession(email)` returns a session id that IS the `ucmc_session` cookie value** — the cookie holds the opaque id and nothing derived from it. A spec whose subject isn't sign-in should use it: several seconds faster per test, and no dependence on the Mailpit sidecar. (It used to be the only way a spec could run in CI at all; since the full suite runs there that is no longer the reason, but the speed still is.) A spec testing the sign-in flow itself still goes through the real magic link.
+- `e2e/fixtures/db.ts` seeds by writing the Miniflare D1 SQLite file directly through `node:sqlite` (see **Seeding cost** below). **`seedSession(email)` returns a session id that IS the `ucmc_session` cookie value** — the cookie holds the opaque id and nothing derived from it. A spec whose subject isn't sign-in should use it: several seconds faster per test, and no dependence on the Mailpit sidecar. (It used to be the only way a spec could run in CI at all; since the full suite runs there that is no longer the reason, but the speed still is.) A spec testing the sign-in flow itself still goes through the real magic link.
 - `e2e/fixtures/fake-camera.ts` writes a single-frame Y4M of a QR for Chromium's `--use-file-for-fake-video-capture`. Hand-rolled (text header + planar YUV) because `qrcode` hands over the module matrix and an ffmpeg dependency for three loops is a poor trade.
 - The webServer config sets `E2E_BYPASS_RATE_LIMIT=1` and clears Turnstile keys: the 10/60s budget can't cover a suite from one IP, and Turnstile blocks `networkidle` and steals focus.
 
@@ -127,6 +127,22 @@ Two details about the Mailpit sidecar in CI:
 
 - **`MAILPIT_URL` must be `http://localhost:8025`, not the fixture's `http://mailpit:8025` default.** GitHub service containers publish to the runner's loopback; the Docker-network hostname that works in the devcontainer does not resolve on a runner.
 - **The job waits on `/api/v1/info` before running specs.** GitHub starts the container but does not wait for the process inside it to bind, and the mailpit fixture clears the inbox in a `beforeEach` and throws when that request fails — so losing the race reads as an unrelated failure in whichever spec happens to run first, not as "Mailpit wasn't up".
+
+### Seeding cost
+
+**`e2e/fixtures/db.ts` writes the Miniflare SQLite file directly via `node:sqlite`, not through `wrangler d1 execute`.** Measured on the same machine: **1.4–4 ms** to open the file and run a statement, against **1–2.5 s** for the equivalent wrangler invocation — the CLI boot was the entire cost, never the SQL. Across the ~25 seed call sites that took the local chromium suite from **116 s to 82 s**, and the mobile pair runs in 48 s.
+
+Three things make this safe, and each is worth knowing before changing the fixture:
+
+- **The dev server does not hold an exclusive lock.** `wrangler d1 execute --local` was itself just another process opening the same file, so writing it directly is the same arrangement minus the boot. The database is in WAL mode, so an external writer and the running worker coexist; the connection sets a 5 s `timeout` to ride out the moments they overlap, since a bare `SQLITE_BUSY` would read as a flaky seed.
+- **The filename is discovered, not recomputed.** Miniflare derives it as a hash internally. Reimplementing that would couple the fixtures to a private detail a miniflare bump can change silently, and the failure would look like an empty database rather than a broken fixture — so `resolveDatabaseFile()` globs the persist directory and throws if there isn't exactly one candidate.
+- **Foreign keys are on by default in `node:sqlite`** (verified), which the seeds depend on: each opens with one `DELETE FROM users` and relies on `ON DELETE cascade` to clear `user_emails`, `profiles`, `sessions` and `user_roles`. Turning them off would orphan rows and the next re-seed would collide on `user_emails.email`.
+
+**Values are bound, not interpolated.** The wrangler implementation hand-escaped every string into a SQL literal because it shipped statements to a CLI as text; prepared statements remove that. Use `queryD1<T>(sql, ...params)` for rows and `execD1(sql)` for raw multi-statement setup — `queryD1` replaced two copies of a `JSON.parse` over wrangler's `[{ results: [...] }]` envelope that each returned null for both "no rows" and "the query was broken".
+
+**A `beforeEach` seed is no longer a performance decision.** The old guidance priced it at ~1.5–2.5 s per call; it is now microseconds-to-milliseconds. What still argues against one is state pollution, not time.
+
+**`workers: 1` still stands.** The speed-up does nothing about isolation: all workers would share this one file, colliding on `user_emails.email`'s global UNIQUE and on each seed's delete-then-insert. Per-worker databases are issue #238, and `persistState` on `@cloudflare/vite-plugin` is the hook for it. `drizzle/seed.ts` still shells out to wrangler — that is a once-per-invocation script, where the boot does not compound.
 
 ### `smoke.spec.ts` — the only spec that runs against a real deployment
 
@@ -146,11 +162,11 @@ The smoke steps live **inside** the `web-dev` / `web-prod` jobs, not in jobs of 
 
 The spec asserts on the **document**, not on components, which is the point: a unit test can pin the class list of the bar that caused it last time, but only a real layout tells us about the next one. Two supporting details are load-bearing. It reports the _outermost_ elements whose right edge is past the viewport, because the bare assertion otherwise leaves you bisecting a route's component tree by hand. And it first asserts `#main` is taller than 120px — **a page that rendered nothing cannot overflow, so a 404 (a page flag off, a session that didn't take) would pass while checking nothing.** Verified against the bug it was written for: restoring `AccountTabsBar`'s flat `-mx-6` fails `/my/profile` with `<div class="-mx-6 mb-6 border-b border-border"> right=398` in a 390px viewport.
 
-**Its officer session is a worker-scoped fixture, not a `beforeEach` seed, and that is a performance fix worth generalising.** Every `ensureApprovedUser` / `seedSession` call shells out to `wrangler d1 execute` — a full CLI boot, measured at **1.5–2.5 s locally** and slower on a runner. Seeding per test paid that twice for each of the 21 signed-in routes in each of two engines: **84 wrangler boots per CI job**, against 88 page loads they existed to enable. Measured per test, a signed-in route cost ~2.4 s to a public route's ~0.7 s, and the gap was entirely the seed; hoisting it took one engine from **66 s to 25.8 s** and both from ~150 s to 72 s, with no change to what is covered.
+**Its officer session is a worker-scoped fixture, not a `beforeEach` seed — and the reason has changed.** It was hoisted for cost: every `ensureApprovedUser` / `seedSession` call shelled out to `wrangler d1 execute`, a full CLI boot at **1.5–2.5 s locally** and slower on a runner, so seeding per test paid that twice for each of the 21 signed-in routes in each of two engines — **84 wrangler boots per CI job** against the 88 page loads they existed to enable. Hoisting took one engine from **66 s to 25.8 s** and both from ~150 s to 72 s.
+
+**That cost is gone** (see **Seeding cost** below), so the hoist now rests entirely on the pollution hazard documented under `mobile-waiver-queue.spec.ts` below: a per-test seed would put 42 rows a run back into the waiver queue. Keep it hoisted for that reason, not the old one.
 
 **Sharing one session is sound _for this spec_ and not in general.** Every test here is a `goto` plus a measurement — nothing writes, so there is no state for one route to leak into the next. A spec that mutates must keep seeding per test. The fixture is worker-scoped rather than a `beforeAll` so it stays correct if the suite ever runs `workers: > 1`. It needs `// eslint-disable-next-line no-empty-pattern` on `async ({}, use)`: Playwright reads the first parameter's destructured property names to resolve fixture dependencies, so the pattern has to be there even when there are none.
-
-**Before reaching for a `beforeEach` seed anywhere in `e2e/`, price it at ~1.5–2.5 s per `execD1` call.** The cost is the wrangler boot, not the SQL.
 
 **`mobile-waiver-queue.spec.ts` measures layout shift, and measures it rather than asserting on markup on purpose.** Ticking a checkbox on `/members/waivers` must not move the rows: the gesture the page exists for is working down a stack of signed papers ticking rows in sequence, and the bulk-attest bar used to mount on first selection. Verified against that regression in both engines — 158px of displacement on an iPhone 14, 142px on the wider Pixel 7, because the bar stacks to a column below `sm`. Any future control that appears above the list reintroduces this whatever it is made of, which a class-list assertion would miss. The companion test pins that the bar is present-and-disabled, since "nothing moved" is also satisfied by never showing it.
 
