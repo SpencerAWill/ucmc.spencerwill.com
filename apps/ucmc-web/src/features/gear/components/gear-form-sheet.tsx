@@ -271,14 +271,33 @@ function GearForm({
     gearSuggestedCodeQueryOptions(typePublicId || null),
   );
 
-  // Auto-fill the code when type changes (create only, only if code is empty).
+  // Auto-fill the code ONCE per type selection (create only, and only
+  // over an empty field).
+  //
+  // `code` is deliberately not a dependency, and the emptiness check has
+  // moved inside the updater. With `code` in the deps the effect re-ran
+  // on every keystroke, so clearing the field re-entered it with the
+  // guard now satisfied and put the suggestion straight back — the
+  // "Blank for unlabeled" the hint underneath promises was unreachable
+  // the moment a type was picked.
+  //
+  // The ref is what keeps "once per type" true without reading `code` as
+  // a dep. The suggestion arrives asynchronously, so the effect still has
+  // to fire when the query resolves for the current type — just exactly
+  // once after it does. Switching type is a fresh explicit choice and
+  // re-arms it, which is the behaviour the comment always claimed.
   const suggestion = suggested.data?.suggestion;
+  const autofilledForType = useRef<string | null>(null);
   useEffect(() => {
     if (isEdit) return;
     if (!suggestion) return;
-    if (code.trim().length > 0) return;
-    setCode(suggestion);
-  }, [isEdit, suggestion, typePublicId, code]);
+    if (autofilledForType.current === typePublicId) return;
+    autofilledForType.current = typePublicId;
+    // Functional update so this reads the live value rather than one
+    // captured when the suggestion last changed — a code typed while the
+    // query was still in flight must not be clobbered.
+    setCode((current) => (current.trim().length > 0 ? current : suggestion));
+  }, [isEdit, suggestion, typePublicId]);
 
   const submitting = createMutation.isPending || editMutation.isPending;
 
