@@ -1523,6 +1523,15 @@ export const gearInspections = sqliteTable(
  *   - checkedOutBy / returnedTo: SET NULL — officer accounts come and
  *     go; closed-loan history survives them.
  */
+export const loanReminderStage = [
+  "none",
+  "due_soon",
+  "overdue",
+  "flagged",
+  "blocked",
+] as const;
+export type LoanReminderStageValue = (typeof loanReminderStage)[number];
+
 export const gearLoans = sqliteTable(
   "gear_loans",
   {
@@ -1558,6 +1567,23 @@ export const gearLoans = sqliteTable(
     // Units never returned, written off at close. Feeds the lost-gear
     // report and, eventually, a replacement charge.
     quantityLost: integer("quantity_lost").notNull().default(0),
+    /**
+     * How far up the reminder ladder this loan has been emailed about.
+     * The ladder only climbs, which is what makes the daily job
+     * idempotent (a second run the same day sends nothing) and
+     * outage-tolerant (a missed day is picked up at the right rung,
+     * not skipped forever). See `features/gear/lib/loan-reminders.ts`.
+     */
+    reminderStage: text("reminder_stage", { enum: loanReminderStage })
+      .notNull()
+      .default("none"),
+    /**
+     * Officer-facing "when did we last chase them", for the loan detail
+     * page and the overdue list. Explicitly NOT the dedupe —
+     * `reminderStage` is, and deriving one from the other is impossible
+     * in either direction.
+     */
+    lastRemindedAt: timestamp("last_reminded_at"),
   },
   (t) => [
     check(
@@ -1574,6 +1600,9 @@ export const gearLoans = sqliteTable(
     index("gear_loans_model_idx").on(t.modelId),
     // Drives the overdue list + due-date sort on /gear/loans.
     index("gear_loans_due_idx").on(t.dueAt),
+    // Lets the daily reminder scan skip loans with nothing left to climb
+    // to, which is most of them once the cave is in a steady state.
+    index("gear_loans_reminder_idx").on(t.returnedAt, t.reminderStage),
   ],
 );
 

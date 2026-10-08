@@ -750,6 +750,37 @@ export const SETTINGS = {
   // consequences, and wants to tune how forgiving they are without a
   // migration. Checkouts run weekly, so the defaults are one missed
   // return window to flag and three to block.
+  // The reminder ladder's own knobs. All three are settings rather than
+  // constants for the reason the thresholds below already are: a setting
+  // needs no migration, and leaving loan duration a constant while the
+  // thresholds beside it were tunable was the inconsistency #224 called
+  // out.
+  "gear.remindersEnabled": z.boolean().default(false).register(registry, {
+    label: "Send gear loan reminder emails",
+    description:
+      "The daily job that emails members about gear due soon and gear overdue. Off by default so the ladder can be deployed and the backfill eyeballed before anything goes out. Turning it off stops all gear mail without a deploy — the switch to reach for during a bad send, a provider outage, or over the summer.",
+    category: "features",
+    flagKind: "ops",
+    owner: "system_admin",
+    createdAt: "2026-10-08",
+    confirm:
+      "Turning this on means the next 08:00 UTC run emails every member whose loan has crossed a rung it hasn't been emailed about. Check the overdue list first.",
+  }),
+  "gear.dueSoonLeadDays": z
+    .number()
+    .int()
+    .min(1)
+    .max(30)
+    .default(2)
+    .register(registry, {
+      label: "Days before a loan is due to send the courtesy reminder",
+      description:
+        "The 'your gear is due Thursday' nudge. Two days is the common library convention for short loans, and ours run seven. This is the only reminder timing that isn't already decided by the flag and block thresholds below.",
+      category: "features",
+      flagKind: "ops",
+      owner: "system_admin",
+      createdAt: "2026-10-08",
+    }),
   "gear.overdueFlagDays": z
     .number()
     .int()

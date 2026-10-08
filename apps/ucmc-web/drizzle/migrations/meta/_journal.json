@@ -512,6 +512,13 @@
       "when": 1779477596949,
       "tag": "0072_user_notification_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1779477596950,
+      "tag": "0073_gear_loan_reminders",
+      "breakpoints": true
     }
   ]
 }

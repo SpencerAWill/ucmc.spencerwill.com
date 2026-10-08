@@ -17,7 +17,17 @@
  * available-quantity read-then-write that can over-lend by one under a
  * true tie, which the cave prefers to taking a lock.
  */
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { getDb, likeContains, schema } from "#/server/db";
 import { DEFAULT_LOAN_SORT_DIRECTION } from "#/features/gear/lib/loan-sort";
@@ -26,6 +36,7 @@ import type {
   LoanSortKey,
 } from "#/features/gear/lib/loan-sort";
 import { gearItemName } from "#/features/gear/lib/labels";
+import type { LoanReminderStageValue } from "../../../../drizzle/schema";
 
 // ── shared row shapes ──────────────────────────────────────────────────
 
@@ -548,6 +559,132 @@ export async function listOverdueLoansForMember(
       ),
     )
     .orderBy(asc(schema.gearLoans.dueAt));
+}
+
+// ── reminder ladder ────────────────────────────────────────────────────
+
+export interface ReminderCandidate {
+  id: string;
+  publicId: string;
+  memberUserId: string;
+  memberPreferredName: string | null;
+  /** Primary AND verified. Null when the member has no such address. */
+  memberEmail: string | null;
+  dueAt: Temporal.Instant;
+  reminderStage: LoanReminderStageValue;
+  /** Ready-to-print, e.g. "Petzl Corax (CH93)" or "6 x BD HotForge". */
+  gearLabel: string;
+}
+
+/**
+ * Every open loan, with what the reminder job needs to decide and send.
+ *
+ * Returns ALL open loans rather than filtering by due date in SQL: the
+ * rung depends on three site settings and on club-calendar arithmetic
+ * that SQLite can't do correctly across a DST boundary, so the decision
+ * belongs in `stageForLoan`. Club scale is tens to low hundreds of open
+ * loans, and `gear_loans_reminder_idx` keeps the scan cheap.
+ *
+ * Rows already at the terminal rung are excluded — nothing can advance
+ * them, so carrying them into the job would just be noise in the logs.
+ *
+ * **The email join is to the primary AND verified address.** A member
+ * with neither is returned with `memberEmail: null` so the caller can
+ * log a skip rather than discovering it mid-send.
+ */
+export async function listOpenLoansForReminders(): Promise<
+  ReminderCandidate[]
+> {
+  const rows = await getDb()
+    .select({
+      id: schema.gearLoans.id,
+      publicId: schema.gearLoans.publicId,
+      memberUserId: schema.gearLoans.memberUserId,
+      memberPreferredName: schema.profiles.preferredName,
+      memberEmail: schema.userEmails.email,
+      dueAt: schema.gearLoans.dueAt,
+      reminderStage: schema.gearLoans.reminderStage,
+      code: schema.gearItems.code,
+      modelName: schema.gearModels.name,
+      manufacturer: schema.gearModels.manufacturer,
+      quantity: schema.gearLoans.quantity,
+      itemId: schema.gearLoans.itemId,
+    })
+    .from(schema.gearLoans)
+    .leftJoin(
+      schema.gearItems,
+      eq(schema.gearItems.id, schema.gearLoans.itemId),
+    )
+    .innerJoin(
+      schema.gearModels,
+      eq(
+        schema.gearModels.id,
+        sql`coalesce(${schema.gearLoans.modelId}, ${schema.gearItems.modelId})`,
+      ),
+    )
+    .leftJoin(
+      schema.profiles,
+      eq(schema.profiles.userId, schema.gearLoans.memberUserId),
+    )
+    .leftJoin(
+      schema.userEmails,
+      and(
+        eq(schema.userEmails.userId, schema.gearLoans.memberUserId),
+        eq(schema.userEmails.isPrimary, true),
+        isNotNull(schema.userEmails.verifiedAt),
+      ),
+    )
+    .where(
+      and(
+        isNull(schema.gearLoans.returnedAt),
+        sql`${schema.gearLoans.reminderStage} <> 'blocked'`,
+      ),
+    )
+    .orderBy(asc(schema.gearLoans.dueAt));
+
+  return rows.map((r) => {
+    const product = gearItemName({
+      manufacturer: r.manufacturer,
+      name: r.modelName,
+    });
+    // A coded loan names the unit; a counted loan names the quantity,
+    // because "six draws" IS the loan and there is no unit to point at.
+    const gearLabel =
+      r.itemId === null
+        ? `${r.quantity} x ${product}`
+        : r.code
+          ? `${product} (${r.code})`
+          : product;
+    return {
+      id: r.id,
+      publicId: r.publicId,
+      memberUserId: r.memberUserId,
+      memberPreferredName: r.memberPreferredName,
+      memberEmail: r.memberEmail,
+      dueAt: r.dueAt,
+      reminderStage: r.reminderStage,
+      gearLabel,
+    };
+  });
+}
+
+/**
+ * Move a batch of loans up to `stage` and stamp when they were chased.
+ *
+ * Called only AFTER a successful send, so a provider failure leaves the
+ * stage where it was and the next run retries rather than silently
+ * marking unsent mail as sent.
+ */
+export async function advanceLoanReminderStage(input: {
+  loanIds: string[];
+  stage: LoanReminderStageValue;
+  now: Temporal.Instant;
+}): Promise<void> {
+  if (input.loanIds.length === 0) return;
+  await getDb()
+    .update(schema.gearLoans)
+    .set({ reminderStage: input.stage, lastRemindedAt: input.now })
+    .where(inArray(schema.gearLoans.id, input.loanIds));
 }
 
 // ── search helpers (back the gear-desk lookups) ────────────────────────

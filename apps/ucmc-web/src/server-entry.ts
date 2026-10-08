@@ -95,12 +95,42 @@ export default {
       return;
     }
 
-    // Default fallback: daily retention. Catches "0 8 * * *" plus any
+    // Default fallback: the daily tick. Catches "0 8 * * *" plus any
     // future daily schedules that piggyback on the same wakeup.
-    const { runRetentionSweeps } =
-      await import("./server/cron/retention.server");
+    //
+    // **Adding a second daily cron expression means making this branch
+    // explicit first.** Anything that isn't the March schedule above
+    // lands here, so a new "0 13 * * *" would silently run the retention
+    // sweeps a second time each day rather than only the job it was
+    // added for. The gear reminders ride this tick instead of taking
+    // their own precisely to avoid that: 08:00 UTC is 03:00/04:00
+    // Cincinnati, which puts the mail at the top of a member's inbox
+    // when they wake up.
+    const [{ runRetentionSweeps }, { runGearLoanReminders }] =
+      await Promise.all([
+        import("./server/cron/retention.server"),
+        import("./server/cron/gear-reminders.server"),
+      ]);
     ctx.waitUntil(
-      runWithLogContext({ cron: event.cron }, () => runRetentionSweeps()),
+      runWithLogContext({ cron: event.cron }, async () => {
+        // Independent: a failed sweep must not cost members their
+        // reminders, and a provider outage must not stop the retention
+        // promises on /privacy from being kept. `allSettled`, not `all`.
+        const [sweeps, reminders] = await Promise.allSettled([
+          runRetentionSweeps(),
+          runGearLoanReminders({ now: Temporal.Now.instant() }),
+        ]);
+        if (sweeps.status === "rejected") {
+          log.error("retention.sweeps_failed", {
+            error: errorMessage(sweeps.reason),
+          });
+        }
+        if (reminders.status === "rejected") {
+          log.error("gear_reminders.run_failed", {
+            error: errorMessage(reminders.reason),
+          });
+        }
+      }),
     );
   },
 } satisfies {
