@@ -6,6 +6,7 @@ import { PROFILE_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useSubmitPublicProfile } from "#/features/auth/api/use-submit-public-profile";
 import { AvatarEditor } from "#/features/auth/components/avatar-editor";
+import { PasskeyNudge } from "#/features/auth/components/passkey-nudge";
 import { BioFields } from "#/components/profile/bio-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
@@ -23,6 +24,11 @@ import type { PublicProfileInput } from "#/server/profile/profile-schemas";
  * Private fields (legal name, phone) live on the sibling `/my/details`
  * route and emergency contacts on `/my/contacts`, mirroring the
  * server-side `members:view_private` projection split.
+ *
+ * Also hosts `PasskeyNudge` — the catch-all for members who hold no
+ * passkey, including officer pre-added ones who never saw the offer on
+ * `/register/pending`. It sits here rather than on `/my/security`
+ * because the people it is for aren't the people who open Security.
  */
 export const Route = createFileRoute("/my/_tabs/profile")({
   staticData: { pageFlag: "my_profile" },
@@ -52,6 +58,7 @@ function AccountProfilePage() {
           What other UCMC members see about you. Changes save immediately.
         </p>
       </header>
+      <PasskeyNudge />
       <AvatarEditor
         avatarKey={avatarKey}
         name={preferredName || principal.primaryEmail}
