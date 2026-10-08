@@ -100,6 +100,7 @@ import type {
   GearLookupRow,
   ListLoansActionInput,
   ListLoansActionResult,
+  LoanDefaults,
   LoanDetail,
   LoanSummary,
   MyLoansResult,
@@ -224,6 +225,7 @@ export type {
   GearLookupRow,
   ListLoansActionInput,
   ListLoansActionResult,
+  LoanDefaults,
   LoanDetail,
   LoanSummary,
   MemberSearchResult,
@@ -1049,6 +1051,14 @@ export const extendLoanFn = createServerFn({ method: "POST" })
       await import("#/features/gear/server/loans-actions.server");
     return extendLoanAction(data);
   });
+
+export const getLoanDefaultsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<LoanDefaults> => {
+    const { getLoanDefaultsAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return getLoanDefaultsAction();
+  },
+);
 
 export const listLoansFn = createServerFn({ method: "GET" })
   .validator(listLoansInputSchema)

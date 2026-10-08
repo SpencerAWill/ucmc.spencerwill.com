@@ -37,6 +37,13 @@ vi.mock("#/features/gear/server/gear-fns", () => ({
 
 vi.mock("#/features/gear/api/queries", () => ({
   fetchGearByCode: fetchGearByCodeMock,
+  // The pane reads `gear.defaultLoanDays` for its duration prefill. The
+  // value is irrelevant to every case here, but the factory has to exist
+  // or `useQuery` throws before the component renders at all.
+  loanDefaultsQueryOptions: () => ({
+    queryKey: ["stub", "loan-defaults"],
+    queryFn: async () => ({ defaultLoanDays: 7 }),
+  }),
 }));
 
 // The override affordance is `gear:manage`-gated; the permission list

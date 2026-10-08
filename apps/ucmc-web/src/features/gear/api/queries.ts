@@ -16,6 +16,7 @@ import {
   gearModelBrowseQueryKey,
   gearModelsQueryKey,
   GEAR_TYPES_QUERY_KEY,
+  LOAN_DEFAULTS_QUERY_KEY,
   LOANS_QUERY_KEY,
   MY_CART_QUERY_KEY,
   MY_LOANS_QUERY_KEY,
@@ -31,6 +32,7 @@ import {
   memberLoanSearchQueryKey,
 } from "#/features/gear/api/query-keys";
 import {
+  getLoanDefaultsFn,
   getItemByCodeFn,
   getGearDetailFn,
   getLoanDetailFn,
@@ -332,4 +334,19 @@ export function gearCodeSearchQueryOptions(q: string) {
  */
 export function fetchGearByCode(code: string) {
   return getItemByCodeFn({ data: { code } });
+}
+
+/**
+ * The gear desk's prefill values.
+ *
+ * Long `staleTime`: a club-wide loan length changes about never, and a
+ * refetch between opening the sheet and adding a row would move the
+ * default out from under the officer.
+ */
+export function loanDefaultsQueryOptions() {
+  return {
+    queryKey: LOAN_DEFAULTS_QUERY_KEY,
+    queryFn: () => getLoanDefaultsFn(),
+    staleTime: 10 * 60 * 1000,
+  } as const;
 }

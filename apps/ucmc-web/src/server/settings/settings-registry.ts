@@ -766,6 +766,21 @@ export const SETTINGS = {
     confirm:
       "Turning this on means the next 08:00 UTC run emails every member whose loan has crossed a rung it hasn't been emailed about. Check the overdue list first.",
   }),
+  "gear.defaultLoanDays": z
+    .number()
+    .int()
+    .min(0)
+    .max(90)
+    .default(7)
+    .register(registry, {
+      label: "Default loan length in days",
+      description:
+        "What the gear desk prefills when an officer checks something out. They can still override per row, and the 90-day ceiling is enforced in code at checkout rather than here. Changing this does not move the due date of any loan already open.",
+      category: "features",
+      flagKind: "ops",
+      owner: "system_admin",
+      createdAt: "2026-10-08",
+    }),
   "gear.dueSoonLeadDays": z
     .number()
     .int()

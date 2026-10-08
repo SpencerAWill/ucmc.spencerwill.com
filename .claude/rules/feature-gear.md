@@ -207,6 +207,16 @@ Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`
 
 **The audit action list exists twice** — `auditAction` in `drizzle/schema.ts` (the column enum) and `AUDIT_ACTIONS` in `features/audit/server/audit-fns.ts` (the filter dropdown). Nothing keeps them in sync; add to both.
 
+### Loan length is a site setting
+
+`gear.defaultLoanDays` (default 7) is what the desk prefills; the officer still overrides per row, and `MAX_LOAN_DURATION_DAYS` (90) stays a code-enforced ceiling at checkout rather than a second knob. Leaving duration a constant while the overdue thresholds beside it were tunable was the inconsistency #224 called out — a setting needs no migration and a column does.
+
+`DEFAULT_LOAN_DURATION_DAYS` survives as the **fallback the sheet shows before the query resolves**, not as the policy. The two numbers must agree, and `loan-duration.test.ts` pins the constant against the registry default so neither can be tidied in isolation — if they drift, the officer watches the prefill jump on load, which reads as a bug in the sheet rather than a mismatch between two files.
+
+It is read through a **`gear:loan`-gated** server fn, not the public settings snapshot: loan length is officer-facing configuration, and that allowlist exists precisely so a setting can't go public by being reclassified. The pane adopts the configured value only while the officer hasn't touched the control, so a late response can't overwrite a deliberate choice.
+
+**Still club-wide, not per-type.** `gear_types` already owns `inspection_interval_days`, so a `default_loan_days` column beside it is coherent the day officers ask for tents at 14 and harnesses at 7 — it is not built on speculation.
+
 ### Extending an overdue loan is an override
 
 Standing is `daysOverdue(dueAt, now)`, so pushing a due date out resets it — a **one-day** extension on a rope thirty days late turns a blocked member back into a good one. That made "extend" the silent escape hatch from the entire overdue apparatus, and it is what the reminder ladder would otherwise leak through.

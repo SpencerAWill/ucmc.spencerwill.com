@@ -640,6 +640,25 @@ export async function extendLoanAction(input: {
 
 // ── officer reads ───────────────────────────────────────────────────────
 
+export interface LoanDefaults {
+  defaultLoanDays: number;
+}
+
+/**
+ * The desk's prefill values.
+ *
+ * `gear:loan`-gated rather than added to the public settings snapshot:
+ * loan length is officer-facing configuration, and the public subset is
+ * a curated allowlist that exists so a setting can't become public by
+ * being reclassified into the wrong category.
+ */
+export async function getLoanDefaultsAction(): Promise<LoanDefaults> {
+  await requireGearLoanManager();
+  const { readSetting } =
+    await import("#/server/settings/settings-repo.server");
+  return { defaultLoanDays: await readSetting("gear.defaultLoanDays") };
+}
+
 export interface ListLoansActionInput {
   tab?: "active" | "history";
   memberPublicId?: string;
