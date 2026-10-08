@@ -376,6 +376,17 @@ export default [
     },
   },
   {
+    // Playwright's global setup, same category as the CLI scripts
+    // above: it runs from a terminal and its output is the interface.
+    // It deletes the previous run's seeded users, and a sweep that
+    // removes several hundred rows without saying so is a worse
+    // default than one line on stdout.
+    files: ["e2e/global-setup.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
+  {
     ignores: ["eslint.config.js"],
   },
 ];

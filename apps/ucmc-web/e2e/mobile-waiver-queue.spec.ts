@@ -24,9 +24,15 @@ import { waitForHydration } from "./fixtures/hydration";
  * reintroduces this whatever it is made of.
  */
 
-/** Sign in as an officer holding `waivers:verify`, with two members in
- *  the queue. A freshly approved member has no current-cycle
- *  attestation, so seeding one puts a known row in it. */
+/** Sign in as an officer holding `waivers:verify`, with a member in the
+ *  queue.
+ *
+ *  `attested: false` is what puts them there, and it has to be explicit:
+ *  `ensureApprovedUser` writes a current-cycle attestation by default,
+ *  because an approved member *without* one sits in this queue forever
+ *  and every run used to add another. This spec is the one place the
+ *  queue row IS the fixture, so it opts out — the officer does not, since
+ *  they only need to read the page. */
 async function seedQueue(
   page: Page,
   prefix: string,
@@ -36,7 +42,7 @@ async function seedQueue(
   const selectEmail = `${prefix}-select-${stamp}@example.com`;
 
   ensureApprovedUser(officer, { roles: ["role_system_admin"] });
-  ensureApprovedUser(selectEmail);
+  ensureApprovedUser(selectEmail, { attested: false });
 
   await page.context().addCookies([
     {
