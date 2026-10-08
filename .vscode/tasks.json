@@ -155,9 +155,17 @@
       "problemMatcher": []
     },
     {
+      "label": "repo: verify",
+      "detail": "lint + typecheck + knip + test across every package (~70s)",
+      "type": "shell",
+      "command": "pnpm verify",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
       "label": "repo: format",
       "type": "shell",
-      "command": "pnpm exec prettier --write .",
+      "command": "pnpm format",
       "problemMatcher": []
     },
     {

@@ -14,7 +14,8 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 
 ## Commands
 
-- `pnpm install` · `pnpm commit` · `pnpm exec eslint .` · `pnpm exec prettier --write .`
+- `pnpm install` · `pnpm commit` · `pnpm format` (`format:check`)
+- `pnpm verify` — lint + typecheck + knip + test across every package, ~70s. `pnpm {lint,typecheck,knip,test}` run the pieces individually.
 - `pnpm --filter ucmc-web {dev,build,test,test:coverage,test:mutation,typecheck,lint,knip,storybook,e2e,e2e:ui}`
 - `pnpm --filter ucmc-web {deploy:dev,deploy:prod}`
 - `pnpm --filter ucmc-web {db:migrate:local,db:seed:local}` — remote sysadmin seeding is the `seed-admin.yml` GitHub Action, not a script
@@ -25,7 +26,7 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 
 **`knip` must stay green.** It reports unused files, exports, exported types and dependencies — the module-graph findings ESLint can't see, and the thing that will tell us a migration shim (`permission-aliases.ts`, `LEGACY_SETTING_KEYS`, `LEGACY_HERO_SETTING_KEYS`) has lost its last call site. Most entry points here are reached by convention, not by an import, so **a new route, story, script or vitest pool may need a `knip.config.ts` entry.** Every suppression in that file is commented with why; add findings to it only after establishing they're false positives, and prefer `entry` over `ignore` for vendored catalogs so knip still follows their imports.
 
-**Run lint as `pnpm --filter ucmc-web lint`, the way CI does.** The web ESLint config resolves `import/no-restricted-paths` zones against `process.cwd()`; from the repo root those zones match nothing, and the rule **fails open** — silently passing rather than erroring.
+**Never lint with a bare `eslint .` from the repo root.** The web ESLint config resolves `import/no-restricted-paths` zones against `process.cwd()`; from the root those zones match nothing, and the rule **fails open** — silently passing rather than erroring. Use `pnpm --filter ucmc-web lint`, the way CI does, or the root `pnpm lint`, which is `pnpm -r lint` and therefore runs each package's own script with the cwd set to that package. The root aggregates all work this way; `format` is the one exception, because Prettier's config and `.prettierignore` are repo-wide. **package.json cannot carry a comment, so this is the only place that constraint is written down — don't 'simplify' a root script to a direct tool invocation.**
 
 ## Code style
 

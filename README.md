@@ -89,15 +89,27 @@ touching neither package's TypeScript skips it entirely. Deletions, renames
 and `tsconfig.json` edits all count as changes, since removing a module
 breaks whatever imported it.
 
-To run manually:
+To run manually, from the repo root:
 
 ```bash
-pnpm exec eslint .
-pnpm exec prettier --write .
-pnpm --filter ucmc-web typecheck
-pnpm --filter ucmc-web knip
-cd infra && pnpm typecheck
+pnpm verify        # lint + typecheck + knip + test, every package (~70s)
+
+# or individually
+pnpm lint
+pnpm typecheck
+pnpm knip
+pnpm test
+pnpm format        # prettier --write . (pnpm format:check to check only)
 ```
+
+Each of those except `format` is `pnpm -r`, which runs the package's own
+script **with the cwd set to that package**. That is not cosmetic: the web
+ESLint config resolves its `import/no-restricted-paths` zones against
+`process.cwd()`, so a root-level `eslint .` matches none of them and the rule
+**fails open** — passing silently rather than erroring. `pnpm -r` is what
+makes the root shortcut agree with CI, which invokes the package scripts
+directly. Prettier is the exception because its config and `.prettierignore`
+are repo-wide, so it genuinely does run once from the root.
 
 [Knip](https://knip.dev) reports unused files, exports, exported types and
 dependencies — the module-graph half of dead-code detection that ESLint's
