@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import { Textarea } from "#/components/ui/textarea";
+import { CLUB_TIME_ZONE } from "#/config/time";
 import { useAuth } from "#/features/auth/api/use-auth";
 import {
   fetchGearByCode,
@@ -34,7 +35,10 @@ import { MemberSearchCombobox } from "#/features/gear/components/member-search-c
 import { SKIP_OVERRIDE_FLAG } from "#/features/gear/lib/availability";
 import type { CheckoutOverrideFlag } from "#/features/gear/lib/availability";
 import { isCartToken } from "#/features/gear/lib/cart-token";
-import { DEFAULT_LOAN_DURATION_DAYS } from "#/features/gear/lib/loan-duration";
+import {
+  DEFAULT_LOAN_DURATION_DAYS,
+  defaultLoanDurationDays,
+} from "#/features/gear/lib/loan-duration";
 import {
   resolveCartTokenFn,
   getMemberForLoanFn,
@@ -140,9 +144,20 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   const [durationTouched, setDurationTouched] = useState(false);
   useEffect(() => {
     if (!durationTouched && loanDefaults) {
-      setDefaultDurationDays(loanDefaults.defaultLoanDays);
+      // Rolled forward to the next day the cave is open, so the suggested
+      // due date is one the member can actually meet. This is the ONLY
+      // place the cave's hours move a date — the officer overrides freely
+      // and the server stores whatever is submitted (#242).
+      setDefaultDurationDays(
+        defaultLoanDurationDays(
+          Temporal.Now.zonedDateTimeISO(CLUB_TIME_ZONE).toPlainDate(),
+          loanDefaults.defaultLoanDays,
+          loanDefaults.caveOpenWeekdays,
+        ),
+      );
     }
   }, [durationTouched, loanDefaults]);
+  const caveOpenWeekdays = loanDefaults?.caveOpenWeekdays ?? [];
   const checkout = useCheckoutLoans();
   const { hasPermission } = useAuth();
   // `gear:loan` runs the desk; overriding a hold or a blocked member is
@@ -395,6 +410,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
               setDefaultDurationDays(days);
             }}
             disabled={checkout.isPending}
+            caveOpenWeekdays={caveOpenWeekdays}
           />
         </div>
       </div>
@@ -454,6 +470,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
                       )
                     }
                     error={item.error}
+                    caveOpenWeekdays={caveOpenWeekdays}
                     onRemove={() =>
                       setItems((prev) => prev.filter((_, pi) => pi !== idx))
                     }

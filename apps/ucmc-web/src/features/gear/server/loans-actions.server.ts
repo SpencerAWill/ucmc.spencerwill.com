@@ -45,6 +45,7 @@ import {
   searchApprovedMembers,
   searchItemsByCode,
 } from "#/features/gear/server/loans-repo.server";
+import { parseWeekdayList } from "#/lib/weekdays";
 import { gearCaveStanding } from "#/server/gear/gear-cave-standing.server";
 import type { GearCaveStanding } from "#/server/gear/gear-cave-standing.server";
 import type {
@@ -642,6 +643,12 @@ export async function extendLoanAction(input: {
 
 export interface LoanDefaults {
   defaultLoanDays: number;
+  /**
+   * ISO weekday numbers (Mon = 1 … Sun = 7) the cave is open, parsed from
+   * `gear.caveOpenDays`. Empty means none configured, which the desk reads
+   * as "prefill the plain loan length".
+   */
+  caveOpenWeekdays: number[];
 }
 
 /**
@@ -651,12 +658,31 @@ export interface LoanDefaults {
  * loan length is officer-facing configuration, and the public subset is
  * a curated allowlist that exists so a setting can't become public by
  * being reclassified into the wrong category.
+ *
+ * Both values are *prefill inputs only* — nothing here is applied to a
+ * submitted checkout. The wire format stays `durationDays`, and the server
+ * stores exactly what the officer sent.
  */
 export async function getLoanDefaultsAction(): Promise<LoanDefaults> {
   await requireGearLoanManager();
   const { readSetting } =
     await import("#/server/settings/settings-repo.server");
-  return { defaultLoanDays: await readSetting("gear.defaultLoanDays") };
+  const [defaultLoanDays, caveOpenDays] = await Promise.all([
+    readSetting("gear.defaultLoanDays"),
+    readSetting("gear.caveOpenDays"),
+  ]);
+  return {
+    defaultLoanDays,
+    // `readSetting` is fail-open and the registry's refinement IS
+    // `parseWeekdayList`, so anything reaching here already parses — a
+    // garbage row falls back to the schema default before we see it.
+    // The `?? []` is therefore unreachable, and kept only because the
+    // parser's signature can't say so. Do not read it as a fallback
+    // policy: "no open days" is a real configuration (the summer), and
+    // silently adopting it on a bad read would be a different answer
+    // from the one the fail-open path already gives.
+    caveOpenWeekdays: parseWeekdayList(caveOpenDays) ?? [],
+  };
 }
 
 export interface ListLoansActionInput {
