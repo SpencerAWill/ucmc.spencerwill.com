@@ -14,9 +14,27 @@
       // for its "Local: http://localhost:3000" line (see the background
       // problem matcher in tasks.json) before the browser opens.
       //
-      // In the dev container, VS Code launches the browser on the HOST and
-      // tunnels the debug connection back, which is why this points at the
-      // forwarded port rather than at anything inside the container.
+      // In the dev container there is no browser, and that is handled by
+      // design: `ms-vscode.js-debug-companion` ships with VS Code, declares
+      // `extensionKind: ["ui"]`, and launches Chrome on the HOST on behalf of
+      // js-debug running in here.
+      //
+      // The URL below resolves on the host, where :3000 is PUBLISHED by
+      // .devcontainer/docker-compose.yml — not forwarded by VS Code.
+      //
+      // The debug channel is a separate matter and still needs VS Code port
+      // forwarding to be healthy: js-debug opens a tunnel it labels "Browser
+      // Debug Tunnel" for its CDP server port and hands the companion a
+      // `proxyUri` pointing at the local end. That request is wrapped in a
+      // swallowing `.catch(() => {})`, so when forwarding is broken the
+      // proxyUri silently falls back to 127.0.0.1:<serverPort> ON THE HOST,
+      // where nothing listens — Chrome opens, then the attach fails. If that
+      // is what you are seeing, the fault is host-side forwarding, not this
+      // config, and publishing cannot route around it: the tunnel port is
+      // allocated per debug session.
+      //
+      // For just LOOKING at the app, `Simple Browser: Show` renders it inside
+      // the editor and needs only the published port.
       //
       // Breakpoints in code that runs during SSR will not bind here — that
       // half executes in workerd, not in the browser. Use a test or a log
@@ -61,10 +79,17 @@
       // the Playwright runner's own Node process. Application code still runs
       // in the browser and in workerd, so use `page.pause()` or the trace
       // viewer for those.
+      //
+      // Deliberately NOT `--headed`: there is no X server in this container,
+      // so a headed browser dies on launch with "Missing X server or
+      // $DISPLAY". Headless changes nothing about where breakpoints bind.
+      // To watch a run instead of stepping through it, use UI mode
+      // (`pnpm --filter ucmc-web e2e:ui`), which serves itself over :9323
+      // rather than opening a window.
       "name": "Web: Playwright — current spec",
       "type": "node-terminal",
       "request": "launch",
-      "command": "pnpm --filter ucmc-web exec playwright test ${file} --headed --workers 1",
+      "command": "pnpm --filter ucmc-web exec playwright test ${file} --workers 1",
       "cwd": "${workspaceFolder}"
     },
     {

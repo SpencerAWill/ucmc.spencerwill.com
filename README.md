@@ -40,10 +40,11 @@ Ports are **published** by `.devcontainer/docker-compose.yml`, not forwarded by 
 | `3000` | Vite dev server                          | `pnpm --filter ucmc-web dev`          |
 | `4173` | `vite preview` — built worker on workerd | `pnpm --filter ucmc-web preview`      |
 | `6006` | Storybook                                | `pnpm --filter ucmc-web storybook`    |
+| `9323` | Playwright UI mode / HTML report         | `pnpm --filter ucmc-web e2e:ui`       |
 | `8025` | Mailpit web UI + REST API                | the `mailpit` sidecar, always running |
 | `1025` | Mailpit SMTP intake                      | same (nothing speaks SMTP to it yet)  |
 
-Because these are published rather than forwarded, each server has to bind `0.0.0.0` rather than loopback — all of them already do. Addresses are relative to which side of the container you are on: Mailpit is <http://localhost:8025> from a host browser and `http://mailpit:8025` from inside the container, and both are correct.
+Because these are published rather than forwarded, each server has to bind `0.0.0.0` rather than loopback — all of them already do. There is no X server in the container, so nothing that wants a visible browser window works here; the tools that matter all serve over HTTP instead (Playwright UI mode, `show-report`), and `Simple Browser: Show` will render any of these inside VS Code. Addresses are relative to which side of the container you are on: Mailpit is <http://localhost:8025> from a host browser and `http://mailpit:8025` from inside the container, and both are correct.
 
 ### Manual Setup
 

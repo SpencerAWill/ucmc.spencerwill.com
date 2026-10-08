@@ -36,6 +36,13 @@
       "label": "Storybook",
       "onAutoForward": "silent"
     },
+    // Playwright UI mode and `playwright show-report`. Both serve over HTTP
+    // precisely so they work without a display — a headed browser cannot run
+    // in this container at all (no X server).
+    "9323": {
+      "label": "Playwright (UI mode / report)",
+      "onAutoForward": "silent"
+    },
     // Published by the mailpit SERVICE, not by this container, so it reaches
     // the host on its own. Both addresses are correct from their own side:
     // http://localhost:8025 from a host browser, http://mailpit:8025 from

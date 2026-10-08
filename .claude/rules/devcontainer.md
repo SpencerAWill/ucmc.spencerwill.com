@@ -23,7 +23,7 @@ The store must share a filesystem with `node_modules` to hardlink rather than co
 
 ## Ports reach the host by Docker publishing, not by VS Code forwarding
 
-`docker-compose.yml` **publishes** 3000 (Vite), 4173 (`vite preview`), 6006 (Storybook) and — on the mailpit service — 8025 / 1025. `devcontainer.json` deliberately has **no `forwardPorts`**.
+`docker-compose.yml` **publishes** 3000 (Vite), 4173 (`vite preview`), 6006 (Storybook), 9323 (Playwright UI mode and `show-report`) and — on the mailpit service — 8025 / 1025. `devcontainer.json` deliberately has **no `forwardPorts`**.
 
 The two mechanisms are not interchangeable:
 
@@ -40,6 +40,25 @@ Publishing is the choice here because forwarding is a devcontainer **client** fe
 **Never list a published port in `forwardPorts` as well.** VS Code finds the host port taken and silently remaps to a random one ([vscode-remote-release#3025](https://github.com/microsoft/vscode-remote-release/issues/3025)) — which presents as "port forwarding is broken" and sends you looking in the wrong place. Adding a new long-running server means adding it to `ports:`, and to `portsAttributes` only for its label.
 
 **An address is relative to where you are standing, and both sides are correct.** Mailpit is `http://localhost:8025` from a host browser and `http://mailpit:8025` from inside the container, where compose DNS resolves service names; neither is the "real" one. Anything running in the container — the worker's `MAILPIT_URL`, the Playwright fixtures — wants the service name. The same split is why CI sets `MAILPIT_URL=http://localhost:8025`: GitHub service containers publish to the runner's loopback and there is no compose network. See `testing.md`.
+
+## Nothing visual runs in here — there is no X server
+
+`chromium` and `webkit` are installed (Playwright), but **headed** launches die immediately:
+
+```
+ERROR:ui/ozone/platform/x11/ozone_platform_x11.cc:257] Missing X server or $DISPLAY
+ERROR:ui/aura/env.cc:246] The platform failed to initialize.  Exiting.
+```
+
+`xvfb-run` and `Xvfb` are installed, so a headed run _can_ be wrapped — but you still cannot see the window, which defeats the point. **Prefer the things that serve over HTTP instead**, because a published port is something you can actually open:
+
+- `pnpm --filter ucmc-web e2e:ui` — UI mode on `:9323` (`--ui-host 0.0.0.0 --ui-port 9323`), not a window.
+- `playwright show-report` / `show-trace` — same port.
+- `Simple Browser: Show` — VS Code's bundled webview browser. It renders in the host window and does **not** call `asExternalUri`, so it reaches the app through the published port like any host browser would. No breakpoints, but it keeps the app in the editor.
+
+**Client-side Chrome debugging is a special case and currently depends on VS Code forwarding being healthy.** There is no browser here, which js-debug handles by design: `ms-vscode.js-debug-companion` (`extensionKind: ["ui"]`, bundled with VS Code) launches Chrome on the host for it. But js-debug also opens a tunnel labelled _"Browser Debug Tunnel"_ for its CDP server port and passes the companion a `proxyUri` for the local end — **and that request is wrapped in a swallowing `.catch(() => {})`.** When forwarding is broken the `proxyUri` silently falls back to `127.0.0.1:<serverPort>` on the host, where nothing listens; Chrome opens and the attach then fails. Publishing cannot rescue this one — the tunnel port is allocated per debug session, so there is nothing static to put in `ports:`.
+
+Breakpoints in the Vitest and tsx configs are unaffected: those are `node-terminal`, entirely in-container, no browser and no tunnel.
 
 ## Editors
 

@@ -29,6 +29,7 @@ services:
       - "3000:3000" # Vite dev server
       - "4173:4173" # vite preview — the built worker through workerd
       - "6006:6006" # Storybook
+      - "9323:9323" # Playwright UI mode + `playwright show-report`
     volumes:
       - ..:/workspace:cached
       # node_modules on a named (container-native) volume rather than the

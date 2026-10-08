@@ -136,6 +136,12 @@
     },
     {
       "label": "web: e2e:ui",
+      // UI mode SERVES itself at http://localhost:9323 (published by
+      // docker-compose.yml) rather than opening a window — there is no X
+      // server in this container, so anything that wants a visible browser
+      // dies with "Missing X server or $DISPLAY". Open the URL in a host
+      // browser, or run `Simple Browser: Show` to get it inside the editor.
+      "detail": "Playwright UI mode, served on :9323",
       "type": "shell",
       "command": "pnpm --filter ucmc-web e2e:ui",
       "problemMatcher": [],
