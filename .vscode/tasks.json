@@ -1,0 +1,186 @@
+{
+  // Run configurations for the repo's pnpm scripts, so the common commands
+  // are one `Tasks: Run Task` away instead of a remembered incantation.
+  //
+  // Every task runs from ${workspaceFolder} (the monorepo root) and selects
+  // the package with `pnpm --filter`, which sets the child process's cwd to
+  // that package for us. The one exception is `infra:`, which uses `cwd`
+  // directly because Pulumi is driven by the `pulumi` CLI rather than by a
+  // package script.
+  //
+  // `web: lint` is deliberately `pnpm --filter ucmc-web lint` and NOT a bare
+  // `eslint .` at the root: the web ESLint config resolves its
+  // `import/no-restricted-paths` zones against `process.cwd()`, and from the
+  // root those zones match nothing and the rule fails OPEN — it passes
+  // silently rather than erroring. See CLAUDE.md.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "web: dev",
+      "detail": "Vite dev server on :3000 (runs prepare:assets first)",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web dev",
+      "isBackground": true,
+      // A background task needs a matcher that tells VS Code when the
+      // server is *up*, otherwise a `preLaunchTask` on it never resolves
+      // and the debug session hangs forever waiting. Nothing here parses
+      // real problems — tsc/eslint own that — so the pattern is a stub
+      // and only `background` does any work.
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": [{ "regexp": ".", "file": 1, "location": 2, "message": 3 }],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*VITE v.*",
+          "endsPattern": ".*Local:.*http://localhost:3000.*"
+        }
+      },
+      "presentation": { "panel": "dedicated", "group": "servers" }
+    },
+    {
+      "label": "web: preview",
+      "detail": "Serve the built worker from dist/ through workerd on :4173",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web preview",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": [{ "regexp": ".", "file": 1, "location": 2, "message": 3 }],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*vite.*preview.*",
+          "endsPattern": ".*Local:.*http://localhost:4173.*"
+        }
+      },
+      "presentation": { "panel": "dedicated", "group": "servers" }
+    },
+    {
+      "label": "web: storybook",
+      "detail": "Storybook on :6006",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web storybook",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "group": "servers" }
+    },
+    {
+      "label": "web: build",
+      "detail": "Production build — also regenerates src/routeTree.gen.ts",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web build",
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "web: typecheck",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web typecheck",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "web: lint",
+      "detail": "ESLint the way CI runs it — from the package, not the root",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web lint",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "web: knip",
+      "detail": "Unused files/exports/deps — must stay green (see CLAUDE.md)",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web knip",
+      "problemMatcher": []
+    },
+    {
+      "label": "web: test",
+      "detail": "Vitest once, both pools (workers + jsdom)",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web test",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "web: test (watch)",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web exec vitest",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "web: test:coverage",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web test:coverage",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "web: e2e",
+      "detail": "Playwright — boots its own dev server per playwright.config.ts",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web e2e",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "web: e2e (preview build)",
+      // The dev server and the built worker are not the same artifact, and a
+      // class of defect (the client-bundle `cloudflare:workers` stub, SSR
+      // bundling, the asset manifest) exists only in the second. E2E_PREVIEW
+      // points the suite at `vite preview` on :4173 instead.
+      "type": "shell",
+      "command": "E2E_PREVIEW=1 pnpm --filter ucmc-web e2e",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "web: e2e:ui",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web e2e:ui",
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "web: db:migrate:local",
+      "detail": "Apply D1 migrations to the local Miniflare database",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web db:migrate:local",
+      "problemMatcher": []
+    },
+    {
+      "label": "web: db:seed:local",
+      "type": "shell",
+      "command": "pnpm --filter ucmc-web db:seed:local",
+      "problemMatcher": []
+    },
+    {
+      "label": "repo: format",
+      "type": "shell",
+      "command": "pnpm exec prettier --write .",
+      "problemMatcher": []
+    },
+    {
+      "label": "repo: commit",
+      "detail": "czg — walks you through a commitlint-valid Conventional Commit",
+      "type": "shell",
+      "command": "pnpm commit",
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "focus": true }
+    },
+    {
+      "label": "infra: pulumi preview (dev)",
+      "type": "shell",
+      "command": "pulumi preview --stack dev",
+      "options": { "cwd": "${workspaceFolder}/infra" },
+      "problemMatcher": []
+    },
+    {
+      "label": "infra: typecheck",
+      "type": "shell",
+      "command": "pnpm --filter @ucmc/infra typecheck",
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    }
+  ]
+}

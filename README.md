@@ -10,7 +10,7 @@ This is a polyglot pnpm monorepo with the following workspace layout:
   - `apps/ucmc-web/` — UCMC web app (TanStack Start on Cloudflare Workers)
 - `infra/` — Pulumi infrastructure-as-code
 - `.devcontainer/` — Dev container configuration (`initialize.sh` on the host, `configure-git.sh` on create; see [`.claude/rules/devcontainer.md`](.claude/rules/devcontainer.md) on git index-lock contention)
-- `.zed/`, `.vscode/` — editor settings; both committed, and their scan/watch exclusions are load-bearing for git performance
+- `.zed/`, `.vscode/` — editor settings; both committed, and their scan/watch exclusions are load-bearing for git performance. `.vscode/tasks.json` wraps the pnpm scripts as run configurations and `.vscode/launch.json` holds the debug ones (Chrome against the dev server, Vitest/Playwright/tsx on the current file)
 
 ## Development Setup
 

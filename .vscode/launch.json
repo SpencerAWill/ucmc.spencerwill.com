@@ -1,0 +1,80 @@
+{
+  // Debug configurations. The companion run configurations are in tasks.json
+  // (`Tasks: Run Task`) — anything that is just "run a pnpm script" lives
+  // there; this file is only for things you want breakpoints in.
+  //
+  // The `node-terminal` configurations need no extension: VS Code's built-in
+  // JavaScript debugger auto-attaches to whatever Node process the command
+  // spawns, so `pnpm --filter … exec …` works without reconstructing the
+  // underlying binary path.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Client-side debugging. `preLaunchTask` boots the dev server and waits
+      // for its "Local: http://localhost:3000" line (see the background
+      // problem matcher in tasks.json) before the browser opens.
+      //
+      // In the dev container, VS Code launches the browser on the HOST and
+      // tunnels the debug connection back, which is why this points at the
+      // forwarded port rather than at anything inside the container.
+      //
+      // Breakpoints in code that runs during SSR will not bind here — that
+      // half executes in workerd, not in the browser. Use a test or a log
+      // for server-render paths.
+      "name": "Web: Chrome against dev server",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/apps/ucmc-web",
+      "preLaunchTask": "web: dev",
+      "sourceMapPathOverrides": {
+        "/@fs/*": "/*",
+        "/src/*": "${workspaceFolder}/apps/ucmc-web/src/*"
+      }
+    },
+    {
+      // ${file} is the ABSOLUTE path, and that is deliberate: Vitest and
+      // Playwright both match a positional filter against the absolute test
+      // path, while the relative-file variable is relative to the repo ROOT
+      // (apps/ucmc-web/src/…) and matches nothing once pnpm has moved the
+      // child process's cwd into the package.
+      //
+      // Breakpoints bind in the `dom` project (*.test.tsx, jsdom) but NOT in
+      // the `workers` project (*.test.ts): those run inside workerd under
+      // @cloudflare/vitest-pool-workers, which the Node inspector cannot see
+      // into. For those, `console.log` and assertion output are the tools.
+      "name": "Web: Vitest — current file",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm --filter ucmc-web exec vitest run --no-file-parallelism ${file}",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Web: Vitest — dom project (watch)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm --filter ucmc-web exec vitest --project dom",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      // Breakpoints bind in the spec and in the fixtures under e2e/ — that is
+      // the Playwright runner's own Node process. Application code still runs
+      // in the browser and in workerd, so use `page.pause()` or the trace
+      // viewer for those.
+      "name": "Web: Playwright — current spec",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm --filter ucmc-web exec playwright test ${file} --headed --workers 1",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      // For the one-off tsx entry points: scripts/generate-sitemap.ts,
+      // scripts/sync-zxing-wasm.ts, drizzle/seed.ts.
+      "name": "Web: tsx — current file",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm --filter ucmc-web exec tsx ${file}",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
