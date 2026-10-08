@@ -56,4 +56,8 @@ Unlike settings writes, which batch with an audit event. The audit log records *
 
 `src/server/email/resend.ts` has two tiers and **no third**: Resend when `RESEND_API_KEY` is set, Mailpit when `MAILPIT_URL` is, and otherwise it **throws** `EmailNotConfiguredError`. An earlier revision logged the message to the Worker console as a "fallback"; that either dumped magic-link URLs into dashboard-readable Workers Logs or left users staring at a never-arriving email. Failing loudly is the behaviour — don't reintroduce a silent tier.
 
-`EmailMessage` is `{ to, subject, text, html? }`. There is no `headers` field and no HTML layout; `magicLinkEmail` is plain text. Adding either is a real edit, not free.
+**Every reminder carries `gear.caveHoursNote`.** The cave is open about two hours a week (Wednesdays, either side of the meeting), so "bring it back during open hours" without naming them is an instruction a member cannot follow — and it is what makes the day-one overdue notice worth sending at all, since the next chance to return anything may be six days away. It is free text, not a structured schedule: the hours shift each semester, have exceptions, and off-cycle checkouts happen by arrangement. Blank collapses the line and its separator, which is the summer case.
+
+**Each rung has its own subject line.** `flagged` used to reuse the plain overdue wording, so the escalation was invisible from the inbox list — two apparently identical emails a week apart, and the one that actually changed something looked like a repeat.
+
+`EmailMessage` is `{ to, subject, text, html?, headers?, idempotencyKey? }`. There is no HTML layout; `magicLinkEmail` and the gear reminders are plain text. Adding one is a real edit, not free.

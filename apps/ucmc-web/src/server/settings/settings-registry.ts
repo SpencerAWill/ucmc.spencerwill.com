@@ -781,6 +781,26 @@ export const SETTINGS = {
       owner: "system_admin",
       createdAt: "2026-10-08",
     }),
+  // Free text, not a structured schedule. The cave's hours shift each
+  // semester, have exceptions, and off-cycle checkouts happen by
+  // arrangement — encoding open days properly would turn a flexible
+  // arrangement into a constraint officers then fight. This is one line
+  // of email copy, so it is one string.
+  "gear.caveHoursNote": z
+    .string()
+    .trim()
+    .max(200, "At most 200 characters")
+    .default(
+      "Wednesdays, 6\u20137pm and 8\u20139pm \u2014 before and after the weekly meeting.",
+    )
+    .register(registry, {
+      label: "Gear cave hours",
+      description:
+        "Printed in every gear reminder email so a member knows when they can actually return something. The cave is open a couple of hours a week, so this is the most useful sentence those emails carry. Leave blank to omit the line entirely \u2014 e.g. over the summer when there are no hours.",
+      category: "features",
+      owner: "system_admin",
+      createdAt: "2026-10-08",
+    }),
   "gear.dueSoonLeadDays": z
     .number()
     .int()

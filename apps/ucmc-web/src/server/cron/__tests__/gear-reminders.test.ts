@@ -383,6 +383,75 @@ describe("the unsubscribe header", () => {
   });
 });
 
+describe("cave hours", () => {
+  it("prints the configured hours in both the courtesy and overdue mail", async () => {
+    await setSetting("gear.caveHoursNote", "Wednesdays, 6-7pm and 8-9pm");
+    await setSetting("gear.dueSoonLeadDays", 2);
+    const soon = await seedMember({ email: "soon@example.com" });
+    const late = await seedMember({ email: "late@example.com" });
+    await seedLoan({ memberUserId: soon, dueAt: dueOn("2026-03-06") });
+    await seedLoan({ memberUserId: late, dueAt: dueOn("2026-03-01") });
+
+    await runGearLoanReminders({ now: at("2026-03-05") });
+
+    // The cave is open about two hours a week, so "bring it back during
+    // open hours" without naming them is an instruction nobody can
+    // follow. It is also what makes the day-one overdue notice worth
+    // sending, given the next return window may be six days out.
+    expect(sent).toHaveLength(2);
+    for (const message of sent) {
+      expect(message.text).toContain("Cave hours: Wednesdays, 6-7pm and 8-9pm");
+    }
+  });
+
+  it("omits the line entirely when the setting is blank", async () => {
+    await setSetting("gear.caveHoursNote", "   ");
+    const member = await seedMember({});
+    await seedLoan({ memberUserId: member, dueAt: dueOn("2026-03-01") });
+
+    await runGearLoanReminders({ now: at("2026-03-05") });
+
+    // Blank is the summer case. It has to collapse the separator too,
+    // or the message carries a mystery gap.
+    expect(sent[0].text).not.toContain("Cave hours:");
+    expect(sent[0].text).not.toMatch(/\n\n\n/);
+  });
+});
+
+describe("subject lines", () => {
+  it("gives every rung a subject a member can tell apart", async () => {
+    await setSetting("gear.dueSoonLeadDays", 2);
+    const subjects: string[] = [];
+
+    // One member per rung, so each message is unambiguous.
+    const cases = [
+      { due: "2026-03-06", label: "due_soon" },
+      { due: "2026-03-04", label: "overdue" },
+      { due: "2026-02-26", label: "flagged" },
+      { due: "2026-02-10", label: "blocked" },
+    ];
+    for (const c of cases) {
+      sent.length = 0;
+      const m = await seedMember({ email: `${c.label}@example.com` });
+      await seedLoan({ memberUserId: m, dueAt: dueOn(c.due) });
+      await runGearLoanReminders({ now: at("2026-03-05") });
+      expect(sent, `no mail for ${c.label}`).toHaveLength(1);
+      subjects.push(sent[0].subject);
+    }
+
+    // The flagged rung used to reuse the plain overdue subject, so the
+    // escalation was invisible from the inbox list: two apparently
+    // identical emails a week apart, and the one that actually changed
+    // something looked like a repeat.
+    expect(
+      new Set(subjects).size,
+      `duplicate subjects: ${subjects.join(" | ")}`,
+    ).toBe(4);
+    expect(subjects[2]).toMatch(/flagged/i);
+    expect(subjects[3]).toMatch(/can't borrow/i);
+  });
+});
+
 describe("failure handling", () => {
   it("leaves the stage alone when the send throws, so tomorrow retries", async () => {
     const member = await seedMember({});

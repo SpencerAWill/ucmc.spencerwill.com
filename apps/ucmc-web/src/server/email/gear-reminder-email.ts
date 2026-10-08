@@ -51,10 +51,26 @@ export function gearReminderEmail(args: {
   myGearUrl: string;
   /** Absolute URL of `/my/preferences`. */
   preferencesUrl: string;
+  /**
+   * `gear.caveHoursNote`, or empty to omit the line.
+   *
+   * **The most useful sentence in the message.** The cave is open about
+   * two hours a week, so "bring it back during open hours" without
+   * naming them is an instruction a member cannot follow — and it is
+   * what makes the day-one overdue notice worth sending at all, given
+   * the next chance to return anything may be six days away.
+   */
+  caveHours: string;
 }): EmailMessage {
   const greeting = args.preferredName ? `Hi ${args.preferredName},` : "Hi,";
   const plural = args.loans.length === 1 ? "this" : "these";
   const items = args.loans.map(lineFor).join("\n");
+  // Blank collapses the line AND its separator rather than leaving a
+  // gap — officers empty this over the summer.
+  const hoursBlock =
+    args.caveHours.trim().length > 0
+      ? [`Cave hours: ${args.caveHours.trim()}`, ""]
+      : [];
 
   if (args.stage === "due_soon") {
     return {
@@ -70,9 +86,10 @@ export function gearReminderEmail(args: {
         "",
         items,
         "",
-        `You can see everything you have out at ${args.myGearUrl}`,
+        "Bring it by and an officer will check it in.",
         "",
-        "Bring it by the cave during open hours and an officer will check it in.",
+        ...hoursBlock,
+        `You can see everything you have out at ${args.myGearUrl}`,
         "",
         "— UCMC",
         "",
@@ -99,16 +116,22 @@ export function gearReminderEmail(args: {
       ? "Because of this, you can't check out any more club gear until it comes back."
       : args.stage === "flagged"
         ? "Officers will see this flagged on your account at the desk. If it stays out, you'll stop being able to borrow."
-        : "Please bring it back to the cave during open hours.";
+        : "Please bring it back at the next cave hours.";
 
   return {
     to: args.to,
+    // Every rung gets its own subject. The flagged one used to reuse the
+    // plain overdue wording, so the escalation was invisible from the
+    // inbox list — two apparently identical emails a week apart, and the
+    // one that actually changed something looked like a repeat.
     subject:
       args.stage === "blocked"
         ? "Overdue club gear — you can't borrow until it's returned"
-        : args.loans.length === 1
-          ? "Club gear is overdue"
-          : `${args.loans.length} pieces of club gear are overdue`,
+        : args.stage === "flagged"
+          ? "Overdue club gear — your account is now flagged"
+          : args.loans.length === 1
+            ? "Club gear is overdue"
+            : `${args.loans.length} pieces of club gear are overdue`,
     text: [
       greeting,
       "",
@@ -118,6 +141,7 @@ export function gearReminderEmail(args: {
       "",
       consequence,
       "",
+      ...hoursBlock,
       `You can see everything you have out at ${args.myGearUrl}`,
       "",
       "If you've already returned it, or something here looks wrong, reply to this email and we'll sort it out.",

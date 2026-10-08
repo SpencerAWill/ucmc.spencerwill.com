@@ -110,11 +110,13 @@ export async function runGearLoanReminders(input: {
     return { ...empty, skipped: true };
   }
 
-  const [dueSoonLeadDays, flagAfterDays, blockAfterDays] = await Promise.all([
-    readSetting("gear.dueSoonLeadDays"),
-    readSetting("gear.overdueFlagDays"),
-    readSetting("gear.overdueBlockDays"),
-  ]);
+  const [dueSoonLeadDays, flagAfterDays, blockAfterDays, caveHours] =
+    await Promise.all([
+      readSetting("gear.dueSoonLeadDays"),
+      readSetting("gear.overdueFlagDays"),
+      readSetting("gear.overdueBlockDays"),
+      readSetting("gear.caveHoursNote"),
+    ]);
   const thresholds = { dueSoonLeadDays, flagAfterDays, blockAfterDays };
 
   const { listOpenLoansForReminders, advanceLoanReminderStage } =
@@ -237,6 +239,7 @@ export async function runGearLoanReminders(input: {
           loans: lines,
           myGearUrl,
           preferencesUrl,
+          caveHours,
         }),
         // Scoped to the club day so a same-day re-run is deduped by the
         // provider even if the stage advance below never landed.
