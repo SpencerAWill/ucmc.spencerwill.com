@@ -145,9 +145,9 @@ The app uses a two-path authentication system:
 
 1. **Magic links** (primary for registration, fallback for sign-in) — enter an email, receive a one-time link that expires in 15 minutes. The link lands on a click-through page (to defeat email scanners), then either opens a session (existing user) or sets a short-lived proof cookie (new user → profile form → pending approval).
 
-2. **Passkeys / WebAuthn** (primary for sign-in) — approved users can enroll FIDO2 passkeys on `/my/account/security`. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
+2. **Passkeys / WebAuthn** (primary for sign-in) — FIDO2 passkeys are managed on `/my/security` and offered earlier, on `/register/pending`, since enrollment needs a session but **not** an approved account. They stay optional: magic links remain the sign-in and recovery path, and plenty of people register on a machine that can't create a passkey at all. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
 
-**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (required fields only: legal + preferred name, phone, UC affiliation, policies ack) → `/register/pending` (wait for exec approval; optionally add emergency contacts and a bio there) → exec approves at `/members/pending` → user is `approved` with the `member` role.
+**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (required fields only: legal + preferred name, phone, UC affiliation, policies ack) → `/register/pending` (wait for exec approval; optionally add a passkey, emergency contacts and a bio there) → exec approves at `/members/pending` → user is `approved` with the `member` role.
 
 **Anti-abuse**: Turnstile CAPTCHA on the magic-link form, per-IP + per-email rate limiting (10 req / 60 s), timing jitter (500–800 ms) to prevent email enumeration, SHA-256 hashed tokens in D1 (stolen DB can't replay links).
 

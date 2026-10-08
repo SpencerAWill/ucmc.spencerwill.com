@@ -142,6 +142,48 @@ VALUES ('${userEmailId}', '${userId}', ${escapedEmail}, 1, NULL, ${nowMs});
 }
 
 /**
+ * Insert a `users` row with `status='pending'`, a verified primary
+ * email, **and** a `profiles` row — a member who finished
+ * `/register/profile` and is now sitting in the approval queue.
+ *
+ * That is the one state `/register/pending` actually renders: the
+ * route redirects an approved principal to `/my/profile` and a
+ * profile-less one back to `/register/profile`, so neither
+ * `ensureApprovedUser` nor `seedUserWithoutProfile` can reach it.
+ */
+export function seedPendingUserWithProfile(email: string): void {
+  const userId = `user_${randomUUID()}`;
+  const publicId = randomUUID().replace(/-/g, "").slice(0, 12);
+  const userEmailId = `uem_${randomUUID()}`;
+  const nowMs = Date.now();
+  const escapedEmail = `'${email.replace(/'/g, "''")}'`;
+
+  const sql = `
+DELETE FROM users WHERE id IN (SELECT user_id FROM user_emails WHERE email = ${escapedEmail});
+INSERT INTO users (id, public_id, status, created_at)
+VALUES ('${userId}', '${publicId}', 'pending', ${nowMs});
+INSERT INTO user_emails (id, user_id, email, is_primary, verified_at, created_at)
+VALUES ('${userEmailId}', '${userId}', ${escapedEmail}, 1, ${nowMs}, ${nowMs});
+INSERT INTO profiles (user_id, full_name, preferred_name, phone, uc_affiliation, updated_at)
+VALUES ('${userId}', 'E2E Pending', 'Pending', '+15555550101', 'student', ${nowMs});
+`;
+  const tempFile = join(tmpdir(), `e2e-pending-${randomUUID()}.sql`);
+  writeFileSync(tempFile, sql, "utf8");
+  try {
+    execSync(
+      `pnpm exec wrangler d1 execute ucmc-web-dev --local --file ${tempFile}`,
+      { cwd: WEB_DIR, stdio: "pipe" },
+    );
+  } finally {
+    try {
+      unlinkSync(tempFile);
+    } catch {
+      // best-effort
+    }
+  }
+}
+
+/**
  * Insert a `users` row with a verified primary email and **no
  * `profiles` row** — the half-registered state the magic-link
  * callback's "user without profile" branch has to handle.
