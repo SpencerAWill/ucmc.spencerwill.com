@@ -14,14 +14,34 @@
   "containerEnv": {
     "TZ": "${localEnv:TZ:America/New_York}"
   },
-  "forwardPorts": [3000, 6006],
+  // There is deliberately no `forwardPorts` here. 3000 / 4173 / 6006 are
+  // PUBLISHED by docker-compose.yml instead, so they reach the host even when
+  // no VS Code window is attached — Zed and a headless `devcontainer up` get
+  // them too, which forwarding cannot do. Listing a published port here as
+  // well makes VS Code find the host port taken and silently remap it to a
+  // random one: microsoft/vscode-remote-release#3025.
+  //
+  // These attributes are still worth keeping: they label the published ports
+  // in the Ports panel and set what VS Code does when it notices them.
   "portsAttributes": {
     "3000": {
       "label": "Web (Vite)",
       "onAutoForward": "notify"
     },
+    "4173": {
+      "label": "Web (vite preview)",
+      "onAutoForward": "silent"
+    },
     "6006": {
       "label": "Storybook",
+      "onAutoForward": "silent"
+    },
+    // Published by the mailpit SERVICE, not by this container, so it reaches
+    // the host on its own. Both addresses are correct from their own side:
+    // http://localhost:8025 from a host browser, http://mailpit:8025 from
+    // inside the container (compose DNS).
+    "8025": {
+      "label": "Mailpit (dev inbox)",
       "onAutoForward": "silent"
     }
   },

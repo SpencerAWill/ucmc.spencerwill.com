@@ -31,6 +31,20 @@ Named Docker volumes persist the pnpm store, Pulumi config, and Claude data acro
 
 To use it, open the repo in VS Code and select **Reopen in Container** when prompted, or run `Dev Containers: Reopen in Container` from the command palette.
 
+#### Ports
+
+Ports are **published** by `.devcontainer/docker-compose.yml`, not forwarded by the editor, so they reach the host whether you are in VS Code, in Zed, or running `devcontainer up` headless. `devcontainer.json` has no `forwardPorts` on purpose — a port that is both published and forwarded makes VS Code find the host port taken and silently remap it to a random one ([vscode-remote-release#3025](https://github.com/microsoft/vscode-remote-release/issues/3025)).
+
+| Port   | What                                     | Started by                            |
+| ------ | ---------------------------------------- | ------------------------------------- |
+| `3000` | Vite dev server                          | `pnpm --filter ucmc-web dev`          |
+| `4173` | `vite preview` — built worker on workerd | `pnpm --filter ucmc-web preview`      |
+| `6006` | Storybook                                | `pnpm --filter ucmc-web storybook`    |
+| `8025` | Mailpit web UI + REST API                | the `mailpit` sidecar, always running |
+| `1025` | Mailpit SMTP intake                      | same (nothing speaks SMTP to it yet)  |
+
+Because these are published rather than forwarded, each server has to bind `0.0.0.0` rather than loopback — all of them already do. Addresses are relative to which side of the container you are on: Mailpit is <http://localhost:8025> from a host browser and `http://mailpit:8025` from inside the container, and both are correct.
+
 ### Manual Setup
 
 #### Prerequisites
