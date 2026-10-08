@@ -126,7 +126,6 @@ const SIGNED_IN_ROUTES = [
   "/access",
   "/settings",
   "/audit",
-  "/announcements",
   "/feedback",
 ] as const;
 

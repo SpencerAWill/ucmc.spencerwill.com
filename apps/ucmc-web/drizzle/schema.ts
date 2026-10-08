@@ -94,7 +94,6 @@ export const users = sqliteTable("users", {
   // `deactivatedAt`. A future retention cron can purge stale stubs by
   // filtering `status = 'unclaimed' AND unclaimed_at < cutoff`.
   unclaimedAt: timestamp("unclaimed_at"),
-  lastReadAnnouncementsAt: timestamp("last_read_announcements_at"),
 });
 
 /**
@@ -292,7 +291,7 @@ export const waiverAttestations = sqliteTable(
     // who has attested another member's waiver can later self-delete
     // without an FK violation. The attestation row survives (audit
     // trail), it just loses the officer's identity. Mirrors the
-    // pattern `announcements.created_by` already uses.
+    // pattern `audit_log.actor_user_id` already uses.
     attestedBy: text("attested_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -375,28 +374,6 @@ export const magicLinks = sqliteTable("magic_links", {
   expiresAt: timestamp("expires_at").notNull(),
   consumedAt: timestamp("consumed_at"),
 });
-
-export const announcements = sqliteTable(
-  "announcements",
-  {
-    id: text("id").primaryKey(),
-    title: text("title").notNull(),
-    body: text("body").notNull(),
-    createdBy: text("created_by").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    publishedAt: timestamp("published_at")
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-    createdAt: timestamp("created_at")
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-    updatedAt: timestamp("updated_at")
-      .notNull()
-      .default(sql`(unixepoch() * 1000)`),
-  },
-  (t) => [index("announcements_published_at_idx").on(t.publishedAt)],
-);
 
 // Singleton key/value store for editable landing-page text. One row per
 // well-known key (e.g. "hero.heading", "about.paragraphs"). Values are JSON
@@ -837,8 +814,8 @@ export const auditLog = sqliteTable(
     targetUserId: text("target_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    // For non-user targets — role IDs, landing setting keys,
-    // announcement IDs. Loose `text` because the universe of types
+    // For non-user targets — role IDs, landing setting keys, site
+    // setting keys. Loose `text` because the universe of types
     // grows as features land; the action enum disambiguates.
     targetType: text("target_type"),
     targetId: text("target_id"),
@@ -1749,7 +1726,6 @@ export type Permission = typeof permissions.$inferSelect;
 export type PasskeyCredential = typeof passkeyCredentials.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type MagicLink = typeof magicLinks.$inferSelect;
-export type Announcement = typeof announcements.$inferSelect;
 export type LandingSetting = typeof landingSettings.$inferSelect;
 export type HeroSlide = typeof heroSlides.$inferSelect;
 export type LandingFaqItem = typeof landingFaqItems.$inferSelect;

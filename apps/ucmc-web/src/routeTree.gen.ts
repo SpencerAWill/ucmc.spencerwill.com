@@ -46,7 +46,6 @@ import { Route as MyIndexRouteImport } from './routes/my.index'
 import { Route as GearIndexRouteImport } from './routes/gear.index'
 import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
-import { Route as AnnouncementsIndexRouteImport } from './routes/announcements.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as MyGearRouteImport } from './routes/my.gear'
@@ -268,11 +267,6 @@ const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
   path: '/',
   getParentRoute: () => FeedbackRoute,
 } as any)
-const AnnouncementsIndexRoute = AnnouncementsIndexRouteImport.update({
-  id: '/announcements/',
-  path: '/announcements/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const RegisterProfileRoute = RegisterProfileRouteImport.update({
   id: '/register/profile',
   path: '/register/profile',
@@ -488,7 +482,6 @@ export interface FileRoutesByFullPath {
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
-  '/announcements/': typeof AnnouncementsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
@@ -557,7 +550,6 @@ export interface FileRoutesByTo {
   '/my': typeof MyIndexRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
-  '/announcements': typeof AnnouncementsIndexRoute
   '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
@@ -630,7 +622,6 @@ export interface FileRoutesById {
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
-  '/announcements/': typeof AnnouncementsIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
@@ -704,7 +695,6 @@ export interface FileRouteTypes {
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
-    | '/announcements/'
     | '/feedback/'
     | '/gazette/'
     | '/gear/'
@@ -773,7 +763,6 @@ export interface FileRouteTypes {
     | '/my'
     | '/register/pending'
     | '/register/profile'
-    | '/announcements'
     | '/gazette'
     | '/gear'
     | '/api/account/export'
@@ -845,7 +834,6 @@ export interface FileRouteTypes {
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
-    | '/announcements/'
     | '/feedback/'
     | '/gazette/'
     | '/gear/'
@@ -913,7 +901,6 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
   RegisterProfileRoute: typeof RegisterProfileRoute
-  AnnouncementsIndexRoute: typeof AnnouncementsIndexRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAlbumImageSplatRoute: typeof ApiAlbumImageSplatRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
@@ -1183,13 +1170,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/feedback/'
       preLoaderRoute: typeof FeedbackIndexRouteImport
       parentRoute: typeof FeedbackRoute
-    }
-    '/announcements/': {
-      id: '/announcements/'
-      path: '/announcements'
-      fullPath: '/announcements/'
-      preLoaderRoute: typeof AnnouncementsIndexRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/register/profile': {
       id: '/register/profile'
@@ -1616,7 +1596,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   RegisterPendingRoute: RegisterPendingRoute,
   RegisterProfileRoute: RegisterProfileRoute,
-  AnnouncementsIndexRoute: AnnouncementsIndexRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAlbumImageSplatRoute: ApiAlbumImageSplatRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,

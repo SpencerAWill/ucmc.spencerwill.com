@@ -70,18 +70,16 @@ export async function getPublicBrandingAction(): Promise<PublicBranding> {
 /**
  * Curated public-read of feature-flag state. No auth. The set of flags
  * exposed here is hand-maintained — every entry corresponds to a boolean
- * setting in the registry whose value the sidebar / bell / public-facing
- * UI needs to consult synchronously. Anyone can read these; "this
+ * setting in the registry whose value the sidebar / tab bars /
+ * public-facing UI need to consult synchronously. Anyone can read these; "this
  * feature is off" is the same answer the gated route already returns.
  */
 export async function getPublicFlagsAction(): Promise<PublicFlags> {
-  const [siteFeedback, clubFeedback, announcements, pageValues] =
-    await Promise.all([
-      readSetting("feedback.site_enabled"),
-      readSetting("feedback.club_enabled"),
-      readSetting("features.announcements"),
-      Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
-    ]);
+  const [siteFeedback, clubFeedback, pageValues] = await Promise.all([
+    readSetting("feedback.site_enabled"),
+    readSetting("feedback.club_enabled"),
+    Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
+  ]);
   const raw = Object.fromEntries(
     PAGE_SETTING_KEYS.map((key, i) => [pageFlagKeyOf(key), pageValues[i]]),
   ) as PublicFlags["pages"];
@@ -94,7 +92,6 @@ export async function getPublicFlagsAction(): Promise<PublicFlags> {
   return {
     siteFeedback,
     clubFeedback,
-    announcements,
     pages: effectivePageFlags(raw),
   };
 }

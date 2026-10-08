@@ -22,7 +22,6 @@ import {
   ListChecks,
   Mail,
   Wallet,
-  Megaphone,
   MessageSquare,
   MessagesSquare,
   Newspaper,
@@ -36,7 +35,6 @@ import {
   Vote,
 } from "lucide-react";
 
-import { AnnouncementsBell } from "#/features/announcements/components/announcements-bell";
 import { UserMenu } from "#/features/auth/components/user-menu";
 import { ViewAsMenu } from "#/features/auth/components/view-as-menu";
 import { GitHubIcon } from "#/components/brand-icons";
@@ -147,7 +145,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex flex-1 flex-nowrap flex-row-reverse gap-x-2">
             <UserMenu />
             <ViewAsMenu />
-            <AnnouncementsBell />
             <ModeToggle />
           </div>
         </nav>
@@ -206,10 +203,6 @@ function CloseSidebarOnNavigate() {
 // entry renders and 404s on click. Not part of the module's public API.
 export function SidebarNav() {
   const { isApproved, hasPermission, hasAnyPermission } = useAuth();
-  // Announcements gates compose: must have the permission AND the kill
-  // switch must be on. `placeholderData` returns the schema default
-  // (off) until the query resolves, so a fresh-DB / pre-hydration render
-  // keeps the entry hidden.
   const flagsOptions = publicFlagsQueryOptions();
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
   const pages = flags.pages;
@@ -218,8 +211,6 @@ export function SidebarNav() {
   // defaults until the query resolves, so a fresh-DB / pre-hydration
   // render matches the server. Route-less "coming soon" placeholders
   // (Blog, Volunteer, etc.) have only their flag as the gate.
-  const canReadAnnouncements =
-    hasPermission("announcements:read") && flags.announcements;
   // `waivers:view` reaches the queue read-only, so the nav entry follows
   // the read tier — the attest controls on the page gate separately on
   // `waivers:verify`.
@@ -372,7 +363,7 @@ export function SidebarNav() {
         </SidebarMenu>
       </SidebarGroup>
 
-      {canReadAnnouncements || isApproved ? (
+      {isApproved ? (
         <SidebarGroup>
           <SidebarMenu>
             {pages.calendar ? (
@@ -388,198 +379,53 @@ export function SidebarNav() {
               </SidebarMenuItem>
             ) : null}
 
-            {canReadAnnouncements ? (
+            {pages.forum ? (
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Announcements">
-                  <Link to="/announcements">
-                    <Megaphone />
-                    <span>Announcements</span>
-                  </Link>
+                <SidebarMenuButton
+                  aria-disabled
+                  tabIndex={-1}
+                  tooltip="Forum (coming soon)"
+                >
+                  <MessagesSquare />
+                  <span>Forum</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ) : null}
-
-            {isApproved ? (
-              <>
-                {pages.forum ? (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      aria-disabled
-                      tabIndex={-1}
-                      tooltip="Forum (coming soon)"
-                    >
-                      <MessagesSquare />
-                      <span>Forum</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ) : null}
-                {canReadMembers || canSeeWaivers ? (
-                  <SidebarMenuItem>
-                    {/*
-                     * Collapsible sits inside SidebarMenuItem (not the
-                     * other way around) so the <ul> only has <li> direct
-                     * children — axe-core's `list` rule rejects a <ul>
-                     * with a <div> child, which is what Radix Collapsible
-                     * renders as.
-                     */}
-                    <Collapsible defaultOpen className="group/collapsible">
-                      {/* Main button navigates to /members. When the
-                       * directory page itself is switched off but the
-                       * Waivers sub-page is still enabled, the label stays
-                       * as an inert group header so that sub-item remains
-                       * reachable. */}
-                      {canReadMembers ? (
-                        <SidebarMenuButton asChild tooltip="Members">
-                          <Link to="/members">
-                            <Users />
-                            <span>Members</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      ) : (
-                        <SidebarMenuButton
-                          tooltip="Members"
-                          className="cursor-default"
-                        >
-                          <Users />
-                          <span>Members</span>
-                        </SidebarMenuButton>
-                      )}
-
-                      {/* Chevron toggles sub-items — separate from the link */}
-                      {canSeeWaivers ? (
-                        <>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuAction className="data-[state=open]:rotate-90">
-                              <ChevronRight />
-                              <span className="sr-only">Toggle sub-menu</span>
-                            </SidebarMenuAction>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild>
-                                  <Link to="/members/waivers">
-                                    <ScrollText />
-                                    <span>Waivers</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </>
-                      ) : null}
-                    </Collapsible>
-                  </SidebarMenuItem>
-                ) : null}
-                {pages.trips ? (
-                  <SidebarMenuItem>
-                    {/* A real link now: /trips hosts the Google Form
-                     * sign-up stopgap until the trips feature ships.
-                     * Already inside the `isApproved` block, which
-                     * matches the route's `requireApproved` guard — no
-                     * `trips:*` permission exists yet. */}
-                    <SidebarMenuButton asChild tooltip="Trips">
-                      <Link to="/trips">
-                        <Compass />
-                        <span>Trips</span>
+            {canReadMembers || canSeeWaivers ? (
+              <SidebarMenuItem>
+                {/*
+                 * Collapsible sits inside SidebarMenuItem (not the
+                 * other way around) so the <ul> only has <li> direct
+                 * children — axe-core's `list` rule rejects a <ul>
+                 * with a <div> child, which is what Radix Collapsible
+                 * renders as.
+                 */}
+                <Collapsible defaultOpen className="group/collapsible">
+                  {/* Main button navigates to /members. When the
+                   * directory page itself is switched off but the
+                   * Waivers sub-page is still enabled, the label stays
+                   * as an inert group header so that sub-item remains
+                   * reachable. */}
+                  {canReadMembers ? (
+                    <SidebarMenuButton asChild tooltip="Members">
+                      <Link to="/members">
+                        <Users />
+                        <span>Members</span>
                       </Link>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ) : null}
-                {canReadGear || canLoanGear ? (
-                  <SidebarMenuItem>
-                    {/* Same Collapsible-inside-MenuItem pattern as the
-                     * Members entry so the <ul> only contains <li>
-                     * children (axe-core's list rule). Sub-item appears
-                     * only when the user has `gear:loan`. Members reach
-                     * their personal surfaces (My Gear, My Cart) from
-                     * the user menu — kept off the sidebar so the
-                     * sidebar stays officer-shaped. */}
-                    <Collapsible
-                      defaultOpen={canLoanGear}
-                      className="group/collapsible"
-                    >
-                      {/* Inert group header when the inventory page itself
-                       * is switched off but the Loans sub-page is still
-                       * enabled. */}
-                      {canReadGear ? (
-                        <SidebarMenuButton asChild tooltip="Gear">
-                          <Link to="/gear">
-                            <Package />
-                            <span>Gear</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      ) : (
-                        <SidebarMenuButton
-                          tooltip="Gear"
-                          className="cursor-default"
-                        >
-                          <Package />
-                          <span>Gear</span>
-                        </SidebarMenuButton>
-                      )}
-                      {canLoanGear ? (
-                        <>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuAction className="data-[state=open]:rotate-90">
-                              <ChevronRight />
-                              <span className="sr-only">Toggle sub-menu</span>
-                            </SidebarMenuAction>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild>
-                                  <Link to="/gear/loans">
-                                    <Handshake />
-                                    <span>Loans</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </>
-                      ) : null}
-                    </Collapsible>
-                  </SidebarMenuItem>
-                ) : null}
-                {pages.elections ? (
-                  <SidebarMenuItem>
+                  ) : (
                     <SidebarMenuButton
-                      aria-disabled
-                      tabIndex={-1}
-                      tooltip="Elections (coming soon)"
+                      tooltip="Members"
+                      className="cursor-default"
                     >
-                      <Vote />
-                      <span>Elections</span>
+                      <Users />
+                      <span>Members</span>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ) : null}
-                {pages.executive ? (
-                  <SidebarMenuItem>
-                    {/*
-                     * Executive: workflow tools for the exec board
-                     * (meeting agendas + minutes, quarterly goals,
-                     * accountability tasks). Currently gated on
-                     * `isApproved` like the other placeholder items;
-                     * when these features ship, swap to a proper
-                     * `executive:read`-style permission so non-officer
-                     * members don't see the section.
-                     *
-                     * `pages.executive` covers the parent AND all seven
-                     * sub-items, since none of them is independently
-                     * reachable. Give the children their own flags when
-                     * they become real routes.
-                     */}
-                    <Collapsible className="group/collapsible">
-                      <SidebarMenuButton
-                        aria-disabled
-                        tabIndex={-1}
-                        tooltip="Executive (coming soon)"
-                      >
-                        <Briefcase />
-                        <span>Executive</span>
-                      </SidebarMenuButton>
+                  )}
+
+                  {/* Chevron toggles sub-items — separate from the link */}
+                  {canSeeWaivers ? (
+                    <>
                       <CollapsibleTrigger asChild>
                         <SidebarMenuAction className="data-[state=open]:rotate-90">
                           <ChevronRight />
@@ -589,53 +435,183 @@ export function SidebarNav() {
                       <CollapsibleContent>
                         <SidebarMenuSub>
                           <SidebarMenuSubItem>
-                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                              <Crown />
-                              <span>Board</span>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                              <CalendarClock />
-                              <span>Meetings</span>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                              <Gavel />
-                              <span>Decisions</span>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                              <Target />
-                              <span>Goals</span>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                              <ListChecks />
-                              <span>Tasks</span>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                              <Wallet />
-                              <span>Budget</span>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton aria-disabled tabIndex={-1}>
-                              <Handshake />
-                              <span>Handoff</span>
+                            <SidebarMenuSubButton asChild>
+                              <Link to="/members/waivers">
+                                <ScrollText />
+                                <span>Waivers</span>
+                              </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         </SidebarMenuSub>
                       </CollapsibleContent>
-                    </Collapsible>
-                  </SidebarMenuItem>
-                ) : null}
-              </>
+                    </>
+                  ) : null}
+                </Collapsible>
+              </SidebarMenuItem>
+            ) : null}
+            {pages.trips ? (
+              <SidebarMenuItem>
+                {/* A real link now: /trips hosts the Google Form
+                 * sign-up stopgap until the trips feature ships.
+                 * Already inside the `isApproved` block, which
+                 * matches the route's `requireApproved` guard — no
+                 * `trips:*` permission exists yet. */}
+                <SidebarMenuButton asChild tooltip="Trips">
+                  <Link to="/trips">
+                    <Compass />
+                    <span>Trips</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
+            {canReadGear || canLoanGear ? (
+              <SidebarMenuItem>
+                {/* Same Collapsible-inside-MenuItem pattern as the
+                 * Members entry so the <ul> only contains <li>
+                 * children (axe-core's list rule). Sub-item appears
+                 * only when the user has `gear:loan`. Members reach
+                 * their personal surfaces (My Gear, My Cart) from
+                 * the user menu — kept off the sidebar so the
+                 * sidebar stays officer-shaped. */}
+                <Collapsible
+                  defaultOpen={canLoanGear}
+                  className="group/collapsible"
+                >
+                  {/* Inert group header when the inventory page itself
+                   * is switched off but the Loans sub-page is still
+                   * enabled. */}
+                  {canReadGear ? (
+                    <SidebarMenuButton asChild tooltip="Gear">
+                      <Link to="/gear">
+                        <Package />
+                        <span>Gear</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton
+                      tooltip="Gear"
+                      className="cursor-default"
+                    >
+                      <Package />
+                      <span>Gear</span>
+                    </SidebarMenuButton>
+                  )}
+                  {canLoanGear ? (
+                    <>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuAction className="data-[state=open]:rotate-90">
+                          <ChevronRight />
+                          <span className="sr-only">Toggle sub-menu</span>
+                        </SidebarMenuAction>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <Link to="/gear/loans">
+                                <Handshake />
+                                <span>Loans</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </>
+                  ) : null}
+                </Collapsible>
+              </SidebarMenuItem>
+            ) : null}
+            {pages.elections ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  aria-disabled
+                  tabIndex={-1}
+                  tooltip="Elections (coming soon)"
+                >
+                  <Vote />
+                  <span>Elections</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
+            {pages.executive ? (
+              <SidebarMenuItem>
+                {/*
+                 * Executive: workflow tools for the exec board
+                 * (meeting agendas + minutes, quarterly goals,
+                 * accountability tasks). Currently gated on
+                 * `isApproved` like the other placeholder items;
+                 * when these features ship, swap to a proper
+                 * `executive:read`-style permission so non-officer
+                 * members don't see the section.
+                 *
+                 * `pages.executive` covers the parent AND all seven
+                 * sub-items, since none of them is independently
+                 * reachable. Give the children their own flags when
+                 * they become real routes.
+                 */}
+                <Collapsible className="group/collapsible">
+                  <SidebarMenuButton
+                    aria-disabled
+                    tabIndex={-1}
+                    tooltip="Executive (coming soon)"
+                  >
+                    <Briefcase />
+                    <span>Executive</span>
+                  </SidebarMenuButton>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuAction className="data-[state=open]:rotate-90">
+                      <ChevronRight />
+                      <span className="sr-only">Toggle sub-menu</span>
+                    </SidebarMenuAction>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                          <Crown />
+                          <span>Board</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                          <CalendarClock />
+                          <span>Meetings</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                          <Gavel />
+                          <span>Decisions</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                          <Target />
+                          <span>Goals</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                          <ListChecks />
+                          <span>Tasks</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                          <Wallet />
+                          <span>Budget</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton aria-disabled tabIndex={-1}>
+                          <Handshake />
+                          <span>Handoff</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarMenuItem>
             ) : null}
           </SidebarMenu>
         </SidebarGroup>

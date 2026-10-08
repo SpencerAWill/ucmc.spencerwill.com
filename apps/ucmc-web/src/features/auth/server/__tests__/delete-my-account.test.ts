@@ -237,24 +237,6 @@ describe("deleteMyAccountAction", () => {
     ).toBeDefined();
   });
 
-  it("preserves announcements authored by the deleted user (set null on author)", async () => {
-    const userId = await seedUser("author@example.com");
-    const db = getDb();
-    await db.insert(schema.announcements).values({
-      id: `ann_${crypto.randomUUID()}`,
-      title: "before",
-      body: "hello",
-      createdBy: userId,
-    });
-    await signInAs(userId);
-
-    await deleteMyAccountAction();
-
-    const remaining = await db.select().from(schema.announcements);
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0]?.createdBy).toBeNull();
-  });
-
   // Regression: an officer who has attested another member's waiver
   // used to fail self-delete with a foreign-key violation on
   // waiver_attestations.attested_by (issue #32). After

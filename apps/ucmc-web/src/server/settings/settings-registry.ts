@@ -32,11 +32,11 @@ import { parseWeekdayList } from "#/lib/weekdays";
 //              Uniform meaning across ~43 booleans, which is what lets the
 //              route guards and the flags map be generic.
 //   features — *behaviour*: does this feature accept writes / render its
-//              affordances? These are NOT page flags. `announcements` lives
-//              here (not in `pages`) because it also gates the header bell
-//              and the server write actions, and the feedback switches live
-//              here because they pause new submissions while deliberately
-//              leaving the page reachable so managers can still triage.
+//              affordances? These are NOT page flags. The feedback switches
+//              live here because they pause new submissions while
+//              deliberately leaving the page reachable so managers can
+//              still triage, and the gear reminder knobs because they
+//              govern what the cron sends rather than what resolves.
 //
 //   appearance — how the site presents itself: the header masthead text.
 //              Site identity rather than a way to reach anyone, which is
@@ -720,24 +720,6 @@ export const SETTINGS = {
   // fresh DB / new deploy keeps both forms open. Exposed publicly via
   // `getPublicFlagsFn` so the route guards and tab bar can decide
   // synchronously whether to render the submit UI for non-managers.
-  // Kill switch for the in-progress announcements feature. Defaults OFF
-  // (not yet launched). This is a FEATURE flag, not a page flag: besides
-  // hiding /announcements it also hides the header bell and rejects the
-  // server write actions (defense-in-depth in
-  // announcements-actions.server.ts). It lived in `pages` until the
-  // `features` category existed, which made it look like every other
-  // reachability switch — it never was one.
-  "features.announcements": z.boolean().default(false).register(registry, {
-    label: "Announcements enabled",
-    description:
-      "Hides the announcement bell, sidebar entry, and /announcements route while off. Toggle on once the feature is ready.",
-    category: "features",
-    flagKind: "release",
-    owner: "system_admin",
-    createdAt: "2026-05-13",
-    confirm:
-      "Flipping this changes whether members see announcements at all. Existing announcement data and role grants stay in the database — toggling back on restores access.",
-  }),
   "feedback.site_enabled": z.boolean().default(true).register(registry, {
     label: "Accept site feedback submissions",
     description:

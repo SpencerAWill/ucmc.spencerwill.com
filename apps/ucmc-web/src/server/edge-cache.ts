@@ -8,8 +8,8 @@
  * Why bypass-by-cookie instead of stub-the-auth-aware-UI: most public
  * traffic is anonymous (recruitment + legal-policy surfaces), and
  * anonymous SSR HTML on these pages is fully deterministic — UserMenu
- * shows "Sign in", AnnouncementsBell hidden, the auth-gated sidebar
- * branches collapsed, EditAffordance widgets render null. Signed-in
+ * shows "Sign in", the auth-gated sidebar branches collapsed,
+ * EditAffordance widgets render null. Signed-in
  * visits bypass the cache and pay full SSR (rare on these surfaces).
  *
  * Why these paths only: every entry in `CACHEABLE_PATHS` either has

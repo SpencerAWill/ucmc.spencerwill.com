@@ -152,7 +152,6 @@ const config: KnipConfig = {
     // Candidates for deletion, but each needs a look at whether the caller
     // is merely pending.
     "src/features/album/server/album-fns.ts": ["exports"],
-    "src/features/announcements/server/repo.server.ts": ["exports"],
     "src/features/gazette/server/gazette-repo.server.ts": ["exports"],
     "src/features/gear/server/models-repo.server.ts": ["exports"],
     "src/features/gear/server/repo.server.ts": ["exports"],
@@ -181,7 +180,6 @@ const config: KnipConfig = {
     // without reaching past the boundary (`import/no-restricted-paths`).
     // Some have no consumer yet; the re-export set is intentionally the
     // whole surface rather than whatever happens to be imported today.
-    "src/features/announcements/server/limits.ts": ["types"],
     "src/features/auth/server/email-fns.ts": ["types"],
     "src/features/auth/server/server-fns.ts": ["types"],
     "src/features/feedback/server/limits.ts": ["types"],
