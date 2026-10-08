@@ -6,6 +6,7 @@ import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-sha
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { BioEditor } from "#/features/auth/components/bio-editor";
 import { ContactsEditor } from "#/features/auth/components/contacts-editor";
+import { PasskeyEnrollmentCard } from "#/features/auth/components/passkey-enrollment-card";
 import { requireAuth } from "#/features/auth/guards";
 
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
@@ -15,12 +16,13 @@ import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
  * home of everything registration deliberately doesn't ask for.
  *
  * `/register/profile` collects only what an exec needs to review an
- * account. The optional parts — emergency contacts and a bio — live
- * here instead, where a member can fill them in during the wait rather
- * than on the longest form in the funnel. Both save through server fns
- * that require a session but **not** an approved account, which is what
- * makes them reachable from here at all; `/my/*` is gated on approval
- * and stays out of reach until an exec acts.
+ * account. The optional parts — emergency contacts, a bio, and passkey
+ * enrollment — live here instead, where a member can fill them in
+ * during the wait rather than on the longest form in the funnel. All
+ * three save through server fns that require a session but **not** an
+ * approved account, which is what makes them reachable from here at
+ * all; `/my/*` is gated on approval and stays out of reach until an
+ * exec acts.
  *
  * Requires a session but not approval — that's the whole point — and
  * redirects the two states this page can't serve: an approved member
@@ -86,10 +88,14 @@ function PendingPage() {
             </span>
           </h2>
           <p className="text-sm text-muted-foreground">
-            Neither of these holds up your review, and you can change them
-            later.
+            None of these hold up your review, and you can change them later.
           </p>
         </div>
+
+        {/* First because it is the only one that pays off *before*
+            approval: a passkey added now is what signs you back in to
+            read the approval email. */}
+        <PasskeyEnrollmentCard />
 
         <div className="space-y-3 rounded-md border p-4">
           <div className="space-y-1">

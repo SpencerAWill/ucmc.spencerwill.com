@@ -4,7 +4,14 @@
   "description": "The software system for the University of Cincinnati's Mountaineering Club",
   "scripts": {
     "prepare": "husky",
-    "commit": "czg"
+    "commit": "czg",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "knip": "pnpm -r --if-present run knip",
+    "test": "pnpm -r --if-present run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run test"
   },
   "keywords": [],
   "author": "Spencer Will",

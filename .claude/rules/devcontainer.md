@@ -21,9 +21,52 @@ The store must share a filesystem with `node_modules` to hardlink rather than co
 
 **Trade-off:** `node_modules` is no longer visible on the host (source still is, via the bind mount) — host-side tooling that needs the dependency tree must run in the container. A fresh volume is root-owned, so `lifecycle.sh`'s `claim_volumes` chowns it before `update-content` installs.
 
+## Ports reach the host by Docker publishing, not by VS Code forwarding
+
+`docker-compose.yml` **publishes** 3000 (Vite), 4173 (`vite preview`), 6006 (Storybook), 9323 (Playwright UI mode and `show-report`) and — on the mailpit service — 8025 / 1025. `devcontainer.json` deliberately has **no `forwardPorts`**.
+
+The two mechanisms are not interchangeable:
+
+|                    | compose `ports:` (publish)               | `forwardPorts` (forward)                |
+| ------------------ | ---------------------------------------- | --------------------------------------- |
+| Mechanism          | Docker binds the port on the Docker host | VS Code tunnels over its own connection |
+| Needs VS Code?     | **No** — Zed, `devcontainer up`, CI too  | **Yes** — dies with the window          |
+| Server must bind   | `0.0.0.0`; loopback-only is unreachable  | anything; arrives as localhost inside   |
+| Host port conflict | fails loudly at container start          | **silently remaps to a random port**    |
+| Other compose svc  | only its own service                     | `"mailpit:8025"` service:port form      |
+
+Publishing is the choice here because forwarding is a devcontainer **client** feature and this repo is not VS Code-only. Every server already binds `0.0.0.0` (Vite `server.host: true`, Storybook `--host 0.0.0.0`, and `vite preview`, which resolves `preview.host ?? server.host`), which publishing requires and forwarding does not.
+
+**Never list a published port in `forwardPorts` as well.** VS Code finds the host port taken and silently remaps to a random one ([vscode-remote-release#3025](https://github.com/microsoft/vscode-remote-release/issues/3025)) — which presents as "port forwarding is broken" and sends you looking in the wrong place. Adding a new long-running server means adding it to `ports:`, and to `portsAttributes` only for its label.
+
+**An address is relative to where you are standing, and both sides are correct.** Mailpit is `http://localhost:8025` from a host browser and `http://mailpit:8025` from inside the container, where compose DNS resolves service names; neither is the "real" one. Anything running in the container — the worker's `MAILPIT_URL`, the Playwright fixtures — wants the service name. The same split is why CI sets `MAILPIT_URL=http://localhost:8025`: GitHub service containers publish to the runner's loopback and there is no compose network. See `testing.md`.
+
+## Nothing visual runs in here — there is no X server
+
+`chromium` and `webkit` are installed (Playwright), but **headed** launches die immediately:
+
+```
+ERROR:ui/ozone/platform/x11/ozone_platform_x11.cc:257] Missing X server or $DISPLAY
+ERROR:ui/aura/env.cc:246] The platform failed to initialize.  Exiting.
+```
+
+`xvfb-run` and `Xvfb` are installed, so a headed run _can_ be wrapped — but you still cannot see the window, which defeats the point. **Prefer the things that serve over HTTP instead**, because a published port is something you can actually open:
+
+- `pnpm --filter ucmc-web e2e:ui` — UI mode on `:9323` (`--ui-host 0.0.0.0 --ui-port 9323`), not a window.
+- `playwright show-report` / `show-trace` — same port.
+- `Simple Browser: Show` — VS Code's bundled webview browser. It renders in the host window and does **not** call `asExternalUri`, so it reaches the app through the published port like any host browser would. No breakpoints, but it keeps the app in the editor.
+
+**Client-side Chrome debugging is a special case and currently depends on VS Code forwarding being healthy.** There is no browser here, which js-debug handles by design: `ms-vscode.js-debug-companion` (`extensionKind: ["ui"]`, bundled with VS Code) launches Chrome on the host for it. But js-debug also opens a tunnel labelled _"Browser Debug Tunnel"_ for its CDP server port and passes the companion a `proxyUri` for the local end — **and that request is wrapped in a swallowing `.catch(() => {})`.** When forwarding is broken the `proxyUri` silently falls back to `127.0.0.1:<serverPort>` on the host, where nothing listens; Chrome opens and the attach then fails. Publishing cannot rescue this one — the tunnel port is allocated per debug session, so there is nothing static to put in `ports:`.
+
+Breakpoints in the Vitest and tsx configs are unaffected: those are `node-terminal`, entirely in-container, no browser and no tunnel.
+
 ## Editors
 
-Zed is the primary IDE (`.zed/settings.json`). `.vscode/settings.json` is kept for anyone attaching VS Code, but **no VS Code Server runs in this container by default** — don't assume it when diagnosing behaviour here.
+Zed (`.zed/settings.json`) and VS Code (`.vscode/settings.json`) are both supported and either may be attached — **check which, rather than assuming, when diagnosing behaviour here.**
+
+With VS Code attached a full VS Code Server runs in this container (`~/.vscode-server`, plus a host-injected `/tmp/vscode-remote-containers-server-*.js` relay); the host window talks to it over that connection. Under Zed, or a headless `devcontainer up`, none of it exists.
+
+**Claude runs inside the container and cannot see the host.** It can reach other compose services by name and the bridge gateway `172.18.0.1` (which is the Docker Desktop VM, not the developer's machine) — the VM→host hop is neither visible nor traversable. Host-side questions (the Ports panel, the Dev Containers output channel, what already holds a port) have to be handed to a human. Port forwarding straddles that line: the listener is opened on the **host**, the dial-out to `127.0.0.1:<port>` happens **in the container**. So a refused connection on the host means no host listener was ever created, while one that accepts and then hangs implicates the container half.
 
 ## Git index-lock contention is Zed-specific
 

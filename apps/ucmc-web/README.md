@@ -23,7 +23,7 @@ pnpm --filter ucmc-web db:migrate:local   # apply migrations to Miniflare D1
 pnpm --filter ucmc-web db:seed:local      # promote SEED_ADMIN_EMAIL to system_admin
 ```
 
-`.env.local` (gitignored) needs the values listed in `.env.example`. The devcontainer ships a Mailpit sidecar; with `MAILPIT_URL` set and `RESEND_API_KEY` unset, magic-link emails land at <http://localhost:8025>.
+`.env.local` (gitignored) needs the values listed in `.env.example`. The devcontainer ships a Mailpit sidecar; with `MAILPIT_URL` set and `RESEND_API_KEY` unset, magic-link emails land there. Read the inbox at <http://localhost:8025> in a host browser; from inside the container the same service is `http://mailpit:8025` (compose DNS), which is what `MAILPIT_URL` and the Playwright fixtures use.
 
 ```bash
 pnpm --filter ucmc-web test               # Vitest (workers + jsdom)

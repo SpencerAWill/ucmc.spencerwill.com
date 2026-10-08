@@ -12,6 +12,24 @@ services:
       # "empty if unset on host" — apps/ucmc-web/.env.local then fills in.
       SESSION_SECRET: "${SESSION_SECRET:-}"
       RESEND_API_KEY: "${RESEND_API_KEY:-}"
+    # Published here rather than listed in devcontainer.json's `forwardPorts`.
+    # Forwarding is a devcontainer CLIENT feature: it only works while a
+    # VS Code window is attached, and Zed (the primary IDE here) and a
+    # headless `devcontainer up` do not implement it. Publishing reaches the
+    # host in every case, which is why the mailpit sidecar below already does
+    # it. Published ports require the server to bind 0.0.0.0, and every one
+    # of these does — Vite `server.host: true`, Storybook `--host 0.0.0.0`,
+    # and `vite preview`, which resolves `preview.host ?? server.host`.
+    #
+    # Do NOT also list these in `forwardPorts`: VS Code then finds the host
+    # port already taken and silently remaps to a random one, which presents
+    # as "port forwarding is broken".
+    # https://github.com/microsoft/vscode-remote-release/issues/3025
+    ports:
+      - "3000:3000" # Vite dev server
+      - "4173:4173" # vite preview — the built worker through workerd
+      - "6006:6006" # Storybook
+      - "9323:9323" # Playwright UI mode + `playwright show-report`
     volumes:
       - ..:/workspace:cached
       # node_modules on a named (container-native) volume rather than the
@@ -37,7 +55,11 @@ services:
       - mailpit
 
   # Mailpit catches outbound dev email so magic links land in a real
-  # inbox UI (http://localhost:8025) instead of the wrangler terminal.
+  # inbox UI instead of the wrangler terminal. It has two addresses and both
+  # are correct, from their own side: http://localhost:8025 from a host
+  # browser (via the published ports below), and http://mailpit:8025 from
+  # inside the devcontainer, where compose DNS resolves the service name.
+  # Code and tests running in the container want the latter.
   # The web app POSTs messages to Mailpit's HTTP send API
   # (`POST /api/v1/send`) when MAILPIT_URL is set; see
   # apps/ucmc-web/src/server/email/resend.ts. The SMTP listener on 1025 is

@@ -10,7 +10,7 @@ This is a polyglot pnpm monorepo with the following workspace layout:
   - `apps/ucmc-web/` — UCMC web app (TanStack Start on Cloudflare Workers)
 - `infra/` — Pulumi infrastructure-as-code
 - `.devcontainer/` — Dev container configuration (`initialize.sh` on the host, `configure-git.sh` on create; see [`.claude/rules/devcontainer.md`](.claude/rules/devcontainer.md) on git index-lock contention)
-- `.zed/`, `.vscode/` — editor settings; both committed, and their scan/watch exclusions are load-bearing for git performance
+- `.zed/`, `.vscode/` — editor settings; both committed, and their scan/watch exclusions are load-bearing for git performance. `.vscode/tasks.json` wraps the pnpm scripts as run configurations and `.vscode/launch.json` holds the debug ones (Chrome against the dev server, Vitest/Playwright/tsx on the current file)
 
 ## Development Setup
 
@@ -30,6 +30,21 @@ The container provides:
 Named Docker volumes persist the pnpm store, Pulumi config, and Claude data across container rebuilds. GitHub CLI auth is bind-mounted from the host's `~/.config/gh`, so a one-time `gh auth login` on the host carries into every container (macOS users: run it with `--insecure-storage` so the token lands in `hosts.yml` rather than Keychain).
 
 To use it, open the repo in VS Code and select **Reopen in Container** when prompted, or run `Dev Containers: Reopen in Container` from the command palette.
+
+#### Ports
+
+Ports are **published** by `.devcontainer/docker-compose.yml`, not forwarded by the editor, so they reach the host whether you are in VS Code, in Zed, or running `devcontainer up` headless. `devcontainer.json` has no `forwardPorts` on purpose — a port that is both published and forwarded makes VS Code find the host port taken and silently remap it to a random one ([vscode-remote-release#3025](https://github.com/microsoft/vscode-remote-release/issues/3025)).
+
+| Port   | What                                     | Started by                            |
+| ------ | ---------------------------------------- | ------------------------------------- |
+| `3000` | Vite dev server                          | `pnpm --filter ucmc-web dev`          |
+| `4173` | `vite preview` — built worker on workerd | `pnpm --filter ucmc-web preview`      |
+| `6006` | Storybook                                | `pnpm --filter ucmc-web storybook`    |
+| `9323` | Playwright UI mode / HTML report         | `pnpm --filter ucmc-web e2e:ui`       |
+| `8025` | Mailpit web UI + REST API                | the `mailpit` sidecar, always running |
+| `1025` | Mailpit SMTP intake                      | same (nothing speaks SMTP to it yet)  |
+
+Because these are published rather than forwarded, each server has to bind `0.0.0.0` rather than loopback — all of them already do. There is no X server in the container, so nothing that wants a visible browser window works here; the tools that matter all serve over HTTP instead (Playwright UI mode, `show-report`), and `Simple Browser: Show` will render any of these inside VS Code. Addresses are relative to which side of the container you are on: Mailpit is <http://localhost:8025> from a host browser and `http://mailpit:8025` from inside the container, and both are correct.
 
 ### Manual Setup
 
@@ -89,15 +104,27 @@ touching neither package's TypeScript skips it entirely. Deletions, renames
 and `tsconfig.json` edits all count as changes, since removing a module
 breaks whatever imported it.
 
-To run manually:
+To run manually, from the repo root:
 
 ```bash
-pnpm exec eslint .
-pnpm exec prettier --write .
-pnpm --filter ucmc-web typecheck
-pnpm --filter ucmc-web knip
-cd infra && pnpm typecheck
+pnpm verify        # lint + typecheck + knip + test, every package (~70s)
+
+# or individually
+pnpm lint
+pnpm typecheck
+pnpm knip
+pnpm test
+pnpm format        # prettier --write . (pnpm format:check to check only)
 ```
+
+Each of those except `format` is `pnpm -r`, which runs the package's own
+script **with the cwd set to that package**. That is not cosmetic: the web
+ESLint config resolves its `import/no-restricted-paths` zones against
+`process.cwd()`, so a root-level `eslint .` matches none of them and the rule
+**fails open** — passing silently rather than erroring. `pnpm -r` is what
+makes the root shortcut agree with CI, which invokes the package scripts
+directly. Prettier is the exception because its config and `.prettierignore`
+are repo-wide, so it genuinely does run once from the root.
 
 [Knip](https://knip.dev) reports unused files, exports, exported types and
 dependencies — the module-graph half of dead-code detection that ESLint's
@@ -145,9 +172,9 @@ The app uses a two-path authentication system:
 
 1. **Magic links** (primary for registration, fallback for sign-in) — enter an email, receive a one-time link that expires in 15 minutes. The link lands on a click-through page (to defeat email scanners), then either opens a session (existing user) or sets a short-lived proof cookie (new user → profile form → pending approval).
 
-2. **Passkeys / WebAuthn** (primary for sign-in) — approved users can enroll FIDO2 passkeys on `/my/account/security`. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
+2. **Passkeys / WebAuthn** (primary for sign-in) — FIDO2 passkeys are managed on `/my/security` and offered in two places ahead of it: on `/register/pending`, since enrollment needs a session but **not** an approved account, and as a dismissible nudge on `/my/profile` for anyone still holding none — which is the only offer an officer pre-added member ever sees, since they skip the pending page entirely. They stay optional: magic links remain the sign-in and recovery path, and plenty of people register on a machine that can't create a passkey at all. The sign-in page runs a conditional-UI ceremony in the background: if the browser has a passkey, it appears in the email field's autofill menu and skips the magic link entirely.
 
-**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (required fields only: legal + preferred name, phone, UC affiliation, policies ack) → `/register/pending` (wait for exec approval; optionally add emergency contacts and a bio there) → exec approves at `/members/pending` → user is `approved` with the `member` role.
+**Registration flow**: `/sign-in?register=1` → magic link → `/auth/callback` (click-through) → `/register/profile` (required fields only: legal + preferred name, phone, UC affiliation, policies ack) → `/register/pending` (wait for exec approval; optionally add a passkey, emergency contacts and a bio there) → exec approves at `/members/pending` → user is `approved` with the `member` role.
 
 **Anti-abuse**: Turnstile CAPTCHA on the magic-link form, per-IP + per-email rate limiting (10 req / 60 s), timing jitter (500–800 ms) to prevent email enumeration, SHA-256 hashed tokens in D1 (stolen DB can't replay links).
 
