@@ -10,5 +10,11 @@ apps/ucmc-web/drizzle/migrations/
 **/.tanstack/
 **/.vite/
 
+# Playwright run artifacts. Gitignored, but prettier does not read
+# .gitignore — without these, any local `pnpm e2e` leaves a generated
+# report and a results JSON behind that turn `pnpm format:check` red.
+**/playwright-report/
+**/test-results/
+
 # Tool-managed by pnpm; format follows pnpm's defaults, not ours.
 pnpm-lock.yaml
