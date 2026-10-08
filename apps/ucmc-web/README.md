@@ -103,7 +103,7 @@ The attestation row schema is `(userId, cycle, version)` together — the `requi
 
 ### Retention is automated
 
-A daily Cloudflare cron (08:00 UTC, see `wrangler.jsonc` `triggers.crons` and `apps/ucmc-web/src/server/cron/retention.server.ts`) sweeps:
+A daily Cloudflare cron (12:00 UTC — 08:00 EDT / 07:00 EST; see `wrangler.jsonc` `triggers.crons`, `src/server/cron/daily-schedule.ts` and `src/server/cron/retention.server.ts`) sweeps:
 
 - Rejected registrations 30 days after rejection
 - Deactivated accounts 12 months after deactivation

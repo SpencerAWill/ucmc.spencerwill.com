@@ -21,6 +21,7 @@ import startEntry from "@tanstack/react-start/server-entry";
 
 import { withPublicPageCache } from "./server/edge-cache";
 import type { WorkerFetchHandler } from "./server/edge-cache";
+import { isDailyCron } from "./server/cron/daily-schedule";
 import { errorMessage, log, runWithLogContext } from "./server/log/log.server";
 
 /**
@@ -71,7 +72,9 @@ export default {
     // branch each, rather than every job firing on every tick.
     //
     // Schedules currently wired (must match wrangler.jsonc):
-    //   - "0 8 * * *"   → daily retention sweeps
+    //   - "0 12 * * *"  → daily retention sweeps + gear reminders
+    //                     (08:00 EDT / 07:00 EST — see
+    //                     ./server/cron/daily-schedule)
     //   - "15 8 1 3 *"  → annual officer-archive snapshot (March 1)
     //
     // Every branch runs inside a log context carrying the cron
@@ -95,17 +98,20 @@ export default {
       return;
     }
 
-    // Default fallback: the daily tick. Catches "0 8 * * *" plus any
-    // future daily schedules that piggyback on the same wakeup.
+    // The daily tick, matched EXPLICITLY rather than as a fallback.
     //
-    // **Adding a second daily cron expression means making this branch
-    // explicit first.** Anything that isn't the March schedule above
-    // lands here, so a new "0 13 * * *" would silently run the retention
-    // sweeps a second time each day rather than only the job it was
-    // added for. The gear reminders ride this tick instead of taking
-    // their own precisely to avoid that: 08:00 UTC is 03:00/04:00
-    // Cincinnati, which puts the mail at the top of a member's inbox
-    // when they wake up.
+    // This used to be `else { …retention… }`, which quietly made every
+    // unrecognised expression run the sweeps — so adding a second daily
+    // schedule for any reason would have run retention twice a day
+    // without a word. Matching the expression and warning on anything
+    // else turns that from a silent trap into a log line.
+    if (!isDailyCron(event.cron)) {
+      // An expression in wrangler.jsonc with no branch here is a
+      // misconfiguration. Say so instead of running something arbitrary.
+      log.warn("cron.unrecognised", { cron: event.cron });
+      return;
+    }
+
     const [{ runRetentionSweeps }, { runGearLoanReminders }] =
       await Promise.all([
         import("./server/cron/retention.server"),

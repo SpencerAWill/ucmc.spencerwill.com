@@ -244,7 +244,13 @@ Four things that are the way they are on purpose:
 
 `gear.remindersEnabled` ships **off**. It is read first and short-circuits everything, so it is the switch to reach for during a bad send or a provider incident. See `notifications.md` for the preference model and the transactional-vs-courtesy line.
 
-**The reminders ride the existing `"0 8 * * *"` tick rather than taking their own cron.** `server-entry.ts` routes any expression that isn't the March archive to its default branch, so a second daily schedule would silently run the retention sweeps twice a day. Adding one means making that branch explicit first.
+**The reminders ride the daily tick rather than taking their own cron.** `server-entry.ts` routes any expression that isn't the March archive to its default branch, so a second daily schedule would silently run the retention sweeps twice a day. Adding one means making that branch explicit first.
+
+The tick is `0 12 * * *` — **08:00 EDT / 07:00 EST** in Cincinnati. The hour is chosen for the **emails**: it was 08:00 UTC when only the retention sweeps rode it, which is 03:00/04:00 local — fine for DB deletes nobody sees, wrong for mail that can buzz a member's phone overnight.
+
+**The one-hour DST drift is accepted, not overlooked.** Cron triggers are UTC-only with no DST awareness, so pinning 08:00 year-round needs a second expression plus a gate discarding the wrong tick. That was built and then reverted: `wrangler.jsonc` declares crons for two workers (dev + prod), so each expression costs **two** against the account, and the Workers Free cap is 5 — a third would make 6. See `server/cron/daily-schedule.ts` before re-deriving it, and `daily-schedule.test.ts`, which pins the drift at exactly one hour so moving the expression can't quietly move the hour members are mailed at.
+
+**Cloudflare documents no timing guarantee for cron triggers at all.** Nothing here needs better than hour-level accuracy, and both daily jobs are idempotent — retention re-sweeps whatever is still expired, and the ladder is built to catch a missed day at the right rung rather than skip it.
 
 ### The loans list toolbar
 
