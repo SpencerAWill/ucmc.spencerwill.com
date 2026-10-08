@@ -32,13 +32,17 @@ import { waitForHydration } from "./fixtures/hydration";
 /**
  * The officer session, seeded ONCE PER WORKER rather than once per test.
  *
- * `ensureApprovedUser` and `seedSession` each shell out to a full
- * `wrangler d1 execute` — a CLI boot measured at 1.5–2.5 s locally and
- * slower on a runner. Seeding them in a `beforeEach` paid that twice for
- * every one of the 21 signed-in routes, in each of the two engines: 84
- * wrangler boots per CI job, dwarfing the 88 page loads they existed to
- * enable. Measured per-test on a laptop, a signed-in route cost ~2.4 s
- * against ~0.7 s for a public one, and the whole gap was the seed.
+ * It was first hoisted for cost: `ensureApprovedUser` and `seedSession`
+ * each shelled out to a full `wrangler d1 execute`, a CLI boot measured
+ * at 1.5–2.5 s, so a `beforeEach` paid that twice for every one of the
+ * 21 signed-in routes in each of two engines — 84 wrangler boots per CI
+ * job against the 88 page loads they existed to enable. **That reason is
+ * gone**: the fixtures now write the Miniflare SQLite file directly and
+ * a seed costs single-digit milliseconds.
+ *
+ * The hoist stays anyway, for the pollution reason below, which the
+ * speed-up does nothing about. Don't un-hoist it on the grounds that
+ * seeding is cheap now — it is, and that is not what this is for.
  *
  * Sharing one session across the routes is sound *for this spec* and not
  * in general: every test here is a `goto` plus a measurement, nothing

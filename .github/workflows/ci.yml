@@ -173,8 +173,10 @@ jobs:
     needs: paths
     runs-on: ubuntu-latest
     # The whole chromium project, serially: `workers: 1`, because the
-    # specs share one local D1 through `wrangler d1 execute` and cannot be
-    # parallelised, with `retries: 2` on CI.
+    # specs share one local D1 and cannot be parallelised — two workers
+    # would collide on `user_emails.email`'s global UNIQUE and on the
+    # delete-then-insert each seed opens with. Per-worker isolation is
+    # issue #238. `retries: 2` on CI.
     timeout-minutes: 30
     permissions:
       contents: read
