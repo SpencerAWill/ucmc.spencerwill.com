@@ -358,7 +358,7 @@ export const userRoles = sqliteTable(
  * One row per attestation event. A `revokedAt` is set when an officer
  * needs to undo a mistaken attestation (the row stays for audit). The
  * `requireCurrentWaiver` guard looks for any non-revoked row where
- * `cycle = currentWaiverCycle()` and `version = WAIVER_VERSION`.
+ * `cycle = currentSeason()` and `version = WAIVER_VERSION`.
  */
 export const waiverAttestations = sqliteTable(
   "waiver_attestations",
@@ -367,7 +367,7 @@ export const waiverAttestations = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    // "YYYY-YY" — see `#/config/waiver-cycle`.
+    // "YYYY-YY" — see `#/config/club-season`.
     cycle: text("cycle").notNull(),
     // Tied to the canonical waiver PDF filename — see WAIVER_VERSION
     // in `#/config/legal`. Bumping forces re-attestation under the new

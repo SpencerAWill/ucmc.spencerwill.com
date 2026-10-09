@@ -2,8 +2,8 @@
  * The club's civil time zone.
  *
  * Cloudflare Workers run in UTC, but UCMC's calendar-shaped rules are
- * Cincinnati-local: the waiver cycle rolls over at midnight *local* on
- * Aug 21, gear loans are due at the end of the *local* day, the officer
+ * Cincinnati-local: the club season rolls over at midnight *local* on
+ * Aug 1, gear loans are due at the end of the *local* day, the officer
  * archive fires on March 1 *local*, and the Gazette publish date is a
  * local calendar date. Computing those in UTC drifts the boundary by the
  * UTC offset (4–5h), so every calendar-reasoning site converts an

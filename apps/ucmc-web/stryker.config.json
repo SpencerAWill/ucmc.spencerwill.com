@@ -9,7 +9,7 @@
     "related": false
   },
   "mutate": [
-    "src/config/waiver-cycle.ts",
+    "src/config/club-season.ts",
     "src/features/gear/lib/scan-payload.ts",
     "src/features/gear/lib/wedge-buffer.ts",
     "src/lib/sanitize-filename.ts",

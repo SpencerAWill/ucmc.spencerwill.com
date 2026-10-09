@@ -1,7 +1,7 @@
 ---
 paths:
   - "apps/ucmc-web/src/config/legal.ts"
-  - "apps/ucmc-web/src/config/waiver-cycle.ts"
+  - "apps/ucmc-web/src/config/club-season.ts"
   - "apps/ucmc-web/src/server/waivers/**"
   - "apps/ucmc-web/src/features/waivers/**"
   - "apps/ucmc-web/src/routes/waiver.tsx"
@@ -39,7 +39,7 @@ The **compliance matrix** in the [GitHub wiki](https://github.com/SpencerAWill/u
 
 **Never re-derive `(cycle, version, revokedAt IS NULL)` inline** — the next `WAIVER_VERSION` bump is where the copies silently disagree.
 
-The cycle itself comes from `currentWaiverCycle()` — see the dates rule; never compute the August boundary ad-hoc.
+The cycle itself comes from `currentSeason()` — see the dates rule; never compute the August boundary ad-hoc. **The waiver term IS the club season** (Aug 1 → Jul 31 Cincinnati-local), with no grace window: collection is continuous, so a member who wants gear on Aug 3 signs on Aug 3, and the club does run trips in early August. A waiver signed mid-season still covers the whole season, because `attestWaiver` stamps `cycle = currentSeason()` at attest time.
 
 ## Two waiver permission tiers
 

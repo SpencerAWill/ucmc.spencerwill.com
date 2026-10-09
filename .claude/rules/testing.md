@@ -64,7 +64,7 @@ Two layers, because they catch different things:
 
 ## Mutation testing
 
-`pnpm --filter ucmc-web test:mutation` (Stryker), and a weekly job in `quality.yml`. **A report, not a gate** — `thresholds.break` is `null`. Score when it landed: 100%, 76/76 mutants killed, in about 5 seconds. The list has grown since — seven modules, 317 mutants, 312 killed — so treat the figure as a reading rather than a constant, and **run it after adding a module to `mutate`**: that is where the surviving mutants that mean something show up.
+`pnpm --filter ucmc-web test:mutation` (Stryker), and a weekly job in `quality.yml`. **A report, not a gate** — `thresholds.break` is `null`. Score when it landed: 100%, 76/76 mutants killed, in about 5 seconds. The list has grown since — seven modules, 347 mutants, 339 killed — so treat the figure as a reading rather than a constant, and **run it after adding a module to `mutate`**: that is where the surviving mutants that mean something show up.
 
 It runs against **`vitest.mutation.config.ts`, a plain-Node project that exists only for this** and is deliberately absent from `vitest.config.ts`'s `projects` (the files are already covered by the `workers` project; listing it would run them twice per `pnpm test`). The `workers` pool boots workerd and applies every migration per file (78 and counting), which is unaffordable once per mutant, and `@cloudflare/vitest-plugin` compatibility with Stryker is unverified upstream.
 
@@ -75,7 +75,7 @@ Two configuration details that each cost a failed run:
 - **`plugins: ["@stryker-mutator/vitest-runner"]` is required.** pnpm's strict `node_modules` defeats Stryker's plugin auto-discovery, which fails with "no TestRunner plugins were loaded".
 - **`vitest.related` must be `false`.** It maps a mutated source file back to its tests through vitest's module graph, which does not resolve the `#/*` alias — so it finds nothing and Stryker exits with "No tests were executed".
 
-**It found four real gaps on its first run**, all since closed, and they are the argument for keeping it: dropping either anchor from `STRICT_EMAIL_PATTERN` survived the whole suite, and without the trailing `$`, `redactEmail("alice@example.com SECRET")` logs `a***@example.com SECRET` — the exact disclosure that helper exists to prevent. Also surviving: `https?` → `https` in `URL_PATTERN` (plain-http tokens unredacted), and collapsing `month === CUTOFF.month` to `true` in the waiver cutoff, which misdates any early-in-the-month day after August by a whole club year.
+**It found four real gaps on its first run**, all since closed, and they are the argument for keeping it: dropping either anchor from `STRICT_EMAIL_PATTERN` survived the whole suite, and without the trailing `$`, `redactEmail("alice@example.com SECRET")` logs `a***@example.com SECRET` — the exact disclosure that helper exists to prevent. Also surviving: `https?` → `https` in `URL_PATTERN` (plain-http tokens unredacted), and collapsing `month === CUTOFF.month` to `true` in the then-two-part season cutoff, which misdated any early-in-the-month day after August by a whole club year. (That cutoff is now a single `ZonedDateTime.compare`, and `club-season.test.ts` still pins the two sides it found.)
 
 ## Property-based tests (`*.property.test.ts`)
 
@@ -105,7 +105,7 @@ Neither was a bug in the code. The real claim is **indistinguishability**: two a
 **The two kinds of date arithmetic are not interchangeable, and the split is deliberate:**
 
 - **Exact elapsed time** (`instant.subtract({ milliseconds: DAYS * DAY_MS })`) for retention windows. The privacy-policy promise is about how long data is _kept_, so a DST transition must not change it. Calendar arithmetic would make a row survive an hour longer in March than in July.
-- **Calendar arithmetic in `CLUB_TIME_ZONE`** (`toZonedDateTimeISO(CLUB_TIME_ZONE)`) for anything a human reads off a calendar: the Aug 21 waiver rollover, a loan due "end of day", the March 1 officer archive.
+- **Calendar arithmetic in `CLUB_TIME_ZONE`** (`toZonedDateTimeISO(CLUB_TIME_ZONE)`) for anything a human reads off a calendar: the Aug 1 season rollover, a loan due "end of day", the March 1 officer archive.
 
 Using the wrong one is invisible for most of the year and wrong for a few hours around a transition — exactly the shape that reaches production. A 30-day window spanning spring-forward differs from 30 calendar days by precisely one hour, and the test pins that number rather than asserting the two are "close".
 
@@ -158,7 +158,7 @@ The officer queue (`listMembersNeedingAttestationAction`) is every `status='appr
 
 Attesting is also the realistic state: an approved member has handed in a signed waiver. A member approved who then never signed is a specific case, not the default one.
 
-**The cycle and version are imported, never recomputed** — `currentWaiverCycle()` from `#/config/waiver-cycle` and `WAIVER_VERSION` from `#/config/legal`. The predicate in `currentAttestationFilter` is `(cycle, version, revoked_at IS NULL)`, so a hard-coded value would quietly stop matching after the Aug 21 rollover or a version bump, and the symptom would be the slow return of the pollution this prevents. (CLAUDE.md forbids deriving the club year ad-hoc regardless.) The `#/*` alias resolves inside Playwright; `e2e/fixtures/db.ts` imports `temporal-polyfill/global` itself, since nothing installs `Temporal` in the Playwright process.
+**The cycle and version are imported, never recomputed** — `currentSeason()` from `#/config/club-season` and `WAIVER_VERSION` from `#/config/legal`. The predicate in `currentAttestationFilter` is `(cycle, version, revoked_at IS NULL)`, so a hard-coded value would quietly stop matching after the Aug 1 rollover or a version bump, and the symptom would be the slow return of the pollution this prevents. (CLAUDE.md forbids deriving the club year ad-hoc regardless.) The `#/*` alias resolves inside Playwright; `e2e/fixtures/db.ts` imports `temporal-polyfill/global` itself, since nothing installs `Temporal` in the Playwright process.
 
 **`mobile-waiver-queue.spec.ts` is the only spec that opts out**, because there the queue row _is_ the fixture.
 

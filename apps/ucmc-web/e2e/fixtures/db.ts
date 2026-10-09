@@ -4,13 +4,13 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
-// `currentWaiverCycle()` reads `Temporal.Now`, which the app installs in
+// `currentSeason()` reads `Temporal.Now`, which the app installs in
 // its own entrypoints (`src/router.tsx`, `src/server-entry.ts`). Nothing
 // installs it in the Playwright process, so the fixture does.
 import "temporal-polyfill/global";
 
 import { WAIVER_VERSION } from "#/config/legal";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 
 const WEB_DIR = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
@@ -255,7 +255,7 @@ function insertUser(options: InsertUserOptions): string {
       // `cycle` and `version` are imported, never recomputed: the match
       // in `currentAttestationFilter` is `(cycle, version, revoked_at IS
       // NULL)`, so a fixture that hard-coded either would silently stop
-      // satisfying the queue's anti-join after the Aug 21 rollover or a
+      // satisfying the queue's anti-join after the Aug 1 rollover or a
       // `WAIVER_VERSION` bump — and the symptom would be a slow return
       // of the queue pollution this exists to prevent. (CLAUDE.md also
       // forbids deriving the club year ad-hoc.)
@@ -271,7 +271,7 @@ function insertUser(options: InsertUserOptions): string {
         .run(
           `wa_${randomUUID()}`,
           userId,
-          currentWaiverCycle(),
+          currentSeason(),
           WAIVER_VERSION,
           nowMs,
         );

@@ -7,7 +7,7 @@ const { loadMemberCounters, onTimeStreak, scoreMemberStats } =
 
 const at = (iso: string) => Temporal.Instant.from(iso);
 
-/** Mid-season for cycle 2025-26: after Aug 21 2025, before May 1 2026. */
+/** Mid-season for cycle 2025-26: after Aug 1 2025, before May 1 2026. */
 const NOW = at("2026-02-01T12:00:00Z");
 
 async function seedMember(): Promise<string> {

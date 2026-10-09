@@ -74,7 +74,7 @@ Six bands in one column — hero, editable narrative, standing programs, "Coming
 
 **`volunteer_events` has no status column, and that is the design.** Upcoming vs past is derived from `starts_at`, so nothing is flipped by hand or by a cron and the two bands can't disagree about a row. The bound is **the start of today in `CLUB_TIME_ZONE`** (`startOfClubDay` in `features/volunteer/lib/day-boundary.ts`), not `now` — a trail day that began at 09:00 shouldn't drop out of "Coming up" at noon while people are still driving to it. The read action resolves it **once** and hands the same instant to both queries, so they partition the table rather than overlapping or leaving a gap at midnight.
 
-**The archive groups by `currentWaiverCycle`, deliberately reusing the waiver helper** — see the dates rule.
+**The archive groups by `currentSeason`** (`#/config/club-season`), the one definition of the club year — Aug 1 → Jul 31, the same season the waiver term runs on. See the dates rule.
 
 **`volunteersCount` / `serviceHours` are nullable and the totals strip reports its own coverage** ("recorded for 3 of 40"). An officer logs the outing before it happens and fills the numbers in after, if ever; a bare sum would read as "this is all we did" when it means "this is all we wrote down". A recorded **zero** counts as recorded — the note is suppressed only at full or zero coverage.
 

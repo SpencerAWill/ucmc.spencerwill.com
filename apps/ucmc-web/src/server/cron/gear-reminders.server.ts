@@ -33,7 +33,7 @@
  * ## Everything is a parameter
  *
  * `now` is injected rather than read from the clock, like
- * `gearCaveStanding` and `currentWaiverCycle`, so tests pin it and a run
+ * `gearCaveStanding` and `currentSeason`, so tests pin it and a run
  * that straddles midnight can't produce two different answers.
  */
 import { CLUB_TIME_ZONE } from "#/config/time";

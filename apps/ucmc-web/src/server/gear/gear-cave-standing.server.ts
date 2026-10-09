@@ -61,7 +61,7 @@ function daysOverdue(
  * Compute a member's cave standing.
  *
  * `now` is a parameter rather than read from the clock so tests can pin
- * it — the same reason `currentWaiverCycle` takes one.
+ * it — the same reason `currentSeason` takes one.
  */
 export async function gearCaveStanding(input: {
   memberUserId: string;

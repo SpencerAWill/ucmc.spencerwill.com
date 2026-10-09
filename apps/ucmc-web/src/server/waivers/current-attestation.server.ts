@@ -23,7 +23,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { WAIVER_VERSION } from "#/config/legal";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 import { getDb, schema } from "#/server/db";
 
 /**
@@ -87,7 +87,7 @@ export async function hasCurrentAttestation(userId: string): Promise<boolean> {
     .where(
       and(
         eq(schema.waiverAttestations.userId, userId),
-        currentAttestationFilter(currentWaiverCycle()),
+        currentAttestationFilter(currentSeason()),
       ),
     )
     .limit(1);
@@ -102,7 +102,7 @@ export async function hasCurrentAttestation(userId: string): Promise<boolean> {
 export async function loadMemberWaiverStatus(
   userId: string,
 ): Promise<MemberWaiverStatus> {
-  const cycle = currentWaiverCycle();
+  const cycle = currentSeason();
   const att = schema.waiverAttestations;
 
   const row = await getDb()

@@ -13,7 +13,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { WAIVER_VERSION } from "#/config/legal";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 import {
   buildAuditEventStatement,
   buildBulkAuditEventStatement,
@@ -138,12 +138,12 @@ export async function listWaiverHistoryForUserAction(input: {
 
 /**
  * Returns the caller's status for the current cycle: the most recent
- * non-revoked attestation row that matches `(currentWaiverCycle(),
+ * non-revoked attestation row that matches `(currentSeason(),
  * WAIVER_VERSION)`, or `null` if missing/expired.
  */
 export async function getMyCurrentWaiverStatusAction(): Promise<WaiverStatus> {
   const principal = await requireSignedIn();
-  const cycle = currentWaiverCycle();
+  const cycle = currentSeason();
   const current = await loadCurrentAttestation(principal.userId, cycle);
   return { cycle, version: WAIVER_VERSION, current };
 }
@@ -159,7 +159,7 @@ export async function listMembersNeedingAttestationAction(): Promise<
 > {
   await requireWaiverViewer();
   const db = getDb();
-  const cycle = currentWaiverCycle();
+  const cycle = currentSeason();
 
   // Subquery: users with a current, non-revoked attestation for this
   // cycle + version. We anti-join against this set.
@@ -222,7 +222,7 @@ export async function attestWaiverAction(input: {
   }
 
   const id = `wa_${uuidv7()}`;
-  const cycle = currentWaiverCycle();
+  const cycle = currentSeason();
   // Atomic with the audit row: D1 batch commits both or neither.
   await db.batch([
     db.insert(schema.waiverAttestations).values({
@@ -293,7 +293,7 @@ export async function bulkAttestWaiversAction(input: {
     }
   }
 
-  const cycle = currentWaiverCycle();
+  const cycle = currentSeason();
   const now = Temporal.Now.instant();
   const notes = input.notes?.trim() || null;
   const rows = userIds.map((userId) => ({

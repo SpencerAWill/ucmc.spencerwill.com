@@ -14,7 +14,7 @@ import { Label } from "#/components/ui/label";
 import { WAIVER_VERSION } from "#/config/legal";
 import { cn } from "#/lib/utils";
 import { formatDate } from "#/lib/date-format";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 import {
   requireAnyPermission,
   WAIVER_VIEW_PERMISSIONS,
@@ -57,7 +57,7 @@ export const Route = createFileRoute("/members/waivers")({
 });
 
 function WaiversQueuePage() {
-  const cycle = currentWaiverCycle();
+  const cycle = currentSeason();
   const { hasPermission } = useAuth();
   const canVerify = hasPermission("waivers:verify");
   const { data: queue } = useSuspenseQuery(waiverPendingQueueQueryOptions());
