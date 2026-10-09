@@ -1,9 +1,11 @@
 import {
   complianceAnalyticsQueryKey,
+  gearAnalyticsQueryKey,
   platformAnalyticsQueryKey,
 } from "#/features/analytics/api/query-keys";
 import {
   complianceAnalyticsFn,
+  gearAnalyticsFn,
   platformAnalyticsFn,
 } from "#/features/analytics/server/analytics-fns";
 
@@ -25,5 +27,13 @@ export function complianceAnalyticsQueryOptions(season: string | null) {
   return {
     queryKey: complianceAnalyticsQueryKey(season),
     queryFn: () => complianceAnalyticsFn({ data: season ? { season } : {} }),
+  } as const;
+}
+
+/** Utilisation, overdue aging, loan duration and inspection standing. */
+export function gearAnalyticsQueryOptions(season: string | null) {
+  return {
+    queryKey: gearAnalyticsQueryKey(season),
+    queryFn: () => gearAnalyticsFn({ data: season ? { season } : {} }),
   } as const;
 }

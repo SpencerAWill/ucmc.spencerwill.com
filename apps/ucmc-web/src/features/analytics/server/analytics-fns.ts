@@ -12,11 +12,13 @@ import type {
   ServiceHeadroom,
 } from "#/features/analytics/server/platform-actions.server";
 
-// Re-exported so components take their props from the shell rather than
-// reaching into a `.server` module. Only the shapes a component actually
-// renders are re-exported — the full `PlatformAnalytics` result is
-// inferred through the query options, and re-exporting it as well would
-// be an export with no importer for knip to flag.
+// Re-exported so a COMPONENT can take its props from the shell rather
+// than reaching into a `.server` module. Only shapes a component names
+// in its props belong here: a route infers the whole result through its
+// query options, so re-exporting the top-level result types as well
+// leaves exports with no importer, which knip correctly flags. Add an
+// entry here when a component needs the type, not when an action grows
+// one.
 export type { EmailVolume, ServiceHeadroom };
 
 /**
@@ -45,4 +47,12 @@ export const complianceAnalyticsFn = createServerFn({ method: "GET" })
     const { complianceAnalyticsAction } =
       await import("#/features/analytics/server/compliance-actions.server");
     return complianceAnalyticsAction(data);
+  });
+
+export const gearAnalyticsFn = createServerFn({ method: "GET" })
+  .validator(z.object({ season: seasonSchema.optional() }))
+  .handler(async ({ data }) => {
+    const { gearAnalyticsAction } =
+      await import("#/features/analytics/server/gear-actions.server");
+    return gearAnalyticsAction(data);
   });

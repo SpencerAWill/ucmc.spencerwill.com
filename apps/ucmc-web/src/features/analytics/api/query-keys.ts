@@ -18,3 +18,7 @@ export function platformAnalyticsQueryKey(season: string | null) {
 export function complianceAnalyticsQueryKey(season: string | null) {
   return [...ANALYTICS_QUERY_KEY, "compliance", season] as const;
 }
+
+export function gearAnalyticsQueryKey(season: string | null) {
+  return [...ANALYTICS_QUERY_KEY, "gear", season] as const;
+}
