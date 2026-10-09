@@ -28,12 +28,12 @@ import { schoolYearForArchiveFire } from "#/server/cron/archive-officers.server"
  * deliberately uses each in different places.
  */
 
-// 2025-08-21T04:00Z is exactly midnight EDT (UTC-4) on Aug 21 — the
-// instant the waiver cycle rolls over. A UTC-reading implementation puts
+// 2025-08-01T04:00Z is exactly midnight EDT (UTC-4) on Aug 1 — the
+// instant the club season rolls over. A UTC-reading implementation puts
 // the boundary at 00:00Z, four hours earlier, and gets both of these
 // wrong in the same direction.
-const ROLLOVER_UTC = "2025-08-21T04:00:00Z";
-const ONE_SECOND_BEFORE_ROLLOVER = "2025-08-21T03:59:59Z";
+const ROLLOVER_UTC = "2025-08-01T04:00:00Z";
+const ONE_SECOND_BEFORE_ROLLOVER = "2025-08-01T03:59:59Z";
 
 // America/New_York transitions: 2nd Sunday in March (02:00 EST → 03:00
 // EDT, the day with 23 hours) and 1st Sunday in November (02:00 EDT →
@@ -64,11 +64,11 @@ describe("currentSeason() reads the real clock, in the club zone", () => {
 
   it("rolls over at local midnight, not UTC midnight", () => {
     // The assertion the whole `CLUB_TIME_ZONE` convention exists for.
-    // At 00:00Z on Aug 21 it is still 20:00 on Aug 20 in Cincinnati, so
-    // a UTC read rolls the club into a new waiver cycle four hours early
+    // At 00:00Z on Aug 1 it is still 20:00 on Jul 31 in Cincinnati, so
+    // a UTC read rolls the club into a new season four hours early
     // — and every member's current attestation stops satisfying
     // `requireCurrentWaiver` for those four hours.
-    setNow("2025-08-21T00:00:00Z");
+    setNow("2025-08-01T00:00:00Z");
     expect(currentSeason()).toBe("2024-25");
 
     setNow(ONE_SECOND_BEFORE_ROLLOVER);
@@ -88,8 +88,8 @@ describe("currentSeason() reads the real clock, in the club zone", () => {
 });
 
 describe("club-year rollover is stable across DST transitions", () => {
-  // Both transitions are far from the Aug 21 cutoff, which is the point:
-  // the cycle must not notice them at all. It would if the boundary were
+  // Both transitions are far from the Aug 1 boundary, which is the point:
+  // the season must not notice it at all. It would if the boundary were
   // ever reimplemented by counting elapsed milliseconds from a fixed
   // epoch instead of reading the local calendar date.
   it("does not shift the cycle at spring forward", () => {
@@ -136,7 +136,7 @@ describe("club-year rollover is stable across DST transitions", () => {
   });
 });
 
-describe("the volunteer club year is the waiver cycle, under the same clock", () => {
+describe("the volunteer club year is the club season, under the same clock", () => {
   it("classifies an outing by the club-local rollover", () => {
     // `clubYearOf` reuses `currentSeason` rather than defining a
     // second August boundary. Pinned here so a later "simplification"
@@ -190,7 +190,7 @@ describe("retention windows are exact elapsed time, not calendar days", () => {
     // an hour longer in March than in July.
     //
     // Anything user-facing and calendar-shaped (a loan due "at end of
-    // day", the Aug 21 rollover) must NOT use this, and doesn't.
+    // day", the Aug 1 rollover) must NOT use this, and doesn't.
     const now = Temporal.Instant.from("2026-03-20T12:00:00Z");
     const exact = now.subtract({ milliseconds: 30 * 24 * 60 * 60 * 1000 });
 

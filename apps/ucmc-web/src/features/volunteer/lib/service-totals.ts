@@ -20,13 +20,12 @@ export interface ServiceTotals {
 /**
  * Which club year an outing belongs to.
  *
- * Reuses `currentSeason` rather than defining a second year
- * boundary. The function reads as waiver-specific because that's what
- * needed it first, but it is just "which club year is this instant in",
- * rolling over at midnight Cincinnati-local on Aug 21 — and the club's
- * year is the club's year. Defining a parallel August boundary here is
- * exactly the ad-hoc re-derivation CLAUDE.md warns against; the two
- * would then disagree the first time the cutoff moved.
+ * Reuses `currentSeason` rather than defining a second year boundary:
+ * the club's year is the club's year, and the waiver term is the same
+ * season. Rolls over at midnight Cincinnati-local on Aug 1. Defining a
+ * parallel August boundary here is exactly the ad-hoc re-derivation
+ * CLAUDE.md warns against; the two would then disagree the first time
+ * the boundary moved — which it since has.
  */
 export function clubYearOf(event: VolunteerEventEntry): string {
   return currentSeason(

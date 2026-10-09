@@ -255,7 +255,7 @@ function insertUser(options: InsertUserOptions): string {
       // `cycle` and `version` are imported, never recomputed: the match
       // in `currentAttestationFilter` is `(cycle, version, revoked_at IS
       // NULL)`, so a fixture that hard-coded either would silently stop
-      // satisfying the queue's anti-join after the Aug 21 rollover or a
+      // satisfying the queue's anti-join after the Aug 1 rollover or a
       // `WAIVER_VERSION` bump — and the symptom would be a slow return
       // of the queue pollution this exists to prevent. (CLAUDE.md also
       // forbids deriving the club year ad-hoc.)

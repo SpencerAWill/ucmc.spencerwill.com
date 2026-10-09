@@ -92,13 +92,13 @@ UC's student/staff ID number is intentionally **not** stored anywhere — schema
 
 Members print and sign the canonical PDF (`apps/ucmc-web/public/legal/ucmc-waiver-v1.pdf`), then physically hand it to an officer. The officer marks the member attested for the current cycle via `/members/waivers`. Waiver standing also shows on `/members/$publicId` for `waivers:view` holders. The signed paper lives off-platform with the Treasurer; **medical PII never touches Cloudflare**, no R2 PDFs, no signature images.
 
-The attestation row schema is `(userId, cycle, version)` together — the `requireCurrentWaiver` guard requires all three to match `currentSeason()` and `WAIVER_VERSION`. Re-attestation is required every fall semester; the cycle rolls over on August 15.
+The attestation row schema is `(userId, cycle, version)` together — the `requireCurrentWaiver` guard requires all three to match `currentSeason()` and `WAIVER_VERSION`. **The waiver term is the club season**, Aug 1 → Jul 31 Cincinnati-local, so re-attestation is required once a season. Signing mid-season covers the whole season: the stamp is taken at attest time.
 
 ### Compliance content source of truth
 
 `apps/ucmc-web/src/config/legal.ts` holds every legal/policy string rendered by the site — the registration disclaimer, all nine legal-route bodies, the canonical `WAIVER_PDF_PATH`, `WAIVER_VERSION`, and `POLICIES_VERSION`. Edits to these strings are legal review, not word-smithing — the on-site text must match the canonical PDF byte-for-byte. Bumping `WAIVER_VERSION` invalidates every existing waiver attestation.
 
-`apps/ucmc-web/src/config/club-season.ts` is the **only** place that should compute "what cycle are we in." Always import `currentSeason()`; never derive it ad-hoc.
+`apps/ucmc-web/src/config/club-season.ts` is the **only** place that should compute "what season are we in." Always import `currentSeason()`; never derive it ad-hoc.
 
 ### Retention is automated
 

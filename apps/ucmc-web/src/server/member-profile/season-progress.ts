@@ -7,7 +7,7 @@
  * season has exactly one, and someone a quarter of the way through
  * their third has two rings and a 25% arc.
  *
- * Two anchors, and neither is the waiver cycle's own Aug 21 → Aug 20
+ * Two anchors, and neither is the club season's own Aug 1 → Jul 31
  * span:
  *
  * - **Start is the day the member attested**, not the day the cycle

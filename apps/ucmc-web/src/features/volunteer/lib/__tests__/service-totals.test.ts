@@ -29,22 +29,31 @@ function outing(
 const at = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
 
 describe("clubYearOf", () => {
-  it("rolls over on Aug 21 Cincinnati-local, like the waiver cycle", () => {
-    // Aug 20 belongs to the year that is ending; Aug 21 starts the next.
+  it("rolls over on Aug 1 Cincinnati-local, like the waiver term", () => {
+    // Jul 31 belongs to the year that is ending; Aug 1 starts the next.
     expect(
-      clubYearOf(outing({ startsAtMs: at("2025-08-20T12:00:00-04:00") })),
+      clubYearOf(outing({ startsAtMs: at("2025-07-31T12:00:00-04:00") })),
     ).toBe("2024-25");
     expect(
-      clubYearOf(outing({ startsAtMs: at("2025-08-21T00:00:00-04:00") })),
+      clubYearOf(outing({ startsAtMs: at("2025-08-01T00:00:00-04:00") })),
     ).toBe("2025-26");
   });
 
   it("reads the boundary in the club zone, not UTC", () => {
-    // 23:00 EDT on Aug 20 is 03:00 UTC on Aug 21. Reading the date in
+    // 23:00 EDT on Jul 31 is 03:00 UTC on Aug 1. Reading the date in
     // UTC would push this into the next club year.
-    expect(clubYearOf(outing({ startsAtMs: at("2025-08-21T03:00:00Z") }))).toBe(
+    expect(clubYearOf(outing({ startsAtMs: at("2025-08-01T03:00:00Z") }))).toBe(
       "2024-25",
     );
+  });
+
+  it("counts an early-August outing as new-season activity", () => {
+    // The club runs trips in early August depending on when classes land.
+    // Under the old Aug 21 rollover those landed in the season that had
+    // just ended, which is also what let them ride on a stale waiver.
+    expect(
+      clubYearOf(outing({ startsAtMs: at("2025-08-10T12:00:00-04:00") })),
+    ).toBe("2025-26");
   });
 });
 

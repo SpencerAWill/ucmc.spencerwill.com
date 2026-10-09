@@ -34,7 +34,7 @@ describe("seasonComplete", () => {
   });
 
   it("stays true through the summer, before the next cycle opens", () => {
-    // The gap between May 1 and the Aug 21 rollover: last season is
+    // The gap between May 1 and the Aug 1 rollover: last season is
     // finished and the next has not started. A closed ring, no arc.
     expect(seasonComplete("2025-26", at("2026-07-04T16:00:00Z"))).toBe(true);
   });
@@ -57,7 +57,7 @@ describe("seasonProgress", () => {
     // Two members in the same club year, one who signed in August and
     // one who signed in January, both looked at on the same March
     // day. The January joiner is earlier in THEIR season; an arc
-    // anchored to Aug 21 would report them identically.
+    // anchored to Aug 1 would report them identically.
     const now = at("2026-03-01T12:00:00Z");
     const august = seasonProgress(at("2025-08-25T12:00:00Z"), "2025-26", now);
     const january = seasonProgress(at("2026-01-15T12:00:00Z"), "2025-26", now);

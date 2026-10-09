@@ -2,40 +2,53 @@ import { describe, expect, it } from "vitest";
 
 import { currentSeason } from "#/config/club-season";
 
-// The cycle rolls over at midnight Cincinnati-local (America/New_York,
-// UTC-4 in August/EDT) on Aug 21 — NOT midnight UTC. The offset-suffixed
+// The season rolls over at midnight Cincinnati-local (America/New_York,
+// UTC-4 in August/EDT) on Aug 1 — NOT midnight UTC. The offset-suffixed
 // and Z-suffixed instants below pin both sides of that local boundary.
 describe("currentSeason", () => {
-  it("returns YYYY-YY for a midwinter date inside the cycle", () => {
+  it("returns YYYY-YY for a midwinter date inside the season", () => {
     expect(currentSeason(Temporal.Instant.from("2026-01-15T12:00:00Z"))).toBe(
       "2025-26",
     );
   });
 
-  it("treats Aug 20 (local) as the tail end of the previous cycle", () => {
+  it("treats Jul 31 (local) as the tail end of the previous season", () => {
     expect(
-      currentSeason(Temporal.Instant.from("2025-08-20T23:59:59-04:00")),
+      currentSeason(Temporal.Instant.from("2025-07-31T23:59:59-04:00")),
     ).toBe("2024-25");
   });
 
-  it("rolls over to the new cycle at local midnight on Aug 21", () => {
+  it("rolls over to the new season at local midnight on Aug 1", () => {
     expect(
-      currentSeason(Temporal.Instant.from("2025-08-21T00:00:00-04:00")),
+      currentSeason(Temporal.Instant.from("2025-08-01T00:00:00-04:00")),
     ).toBe("2025-26");
   });
 
   it("rolls over on the LOCAL boundary, not UTC midnight", () => {
-    // 2025-08-21T00:00Z is 2025-08-20 20:00 EDT — still the prior cycle.
-    expect(currentSeason(Temporal.Instant.from("2025-08-21T00:00:00Z"))).toBe(
+    // 2025-08-01T00:00Z is 2025-07-31 20:00 EDT — still the prior season.
+    expect(currentSeason(Temporal.Instant.from("2025-08-01T00:00:00Z"))).toBe(
       "2024-25",
     );
-    // 2025-08-21T05:00Z is 2025-08-21 01:00 EDT — into the new cycle.
-    expect(currentSeason(Temporal.Instant.from("2025-08-21T05:00:00Z"))).toBe(
+    // 2025-08-01T05:00Z is 2025-08-01 01:00 EDT — into the new season.
+    expect(currentSeason(Temporal.Instant.from("2025-08-01T05:00:00Z"))).toBe(
       "2025-26",
     );
   });
 
-  it("stays in the new cycle through the rest of the calendar year", () => {
+  it("puts the first three weeks of August in the NEW season", () => {
+    // The whole behavioural consequence of moving the boundary off Aug 21.
+    // These three weeks used to answer the previous season, which meant a
+    // trip going out on Aug 10 — the club does run them — counted against
+    // a season that had ended, and rode on last season's waiver.
+    expect(
+      currentSeason(Temporal.Instant.from("2025-08-10T12:00:00-04:00")),
+    ).toBe("2025-26");
+    expect(
+      currentSeason(Temporal.Instant.from("2025-08-20T23:59:59-04:00")),
+    ).toBe("2025-26");
+  });
+
+  it("stays in the new season through the rest of the calendar year", () => {
     expect(currentSeason(Temporal.Instant.from("2025-12-31T23:59:59Z"))).toBe(
       "2025-26",
     );
@@ -43,26 +56,22 @@ describe("currentSeason", () => {
 
   it("crosses year boundaries cleanly", () => {
     expect(
-      currentSeason(Temporal.Instant.from("2026-08-20T12:00:00-04:00")),
+      currentSeason(Temporal.Instant.from("2026-07-31T12:00:00-04:00")),
     ).toBe("2025-26");
     expect(
-      currentSeason(Temporal.Instant.from("2026-08-21T00:00:00-04:00")),
+      currentSeason(Temporal.Instant.from("2026-08-01T00:00:00-04:00")),
     ).toBe("2026-27");
   });
 
-  it("does not treat an early day in a later month as before the cutoff", () => {
-    // Sept 10 is day 10, which is less than the cutoff day of 21 — but
-    // September is past August, so it belongs to the NEW cycle. The two
-    // halves of the cutoff test have to be read together: a mutation
-    // replacing `month === CLUB_SEASON_START.month` with `true` leaves every other
-    // test in this file passing and gets this one wrong by a whole year.
-    // (Found by Stryker; this test is why that mutant now dies.)
+  it("separates the two halves of the year by month, not by day-of-month", () => {
+    // Both of these are the 10th. September is past the opening month and
+    // belongs to the NEW season; June is before it and belongs to the OLD
+    // one. A comparison that lost the month half — Stryker killed exactly
+    // that mutant under the old two-part cutoff — gets one of them wrong
+    // by a whole club year.
     expect(
       currentSeason(Temporal.Instant.from("2025-09-10T12:00:00-04:00")),
     ).toBe("2025-26");
-
-    // The mirror case on the other side: June 10 is also day 10, in a
-    // month before the cutoff, and belongs to the OLD cycle.
     expect(
       currentSeason(Temporal.Instant.from("2025-06-10T12:00:00-04:00")),
     ).toBe("2024-25");
