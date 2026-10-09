@@ -16,6 +16,30 @@ The **Cloudflare provider** manages Worker custom domains, D1 databases, R2 buck
 
 A custom `ResendDomain` component shells out to `infra/scripts/resend.mjs` via `@pulumi/command` — **no dynamic provider, because pnpm and Pulumi dynamic providers don't mix** (pulumi/pulumi#9085).
 
+## `@pulumi/cloudflare` and `@pulumi/pulumi` are pinned EXACTLY, on purpose
+
+`infra/package.json` carries `6.17.0` and `3.257.0` with no caret. package.json
+cannot hold a comment, so the reason lives here: **provider 6.21.0 plans a
+REPLACEMENT of the dev D1 database** — `+-1 to replace`, with an empty property
+diff, which is the signature of a resource whose schema changed under a stable
+program rather than of anything the program asked for.
+
+Replacing a D1 database wipes every row. The `protect: true` on that resource is
+what caught it (`error: unable to replace resource … as it is currently marked
+for protection`), and it caught it in `pulumi preview` on a PR, which is the
+only reason it was not discovered by `deploy.yml` auto-deploying dev on the next
+push to main.
+
+So a `@pulumi/cloudflare` bump is **not** a routine dependency update here:
+
+- Raise it in its own PR, never inside a Dependabot group bump.
+- Read the `pulumi preview` diff before merging. A `replace` or `delete` line
+  against D1, R2 or KV means stop — those are the `protect: true` resources, and
+  protection turns the data loss into a failed deploy, not a safe one.
+- Dependabot will keep proposing the bump. Closing it is a valid answer until
+  somebody has time to work out which property the provider now treats as
+  replace-triggering and pin or `ignoreChanges` it.
+
 Prereq: `RESEND_MANAGEMENT_API_KEY` (full-access) as a GitHub env secret on both environments, and exported locally for `pulumi up`.
 
 **Single-domain sharing** (free-tier limit): prod owns the `ResendDomain`; dev sets `resendOwnerStack: prod` and reads `resendApiKey` + `resendFromEmail` via `pulumi.StackReference`. **Prod must `pulumi up` before dev** so the StackReference resolves. The component is `protect: true` — destroying it re-issues DKIM and invalidates the sending token.
