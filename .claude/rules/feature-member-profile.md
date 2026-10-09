@@ -5,6 +5,17 @@ paths:
   - "apps/ucmc-web/src/features/members/lib/topo-banner.ts"
   - "apps/ucmc-web/src/components/badge-emblem.tsx"
   - "apps/ucmc-web/src/routes/members.$publicId.tsx"
+  # The editing surfaces. The "Editing" section below is a warning
+  # about what happens when you add a field to `profileInputSchema`
+  # without carrying it through every form — so the rule has to load
+  # for the person editing those files, not only for the profile page
+  # that suffers the consequence.
+  - "apps/ucmc-web/src/server/profile/profile-schemas.ts"
+  - "apps/ucmc-web/src/components/profile/**"
+  - "apps/ucmc-web/src/features/members/components/admin-profile-sheet.tsx"
+  - "apps/ucmc-web/src/features/auth/components/profile-facets-editor.tsx"
+  - "apps/ucmc-web/src/features/auth/server/profile-facets-actions.server.ts"
+  - "apps/ucmc-web/src/routes/my._tabs.profile.tsx"
 ---
 
 # Member profiles, seasons, and badges
