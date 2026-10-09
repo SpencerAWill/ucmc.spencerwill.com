@@ -33,6 +33,11 @@ export const CURATED_ICONS = [
   "Sun",
   "Trees",
   "Footprints",
+  // Caving had no glyph in the terrain set — `Compass` reads as
+  // navigation and `Mountain` is the wrong direction. Added for the
+  // member profile's discipline list (`profile-prompt-registry.ts`),
+  // and useful to an officer writing a caving activity card too.
+  "Flashlight",
   // Service and stewardship — /volunteer's program cards. The set above
   // is entirely climbing-and-camping glyphs, with nothing that reads as
   // trail work, a cleanup, or a donation drive.

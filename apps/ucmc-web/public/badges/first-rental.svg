@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="First Rental">
+<rect width="96" height="96" fill="#dce7e4"/>
+<path d="M34 30c0-9 6-15 14-15s14 6 14 15v4h8v48H26V34h8z" fill="#2f7d63"/>
+<path d="M26 50h44v16H26z" fill="#245f4c"/>
+<rect x="38" y="54" width="20" height="8" rx="2" fill="#e7f2ee"/>
+<path d="M40 30v4M56 30v4" stroke="#1d4d3e" stroke-width="3"/>
+<circle cx="72" cy="26" r="13" fill="#d6a43c"/>
+<path d="M72 18v16M66 22h12" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

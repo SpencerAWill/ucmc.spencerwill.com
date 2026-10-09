@@ -167,6 +167,15 @@ export const profiles = sqliteTable("profiles", {
   ucAffiliation: text("uc_affiliation", { enum: ucAffiliation }).notNull(),
   avatarKey: text("avatar_key"),
   bio: text("bio"),
+  // Profile identity fields (0077). All three are nullable with no
+  // default: `ALTER TABLE ADD COLUMN` on D1 can't add NOT NULL without
+  // one, and a default would invent a value for every existing member.
+  // NULL means "not set" and the header omits the line; never "".
+  /** Trail name, in the Appalachian Trail sense. Rendered in quotes. */
+  trailName: text("trail_name"),
+  pronouns: text("pronouns"),
+  /** "What I'm up to" — one line, e.g. "Training for my first lead". */
+  statusLine: text("status_line"),
   // Acknowledgment of UCMC's anti-hazing + non-discrimination policies,
   // captured at registration as a single checkbox. Bumping
   // POLICIES_VERSION (in `#/config/legal`) invalidates prior
@@ -177,6 +186,86 @@ export const profiles = sqliteTable("profiles", {
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
 });
+
+/**
+ * A member's answers to the profile prompts ("Go-to trail snack",
+ * "Dream objective"), replacing the blank-bio problem with something
+ * to react to.
+ *
+ * The prompt CATALOG is a code registry
+ * (`src/server/member-profile/profile-prompt-registry.ts`), not rows —
+ * adding a prompt is an entry there, the same trade `site_settings`
+ * and `user_notification_preferences` already make. Rows are sparse: a
+ * member who answers nothing has none.
+ *
+ * `position` is the member's own ordering and is deliberately NOT
+ * unique per user — a swap would otherwise need an interim write to
+ * dodge the constraint, and nothing reads it but an `ORDER BY` that a
+ * duplicate merely makes arbitrary. The 3-answer cap lives in zod; a
+ * CHECK cannot count sibling rows.
+ */
+export const profilePrompts = sqliteTable(
+  "profile_prompts",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Registry key, e.g. `trail_snack`. */
+    promptKey: text("prompt_key").notNull(),
+    answer: text("answer").notNull(),
+    position: integer("position").notNull(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.promptKey] }),
+    // The only read is "this member's answers, in their order". The
+    // primary key already leads with `user_id`, so this exists purely
+    // to return that read sorted without a filesort.
+    index("profile_prompts_user_position_idx").on(t.userId, t.position),
+  ],
+);
+
+export type ProfilePrompt = typeof profilePrompts.$inferSelect;
+
+/**
+ * Self-rated experience per discipline — "I'm comfortable in a cave".
+ *
+ * **These authorize nothing**, and the UI labels them as self-rated.
+ * The certificates that will gate lead and trad gear checkout are a
+ * different table with a granting officer and an audit trail (issue
+ * #257 phase 2). Keeping the two apart is what stops a member
+ * self-rating their way into the trad rack.
+ *
+ * Discipline list and level scale both live in the same code registry
+ * as the prompts, for the same reason. Rows are sparse.
+ */
+export const profileDisciplines = sqliteTable(
+  "profile_disciplines",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Registry key, e.g. `climbing`. */
+    discipline: text("discipline").notNull(),
+    /** Registry key, e.g. `comfortable`. */
+    level: text("level").notNull(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.discipline] }),
+    // Answers "who has rated themselves experienced at caving", which
+    // is what the directory's experience filter will ask. Leads with
+    // `discipline` for the same reason 0072's index leads with
+    // `category`: the primary key already covers the per-member read.
+    index("profile_disciplines_discipline_level_idx").on(t.discipline, t.level),
+  ],
+);
+
+export type ProfileDiscipline = typeof profileDisciplines.$inferSelect;
 
 export const contactRelationship = [
   "parent",

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Artwork coming soon">
+<rect width="96" height="96" fill="#dcd9d0"/>
+<circle cx="48" cy="48" r="26" fill="none" stroke="#8f8a7c" stroke-width="3" stroke-dasharray="7 6"/>
+<path d="M40 40c0-5 4-8 8-8s8 3 8 8c0 6-8 6-8 12" stroke="#8f8a7c" stroke-width="4" fill="none" stroke-linecap="round"/>
+<circle cx="48" cy="62" r="3" fill="#8f8a7c"/>
+</svg>

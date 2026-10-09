@@ -12,6 +12,13 @@
  */
 import { isValidPhoneNumber } from "react-phone-number-input";
 import { z } from "zod";
+import {
+  DISCIPLINE_KEYS,
+  DISCIPLINE_LEVEL_KEYS,
+  MAX_ANSWERED_PROMPTS,
+  PROFILE_PROMPT_KEYS,
+  PROMPT_ANSWER_MAX_LENGTH,
+} from "#/server/member-profile/profile-prompt-registry";
 
 import { schema } from "#/server/db";
 
@@ -24,6 +31,13 @@ export const PROFILE_LIMITS = {
   fullName: { min: 1, max: 120 },
   preferredName: { min: 1, max: 60 },
   emergencyContactName: { min: 1, max: 120 },
+  // The three optional identity fields (#257). Each is capped to
+  // what the profile header can render on one phone line before it
+  // wraps into the next element — these are one-liners by design,
+  // and the bio is where anything longer belongs.
+  trailName: { min: 0, max: 40 },
+  pronouns: { min: 0, max: 30 },
+  statusLine: { min: 0, max: 120 },
 } as const;
 
 export const BIO_LIMITS = { maxWords: 150 } as const;
@@ -90,6 +104,29 @@ export const profileInputSchema = z.object({
     .refine((v) => countWords(v) <= BIO_LIMITS.maxWords, {
       message: `At most ${BIO_LIMITS.maxWords} words`,
     }),
+  // All three optional: an empty string is valid and is stored as
+  // NULL, so the header omits the line rather than rendering a gap.
+  trailName: z
+    .string()
+    .trim()
+    .max(
+      PROFILE_LIMITS.trailName.max,
+      `At most ${PROFILE_LIMITS.trailName.max} characters`,
+    ),
+  pronouns: z
+    .string()
+    .trim()
+    .max(
+      PROFILE_LIMITS.pronouns.max,
+      `At most ${PROFILE_LIMITS.pronouns.max} characters`,
+    ),
+  statusLine: z
+    .string()
+    .trim()
+    .max(
+      PROFILE_LIMITS.statusLine.max,
+      `At most ${PROFILE_LIMITS.statusLine.max} characters`,
+    ),
   // Carried on the shape so non-registration forms (Profile, Details,
   // admin sheet) match the same validator. Accepts any boolean here;
   // the registration submit overrides this to literal-true via
@@ -125,6 +162,9 @@ export const publicProfileInputSchema = profileInputSchema.pick({
   preferredName: true,
   ucAffiliation: true,
   bio: true,
+  trailName: true,
+  pronouns: true,
+  statusLine: true,
 });
 
 export type PublicProfileInput = z.infer<typeof publicProfileInputSchema>;
@@ -136,3 +176,96 @@ export const detailsInputSchema = profileInputSchema.pick({
 });
 
 export type DetailsInput = z.infer<typeof detailsInputSchema>;
+
+// ── Profile facets: prompt answers and self-rated disciplines ────────
+//
+// Deliberately NOT part of `profileInputSchema`. Those fields are all
+// columns on `profiles` and one UPDATE writes them; these are rows in
+// two other tables, written by their own action with its own Save.
+// Folding them into the shared shape would also mean registration and
+// the admin sheet carrying arrays they never touch — and `withForm`'s
+// invariant generics make every such addition ripple through every
+// profile form in the app.
+
+export const profilePromptAnswerSchema = z.object({
+  key: z.enum(PROFILE_PROMPT_KEYS),
+  answer: z
+    .string()
+    .trim()
+    .min(1, "Write an answer or remove the prompt")
+    .max(
+      PROMPT_ANSWER_MAX_LENGTH,
+      `At most ${PROMPT_ANSWER_MAX_LENGTH} characters`,
+    ),
+});
+
+export const profileDisciplineRatingSchema = z.object({
+  discipline: z.enum(DISCIPLINE_KEYS),
+  level: z.enum(DISCIPLINE_LEVEL_KEYS),
+});
+
+export const profileFacetsInputSchema = z.object({
+  prompts: z
+    .array(profilePromptAnswerSchema)
+    .max(MAX_ANSWERED_PROMPTS, `Pick at most ${MAX_ANSWERED_PROMPTS} prompts`)
+    // The primary key is (user_id, prompt_key), so a duplicate would
+    // fail at the database with a constraint error the member cannot
+    // act on. Caught here, it names the actual problem.
+    .refine(
+      (rows) => new Set(rows.map((r) => r.key)).size === rows.length,
+      "Each prompt can only be answered once",
+    ),
+  disciplines: z
+    .array(profileDisciplineRatingSchema)
+    .refine(
+      (rows) => new Set(rows.map((r) => r.discipline)).size === rows.length,
+      "Each discipline can only be rated once",
+    ),
+});
+
+export type ProfileFacetsInput = z.infer<typeof profileFacetsInputSchema>;
+
+/**
+ * `""` → `null` for the optional profile text columns.
+ *
+ * Every one of `bio`, `trail_name`, `pronouns` and `status_line` is
+ * nullable, and the schema's stated invariant is that **NULL means
+ * "not set" and `""` never occurs** — readers omit the line entirely
+ * for null, where an empty string is truthy enough to render an
+ * element with its own spacing.
+ *
+ * The zod schemas keep these as plain strings so the forms can bind
+ * them, so the conversion has to happen at the write. It lives here,
+ * once, because there are **three** writers — registration, the
+ * member's own Profile tab, and the admin sheet — and the first
+ * version of this normalised in only one of them, leaving every new
+ * registrant with three empty strings on disk.
+ */
+export function optionalProfileText<
+  T extends {
+    bio?: string;
+    trailName?: string;
+    pronouns?: string;
+    statusLine?: string;
+  },
+>(
+  data: T,
+): {
+  bio?: string | null;
+  trailName?: string | null;
+  pronouns?: string | null;
+  statusLine?: string | null;
+} {
+  const orNull = (value: string | undefined) =>
+    value === undefined ? undefined : value.length > 0 ? value : null;
+  return {
+    ...(data.bio === undefined ? {} : { bio: orNull(data.bio) }),
+    ...(data.trailName === undefined
+      ? {}
+      : { trailName: orNull(data.trailName) }),
+    ...(data.pronouns === undefined ? {} : { pronouns: orNull(data.pronouns) }),
+    ...(data.statusLine === undefined
+      ? {}
+      : { statusLine: orNull(data.statusLine) }),
+  };
+}

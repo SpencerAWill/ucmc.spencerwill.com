@@ -6,11 +6,15 @@ import { PROFILE_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useSubmitPublicProfile } from "#/features/auth/api/use-submit-public-profile";
 import { AvatarEditor } from "#/features/auth/components/avatar-editor";
+import { ProfileFacetsEditor } from "#/features/auth/components/profile-facets-editor";
 import { PasskeyNudge } from "#/features/auth/components/passkey-nudge";
 import { BioFields } from "#/components/profile/bio-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
-import { PublicProfileFields } from "#/components/profile/public-profile-fields";
+import {
+  ProfileIdentityFields,
+  PublicProfileFields,
+} from "#/components/profile/public-profile-fields";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 import { useAppForm } from "#/lib/form/form";
@@ -85,6 +89,9 @@ function AccountProfilePage() {
                   phone: data.profile.phone,
                   ucAffiliation: data.profile.ucAffiliation,
                   bio: data.profile.bio ?? "",
+                  trailName: data.profile.trailName ?? "",
+                  pronouns: data.profile.pronouns ?? "",
+                  statusLine: data.profile.statusLine ?? "",
                   emergencyContacts: data.emergencyContacts.map((c) => ({
                     name: c.name,
                     phone: c.phone,
@@ -93,6 +100,19 @@ function AccountProfilePage() {
                 }
               : EMPTY_PROFILE_FORM_VALUES
           }
+        />
+      )}
+      {isLoading || !data?.profile ? null : (
+        <ProfileFacetsEditor
+          // Deliberately NOT keyed on `profile.updatedAt`. This
+          // editor has its own Save and writes different tables, so
+          // remounting it when the form above saves would discard
+          // whatever the member had typed here but not yet
+          // submitted. (It also collided with that form's key —
+          // identical keys on sibling elements, which React warns
+          // about.)
+          prompts={data.facets.prompts}
+          disciplines={data.facets.disciplines}
         />
       )}
       <p className="text-xs text-muted-foreground">
@@ -133,6 +153,9 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
           preferredName: value.preferredName,
           ucAffiliation: value.ucAffiliation,
           bio: value.bio,
+          trailName: value.trailName,
+          pronouns: value.pronouns,
+          statusLine: value.statusLine,
         } as PublicProfileInput,
         {
           onSuccess: () => {
@@ -165,6 +188,7 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
         {(isSubmitting) => (
           <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
             <PublicProfileFields form={form} />
+            <ProfileIdentityFields form={form} />
             <BioFields form={form} />
             <form.AppForm>
               <form.SubscribeButton label="Save changes" />

@@ -226,6 +226,9 @@ const validProfile = {
   ],
   ucAffiliation: "student" as const,
   bio: "",
+  trailName: "",
+  pronouns: "",
+  statusLine: "",
   policiesAck: true as const,
 };
 

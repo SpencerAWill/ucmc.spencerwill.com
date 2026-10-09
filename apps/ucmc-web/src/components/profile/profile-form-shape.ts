@@ -20,6 +20,9 @@ export interface ProfileFormShape {
   emergencyContacts: EmergencyContactInput[];
   ucAffiliation: "" | "student" | "faculty" | "staff" | "alum" | "community";
   bio: string;
+  trailName: string;
+  pronouns: string;
+  statusLine: string;
   // Registration-only checkbox. Subset forms (Profile, Details, admin
   // sheet) keep the field on the shape so `PublicProfileFields` /
   // `PrivateDetailFields` (declared via `withForm` with the full
@@ -36,5 +39,8 @@ export const EMPTY_PROFILE_FORM_VALUES: ProfileFormShape = {
   emergencyContacts: [],
   ucAffiliation: "",
   bio: "",
+  trailName: "",
+  pronouns: "",
+  statusLine: "",
   policiesAck: false,
 };

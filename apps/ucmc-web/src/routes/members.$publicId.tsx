@@ -2,15 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowLeft,
   LogOut,
   Pencil,
+  RefreshCw,
   Shield,
   Undo2,
   UserMinus,
   UserPlus,
 } from "lucide-react";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 
 import { PageContainer } from "#/components/layouts/page-container";
 import { memberDetailQueryOptions } from "#/features/members/api/queries";
@@ -21,7 +23,23 @@ import { useUnrejectMembers } from "#/features/members/api/use-unreject-members"
 import { AdminProfileSheet } from "#/features/members/components/admin-profile-sheet";
 import type { AdminProfileDefaults } from "#/features/members/components/admin-profile-sheet";
 import { RoleAssignmentSheet } from "#/features/members/components/role-assignment-sheet";
-import { StatusBadge } from "#/features/members/components/status-badge";
+import {
+  ProfileDisciplines,
+  ProfilePrompts,
+} from "#/features/members/components/profile/profile-about";
+import {
+  BadgeCatalog,
+  BadgeShowcase,
+} from "#/features/members/components/profile/profile-badges";
+import { ProfileHeader } from "#/features/members/components/profile/profile-header";
+import { TopoBanner } from "#/features/members/components/profile/topo-banner";
+import {
+  FieldEmergencyCard,
+  TripReadiness,
+} from "#/features/members/components/profile/profile-officer-panel";
+import type { ReadinessItem } from "#/features/members/components/profile/profile-officer-panel";
+import { ProfileStats } from "#/features/members/components/profile/profile-stats";
+import type { ProfileStat } from "#/features/members/components/profile/profile-stats";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,13 +50,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
-import { UserAvatar } from "#/components/user-avatar";
+import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent } from "#/components/ui/card";
-import { Separator } from "#/components/ui/separator";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "#/components/ui/empty";
+import { Skeleton } from "#/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { RouteErrorFallback } from "#/components/error-page";
-import { PhoneLink } from "#/components/phone-link";
 import { formatDate } from "#/lib/date-format";
 import {
   requireApproved,
@@ -57,13 +81,19 @@ export const Route = createFileRoute("/members/$publicId")({
   errorComponent: RouteErrorFallback,
 });
 
+type ProfileTab = "overview" | "badges" | "officer";
+
 function MemberDetailPage() {
   const { publicId } = Route.useParams();
   const { hasPermission, hasAnyPermission, principal } = useAuth();
+  const [tab, setTab] = useState<ProfileTab>("overview");
 
-  const { data: member, isLoading } = useQuery(
-    memberDetailQueryOptions(publicId),
-  );
+  const {
+    data: member,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery(memberDetailQueryOptions(publicId));
 
   const canManage = hasPermission("members:manage");
   const canViewPrivate = hasPermission("members:view_private");
@@ -80,210 +110,294 @@ function MemberDetailPage() {
   const canViewWaivers = hasAnyPermission(WAIVER_VIEW_PERMISSIONS);
   const isSelf = principal?.userId === member?.userId;
 
+  // Everything an officer sees lives behind one tab. Taking the
+  // waiver, contacts and admin cards out of the main column is what
+  // stops the page reading as a personnel record.
+  const hasOfficerTab =
+    !isSelf &&
+    (canViewPrivate ||
+      canViewWaivers ||
+      canManage ||
+      canRevokeSessions ||
+      canAssignRoles);
+
   if (isLoading) {
     return (
-      <div className="py-12 text-center text-sm text-muted-foreground">
-        Loading...
-      </div>
+      <PageContainer width="app" className="space-y-4">
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+      </PageContainer>
+    );
+  }
+
+  // A failed read and a member who does not exist are different
+  // answers and must not share a screen: "not found" sends a reader
+  // looking for a deleted account when the query merely threw, and
+  // an error screen offers a Retry that can never succeed for a
+  // member who was never there. `getMemberDetailAction` answers
+  // `null` for the second case and throws only for the first, which
+  // is what makes the two distinguishable here.
+  if (error) {
+    return (
+      <PageContainer width="app">
+        <Alert variant="destructive">
+          <AlertTriangle />
+          <AlertTitle>Couldn&rsquo;t load this member.</AlertTitle>
+          <AlertDescription className="gap-3">
+            {/* Deliberately not `error.message`. A server-fn error
+                serializes its message to the client, so a D1 failure
+                would print internal query text to any approved
+                member. The retry is the useful half. */}
+            <p>Something went wrong fetching this profile.</p>
+            <Button size="sm" variant="outline" onClick={() => void refetch()}>
+              <RefreshCw className="size-3.5" />
+              Try again
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </PageContainer>
     );
   }
 
   if (!member) {
     return (
-      <div className="py-12 text-center text-sm text-muted-foreground">
-        Member not found.
-      </div>
+      <PageContainer width="app">
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Member not found</EmptyTitle>
+            <EmptyDescription>
+              This profile may have been removed, or the link may be wrong.
+            </EmptyDescription>
+          </EmptyHeader>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/members">Back to directory</Link>
+          </Button>
+        </Empty>
+      </PageContainer>
     );
   }
 
+  // `tab` is component state and `hasOfficerTab` follows live
+  // permissions, so switching role emulation while sitting on the
+  // Officer tab unmounts both its trigger and its panel and leaves
+  // the controlled `Tabs` on a value nothing matches — a blank
+  // content area. Clamping at render keeps the two in step without
+  // an effect.
+  const activeTab: ProfileTab =
+    tab === "officer" && !hasOfficerTab ? "overview" : tab;
+
   const name = member.preferredName ?? member.fullName;
+  const { stats } = member;
+
+  // Only tiles with something behind them. A strip padded out with
+  // zeros reads as a member who has done nothing, when the truth is
+  // usually that the club has not recorded it yet.
+  // A null tally means the viewer may not see it, which is not the
+  // same as zero — both are dropped from the strip, but only one of
+  // them would have been a claim.
+  const tiles: ProfileStat[] = [
+    { label: "Seasons", value: stats.completedSeasons },
+    { label: "Badges", value: stats.badges.length },
+    { label: "Gear loans", value: stats.gearLoans },
+    { label: "Sweeps", value: stats.sweepsParticipated },
+  ].flatMap((tile) =>
+    tile.value !== null && tile.value > 0
+      ? [{ label: tile.label, value: tile.value }]
+      : [],
+  );
+
+  const readiness: ReadinessItem[] = [];
+  if (canViewWaivers && member.waiverStatus) {
+    readiness.push({
+      state: member.waiverStatus.attested ? "ok" : "blocked",
+      label: member.waiverStatus.attested
+        ? `Waiver attested, cycle ${member.waiverStatus.cycle}`
+        : `No current waiver for ${member.waiverStatus.cycle}`,
+      detail: member.waiverStatus.attestedAt
+        ? // Null when the attesting officer has since deleted their
+          // account (the FK is SET NULL).
+          `${formatDate(member.waiverStatus.attestedAt)} · ${member.waiverStatus.attestedByName ?? "(deleted user)"}`
+        : null,
+    });
+  }
+  if (canViewPrivate) {
+    readiness.push({
+      state: member.emergencyContacts.length > 0 ? "ok" : "warn",
+      label:
+        member.emergencyContacts.length > 0
+          ? `${member.emergencyContacts.length} emergency contact${member.emergencyContacts.length > 1 ? "s" : ""} on file`
+          : "No emergency contact on file",
+    });
+  }
+  // Only for a viewer who may see the tallies at all; the Officer
+  // tab is already permission-gated, but the payload is the gate
+  // that matters.
+  if (stats.openLoans !== null) {
+    readiness.push({
+      state: stats.openLoans > 0 ? "warn" : "ok",
+      label:
+        stats.openLoans > 0
+          ? `Holding ${stats.openLoans} item${stats.openLoans > 1 ? "s" : ""} from the gear cave`
+          : "Nothing out from the gear cave",
+    });
+  }
 
   return (
-    <PageContainer width="prose" className="space-y-6">
-      <Link
-        to="/members"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        Back to directory
-      </Link>
-
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        <UserAvatar
-          avatarKey={member.avatarKey}
-          name={name}
-          className="size-16"
-          fallbackClassName="text-lg"
-        />
-        <div className="min-w-0 flex-1 space-y-1">
-          {name ? (
-            <h1 className="truncate text-xl font-semibold">{name}</h1>
-          ) : null}
-          {member.fullName && member.preferredName ? (
-            <p className="truncate text-sm text-muted-foreground">
-              {member.fullName}
-            </p>
-          ) : null}
-          <p className="truncate text-sm text-muted-foreground">
-            {member.email}
-          </p>
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <StatusBadge status={member.status} />
-            {member.ucAffiliation ? (
-              <span className="rounded bg-muted px-1.5 py-0.5 text-xs capitalize">
-                {member.ucAffiliation}
-              </span>
-            ) : null}
-            {/* `displayName`, not the slug — and no `capitalize`, which
-                would mangle a label like "VP of Trips". */}
-            {member.roles
-              .filter((r) => r.name !== "member")
-              .map((role) => (
-                <span
-                  key={role.name}
-                  className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
-                >
-                  {role.displayName}
-                </span>
-              ))}
-          </div>
+    // Not wrapped in one `PageContainer`: the banner runs the full
+    // width of the viewport, so it sits outside the container and
+    // everything else sits inside one. A negative margin would have
+    // to track the container's gutter at every breakpoint instead,
+    // which is the overflow bug `mobile-overflow.spec.ts` guards.
+    <div className="pb-8">
+      {/* The back link rides on the banner rather than on a strip
+          above it: a band of page background over a full-bleed image
+          reads as a letterboxing bug, and the contour green gives
+          the link plenty of contrast to sit on. */}
+      <div className="relative">
+        <TopoBanner seed={member.publicId} />
+        <div className="absolute inset-x-0 top-0">
+          <PageContainer width="app" className="py-2 sm:py-3">
+            <Link
+              to="/members"
+              className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-[var(--header-foreground)]/85 transition-colors hover:text-[var(--header-foreground)] focus-visible:ring-2 focus-visible:ring-[var(--header-foreground)] focus-visible:outline-none"
+            >
+              <ArrowLeft className="size-4" />
+              Back to directory
+            </Link>
+          </PageContainer>
         </div>
       </div>
 
-      <Separator />
+      <PageContainer width="app" className="space-y-4 py-0">
+        <ProfileHeader
+          name={name}
+          fullName={member.fullName}
+          preferredName={member.preferredName}
+          trailName={member.trailName}
+          pronouns={member.pronouns}
+          statusLine={member.statusLine}
+          email={member.email}
+          avatarKey={member.avatarKey}
+          status={member.status}
+          ucAffiliation={member.ucAffiliation}
+          roles={member.roles}
+          completedSeasons={stats.completedSeasons}
+          seasonProgress={stats.seasonProgress}
+          actions={
+            isSelf ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/my/profile">
+                  <Pencil className="mr-1 size-3.5" />
+                  Edit profile
+                </Link>
+              </Button>
+            ) : null
+          }
+        />
 
-      {/* Public profile */}
-      <Card>
-        <CardContent className="space-y-3">
-          <h2 className="text-sm font-semibold">Public profile</h2>
-          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-            {member.preferredName ? (
-              <>
-                <dt className="text-muted-foreground">Preferred name</dt>
-                <dd>{member.preferredName}</dd>
-              </>
-            ) : null}
-            {member.ucAffiliation ? (
-              <>
-                <dt className="text-muted-foreground">UC affiliation</dt>
-                <dd className="capitalize">{member.ucAffiliation}</dd>
-              </>
-            ) : null}
-          </dl>
-          {member.bio ? (
-            <p className="whitespace-pre-line pt-2 text-sm">{member.bio}</p>
-          ) : (
-            <p className="pt-2 text-sm italic text-muted-foreground">
-              No bio yet.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+        <ProfileStats stats={tiles} />
 
-      {/* Private information */}
-      {canViewPrivate ? (
-        <Card>
-          <CardContent className="space-y-3">
-            <h2 className="text-sm font-semibold">Private information</h2>
-            {member.phone || member.emergencyContacts.length > 0 ? (
-              <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                {member.phone ? (
-                  <>
-                    <dt className="text-muted-foreground">Phone</dt>
-                    <dd>
-                      <PhoneLink phone={member.phone} />
-                    </dd>
-                  </>
-                ) : null}
-                {member.emergencyContacts.map((ec, i) => (
-                  <Fragment key={i}>
-                    <dt className="text-muted-foreground">
-                      Emergency contact
-                      {member.emergencyContacts.length > 1 ? ` ${i + 1}` : ""}
-                    </dt>
-                    <dd>
-                      {ec.name} (<PhoneLink phone={ec.phone} />)
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        — {ec.relationship.replace(/_/g, " ")}
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setTab(value as ProfileTab)}
+        >
+          {/* Scrolls rather than wraps at phone width: a wrapped tab
+            list changes height between tabs and shifts the content
+            under the reader's thumb. */}
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="badges">Badges</TabsTrigger>
+            {hasOfficerTab ? (
+              <TabsTrigger value="officer">Officer</TabsTrigger>
+            ) : null}
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-4">
+            <ProfilePrompts
+              prompts={member.prompts}
+              bio={member.bio}
+              isSelf={isSelf}
+            />
+            <ProfileDisciplines
+              disciplines={member.disciplines}
+              isSelf={isSelf}
+            />
+            <BadgeShowcase
+              badges={stats.badges}
+              onSeeAll={() => setTab("badges")}
+            />
+          </TabsContent>
+
+          <TabsContent value="badges" className="space-y-4">
+            <BadgeCatalog badges={stats.badges} />
+          </TabsContent>
+
+          {hasOfficerTab ? (
+            <TabsContent value="officer" className="space-y-4">
+              <TripReadiness items={readiness} />
+
+              {canViewPrivate ? (
+                <FieldEmergencyCard
+                  phone={member.phone}
+                  contacts={member.emergencyContacts}
+                />
+              ) : null}
+
+              {canViewWaivers && member.waiverStatus ? (
+                <Card>
+                  <CardContent className="space-y-2">
+                    <h2 className="text-sm font-semibold">Waiver</h2>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      {member.waiverStatus.attested ? (
+                        <Badge variant="success">Attested</Badge>
+                      ) : (
+                        <Badge variant="destructive">
+                          No current attestation
+                        </Badge>
+                      )}
+                      <span className="text-muted-foreground">
+                        cycle {member.waiverStatus.cycle}
                       </span>
-                    </dd>
-                  </Fragment>
-                ))}
-              </dl>
-            ) : (
-              <p className="text-sm italic text-muted-foreground">
-                No private information on file.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
+                      <code className="text-xs text-muted-foreground">
+                        {member.waiverStatus.version}
+                      </code>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
 
-      {/* Waiver standing. Shown only when the viewer holds one of
-          `WAIVER_VIEW_PERMISSIONS` and the member could have an
-          attestation at all — the server omits the field for pending and
-          rejected members, so they aren't flagged for one they were
-          never able to give. Read-only here: attesting lives on
-          /members/waivers behind `waivers:verify`. */}
-      {canViewWaivers && member.waiverStatus ? (
-        <Card>
-          <CardContent className="space-y-3">
-            <h2 className="text-sm font-semibold">Waiver</h2>
-            <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-              <dt className="text-muted-foreground">
-                Cycle {member.waiverStatus.cycle}
-              </dt>
-              <dd>
-                {member.waiverStatus.attested ? (
-                  <Badge variant="outline">Attested</Badge>
-                ) : (
-                  <Badge variant="destructive">No current attestation</Badge>
-                )}
-              </dd>
-              {member.waiverStatus.attestedAt ? (
-                <>
-                  <dt className="text-muted-foreground">Attested</dt>
-                  <dd>
-                    {formatDate(member.waiverStatus.attestedAt)}
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      {/* Null when the attesting officer has since
-                          deleted their account (FK is SET NULL). */}
-                      — by{" "}
-                      {member.waiverStatus.attestedByName ?? "(deleted user)"}
-                    </span>
-                  </dd>
-                </>
+              {canManage || canRevokeSessions || canAssignRoles ? (
+                <Card>
+                  <CardContent className="space-y-3">
+                    <h2 className="text-sm font-semibold">Actions</h2>
+                    <div className="flex flex-wrap gap-2">
+                      {canManage ? (
+                        <MemberManageActions
+                          member={member}
+                          publicId={publicId}
+                        />
+                      ) : null}
+                      {canRevokeSessions &&
+                      member.activeSessions !== null &&
+                      member.activeSessions > 0 ? (
+                        <RevokeSessionsButton
+                          member={member}
+                          publicId={publicId}
+                        />
+                      ) : null}
+                      {canAssignRoles ? (
+                        <RoleAssignButton member={member} />
+                      ) : null}
+                    </div>
+                  </CardContent>
+                </Card>
               ) : null}
-              <dt className="text-muted-foreground">Waiver version</dt>
-              <dd>
-                <code className="text-xs">{member.waiverStatus.version}</code>
-              </dd>
-            </dl>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* Admin actions */}
-      {!isSelf && (canManage || canRevokeSessions || canAssignRoles) ? (
-        <Card>
-          <CardContent className="space-y-4">
-            <h2 className="text-sm font-semibold">Actions</h2>
-            <div className="flex flex-wrap gap-2">
-              {canManage ? (
-                <MemberManageActions member={member} publicId={publicId} />
-              ) : null}
-              {canRevokeSessions &&
-              member.activeSessions !== null &&
-              member.activeSessions > 0 ? (
-                <RevokeSessionsButton member={member} publicId={publicId} />
-              ) : null}
-              {canAssignRoles ? <RoleAssignButton member={member} /> : null}
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-    </PageContainer>
+            </TabsContent>
+          ) : null}
+        </Tabs>
+      </PageContainer>
+    </div>
   );
 }
 
@@ -310,6 +424,9 @@ function MemberManageActions({
           fullName: member.fullName,
           preferredName: member.preferredName,
           phone: member.phone,
+          trailName: member.trailName,
+          pronouns: member.pronouns,
+          statusLine: member.statusLine,
           emergencyContacts: member.emergencyContacts,
           ucAffiliation:
             member.ucAffiliation as AdminProfileDefaults["ucAffiliation"],

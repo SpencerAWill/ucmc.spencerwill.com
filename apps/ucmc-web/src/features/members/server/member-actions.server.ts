@@ -28,8 +28,19 @@ import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, likeContains, schema } from "#/server/db";
 import { loadMemberWaiverStatus } from "#/server/waivers/current-attestation.server";
+import type { MemberStats } from "#/server/member-profile/member-stats.server";
+import {
+  loadMemberCounters,
+  scoreMemberStats,
+} from "#/server/member-profile/member-stats.server";
+import type {
+  ProfileDisciplineRating,
+  ProfilePromptAnswer,
+} from "#/server/member-profile/profile-facets.server";
+import { loadProfileFacets } from "#/server/member-profile/profile-facets.server";
 import type { MemberWaiverStatus } from "#/server/waivers/current-attestation.server";
 import { requireMembersManager } from "#/features/members/server/permissions.server";
+import { optionalProfileText } from "#/server/profile/profile-schemas";
 
 // ── auth helpers ────────────────────────────────────────────────────────
 
@@ -434,7 +445,20 @@ export interface MemberDetail {
   ucAffiliation: string | null;
   avatarKey: string | null;
   bio: string | null;
+  // Profile identity (0077). Public to any approved member, like
+  // `bio` — `members:view_private` draws the line below these.
+  trailName: string | null;
+  pronouns: string | null;
+  statusLine: string | null;
+  prompts: ProfilePromptAnswer[];
+  disciplines: ProfileDisciplineRating[];
   roles: MemberRoleBadge[];
+  /**
+   * Seasons, gear tallies and the badges they earn. Derived on every
+   * read from waiver, loan and sweep rows — never stored, so a
+   * revoked attestation takes its badge with it.
+   */
+  stats: MemberStats;
   // Private fields — null/empty when caller lacks members:view_private.
   phone: string | null;
   emergencyContacts: EmergencyContactSummary[];
@@ -447,9 +471,19 @@ export interface MemberDetail {
   waiverStatus: MemberWaiverStatus | null;
 }
 
+/**
+ * Returns `null` — rather than throwing — when there is no such
+ * member, so the caller can tell "this profile does not exist" from
+ * "the read failed". Those are different answers and must not share
+ * a screen: reporting a failed query as "member not found" sends a
+ * reader looking for a deleted account, and reporting a missing
+ * member as an error offers them a Retry that can never succeed.
+ *
+ * Anything else still throws.
+ */
 export async function getMemberDetailAction(
   publicId: string,
-): Promise<MemberDetail> {
+): Promise<MemberDetail | null> {
   const principal = await requireApprovedPrincipal();
   const db = getDb();
   const canViewPrivate = principal.permissions.includes("members:view_private");
@@ -476,6 +510,9 @@ export async function getMemberDetailAction(
       ucAffiliation: schema.profiles.ucAffiliation,
       avatarKey: schema.profiles.avatarKey,
       bio: schema.profiles.bio,
+      trailName: schema.profiles.trailName,
+      pronouns: schema.profiles.pronouns,
+      statusLine: schema.profiles.statusLine,
       phone: schema.profiles.phone,
     })
     .from(schema.users)
@@ -491,16 +528,15 @@ export async function getMemberDetailAction(
     .get();
 
   if (!row) {
-    throw new Error("User not found");
+    return null;
   }
   // Unclaimed (officer-pre-added) stubs aren't directory members — they
   // have no profile, no verified email, and no avatar. The list query
   // already excludes them; mirror that here so a manually-typed
   // /members/<publicId> URL can't surface a stub on the detail page.
-  // Treat as 404 so the route renders the same not-found state any
-  // unknown publicId would.
+  // Indistinguishable from an unknown publicId by design.
   if (row.status === "unclaimed") {
-    throw new Error("User not found");
+    return null;
   }
 
   const userId = row.userId;
@@ -513,7 +549,7 @@ export async function getMemberDetailAction(
   // queries unconditionally, which is wasted work for the common
   // regular-member caller). Permission gates above decide whether to
   // fetch private contacts and the session count.
-  const [roleRows, contacts, sessionCountRows, waiverStatus] =
+  const [roleRows, contacts, sessionCountRows, waiverStatus, counters, facets] =
     await Promise.all([
       db
         .select({
@@ -553,11 +589,30 @@ export async function getMemberDetailAction(
       canViewWaivers && row.status !== "pending" && row.status !== "rejected"
         ? loadMemberWaiverStatus(userId)
         : Promise.resolve<MemberWaiverStatus | null>(null),
+      // Unconditional, unlike the two above: seasons, badges and the
+      // member's own prompts are public to any approved viewer, so
+      // there is no permission to branch on and nothing saved by
+      // skipping them.
+      loadMemberCounters(userId),
+      loadProfileFacets(userId),
     ]);
 
   const activeSessions = canRevokeSessions
     ? (sessionCountRows[0]?.value ?? 0)
     : null;
+
+  const roles = roleRows.map((r) => ({
+    name: r.roleName,
+    displayName: r.roleDisplayName,
+  }));
+  // `member` is the role every approved account holds, so it says
+  // nothing about service. Matches the header's role-chip filter.
+  const stats = scoreMemberStats(
+    counters,
+    roles.some((r) => r.name !== "member"),
+    canViewPrivate,
+  );
+  const { prompts, disciplines } = facets;
 
   return {
     userId: row.userId,
@@ -572,10 +627,13 @@ export async function getMemberDetailAction(
     ucAffiliation: row.ucAffiliation,
     avatarKey: row.avatarKey,
     bio: row.bio,
-    roles: roleRows.map((r) => ({
-      name: r.roleName,
-      displayName: r.roleDisplayName,
-    })),
+    trailName: row.trailName,
+    pronouns: row.pronouns,
+    statusLine: row.statusLine,
+    prompts,
+    disciplines,
+    roles,
+    stats,
     phone: canViewPrivate ? row.phone : null,
     emergencyContacts: contacts,
     activeSessions,
@@ -877,6 +935,14 @@ export async function adminUpdateProfileAction(input: {
     relationship: schema.ContactRelationship;
   }>;
   ucAffiliation: schema.UcAffiliation;
+  // The fn's validator is `profileInputSchema`, so these arrive
+  // whether or not the sheet renders them. Declared here rather than
+  // left to the spread: an undeclared field still reaches the DB and
+  // still gets written, it just does so invisibly.
+  bio?: string;
+  trailName?: string;
+  pronouns?: string;
+  statusLine?: string;
 }): Promise<{ ok: true }> {
   const principal = await requireMembersManager();
 
@@ -889,7 +955,12 @@ export async function adminUpdateProfileAction(input: {
     throw new Error("User not found");
   }
 
-  const { userId, emergencyContacts, ...profileData } = input;
+  const { userId, emergencyContacts, ...rest } = input;
+  // Same NULL normalisation as the member's own save. Without it an
+  // officer opening and saving the sheet writes `""` over a cleared
+  // trail name, so the two writers disagree about what "not set"
+  // looks like on disk.
+  const profileData = { ...rest, ...optionalProfileText(rest) };
   // Profile upsert + emergency-contact replace + audit row, all
   // committed as one D1 batch. Field names only in audit metadata —
   // the values themselves would be PII by definition since this

@@ -18,6 +18,9 @@ import {
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
 import { UnauthorizedError } from "#/server/auth/errors.server";
+import { optionalProfileText } from "#/server/profile/profile-schemas";
+import type { ProfileFacets } from "#/server/member-profile/profile-facets.server";
+import { loadProfileFacets } from "#/server/member-profile/profile-facets.server";
 import { resolveEmulatedRole } from "#/server/auth/emulation";
 import type { Principal } from "#/server/auth/principal.server";
 import {
@@ -280,10 +283,15 @@ export async function getProfileAction(): Promise<{
     phone: string;
     relationship: schema.ContactRelationship;
   }>;
+  facets: ProfileFacets;
 }> {
   const principal = await loadCurrentPrincipal();
   if (!principal) {
-    return { profile: null, emergencyContacts: [] };
+    return {
+      profile: null,
+      emergencyContacts: [],
+      facets: { prompts: [], disciplines: [] },
+    };
   }
   const db = getDb();
   const profile = await db.query.profiles.findFirst({
@@ -299,7 +307,14 @@ export async function getProfileAction(): Promise<{
         .from(schema.emergencyContacts)
         .where(eq(schema.emergencyContacts.userId, principal.userId))
     : [];
-  return { profile: profile ?? null, emergencyContacts: contacts };
+  // Reuses the same loader the member-profile page reads through, so
+  // the edit form can never show a different set from the profile it
+  // is editing — including the drop of keys no longer in the
+  // registry, which only one of the two implementing it would hide.
+  const facets = profile
+    ? await loadProfileFacets(principal.userId)
+    : { prompts: [], disciplines: [] };
+  return { profile: profile ?? null, emergencyContacts: contacts, facets };
 }
 
 export async function signOutAction(): Promise<{ ok: true }> {
@@ -556,15 +571,16 @@ export async function submitProfileAction(
 
   const email = normalizeEmail(principal?.primaryEmail ?? proof!.email);
 
-  const { emergencyContacts, bio, policiesAck: _ack, ...rest } = data;
-  // Empty/whitespace-only bio normalizes to NULL so the DB has a single
-  // representation of "no bio set". `policiesAck` is enforced by the
-  // zod schema; we don't store the boolean — we record the moment it
-  // was ticked plus the policy version so a future POLICIES_VERSION
-  // bump can require re-ack.
+  const { emergencyContacts, policiesAck: _ack, ...rest } = data;
+  // Every optional text column normalizes to NULL through one shared
+  // helper, so the DB has a single representation of "not set" no
+  // matter which of the three writers got there. `policiesAck` is
+  // enforced by the zod schema; we don't store the boolean — we
+  // record the moment it was ticked plus the policy version so a
+  // future POLICIES_VERSION bump can require re-ack.
   const profileData = {
     ...rest,
-    bio: bio.length > 0 ? bio : null,
+    ...optionalProfileText(rest),
     policiesAcknowledgedAt: Temporal.Now.instant(),
     policiesVersion: POLICIES_VERSION,
   };
@@ -763,12 +779,11 @@ export async function submitPublicProfileAction(
     throw new Error("Not authorized to submit a profile");
   }
 
-  const { bio, ...rest } = data;
   await getDb()
     .update(schema.profiles)
     .set({
-      ...rest,
-      bio: bio.length > 0 ? bio : null,
+      ...data,
+      ...optionalProfileText(data),
       updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.profiles.userId, principal.userId));

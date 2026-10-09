@@ -152,6 +152,21 @@ async function signInWithPermission(
   return userId;
 }
 
+/**
+ * `getMemberDetailAction` answers `null` for a member who does not
+ * exist. Every test below is about a member who does, so narrowing
+ * once here beats a non-null assertion at forty call sites — and a
+ * regression that starts returning null fails with a clear message
+ * rather than a `TypeError` deep in an assertion.
+ */
+async function detailOf(publicId: string) {
+  const detail = await getMemberDetailAction(publicId);
+  if (!detail) {
+    throw new Error(`expected a member detail for publicId ${publicId}`);
+  }
+  return detail;
+}
+
 // ── setup ──────────────────────────────────────────────────────────────
 
 beforeEach(async () => {
@@ -903,7 +918,7 @@ describe("getMemberDetailAction", () => {
     const targetId = await seedUser("target@example.com");
     await assignRole(targetId, "role_member");
 
-    const detail = await getMemberDetailAction(await publicIdOf(targetId));
+    const detail = await detailOf(await publicIdOf(targetId));
     expect(detail.userId).toBe(targetId);
     expect(detail.publicId).toMatch(/^[a-z0-9]+$/);
     expect(detail.email).toBe("target@example.com");
@@ -937,7 +952,7 @@ describe("getMemberDetailAction", () => {
     const targetId = await seedUser("cavekeeper@example.com");
     await assignRole(targetId, "role_gear_cave_manager");
 
-    const detail = await getMemberDetailAction(await publicIdOf(targetId));
+    const detail = await detailOf(await publicIdOf(targetId));
     expect(detail.roles).toEqual(
       expect.arrayContaining([
         { name: "gear_cave_manager", displayName: "Gear Cave Manager" },
@@ -959,7 +974,7 @@ describe("getMemberDetailAction", () => {
 
     const targetId = await seedUser("target@example.com");
 
-    const detail = await getMemberDetailAction(await publicIdOf(targetId));
+    const detail = await detailOf(await publicIdOf(targetId));
     expect(detail.phone).toBe("+15135551212");
     expect(detail.emergencyContacts).toEqual([
       {
@@ -986,15 +1001,29 @@ describe("getMemberDetailAction", () => {
         expiresAt: Temporal.Now.instant().add({ milliseconds: 86_400_000 }),
       });
 
-    const detail = await getMemberDetailAction(await publicIdOf(targetId));
+    const detail = await detailOf(await publicIdOf(targetId));
     expect(detail.activeSessions).toBe(1);
   });
 
-  it("throws for nonexistent user", async () => {
+  it("answers null for a nonexistent user rather than throwing", async () => {
+    // Null is "no such member"; a throw is "the read failed". The
+    // detail page renders a different screen for each — a not-found
+    // state with a way back, versus an error with a Retry — so the
+    // action has to keep the two apart.
     await signInAsMember();
-    await expect(getMemberDetailAction("nonexistent")).rejects.toThrow(
-      "User not found",
-    );
+    expect(await getMemberDetailAction("nonexistent")).toBeNull();
+  });
+
+  it("answers null for an unclaimed stub", async () => {
+    // Officer pre-adds are not directory members, and the answer is
+    // deliberately identical to an unknown id: a typed URL must not
+    // confirm that a given person has been pre-added.
+    await signInAsMember();
+    const stub = await seedUser("stub-detail@example.com", {
+      status: "unclaimed",
+      withProfile: false,
+    });
+    expect(await getMemberDetailAction(await publicIdOf(stub))).toBeNull();
   });
 });
 
@@ -1264,7 +1293,7 @@ describe("getMemberDetailAction waiver status", () => {
     const targetId = await seedUser("target@example.com");
     const publicId = await publicIdOf(targetId);
 
-    const detail = await getMemberDetailAction(publicId);
+    const detail = await detailOf(publicId);
 
     // No attestation row was seeded, so the read tier should still see
     // the card — reporting the gap is the whole point of the queue.
@@ -1282,7 +1311,7 @@ describe("getMemberDetailAction waiver status", () => {
     });
     const publicId = await publicIdOf(targetId);
 
-    const detail = await getMemberDetailAction(publicId);
+    const detail = await detailOf(publicId);
 
     expect(detail.waiverStatus).not.toBeNull();
   });
@@ -1297,7 +1326,7 @@ describe("getMemberDetailAction waiver status", () => {
     });
     const publicId = await publicIdOf(targetId);
 
-    const detail = await getMemberDetailAction(publicId);
+    const detail = await detailOf(publicId);
 
     expect(detail.waiverStatus).toBeNull();
   });

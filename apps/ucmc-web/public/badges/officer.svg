@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Officer">
+<rect width="96" height="96" fill="#1f4a3d"/>
+<circle cx="48" cy="44" r="26" fill="none" stroke="#d9b45a" stroke-width="3"/>
+<path d="M48 18l6 20 20 6-20 6-6 20-6-20-20-6 20-6z" fill="#d9b45a"/>
+<circle cx="48" cy="44" r="6" fill="#1f4a3d"/>
+<path d="M24 76c8 8 40 8 48 0" stroke="#d9b45a" stroke-width="3" fill="none" stroke-linecap="round"/>
+<g fill="#b8923f"><circle cx="30" cy="80" r="3"/><circle cx="48" cy="84" r="3"/><circle cx="66" cy="80" r="3"/></g>
+</svg>
