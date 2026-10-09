@@ -80,8 +80,7 @@ function MarkdownEditorFallback({ rows }: { rows: number }) {
 const ACQUISITION_KIND_NONE = "__none__";
 
 export type GearFormMode =
-  | { mode: "create" }
-  | { mode: "edit"; gear: GearSummary | GearDetail };
+  { mode: "create" } | { mode: "edit"; gear: GearSummary | GearDetail };
 
 export function GearFormSheet({
   open,

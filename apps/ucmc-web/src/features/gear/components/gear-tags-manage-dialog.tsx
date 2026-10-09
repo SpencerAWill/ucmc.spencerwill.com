@@ -46,9 +46,7 @@ import type { GearTagSummary } from "#/features/gear/server/gear-fns";
 import { GearTagChip } from "#/features/gear/components/gear-tag-chip";
 
 type Mode =
-  | { kind: "list" }
-  | { kind: "create" }
-  | { kind: "edit"; tag: GearTagSummary };
+  { kind: "list" } | { kind: "create" } | { kind: "edit"; tag: GearTagSummary };
 
 export function GearTagsManageDialog({
   open,

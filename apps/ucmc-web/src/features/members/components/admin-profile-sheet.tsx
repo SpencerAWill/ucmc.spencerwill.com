@@ -43,13 +43,7 @@ export interface AdminProfileDefaults {
   statusLine: string | null;
   emergencyContacts: EmergencyContactInput[];
   ucAffiliation:
-    | "student"
-    | "faculty"
-    | "staff"
-    | "alum"
-    | "community"
-    | ""
-    | null;
+    "student" | "faculty" | "staff" | "alum" | "community" | "" | null;
   bio: string | null;
 }
 

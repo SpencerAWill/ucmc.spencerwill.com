@@ -22,11 +22,7 @@ import { useAuth } from "#/features/auth/api/use-auth";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export type MembersTabId =
-  | "approved"
-  | "pending"
-  | "unclaimed"
-  | "rejected"
-  | "deactivated";
+  "approved" | "pending" | "unclaimed" | "rejected" | "deactivated";
 
 export function activeMembersTabFromPath(pathname: string): MembersTabId {
   if (pathname.startsWith("/members/pending")) return "pending";

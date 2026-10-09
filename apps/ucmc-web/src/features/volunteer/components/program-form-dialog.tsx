@@ -25,8 +25,7 @@ import { VOLUNTEER_LIMITS } from "#/features/volunteer/server/volunteer-schemas"
 import type { VolunteerOpportunityEntry } from "#/features/volunteer/server/volunteer-fns";
 
 export type ProgramFormSeed =
-  | { mode: "create" }
-  | { mode: "edit"; program: VolunteerOpportunityEntry };
+  { mode: "create" } | { mode: "edit"; program: VolunteerOpportunityEntry };
 
 interface FormState {
   icon: CuratedIconName;

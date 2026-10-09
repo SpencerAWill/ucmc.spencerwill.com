@@ -40,10 +40,7 @@ export type RegisterFinishResult =
   | {
       ok: false;
       reason:
-        | "unauthorized"
-        | "rate_limited"
-        | "no_ceremony"
-        | "verification_failed";
+        "unauthorized" | "rate_limited" | "no_ceremony" | "verification_failed";
     };
 
 export type AuthenticateBeginResult =
@@ -62,8 +59,7 @@ export type AuthenticateFinishResult =
     };
 
 export type RemovePasskeyResult =
-  | { ok: true }
-  | { ok: false; reason: "unauthorized" | "not_found" };
+  { ok: true } | { ok: false; reason: "unauthorized" | "not_found" };
 
 /** `nickname` echoes the stored value so the client can reconcile
  *  optimistic state with the server's trimming (and with an

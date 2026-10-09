@@ -371,8 +371,7 @@ export async function updateGearModelAction(
 }
 
 export type DeleteGearModelResult =
-  | { ok: true }
-  | { ok: false; reason: "not_found" | "has_items" };
+  { ok: true } | { ok: false; reason: "not_found" | "has_items" };
 
 export async function deleteGearModelAction(input: {
   publicId: string;

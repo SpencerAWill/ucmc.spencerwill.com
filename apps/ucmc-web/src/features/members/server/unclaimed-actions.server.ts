@@ -385,13 +385,10 @@ async function preAddPerRowFallback(
 // ── edit ────────────────────────────────────────────────────────────────
 
 export type EditUnclaimedError =
-  | { kind: "not_found" }
-  | { kind: "not_unclaimed" }
-  | { kind: "email_taken" };
+  { kind: "not_found" } | { kind: "not_unclaimed" } | { kind: "email_taken" };
 
 export type EditUnclaimedResult =
-  | { ok: true }
-  | { ok: false; error: EditUnclaimedError };
+  { ok: true } | { ok: false; error: EditUnclaimedError };
 
 export async function editUnclaimedMemberAction(args: {
   userId: string;

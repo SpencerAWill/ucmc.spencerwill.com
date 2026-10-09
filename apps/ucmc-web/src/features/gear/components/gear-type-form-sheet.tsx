@@ -18,8 +18,7 @@ import { useEditGearType } from "#/features/gear/api/use-edit-gear-type";
 import type { GearTypeSummary } from "#/features/gear/server/gear-fns";
 
 export type GearTypeFormMode =
-  | { mode: "create" }
-  | { mode: "edit"; type: GearTypeSummary };
+  { mode: "create" } | { mode: "edit"; type: GearTypeSummary };
 
 export function GearTypeFormSheet({
   open,

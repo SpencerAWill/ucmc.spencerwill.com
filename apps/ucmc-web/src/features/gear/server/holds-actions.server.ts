@@ -237,8 +237,7 @@ export async function placeGearHoldAction(
 }
 
 export type ReleaseGearHoldResult =
-  | { ok: true }
-  | { ok: false; reason: "not_found" | "already_released" };
+  { ok: true } | { ok: false; reason: "not_found" | "already_released" };
 
 export async function releaseGearHoldAction(input: {
   publicId: string;

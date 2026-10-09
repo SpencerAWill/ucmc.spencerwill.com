@@ -257,8 +257,7 @@ export async function requireViewPermission(
  * reads either cookie itself) stays the source of truth.
  */
 export type RegistrationContext =
-  | { source: "proof"; email: string }
-  | { source: "session"; email: string };
+  { source: "proof"; email: string } | { source: "session"; email: string };
 
 /**
  * Returns the caller's current-cycle waiver status (cached) without

@@ -33,8 +33,7 @@ import { toDateInputValue } from "#/lib/date-format";
  * optional (omit to keep the current image, attach to replace).
  */
 export type PhotoFormSeed =
-  | { mode: "create" }
-  | { mode: "edit"; photo: AlbumPhotoSummary };
+  { mode: "create" } | { mode: "edit"; photo: AlbumPhotoSummary };
 
 const ALBUM_OUTPUT_WIDTH = 1600;
 const ALBUM_OUTPUT_HEIGHT = 1200;

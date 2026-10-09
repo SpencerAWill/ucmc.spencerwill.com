@@ -80,6 +80,9 @@ allowBuilds:
 #               was the first release carrying that patch) + GHSA-pqg4-j6r4-53mv (quote() injection via a
 #               line terminator after a `{ comment }` token), which 1.9.0 does NOT cover — hence 1.11.0.
 #   - sigstore <4.1.1  GHSA-52v5-jr5w-gjxr (verification bypass; via Pulumi); capped <5.
+#   - source-map-js <1.2.2  GHSA-68fv-2mgg-jv7q (event-loop DoS via indexed source-map section
+#               offsets). Reached via @tailwindcss/node and css-tree. 1.2.2 cleared the quarantine
+#               window on 2026-10-07; capped <2.
 #   - smol-toml <1.9.0  GHSA-r4xh-jqrq-34v2 (quadratic parse() — parseKey rescans to end of document
 #               on each key line); via wrangler's config loader.
 #   - tar       <7.5.21  GHSA-r292-9mhp-454m (uncatchable stack-overflow DoS) + -23hp-3jrh-7fpw (critical)
@@ -89,16 +92,13 @@ allowBuilds:
 #               reaches us only via Cloudflare dev tooling. Capped <8 to stay on the major miniflare
 #               and wrangler expect (the tooling versions that bundle 7.29.0 natively are still fresh).
 #   - ws        <8.21.0  GHSA-96hv-2xvq-fx4p (memory-exhaustion DoS; via miniflare. Supersedes <8.20.1)
-# Three open advisories are deliberately NOT overridden, because no installable fix exists:
+# Two open advisories are deliberately NOT overridden, because no installable fix exists:
 #   - braces <=3.0.3  GHSA-vfj7-8cjw-p6xm (stack exhaustion on deeply nested patterns). 3.0.3 IS the
 #               latest release; there is no patched version to pin to. Reached only via chokidar/
 #               micromatch in dev watch tooling, over developer-authored glob patterns.
 #   - http-cache-semantics <=4.2.0  GHSA-ch52-4w7c-c8xp (max-stale can disclose cross-user cached
 #               responses). GitHub lists no patched version; 4.3.0 shipped 2026-10-04 but is still
 #               inside the quarantine window. Revisit once GitHub confirms 4.3.0 as the fix.
-#   - source-map-js <1.2.2  GHSA-68fv-2mgg-jv7q (event-loop DoS via indexed source-map section
-#               offsets). 1.2.2 is the fix but shipped 2026-09-30 — it clears the 7-day quarantine on
-#               2026-10-07. Pin it then; we do not grant a minimumReleaseAgeExclude for it.
 # The @opentelemetry/* set (GHSA-8988-4f7v-96qf core, GHSA-45rx-2jwx-cxfr propagator-jaeger) is fixed
 # only on the OTel 2.x line — the whole graph must move majors in lockstep. Rather than force a
 # mismatched OTel major onto old Pulumi, we bump @pulumi/pulumi itself: 3.252.0+ migrated its entire
@@ -146,14 +146,20 @@ overrides:
   "shell-quote@<1.11.0": ">=1.11.0 <2.0.0"
   "sigstore@<4.1.1": ">=4.1.1 <5.0.0"
   "smol-toml@<1.9.0": ">=1.9.0 <2.0.0"
+  "source-map-js@<1.2.2": ">=1.2.2 <2.0.0"
   "tar@<7.5.21": ">=7.5.21"
   "tmp@<0.2.6": ">=0.2.6"
   "undici@<7.29.1": ">=7.29.1 <8.0.0"
   "ws@<8.21.0": ">=8.21.0"
   # Pin @tanstack/query-core to match our pinned react-query so the
   # auto-installed peer dep stays in lockstep (otherwise pnpm picks
-  # the latest matching version, which can be quarantined).
-  "@tanstack/query-core": "5.101.1"
+  # the latest matching version, which can be quarantined). BUMP THIS IN
+  # THE SAME CHANGE AS `@tanstack/react-query` — Dependabot raises that one
+  # and cannot see this override, so the pair silently desynchronises. The
+  # failure is build-only: `@tanstack/router-ssr-query-core` imports
+  # `dehydrateQuery`, which a stale query-core does not export, and neither
+  # typecheck nor the vitest suite links that graph.
+  "@tanstack/query-core": "5.104.0"
 
 peerDependencyRules:
   allowedVersions:
@@ -169,10 +175,6 @@ peerDependencyRules:
 auditConfig:
   ignoreGhsas:
     - GHSA-rmmr-r34h-pfm5
-    # source-map-js GHSA-68fv-2mgg-jv7q (event-loop DoS via indexed source-map
-    # section offsets). Fixed in 1.2.2, published 2026-09-30 — clears quarantine
-    # 2026-10-07. Pin `source-map-js@<1.2.2` and drop this line on/after then.
-    - GHSA-68fv-2mgg-jv7q
     # http-cache-semantics GHSA-ch52-4w7c-c8xp (max-stale can disclose cross-user
     # cached responses). The advisory claims 4.2.1 but no such version was ever
     # published; 4.3.0 (2026-10-04) is the real fix and clears quarantine

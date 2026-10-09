@@ -13,9 +13,7 @@
  *     is plenty for tens of thousands of small images.
  */
 export type AcceptedImageContentType =
-  | "image/webp"
-  | "image/jpeg"
-  | "image/png";
+  "image/webp" | "image/jpeg" | "image/png";
 
 const DATA_URL_RE =
   /^data:(image\/(?:webp|jpeg|png));base64,([A-Za-z0-9+/]+=*)$/;

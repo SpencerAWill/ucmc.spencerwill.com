@@ -55,8 +55,7 @@ export interface EmailRow {
 }
 
 export type ListMyEmailsResult =
-  | { ok: true; emails: EmailRow[] }
-  | { ok: false; reason: "unauthorized" };
+  { ok: true; emails: EmailRow[] } | { ok: false; reason: "unauthorized" };
 
 export type RequestAddEmailResult =
   | { ok: true }

@@ -9,242 +9,87 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WaiverRouteImport } from './routes/waiver'
-import { Route as VolunteerRouteImport } from './routes/volunteer'
-import { Route as VerifyEmailRouteImport } from './routes/verify-email'
-import { Route as TripsRouteImport } from './routes/trips'
-import { Route as TermsRouteImport } from './routes/terms'
-import { Route as SponsorsRouteImport } from './routes/sponsors'
-import { Route as SignInRouteImport } from './routes/sign-in'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ScholarshipsRouteImport } from './routes/scholarships'
-import { Route as ResourcesRouteImport } from './routes/resources'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as PoliciesRouteImport } from './routes/policies'
-import { Route as OpenSourceRouteImport } from './routes/open-source'
-import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
-import { Route as MyRouteImport } from './routes/my'
-import { Route as MembershipRouteImport } from './routes/membership'
-import { Route as MembersRouteImport } from './routes/members'
-import { Route as LegalRouteImport } from './routes/legal'
-import { Route as HistoryRouteImport } from './routes/history'
-import { Route as HealthRouteImport } from './routes/health'
-import { Route as GearCaveRouteImport } from './routes/gear-cave'
-import { Route as GearRouteImport } from './routes/gear'
-import { Route as GazetteRouteImport } from './routes/gazette'
-import { Route as FeedbackRouteImport } from './routes/feedback'
-import { Route as DisclaimerRouteImport } from './routes/disclaimer'
-import { Route as DeactivatedRouteImport } from './routes/deactivated'
-import { Route as ConstitutionRouteImport } from './routes/constitution'
-import { Route as CalendarRouteImport } from './routes/calendar'
-import { Route as AuditRouteImport } from './routes/audit'
-import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
-import { Route as AlbumRouteImport } from './routes/album'
-import { Route as AccessRouteImport } from './routes/access'
-import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as MyIndexRouteImport } from './routes/my.index'
-import { Route as GearIndexRouteImport } from './routes/gear.index'
-import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
-import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
-import { Route as CalendarIndexRouteImport } from './routes/calendar.index'
-import { Route as RegisterProfileRouteImport } from './routes/register.profile'
-import { Route as RegisterPendingRouteImport } from './routes/register.pending'
-import { Route as MyGearRouteImport } from './routes/my.gear'
-import { Route as MyTabsRouteImport } from './routes/my._tabs'
-import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
-import { Route as MembersTabsRouteImport } from './routes/members._tabs'
-import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
-import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
-import { Route as GazettePublicIdRouteImport } from './routes/gazette.$publicId'
-import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
-import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicId'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as AccessRouteImport } from './routes/access'
+import { Route as AlbumRouteImport } from './routes/album'
+import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
+import { Route as AuditRouteImport } from './routes/audit'
+import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as ConstitutionRouteImport } from './routes/constitution'
+import { Route as DeactivatedRouteImport } from './routes/deactivated'
+import { Route as DisclaimerRouteImport } from './routes/disclaimer'
+import { Route as FeedbackRouteImport } from './routes/feedback'
+import { Route as GazetteRouteImport } from './routes/gazette'
+import { Route as GearRouteImport } from './routes/gear'
+import { Route as GearCaveRouteImport } from './routes/gear-cave'
+import { Route as HealthRouteImport } from './routes/health'
+import { Route as HistoryRouteImport } from './routes/history'
+import { Route as LegalRouteImport } from './routes/legal'
+import { Route as MembersRouteImport } from './routes/members'
+import { Route as MembershipRouteImport } from './routes/membership'
+import { Route as MyRouteImport } from './routes/my'
+import { Route as NondiscriminationRouteImport } from './routes/nondiscrimination'
+import { Route as OpenSourceRouteImport } from './routes/open-source'
+import { Route as PoliciesRouteImport } from './routes/policies'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as ResourcesRouteImport } from './routes/resources'
+import { Route as ScholarshipsRouteImport } from './routes/scholarships'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SponsorsRouteImport } from './routes/sponsors'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as TripsRouteImport } from './routes/trips'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as VolunteerRouteImport } from './routes/volunteer'
+import { Route as WaiverRouteImport } from './routes/waiver'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
-import { Route as MyGearIndexRouteImport } from './routes/my.gear.index'
-import { Route as MembersTabsIndexRouteImport } from './routes/members._tabs.index'
-import { Route as GearLoansIndexRouteImport } from './routes/gear.loans.index'
-import { Route as MyGearCartRouteImport } from './routes/my.gear.cart'
-import { Route as MyTabsWaiverRouteImport } from './routes/my._tabs.waiver'
-import { Route as MyTabsSecurityRouteImport } from './routes/my._tabs.security'
-import { Route as MyTabsProfileRouteImport } from './routes/my._tabs.profile'
-import { Route as MyTabsPreferencesRouteImport } from './routes/my._tabs.preferences'
-import { Route as MyTabsDetailsRouteImport } from './routes/my._tabs.details'
-import { Route as MyTabsContactsRouteImport } from './routes/my._tabs.contacts'
-import { Route as MyTabsCalendarRouteImport } from './routes/my._tabs.calendar'
-import { Route as MembersTabsUnclaimedRouteImport } from './routes/members._tabs.unclaimed'
-import { Route as MembersTabsRejectedRouteImport } from './routes/members._tabs.rejected'
-import { Route as MembersTabsPendingRouteImport } from './routes/members._tabs.pending'
-import { Route as MembersTabsDeactivatedRouteImport } from './routes/members._tabs.deactivated'
-import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publicId'
-import { Route as FeedbackTabsSiteRouteImport } from './routes/feedback._tabs.site'
-import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.club'
-import { Route as ApiSponsorLogoSplatRouteImport } from './routes/api/sponsor-logo.$'
-import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
-import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
-import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
-import { Route as ApiCalendarSplatRouteImport } from './routes/api/calendar.$'
-import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
-import { Route as ApiAlbumImageSplatRouteImport } from './routes/api/album-image.$'
+import { Route as CalendarIndexRouteImport } from './routes/calendar.index'
+import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicId'
+import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
+import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
+import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
+import { Route as GazettePublicIdRouteImport } from './routes/gazette.$publicId'
+import { Route as GearIndexRouteImport } from './routes/gear.index'
+import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
+import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
+import { Route as MembersTabsRouteImport } from './routes/members._tabs'
+import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
+import { Route as MyIndexRouteImport } from './routes/my.index'
+import { Route as MyTabsRouteImport } from './routes/my._tabs'
+import { Route as MyGearRouteImport } from './routes/my.gear'
+import { Route as RegisterPendingRouteImport } from './routes/register.pending'
+import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
+import { Route as ApiAlbumImageSplatRouteImport } from './routes/api/album-image.$'
+import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
+import { Route as ApiCalendarSplatRouteImport } from './routes/api/calendar.$'
+import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
+import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
+import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
+import { Route as ApiSponsorLogoSplatRouteImport } from './routes/api/sponsor-logo.$'
+import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.club'
+import { Route as FeedbackTabsSiteRouteImport } from './routes/feedback._tabs.site'
+import { Route as GearLoansIndexRouteImport } from './routes/gear.loans.index'
+import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publicId'
+import { Route as MembersTabsIndexRouteImport } from './routes/members._tabs.index'
+import { Route as MembersTabsDeactivatedRouteImport } from './routes/members._tabs.deactivated'
+import { Route as MembersTabsPendingRouteImport } from './routes/members._tabs.pending'
+import { Route as MembersTabsRejectedRouteImport } from './routes/members._tabs.rejected'
+import { Route as MembersTabsUnclaimedRouteImport } from './routes/members._tabs.unclaimed'
+import { Route as MyTabsCalendarRouteImport } from './routes/my._tabs.calendar'
+import { Route as MyTabsContactsRouteImport } from './routes/my._tabs.contacts'
+import { Route as MyTabsDetailsRouteImport } from './routes/my._tabs.details'
+import { Route as MyTabsPreferencesRouteImport } from './routes/my._tabs.preferences'
+import { Route as MyTabsProfileRouteImport } from './routes/my._tabs.profile'
+import { Route as MyTabsSecurityRouteImport } from './routes/my._tabs.security'
+import { Route as MyTabsWaiverRouteImport } from './routes/my._tabs.waiver'
+import { Route as MyGearIndexRouteImport } from './routes/my.gear.index'
+import { Route as MyGearCartRouteImport } from './routes/my.gear.cart'
 
-const WaiverRoute = WaiverRouteImport.update({
-  id: '/waiver',
-  path: '/waiver',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VolunteerRoute = VolunteerRouteImport.update({
-  id: '/volunteer',
-  path: '/volunteer',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VerifyEmailRoute = VerifyEmailRouteImport.update({
-  id: '/verify-email',
-  path: '/verify-email',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TripsRoute = TripsRouteImport.update({
-  id: '/trips',
-  path: '/trips',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TermsRoute = TermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SponsorsRoute = SponsorsRouteImport.update({
-  id: '/sponsors',
-  path: '/sponsors',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignInRoute = SignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ScholarshipsRoute = ScholarshipsRouteImport.update({
-  id: '/scholarships',
-  path: '/scholarships',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResourcesRoute = ResourcesRouteImport.update({
-  id: '/resources',
-  path: '/resources',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PoliciesRoute = PoliciesRouteImport.update({
-  id: '/policies',
-  path: '/policies',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OpenSourceRoute = OpenSourceRouteImport.update({
-  id: '/open-source',
-  path: '/open-source',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NondiscriminationRoute = NondiscriminationRouteImport.update({
-  id: '/nondiscrimination',
-  path: '/nondiscrimination',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MyRoute = MyRouteImport.update({
-  id: '/my',
-  path: '/my',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MembershipRoute = MembershipRouteImport.update({
-  id: '/membership',
-  path: '/membership',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MembersRoute = MembersRouteImport.update({
-  id: '/members',
-  path: '/members',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LegalRoute = LegalRouteImport.update({
-  id: '/legal',
-  path: '/legal',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HistoryRoute = HistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HealthRoute = HealthRouteImport.update({
-  id: '/health',
-  path: '/health',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GearCaveRoute = GearCaveRouteImport.update({
-  id: '/gear-cave',
-  path: '/gear-cave',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GearRoute = GearRouteImport.update({
-  id: '/gear',
-  path: '/gear',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GazetteRoute = GazetteRouteImport.update({
-  id: '/gazette',
-  path: '/gazette',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FeedbackRoute = FeedbackRouteImport.update({
-  id: '/feedback',
-  path: '/feedback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DisclaimerRoute = DisclaimerRouteImport.update({
-  id: '/disclaimer',
-  path: '/disclaimer',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DeactivatedRoute = DeactivatedRouteImport.update({
-  id: '/deactivated',
-  path: '/deactivated',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConstitutionRoute = ConstitutionRouteImport.update({
-  id: '/constitution',
-  path: '/constitution',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CalendarRoute = CalendarRouteImport.update({
-  id: '/calendar',
-  path: '/calendar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuditRoute = AuditRouteImport.update({
-  id: '/audit',
-  path: '/audit',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AntiHazingRoute = AntiHazingRouteImport.update({
-  id: '/anti-hazing',
-  path: '/anti-hazing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AlbumRoute = AlbumRouteImport.update({
-  id: '/album',
-  path: '/album',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccessRoute = AccessRouteImport.update({
-  id: '/access',
-  path: '/access',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
@@ -252,211 +97,251 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AccessRoute = AccessRouteImport.update({
+  id: '/access',
+  path: '/access',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MyIndexRoute = MyIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => MyRoute,
-} as any)
-const GearIndexRoute = GearIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => GearRoute,
-} as any)
-const GazetteIndexRoute = GazetteIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => GazetteRoute,
-} as any)
-const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => FeedbackRoute,
-} as any)
-const CalendarIndexRoute = CalendarIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => CalendarRoute,
-} as any)
-const RegisterProfileRoute = RegisterProfileRouteImport.update({
-  id: '/register/profile',
-  path: '/register/profile',
+const AlbumRoute = AlbumRouteImport.update({
+  id: '/album',
+  path: '/album',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RegisterPendingRoute = RegisterPendingRouteImport.update({
-  id: '/register/pending',
-  path: '/register/pending',
+const AntiHazingRoute = AntiHazingRouteImport.update({
+  id: '/anti-hazing',
+  path: '/anti-hazing',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MyGearRoute = MyGearRouteImport.update({
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarRoute = CalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConstitutionRoute = ConstitutionRouteImport.update({
+  id: '/constitution',
+  path: '/constitution',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeactivatedRoute = DeactivatedRouteImport.update({
+  id: '/deactivated',
+  path: '/deactivated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DisclaimerRoute = DisclaimerRouteImport.update({
+  id: '/disclaimer',
+  path: '/disclaimer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeedbackRoute = FeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GazetteRoute = GazetteRouteImport.update({
+  id: '/gazette',
+  path: '/gazette',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GearRoute = GearRouteImport.update({
   id: '/gear',
   path: '/gear',
-  getParentRoute: () => MyRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const MyTabsRoute = MyTabsRouteImport.update({
-  id: '/_tabs',
-  getParentRoute: () => MyRoute,
+const GearCaveRoute = GearCaveRouteImport.update({
+  id: '/gear-cave',
+  path: '/gear-cave',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const MembersWaiversRoute = MembersWaiversRouteImport.update({
-  id: '/waivers',
-  path: '/waivers',
-  getParentRoute: () => MembersRoute,
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const MembersTabsRoute = MembersTabsRouteImport.update({
-  id: '/_tabs',
-  getParentRoute: () => MembersRoute,
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const MembersPublicIdRoute = MembersPublicIdRouteImport.update({
-  id: '/$publicId',
-  path: '/$publicId',
-  getParentRoute: () => MembersRoute,
+const LegalRoute = LegalRouteImport.update({
+  id: '/legal',
+  path: '/legal',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const GearPublicIdRoute = GearPublicIdRouteImport.update({
-  id: '/$publicId',
-  path: '/$publicId',
-  getParentRoute: () => GearRoute,
+const MembersRoute = MembersRouteImport.update({
+  id: '/members',
+  path: '/members',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const GazettePublicIdRoute = GazettePublicIdRouteImport.update({
-  id: '/$publicId',
-  path: '/$publicId',
-  getParentRoute: () => GazetteRoute,
+const MembershipRoute = MembershipRouteImport.update({
+  id: '/membership',
+  path: '/membership',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const FeedbackTabsRoute = FeedbackTabsRouteImport.update({
-  id: '/_tabs',
-  getParentRoute: () => FeedbackRoute,
+const MyRoute = MyRouteImport.update({
+  id: '/my',
+  path: '/my',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const CalendarPublicIdRoute = CalendarPublicIdRouteImport.update({
-  id: '/$publicId',
-  path: '/$publicId',
-  getParentRoute: () => CalendarRoute,
+const NondiscriminationRoute = NondiscriminationRouteImport.update({
+  id: '/nondiscrimination',
+  path: '/nondiscrimination',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpenSourceRoute = OpenSourceRouteImport.update({
+  id: '/open-source',
+  path: '/open-source',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PoliciesRoute = PoliciesRouteImport.update({
+  id: '/policies',
+  path: '/policies',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResourcesRoute = ResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScholarshipsRoute = ScholarshipsRouteImport.update({
+  id: '/scholarships',
+  path: '/scholarships',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SponsorsRoute = SponsorsRouteImport.update({
+  id: '/sponsors',
+  path: '/sponsors',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TripsRoute = TripsRouteImport.update({
+  id: '/trips',
+  path: '/trips',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VolunteerRoute = VolunteerRouteImport.update({
+  id: '/volunteer',
+  path: '/volunteer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WaiverRoute = WaiverRouteImport.update({
+  id: '/waiver',
+  path: '/waiver',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MyGearIndexRoute = MyGearIndexRouteImport.update({
+const CalendarIndexRoute = CalendarIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => MyGearRoute,
+  getParentRoute: () => CalendarRoute,
 } as any)
-const MembersTabsIndexRoute = MembersTabsIndexRouteImport.update({
+const CalendarPublicIdRoute = CalendarPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => CalendarRoute,
+} as any)
+const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => MembersTabsRoute,
+  getParentRoute: () => FeedbackRoute,
 } as any)
-const GearLoansIndexRoute = GearLoansIndexRouteImport.update({
-  id: '/loans/',
-  path: '/loans/',
+const FeedbackTabsRoute = FeedbackTabsRouteImport.update({
+  id: '/_tabs',
+  getParentRoute: () => FeedbackRoute,
+} as any)
+const GazetteIndexRoute = GazetteIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GazetteRoute,
+} as any)
+const GazettePublicIdRoute = GazettePublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => GazetteRoute,
+} as any)
+const GearIndexRoute = GearIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => GearRoute,
 } as any)
-const MyGearCartRoute = MyGearCartRouteImport.update({
-  id: '/cart',
-  path: '/cart',
-  getParentRoute: () => MyGearRoute,
-} as any)
-const MyTabsWaiverRoute = MyTabsWaiverRouteImport.update({
-  id: '/waiver',
-  path: '/waiver',
-  getParentRoute: () => MyTabsRoute,
-} as any)
-const MyTabsSecurityRoute = MyTabsSecurityRouteImport.update({
-  id: '/security',
-  path: '/security',
-  getParentRoute: () => MyTabsRoute,
-} as any)
-const MyTabsProfileRoute = MyTabsProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => MyTabsRoute,
-} as any)
-const MyTabsPreferencesRoute = MyTabsPreferencesRouteImport.update({
-  id: '/preferences',
-  path: '/preferences',
-  getParentRoute: () => MyTabsRoute,
-} as any)
-const MyTabsDetailsRoute = MyTabsDetailsRouteImport.update({
-  id: '/details',
-  path: '/details',
-  getParentRoute: () => MyTabsRoute,
-} as any)
-const MyTabsContactsRoute = MyTabsContactsRouteImport.update({
-  id: '/contacts',
-  path: '/contacts',
-  getParentRoute: () => MyTabsRoute,
-} as any)
-const MyTabsCalendarRoute = MyTabsCalendarRouteImport.update({
-  id: '/calendar',
-  path: '/calendar',
-  getParentRoute: () => MyTabsRoute,
-} as any)
-const MembersTabsUnclaimedRoute = MembersTabsUnclaimedRouteImport.update({
-  id: '/unclaimed',
-  path: '/unclaimed',
-  getParentRoute: () => MembersTabsRoute,
-} as any)
-const MembersTabsRejectedRoute = MembersTabsRejectedRouteImport.update({
-  id: '/rejected',
-  path: '/rejected',
-  getParentRoute: () => MembersTabsRoute,
-} as any)
-const MembersTabsPendingRoute = MembersTabsPendingRouteImport.update({
-  id: '/pending',
-  path: '/pending',
-  getParentRoute: () => MembersTabsRoute,
-} as any)
-const MembersTabsDeactivatedRoute = MembersTabsDeactivatedRouteImport.update({
-  id: '/deactivated',
-  path: '/deactivated',
-  getParentRoute: () => MembersTabsRoute,
-} as any)
-const GearLoansPublicIdRoute = GearLoansPublicIdRouteImport.update({
-  id: '/loans/$publicId',
-  path: '/loans/$publicId',
+const GearPublicIdRoute = GearPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
   getParentRoute: () => GearRoute,
 } as any)
-const FeedbackTabsSiteRoute = FeedbackTabsSiteRouteImport.update({
-  id: '/site',
-  path: '/site',
-  getParentRoute: () => FeedbackTabsRoute,
+const MembersPublicIdRoute = MembersPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => MembersRoute,
 } as any)
-const FeedbackTabsClubRoute = FeedbackTabsClubRouteImport.update({
-  id: '/club',
-  path: '/club',
-  getParentRoute: () => FeedbackTabsRoute,
+const MembersTabsRoute = MembersTabsRouteImport.update({
+  id: '/_tabs',
+  getParentRoute: () => MembersRoute,
 } as any)
-const ApiSponsorLogoSplatRoute = ApiSponsorLogoSplatRouteImport.update({
-  id: '/api/sponsor-logo/$',
-  path: '/api/sponsor-logo/$',
+const MembersWaiversRoute = MembersWaiversRouteImport.update({
+  id: '/waivers',
+  path: '/waivers',
+  getParentRoute: () => MembersRoute,
+} as any)
+const MyIndexRoute = MyIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MyRoute,
+} as any)
+const MyTabsRoute = MyTabsRouteImport.update({
+  id: '/_tabs',
+  getParentRoute: () => MyRoute,
+} as any)
+const MyGearRoute = MyGearRouteImport.update({
+  id: '/gear',
+  path: '/gear',
+  getParentRoute: () => MyRoute,
+} as any)
+const RegisterPendingRoute = RegisterPendingRouteImport.update({
+  id: '/register/pending',
+  path: '/register/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
-  id: '/api/landing/$',
-  path: '/api/landing/$',
+const RegisterProfileRoute = RegisterProfileRouteImport.update({
+  id: '/register/profile',
+  path: '/register/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiGearThumbnailsSplatRoute = ApiGearThumbnailsSplatRouteImport.update({
-  id: '/api/gear-thumbnails/$',
-  path: '/api/gear-thumbnails/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiGazettePdfSplatRoute = ApiGazettePdfSplatRouteImport.update({
-  id: '/api/gazette-pdf/$',
-  path: '/api/gazette-pdf/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCalendarSplatRoute = ApiCalendarSplatRouteImport.update({
-  id: '/api/calendar/$',
-  path: '/api/calendar/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
-  id: '/api/avatars/$',
-  path: '/api/avatars/$',
+const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
+  id: '/api/account/export',
+  path: '/api/account/export',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAlbumImageSplatRoute = ApiAlbumImageSplatRouteImport.update({
@@ -464,10 +349,125 @@ const ApiAlbumImageSplatRoute = ApiAlbumImageSplatRouteImport.update({
   path: '/api/album-image/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAccountExportRoute = ApiAccountExportRouteImport.update({
-  id: '/api/account/export',
-  path: '/api/account/export',
+const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
+  id: '/api/avatars/$',
+  path: '/api/avatars/$',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCalendarSplatRoute = ApiCalendarSplatRouteImport.update({
+  id: '/api/calendar/$',
+  path: '/api/calendar/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGazettePdfSplatRoute = ApiGazettePdfSplatRouteImport.update({
+  id: '/api/gazette-pdf/$',
+  path: '/api/gazette-pdf/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGearThumbnailsSplatRoute = ApiGearThumbnailsSplatRouteImport.update({
+  id: '/api/gear-thumbnails/$',
+  path: '/api/gear-thumbnails/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLandingSplatRoute = ApiLandingSplatRouteImport.update({
+  id: '/api/landing/$',
+  path: '/api/landing/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSponsorLogoSplatRoute = ApiSponsorLogoSplatRouteImport.update({
+  id: '/api/sponsor-logo/$',
+  path: '/api/sponsor-logo/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeedbackTabsClubRoute = FeedbackTabsClubRouteImport.update({
+  id: '/club',
+  path: '/club',
+  getParentRoute: () => FeedbackTabsRoute,
+} as any)
+const FeedbackTabsSiteRoute = FeedbackTabsSiteRouteImport.update({
+  id: '/site',
+  path: '/site',
+  getParentRoute: () => FeedbackTabsRoute,
+} as any)
+const GearLoansIndexRoute = GearLoansIndexRouteImport.update({
+  id: '/loans/',
+  path: '/loans/',
+  getParentRoute: () => GearRoute,
+} as any)
+const GearLoansPublicIdRoute = GearLoansPublicIdRouteImport.update({
+  id: '/loans/$publicId',
+  path: '/loans/$publicId',
+  getParentRoute: () => GearRoute,
+} as any)
+const MembersTabsIndexRoute = MembersTabsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MembersTabsRoute,
+} as any)
+const MembersTabsDeactivatedRoute = MembersTabsDeactivatedRouteImport.update({
+  id: '/deactivated',
+  path: '/deactivated',
+  getParentRoute: () => MembersTabsRoute,
+} as any)
+const MembersTabsPendingRoute = MembersTabsPendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
+  getParentRoute: () => MembersTabsRoute,
+} as any)
+const MembersTabsRejectedRoute = MembersTabsRejectedRouteImport.update({
+  id: '/rejected',
+  path: '/rejected',
+  getParentRoute: () => MembersTabsRoute,
+} as any)
+const MembersTabsUnclaimedRoute = MembersTabsUnclaimedRouteImport.update({
+  id: '/unclaimed',
+  path: '/unclaimed',
+  getParentRoute: () => MembersTabsRoute,
+} as any)
+const MyTabsCalendarRoute = MyTabsCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => MyTabsRoute,
+} as any)
+const MyTabsContactsRoute = MyTabsContactsRouteImport.update({
+  id: '/contacts',
+  path: '/contacts',
+  getParentRoute: () => MyTabsRoute,
+} as any)
+const MyTabsDetailsRoute = MyTabsDetailsRouteImport.update({
+  id: '/details',
+  path: '/details',
+  getParentRoute: () => MyTabsRoute,
+} as any)
+const MyTabsPreferencesRoute = MyTabsPreferencesRouteImport.update({
+  id: '/preferences',
+  path: '/preferences',
+  getParentRoute: () => MyTabsRoute,
+} as any)
+const MyTabsProfileRoute = MyTabsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => MyTabsRoute,
+} as any)
+const MyTabsSecurityRoute = MyTabsSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => MyTabsRoute,
+} as any)
+const MyTabsWaiverRoute = MyTabsWaiverRouteImport.update({
+  id: '/waiver',
+  path: '/waiver',
+  getParentRoute: () => MyTabsRoute,
+} as any)
+const MyGearIndexRoute = MyGearIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MyGearRoute,
+} as any)
+const MyGearCartRoute = MyGearCartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
+  getParentRoute: () => MyGearRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -972,228 +972,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/waiver': {
-      id: '/waiver'
-      path: '/waiver'
-      fullPath: '/waiver'
-      preLoaderRoute: typeof WaiverRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/volunteer': {
-      id: '/volunteer'
-      path: '/volunteer'
-      fullPath: '/volunteer'
-      preLoaderRoute: typeof VolunteerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/verify-email': {
-      id: '/verify-email'
-      path: '/verify-email'
-      fullPath: '/verify-email'
-      preLoaderRoute: typeof VerifyEmailRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/trips': {
-      id: '/trips'
-      path: '/trips'
-      fullPath: '/trips'
-      preLoaderRoute: typeof TripsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/terms': {
-      id: '/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof TermsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sponsors': {
-      id: '/sponsors'
-      path: '/sponsors'
-      fullPath: '/sponsors'
-      preLoaderRoute: typeof SponsorsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-in': {
-      id: '/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof SignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/scholarships': {
-      id: '/scholarships'
-      path: '/scholarships'
-      fullPath: '/scholarships'
-      preLoaderRoute: typeof ScholarshipsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/resources': {
-      id: '/resources'
-      path: '/resources'
-      fullPath: '/resources'
-      preLoaderRoute: typeof ResourcesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/policies': {
-      id: '/policies'
-      path: '/policies'
-      fullPath: '/policies'
-      preLoaderRoute: typeof PoliciesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/open-source': {
-      id: '/open-source'
-      path: '/open-source'
-      fullPath: '/open-source'
-      preLoaderRoute: typeof OpenSourceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/nondiscrimination': {
-      id: '/nondiscrimination'
-      path: '/nondiscrimination'
-      fullPath: '/nondiscrimination'
-      preLoaderRoute: typeof NondiscriminationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/my': {
-      id: '/my'
-      path: '/my'
-      fullPath: '/my'
-      preLoaderRoute: typeof MyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/membership': {
-      id: '/membership'
-      path: '/membership'
-      fullPath: '/membership'
-      preLoaderRoute: typeof MembershipRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/members': {
-      id: '/members'
-      path: '/members'
-      fullPath: '/members'
-      preLoaderRoute: typeof MembersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/legal': {
-      id: '/legal'
-      path: '/legal'
-      fullPath: '/legal'
-      preLoaderRoute: typeof LegalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/history': {
-      id: '/history'
-      path: '/history'
-      fullPath: '/history'
-      preLoaderRoute: typeof HistoryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/health': {
-      id: '/health'
-      path: '/health'
-      fullPath: '/health'
-      preLoaderRoute: typeof HealthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gear-cave': {
-      id: '/gear-cave'
-      path: '/gear-cave'
-      fullPath: '/gear-cave'
-      preLoaderRoute: typeof GearCaveRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gear': {
-      id: '/gear'
-      path: '/gear'
-      fullPath: '/gear'
-      preLoaderRoute: typeof GearRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gazette': {
-      id: '/gazette'
-      path: '/gazette'
-      fullPath: '/gazette'
-      preLoaderRoute: typeof GazetteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/feedback': {
-      id: '/feedback'
-      path: '/feedback'
-      fullPath: '/feedback'
-      preLoaderRoute: typeof FeedbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/disclaimer': {
-      id: '/disclaimer'
-      path: '/disclaimer'
-      fullPath: '/disclaimer'
-      preLoaderRoute: typeof DisclaimerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/deactivated': {
-      id: '/deactivated'
-      path: '/deactivated'
-      fullPath: '/deactivated'
-      preLoaderRoute: typeof DeactivatedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/constitution': {
-      id: '/constitution'
-      path: '/constitution'
-      fullPath: '/constitution'
-      preLoaderRoute: typeof ConstitutionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/calendar': {
-      id: '/calendar'
-      path: '/calendar'
-      fullPath: '/calendar'
-      preLoaderRoute: typeof CalendarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/audit': {
-      id: '/audit'
-      path: '/audit'
-      fullPath: '/audit'
-      preLoaderRoute: typeof AuditRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/anti-hazing': {
-      id: '/anti-hazing'
-      path: '/anti-hazing'
-      fullPath: '/anti-hazing'
-      preLoaderRoute: typeof AntiHazingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/album': {
-      id: '/album'
-      path: '/album'
-      fullPath: '/album'
-      preLoaderRoute: typeof AlbumRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/access': {
-      id: '/access'
-      path: '/access'
-      fullPath: '/access'
-      preLoaderRoute: typeof AccessRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/about': {
@@ -1203,40 +986,236 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/access': {
+      id: '/access'
+      path: '/access'
+      fullPath: '/access'
+      preLoaderRoute: typeof AccessRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/my/': {
-      id: '/my/'
-      path: '/'
-      fullPath: '/my/'
-      preLoaderRoute: typeof MyIndexRouteImport
-      parentRoute: typeof MyRoute
+    '/album': {
+      id: '/album'
+      path: '/album'
+      fullPath: '/album'
+      preLoaderRoute: typeof AlbumRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/gear/': {
-      id: '/gear/'
-      path: '/'
-      fullPath: '/gear/'
-      preLoaderRoute: typeof GearIndexRouteImport
-      parentRoute: typeof GearRoute
+    '/anti-hazing': {
+      id: '/anti-hazing'
+      path: '/anti-hazing'
+      fullPath: '/anti-hazing'
+      preLoaderRoute: typeof AntiHazingRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/gazette/': {
-      id: '/gazette/'
-      path: '/'
-      fullPath: '/gazette/'
-      preLoaderRoute: typeof GazetteIndexRouteImport
-      parentRoute: typeof GazetteRoute
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/feedback/': {
-      id: '/feedback/'
-      path: '/'
-      fullPath: '/feedback/'
-      preLoaderRoute: typeof FeedbackIndexRouteImport
-      parentRoute: typeof FeedbackRoute
+    '/calendar': {
+      id: '/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/constitution': {
+      id: '/constitution'
+      path: '/constitution'
+      fullPath: '/constitution'
+      preLoaderRoute: typeof ConstitutionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/deactivated': {
+      id: '/deactivated'
+      path: '/deactivated'
+      fullPath: '/deactivated'
+      preLoaderRoute: typeof DeactivatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/disclaimer': {
+      id: '/disclaimer'
+      path: '/disclaimer'
+      fullPath: '/disclaimer'
+      preLoaderRoute: typeof DisclaimerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feedback': {
+      id: '/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gazette': {
+      id: '/gazette'
+      path: '/gazette'
+      fullPath: '/gazette'
+      preLoaderRoute: typeof GazetteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gear': {
+      id: '/gear'
+      path: '/gear'
+      fullPath: '/gear'
+      preLoaderRoute: typeof GearRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gear-cave': {
+      id: '/gear-cave'
+      path: '/gear-cave'
+      fullPath: '/gear-cave'
+      preLoaderRoute: typeof GearCaveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal': {
+      id: '/legal'
+      path: '/legal'
+      fullPath: '/legal'
+      preLoaderRoute: typeof LegalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/members': {
+      id: '/members'
+      path: '/members'
+      fullPath: '/members'
+      preLoaderRoute: typeof MembersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/membership': {
+      id: '/membership'
+      path: '/membership'
+      fullPath: '/membership'
+      preLoaderRoute: typeof MembershipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my': {
+      id: '/my'
+      path: '/my'
+      fullPath: '/my'
+      preLoaderRoute: typeof MyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nondiscrimination': {
+      id: '/nondiscrimination'
+      path: '/nondiscrimination'
+      fullPath: '/nondiscrimination'
+      preLoaderRoute: typeof NondiscriminationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/open-source': {
+      id: '/open-source'
+      path: '/open-source'
+      fullPath: '/open-source'
+      preLoaderRoute: typeof OpenSourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/policies': {
+      id: '/policies'
+      path: '/policies'
+      fullPath: '/policies'
+      preLoaderRoute: typeof PoliciesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resources': {
+      id: '/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof ResourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scholarships': {
+      id: '/scholarships'
+      path: '/scholarships'
+      fullPath: '/scholarships'
+      preLoaderRoute: typeof ScholarshipsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sponsors': {
+      id: '/sponsors'
+      path: '/sponsors'
+      fullPath: '/sponsors'
+      preLoaderRoute: typeof SponsorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trips': {
+      id: '/trips'
+      path: '/trips'
+      fullPath: '/trips'
+      preLoaderRoute: typeof TripsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/volunteer': {
+      id: '/volunteer'
+      path: '/volunteer'
+      fullPath: '/volunteer'
+      preLoaderRoute: typeof VolunteerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/waiver': {
+      id: '/waiver'
+      path: '/waiver'
+      fullPath: '/waiver'
+      preLoaderRoute: typeof WaiverRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/calendar/': {
       id: '/calendar/'
@@ -1245,39 +1224,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CalendarIndexRouteImport
       parentRoute: typeof CalendarRoute
     }
-    '/register/profile': {
-      id: '/register/profile'
-      path: '/register/profile'
-      fullPath: '/register/profile'
-      preLoaderRoute: typeof RegisterProfileRouteImport
-      parentRoute: typeof rootRouteImport
+    '/calendar/$publicId': {
+      id: '/calendar/$publicId'
+      path: '/$publicId'
+      fullPath: '/calendar/$publicId'
+      preLoaderRoute: typeof CalendarPublicIdRouteImport
+      parentRoute: typeof CalendarRoute
     }
-    '/register/pending': {
-      id: '/register/pending'
-      path: '/register/pending'
-      fullPath: '/register/pending'
-      preLoaderRoute: typeof RegisterPendingRouteImport
-      parentRoute: typeof rootRouteImport
+    '/feedback/': {
+      id: '/feedback/'
+      path: '/'
+      fullPath: '/feedback/'
+      preLoaderRoute: typeof FeedbackIndexRouteImport
+      parentRoute: typeof FeedbackRoute
     }
-    '/my/gear': {
-      id: '/my/gear'
-      path: '/gear'
-      fullPath: '/my/gear'
-      preLoaderRoute: typeof MyGearRouteImport
-      parentRoute: typeof MyRoute
-    }
-    '/my/_tabs': {
-      id: '/my/_tabs'
+    '/feedback/_tabs': {
+      id: '/feedback/_tabs'
       path: ''
-      fullPath: '/my'
-      preLoaderRoute: typeof MyTabsRouteImport
-      parentRoute: typeof MyRoute
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackTabsRouteImport
+      parentRoute: typeof FeedbackRoute
     }
-    '/members/waivers': {
-      id: '/members/waivers'
-      path: '/waivers'
-      fullPath: '/members/waivers'
-      preLoaderRoute: typeof MembersWaiversRouteImport
+    '/gazette/': {
+      id: '/gazette/'
+      path: '/'
+      fullPath: '/gazette/'
+      preLoaderRoute: typeof GazetteIndexRouteImport
+      parentRoute: typeof GazetteRoute
+    }
+    '/gazette/$publicId': {
+      id: '/gazette/$publicId'
+      path: '/$publicId'
+      fullPath: '/gazette/$publicId'
+      preLoaderRoute: typeof GazettePublicIdRouteImport
+      parentRoute: typeof GazetteRoute
+    }
+    '/gear/': {
+      id: '/gear/'
+      path: '/'
+      fullPath: '/gear/'
+      preLoaderRoute: typeof GearIndexRouteImport
+      parentRoute: typeof GearRoute
+    }
+    '/gear/$publicId': {
+      id: '/gear/$publicId'
+      path: '/$publicId'
+      fullPath: '/gear/$publicId'
+      preLoaderRoute: typeof GearPublicIdRouteImport
+      parentRoute: typeof GearRoute
+    }
+    '/members/$publicId': {
+      id: '/members/$publicId'
+      path: '/$publicId'
+      fullPath: '/members/$publicId'
+      preLoaderRoute: typeof MembersPublicIdRouteImport
       parentRoute: typeof MembersRoute
     }
     '/members/_tabs': {
@@ -1287,214 +1287,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MembersTabsRouteImport
       parentRoute: typeof MembersRoute
     }
-    '/members/$publicId': {
-      id: '/members/$publicId'
-      path: '/$publicId'
-      fullPath: '/members/$publicId'
-      preLoaderRoute: typeof MembersPublicIdRouteImport
+    '/members/waivers': {
+      id: '/members/waivers'
+      path: '/waivers'
+      fullPath: '/members/waivers'
+      preLoaderRoute: typeof MembersWaiversRouteImport
       parentRoute: typeof MembersRoute
     }
-    '/gear/$publicId': {
-      id: '/gear/$publicId'
-      path: '/$publicId'
-      fullPath: '/gear/$publicId'
-      preLoaderRoute: typeof GearPublicIdRouteImport
-      parentRoute: typeof GearRoute
+    '/my/': {
+      id: '/my/'
+      path: '/'
+      fullPath: '/my/'
+      preLoaderRoute: typeof MyIndexRouteImport
+      parentRoute: typeof MyRoute
     }
-    '/gazette/$publicId': {
-      id: '/gazette/$publicId'
-      path: '/$publicId'
-      fullPath: '/gazette/$publicId'
-      preLoaderRoute: typeof GazettePublicIdRouteImport
-      parentRoute: typeof GazetteRoute
-    }
-    '/feedback/_tabs': {
-      id: '/feedback/_tabs'
+    '/my/_tabs': {
+      id: '/my/_tabs'
       path: ''
-      fullPath: '/feedback'
-      preLoaderRoute: typeof FeedbackTabsRouteImport
-      parentRoute: typeof FeedbackRoute
+      fullPath: '/my'
+      preLoaderRoute: typeof MyTabsRouteImport
+      parentRoute: typeof MyRoute
     }
-    '/calendar/$publicId': {
-      id: '/calendar/$publicId'
-      path: '/$publicId'
-      fullPath: '/calendar/$publicId'
-      preLoaderRoute: typeof CalendarPublicIdRouteImport
-      parentRoute: typeof CalendarRoute
+    '/my/gear': {
+      id: '/my/gear'
+      path: '/gear'
+      fullPath: '/my/gear'
+      preLoaderRoute: typeof MyGearRouteImport
+      parentRoute: typeof MyRoute
     }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
+    '/register/pending': {
+      id: '/register/pending'
+      path: '/register/pending'
+      fullPath: '/register/pending'
+      preLoaderRoute: typeof RegisterPendingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/my/gear/': {
-      id: '/my/gear/'
-      path: '/'
-      fullPath: '/my/gear/'
-      preLoaderRoute: typeof MyGearIndexRouteImport
-      parentRoute: typeof MyGearRoute
-    }
-    '/members/_tabs/': {
-      id: '/members/_tabs/'
-      path: '/'
-      fullPath: '/members/'
-      preLoaderRoute: typeof MembersTabsIndexRouteImport
-      parentRoute: typeof MembersTabsRoute
-    }
-    '/gear/loans/': {
-      id: '/gear/loans/'
-      path: '/loans'
-      fullPath: '/gear/loans/'
-      preLoaderRoute: typeof GearLoansIndexRouteImport
-      parentRoute: typeof GearRoute
-    }
-    '/my/gear/cart': {
-      id: '/my/gear/cart'
-      path: '/cart'
-      fullPath: '/my/gear/cart'
-      preLoaderRoute: typeof MyGearCartRouteImport
-      parentRoute: typeof MyGearRoute
-    }
-    '/my/_tabs/waiver': {
-      id: '/my/_tabs/waiver'
-      path: '/waiver'
-      fullPath: '/my/waiver'
-      preLoaderRoute: typeof MyTabsWaiverRouteImport
-      parentRoute: typeof MyTabsRoute
-    }
-    '/my/_tabs/security': {
-      id: '/my/_tabs/security'
-      path: '/security'
-      fullPath: '/my/security'
-      preLoaderRoute: typeof MyTabsSecurityRouteImport
-      parentRoute: typeof MyTabsRoute
-    }
-    '/my/_tabs/profile': {
-      id: '/my/_tabs/profile'
-      path: '/profile'
-      fullPath: '/my/profile'
-      preLoaderRoute: typeof MyTabsProfileRouteImport
-      parentRoute: typeof MyTabsRoute
-    }
-    '/my/_tabs/preferences': {
-      id: '/my/_tabs/preferences'
-      path: '/preferences'
-      fullPath: '/my/preferences'
-      preLoaderRoute: typeof MyTabsPreferencesRouteImport
-      parentRoute: typeof MyTabsRoute
-    }
-    '/my/_tabs/details': {
-      id: '/my/_tabs/details'
-      path: '/details'
-      fullPath: '/my/details'
-      preLoaderRoute: typeof MyTabsDetailsRouteImport
-      parentRoute: typeof MyTabsRoute
-    }
-    '/my/_tabs/contacts': {
-      id: '/my/_tabs/contacts'
-      path: '/contacts'
-      fullPath: '/my/contacts'
-      preLoaderRoute: typeof MyTabsContactsRouteImport
-      parentRoute: typeof MyTabsRoute
-    }
-    '/my/_tabs/calendar': {
-      id: '/my/_tabs/calendar'
-      path: '/calendar'
-      fullPath: '/my/calendar'
-      preLoaderRoute: typeof MyTabsCalendarRouteImport
-      parentRoute: typeof MyTabsRoute
-    }
-    '/members/_tabs/unclaimed': {
-      id: '/members/_tabs/unclaimed'
-      path: '/unclaimed'
-      fullPath: '/members/unclaimed'
-      preLoaderRoute: typeof MembersTabsUnclaimedRouteImport
-      parentRoute: typeof MembersTabsRoute
-    }
-    '/members/_tabs/rejected': {
-      id: '/members/_tabs/rejected'
-      path: '/rejected'
-      fullPath: '/members/rejected'
-      preLoaderRoute: typeof MembersTabsRejectedRouteImport
-      parentRoute: typeof MembersTabsRoute
-    }
-    '/members/_tabs/pending': {
-      id: '/members/_tabs/pending'
-      path: '/pending'
-      fullPath: '/members/pending'
-      preLoaderRoute: typeof MembersTabsPendingRouteImport
-      parentRoute: typeof MembersTabsRoute
-    }
-    '/members/_tabs/deactivated': {
-      id: '/members/_tabs/deactivated'
-      path: '/deactivated'
-      fullPath: '/members/deactivated'
-      preLoaderRoute: typeof MembersTabsDeactivatedRouteImport
-      parentRoute: typeof MembersTabsRoute
-    }
-    '/gear/loans/$publicId': {
-      id: '/gear/loans/$publicId'
-      path: '/loans/$publicId'
-      fullPath: '/gear/loans/$publicId'
-      preLoaderRoute: typeof GearLoansPublicIdRouteImport
-      parentRoute: typeof GearRoute
-    }
-    '/feedback/_tabs/site': {
-      id: '/feedback/_tabs/site'
-      path: '/site'
-      fullPath: '/feedback/site'
-      preLoaderRoute: typeof FeedbackTabsSiteRouteImport
-      parentRoute: typeof FeedbackTabsRoute
-    }
-    '/feedback/_tabs/club': {
-      id: '/feedback/_tabs/club'
-      path: '/club'
-      fullPath: '/feedback/club'
-      preLoaderRoute: typeof FeedbackTabsClubRouteImport
-      parentRoute: typeof FeedbackTabsRoute
-    }
-    '/api/sponsor-logo/$': {
-      id: '/api/sponsor-logo/$'
-      path: '/api/sponsor-logo/$'
-      fullPath: '/api/sponsor-logo/$'
-      preLoaderRoute: typeof ApiSponsorLogoSplatRouteImport
+    '/register/profile': {
+      id: '/register/profile'
+      path: '/register/profile'
+      fullPath: '/register/profile'
+      preLoaderRoute: typeof RegisterProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/landing/$': {
-      id: '/api/landing/$'
-      path: '/api/landing/$'
-      fullPath: '/api/landing/$'
-      preLoaderRoute: typeof ApiLandingSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/gear-thumbnails/$': {
-      id: '/api/gear-thumbnails/$'
-      path: '/api/gear-thumbnails/$'
-      fullPath: '/api/gear-thumbnails/$'
-      preLoaderRoute: typeof ApiGearThumbnailsSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/gazette-pdf/$': {
-      id: '/api/gazette-pdf/$'
-      path: '/api/gazette-pdf/$'
-      fullPath: '/api/gazette-pdf/$'
-      preLoaderRoute: typeof ApiGazettePdfSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/calendar/$': {
-      id: '/api/calendar/$'
-      path: '/api/calendar/$'
-      fullPath: '/api/calendar/$'
-      preLoaderRoute: typeof ApiCalendarSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/avatars/$': {
-      id: '/api/avatars/$'
-      path: '/api/avatars/$'
-      fullPath: '/api/avatars/$'
-      preLoaderRoute: typeof ApiAvatarsSplatRouteImport
+    '/api/account/export': {
+      id: '/api/account/export'
+      path: '/api/account/export'
+      fullPath: '/api/account/export'
+      preLoaderRoute: typeof ApiAccountExportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/album-image/$': {
@@ -1504,12 +1343,173 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAlbumImageSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/account/export': {
-      id: '/api/account/export'
-      path: '/api/account/export'
-      fullPath: '/api/account/export'
-      preLoaderRoute: typeof ApiAccountExportRouteImport
+    '/api/avatars/$': {
+      id: '/api/avatars/$'
+      path: '/api/avatars/$'
+      fullPath: '/api/avatars/$'
+      preLoaderRoute: typeof ApiAvatarsSplatRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/calendar/$': {
+      id: '/api/calendar/$'
+      path: '/api/calendar/$'
+      fullPath: '/api/calendar/$'
+      preLoaderRoute: typeof ApiCalendarSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/gazette-pdf/$': {
+      id: '/api/gazette-pdf/$'
+      path: '/api/gazette-pdf/$'
+      fullPath: '/api/gazette-pdf/$'
+      preLoaderRoute: typeof ApiGazettePdfSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/gear-thumbnails/$': {
+      id: '/api/gear-thumbnails/$'
+      path: '/api/gear-thumbnails/$'
+      fullPath: '/api/gear-thumbnails/$'
+      preLoaderRoute: typeof ApiGearThumbnailsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/landing/$': {
+      id: '/api/landing/$'
+      path: '/api/landing/$'
+      fullPath: '/api/landing/$'
+      preLoaderRoute: typeof ApiLandingSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sponsor-logo/$': {
+      id: '/api/sponsor-logo/$'
+      path: '/api/sponsor-logo/$'
+      fullPath: '/api/sponsor-logo/$'
+      preLoaderRoute: typeof ApiSponsorLogoSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feedback/_tabs/club': {
+      id: '/feedback/_tabs/club'
+      path: '/club'
+      fullPath: '/feedback/club'
+      preLoaderRoute: typeof FeedbackTabsClubRouteImport
+      parentRoute: typeof FeedbackTabsRoute
+    }
+    '/feedback/_tabs/site': {
+      id: '/feedback/_tabs/site'
+      path: '/site'
+      fullPath: '/feedback/site'
+      preLoaderRoute: typeof FeedbackTabsSiteRouteImport
+      parentRoute: typeof FeedbackTabsRoute
+    }
+    '/gear/loans/': {
+      id: '/gear/loans/'
+      path: '/loans'
+      fullPath: '/gear/loans/'
+      preLoaderRoute: typeof GearLoansIndexRouteImport
+      parentRoute: typeof GearRoute
+    }
+    '/gear/loans/$publicId': {
+      id: '/gear/loans/$publicId'
+      path: '/loans/$publicId'
+      fullPath: '/gear/loans/$publicId'
+      preLoaderRoute: typeof GearLoansPublicIdRouteImport
+      parentRoute: typeof GearRoute
+    }
+    '/members/_tabs/': {
+      id: '/members/_tabs/'
+      path: '/'
+      fullPath: '/members/'
+      preLoaderRoute: typeof MembersTabsIndexRouteImport
+      parentRoute: typeof MembersTabsRoute
+    }
+    '/members/_tabs/deactivated': {
+      id: '/members/_tabs/deactivated'
+      path: '/deactivated'
+      fullPath: '/members/deactivated'
+      preLoaderRoute: typeof MembersTabsDeactivatedRouteImport
+      parentRoute: typeof MembersTabsRoute
+    }
+    '/members/_tabs/pending': {
+      id: '/members/_tabs/pending'
+      path: '/pending'
+      fullPath: '/members/pending'
+      preLoaderRoute: typeof MembersTabsPendingRouteImport
+      parentRoute: typeof MembersTabsRoute
+    }
+    '/members/_tabs/rejected': {
+      id: '/members/_tabs/rejected'
+      path: '/rejected'
+      fullPath: '/members/rejected'
+      preLoaderRoute: typeof MembersTabsRejectedRouteImport
+      parentRoute: typeof MembersTabsRoute
+    }
+    '/members/_tabs/unclaimed': {
+      id: '/members/_tabs/unclaimed'
+      path: '/unclaimed'
+      fullPath: '/members/unclaimed'
+      preLoaderRoute: typeof MembersTabsUnclaimedRouteImport
+      parentRoute: typeof MembersTabsRoute
+    }
+    '/my/_tabs/calendar': {
+      id: '/my/_tabs/calendar'
+      path: '/calendar'
+      fullPath: '/my/calendar'
+      preLoaderRoute: typeof MyTabsCalendarRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
+    '/my/_tabs/contacts': {
+      id: '/my/_tabs/contacts'
+      path: '/contacts'
+      fullPath: '/my/contacts'
+      preLoaderRoute: typeof MyTabsContactsRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
+    '/my/_tabs/details': {
+      id: '/my/_tabs/details'
+      path: '/details'
+      fullPath: '/my/details'
+      preLoaderRoute: typeof MyTabsDetailsRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
+    '/my/_tabs/preferences': {
+      id: '/my/_tabs/preferences'
+      path: '/preferences'
+      fullPath: '/my/preferences'
+      preLoaderRoute: typeof MyTabsPreferencesRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
+    '/my/_tabs/profile': {
+      id: '/my/_tabs/profile'
+      path: '/profile'
+      fullPath: '/my/profile'
+      preLoaderRoute: typeof MyTabsProfileRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
+    '/my/_tabs/security': {
+      id: '/my/_tabs/security'
+      path: '/security'
+      fullPath: '/my/security'
+      preLoaderRoute: typeof MyTabsSecurityRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
+    '/my/_tabs/waiver': {
+      id: '/my/_tabs/waiver'
+      path: '/waiver'
+      fullPath: '/my/waiver'
+      preLoaderRoute: typeof MyTabsWaiverRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
+    '/my/gear/': {
+      id: '/my/gear/'
+      path: '/'
+      fullPath: '/my/gear/'
+      preLoaderRoute: typeof MyGearIndexRouteImport
+      parentRoute: typeof MyGearRoute
+    }
+    '/my/gear/cart': {
+      id: '/my/gear/cart'
+      path: '/cart'
+      fullPath: '/my/gear/cart'
+      preLoaderRoute: typeof MyGearCartRouteImport
+      parentRoute: typeof MyGearRoute
     }
   }
 }

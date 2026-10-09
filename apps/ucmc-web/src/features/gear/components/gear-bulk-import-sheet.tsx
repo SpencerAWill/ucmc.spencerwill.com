@@ -638,8 +638,7 @@ function GearImportRow({
             onValueChange={(v) =>
               onChange({
                 acquisitionKind: v as
-                  | GearAcquisitionKind
-                  | typeof ACQUISITION_KIND_NONE,
+                  GearAcquisitionKind | typeof ACQUISITION_KIND_NONE,
               })
             }
           >
