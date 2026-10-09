@@ -526,6 +526,13 @@
       "when": 1779477596951,
       "tag": "0074_drop_announcements",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1779477596952,
+      "tag": "0075_calendar_events",
+      "breakpoints": true
     }
   ]
 }

@@ -42,6 +42,7 @@ const FEATURES = [
   "album",
   "audit",
   "auth",
+  "calendar",
   "club-feedback",
   "feedback",
   "gazette",
