@@ -79,6 +79,7 @@ import { Route as ApiSponsorLogoSplatRouteImport } from './routes/api/sponsor-lo
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
+import { Route as ApiCalendarSplatRouteImport } from './routes/api/calendar.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
 import { Route as ApiAlbumImageSplatRouteImport } from './routes/api/album-image.$'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
@@ -430,6 +431,11 @@ const ApiGazettePdfSplatRoute = ApiGazettePdfSplatRouteImport.update({
   path: '/api/gazette-pdf/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCalendarSplatRoute = ApiCalendarSplatRouteImport.update({
+  id: '/api/calendar/$',
+  path: '/api/calendar/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   id: '/api/avatars/$',
   path: '/api/avatars/$',
@@ -496,6 +502,7 @@ export interface FileRoutesByFullPath {
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/calendar/$': typeof ApiCalendarSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -563,6 +570,7 @@ export interface FileRoutesByTo {
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/calendar/$': typeof ApiCalendarSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -638,6 +646,7 @@ export interface FileRoutesById {
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/calendar/$': typeof ApiCalendarSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -712,6 +721,7 @@ export interface FileRouteTypes {
     | '/api/account/export'
     | '/api/album-image/$'
     | '/api/avatars/$'
+    | '/api/calendar/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -779,6 +789,7 @@ export interface FileRouteTypes {
     | '/api/account/export'
     | '/api/album-image/$'
     | '/api/avatars/$'
+    | '/api/calendar/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -853,6 +864,7 @@ export interface FileRouteTypes {
     | '/api/account/export'
     | '/api/album-image/$'
     | '/api/avatars/$'
+    | '/api/calendar/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -917,6 +929,7 @@ export interface RootRouteChildren {
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAlbumImageSplatRoute: typeof ApiAlbumImageSplatRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
+  ApiCalendarSplatRoute: typeof ApiCalendarSplatRoute
   ApiGazettePdfSplatRoute: typeof ApiGazettePdfSplatRoute
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
@@ -1415,6 +1428,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGazettePdfSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/calendar/$': {
+      id: '/api/calendar/$'
+      path: '/api/calendar/$'
+      fullPath: '/api/calendar/$'
+      preLoaderRoute: typeof ApiCalendarSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/avatars/$': {
       id: '/api/avatars/$'
       path: '/api/avatars/$'
@@ -1620,6 +1640,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAlbumImageSplatRoute: ApiAlbumImageSplatRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
+  ApiCalendarSplatRoute: ApiCalendarSplatRoute,
   ApiGazettePdfSplatRoute: ApiGazettePdfSplatRoute,
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,

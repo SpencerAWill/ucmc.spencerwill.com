@@ -136,3 +136,59 @@ export function buildOccurrences(
   });
   return out;
 }
+
+/**
+ * A series as a single occurrence-shaped record, *unexpanded*.
+ *
+ * What the `.ics` feed renders: one VEVENT carrying the series' RRULE,
+ * rather than one per occurrence. Clients expand it themselves, which
+ * is what the format is for — and an expanded feed would have a
+ * horizon, so a member who subscribes and never opens the site again
+ * would silently stop seeing the weekly meeting the day that horizon
+ * passed.
+ */
+export function seriesAsOccurrence(series: EventSeries): CalendarOccurrence {
+  return {
+    eventId: series.id,
+    publicId: series.publicId,
+    occurrenceStart: series.startsAt,
+    startsAt: series.startsAt,
+    endsAt: series.endsAt,
+    allDay: series.allDay,
+    title: series.title,
+    description: series.description,
+    location: series.location,
+    kind: series.kind,
+    visibility: series.visibility,
+    rrule: series.rrule,
+    canceled: series.canceledAt !== null,
+    sequence: series.sequence,
+    updatedAt: series.updatedAt,
+  };
+}
+
+/**
+ * One occurrence of a series as modified by an exception.
+ *
+ * Carries no RRULE: an override is the same UID with a RECURRENCE-ID
+ * naming the slot it replaces, and repeating the rule would have the
+ * client read it as a second infinite series.
+ */
+export function overrideAsOccurrence(
+  series: EventSeries,
+  exception: EventExceptionRow,
+  fallbackStart: Temporal.Instant,
+  fallbackEnd: Temporal.Instant | null,
+): CalendarOccurrence {
+  return {
+    ...seriesAsOccurrence(series),
+    rrule: null,
+    occurrenceStart: exception.occurrenceStart,
+    startsAt: exception.startsAt ?? fallbackStart,
+    endsAt: exception.endsAt ?? fallbackEnd,
+    title: exception.title ?? series.title,
+    description: exception.description ?? series.description,
+    location: exception.location ?? series.location,
+    canceled: series.canceledAt !== null || exception.canceled,
+  };
+}
