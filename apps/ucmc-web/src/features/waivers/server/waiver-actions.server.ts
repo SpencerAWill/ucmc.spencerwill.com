@@ -20,7 +20,7 @@ import {
 } from "#/server/audit/audit-log.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, schema } from "#/server/db";
+import { getDb, schema, selectInChunks } from "#/server/db";
 import {
   currentAttestationFilter,
   currentlyAttestedUserIds,
@@ -275,10 +275,12 @@ export async function bulkAttestWaiversAction(input: {
   // Pre-validate every target is approved — fail before any insert if
   // even one is wrong. drizzle-kit doesn't expose a true transaction
   // over D1, so the pre-check + multi-row insert is best-effort.
-  const allTargets = await db.query.users.findMany({
-    where: (users, { inArray }) => inArray(users.id, userIds),
-    columns: { id: true, status: true },
-  });
+  const allTargets = await selectInChunks(userIds, (chunk) =>
+    db.query.users.findMany({
+      where: (users, { inArray }) => inArray(users.id, [...chunk]),
+      columns: { id: true, status: true },
+    }),
+  );
   const found = new Set(allTargets.map((t) => t.id));
   for (const id of userIds) {
     if (!found.has(id)) {
