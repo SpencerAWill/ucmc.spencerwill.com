@@ -276,13 +276,51 @@ The tick is `0 12 * * *` — **08:00 EDT / 07:00 EST** in Cincinnati. The hour i
 - **Sorting carries a direction**, and the per-key default is in `lib/loan-sort.ts` (`due_at` → `asc`, so most-overdue-first; `checked_out_at` → `desc`). The contract lives in `lib/` rather than beside `listLoans` because the repo applies it, the route puts it in the URL and the toolbar offers it — and two of those three are client code. The route omits `dir` from the URL whenever it matches the default, so a shared link carries only what the sender actually changed.
 - **The "Overdue only" chip is suppressed on the History tab**, where its checkbox is hidden — otherwise a tab switch strands a chip with no control behind it and a filter count nobody can clear.
 
+### Two ways a code reaches the desk, one discriminator
+
+**`parseScanPayload` (`lib/scan-payload.ts`) is the only place that decides what a scanned string is.** `handleScan` used to branch inline — `ucmc-cart:` prefix → resolve a cart, anything else → treat it as a short code — which was fine while the camera was the only producer. #224 finding 5 called it out; #215 made it real by adding a second producer. #223's counted-stock bin labels (`ucmc-model:`) add one branch here, not a fourth copy across two panes and a wedge path.
+
+It also strips an **AIM symbology identifier** (ISO/IEC 15424) — `]` + symbology char + modifier — which a reader prepends when "Transmit Code ID Character" is set to AIM. **Our labels transmit `]C0`, plain CODE128; `]C1` is GS1-128, which we never emit**, so the parser matches the identifier's _shape_. A discriminator hardcoded to the `]C1` most documentation leads with would have failed on every real scan.
+
+**The symbology is carried through rather than discarded, as a hint and never a gate.** A 2D imager pointed at a harness reads the manufacturer's own DataMatrix — Petzl marks PPE with one carrying the individual serial number — and `]d*` is a symbology we never print, so the pane can say "that's the manufacturer's tag" instead of "no gear matches code 3F8A91C2". It cannot be a gate: a cart QR could be printed on paper, so refusing a payload for arriving in an unexpected symbology would reject real scans to enforce an assumption nobody made.
+
+`isCartToken()` is gone. knip caught it losing its last call site, which is what knip is kept green for — a second, weaker discriminator beside the real one is the drift.
+
+### USB keyboard-wedge scanners
+
+Cheap USB scanners are HID keyboard wedges: they "type" the payload then a terminator. No permission, no camera, far faster for a batch of returns. **The browser cannot tell one from a keyboard** — a `keydown` carries no device identity — so recognition is a heuristic, and `lib/wedge-buffer.ts` is all of it, as a pure reducer with the clock as a parameter.
+
+Calibrated against `onscan.js`, the closest prior art. **Its `minLength: 6` is the one default we cannot take** — `LJ4` is a real code — and that, plus an untyped vanilla-JS dependency against a `minimumReleaseAge`-quarantined supply chain, is why this is ~100 lines rather than a dep.
+
+**Two tiers, because they fail in opposite directions.**
+
+- **Tier 1 — the burst announces itself.** An opener identifies it from the first keystroke, so it can be captured **inside a focused text field**. Two openers: `]` (the AIM flag — the standard way, and the preferred config) and `WEDGE_SENTINEL` (`~`, a plain configured preamble, for the budget readers that cannot emit an AIM ID at all).
+- **Tier 2 — timing alone.** Machine speed across every gap (`maxInterKeyMs` 50) plus a terminator. Bails out inside focused text fields, because it is only a _guess_ that a machine is typing. **This tier is why the feature works out of the box** — without it the replacement gun somebody plugs in next season fails _silently_, which in a volunteer-run cave is the worst available outcome.
+
+Four things that are the way they are on purpose:
+
+- **`~` is swallowed on sight; `]` is not.** The sentinel is ours and nobody types a tilde, so capturing it leaks nothing. `]` is a character an officer might really write ("replaced buckle [2024]"), so it opens a tier-1 burst but the keystroke itself passes through and is buffered — capture starts at the next key. The worst case is one stray `]`, not an unTypeable character.
+- **The reducer never strips an AIM identifier.** It strips only `WEDGE_SENTINEL`, its own invention. `parseScanPayload` owns the rest, which is what stops the two files disagreeing about whether `]99CH93` is an identifier (it isn't) or part of a code (it is).
+- **A late key starts a NEW buffer rather than poisoning the current one.** Discarding instead lets one stray keystroke eat the scan that follows.
+- **`preventDefault` on a terminator that completes a scan is load-bearing, not tidiness.** The desk has a live "Check out N items" button and Radix focuses something when the Sheet opens, so an uncaptured Enter submits the batch mid-scan; a Tab terminator moves focus. The inverse matters equally — a terminator that completes nothing must fall through, or the submit button becomes unreachable by keyboard.
+
+**The listener is on `document` in the capture phase, so focus is irrelevant.** That is the answer to #215's rejected "always-focused hidden input": not competing for focus beats winning. Capture phase specifically, because `cmdk` and Radix handle Enter and Tab on their own elements. **The jsdom suite cannot see that choice** — the combobox is stubbed there, so bubble-phase passes every component test; `e2e/gear-scanner.spec.ts` is what covers it.
+
+**`data-wedge-capture` opts an input out of the text-field protection**, and `GearCodeSearchCombobox` wears it. That input is _already_ an accidental wedge target — its own doc comment describes typing a code and pressing Enter — but it resolves by prefix search and first match while `handleScan` resolves exactly. Without the attribute, one trigger pull means two different things depending on where focus sat.
+
+**The wedge defaults ON (`ucmc:gear-scanner:wedge`), the camera defaults OFF.** A camera that starts itself fires a permission prompt the moment the Sheet opens; a wedge that is simply not plugged in costs nothing.
+
+**`DeskScanControls` owns the Scan column** — camera, wedge, and **one** confirmation line for both. Both panes rendered that column verbatim before, and #223's counted pane would have been a third copy. The camera scanner's in-viewfinder "Scanned CH93" pill moved there: two confirmations for one officer action drift in wording and timing, and the wedge has no viewfinder to overlay one on.
+
+**Scanner config, for whoever buys the gun** (all set by scanning setup barcodes from its manual): "Transmit Code ID Character" = **AIM** (defaults to None; if the reader has no AIM option, set the prefix/preamble to `~` instead) · terminator = **Enter** (Tab also works) · keyboard layout = **US**, the one that actually bites, since a mismatch on a shared cave laptop produces silently mangled codes rather than an error · and **leave it in keyboard-wedge mode**. Do not flip it to HID POS: that is the better protocol (decoded data plus symbology in one report, reachable via WebHID) but it takes the gun _out_ of keyboard mode, so it stops working in every other application on that laptop. A **2D imager** reads our CODE128 labels _and_ a member's cart QR off their phone; a 1D laser reads the labels only.
+
 ### Barcode scanning is hand-rolled
 
 Native `BarcodeDetector` on Chrome / Edge / Android Chrome (zero deps, zero WASM), with a `barcode-detector/ponyfill` fallback for Firefox and Safari, neither of which has shipped the Barcode Detection API. The component feature-tests rather than sniffing, so that list is orientation only. Format whitelist is `["code_128", "qr_code"]`. CSP needs `script-src 'wasm-unsafe-eval'`; `Permissions-Policy: camera=(self)` is scoped to `/gear/loans*` only (`server/headers.server.ts` `securityHeadersForPath`).
 
 **The ZXing WASM the ponyfill needs is copied into `public/zxing-wasm/` at build time by `scripts/sync-zxing-wasm.ts`** (chained into `dev` and `build` via `prepare:assets`, output gitignored) and served same-origin via `prepareZXingModule({ overrides.locateFile })` so `connect-src 'self'` stays sufficient. It resolves the binary _through_ `barcode-detector` so it always copies the exact nested `zxing-wasm` the ponyfill will load.
 
-**It was hand-vendored and committed, and that is what broke the scanner.** The Emscripten glue JS and its `.wasm` are one artifact split across two files. They keep the same import/export surface across releases, so a stale binary instantiates cleanly and then throws `RuntimeError: table index is out of bounds` on the first decode. The `barcode-detector` 3.1.3 → 3.2.0 bump in #144 left the committed binary behind, and because the scan loop swallowed per-frame `detect()` errors, every ponyfill-path browser had a live camera preview that silently decoded nothing — no error, no toast, for months. The loop now counts consecutive `detect()` failures and surfaces a dead detector after 30, and `e2e/gear-scanner.spec.ts` drives a real QR through a real camera (Chromium fake-capture) so the decode seam is covered at all — see the testing rule.
+**The camera scanner was hand-vendored and committed, and that is what broke it.** The Emscripten glue JS and its `.wasm` are one artifact split across two files. They keep the same import/export surface across releases, so a stale binary instantiates cleanly and then throws `RuntimeError: table index is out of bounds` on the first decode. The `barcode-detector` 3.1.3 → 3.2.0 bump in #144 left the committed binary behind, and because the scan loop swallowed per-frame `detect()` errors, every ponyfill-path browser had a live camera preview that silently decoded nothing — no error, no toast, for months. The loop now counts consecutive `detect()` failures and surfaces a dead detector after 30, and `e2e/gear-scanner.spec.ts` drives a real QR through a real camera (Chromium fake-capture) so the decode seam is covered at all — see the testing rule.
 
 ### Backfill
 

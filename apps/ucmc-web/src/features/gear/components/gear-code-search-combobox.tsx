@@ -73,6 +73,15 @@ export function GearCodeSearchCombobox({
       className="overflow-visible rounded-md border bg-transparent"
     >
       <CommandInput
+        // Opts this input out of the wedge listener's text-field
+        // protection, so a scan taken while the caret sits here is
+        // routed to the desk's `handleScan` rather than resolved by
+        // cmdk. Both would "work", and that is the problem: cmdk picks
+        // the first PREFIX match while `handleScan` looks the code up
+        // exactly, so without this one trigger pull means two different
+        // things depending on where focus happened to be. See
+        // `use-barcode-wedge.ts`.
+        data-wedge-capture=""
         value={input}
         onValueChange={(v) => {
           if (!disabled) setInput(v);

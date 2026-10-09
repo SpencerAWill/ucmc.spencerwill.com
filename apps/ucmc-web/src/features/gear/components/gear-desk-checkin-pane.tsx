@@ -13,7 +13,7 @@ import {
 } from "#/components/ui/table";
 import { fetchGearByCode } from "#/features/gear/api/queries";
 import { useCheckinLoans } from "#/features/gear/api/use-checkin-loans";
-import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
+import { DeskScanControls } from "#/features/gear/components/desk-scan-controls";
 import { CheckinItemRow } from "#/features/gear/components/gear-desk-item-row";
 import { GearCodeSearchCombobox } from "#/features/gear/components/gear-code-search-combobox";
 import {
@@ -161,11 +161,8 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
           rationale (sticky's containing block is the grid, not the
           cell; `items-start` keeps the cell content-height). */}
       <div className="grid items-start gap-4 md:grid-cols-[18rem_1fr]">
-        <div className="sticky top-0 z-10 space-y-1.5 bg-background pb-2 md:pb-0">
-          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Scan
-          </Label>
-          <BarcodeScanner onResult={handleScan} />
+        <div className="sticky top-0 z-10 bg-background pb-2 md:pb-0">
+          <DeskScanControls onScan={handleScan} />
         </div>
         <div className="space-y-2">
           <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">

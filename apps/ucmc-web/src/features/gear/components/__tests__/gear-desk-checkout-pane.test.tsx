@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
+import { WEDGE_SENTINEL } from "#/features/gear/lib/wedge-buffer";
 import { GearDeskCheckoutPane } from "#/features/gear/components/gear-desk-checkout-pane";
 import type { LoanDefaults } from "#/features/gear/server/loans-actions.server";
 
@@ -359,5 +360,174 @@ describe("GearDeskCheckoutPane officer override", () => {
     expect(checkoutMutateMock.mock.calls[1]?.[0]).not.toHaveProperty(
       "overrideStanding",
     );
+  });
+});
+
+describe("GearDeskCheckoutPane keyboard-wedge branch", () => {
+  /**
+   * Drive a synthetic wedge burst. `user-event` with `delay: null`
+   * dispatches without awaiting a timer between keys, which puts every
+   * `timeStamp` gap at or near zero — machine speed by construction,
+   * which is exactly the signature being asserted on.
+   *
+   * The timing MATRIX (slow bursts, stray keys, overflow) belongs to
+   * `wedge-buffer.test.ts`, where the clock is a parameter. What can
+   * only be seen here is the seam: the document listener, the focus
+   * rules, and `preventDefault`.
+   */
+  const wedge = async (payload: string) => {
+    const user = userEvent.setup({ delay: null });
+    await user.keyboard(`${payload}{Enter}`);
+  };
+
+  /**
+   * Dispatch a burst as raw `KeyboardEvent`s so each one's
+   * `defaultPrevented` can be inspected. `user-event` owns the
+   * ordinary cases; this exists only where the assertion is about
+   * `preventDefault` itself. Timestamps are left to jsdom, which
+   * stamps them from `performance.now()` at construction — synchronous
+   * dispatch puts every gap at or near zero.
+   *
+   * Returns the terminator event.
+   */
+  const dispatchBurst = (payload: string): KeyboardEvent => {
+    const events = [...payload, "Enter"].map(
+      (key) =>
+        new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
+    );
+    act(() => {
+      for (const event of events) {
+        (document.activeElement ?? document.body).dispatchEvent(event);
+      }
+    });
+    return events[events.length - 1];
+  };
+
+  const GEAR_ROW = {
+    publicId: "gear_w",
+    code: "CH93",
+    name: "Black Diamond Momentum",
+    typeName: "Harness",
+    thumbnailKey: null,
+    status: "active",
+    condition: "serviceable",
+    hasOpenLoan: false,
+    openLoanMemberFullName: null,
+    openLoanMemberAvatarKey: null,
+  };
+
+  it("adds a row from a burst typed with nothing focused", async () => {
+    fetchGearByCodeMock.mockResolvedValue(GEAR_ROW);
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    await wedge("CH93");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("row-CH93")).toBeInTheDocument(),
+    );
+    // Resolved exactly, through the same path the camera scanner uses.
+    expect(fetchGearByCodeMock).toHaveBeenCalledWith("CH93");
+  });
+
+  it("strips an AIM symbology identifier before the lookup", async () => {
+    // `]C0` is plain CODE128 — what our labels transmit once the gun's
+    // "Transmit Code ID Character" is set to AIM.
+    fetchGearByCodeMock.mockResolvedValue(GEAR_ROW);
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    await wedge("]C0CH93");
+
+    await waitFor(() =>
+      expect(fetchGearByCodeMock).toHaveBeenCalledWith("CH93"),
+    );
+  });
+
+  it("leaves real typing in the notes field alone", async () => {
+    // A bare burst is only a GUESS that a machine is typing, so it must
+    // never eat what an officer is writing.
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    const notes = screen.getByLabelText(/notes/i);
+    const user = userEvent.setup({ delay: null });
+    await user.click(notes);
+
+    await user.keyboard("CH93");
+
+    expect(notes).toHaveValue("CH93");
+    expect(fetchGearByCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("captures a sentinel burst even inside the notes field", async () => {
+    // The payoff for configuring the gun: a burst that announces itself
+    // is unambiguous, so there is nothing to protect typing from.
+    fetchGearByCodeMock.mockResolvedValue(GEAR_ROW);
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    const notes = screen.getByLabelText(/notes/i);
+    const user = userEvent.setup({ delay: null });
+    await user.click(notes);
+
+    await user.keyboard(`${WEDGE_SENTINEL}CH93{Enter}`);
+
+    await waitFor(() =>
+      expect(fetchGearByCodeMock).toHaveBeenCalledWith("CH93"),
+    );
+    expect(notes).toHaveValue("");
+  });
+
+  it("calls preventDefault on a terminator that completes a scan", async () => {
+    // The failure this exists for: the desk carries a live "Check out N
+    // items" button, Radix focuses something when the Sheet opens, and
+    // an uncaptured Enter submits the batch mid-scan. A Tab terminator
+    // moves focus instead, which is just as wrong.
+    //
+    // Asserted on `defaultPrevented` rather than on the button not
+    // firing, because **jsdom does not synthesize a click from Enter on
+    // a focused button** — an assertion phrased that way passes whether
+    // or not the terminator is captured, which is how it was written
+    // the first time. `preventDefault` IS the mechanism; pin it.
+    fetchGearByCodeMock.mockResolvedValue(GEAR_ROW);
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    screen.getByRole("button", { name: /check out/i }).focus();
+
+    const enter = dispatchBurst("CH93");
+
+    expect(enter.defaultPrevented).toBe(true);
+    await waitFor(() =>
+      expect(screen.getByTestId("row-CH93")).toBeInTheDocument(),
+    );
+  });
+
+  it("leaves a bare Enter to the page when no scan is in flight", async () => {
+    // The other half of the same rule. Swallowing every terminator
+    // would make the submit button unreachable by keyboard.
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      document.body.dispatchEvent(enter);
+    });
+
+    expect(enter.defaultPrevented).toBe(false);
+  });
+
+  it("reports an unrecognised payload instead of looking it up", async () => {
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    await scannerOnResult.current!("CH 93");
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "That didn't look like a gear label.",
+    );
+    expect(fetchGearByCodeMock).not.toHaveBeenCalled();
   });
 });
