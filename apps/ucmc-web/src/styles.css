@@ -92,11 +92,76 @@
    * "simplify" a focus style down to the /50 ring alone.
    */
   --ring: oklch(0.508 0.118 165.612);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
+  /*
+   * Chart color comes in TWO families, and they are not
+   * interchangeable. `--chart-*` encodes **identity** (which series is
+   * this?) and must be distinguishable hues. `--chart-ramp-*` encodes
+   * **magnitude** (how much?) and must be one hue stepped in
+   * lightness. Using one for the other's job is the single most common
+   * chart-color mistake.
+   *
+   * `--chart-1..5` used to BE the ramp below — five steps of the brand
+   * green. As a sequential ramp that was correct; as the series
+   * palette shadcn means by these names it failed outright. Measured
+   * on the old values: adjacent steps 4 and 5 sat ΔE 8.2 apart under
+   * *normal* vision (floor is 15), step 5 fell under the chroma floor
+   * and read as gray, and steps 1-2 cleared only 1.48:1 and 2.41:1
+   * against the card. Two series next to each other were effectively
+   * the same color before colorblindness entered into it. The `.dark`
+   * block also held a byte-identical copy of these values, so dark
+   * mode was never actually selected — it just inherited light's
+   * numbers.
+   *
+   * So the two families are now separate tokens, and both are stepped
+   * per mode against that mode's real card surface.
+   */
+
+  /*
+   * Categorical — series identity. Six slots, assigned in fixed order
+   * and never cycled; a seventh series folds into "Other" or becomes
+   * small multiples rather than inventing a hue.
+   *
+   * Deliberately NOT brand green. Categorical color answers "which
+   * series", and six distinguishable hues cannot be six greens. The
+   * brand stays `--primary` for UI and the ramp hue below for
+   * magnitude; a chart's series colors are a separate job.
+   *
+   * Validated against the light card (#fefdfa): worst adjacent pair
+   * ΔE 19.6 normal vision, 9.1 under protanopia, all six inside the
+   * lightness band and over the chroma floor.
+   *
+   * **Three slots sit under 3:1 against the card** (aqua 2.77, yellow
+   * 2.13, pink 2.65). That is tolerable for a filled mark carrying a
+   * visible label, and NOT tolerable for a mark that is the only thing
+   * identifying a value — so any chart using slots 3, 4 or 5 owes the
+   * reader direct labels or a table view. It is an obligation, not a
+   * warning to silence by nudging the numbers: raising contrast far
+   * enough to clear 3:1 pushes these hues out of the lightness band
+   * and breaks the pairwise separation that makes them readable in the
+   * first place.
+   */
+  --chart-1: oklch(0.575 0.163 255.5); /* blue    */
+  --chart-2: oklch(0.671 0.175 40.6); /* orange  */
+  --chart-3: oklch(0.669 0.141 162.1); /* aqua    */
+  --chart-4: oklch(0.764 0.161 75.1); /* yellow  */
+  --chart-5: oklch(0.716 0.141 357.4); /* pink    */
+  --chart-6: oklch(0.529 0.18 142.5); /* green   */
+
+  /*
+   * Sequential — magnitude. One hue (the brand green), stepped light
+   * to dark, for heatmaps, choropleths and share-bars. These are the
+   * original `--chart-1..5` values, unchanged and still correct for
+   * this job.
+   *
+   * Step 1 clears only 1.50:1 against the card, which is intended: the
+   * low end of a sequential ramp is meant to recede into the surface.
+   * Do not "fix" it — darkening the low end flattens the ramp.
+   */
+  --chart-ramp-1: oklch(0.845 0.143 164.978);
+  --chart-ramp-2: oklch(0.696 0.17 162.48);
+  --chart-ramp-3: oklch(0.596 0.145 163.225);
+  --chart-ramp-4: oklch(0.508 0.118 165.612);
+  --chart-ramp-5: oklch(0.432 0.095 166.913);
   --radius: 0.625rem;
   --sidebar: oklch(0.947 0.014 85);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
@@ -171,11 +236,40 @@
    * reads 7.66:1 on the page — dark mode can afford the brighter
    * green that light mode cannot. */
   --ring: oklch(0.696 0.17 162.48);
-  --chart-1: oklch(0.845 0.143 164.978);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.596 0.145 163.225);
-  --chart-4: oklch(0.508 0.118 165.612);
-  --chart-5: oklch(0.432 0.095 166.913);
+  /*
+   * Dark chart color is **selected, not flipped**. These are the same
+   * six hues and the same single ramp hue as light, re-stepped against
+   * the dark card (#19191c) — which is the whole reason this block
+   * used to be wrong: it held a verbatim copy of the light values.
+   *
+   * Categorical: validated on the dark card — worst adjacent pair ΔE
+   * 19.3 normal vision, 8.4 under protanopia, and unlike light, all
+   * six clear 3:1 against the surface, so the label obligation
+   * documented above is a light-mode constraint only. Slot 6 is the
+   * one value shared with light: that green already sits right for
+   * both surfaces, and moving it would cost separation against slot 3.
+   */
+  --chart-1: oklch(0.622 0.161 255.1); /* blue    */
+  --chart-2: oklch(0.622 0.173 40.1); /* orange  */
+  --chart-3: oklch(0.621 0.128 163.1); /* aqua    */
+  --chart-4: oklch(0.67 0.143 73.2); /* yellow  */
+  --chart-5: oklch(0.622 0.171 0.8); /* pink    */
+  --chart-6: oklch(0.529 0.18 142.5); /* green   */
+
+  /*
+   * Sequential, inverted for the dark surface: the ramp runs dark to
+   * light here so that *more* still reads as *brighter*. Light mode's
+   * ramp descends into the page; this one climbs out of it. Chroma
+   * tracks 90% of the sRGB gamut edge at each step, so every value is
+   * in gamut, and the low step still clears 3.37:1 against the card —
+   * on a dark surface a near-background low end would disappear
+   * entirely rather than recede.
+   */
+  --chart-ramp-1: oklch(0.52 0.1 164);
+  --chart-ramp-2: oklch(0.61 0.117 164);
+  --chart-ramp-3: oklch(0.7 0.134 164);
+  --chart-ramp-4: oklch(0.79 0.152 164);
+  --chart-ramp-5: oklch(0.88 0.169 164);
   --sidebar: oklch(0.238 0.006 286);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.696 0.17 162.48);
@@ -218,6 +312,12 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-ramp-1: var(--chart-ramp-1);
+  --color-chart-ramp-2: var(--chart-ramp-2);
+  --color-chart-ramp-3: var(--chart-ramp-3);
+  --color-chart-ramp-4: var(--chart-ramp-4);
+  --color-chart-ramp-5: var(--chart-ramp-5);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

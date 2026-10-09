@@ -46,6 +46,43 @@ put it under before it was moved to `0.515`. It now holds 4.64:1
 against `--muted`, the tightest pairing that renders. Anything that
 darkens a light surface has to be re-checked against it.
 
+### Chart color is two families, not one
+
+`--chart-1..6` encodes **identity** (which series is this?) and is six
+distinguishable hues. `--chart-ramp-1..5` encodes **magnitude** (how
+much?) and is the brand green stepped in lightness. Using either for
+the other's job is the most common chart-color mistake there is.
+
+`--chart-1..5` used to _be_ the ramp — five steps of one green — which
+is why the split exists. As a categorical palette those values failed
+hard: adjacent steps ΔE 8.2 apart under **normal** vision (floor 15),
+the last step under the chroma floor and reading gray, the first two at
+1.48:1 and 2.41:1 on the card. Two series beside each other were the
+same color before colorblindness entered into it. The `.dark` block
+also held a byte-identical copy, so dark mode was never selected.
+
+**Both modes are stepped against that mode's real card surface**
+(`#fefdfa` light, `#19191c` dark), and the dark set is re-stepped, not
+flipped. The sequential ramp inverts direction in dark so more still
+reads as brighter.
+
+Two constraints that look like bugs and are not:
+
+- **Light slots 3, 4 and 5 sit under 3:1 against the card** (2.77,
+  2.13, 2.65). A chart using them owes the reader direct labels or a
+  table view. Raising them far enough to clear 3:1 pushes the hues out
+  of the lightness band and destroys the pairwise separation. Dark
+  clears 3:1 on all six, so this is a light-mode obligation only.
+- **Ramp step 1 clears only 1.50:1 in light.** The low end of a
+  sequential ramp is meant to recede into the surface. Darkening it
+  flattens the ramp.
+
+**Re-run the validator after touching any of these** — the numbers
+above are measured, not asserted, and the categorical checks (lightness
+band, chroma floor, CVD separation, normal-vision floor, contrast) are
+the gate. Assign categorical hues in fixed order, never cycled; a
+seventh series folds into "Other" or becomes small multiples.
+
 ### `--header` is not `--primary`
 
 The masthead bar has its own token pair. The two roles want opposite
