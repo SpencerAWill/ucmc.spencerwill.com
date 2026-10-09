@@ -30,6 +30,7 @@ const CHIP_CLASS: Record<AttentionSeverity, string> = {
 export function AttentionPanel({
   items,
   anyVisible,
+  isPending,
 }: {
   items: AttentionItem[];
   /**
@@ -41,7 +42,23 @@ export function AttentionPanel({
    * club is in perfect shape on the strength of having read nothing.
    */
   anyVisible: boolean;
+  /**
+   * Whether any dataset is still in flight.
+   *
+   * **A third state, and it has to be distinct from the other two.**
+   * An exception list that is empty because it has not loaded yet
+   * looks exactly like one that is empty because nothing is wrong —
+   * so without this an officer gets a flash of "all clear" before nine
+   * uncovered waivers appear. Same "no data is not zero" rule the
+   * panels enforce everywhere else on this page, applied to the one
+   * surface where getting it wrong is actively reassuring.
+   */
+  isPending: boolean;
 }) {
+  if (isPending) {
+    return <p className="py-4 text-sm text-muted-foreground">Checking…</p>;
+  }
+
   if (!anyVisible) {
     return (
       <p className="py-4 text-sm text-muted-foreground">

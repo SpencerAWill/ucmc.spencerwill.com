@@ -81,6 +81,18 @@ describe("gear", () => {
     expect(items[0].key).toBe("gear-failed-inspection");
     expect(items[0].severity).toBe("act-now");
   });
+
+  it("agrees the possessive with the count", () => {
+    // "19 items failed its last inspection" shipped to a rendered page
+    // before this test existed — pluralising only the noun is not
+    // enough when the rest of the clause agrees with it too.
+    expect(
+      buildAttention({ gear: gear({ failedInspections: 1 }) })[0].message,
+    ).toBe("1 active item failed its last inspection");
+    expect(
+      buildAttention({ gear: gear({ failedInspections: 19 }) })[0].message,
+    ).toBe("19 active items failed their last inspection");
+  });
 });
 
 describe("compliance", () => {
@@ -197,6 +209,15 @@ describe("ordering", () => {
     const ranks = items.map((item) => item.severity);
     expect(ranks[0]).toBe("act-now");
     expect(ranks).toEqual([...ranks].sort((a, b) => rank(a) - rank(b)));
+  });
+
+  it("agrees the vacant-seat clause with the count", () => {
+    expect(buildAttention({ membership: { vacantRoles: 1 } })[0].message).toBe(
+      "1 officer seat has nobody in it",
+    );
+    expect(buildAttention({ membership: { vacantRoles: 3 } })[0].message).toBe(
+      "3 officer seats have nobody in them",
+    );
   });
 
   it("gives every item a distinct key", () => {

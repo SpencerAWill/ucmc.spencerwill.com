@@ -98,7 +98,7 @@ export function buildAttention(inputs: AttentionInputs): AttentionItem[] {
       items.push({
         key: "gear-failed-inspection",
         severity: "act-now",
-        message: `${failedInspections} active ${plural(failedInspections, "item", "items")} failed its last inspection`,
+        message: `${failedInspections} active ${plural(failedInspections, "item failed its", "items failed their")} last inspection`,
         href: "/analytics/gear",
         linkLabel: "Gear",
       });
@@ -165,7 +165,7 @@ export function buildAttention(inputs: AttentionInputs): AttentionItem[] {
     items.push({
       key: "vacant-roles",
       severity: "watch",
-      message: `${inputs.membership.vacantRoles} officer ${plural(inputs.membership.vacantRoles, "seat has", "seats have")} nobody in them`,
+      message: `${inputs.membership.vacantRoles} officer ${plural(inputs.membership.vacantRoles, "seat has nobody in it", "seats have nobody in them")}`,
       href: "/analytics/membership",
       linkLabel: "Membership",
     });
