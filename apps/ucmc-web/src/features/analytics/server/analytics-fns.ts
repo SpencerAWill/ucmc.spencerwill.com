@@ -38,3 +38,11 @@ export const platformAnalyticsFn = createServerFn({ method: "GET" })
       await import("#/features/analytics/server/platform-actions.server");
     return platformAnalyticsAction(data);
   });
+
+export const complianceAnalyticsFn = createServerFn({ method: "GET" })
+  .validator(z.object({ season: seasonSchema.optional() }))
+  .handler(async ({ data }) => {
+    const { complianceAnalyticsAction } =
+      await import("#/features/analytics/server/compliance-actions.server");
+    return complianceAnalyticsAction(data);
+  });

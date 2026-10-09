@@ -1,5 +1,11 @@
-import { platformAnalyticsQueryKey } from "#/features/analytics/api/query-keys";
-import { platformAnalyticsFn } from "#/features/analytics/server/analytics-fns";
+import {
+  complianceAnalyticsQueryKey,
+  platformAnalyticsQueryKey,
+} from "#/features/analytics/api/query-keys";
+import {
+  complianceAnalyticsFn,
+  platformAnalyticsFn,
+} from "#/features/analytics/server/analytics-fns";
 
 /**
  * Free-tier headroom, cost and email volume for one season.
@@ -11,5 +17,13 @@ export function platformAnalyticsQueryOptions(season: string | null) {
   return {
     queryKey: platformAnalyticsQueryKey(season),
     queryFn: () => platformAnalyticsFn({ data: season ? { season } : {} }),
+  } as const;
+}
+
+/** Waiver coverage, attestation timing, the RSO minimum and archive gaps. */
+export function complianceAnalyticsQueryOptions(season: string | null) {
+  return {
+    queryKey: complianceAnalyticsQueryKey(season),
+    queryFn: () => complianceAnalyticsFn({ data: season ? { season } : {} }),
   } as const;
 }

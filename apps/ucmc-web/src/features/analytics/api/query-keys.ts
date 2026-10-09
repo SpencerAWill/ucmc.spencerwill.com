@@ -14,3 +14,7 @@ export const ANALYTICS_QUERY_KEY = ["analytics"] as const;
 export function platformAnalyticsQueryKey(season: string | null) {
   return [...ANALYTICS_QUERY_KEY, "platform", season] as const;
 }
+
+export function complianceAnalyticsQueryKey(season: string | null) {
+  return [...ANALYTICS_QUERY_KEY, "compliance", season] as const;
+}
