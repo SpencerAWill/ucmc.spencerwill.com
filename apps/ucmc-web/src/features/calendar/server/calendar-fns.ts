@@ -14,8 +14,11 @@ import {
   createEventInputSchema,
   deleteEventInputSchema,
   overrideOccurrenceInputSchema,
+  createSubscriptionInputSchema,
+  subscriptionIdInputSchema,
   updateEventInputSchema,
 } from "#/features/calendar/server/event-schemas";
+import type { SubscriptionSummary } from "#/features/calendar/server/subscription-actions.server";
 import type { CalendarOccurrence } from "#/server/events/occurrences";
 
 export type { CalendarOccurrence } from "#/server/events/occurrences";
@@ -83,4 +86,41 @@ export const clearOccurrenceOverrideFn = createServerFn({ method: "POST" })
       await import("#/features/calendar/server/event-actions.server");
     await clearOccurrenceOverrideAction(data);
     return { ok: true };
+  });
+
+// ── subscriptions (self-service; see subscription-actions.server.ts) ────
+
+export type { SubscriptionSummary } from "#/features/calendar/server/subscription-actions.server";
+
+export const listMySubscriptionsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SubscriptionSummary[]> => {
+    const { listMySubscriptionsAction } =
+      await import("#/features/calendar/server/subscription-actions.server");
+    return listMySubscriptionsAction();
+  },
+);
+
+export const createMySubscriptionFn = createServerFn({ method: "POST" })
+  .validator(createSubscriptionInputSchema)
+  .handler(async ({ data }): Promise<{ id: string; token: string }> => {
+    const { createMySubscriptionAction } =
+      await import("#/features/calendar/server/subscription-actions.server");
+    return createMySubscriptionAction(data);
+  });
+
+export const revokeMySubscriptionFn = createServerFn({ method: "POST" })
+  .validator(subscriptionIdInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { revokeMySubscriptionAction } =
+      await import("#/features/calendar/server/subscription-actions.server");
+    await revokeMySubscriptionAction(data);
+    return { ok: true };
+  });
+
+export const rotateMySubscriptionFn = createServerFn({ method: "POST" })
+  .validator(subscriptionIdInputSchema)
+  .handler(async ({ data }): Promise<{ id: string; token: string }> => {
+    const { rotateMySubscriptionAction } =
+      await import("#/features/calendar/server/subscription-actions.server");
+    return rotateMySubscriptionAction(data);
   });

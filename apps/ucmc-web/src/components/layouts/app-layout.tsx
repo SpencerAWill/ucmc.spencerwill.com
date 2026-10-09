@@ -360,23 +360,35 @@ export function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
+          {/* Calendar sits in the public group because the club
+           * calendar is a public-facing thing — there is an anonymous
+           * .ics feed of public events, and prospective members are a
+           * real audience for it.
+           *
+           * The ENTRY is still gated on `isApproved`, which is not a
+           * contradiction: `/calendar` itself runs `requireApproved`,
+           * so showing the link to a signed-out visitor would offer
+           * them a page that bounces them to sign-in. Grouping is about
+           * where a member looks for it; the gate is about whether the
+           * link works. If the page is ever opened to anonymous
+           * visitors, this condition drops and `canViewCalendar`
+           * becomes a permission like its neighbours. */}
+          {isApproved && pages.calendar ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Calendar">
+                <Link to="/calendar">
+                  <CalendarDays />
+                  <span>Calendar</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarGroup>
 
       {isApproved ? (
         <SidebarGroup>
           <SidebarMenu>
-            {pages.calendar ? (
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Calendar">
-                  <Link to="/calendar">
-                    <CalendarDays />
-                    <span>Calendar</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ) : null}
-
             {pages.forum ? (
               <SidebarMenuItem>
                 <SidebarMenuButton

@@ -169,6 +169,20 @@ export const calendarWindowInputSchema = z
   );
 
 /**
+ * A subscription label: what device or app this link is for.
+ *
+ * Short, because its only job is to let a member tell "iPhone" from
+ * "work laptop" when deciding which one to revoke.
+ */
+export const createSubscriptionInputSchema = z.object({
+  label: z.string().trim().max(60).nullable().default(null),
+});
+
+export const subscriptionIdInputSchema = z.object({
+  id: z.string().min(1).max(100),
+});
+
+/**
  * Two type families, because these schemas transform.
  *
  * `*Input` is the wire shape — epoch-millisecond numbers and an
@@ -207,3 +221,7 @@ export type OverrideOccurrenceArgs = z.output<
 export type ClearOccurrenceOverrideArgs = z.output<
   typeof clearOccurrenceOverrideInputSchema
 >;
+export type CreateSubscriptionInput = z.input<
+  typeof createSubscriptionInputSchema
+>;
+export type SubscriptionIdInput = z.input<typeof subscriptionIdInputSchema>;

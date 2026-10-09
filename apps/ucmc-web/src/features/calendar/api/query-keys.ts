@@ -26,3 +26,13 @@ export const calendarOccurrencesQueryKey = (
     untilMs,
     kinds ? [...kinds].sort().join(",") : "all",
   ] as const;
+
+/**
+ * The caller's own subscription list. Not keyed by user id — the server
+ * fn answers the current session and the query cache is per browser
+ * session, rebuilt on sign-in and sign-out.
+ */
+export const MY_SUBSCRIPTIONS_QUERY_KEY = [
+  "calendar",
+  "my-subscriptions",
+] as const;

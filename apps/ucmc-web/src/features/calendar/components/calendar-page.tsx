@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 
-import { Plus } from "lucide-react";
+import { CalendarPlus, Plus } from "lucide-react";
 
 import { Button } from "#/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
@@ -128,6 +129,18 @@ export function CalendarPage() {
         </ToggleGroup>
 
         <div className="flex items-center gap-2">
+          {/* The whole point of the feature for most members: see it
+           * once here, subscribe, never open the page again. Links to
+           * /my/calendar rather than opening a dialog, because minting
+           * a token is a credential operation that belongs on the page
+           * that lists and revokes them. */}
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/my/calendar">
+              <CalendarPlus />
+              Subscribe
+            </Link>
+          </Button>
+
           {isCurrentMonth ? null : (
             <Button
               variant="ghost"

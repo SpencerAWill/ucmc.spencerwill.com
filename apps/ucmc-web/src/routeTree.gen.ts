@@ -68,6 +68,7 @@ import { Route as MyTabsProfileRouteImport } from './routes/my._tabs.profile'
 import { Route as MyTabsPreferencesRouteImport } from './routes/my._tabs.preferences'
 import { Route as MyTabsDetailsRouteImport } from './routes/my._tabs.details'
 import { Route as MyTabsContactsRouteImport } from './routes/my._tabs.contacts'
+import { Route as MyTabsCalendarRouteImport } from './routes/my._tabs.calendar'
 import { Route as MembersTabsUnclaimedRouteImport } from './routes/members._tabs.unclaimed'
 import { Route as MembersTabsRejectedRouteImport } from './routes/members._tabs.rejected'
 import { Route as MembersTabsPendingRouteImport } from './routes/members._tabs.pending'
@@ -376,6 +377,11 @@ const MyTabsContactsRoute = MyTabsContactsRouteImport.update({
   path: '/contacts',
   getParentRoute: () => MyTabsRoute,
 } as any)
+const MyTabsCalendarRoute = MyTabsCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => MyTabsRoute,
+} as any)
 const MembersTabsUnclaimedRoute = MembersTabsUnclaimedRouteImport.update({
   id: '/unclaimed',
   path: '/unclaimed',
@@ -514,6 +520,7 @@ export interface FileRoutesByFullPath {
   '/members/pending': typeof MembersTabsPendingRoute
   '/members/rejected': typeof MembersTabsRejectedRoute
   '/members/unclaimed': typeof MembersTabsUnclaimedRoute
+  '/my/calendar': typeof MyTabsCalendarRoute
   '/my/contacts': typeof MyTabsContactsRoute
   '/my/details': typeof MyTabsDetailsRoute
   '/my/preferences': typeof MyTabsPreferencesRoute
@@ -582,6 +589,7 @@ export interface FileRoutesByTo {
   '/members/pending': typeof MembersTabsPendingRoute
   '/members/rejected': typeof MembersTabsRejectedRoute
   '/members/unclaimed': typeof MembersTabsUnclaimedRoute
+  '/my/calendar': typeof MyTabsCalendarRoute
   '/my/contacts': typeof MyTabsContactsRoute
   '/my/details': typeof MyTabsDetailsRoute
   '/my/preferences': typeof MyTabsPreferencesRoute
@@ -658,6 +666,7 @@ export interface FileRoutesById {
   '/members/_tabs/pending': typeof MembersTabsPendingRoute
   '/members/_tabs/rejected': typeof MembersTabsRejectedRoute
   '/members/_tabs/unclaimed': typeof MembersTabsUnclaimedRoute
+  '/my/_tabs/calendar': typeof MyTabsCalendarRoute
   '/my/_tabs/contacts': typeof MyTabsContactsRoute
   '/my/_tabs/details': typeof MyTabsDetailsRoute
   '/my/_tabs/preferences': typeof MyTabsPreferencesRoute
@@ -733,6 +742,7 @@ export interface FileRouteTypes {
     | '/members/pending'
     | '/members/rejected'
     | '/members/unclaimed'
+    | '/my/calendar'
     | '/my/contacts'
     | '/my/details'
     | '/my/preferences'
@@ -801,6 +811,7 @@ export interface FileRouteTypes {
     | '/members/pending'
     | '/members/rejected'
     | '/members/unclaimed'
+    | '/my/calendar'
     | '/my/contacts'
     | '/my/details'
     | '/my/preferences'
@@ -876,6 +887,7 @@ export interface FileRouteTypes {
     | '/members/_tabs/pending'
     | '/members/_tabs/rejected'
     | '/members/_tabs/unclaimed'
+    | '/my/_tabs/calendar'
     | '/my/_tabs/contacts'
     | '/my/_tabs/details'
     | '/my/_tabs/preferences'
@@ -1351,6 +1363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyTabsContactsRouteImport
       parentRoute: typeof MyTabsRoute
     }
+    '/my/_tabs/calendar': {
+      id: '/my/_tabs/calendar'
+      path: '/calendar'
+      fullPath: '/my/calendar'
+      preLoaderRoute: typeof MyTabsCalendarRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
     '/members/_tabs/unclaimed': {
       id: '/members/_tabs/unclaimed'
       path: '/unclaimed'
@@ -1552,6 +1571,7 @@ const MembersRouteWithChildren =
   MembersRoute._addFileChildren(MembersRouteChildren)
 
 interface MyTabsRouteChildren {
+  MyTabsCalendarRoute: typeof MyTabsCalendarRoute
   MyTabsContactsRoute: typeof MyTabsContactsRoute
   MyTabsDetailsRoute: typeof MyTabsDetailsRoute
   MyTabsPreferencesRoute: typeof MyTabsPreferencesRoute
@@ -1561,6 +1581,7 @@ interface MyTabsRouteChildren {
 }
 
 const MyTabsRouteChildren: MyTabsRouteChildren = {
+  MyTabsCalendarRoute: MyTabsCalendarRoute,
   MyTabsContactsRoute: MyTabsContactsRoute,
   MyTabsDetailsRoute: MyTabsDetailsRoute,
   MyTabsPreferencesRoute: MyTabsPreferencesRoute,

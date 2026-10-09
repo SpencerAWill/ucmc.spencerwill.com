@@ -1,5 +1,11 @@
-import { calendarOccurrencesQueryKey } from "#/features/calendar/api/query-keys";
-import { listCalendarOccurrencesFn } from "#/features/calendar/server/calendar-fns";
+import {
+  MY_SUBSCRIPTIONS_QUERY_KEY,
+  calendarOccurrencesQueryKey,
+} from "#/features/calendar/api/query-keys";
+import {
+  listCalendarOccurrencesFn,
+  listMySubscriptionsFn,
+} from "#/features/calendar/server/calendar-fns";
 import type { EventKind } from "#/../drizzle/schema";
 
 /**
@@ -33,5 +39,21 @@ export function calendarOccurrencesQueryOptions(
         },
       }),
     staleTime: 60_000,
+  } as const;
+}
+
+/**
+ * The caller's live calendar subscriptions.
+ *
+ * **The payload carries no tokens** — labels, timestamps and ids only.
+ * A token exists in exactly one response, the one that mints it; see
+ * `subscription-actions.server.ts` for why re-shipping a live bearer
+ * credential into every page load would be the wrong trade.
+ */
+export function mySubscriptionsQueryOptions() {
+  return {
+    queryKey: MY_SUBSCRIPTIONS_QUERY_KEY,
+    queryFn: () => listMySubscriptionsFn(),
+    staleTime: 30_000,
   } as const;
 }

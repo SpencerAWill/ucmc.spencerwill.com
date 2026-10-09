@@ -27,6 +27,7 @@ export const ACCOUNT_TABS = [
   { to: "/my/waiver", label: "Waiver", flag: "my_waiver" },
   { to: "/my/security", label: "Security", flag: "my_security" },
   { to: "/my/preferences", label: "Preferences", flag: "my_preferences" },
+  { to: "/my/calendar", label: "Calendar", flag: "my_calendar" },
 ] as const satisfies ReadonlyArray<{
   to: string;
   label: string;

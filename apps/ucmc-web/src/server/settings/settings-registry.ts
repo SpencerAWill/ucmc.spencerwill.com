@@ -709,6 +709,16 @@ export const SETTINGS = {
     createdAt: "2026-08-21",
     parent: "my",
   }),
+  "pages.my_calendar": z.boolean().default(true).register(registry, {
+    label: "My Account \u00b7 Calendar tab enabled",
+    description:
+      "When off, the Calendar tab is hidden and /my/calendar returns notFound, so members cannot mint or revoke calendar subscription links. Existing subscriptions keep working \u2014 the feeds have their own switch (calendar.feed_enabled).",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-08",
+    parent: "my",
+  }),
   "pages.my_gear": z.boolean().default(true).register(registry, {
     label: "My Gear enabled",
     description:
