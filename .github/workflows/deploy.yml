@@ -281,33 +281,6 @@ jobs:
       # there is no dev server for this run to own. The `smoke` project
       # is read-only and unauthenticated (see e2e/smoke.spec.ts); it must
       # stay that way, because dev is a real environment.
-      # A worker that has just been uploaded serves its first request from a
-      # cold isolate, and that cost lands inside the smoke test's hydration
-      # budget rather than beside it. `waitForHydration` allows 10s; `/` is by
-      # far the heaviest of the three smoke routes (~82 KB of SSR HTML and a
-      # D1-backed landing query against ~1.5s warm) so it is the one that runs
-      # out of room. Observed on the 2026-10-09 dev deploy: `/` failed all
-      # three attempts, `/sign-in` and `/legal` passed, and the identical
-      # commit passed on a warm worker minutes later.
-      #
-      # One throwaway request absorbs the cold start, so what the smoke test
-      # measures is the deployment rather than the isolate. Deliberately not a
-      # gate: a failure here is reported and ignored, because the smoke test
-      # immediately after is the real assertion and should be the thing that
-      # turns the job red.
-      - name: Warm the worker before smoke (dev)
-        env:
-          APP_URL: ${{ steps.pulumi.outputs.app_base_url }}
-        run: |
-          for i in $(seq 1 5); do
-            if curl -sSf -o /dev/null --max-time 30 "$APP_URL/"; then
-              echo "worker warm after ${i} request(s)"
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "::warning::worker did not answer before the smoke test; continuing"
-
       - name: Post-deploy smoke test (dev)
         env:
           PLAYWRIGHT_BASE_URL: ${{ steps.pulumi.outputs.app_base_url }}
@@ -535,33 +508,6 @@ jobs:
       # there is no dev server for this run to own. The `smoke` project
       # is read-only and unauthenticated (see e2e/smoke.spec.ts); it must
       # stay that way, because prod is a real environment.
-      # A worker that has just been uploaded serves its first request from a
-      # cold isolate, and that cost lands inside the smoke test's hydration
-      # budget rather than beside it. `waitForHydration` allows 10s; `/` is by
-      # far the heaviest of the three smoke routes (~82 KB of SSR HTML and a
-      # D1-backed landing query against ~1.5s warm) so it is the one that runs
-      # out of room. Observed on the 2026-10-09 dev deploy: `/` failed all
-      # three attempts, `/sign-in` and `/legal` passed, and the identical
-      # commit passed on a warm worker minutes later.
-      #
-      # One throwaway request absorbs the cold start, so what the smoke test
-      # measures is the deployment rather than the isolate. Deliberately not a
-      # gate: a failure here is reported and ignored, because the smoke test
-      # immediately after is the real assertion and should be the thing that
-      # turns the job red.
-      - name: Warm the worker before smoke (prod)
-        env:
-          APP_URL: ${{ steps.pulumi.outputs.app_base_url }}
-        run: |
-          for i in $(seq 1 5); do
-            if curl -sSf -o /dev/null --max-time 30 "$APP_URL/"; then
-              echo "worker warm after ${i} request(s)"
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "::warning::worker did not answer before the smoke test; continuing"
-
       - name: Post-deploy smoke test (prod)
         env:
           PLAYWRIGHT_BASE_URL: ${{ steps.pulumi.outputs.app_base_url }}

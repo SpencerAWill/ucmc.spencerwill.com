@@ -31,6 +31,23 @@ import { waitForHydration } from "./fixtures/hydration";
 // could switch off — a smoke test that can be turned off from the
 // settings UI is not a smoke test. `/legal` is the canonical-PDF legal
 // index (src/config/legal.ts), which is always routable.
+/**
+ * Hydration budget for this suite, deliberately generous.
+ *
+ * These tests run against a worker uploaded seconds ago, so every asset hash
+ * is new and the whole JS chain is a cache miss at the edge — and Playwright
+ * gives each retry a fresh context, so no attempt benefits from the previous
+ * one's cache. The 2026-10-09 dev deploy lost all three attempts on `/` at the
+ * 10s default while the page itself was healthy; it hydrated in ~1.5s once the
+ * edge was warm.
+ *
+ * What this suite asserts is that the deployed bundle hydrates AT ALL, not
+ * that it hydrates quickly. There is no performance budget here, and a timeout
+ * tuned to double as one just fails the deploy for the wrong reason. Local and
+ * preview runs keep the 10s default in `fixtures/hydration.ts`.
+ */
+const DEPLOYED_HYDRATION_TIMEOUT_MS = 45_000;
+
 const PUBLIC_ROUTES = ["/", "/sign-in", "/legal"] as const;
 
 for (const path of PUBLIC_ROUTES) {
@@ -46,7 +63,7 @@ for (const path of PUBLIC_ROUTES) {
     // reached for `cloudflare:workers` outside SSR, a chunk that 404s
     // against a stale asset manifest — and the page then sits there
     // looking correct and responding to nothing.
-    await waitForHydration(page);
+    await waitForHydration(page, DEPLOYED_HYDRATION_TIMEOUT_MS);
 
     // A worker that renders its error boundary also returns 200 and
     // hydrates. Assert there is a real page under it: the same
@@ -74,7 +91,7 @@ test(
   { tag: "@deployed" },
   async ({ page }) => {
     await page.goto("/health");
-    await waitForHydration(page);
+    await waitForHydration(page, DEPLOYED_HYDRATION_TIMEOUT_MS);
 
     // The <h1> is driven by `report.status`, which health.server.ts sets to
     // "pass" only when every individual probe passed — so this single
