@@ -124,9 +124,26 @@ export function useBarcodeWedge({
       }
       // Mid-composition keystrokes belong to the IME, not to us.
       if (event.isComposing) return;
+      // OS key auto-repeat fires around every 30 ms, comfortably inside
+      // `maxInterKeyMs` — so holding a key down reads as a machine
+      // typing and the field appears to freeze after one character.
+      // `onscan.js` drops repeats for the same reason.
+      if (event.repeat) {
+        stateRef.current = IDLE_WEDGE_STATE;
+        return;
+      }
 
       const isTerminator = event.key === "Enter" || event.key === "Tab";
       const state = stateRef.current;
+      const active = document.activeElement;
+      // A declared scan target is also where an officer types a code by
+      // hand. Buffer its keystrokes but let them land: tier 2 cannot
+      // tell a scan from fast typing until the burst completes, and
+      // swallowing on suspicion eats a character whenever a human hits
+      // two keys inside `maxInterKeyMs`. On a completed scan
+      // `clearScanTarget` wipes what landed; on anything else the
+      // officer keeps every character they typed.
+      const passThrough = active?.hasAttribute("data-wedge-capture") === true;
 
       // Protect real typing: a tier-2 burst is only a *guess* that a
       // machine is typing, so it must not run inside a text field. A
@@ -135,7 +152,7 @@ export function useBarcodeWedge({
       if (
         state.mode !== "tier1" &&
         !isWedgeOpener(event.key) &&
-        isProtectedField(document.activeElement)
+        isProtectedField(active)
       ) {
         stateRef.current = IDLE_WEDGE_STATE;
         return;
@@ -150,6 +167,7 @@ export function useBarcodeWedge({
         // thread would otherwise stretch a real scan's gaps past the
         // threshold and silently drop it.
         at: event.timeStamp,
+        passThrough,
       });
       stateRef.current = result.state;
 
@@ -163,7 +181,7 @@ export function useBarcodeWedge({
         event.stopPropagation();
       }
       if (result.emit !== null) {
-        clearScanTarget(document.activeElement);
+        clearScanTarget(active);
         onScanRef.current(result.emit);
       }
     };

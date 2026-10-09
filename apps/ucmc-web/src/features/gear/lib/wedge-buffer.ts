@@ -124,6 +124,12 @@ export interface WedgeState {
   mode: "idle" | "tier1" | "timing";
   /** Overflowed {@link WedgeOptions.maxLength}; swallow but never emit. */
   disqualified: boolean;
+  /**
+   * Whether any character of this burst was captured. The page has an
+   * incomplete picture of anything we swallowed, so the terminator
+   * belongs to us too — even when the burst turns out to emit nothing.
+   */
+  swallowed: boolean;
 }
 
 export const IDLE_WEDGE_STATE: WedgeState = {
@@ -131,6 +137,7 @@ export const IDLE_WEDGE_STATE: WedgeState = {
   lastAt: 0,
   mode: "idle",
   disqualified: false,
+  swallowed: false,
 };
 
 export interface WedgeKey {
@@ -140,6 +147,19 @@ export interface WedgeKey {
   isTerminator: boolean;
   /** `KeyboardEvent.timeStamp`. */
   at: number;
+  /**
+   * Buffer this key but let it reach the page.
+   *
+   * Set for a field that declared itself a scan target
+   * (`data-wedge-capture`). Such a field is ALSO where an officer types
+   * a code by hand, and tier 2 cannot tell the two apart until the
+   * burst completes — so swallowing on suspicion costs a real
+   * keystroke every time a human happens to hit two keys inside
+   * `maxInterKeyMs`, which on a four-character code is ordinary fast
+   * typing. Letting the characters land and clearing the field on a
+   * completed scan is the trade that loses nothing either way.
+   */
+  passThrough?: boolean;
 }
 
 export interface WedgeResult {
@@ -161,15 +181,22 @@ export function isWedgeOpener(value: string): boolean {
   return value === WEDGE_SENTINEL || value === AIM_FLAG;
 }
 
-function startBuffer(key: WedgeKey): WedgeState {
-  if (key.value === WEDGE_SENTINEL) {
-    return { chars: "", lastAt: key.at, mode: "tier1", disqualified: false };
-  }
+/**
+ * Open a buffer on `key`. `swallowed` comes from the caller because
+ * whether this first keystroke was captured is the same question as
+ * whether it was the sentinel — deciding it twice is how the two
+ * answers drift.
+ */
+function startBuffer(key: WedgeKey, swallowed: boolean): WedgeState {
+  const isSentinel = key.value === WEDGE_SENTINEL;
   return {
-    chars: key.value,
+    // The sentinel is ours and never part of the payload; `]` is the
+    // page's character and stays in it.
+    chars: isSentinel ? "" : key.value,
     lastAt: key.at,
-    mode: key.value === AIM_FLAG ? "tier1" : "timing",
+    mode: isSentinel || key.value === AIM_FLAG ? "tier1" : "timing",
     disqualified: false,
+    swallowed,
   };
 }
 
@@ -197,10 +224,22 @@ export function feedKey(
     return {
       state: IDLE_WEDGE_STATE,
       emit: complete ? state.chars : null,
-      // A terminator that completes nothing must fall through to the
-      // page: a human pressing Enter on a focused button still gets
-      // their click.
-      capture: complete,
+      // Captured in two cases, and the first is the one that bites. A
+      // burst whose characters we swallowed owns its terminator even
+      // when it emits nothing — an over-long payload (a member's WiFi
+      // QR read by a 2D imager) or one below `minLength` otherwise
+      // swallows 200 characters and then hands the trailing Enter to
+      // whatever holds focus, which at this desk is the live "Check out
+      // N items" button. That is precisely the failure `preventDefault`
+      // is here to prevent, arriving by the back door.
+      //
+      // The second is a completed scan in a pass-through field, where
+      // nothing was swallowed but the payload is ours — so cmdk must
+      // not also resolve the Enter by prefix match.
+      //
+      // Neither applies to a human pressing Enter on a focused button:
+      // from idle there is nothing swallowed and nothing to complete.
+      capture: state.swallowed || complete,
     };
   }
 
@@ -218,25 +257,37 @@ export function feedKey(
     // A late key starts a NEW buffer rather than poisoning the current
     // one. Discarding instead would let a single stray keystroke eat
     // the scan that follows it.
-    const next = startBuffer(key);
-    return { state: next, emit: null, capture: key.value === WEDGE_SENTINEL };
+    const capture = !key.passThrough && key.value === WEDGE_SENTINEL;
+    return { state: startBuffer(key, capture), emit: null, capture };
   }
 
   if (state.disqualified || state.chars.length >= opts.maxLength) {
     // Keep swallowing to the end of the burst. Releasing mid-way would
     // spray the tail of an over-long payload into the page.
     return {
-      state: { ...state, lastAt: key.at, disqualified: true },
+      state: {
+        ...state,
+        lastAt: key.at,
+        disqualified: true,
+        swallowed: state.swallowed || !key.passThrough,
+      },
       emit: null,
-      capture: true,
+      capture: !key.passThrough,
     };
   }
 
   return {
-    state: { ...state, chars: state.chars + key.value, lastAt: key.at },
+    state: {
+      ...state,
+      chars: state.chars + key.value,
+      lastAt: key.at,
+      swallowed: state.swallowed || !key.passThrough,
+    },
     emit: null,
     // Machine speed is proven as of this key, so the burst is ours from
-    // here even in tier 2.
-    capture: true,
+    // here even in tier 2 — unless the field asked to keep its
+    // keystrokes, in which case we buffer silently and clear it on a
+    // completed scan instead.
+    capture: !key.passThrough,
   };
 }

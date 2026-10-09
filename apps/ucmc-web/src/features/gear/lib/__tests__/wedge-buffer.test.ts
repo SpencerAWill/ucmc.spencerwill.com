@@ -21,11 +21,13 @@ function burst(
     terminator = "Enter",
     from = IDLE_WEDGE_STATE,
     startAt = 1000,
+    passThrough = false,
   }: {
     gapMs?: number;
     terminator?: "Enter" | "Tab" | null;
     from?: WedgeState;
     startAt?: number;
+    passThrough?: boolean;
   } = {},
 ): { results: WedgeResult[]; state: WedgeState; emitted: string | null } {
   let state = from;
@@ -35,7 +37,7 @@ function burst(
     at += gapMs;
     const r = feedKey(
       state,
-      { value: ch, isTerminator: false, at },
+      { value: ch, isTerminator: false, at, passThrough },
       DEFAULT_WEDGE_OPTIONS,
     );
     results.push(r);
@@ -45,7 +47,7 @@ function burst(
     at += gapMs;
     const r = feedKey(
       state,
-      { value: terminator, isTerminator: true, at },
+      { value: terminator, isTerminator: true, at, passThrough },
       DEFAULT_WEDGE_OPTIONS,
     );
     results.push(r);
@@ -247,6 +249,7 @@ describe("terminators and non-character keys", () => {
       lastAt: 0,
       mode: "idle",
       disqualified: false,
+      swallowed: false,
     });
   });
 });
@@ -297,5 +300,126 @@ describe("boundaries", () => {
       feedKey(IDLE_WEDGE_STATE, { value: "]", isTerminator: false, at: 100 })
         .state.mode,
     ).toBe("tier1");
+  });
+});
+
+describe("a swallowed burst owns its terminator", () => {
+  it("captures the terminator of an over-long burst that emits nothing", () => {
+    // The one that bites. A 2D imager pointed at a member's WiFi or URL
+    // QR swallows 200 characters and then — before this — handed the
+    // trailing Enter to whatever held focus, which at this desk is the
+    // live "Check out N items" button. That is exactly the failure
+    // `preventDefault` exists to prevent, arriving by the back door.
+    const long = burst("X".repeat(DEFAULT_WEDGE_OPTIONS.maxLength + 50));
+    expect(long.emitted).toBeNull();
+    expect(long.results.at(-1)?.capture).toBe(true);
+  });
+
+  it("captures the Tab terminator of a too-short burst", () => {
+    // Same rule, smaller blast radius: a two-character label would
+    // otherwise move focus on its way out.
+    const short = burst("L4", { terminator: "Tab" });
+    expect(short.emitted).toBeNull();
+    expect(short.results.at(-1)?.capture).toBe(true);
+  });
+
+  it("still releases a terminator when nothing was swallowed", () => {
+    // Pressing Enter on a focused button has to keep working. From
+    // idle there is nothing swallowed and nothing to complete.
+    expect(
+      feedKey(IDLE_WEDGE_STATE, { value: "Enter", isTerminator: true, at: 100 })
+        .capture,
+    ).toBe(false);
+  });
+
+  it("releases a terminator that arrives long after a lone keystroke", () => {
+    // One stray key captures nothing, so the Enter behind it is the
+    // page's.
+    const stray = feedKey(IDLE_WEDGE_STATE, {
+      value: "x",
+      isTerminator: false,
+      at: 1000,
+    });
+    expect(stray.capture).toBe(false);
+    expect(
+      feedKey(stray.state, { value: "Enter", isTerminator: true, at: 5000 })
+        .capture,
+    ).toBe(false);
+  });
+});
+
+describe("pass-through fields keep their keystrokes", () => {
+  it("never captures a character in a pass-through field", () => {
+    // A declared scan target is also where an officer types a code by
+    // hand, and tier 2 cannot tell the two apart until the burst
+    // completes. Swallowing on suspicion costs a real keystroke every
+    // time a human hits two keys inside `maxInterKeyMs` — ordinary
+    // fast typing on a four-character code.
+    const { results } = burst("CH93", { passThrough: true });
+    expect(results.slice(0, -1).every((r) => !r.capture)).toBe(true);
+  });
+
+  it("still emits, and still captures the terminator, on a real burst", () => {
+    // Nothing was swallowed, but the payload is ours — so cmdk must not
+    // also resolve the Enter by prefix match.
+    const { emitted, results } = burst("CH93", { passThrough: true });
+    expect(emitted).toBe("CH93");
+    expect(results.at(-1)?.capture).toBe(true);
+  });
+
+  it("leaves the terminator alone when the burst completes nothing", () => {
+    // Typing a code by hand and pressing Enter: cmdk owns that.
+    const { emitted, results } = burst("CH93", {
+      passThrough: true,
+      gapMs: 150,
+    });
+    expect(emitted).toBeNull();
+    expect(results.at(-1)?.capture).toBe(false);
+  });
+
+  it("does not eat a fast digraph in the middle of hand-typing", () => {
+    // `C` … 120 ms … `H` … 40 ms … `9`: the 40 ms gap reads as machine
+    // speed, and before this the `9` was swallowed and never came back,
+    // because no emit followed to clear the field.
+    let state = IDLE_WEDGE_STATE;
+    const captures: boolean[] = [];
+    for (const [value, at] of [
+      ["C", 1000],
+      ["H", 1120],
+      ["9", 1160],
+      ["3", 1400],
+    ] as const) {
+      const r = feedKey(state, {
+        value,
+        isTerminator: false,
+        at,
+        passThrough: true,
+      });
+      captures.push(r.capture);
+      state = r.state;
+    }
+    expect(captures).toEqual([false, false, false, false]);
+  });
+});
+
+describe("a pass-through burst that completes nothing stays the page's", () => {
+  it("releases the terminator of a too-short machine-speed burst", () => {
+    // `L4` typed fast into the code box, then Enter. Nothing was
+    // swallowed and nothing completed, so cmdk owns that Enter — it is
+    // how an officer picks a highlighted suggestion by hand.
+    const { emitted, results } = burst("L4", { passThrough: true });
+    expect(emitted).toBeNull();
+    expect(results.at(-1)?.capture).toBe(false);
+  });
+
+  it("releases the terminator of an over-long pass-through burst", () => {
+    // Nothing was swallowed, so there is nothing for the terminator to
+    // finish. The field keeps what landed in it and the officer can
+    // see and clear it — better than silently eating the Enter too.
+    const long = burst("X".repeat(DEFAULT_WEDGE_OPTIONS.maxLength + 50), {
+      passThrough: true,
+    });
+    expect(long.emitted).toBeNull();
+    expect(long.results.at(-1)?.capture).toBe(false);
   });
 });

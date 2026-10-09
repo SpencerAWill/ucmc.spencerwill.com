@@ -588,4 +588,84 @@ describe("GearDeskCheckoutPane keyboard-wedge branch", () => {
     );
     expect(fetchGearByCodeMock).toHaveBeenCalledWith("CH93");
   });
+
+  it("does not swallow hand-typed characters in the code box", () => {
+    // The field is a declared scan target, which also makes it the
+    // place an officer types a code by hand. A fast digraph inside
+    // `maxInterKeyMs` used to read as machine speed and the character
+    // vanished — with no emit to follow, nothing ever put it back.
+    //
+    // Dispatched as raw events so the inter-key gaps are real
+    // timestamps rather than user-event's scheduling.
+    renderPane();
+    const combobox = screen.getByTestId("gear-combobox");
+    act(() => {
+      combobox.focus();
+    });
+
+    for (const key of [..."CH93"]) {
+      const event = new KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        combobox.dispatchEvent(event);
+      });
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(fetchGearByCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("does not let held-down key repeats fabricate a scan", () => {
+    // Auto-repeat fires around every 30 ms, inside `maxInterKeyMs`, so
+    // a held key reads as a machine typing. With focus somewhere that
+    // takes no text — a button, which is where Radix leaves it when the
+    // Sheet opens — leaning on a key long enough builds a buffer past
+    // `minLength`, and the next Enter submits it as a scan.
+    //
+    // The pass-through fix covers the code box; this is the exposure it
+    // does not reach.
+    renderPane();
+    act(() => {
+      screen.getByRole("button", { name: /check out/i }).focus();
+    });
+
+    act(() => {
+      for (const repeat of [false, true, true, true, true, true]) {
+        document.activeElement?.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "9",
+            repeat,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      }
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    expect(fetchGearByCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("does not show a scan confirmation for an unrecognised payload", () => {
+    // The green line and the error toast are answers to the same
+    // trigger pull and must not contradict each other.
+    renderPane();
+
+    act(() => {
+      scannerOnResult.current?.("CH 93");
+    });
+
+    expect(screen.queryByText(/scanned/i)).not.toBeInTheDocument();
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "That didn't look like a gear label.",
+    );
+  });
 });

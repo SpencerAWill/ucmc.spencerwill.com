@@ -205,8 +205,13 @@ VALUES ('${itemId}', '${randomUUID().replace(/-/g, "").slice(0, 12)}', '${modelI
   // opt-out exists for, and the one where cmdk would otherwise resolve
   // the burst by prefix match instead of an exact lookup.
   await page.getByPlaceholder(/enter code/i).click();
-  await page.keyboard.type(code, { delay: 0 });
-  await page.keyboard.press("Enter");
+  // Terminator inside the same `type()` call, not a second awaited
+  // round trip: the reducer needs the last-char-to-terminator gap under
+  // `maxInterKeyMs` (50 ms), and two separate CDP calls put runner
+  // latency inside that budget. A slow CI machine would then fail this
+  // as "no row appeared", which reads like a wedge regression rather
+  // than the timing artifact it is.
+  await page.keyboard.type(`${code}\n`, { delay: 0 });
 
   await expect(page.getByRole("cell", { name: code, exact: true })).toBeVisible(
     { timeout: 10_000 },

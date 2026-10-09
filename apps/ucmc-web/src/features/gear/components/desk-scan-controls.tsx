@@ -5,6 +5,7 @@ import { Label } from "#/components/ui/label";
 import { Switch } from "#/components/ui/switch";
 import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
 import { useBarcodeWedge } from "#/features/gear/hooks/use-barcode-wedge";
+import { parseScanPayload } from "#/features/gear/lib/scan-payload";
 import { cn } from "#/lib/utils";
 
 /**
@@ -50,8 +51,20 @@ export function DeskScanControls({
   const [wedgeSeen, setWedgeSeen] = useState(false);
 
   const announce = useCallback((raw: string, source: "camera" | "wedge") => {
-    setLastScan((prev) => ({ raw, source, seq: (prev?.seq ?? 0) + 1 }));
+    // A burst proves a gun is plugged in whatever it decoded, so the
+    // indicator flips on anything.
     if (source === "wedge") setWedgeSeen(true);
+    // The green line does NOT. It used to render for every payload,
+    // which put "Scanned https://…" beside the "that didn't look like
+    // a gear label" toast the same action raised — two contradictory
+    // answers to one trigger pull, on what is now the default-on input.
+    // Resolved through the same discriminator the panes use rather than
+    // a second opinion about what counts as a code.
+    if (parseScanPayload(raw) === null) {
+      setLastScan(null);
+      return;
+    }
+    setLastScan((prev) => ({ raw, source, seq: (prev?.seq ?? 0) + 1 }));
   }, []);
 
   const handleCameraResult = useCallback(
