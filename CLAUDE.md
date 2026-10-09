@@ -55,6 +55,7 @@ These bite anywhere in the repo, so they live here rather than in a scoped rule.
 - **Permissions are DB rows; adding one needs a migration.** Site settings are not — a new entry in the Zod registry is the whole change.
 - **Notification categories are not DB rows either** — a new entry in `src/server/notifications/notification-registry.ts` is the whole change. `user_notification_preferences` is sparse: a row exists only when a member moves a category off its registry default. Whether a category can be switched off at all is the registry's `suppressible` field, not a branch in the senders.
 - **Wire the sidebar (`app-layout.tsx`) in the same change as any new public route**, and gate the entry on the flag of the page the link actually targets. This has been caught in review repeatedly.
+- **`events` is a base table, not the calendar's table.** It lives in `src/server/events/` because `features/trips` (and later `volunteer`) will own satellite tables keyed on `event_id`; kind-specific columns go there, never on `events`. The calendar and both `.ics` feeds read only the base table. See `.claude/rules/feature-calendar.md`.
 - **Legal and policy copy is legal review, not word-smithing** — `src/config/legal.ts` and the pages it feeds must match the canonical PDF byte-for-byte. Raise copy changes rather than tidying them.
 
 ## Generated files
