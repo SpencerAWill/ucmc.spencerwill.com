@@ -12,7 +12,7 @@ import {
 import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, isUniqueViolation, schema } from "#/server/db";
+import { getDb, isUniqueViolation, schema, selectInChunks } from "#/server/db";
 import { errorMessage, log } from "#/server/log/log.server";
 
 // ── constants ──────────────────────────────────────────────────────────
@@ -682,10 +682,12 @@ export async function setRoleMembersAction(input: {
   // (officer-pre-added) stubs must claim their account first — the
   // same rule the user-keyed path enforces.
   if (addIds.length > 0) {
-    const targetUsers = await db
-      .select({ id: schema.users.id, status: schema.users.status })
-      .from(schema.users)
-      .where(inArray(schema.users.id, addIds));
+    const targetUsers = await selectInChunks(addIds, (chunk) =>
+      db
+        .select({ id: schema.users.id, status: schema.users.status })
+        .from(schema.users)
+        .where(inArray(schema.users.id, [...chunk])),
+    );
     const byId = new Map(targetUsers.map((u) => [u.id, u.status]));
     for (const userId of addIds) {
       const status = byId.get(userId);

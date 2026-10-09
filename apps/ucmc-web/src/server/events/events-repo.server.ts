@@ -32,7 +32,7 @@ import {
 } from "drizzle-orm";
 
 import type { EventKind, EventVisibility } from "#/../drizzle/schema";
-import { getDb, schema } from "#/server/db";
+import { getDb, schema, selectInChunks } from "#/server/db";
 
 /**
  * The visibility tiers a given viewer may read.
@@ -216,20 +216,28 @@ export async function listExceptionsFor(
     return grouped;
   }
 
-  const rows = await getDb()
-    .select({
-      eventId: schema.eventExceptions.eventId,
-      occurrenceStart: schema.eventExceptions.occurrenceStart,
-      canceled: schema.eventExceptions.canceled,
-      title: schema.eventExceptions.title,
-      description: schema.eventExceptions.description,
-      location: schema.eventExceptions.location,
-      startsAt: schema.eventExceptions.startsAt,
-      endsAt: schema.eventExceptions.endsAt,
-    })
-    .from(schema.eventExceptions)
-    .where(inArray(schema.eventExceptions.eventId, [...eventIds]))
-    .orderBy(asc(schema.eventExceptions.occurrenceStart));
+  // Chunked: the window's series count is unbounded — every event the club
+  // has ever scheduled inside it lands in this one `IN (...)` — so past ~100
+  // events this exceeded D1's bound-parameter limit and 500'd /calendar and
+  // both .ics feeds. Each event's rows stay within a single chunk, so the
+  // per-event ordering the expander depends on survives the split even
+  // though the `ORDER BY` no longer spans the whole read.
+  const rows = await selectInChunks([...eventIds], (chunk) =>
+    getDb()
+      .select({
+        eventId: schema.eventExceptions.eventId,
+        occurrenceStart: schema.eventExceptions.occurrenceStart,
+        canceled: schema.eventExceptions.canceled,
+        title: schema.eventExceptions.title,
+        description: schema.eventExceptions.description,
+        location: schema.eventExceptions.location,
+        startsAt: schema.eventExceptions.startsAt,
+        endsAt: schema.eventExceptions.endsAt,
+      })
+      .from(schema.eventExceptions)
+      .where(inArray(schema.eventExceptions.eventId, [...chunk]))
+      .orderBy(asc(schema.eventExceptions.occurrenceStart)),
+  );
 
   for (const { eventId, ...rest } of rows) {
     const bucket = grouped.get(eventId);
