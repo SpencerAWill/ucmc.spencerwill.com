@@ -66,11 +66,16 @@ export type ScanPayload =
  */
 export function parseScanPayload(raw: string): ScanPayload | null {
   // `\r` rides along with the Enter on some wedges; trim handles it
-  // together with any stray surrounding space.
+  // together with any stray surrounding space. Trimmed BEFORE the AIM
+  // match because that pattern is `^`-anchored — a leading space would
+  // otherwise hide the identifier and leave it in the code.
   const trimmed = raw.trim();
   const aim = AIM_SYMBOLOGY_ID.exec(trimmed);
+  // `groups` is only `undefined` for a pattern with no named group, so
+  // the chain here is the type system's requirement rather than a real
+  // branch.
   const symbology = aim?.groups?.symbology ?? null;
-  const value = (aim ? trimmed.slice(aim[0].length) : trimmed).trim();
+  const value = aim ? trimmed.slice(aim[0].length) : trimmed;
 
   if (value.startsWith(CART_TOKEN_PREFIX)) {
     return { kind: "cart", token: value, symbology };

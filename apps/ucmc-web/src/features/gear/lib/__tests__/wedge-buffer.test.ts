@@ -239,6 +239,63 @@ describe("terminators and non-character keys", () => {
   });
 
   it("resets to idle after emitting", () => {
-    expect(burst("CH93").state).toEqual(IDLE_WEDGE_STATE);
+    // Asserted as a literal, not against `IDLE_WEDGE_STATE`: comparing
+    // the constant to itself passes however the constant is mutated,
+    // which is exactly what mutation testing surfaced here.
+    expect(burst("CH93").state).toEqual({
+      chars: "",
+      lastAt: 0,
+      mode: "idle",
+      disqualified: false,
+    });
+  });
+});
+
+describe("boundaries", () => {
+  it("treats a gap of exactly maxInterKeyMs as machine speed", () => {
+    expect(
+      burst("CH93", { gapMs: DEFAULT_WEDGE_OPTIONS.maxInterKeyMs }).emitted,
+    ).toBe("CH93");
+  });
+
+  it("treats one millisecond more as human speed", () => {
+    expect(
+      burst("CH93", { gapMs: DEFAULT_WEDGE_OPTIONS.maxInterKeyMs + 1 }).emitted,
+    ).toBeNull();
+  });
+
+  it("emits a payload of exactly maxLength", () => {
+    const exact = "X".repeat(DEFAULT_WEDGE_OPTIONS.maxLength);
+    expect(burst(exact).emitted).toBe(exact);
+  });
+
+  it("disqualifies one character past maxLength", () => {
+    expect(
+      burst("X".repeat(DEFAULT_WEDGE_OPTIONS.maxLength + 1)).emitted,
+    ).toBeNull();
+  });
+
+  it("emits a payload of exactly minLength", () => {
+    expect(burst("X".repeat(DEFAULT_WEDGE_OPTIONS.minLength)).emitted).toBe(
+      "XXX",
+    );
+  });
+
+  it("opens a burst correctly when the page clock is still near zero", () => {
+    // `lastAt` is 0 in the idle state, so "no buffer" and "a buffer
+    // stamped at time zero" are only told apart by `mode`. Drop that
+    // check and a scan arriving within `maxInterKeyMs` of the time
+    // origin appends to the idle buffer, never leaves `"idle"`, and
+    // silently never emits.
+    expect(burst("CH93", { startAt: 0, gapMs: 5 }).emitted).toBe("CH93");
+  });
+
+  it("marks an AIM-flag burst tier-1", () => {
+    // This is what lets an AIM-configured gun work inside a focused
+    // text field; the sentinel case alone does not pin it.
+    expect(
+      feedKey(IDLE_WEDGE_STATE, { value: "]", isTerminator: false, at: 100 })
+        .state.mode,
+    ).toBe("tier1");
   });
 });

@@ -125,3 +125,27 @@ describe("isForeignSymbology", () => {
     expect(isForeignSymbology("d1")).toBe(true);
   });
 });
+
+describe("parseScanPayload anchoring and trimming", () => {
+  it("only strips an AIM identifier from the START of the payload", () => {
+    // The anchor is load-bearing. Without `^` the pattern matches
+    // anywhere, and a code that happens to contain `]C0` would have it
+    // cut out of the middle — the same class of defect as a redaction
+    // pattern missing an anchor.
+    expect(parseScanPayload("CH]C093")).toEqual({
+      kind: "code",
+      code: "CH]C093",
+      symbology: null,
+    });
+  });
+
+  it("finds an AIM identifier behind leading whitespace", () => {
+    // Trimming has to happen BEFORE the anchored match, or a stray
+    // leading space hides the identifier and leaves it in the code.
+    expect(parseScanPayload("  ]C0CH93")).toEqual({
+      kind: "code",
+      code: "CH93",
+      symbology: "C0",
+    });
+  });
+});

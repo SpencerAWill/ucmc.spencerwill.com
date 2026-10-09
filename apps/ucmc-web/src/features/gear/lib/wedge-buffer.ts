@@ -185,6 +185,11 @@ export function feedKey(
 ): WedgeResult {
   if (key.isTerminator) {
     const complete =
+      // Redundant while `minLength` is above zero — an idle buffer has
+      // no characters — but `minLength` is an option, and a caller that
+      // set it to 0 would otherwise have every stray Enter "complete" an
+      // empty scan. Mutation testing reports this as a survivor for
+      // exactly that reason; it is not dead code.
       state.mode !== "idle" &&
       !state.disqualified &&
       key.at - state.lastAt <= opts.maxInterKeyMs &&
