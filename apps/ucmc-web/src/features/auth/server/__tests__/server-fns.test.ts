@@ -298,6 +298,9 @@ describe("submitPublicProfileAction", () => {
         preferredName: "Pat",
         ucAffiliation: "student",
         bio: "",
+        trailName: "",
+        pronouns: "",
+        statusLine: "",
       }),
     ).rejects.toThrow();
   });
@@ -314,6 +317,9 @@ describe("submitPublicProfileAction", () => {
       preferredName: "NewPreferred",
       ucAffiliation: "alum",
       bio: "",
+      trailName: "",
+      pronouns: "",
+      statusLine: "",
     });
 
     const row = await getDb().query.profiles.findFirst({
@@ -344,6 +350,9 @@ describe("submitPublicProfileAction", () => {
       preferredName: "OnlyA",
       ucAffiliation: "faculty",
       bio: "",
+      trailName: "",
+      pronouns: "",
+      statusLine: "",
     });
 
     const bRow = await getDb().query.profiles.findFirst({
@@ -351,6 +360,89 @@ describe("submitPublicProfileAction", () => {
     });
     expect(bRow?.preferredName).toBe("Test");
     expect(bRow?.ucAffiliation).toBe("student");
+  });
+});
+
+describe("submitPublicProfileAction identity fields", () => {
+  it("stores an empty identity field as NULL, not an empty string", async () => {
+    // The profile header omits a line that is null. An empty string
+    // is truthy enough to render an element with its own spacing, so
+    // a member who cleared their trail name would get a blank gap
+    // where it used to be.
+    const userId = await seedUser({
+      email: "identity-null@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(userId);
+
+    await submitPublicProfileAction({
+      preferredName: "Pat",
+      ucAffiliation: "student",
+      bio: "",
+      trailName: "",
+      pronouns: "",
+      statusLine: "",
+    });
+
+    const row = await getDb().query.profiles.findFirst({
+      where: eq(schema.profiles.userId, userId),
+    });
+    expect(row?.trailName).toBeNull();
+    expect(row?.pronouns).toBeNull();
+    expect(row?.statusLine).toBeNull();
+  });
+
+  it("round-trips the identity fields when they are set", async () => {
+    const userId = await seedUser({
+      email: "identity-set@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(userId);
+
+    await submitPublicProfileAction({
+      preferredName: "Pat",
+      ucAffiliation: "student",
+      bio: "",
+      trailName: "Switchback",
+      pronouns: "they/them",
+      statusLine: "Looking for a caving partner",
+    });
+
+    const row = await getDb().query.profiles.findFirst({
+      where: eq(schema.profiles.userId, userId),
+    });
+    expect(row?.trailName).toBe("Switchback");
+    expect(row?.pronouns).toBe("they/them");
+    expect(row?.statusLine).toBe("Looking for a caving partner");
+  });
+
+  it("clears a previously set field back to NULL", async () => {
+    // The save path is a full overwrite of the public columns, so
+    // clearing has to work as well as setting — otherwise a trail
+    // name is permanent once typed.
+    const userId = await seedUser({
+      email: "identity-clear@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await openSession(userId);
+
+    const base = {
+      preferredName: "Pat",
+      ucAffiliation: "student" as const,
+      bio: "",
+      pronouns: "",
+      statusLine: "",
+    };
+    await submitPublicProfileAction({ ...base, trailName: "Switchback" });
+    await submitPublicProfileAction({ ...base, trailName: "" });
+
+    const row = await getDb().query.profiles.findFirst({
+      where: eq(schema.profiles.userId, userId),
+    });
+    expect(row?.trailName).toBeNull();
   });
 });
 
@@ -446,6 +538,9 @@ describe("profileInputSchema bio", () => {
       emergencyContacts: [],
       ucAffiliation: "student" as const,
       bio,
+      trailName: "",
+      pronouns: "",
+      statusLine: "",
       policiesAck: true,
     };
   }

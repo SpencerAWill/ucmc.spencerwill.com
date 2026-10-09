@@ -38,6 +38,9 @@ export interface AdminProfileDefaults {
   fullName: string | null;
   preferredName: string | null;
   phone: string | null;
+  trailName: string | null;
+  pronouns: string | null;
+  statusLine: string | null;
   emergencyContacts: EmergencyContactInput[];
   ucAffiliation:
     | "student"
@@ -76,6 +79,14 @@ export function AdminProfileSheet({
       emergencyContacts: defaults?.emergencyContacts ?? [],
       ucAffiliation: defaults?.ucAffiliation ?? "",
       bio: defaults?.bio ?? "",
+      // Passed through rather than edited here. `profileInputSchema`
+      // covers every profile column, so the action writes all of
+      // them — a field the sheet does not carry gets blanked on
+      // save, which is the same hazard `/my/details` and
+      // `/my/contacts` have with each other.
+      trailName: defaults?.trailName ?? "",
+      pronouns: defaults?.pronouns ?? "",
+      statusLine: defaults?.statusLine ?? "",
       // Carried only to satisfy the shared form shape; the admin
       // sheet never persists or surfaces this field — only the
       // registration form does.

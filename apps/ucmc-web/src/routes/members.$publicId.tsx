@@ -399,6 +399,9 @@ function MemberManageActions({
           fullName: member.fullName,
           preferredName: member.preferredName,
           phone: member.phone,
+          trailName: member.trailName,
+          pronouns: member.pronouns,
+          statusLine: member.statusLine,
           emergencyContacts: member.emergencyContacts,
           ucAffiliation:
             member.ucAffiliation as AdminProfileDefaults["ucAffiliation"],

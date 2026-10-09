@@ -24,6 +24,13 @@ export const PROFILE_LIMITS = {
   fullName: { min: 1, max: 120 },
   preferredName: { min: 1, max: 60 },
   emergencyContactName: { min: 1, max: 120 },
+  // The three optional identity fields (#257). Each is capped to
+  // what the profile header can render on one phone line before it
+  // wraps into the next element — these are one-liners by design,
+  // and the bio is where anything longer belongs.
+  trailName: { min: 0, max: 40 },
+  pronouns: { min: 0, max: 30 },
+  statusLine: { min: 0, max: 120 },
 } as const;
 
 export const BIO_LIMITS = { maxWords: 150 } as const;
@@ -90,6 +97,29 @@ export const profileInputSchema = z.object({
     .refine((v) => countWords(v) <= BIO_LIMITS.maxWords, {
       message: `At most ${BIO_LIMITS.maxWords} words`,
     }),
+  // All three optional: an empty string is valid and is stored as
+  // NULL, so the header omits the line rather than rendering a gap.
+  trailName: z
+    .string()
+    .trim()
+    .max(
+      PROFILE_LIMITS.trailName.max,
+      `At most ${PROFILE_LIMITS.trailName.max} characters`,
+    ),
+  pronouns: z
+    .string()
+    .trim()
+    .max(
+      PROFILE_LIMITS.pronouns.max,
+      `At most ${PROFILE_LIMITS.pronouns.max} characters`,
+    ),
+  statusLine: z
+    .string()
+    .trim()
+    .max(
+      PROFILE_LIMITS.statusLine.max,
+      `At most ${PROFILE_LIMITS.statusLine.max} characters`,
+    ),
   // Carried on the shape so non-registration forms (Profile, Details,
   // admin sheet) match the same validator. Accepts any boolean here;
   // the registration submit overrides this to literal-true via
@@ -125,6 +155,9 @@ export const publicProfileInputSchema = profileInputSchema.pick({
   preferredName: true,
   ucAffiliation: true,
   bio: true,
+  trailName: true,
+  pronouns: true,
+  statusLine: true,
 });
 
 export type PublicProfileInput = z.infer<typeof publicProfileInputSchema>;

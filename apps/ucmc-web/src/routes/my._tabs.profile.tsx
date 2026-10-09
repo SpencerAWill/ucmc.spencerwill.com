@@ -10,7 +10,10 @@ import { PasskeyNudge } from "#/features/auth/components/passkey-nudge";
 import { BioFields } from "#/components/profile/bio-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
-import { PublicProfileFields } from "#/components/profile/public-profile-fields";
+import {
+  ProfileIdentityFields,
+  PublicProfileFields,
+} from "#/components/profile/public-profile-fields";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 import { useAppForm } from "#/lib/form/form";
@@ -85,6 +88,9 @@ function AccountProfilePage() {
                   phone: data.profile.phone,
                   ucAffiliation: data.profile.ucAffiliation,
                   bio: data.profile.bio ?? "",
+                  trailName: data.profile.trailName ?? "",
+                  pronouns: data.profile.pronouns ?? "",
+                  statusLine: data.profile.statusLine ?? "",
                   emergencyContacts: data.emergencyContacts.map((c) => ({
                     name: c.name,
                     phone: c.phone,
@@ -133,6 +139,9 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
           preferredName: value.preferredName,
           ucAffiliation: value.ucAffiliation,
           bio: value.bio,
+          trailName: value.trailName,
+          pronouns: value.pronouns,
+          statusLine: value.statusLine,
         } as PublicProfileInput,
         {
           onSuccess: () => {
@@ -165,6 +174,7 @@ function PublicProfileEditor({ defaults }: { defaults: ProfileFormShape }) {
         {(isSubmitting) => (
           <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
             <PublicProfileFields form={form} />
+            <ProfileIdentityFields form={form} />
             <BioFields form={form} />
             <form.AppForm>
               <form.SubscribeButton label="Save changes" />

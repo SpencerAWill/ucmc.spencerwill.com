@@ -763,12 +763,19 @@ export async function submitPublicProfileAction(
     throw new Error("Not authorized to submit a profile");
   }
 
-  const { bio, ...rest } = data;
+  const { bio, trailName, pronouns, statusLine, ...rest } = data;
+  // Empty means "not set", and the columns are nullable so the
+  // profile header can omit the line entirely. Storing `""` would
+  // render an empty element with its own spacing instead.
+  const orNull = (value: string) => (value.length > 0 ? value : null);
   await getDb()
     .update(schema.profiles)
     .set({
       ...rest,
-      bio: bio.length > 0 ? bio : null,
+      bio: orNull(bio),
+      trailName: orNull(trailName),
+      pronouns: orNull(pronouns),
+      statusLine: orNull(statusLine),
       updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.profiles.userId, principal.userId));
