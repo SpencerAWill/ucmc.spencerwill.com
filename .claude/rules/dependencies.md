@@ -17,6 +17,28 @@ paths:
 - **`allowBuilds`** (renamed from pnpm 10's `onlyBuiltDependencies`) is a map of `pkg: true|false`. Lifecycle scripts run only for listed packages; everything else is blocked. Audit pnpm's actual decisions in `node_modules/.modules.yaml`.
 - **`.npmrc`** pins `registry=https://registry.npmjs.org/` so an environment-level registry override can't redirect us to a poisoned mirror.
 
+## The one standing quarantine exception, and why it is time-boxed
+
+`minimumReleaseAgeExclude` currently lists **`@tanstack/charts`**, and it is the
+only entry. The charting library for `/analytics` (issue #267) released 1.0.0 on
+2026-10-03 and 1.1.0 on 2026-10-09, so both were inside the window while the page
+was being built and `pnpm add` refused with
+`ERR_PNPM_NO_MATURE_MATCHING_VERSION`. The exclusion was added deliberately, with
+the trade-off understood, to avoid blocking the feature for a week.
+
+**This is a documented exception to the rule above, not a revision of it.** The
+default remains: never bypass the delay — prefer an override, pick a patched
+floor that has already matured, or wait. What bounds the risk here is that the
+package is pinned to an exact version, ships ESM with no install scripts (so
+`allowBuilds` has nothing to block), and reaches exactly one route that sits
+behind both a permission and a page flag.
+
+**Delete the entry on or after 2026-10-16**, when 1.1.0 matures out of the window
+on its own. Same discipline as the dated `auditConfig.ignoreGhsas` entries: an
+exclusion left in place means the _next_ version of that package installs with no
+quarantine at all, which is the hole the setting exists to close. The comment in
+`pnpm-workspace.yaml` carries the same date.
+
 ## Rules for clearing an advisory
 
 Read the current pins out of `pnpm-workspace.yaml` — they are not duplicated here, and a copy would drift.
