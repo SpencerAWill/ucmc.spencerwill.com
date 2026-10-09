@@ -5,6 +5,16 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 
+/**
+ * TanStack Router types `ErrorComponentProps["error"]` as `unknown` — a thrown
+ * value is not required to be an `Error`, and a route that rejects with a
+ * string or a plain object would otherwise render `undefined` here. Narrow
+ * once, so both boundaries below agree on what is safe to display.
+ */
+function errorMessage(error: unknown): string | undefined {
+  return error instanceof Error && error.message ? error.message : undefined;
+}
+
 export function ErrorPage({ error, reset }: ErrorComponentProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8 text-center">
@@ -17,9 +27,9 @@ export function ErrorPage({ error, reset }: ErrorComponentProps) {
           An unexpected error occurred. You can try again or head home.
         </p>
       </div>
-      {error.message ? (
+      {errorMessage(error) ? (
         <pre className="max-w-2xl overflow-x-auto rounded-md border bg-muted px-4 py-3 text-left text-xs text-muted-foreground">
-          {error.message}
+          {errorMessage(error)}
         </pre>
       ) : null}
       <div className="flex flex-wrap items-center justify-center gap-3">
@@ -50,9 +60,9 @@ export function RouteErrorFallback({ error, reset }: ErrorComponentProps) {
       <AlertTriangle />
       <AlertTitle>Something went wrong loading this section.</AlertTitle>
       <AlertDescription className="gap-3">
-        {error.message ? (
+        {errorMessage(error) ? (
           <pre className="max-w-full overflow-x-auto rounded-sm bg-background/60 px-2 py-1 text-xs text-muted-foreground">
-            {error.message}
+            {errorMessage(error)}
           </pre>
         ) : null}
         <Button size="sm" variant="outline" onClick={reset}>
