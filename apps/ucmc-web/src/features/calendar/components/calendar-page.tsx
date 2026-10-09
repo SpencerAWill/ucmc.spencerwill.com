@@ -1,20 +1,21 @@
-import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-
-import { CalendarPlus, Plus } from "lucide-react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { CalendarPlus, Plus, X } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Button } from "#/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
+import { Toggle } from "#/components/ui/toggle";
 import type { EventKind } from "#/../drizzle/schema";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { calendarOccurrencesQueryOptions } from "#/features/calendar/api/queries";
 import { CalendarAgenda } from "#/features/calendar/components/calendar-agenda";
 import { CalendarMonthGrid } from "#/features/calendar/components/calendar-month-grid";
-import { EventDetailSheet } from "#/features/calendar/components/event-detail-sheet";
 import { EventFormDialog } from "#/features/calendar/components/event-form-dialog";
 import type { EventFormSeed } from "#/features/calendar/components/event-form-dialog";
-import { EventOfficerActions } from "#/features/calendar/components/event-officer-actions";
+import {
+  calendarSearchFor,
+  kindsFromSearch,
+} from "#/features/calendar/lib/calendar-search";
 import {
   clubToday,
   groupByClubDate,
@@ -23,6 +24,8 @@ import {
 import {
   EVENT_KIND_DOT,
   EVENT_KIND_LABEL,
+  formatClubDayHeading,
+  formatClubMonthHeading,
 } from "#/features/calendar/lib/event-display";
 import type { CalendarOccurrence } from "#/features/calendar/server/calendar-fns";
 import { cn } from "#/lib/utils";
@@ -39,57 +42,100 @@ const KIND_ORDER: readonly EventKind[] = [
  * `/calendar` — month grid plus agenda.
  *
  * **One layout at both breakpoints**, stacked on a phone and
- * side-by-side from `lg`. This is the Apple Calendar / Luma shape; the
- * alternative (a month grid with event chips in the cells, Google's
- * desktop view) needs a dedicated calendar library and is unreadable at
- * 400px, where most members will actually open this.
+ * side-by-side from `lg`. This is the Apple Calendar / Luma shape; a
+ * month grid with event chips in the cells (Google's desktop view)
+ * needs a dedicated calendar library and is unreadable at 400px, where
+ * most members will open this.
  *
- * The agenda shows **the whole visible month**, not just the selected
- * day. Selecting a day scrolls the question "what's on the 14th?" into
- * a single tap, but the default reading of a club calendar is "what's
- * coming up" — and a day-at-a-time agenda would make a reader tap
- * through thirty empty days to find out.
+ * **The grid is a filter and the agenda is its result.** Tapping a date
+ * narrows the agenda to that day; tapping a second extends it to a
+ * range. Tap-then-tap rather than click-and-drag, deliberately: drag
+ * needs `touch-action: none` on the grid, which would stop the page
+ * scrolling past the calendar on a phone, and it has no affordance on
+ * touch at all. With no selection the agenda shows the whole month,
+ * which is the default reading of a club calendar — "what's coming up".
+ *
+ * Month, range and type filter all live in the URL, so a reader can
+ * link to what they are looking at and the back button walks their
+ * filtering. See `lib/calendar-search.ts`.
  */
 export function CalendarPage() {
   /**
    * Officer affordances gate on `hasPermission`, never on
    * `principal.permissions.includes` and never on a field's presence in
-   * the payload — both bypass role emulation silently, so a sys admin
-   * previewing `member` would still be shown the edit buttons. The
-   * server re-checks `events:manage` on every write regardless.
+   * the payload — both bypass role emulation silently. The server
+   * re-checks `events:manage` on every write regardless.
    */
   const { hasPermission } = useAuth();
   const canManage = hasPermission("events:manage");
 
-  const today = clubToday();
-  const [month, setMonth] = useState(() =>
-    Temporal.PlainYearMonth.from({ year: today.year, month: today.month }),
-  );
-  const [selected, setSelected] = useState<Temporal.PlainDate>(today);
-  const [kinds, setKinds] = useState<EventKind[]>([]);
-  const [detail, setDetail] = useState<CalendarOccurrence | null>(null);
+  const search = useSearch({ from: "/calendar" });
+  const navigate = useNavigate();
   const [formSeed, setFormSeed] = useState<EventFormSeed | null>(null);
+
+  const today = clubToday();
+  const currentMonth = Temporal.PlainYearMonth.from({
+    year: today.year,
+    month: today.month,
+  });
+  const month = search.month
+    ? Temporal.PlainYearMonth.from(search.month)
+    : currentMonth;
+  const kinds = useMemo(() => kindsFromSearch(search.kind), [search.kind]);
+  const range = search.from
+    ? {
+        from: Temporal.PlainDate.from(search.from),
+        to: search.to ? Temporal.PlainDate.from(search.to) : null,
+      }
+    : null;
+
+  /** Every control is a navigation, so each writes the whole view. */
+  const setView = (next: {
+    month?: Temporal.PlainYearMonth;
+    range?: { from: Temporal.PlainDate; to: Temporal.PlainDate | null } | null;
+    kinds?: readonly EventKind[];
+  }) =>
+    void navigate({
+      to: "/calendar",
+      search: calendarSearchFor({
+        month: next.month ?? month,
+        currentMonth,
+        range: next.range === undefined ? range : next.range,
+        kinds: next.kinds ?? kinds,
+      }),
+      // The month and the filters are a *view*, not a trail: paging
+      // three months forward should leave one back-button press between
+      // the reader and where they came from, not three.
+      replace: true,
+      /**
+       * **Every control here is a navigation, so every control would
+       * otherwise scroll the page to the top.** Tapping a date on a
+       * phone — where the grid sits above the agenda — would throw the
+       * reader back to the header on each tap, which reads as the page
+       * reloading. The view is changing in place; the viewport should
+       * not move.
+       */
+      resetScroll: false,
+    });
 
   const window = useMemo(() => monthWindow(month), [month]);
 
   /**
    * **`keepPreviousData`, and no kind filter in the query key.**
    *
-   * Both halves exist to stop the page blanking. The key contains the
-   * window, so paging months is a new cache entry — under
-   * `useSuspenseQuery` that threw to the nearest Suspense boundary and
-   * replaced the whole page with its fallback, which reads as a full
-   * reload rather than as a month changing. `keepPreviousData` leaves
-   * last month on screen until the next one lands.
+   * Both halves stop the page blanking. The key contains the window, so
+   * paging months is a new cache entry — under `useSuspenseQuery` that
+   * threw to the nearest Suspense boundary and replaced the whole page
+   * with its fallback, which reads as a full reload rather than as a
+   * month changing.
    *
-   * The kind filter is applied **client-side** rather than sent to the
-   * server, so toggling a type does no network work at all. The window
-   * already holds every event this viewer may see; re-fetching a subset
-   * of what is already in memory would make the filter the slowest
-   * control on the page, and would multiply the cache into one entry
-   * per filter combination per month. The server fn keeps its `kinds`
-   * parameter for the `.ics` feed, whose subscribers cannot filter for
-   * themselves.
+   * The kind filter is applied client-side, so toggling a type does no
+   * network work: the window already holds every event this viewer may
+   * see. Re-fetching a subset of what is in memory would make the
+   * filter the slowest control on the page and multiply the cache into
+   * one entry per filter combination per month. The server fn keeps its
+   * `kinds` parameter for the `.ics` feed, whose subscribers cannot
+   * filter for themselves.
    */
   const { data, isPending } = useQuery({
     ...calendarOccurrencesQueryOptions(window.from, window.until),
@@ -108,89 +154,107 @@ export function CalendarPage() {
   const byDate = useMemo(() => groupByClubDate(visible), [visible]);
 
   /**
-   * Agenda days: every day of the displayed month that has something
-   * on it, in order. Built from the month rather than from `byDate`
-   * directly, because the fetch window is padded a week either side and
-   * those padding days belong to a different month's agenda.
+   * The days the agenda lists: the selected range if there is one,
+   * otherwise the whole displayed month.
+   *
+   * Built by walking dates rather than reading `byDate`'s keys, because
+   * the fetch window is padded a week either side and those padding
+   * days belong to a neighbouring month's agenda.
    */
   const agendaDays = useMemo(() => {
-    const first = month.toPlainDate({ day: 1 });
+    const first = range ? range.from : month.toPlainDate({ day: 1 });
+    const last = range
+      ? (range.to ?? range.from)
+      : month.toPlainDate({ day: month.daysInMonth });
+
     const out: {
       date: Temporal.PlainDate;
       occurrences: CalendarOccurrence[];
     }[] = [];
-    for (let day = 0; day < month.daysInMonth; day += 1) {
-      const date = first.add({ days: day });
-      const found = byDate.get(date.toString());
+    let cursor = first;
+    while (Temporal.PlainDate.compare(cursor, last) <= 0) {
+      const found = byDate.get(cursor.toString());
       if (found && found.length > 0) {
-        out.push({ date, occurrences: found });
+        out.push({ date: cursor, occurrences: found });
       }
+      cursor = cursor.add({ days: 1 });
     }
     return out;
-  }, [byDate, month]);
+  }, [byDate, month, range]);
 
   const isCurrentMonth =
-    month.year === today.year && month.month === today.month;
+    Temporal.PlainYearMonth.compare(month, currentMonth) === 0;
+
+  const rangeLabel = range
+    ? range.to && Temporal.PlainDate.compare(range.to, range.from) !== 0
+      ? `${formatClubDayHeading(range.from)} – ${formatClubDayHeading(range.to)}`
+      : formatClubDayHeading(range.from)
+    : null;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <ToggleGroup
-          type="multiple"
-          variant="outline"
-          size="sm"
-          value={kinds}
-          onValueChange={(next) => setKinds(next as EventKind[])}
+      {/* Toolbar. Filters lead because they are what a reader touches;
+       * the officer action is trailing and visually separate. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div
+          className="flex flex-wrap items-center gap-1.5"
+          role="group"
           aria-label="Filter by event type"
         >
           {KIND_ORDER.map((kind) => (
-            <ToggleGroupItem key={kind} value={kind}>
+            <Toggle
+              key={kind}
+              size="sm"
+              variant="outline"
+              pressed={kinds.includes(kind)}
+              onPressedChange={(pressed) =>
+                setView({
+                  kinds: pressed
+                    ? [...kinds, kind]
+                    : kinds.filter((value) => value !== kind),
+                })
+              }
+              className="h-8 rounded-full px-3 text-xs data-[state=on]:bg-accent"
+            >
               <span
                 className={cn("size-2 rounded-full", EVENT_KIND_DOT[kind])}
                 aria-hidden
               />
               {EVENT_KIND_LABEL[kind]}
-            </ToggleGroupItem>
+            </Toggle>
           ))}
-        </ToggleGroup>
+          {kinds.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs text-muted-foreground"
+              onClick={() => setView({ kinds: [] })}
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
 
         <div className="flex items-center gap-2">
-          {/* The whole point of the feature for most members: see it
-           * once here, subscribe, never open the page again. Links to
-           * /my/calendar rather than opening a dialog, because minting
-           * a token is a credential operation that belongs on the page
-           * that lists and revokes them. */}
           <Button variant="outline" size="sm" asChild>
+            {/* The whole point of the feature for most members: see it
+             * once here, subscribe, never open the page again. */}
             <Link to="/my/calendar">
               <CalendarPlus />
               Subscribe
             </Link>
           </Button>
-
-          {isCurrentMonth ? null : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setMonth(
-                  Temporal.PlainYearMonth.from({
-                    year: today.year,
-                    month: today.month,
-                  }),
-                );
-                setSelected(today);
-              }}
-            >
-              Back to today
-            </Button>
-          )}
-
-          {/* Seeded with the day the officer has selected on the grid,
-           * so "tap the 14th, tap New event" fills the date in. */}
           {canManage ? (
             <Button
               size="sm"
-              onClick={() => setFormSeed({ mode: "create", date: selected })}
+              onClick={() =>
+                setFormSeed({
+                  mode: "create",
+                  date:
+                    range?.from ??
+                    (isCurrentMonth ? today : month.toPlainDate({ day: 1 })),
+                })
+              }
             >
               <Plus />
               New event
@@ -199,55 +263,81 @@ export function CalendarPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-        <div className="rounded-lg border p-3">
-          <CalendarMonthGrid
-            month={month}
-            onMonthChange={setMonth}
-            selected={selected}
-            onSelect={setSelected}
-            occurrencesByDate={byDate}
-          />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
+        <div className="lg:sticky lg:top-20 lg:self-start">
+          <div className="rounded-xl border bg-card p-3 shadow-xs">
+            <CalendarMonthGrid
+              month={month}
+              onMonthChange={(next) => setView({ month: next })}
+              range={range}
+              onRangeChange={(next) => setView({ range: next })}
+              occurrencesByDate={byDate}
+            />
+          </div>
+
+          {!isCurrentMonth || range ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {isCurrentMonth ? null : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setView({ month: currentMonth, range: null })}
+                >
+                  Back to today
+                </Button>
+              )}
+              {range ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setView({ range: null })}
+                >
+                  <X />
+                  Whole month
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-3">
+          {/* The agenda says what it is showing. Without it, a range of
+           * two quiet days is indistinguishable from a broken page. */}
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-semibold">
+              {rangeLabel ?? formatClubMonthHeading(month)}
+            </h2>
+            {agendaDays.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {agendaDays.reduce(
+                  (total, day) => total + day.occurrences.length,
+                  0,
+                )}{" "}
+                event
+                {agendaDays.reduce(
+                  (total, day) => total + day.occurrences.length,
+                  0,
+                ) === 1
+                  ? ""
+                  : "s"}
+              </p>
+            ) : null}
+          </div>
+
           <CalendarAgenda
             days={agendaDays}
-            onSelect={setDetail}
             emptyLabel={
               isPending
-                ? "Loading\u2026"
-                : kinds.length > 0
-                  ? "Nothing of those types this month."
-                  : "Nothing on the calendar this month yet."
+                ? "Loading…"
+                : range
+                  ? "Nothing on those dates."
+                  : kinds.length > 0
+                    ? "Nothing of those types this month."
+                    : "Nothing on the calendar this month yet."
             }
           />
         </div>
       </div>
-
-      <EventDetailSheet
-        occurrence={detail}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDetail(null);
-          }
-        }}
-        footer={
-          detail && canManage ? (
-            <EventOfficerActions
-              occurrence={detail}
-              onEdit={() =>
-                setFormSeed({
-                  mode: "edit",
-                  occurrence: detail,
-                  rrule: detail.rrule,
-                })
-              }
-              onDone={() => setDetail(null)}
-            />
-          ) : undefined
-        }
-      />
 
       <EventFormDialog
         seed={formSeed}

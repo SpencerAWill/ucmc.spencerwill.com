@@ -36,7 +36,7 @@ const {
   createEventAction,
   currentVisibilityScope,
   deleteEventAction,
-  getCalendarEventAction,
+  getCalendarOccurrenceAction,
   listCalendarOccurrencesAction,
   overrideOccurrenceAction,
   updateEventAction,
@@ -328,7 +328,7 @@ describe("createEventAction", () => {
       makeEvent({ title: "Gear night" }),
     );
 
-    const stored = await getCalendarEventAction(publicId);
+    const stored = await getCalendarOccurrenceAction({ publicId });
     expect(stored?.title).toBe("Gear night");
     expect(stored?.sequence).toBe(0);
 
@@ -482,10 +482,10 @@ describe("updateEventAction", () => {
     const { publicId } = await createEventAction(makeEvent());
 
     await updateEventAction({ ...makeEvent({ title: "Renamed" }), publicId });
-    expect((await getCalendarEventAction(publicId))?.sequence).toBe(1);
+    expect((await getCalendarOccurrenceAction({ publicId }))?.sequence).toBe(1);
 
     await updateEventAction({ ...makeEvent({ title: "Again" }), publicId });
-    expect((await getCalendarEventAction(publicId))?.sequence).toBe(2);
+    expect((await getCalendarOccurrenceAction({ publicId }))?.sequence).toBe(2);
   });
 
   it("applies the edit", async () => {
@@ -496,7 +496,7 @@ describe("updateEventAction", () => {
       publicId,
     });
 
-    const stored = await getCalendarEventAction(publicId);
+    const stored = await getCalendarOccurrenceAction({ publicId });
     expect(stored?.title).toBe("New title");
     expect(stored?.location).toBe("Crosley Tower");
   });
@@ -592,7 +592,7 @@ describe("cancelEventAction", () => {
     await signInAsAdmin("cancelseq@example.com");
     const { publicId } = await createEventAction(makeEvent());
     await cancelEventAction({ publicId, canceled: true });
-    expect((await getCalendarEventAction(publicId))?.sequence).toBe(1);
+    expect((await getCalendarOccurrenceAction({ publicId }))?.sequence).toBe(1);
   });
 });
 
@@ -617,7 +617,7 @@ describe("deleteEventAction", () => {
     const eventId = await eventRowId(publicId);
     await deleteEventAction({ publicId });
 
-    expect(await getCalendarEventAction(publicId)).toBeNull();
+    expect(await getCalendarOccurrenceAction({ publicId })).toBeNull();
     expect(await exceptionsFor(eventId)).toHaveLength(0);
   });
 });
@@ -767,6 +767,6 @@ describe("occurrence overrides", () => {
       startsAt: null,
       endsAt: null,
     });
-    expect((await getCalendarEventAction(publicId))?.sequence).toBe(1);
+    expect((await getCalendarOccurrenceAction({ publicId }))?.sequence).toBe(1);
   });
 });

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { CalendarOff, MapPin, Repeat } from "lucide-react";
 
 import { Badge } from "#/components/ui/badge";
@@ -24,14 +25,12 @@ import { cn } from "#/lib/utils";
  */
 export function CalendarAgenda({
   days,
-  onSelect,
   emptyLabel,
 }: {
   days: readonly {
     date: Temporal.PlainDate;
     occurrences: readonly CalendarOccurrence[];
   }[];
-  onSelect?: (occurrence: CalendarOccurrence) => void;
   emptyLabel: string;
 }) {
   if (days.length === 0) {
@@ -54,7 +53,7 @@ export function CalendarAgenda({
               <li
                 key={`${occurrence.publicId}:${occurrence.occurrenceStart.epochMilliseconds}`}
               >
-                <AgendaRow occurrence={occurrence} onSelect={onSelect} />
+                <AgendaRow occurrence={occurrence} />
               </li>
             ))}
           </ul>
@@ -64,13 +63,7 @@ export function CalendarAgenda({
   );
 }
 
-function AgendaRow({
-  occurrence,
-  onSelect,
-}: {
-  occurrence: CalendarOccurrence;
-  onSelect?: (occurrence: CalendarOccurrence) => void;
-}) {
+function AgendaRow({ occurrence }: { occurrence: CalendarOccurrence }) {
   const body = (
     <>
       <span
@@ -139,17 +132,32 @@ function AgendaRow({
     </>
   );
 
-  if (!onSelect) {
-    return <div className="flex gap-3 rounded-lg border p-3">{body}</div>;
-  }
-
+  /**
+   * A real `<Link>`, not a button with a click handler.
+   *
+   * Each occurrence has its own URL, so middle-click, copy-link and
+   * open-in-new-tab all work — which is most of why the detail is a
+   * route at all. An officer sharing "this trip" is the common case.
+   *
+   * `occurrence` carries the slot (RECURRENCE-ID, epoch ms) so a link
+   * to the May 13 meeting of a weekly series opens *that* one rather
+   * than the series anchor.
+   */
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(occurrence)}
-      className="flex w-full gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+    <Link
+      to="/calendar/$publicId"
+      params={{ publicId: occurrence.publicId }}
+      search={(prev) => ({
+        ...prev,
+        occurrence: occurrence.occurrenceStart.epochMilliseconds,
+      })}
+      // Opening the detail sheet is an overlay, not a new page: the
+      // calendar stays where it was behind it, so the viewport should
+      // too.
+      resetScroll={false}
+      className="flex w-full gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
     >
       {body}
-    </button>
+    </Link>
   );
 }

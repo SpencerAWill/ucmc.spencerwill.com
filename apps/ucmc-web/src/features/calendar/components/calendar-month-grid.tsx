@@ -23,6 +23,11 @@ import { cn } from "#/lib/utils";
  * beside it carries the detail. It also means `react-day-picker` —
  * already a dependency — is sufficient.
  *
+ * **The grid is a filter, not decoration.** Tapping a date narrows the
+ * agenda beside it to that day; tapping a second extends it to a range.
+ * An earlier version tracked a selected day that nothing read, so
+ * clicking a date appeared to do nothing at all.
+ *
  * **The day cell wraps `CalendarDayButton`; it does not replace it.**
  * That component owns the cell's entire box — `aspect-square`,
  * `size-auto`, `w-full`, `min-w-(--cell-size)` — plus the selected,
@@ -31,18 +36,24 @@ import { cn } from "#/lib/utils";
  * roughly the size of its text and left the grid looking right while
  * being almost impossible to click.
  */
+export interface CalendarRange {
+  from: Temporal.PlainDate;
+  /** NULL while the reader has tapped one end and not yet the other. */
+  to: Temporal.PlainDate | null;
+}
+
 export function CalendarMonthGrid({
   month,
   onMonthChange,
-  selected,
-  onSelect,
+  range,
+  onRangeChange,
   occurrencesByDate,
   className,
 }: {
   month: Temporal.PlainYearMonth;
   onMonthChange: (month: Temporal.PlainYearMonth) => void;
-  selected: Temporal.PlainDate;
-  onSelect: (date: Temporal.PlainDate) => void;
+  range: CalendarRange | null;
+  onRangeChange: (range: CalendarRange | null) => void;
   occurrencesByDate: ReadonlyMap<string, CalendarOccurrence[]>;
   className?: string;
 }) {
@@ -66,7 +77,15 @@ export function CalendarMonthGrid({
   return (
     <Calendar
       className={cn("w-full bg-transparent p-0", className)}
-      mode="single"
+      /**
+       * **Tap, then tap again — never click-and-drag.** Drag would need
+       * `touch-action: none` on the grid, which stops the page
+       * scrolling past the calendar on a phone, and it has no
+       * affordance on touch at all. DayPicker's range mode is
+       * tap-then-tap natively, which is also what Airbnb, Booking and
+       * every mobile date picker trained people to expect.
+       */
+      mode="range"
       month={toPickerDate(month.toPlainDate({ day: 1 }))}
       onMonthChange={(next) => {
         const plain = fromPickerDate(next);
@@ -77,11 +96,32 @@ export function CalendarMonthGrid({
           }),
         );
       }}
-      selected={toPickerDate(selected)}
+      selected={
+        range
+          ? {
+              from: toPickerDate(range.from),
+              to: toPickerDate(range.to ?? range.from),
+            }
+          : undefined
+      }
       onSelect={(next) => {
-        if (next) {
-          onSelect(fromPickerDate(next));
+        if (!next?.from) {
+          // DayPicker hands back `undefined` when a tap clears the
+          // range — tapping the single selected day again. That is the
+          // reader asking for the whole month back.
+          onRangeChange(null);
+          return;
         }
+        const from = fromPickerDate(next.from);
+        const to = next.to ? fromPickerDate(next.to) : null;
+        onRangeChange({
+          from,
+          // DayPicker reports a single-day selection as from === to.
+          // Collapsing it to `null` keeps "one day" and "a range that
+          // happens to be one day" the same thing, so the URL and the
+          // agenda heading do not depend on which the reader meant.
+          to: to && Temporal.PlainDate.compare(to, from) === 0 ? null : to,
+        });
       }}
       showOutsideDays
       /**

@@ -1,8 +1,10 @@
 import {
   MY_SUBSCRIPTIONS_QUERY_KEY,
+  calendarOccurrenceQueryKey,
   calendarOccurrencesQueryKey,
 } from "#/features/calendar/api/query-keys";
 import {
+  getCalendarOccurrenceFn,
   listCalendarOccurrencesFn,
   listMySubscriptionsFn,
 } from "#/features/calendar/server/calendar-fns";
@@ -42,6 +44,39 @@ export function calendarOccurrencesQueryOptions(
           from: fromMs,
           until: untilMs,
           ...(kinds ? { kinds: [...kinds] } : {}),
+        },
+      }),
+    staleTime: 60_000,
+  } as const;
+}
+
+/**
+ * One occurrence, for `/calendar/$publicId`.
+ *
+ * Its own query rather than reading the month list, so the detail route
+ * resolves from a cold load — someone opening a link from an email has
+ * no month in cache, and an event outside the current month would not
+ * be in it anyway.
+ */
+export function calendarOccurrenceQueryOptions(
+  publicId: string,
+  occurrenceStart?: Temporal.Instant,
+) {
+  const occurrenceStartMs = occurrenceStart?.epochMilliseconds;
+  return {
+    queryKey: calendarOccurrenceQueryKey(publicId, occurrenceStartMs),
+    queryFn: () =>
+      getCalendarOccurrenceFn({
+        data: {
+          publicId,
+          // The wire field is `occurrenceStart`, epoch ms. Spelling it
+          // `occurrenceStartMs` here type-checked — a conditional
+          // spread defeats excess-property checking — and would have
+          // silently dropped the slot, resolving every link to a
+          // recurring series back to its anchor.
+          ...(occurrenceStartMs === undefined
+            ? {}
+            : { occurrenceStart: occurrenceStartMs }),
         },
       }),
     staleTime: 60_000,

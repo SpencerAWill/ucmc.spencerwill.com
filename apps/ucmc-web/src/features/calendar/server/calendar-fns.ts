@@ -8,6 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import {
+  calendarOccurrenceInputSchema,
   calendarWindowInputSchema,
   cancelEventInputSchema,
   clearOccurrenceOverrideInputSchema,
@@ -31,6 +32,14 @@ export const listCalendarOccurrencesFn = createServerFn({ method: "GET" })
     const { listCalendarOccurrencesAction } =
       await import("#/features/calendar/server/event-actions.server");
     return listCalendarOccurrencesAction(data);
+  });
+
+export const getCalendarOccurrenceFn = createServerFn({ method: "GET" })
+  .validator(calendarOccurrenceInputSchema)
+  .handler(async ({ data }): Promise<CalendarOccurrence | null> => {
+    const { getCalendarOccurrenceAction } =
+      await import("#/features/calendar/server/event-actions.server");
+    return getCalendarOccurrenceAction(data);
   });
 
 // ── writes (events:manage) ─────────────────────────────────────────────

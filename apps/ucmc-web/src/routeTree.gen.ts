@@ -47,6 +47,7 @@ import { Route as MyIndexRouteImport } from './routes/my.index'
 import { Route as GearIndexRouteImport } from './routes/gear.index'
 import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
+import { Route as CalendarIndexRouteImport } from './routes/calendar.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as MyGearRouteImport } from './routes/my.gear'
@@ -57,6 +58,7 @@ import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
 import { Route as GazettePublicIdRouteImport } from './routes/gazette.$publicId'
 import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
+import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyGearIndexRouteImport } from './routes/my.gear.index'
 import { Route as MembersTabsIndexRouteImport } from './routes/members._tabs.index'
@@ -275,6 +277,11 @@ const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
   path: '/',
   getParentRoute: () => FeedbackRoute,
 } as any)
+const CalendarIndexRoute = CalendarIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CalendarRoute,
+} as any)
 const RegisterProfileRoute = RegisterProfileRouteImport.update({
   id: '/register/profile',
   path: '/register/profile',
@@ -321,6 +328,11 @@ const GazettePublicIdRoute = GazettePublicIdRouteImport.update({
 const FeedbackTabsRoute = FeedbackTabsRouteImport.update({
   id: '/_tabs',
   getParentRoute: () => FeedbackRoute,
+} as any)
+const CalendarPublicIdRoute = CalendarPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => CalendarRoute,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
@@ -465,7 +477,7 @@ export interface FileRoutesByFullPath {
   '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
-  '/calendar': typeof CalendarRoute
+  '/calendar': typeof CalendarRouteWithChildren
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -494,6 +506,7 @@ export interface FileRoutesByFullPath {
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -501,6 +514,7 @@ export interface FileRoutesByFullPath {
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/calendar/': typeof CalendarIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
@@ -539,7 +553,6 @@ export interface FileRoutesByTo {
   '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
-  '/calendar': typeof CalendarRoute
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -564,6 +577,7 @@ export interface FileRoutesByTo {
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/feedback': typeof FeedbackIndexRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
@@ -572,6 +586,7 @@ export interface FileRoutesByTo {
   '/my': typeof MyIndexRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/calendar': typeof CalendarIndexRoute
   '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
@@ -608,7 +623,7 @@ export interface FileRoutesById {
   '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
-  '/calendar': typeof CalendarRoute
+  '/calendar': typeof CalendarRouteWithChildren
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -637,6 +652,7 @@ export interface FileRoutesById {
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
@@ -647,6 +663,7 @@ export interface FileRoutesById {
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/calendar/': typeof CalendarIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
@@ -716,6 +733,7 @@ export interface FileRouteTypes {
     | '/volunteer'
     | '/waiver'
     | '/auth/callback'
+    | '/calendar/$publicId'
     | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
@@ -723,6 +741,7 @@ export interface FileRouteTypes {
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
+    | '/calendar/'
     | '/feedback/'
     | '/gazette/'
     | '/gear/'
@@ -761,7 +780,6 @@ export interface FileRouteTypes {
     | '/album'
     | '/anti-hazing'
     | '/audit'
-    | '/calendar'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
@@ -786,6 +804,7 @@ export interface FileRouteTypes {
     | '/volunteer'
     | '/waiver'
     | '/auth/callback'
+    | '/calendar/$publicId'
     | '/feedback'
     | '/gazette/$publicId'
     | '/gear/$publicId'
@@ -794,6 +813,7 @@ export interface FileRouteTypes {
     | '/my'
     | '/register/pending'
     | '/register/profile'
+    | '/calendar'
     | '/gazette'
     | '/gear'
     | '/api/account/export'
@@ -858,6 +878,7 @@ export interface FileRouteTypes {
     | '/volunteer'
     | '/waiver'
     | '/auth/callback'
+    | '/calendar/$publicId'
     | '/feedback/_tabs'
     | '/gazette/$publicId'
     | '/gear/$publicId'
@@ -868,6 +889,7 @@ export interface FileRouteTypes {
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
+    | '/calendar/'
     | '/feedback/'
     | '/gazette/'
     | '/gear/'
@@ -907,7 +929,7 @@ export interface RootRouteChildren {
   AlbumRoute: typeof AlbumRoute
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
-  CalendarRoute: typeof CalendarRoute
+  CalendarRoute: typeof CalendarRouteWithChildren
   ConstitutionRoute: typeof ConstitutionRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
@@ -1216,6 +1238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackIndexRouteImport
       parentRoute: typeof FeedbackRoute
     }
+    '/calendar/': {
+      id: '/calendar/'
+      path: '/'
+      fullPath: '/calendar/'
+      preLoaderRoute: typeof CalendarIndexRouteImport
+      parentRoute: typeof CalendarRoute
+    }
     '/register/profile': {
       id: '/register/profile'
       path: '/register/profile'
@@ -1285,6 +1314,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/feedback'
       preLoaderRoute: typeof FeedbackTabsRouteImport
       parentRoute: typeof FeedbackRoute
+    }
+    '/calendar/$publicId': {
+      id: '/calendar/$publicId'
+      path: '/$publicId'
+      fullPath: '/calendar/$publicId'
+      preLoaderRoute: typeof CalendarPublicIdRouteImport
+      parentRoute: typeof CalendarRoute
     }
     '/auth/callback': {
       id: '/auth/callback'
@@ -1478,6 +1514,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface CalendarRouteChildren {
+  CalendarPublicIdRoute: typeof CalendarPublicIdRoute
+  CalendarIndexRoute: typeof CalendarIndexRoute
+}
+
+const CalendarRouteChildren: CalendarRouteChildren = {
+  CalendarPublicIdRoute: CalendarPublicIdRoute,
+  CalendarIndexRoute: CalendarIndexRoute,
+}
+
+const CalendarRouteWithChildren = CalendarRoute._addFileChildren(
+  CalendarRouteChildren,
+)
+
 interface FeedbackTabsRouteChildren {
   FeedbackTabsClubRoute: typeof FeedbackTabsClubRoute
   FeedbackTabsSiteRoute: typeof FeedbackTabsSiteRoute
@@ -1627,7 +1677,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlbumRoute: AlbumRoute,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
-  CalendarRoute: CalendarRoute,
+  CalendarRoute: CalendarRouteWithChildren,
   ConstitutionRoute: ConstitutionRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,

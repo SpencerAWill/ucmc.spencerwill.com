@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
 import { CalendarMonthGrid } from "#/features/calendar/components/calendar-month-grid";
+import type { CalendarRange } from "#/features/calendar/components/calendar-month-grid";
 import type { CalendarOccurrence } from "#/features/calendar/server/calendar-fns";
 
 function clubLocal(local: string): Temporal.Instant {
@@ -45,7 +46,8 @@ const MAY_2026 = Temporal.PlainYearMonth.from("2026-05");
 function renderGrid(
   overrides: {
     byDate?: Map<string, CalendarOccurrence[]>;
-    onSelect?: (date: Temporal.PlainDate) => void;
+    range?: CalendarRange | null;
+    onRangeChange?: (range: CalendarRange | null) => void;
     onMonthChange?: (month: Temporal.PlainYearMonth) => void;
   } = {},
 ) {
@@ -53,8 +55,8 @@ function renderGrid(
     <CalendarMonthGrid
       month={MAY_2026}
       onMonthChange={overrides.onMonthChange ?? vi.fn()}
-      selected={Temporal.PlainDate.from("2026-05-06")}
-      onSelect={overrides.onSelect ?? vi.fn()}
+      range={overrides.range ?? null}
+      onRangeChange={overrides.onRangeChange ?? vi.fn()}
       occurrencesByDate={overrides.byDate ?? new Map()}
     />,
   );
@@ -92,25 +94,48 @@ describe("CalendarMonthGrid", () => {
    * w-full min-w-(--cell-size)` box that component owns. The grid still
    * looked correct and was almost impossible to click.
    */
-  it("calls onSelect when a day is clicked", async () => {
-    const onSelect = vi.fn();
-    renderGrid({ onSelect });
+  it("reports a single day as a range with no end", async () => {
+    const onRangeChange = vi.fn();
+    renderGrid({ onRangeChange });
 
     await userEvent.click(dayButton(14));
 
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect.mock.calls[0][0].toString()).toBe("2026-05-14");
+    expect(onRangeChange).toHaveBeenCalledTimes(1);
+    const next = onRangeChange.mock.calls[0][0] as CalendarRange;
+    expect(next.from.toString()).toBe("2026-05-14");
+    // A one-day selection collapses to `to: null`, so "one day" and "a
+    // range that happens to be one day" are the same thing downstream.
+    expect(next.to).toBeNull();
   });
 
-  it("still calls onSelect for a day that has events", async () => {
-    const onSelect = vi.fn();
+  /**
+   * Tap-then-tap, the interaction the grid is built around. Drag was
+   * rejected: it needs `touch-action: none`, which stops the page
+   * scrolling past the calendar on a phone.
+   */
+  it("extends to a range on a second tap", async () => {
+    const onRangeChange = vi.fn();
     renderGrid({
-      onSelect,
+      range: { from: Temporal.PlainDate.from("2026-05-14"), to: null },
+      onRangeChange,
+    });
+
+    await userEvent.click(dayButton(17));
+
+    const next = onRangeChange.mock.calls[0][0] as CalendarRange;
+    expect(next.from.toString()).toBe("2026-05-14");
+    expect(next.to?.toString()).toBe("2026-05-17");
+  });
+
+  it("stays clickable on a day that has events", async () => {
+    const onRangeChange = vi.fn();
+    renderGrid({
+      onRangeChange,
       byDate: new Map([["2026-05-14", [occurrence()]]]),
     });
 
     await userEvent.click(dayButton(14));
-    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onRangeChange).toHaveBeenCalledTimes(1);
   });
 
   it("navigates months through the nav buttons", async () => {
@@ -140,8 +165,8 @@ describe("CalendarMonthGrid", () => {
       <CalendarMonthGrid
         month={MAY_2026}
         onMonthChange={vi.fn()}
-        selected={Temporal.PlainDate.from("2026-05-06")}
-        onSelect={vi.fn()}
+        range={null}
+        onRangeChange={vi.fn()}
         occurrencesByDate={
           new Map([["2026-05-14", [occurrence({ canceled: true })]]])
         }
@@ -156,8 +181,8 @@ describe("CalendarMonthGrid", () => {
       <CalendarMonthGrid
         month={MAY_2026}
         onMonthChange={vi.fn()}
-        selected={Temporal.PlainDate.from("2026-05-06")}
-        onSelect={vi.fn()}
+        range={null}
+        onRangeChange={vi.fn()}
         occurrencesByDate={
           new Map([
             [

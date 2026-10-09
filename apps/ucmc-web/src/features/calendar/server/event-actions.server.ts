@@ -94,21 +94,55 @@ export async function listCalendarOccurrencesAction({
   return buildOccurrences(series, exceptions, from, until);
 }
 
-/** One series, for the detail panel. Scoped — a miss reads as not found. */
-export async function getCalendarEventAction(
-  publicId: string,
-): Promise<CalendarOccurrence | null> {
+/**
+ * One occurrence, for the detail route.
+ *
+ * Scoped, so an event the viewer may not see reads as not found rather
+ * than as forbidden — `/calendar/$publicId` is a guessable URL and the
+ * two answers must be indistinguishable.
+ *
+ * `occurrenceStart` names *which* occurrence of a recurring series is
+ * wanted — iCalendar's RECURRENCE-ID, and the same value the agenda
+ * links with. Omitted, the series' own anchor occurrence is returned,
+ * which is what a link to a one-off means and what a link to a series
+ * with no slot should fall back to.
+ */
+export async function getCalendarOccurrenceAction(input: {
+  publicId: string;
+  occurrenceStart?: Temporal.Instant;
+}): Promise<CalendarOccurrence | null> {
   const scope = await currentVisibilityScope();
-  const series = await getEventByPublicId(publicId, scope);
+  const series = await getEventByPublicId(input.publicId, scope);
   if (!series) {
     return null;
   }
   const exceptions = await listExceptionsFor([series.id]);
-  // A window wide enough to carry the series' own anchor, so a
-  // non-recurring event always yields its single occurrence.
-  const from = series.startsAt;
-  const until = series.startsAt.add({ hours: 24 });
-  return buildOccurrences([series], exceptions, from, until).at(0) ?? null;
+
+  // A day-wide window around the slot asked for. Wide enough to contain
+  // the occurrence whatever its length, narrow enough that a decade-old
+  // weekly series is not expanded to find one entry.
+  const anchor = input.occurrenceStart ?? series.startsAt;
+  const occurrences = buildOccurrences(
+    [series],
+    exceptions,
+    anchor.subtract({ hours: 24 }),
+    anchor.add({ hours: 24 }),
+  );
+
+  if (input.occurrenceStart) {
+    const wanted = input.occurrenceStart.toString();
+    const exact = occurrences.find(
+      (occurrence) => occurrence.occurrenceStart.toString() === wanted,
+    );
+    if (exact) {
+      return exact;
+    }
+    // The slot no longer exists — the series was edited under a link
+    // someone saved. Fall through to the anchor rather than 404ing:
+    // the event is still real, and showing it beats telling a member
+    // the thing on their calendar does not exist.
+  }
+  return occurrences.at(0) ?? null;
 }
 
 export async function createEventAction(

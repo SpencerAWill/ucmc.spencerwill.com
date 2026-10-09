@@ -32,6 +32,18 @@ export const calendarOccurrencesQueryKey = (
  * fn answers the current session and the query cache is per browser
  * session, rebuilt on sign-in and sign-out.
  */
+/** One occurrence, for the detail route. */
+export const calendarOccurrenceQueryKey = (
+  publicId: string,
+  occurrenceStartMs?: number,
+) =>
+  [
+    ...CALENDAR_QUERY_KEY,
+    "occurrence",
+    publicId,
+    occurrenceStartMs ?? "anchor",
+  ] as const;
+
 export const MY_SUBSCRIPTIONS_QUERY_KEY = [
   "calendar",
   "my-subscriptions",

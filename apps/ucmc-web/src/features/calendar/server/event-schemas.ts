@@ -174,6 +174,18 @@ export const clearOccurrenceOverrideInputSchema = z.object({
   occurrenceStart: instantMs,
 });
 
+/**
+ * One occurrence, for `/calendar/$publicId`.
+ *
+ * `occurrenceStart` is which slot of a recurring series is wanted —
+ * RECURRENCE-ID. Optional, because a one-off has only one and a bare
+ * link to a series should resolve to its anchor.
+ */
+export const calendarOccurrenceInputSchema = z.object({
+  publicId: z.string().min(1).max(64),
+  occurrenceStart: instantMs.optional(),
+});
+
 export const calendarWindowInputSchema = z
   .object({
     from: instantMs,

@@ -80,3 +80,25 @@ export function formatClubDayHeading(date: Temporal.PlainDate): string {
     day: "numeric",
   });
 }
+
+/**
+ * `May 2026` — a month heading.
+ *
+ * **Formatted through a `PlainDate`, never off the `PlainYearMonth`
+ * directly.** `Temporal.PlainYearMonth.prototype.toLocaleString` throws
+ * `RangeError: Mismatched calendars` whenever the object's calendar
+ * (`iso8601`) differs from the locale's resolved one — and `en-US`
+ * resolves to `gregory`, so it throws for every month heading on the
+ * page. `PlainDate` tolerates the same mismatch and adopts the locale's
+ * calendar, which is why `formatClubDayHeading` above has never had the
+ * problem; `PlainYearMonth` and `PlainMonthDay` are stricter by spec.
+ *
+ * It took down the whole page rather than one line, because it threw
+ * during render.
+ */
+export function formatClubMonthHeading(month: Temporal.PlainYearMonth): string {
+  return month.toPlainDate({ day: 1 }).toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
