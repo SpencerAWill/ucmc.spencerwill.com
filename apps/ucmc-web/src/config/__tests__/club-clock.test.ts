@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 import { clubYearOf } from "#/features/volunteer/lib/service-totals";
 import type { VolunteerEventEntry } from "#/features/volunteer/server/volunteer-fns";
 import { schoolYearForArchiveFire } from "#/server/cron/archive-officers.server";
@@ -53,13 +53,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("currentWaiverCycle() reads the real clock, in the club zone", () => {
+describe("currentSeason() reads the real clock, in the club zone", () => {
   it("tracks the system clock when called with no argument", () => {
     setNow("2026-01-15T12:00:00Z");
-    expect(currentWaiverCycle()).toBe("2025-26");
+    expect(currentSeason()).toBe("2025-26");
 
     setNow("2027-01-15T12:00:00Z");
-    expect(currentWaiverCycle()).toBe("2026-27");
+    expect(currentSeason()).toBe("2026-27");
   });
 
   it("rolls over at local midnight, not UTC midnight", () => {
@@ -69,13 +69,13 @@ describe("currentWaiverCycle() reads the real clock, in the club zone", () => {
     // — and every member's current attestation stops satisfying
     // `requireCurrentWaiver` for those four hours.
     setNow("2025-08-21T00:00:00Z");
-    expect(currentWaiverCycle()).toBe("2024-25");
+    expect(currentSeason()).toBe("2024-25");
 
     setNow(ONE_SECOND_BEFORE_ROLLOVER);
-    expect(currentWaiverCycle()).toBe("2024-25");
+    expect(currentSeason()).toBe("2024-25");
 
     setNow(ROLLOVER_UTC);
-    expect(currentWaiverCycle()).toBe("2025-26");
+    expect(currentSeason()).toBe("2025-26");
   });
 
   it("agrees with the explicitly-passed instant", () => {
@@ -83,9 +83,7 @@ describe("currentWaiverCycle() reads the real clock, in the club zone", () => {
     // diverge, every test that passes `now` explicitly keeps passing
     // while production reads something else.
     setNow("2026-05-04T17:23:11Z");
-    expect(currentWaiverCycle()).toBe(
-      currentWaiverCycle(Temporal.Now.instant()),
-    );
+    expect(currentSeason()).toBe(currentSeason(Temporal.Now.instant()));
   });
 });
 
@@ -100,12 +98,12 @@ describe("club-year rollover is stable across DST transitions", () => {
         .subtract({ hours: 1 })
         .toString(),
     );
-    const before = currentWaiverCycle();
+    const before = currentSeason();
 
     setNow(
       Temporal.Instant.from(SPRING_FORWARD_2026).add({ hours: 1 }).toString(),
     );
-    expect(currentWaiverCycle()).toBe(before);
+    expect(currentSeason()).toBe(before);
     expect(before).toBe("2025-26");
   });
 
@@ -113,10 +111,10 @@ describe("club-year rollover is stable across DST transitions", () => {
     setNow(
       Temporal.Instant.from(FALL_BACK_2026).subtract({ hours: 1 }).toString(),
     );
-    const before = currentWaiverCycle();
+    const before = currentSeason();
 
     setNow(Temporal.Instant.from(FALL_BACK_2026).add({ hours: 1 }).toString());
-    expect(currentWaiverCycle()).toBe(before);
+    expect(currentSeason()).toBe(before);
     expect(before).toBe("2026-27");
   });
 
@@ -133,14 +131,14 @@ describe("club-year rollover is stable across DST transitions", () => {
         instant.toZonedDateTimeISO(CLUB_TIME_ZONE).hour,
         "both passes should read as the 1 o'clock hour locally",
       ).toBe(1);
-      expect(currentWaiverCycle(instant)).toBe("2026-27");
+      expect(currentSeason(instant)).toBe("2026-27");
     }
   });
 });
 
 describe("the volunteer club year is the waiver cycle, under the same clock", () => {
   it("classifies an outing by the club-local rollover", () => {
-    // `clubYearOf` reuses `currentWaiverCycle` rather than defining a
+    // `clubYearOf` reuses `currentSeason` rather than defining a
     // second August boundary. Pinned here so a later "simplification"
     // that re-derives the cutoff has to disagree with this test first.
     // `clubYearOf` reads one field; the cast keeps the fixture to that

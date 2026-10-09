@@ -158,7 +158,7 @@ The officer queue (`listMembersNeedingAttestationAction`) is every `status='appr
 
 Attesting is also the realistic state: an approved member has handed in a signed waiver. A member approved who then never signed is a specific case, not the default one.
 
-**The cycle and version are imported, never recomputed** — `currentWaiverCycle()` from `#/config/waiver-cycle` and `WAIVER_VERSION` from `#/config/legal`. The predicate in `currentAttestationFilter` is `(cycle, version, revoked_at IS NULL)`, so a hard-coded value would quietly stop matching after the Aug 21 rollover or a version bump, and the symptom would be the slow return of the pollution this prevents. (CLAUDE.md forbids deriving the club year ad-hoc regardless.) The `#/*` alias resolves inside Playwright; `e2e/fixtures/db.ts` imports `temporal-polyfill/global` itself, since nothing installs `Temporal` in the Playwright process.
+**The cycle and version are imported, never recomputed** — `currentSeason()` from `#/config/club-season` and `WAIVER_VERSION` from `#/config/legal`. The predicate in `currentAttestationFilter` is `(cycle, version, revoked_at IS NULL)`, so a hard-coded value would quietly stop matching after the Aug 21 rollover or a version bump, and the symptom would be the slow return of the pollution this prevents. (CLAUDE.md forbids deriving the club year ad-hoc regardless.) The `#/*` alias resolves inside Playwright; `e2e/fixtures/db.ts` imports `temporal-polyfill/global` itself, since nothing installs `Temporal` in the Playwright process.
 
 **`mobile-waiver-queue.spec.ts` is the only spec that opts out**, because there the queue row _is_ the fixture.
 

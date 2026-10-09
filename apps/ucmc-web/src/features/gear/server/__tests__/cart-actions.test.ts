@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WAIVER_VERSION } from "#/config/legal";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
@@ -80,7 +80,7 @@ async function attestCurrentWaiver(userId: string): Promise<void> {
     .values({
       id: `wa_${crypto.randomUUID()}`,
       userId,
-      cycle: currentWaiverCycle(),
+      cycle: currentSeason(),
       version: WAIVER_VERSION,
       attestedAt: Temporal.Now.instant(),
     });

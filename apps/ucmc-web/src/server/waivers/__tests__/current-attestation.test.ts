@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { WAIVER_VERSION } from "#/config/legal";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import {
@@ -25,7 +25,7 @@ import {
  * here is cleaned in `beforeEach` (see .claude/rules/testing.md).
  */
 
-const CYCLE = currentWaiverCycle();
+const CYCLE = currentSeason();
 
 async function seedUser(email: string): Promise<string> {
   const id = `user_${crypto.randomUUID()}`;

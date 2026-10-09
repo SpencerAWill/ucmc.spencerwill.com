@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WAIVER_VERSION } from "#/config/legal";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
@@ -262,7 +262,7 @@ describe("attestWaiverAction", () => {
     expect(row).toBeDefined();
     expect(row?.userId).toBe(memberId);
     expect(row?.attestedBy).toBe(officer);
-    expect(row?.cycle).toBe(currentWaiverCycle());
+    expect(row?.cycle).toBe(currentSeason());
     expect(row?.version).toBe(WAIVER_VERSION);
     expect(row?.revokedAt).toBeNull();
     expect(row?.notes).toBe("Paper waiver received at 9/2 meeting");
@@ -305,7 +305,7 @@ describe("getMyCurrentWaiverStatusAction", () => {
   it("returns null when the caller has no attestation for the current cycle", async () => {
     await signInAsMember();
     const status = await getMyCurrentWaiverStatusAction();
-    expect(status.cycle).toBe(currentWaiverCycle());
+    expect(status.cycle).toBe(currentSeason());
     expect(status.version).toBe(WAIVER_VERSION);
     expect(status.current).toBeNull();
   });
@@ -321,7 +321,7 @@ describe("getMyCurrentWaiverStatusAction", () => {
     const status = await getMyCurrentWaiverStatusAction();
     expect(status.current).not.toBeNull();
     expect(status.current?.attestedByUserId).toBe(officer);
-    expect(status.current?.cycle).toBe(currentWaiverCycle());
+    expect(status.current?.cycle).toBe(currentSeason());
   });
 
   it("ignores revoked attestations", async () => {

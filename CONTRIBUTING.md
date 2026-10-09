@@ -77,7 +77,7 @@ The root [`CLAUDE.md`](./CLAUDE.md) carries the always-on invariants, and [`.cla
 - **Server-only modules** end in `*.server.ts` and must not be imported from the client graph. Server functions follow the three-layer pattern (leaf helper / action / shell). See the "Server-only module boundary" section in `CLAUDE.md`.
 - **Cloudflare bindings** (`DB`, `KV`, `BUCKET_*`) are accessed via `getDb()` / `getKv()` / `getPrivateBucket()` / `getPublicBucket()` only — never at module scope.
 - **Email normalization.** Every read/write of an email address goes through `apps/ucmc-web/src/server/auth/email-normalize.ts`.
-- **Waiver cycle.** Always compute via `currentWaiverCycle()` from `apps/ucmc-web/src/config/waiver-cycle.ts`. Never inline the math.
+- **Waiver cycle.** Always compute via `currentSeason()` from `apps/ucmc-web/src/config/club-season.ts`. Never inline the math.
 - **Legal copy** in `apps/ucmc-web/src/config/legal.ts` must match the canonical PDF byte-for-byte. Treat edits to disclaimer/nondiscrimination/anti-hazing/waiver/privacy/terms copy as legal review, not word-smithing. Bumping `WAIVER_VERSION` invalidates every existing attestation.
 
 If your change crosses one of these boundaries, call it out in the PR description.

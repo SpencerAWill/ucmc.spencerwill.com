@@ -1,7 +1,7 @@
 ---
 paths:
   - "apps/ucmc-web/src/config/legal.ts"
-  - "apps/ucmc-web/src/config/waiver-cycle.ts"
+  - "apps/ucmc-web/src/config/club-season.ts"
   - "apps/ucmc-web/src/server/waivers/**"
   - "apps/ucmc-web/src/features/waivers/**"
   - "apps/ucmc-web/src/routes/waiver.tsx"
@@ -39,7 +39,7 @@ The **compliance matrix** in the [GitHub wiki](https://github.com/SpencerAWill/u
 
 **Never re-derive `(cycle, version, revokedAt IS NULL)` inline** — the next `WAIVER_VERSION` bump is where the copies silently disagree.
 
-The cycle itself comes from `currentWaiverCycle()` — see the dates rule; never compute the August boundary ad-hoc.
+The cycle itself comes from `currentSeason()` — see the dates rule; never compute the August boundary ad-hoc.
 
 ## Two waiver permission tiers
 

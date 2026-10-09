@@ -47,7 +47,7 @@ These bite anywhere in the repo, so they live here rather than in a scoped rule.
 
 - **Never read `env.DB` / `env.KV` / `env.BUCKET_*` at module scope.** Go through `getDb()` / `getKv()` / `getPrivateBucket()` / `getPublicBucket()` — `cloudflare:workers` is stubbed for non-SSR bundles, so module-scope access breaks the client build.
 - **`Temporal` is the timestamp type everywhere** (via `temporal-polyfill`). There is no `date-fns`; raw `Date` survives only at hard external boundaries. Calendar reasoning runs in `CLUB_TIME_ZONE` (`America/New_York`), never UTC and never the runtime default — the worker runs UTC and the browser runs the viewer's zone, so reading a calendar field off a raw instant is also a hydration-mismatch source.
-- **Never compute the club year ad-hoc** — import `currentWaiverCycle()` from `src/config/waiver-cycle.ts`. It reads as waiver-specific but it is just "which club year is this instant in", and `/volunteer` uses it too.
+- **Never compute the club year ad-hoc** — import `currentSeason()` from `src/config/club-season.ts`. It reads as waiver-specific but it is just "which club year is this instant in", and `/volunteer` uses it too.
 - **Server-only boundary**: business logic lives in `*-actions.server.ts`; `createServerFn` shells hold one-line handlers that dynamic-import their action. Routes and components import only from shells. Tests call the actions directly.
 - **Inline `useMutation` in routes/components is forbidden** — every mutation has a `use-*.ts` hook with a fixed cache-invalidation contract.
 - **Features must not import each other.** `import/no-restricted-paths` enforces it; code three features need gets hoisted to `src/server/` or `src/components/`, not published as a third `FEATURE_PUBLIC_API`.

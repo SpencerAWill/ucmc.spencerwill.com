@@ -15,7 +15,7 @@ Via the `temporal-polyfill` global installed at every entry point (`server-entry
 
 ### Never re-derive the club year
 
-`src/config/waiver-cycle.ts` exports `currentWaiverCycle(now: Temporal.Instant)` returning `"YYYY-YY"`, rolling over **August 21** (`WAIVER_CYCLE_CUTOFF`) at **midnight Cincinnati-local**. It reads as waiver-specific because that is what needed it first, but it is just "which club year is this instant in" — `/volunteer`'s service archive groups by it too. **Always import the helper**; a parallel August boundary would disagree the first time the cutoff moved. Tests pin `now` (pass a `Temporal.Instant`, e.g. `Temporal.Instant.from("2025-08-21T00:00:00-04:00")`).
+`src/config/club-season.ts` exports `currentSeason(now: Temporal.Instant)` returning `"YYYY-YY"`, rolling over **August 21** (`CLUB_SEASON_START`) at **midnight Cincinnati-local**. It reads as waiver-specific because that is what needed it first, but it is just "which club year is this instant in" — `/volunteer`'s service archive groups by it too. **Always import the helper**; a parallel August boundary would disagree the first time the cutoff moved. Tests pin `now` (pass a `Temporal.Instant`, e.g. `Temporal.Instant.from("2025-08-21T00:00:00-04:00")`).
 
 ## Phone numbers
 

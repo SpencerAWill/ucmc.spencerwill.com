@@ -4,13 +4,13 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
-// `currentWaiverCycle()` reads `Temporal.Now`, which the app installs in
+// `currentSeason()` reads `Temporal.Now`, which the app installs in
 // its own entrypoints (`src/router.tsx`, `src/server-entry.ts`). Nothing
 // installs it in the Playwright process, so the fixture does.
 import "temporal-polyfill/global";
 
 import { WAIVER_VERSION } from "#/config/legal";
-import { currentWaiverCycle } from "#/config/waiver-cycle";
+import { currentSeason } from "#/config/club-season";
 
 const WEB_DIR = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
@@ -271,7 +271,7 @@ function insertUser(options: InsertUserOptions): string {
         .run(
           `wa_${randomUUID()}`,
           userId,
-          currentWaiverCycle(),
+          currentSeason(),
           WAIVER_VERSION,
           nowMs,
         );

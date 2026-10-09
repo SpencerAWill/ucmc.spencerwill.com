@@ -36,7 +36,7 @@ import { CLUB_TIME_ZONE } from "#/config/time";
 /**
  * End of the spring semester, give or take — the day a club year's
  * season is considered served. Stored 1-indexed to read like a
- * calendar, matching `WAIVER_CYCLE_CUTOFF`.
+ * calendar, matching `CLUB_SEASON_START`.
  */
 export const SEASON_END_CUTOFF = { month: 5, day: 1 } as const;
 
