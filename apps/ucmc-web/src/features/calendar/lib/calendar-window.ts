@@ -107,3 +107,38 @@ export function fromPickerDate(date: Date): Temporal.PlainDate {
 export function clubToday(now: Temporal.Instant = Temporal.Now.instant()) {
   return clubDateOf(now);
 }
+
+/**
+ * `<input type="datetime-local">` value → an instant.
+ *
+ * The input hands over a bare wall-clock string with no zone. It is
+ * read as CLUB time, not the browser's: an officer in another zone
+ * publishing "Wednesday 6pm" means 6pm in Cincinnati, and the page
+ * renders every other time that way too. Reading it as the browser's
+ * zone would silently shift the event for everyone else.
+ */
+export function instantFromClubInput(value: string): Temporal.Instant | null {
+  if (value === "") {
+    return null;
+  }
+  try {
+    return Temporal.PlainDateTime.from(value)
+      .toZonedDateTime(CLUB_TIME_ZONE)
+      .toInstant();
+  } catch {
+    return null;
+  }
+}
+
+/** The inverse: an instant → the `datetime-local` value, in club time. */
+export function clubInputFromInstant(instant: Temporal.Instant): string {
+  return (
+    instant
+      .toZonedDateTimeISO(CLUB_TIME_ZONE)
+      .toPlainDateTime()
+      // `datetime-local` wants minute precision; seconds make Safari
+      // render a seconds spinner nobody asked for.
+      .round({ smallestUnit: "minute", roundingMode: "floor" })
+      .toString({ smallestUnit: "minute" })
+  );
+}

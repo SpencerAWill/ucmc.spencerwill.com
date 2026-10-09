@@ -354,7 +354,9 @@ describe("createEventAction", () => {
       "2026-05-20T18:00:00",
       "2026-05-27T18:00:00",
     ]);
-    expect(occurrences.every((o) => o.isRecurring)).toBe(true);
+    expect(occurrences.every((o) => o.rrule === "FREQ=WEEKLY;BYDAY=WE")).toBe(
+      true,
+    );
   });
 
   it("sorts occurrences from different series chronologically", async () => {

@@ -125,7 +125,7 @@ function AgendaRow({
               </span>
             </>
           ) : null}
-          {occurrence.isRecurring ? (
+          {occurrence.rrule !== null ? (
             <>
               <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1">

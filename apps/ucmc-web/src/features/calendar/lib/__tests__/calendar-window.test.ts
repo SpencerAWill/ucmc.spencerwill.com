@@ -34,7 +34,7 @@ function occurrence(
     location: null,
     kind: "meeting",
     visibility: "members",
-    isRecurring: false,
+    rrule: null,
     canceled: false,
     sequence: 0,
     updatedAt: startsAt,

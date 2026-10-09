@@ -37,8 +37,17 @@ export interface CalendarOccurrence {
   readonly location: string | null;
   readonly kind: EventSeries["kind"];
   readonly visibility: EventSeries["visibility"];
-  /** True when this came from a recurring series, for the UI's badge. */
-  readonly isRecurring: boolean;
+  /**
+   * The series' rule, or NULL for a one-off.
+   *
+   * Carried through rather than reduced to an `isRecurring` boolean so
+   * the officer edit dialog can seed its repeat controls from the same
+   * payload the page already has — the alternative is a second fetch
+   * for a string the client was one field away from holding. Not
+   * sensitive: an occurrence the viewer may see implies a schedule they
+   * may see.
+   */
+  readonly rrule: string | null;
   /**
    * Cancelled either because the whole series was called off, or
    * because this one slot was. Kept in the list rather than filtered
@@ -91,7 +100,7 @@ export function occurrencesForSeries(
       location: exception?.location ?? series.location,
       kind: series.kind,
       visibility: series.visibility,
-      isRecurring: series.rrule !== null,
+      rrule: series.rrule,
       canceled: seriesCanceled || (exception?.canceled ?? false),
       sequence: series.sequence,
       updatedAt: series.updatedAt,

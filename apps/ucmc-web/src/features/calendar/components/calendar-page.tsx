@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 
+import { Plus } from "lucide-react";
+
 import { Button } from "#/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import type { EventKind } from "#/../drizzle/schema";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { calendarOccurrencesQueryOptions } from "#/features/calendar/api/queries";
 import { CalendarAgenda } from "#/features/calendar/components/calendar-agenda";
 import { CalendarMonthGrid } from "#/features/calendar/components/calendar-month-grid";
 import { EventDetailSheet } from "#/features/calendar/components/event-detail-sheet";
+import { EventFormDialog } from "#/features/calendar/components/event-form-dialog";
+import type { EventFormSeed } from "#/features/calendar/components/event-form-dialog";
+import { EventOfficerActions } from "#/features/calendar/components/event-officer-actions";
 import {
   clubToday,
   groupByClubDate,
@@ -43,12 +49,17 @@ const KIND_ORDER: readonly EventKind[] = [
  * coming up" — and a day-at-a-time agenda would make a reader tap
  * through thirty empty days to find out.
  */
-export function CalendarPage({
-  officerActions,
-}: {
-  /** Rendered into the detail sheet for officers. Absent for members. */
-  officerActions?: (occurrence: CalendarOccurrence) => React.ReactNode;
-}) {
+export function CalendarPage() {
+  /**
+   * Officer affordances gate on `hasPermission`, never on
+   * `principal.permissions.includes` and never on a field's presence in
+   * the payload — both bypass role emulation silently, so a sys admin
+   * previewing `member` would still be shown the edit buttons. The
+   * server re-checks `events:manage` on every write regardless.
+   */
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("events:manage");
+
   const today = clubToday();
   const [month, setMonth] = useState(() =>
     Temporal.PlainYearMonth.from({ year: today.year, month: today.month }),
@@ -56,6 +67,7 @@ export function CalendarPage({
   const [selected, setSelected] = useState<Temporal.PlainDate>(today);
   const [kinds, setKinds] = useState<EventKind[]>([]);
   const [detail, setDetail] = useState<CalendarOccurrence | null>(null);
+  const [formSeed, setFormSeed] = useState<EventFormSeed | null>(null);
 
   const window = useMemo(() => monthWindow(month), [month]);
   const { data: occurrences } = useSuspenseQuery(
@@ -115,23 +127,37 @@ export function CalendarPage({
           ))}
         </ToggleGroup>
 
-        {isCurrentMonth ? null : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setMonth(
-                Temporal.PlainYearMonth.from({
-                  year: today.year,
-                  month: today.month,
-                }),
-              );
-              setSelected(today);
-            }}
-          >
-            Back to today
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isCurrentMonth ? null : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setMonth(
+                  Temporal.PlainYearMonth.from({
+                    year: today.year,
+                    month: today.month,
+                  }),
+                );
+                setSelected(today);
+              }}
+            >
+              Back to today
+            </Button>
+          )}
+
+          {/* Seeded with the day the officer has selected on the grid,
+           * so "tap the 14th, tap New event" fills the date in. */}
+          {canManage ? (
+            <Button
+              size="sm"
+              onClick={() => setFormSeed({ mode: "create", date: selected })}
+            >
+              <Plus />
+              New event
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
@@ -165,7 +191,30 @@ export function CalendarPage({
             setDetail(null);
           }
         }}
-        footer={detail && officerActions ? officerActions(detail) : undefined}
+        footer={
+          detail && canManage ? (
+            <EventOfficerActions
+              occurrence={detail}
+              onEdit={() =>
+                setFormSeed({
+                  mode: "edit",
+                  occurrence: detail,
+                  rrule: detail.rrule,
+                })
+              }
+              onDone={() => setDetail(null)}
+            />
+          ) : undefined
+        }
+      />
+
+      <EventFormDialog
+        seed={formSeed}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFormSeed(null);
+          }
+        }}
       />
     </div>
   );

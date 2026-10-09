@@ -75,7 +75,7 @@ export function EventDetailSheet({
                     {occurrence.location}
                   </Row>
                 ) : null}
-                {occurrence.isRecurring ? (
+                {occurrence.rrule !== null ? (
                   <Row icon={<Repeat className="size-4" />} label="Repeats">
                     Part of a repeating series
                   </Row>

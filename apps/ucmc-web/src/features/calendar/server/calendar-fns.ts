@@ -7,7 +7,15 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 
-import { calendarWindowInputSchema } from "#/features/calendar/server/event-schemas";
+import {
+  calendarWindowInputSchema,
+  cancelEventInputSchema,
+  clearOccurrenceOverrideInputSchema,
+  createEventInputSchema,
+  deleteEventInputSchema,
+  overrideOccurrenceInputSchema,
+  updateEventInputSchema,
+} from "#/features/calendar/server/event-schemas";
 import type { CalendarOccurrence } from "#/server/events/occurrences";
 
 export type { CalendarOccurrence } from "#/server/events/occurrences";
@@ -20,4 +28,59 @@ export const listCalendarOccurrencesFn = createServerFn({ method: "GET" })
     const { listCalendarOccurrencesAction } =
       await import("#/features/calendar/server/event-actions.server");
     return listCalendarOccurrencesAction(data);
+  });
+
+// ── writes (events:manage) ─────────────────────────────────────────────
+
+export const createEventFn = createServerFn({ method: "POST" })
+  .validator(createEventInputSchema)
+  .handler(async ({ data }): Promise<{ publicId: string }> => {
+    const { createEventAction } =
+      await import("#/features/calendar/server/event-actions.server");
+    return createEventAction(data);
+  });
+
+export const updateEventFn = createServerFn({ method: "POST" })
+  .validator(updateEventInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { updateEventAction } =
+      await import("#/features/calendar/server/event-actions.server");
+    await updateEventAction(data);
+    return { ok: true };
+  });
+
+export const cancelEventFn = createServerFn({ method: "POST" })
+  .validator(cancelEventInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { cancelEventAction } =
+      await import("#/features/calendar/server/event-actions.server");
+    await cancelEventAction(data);
+    return { ok: true };
+  });
+
+export const deleteEventFn = createServerFn({ method: "POST" })
+  .validator(deleteEventInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { deleteEventAction } =
+      await import("#/features/calendar/server/event-actions.server");
+    await deleteEventAction(data);
+    return { ok: true };
+  });
+
+export const overrideOccurrenceFn = createServerFn({ method: "POST" })
+  .validator(overrideOccurrenceInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { overrideOccurrenceAction } =
+      await import("#/features/calendar/server/event-actions.server");
+    await overrideOccurrenceAction(data);
+    return { ok: true };
+  });
+
+export const clearOccurrenceOverrideFn = createServerFn({ method: "POST" })
+  .validator(clearOccurrenceOverrideInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { clearOccurrenceOverrideAction } =
+      await import("#/features/calendar/server/event-actions.server");
+    await clearOccurrenceOverrideAction(data);
+    return { ok: true };
   });
