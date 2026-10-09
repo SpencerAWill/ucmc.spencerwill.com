@@ -34,6 +34,8 @@ export default defineConfig({
       "src/features/gear/lib/__tests__/wedge-buffer.test.ts",
       "src/lib/__tests__/sanitize-filename.test.ts",
       "src/lib/__tests__/sanitize-filename.property.test.ts",
+      "src/server/member-profile/__tests__/badge-rules.test.ts",
+      "src/server/member-profile/__tests__/season-progress.test.ts",
       "src/server/log/__tests__/redact.test.ts",
       "src/server/log/__tests__/redact.property.test.ts",
     ],

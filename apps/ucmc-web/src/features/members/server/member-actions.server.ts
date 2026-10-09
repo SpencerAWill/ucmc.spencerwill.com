@@ -28,6 +28,16 @@ import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { getDb, likeContains, schema } from "#/server/db";
 import { loadMemberWaiverStatus } from "#/server/waivers/current-attestation.server";
+import type { MemberStats } from "#/server/member-profile/member-stats.server";
+import {
+  loadMemberCounters,
+  scoreMemberStats,
+} from "#/server/member-profile/member-stats.server";
+import type {
+  ProfileDisciplineRating,
+  ProfilePromptAnswer,
+} from "#/server/member-profile/profile-facets.server";
+import { loadProfileFacets } from "#/server/member-profile/profile-facets.server";
 import type { MemberWaiverStatus } from "#/server/waivers/current-attestation.server";
 import { requireMembersManager } from "#/features/members/server/permissions.server";
 
@@ -434,7 +444,20 @@ export interface MemberDetail {
   ucAffiliation: string | null;
   avatarKey: string | null;
   bio: string | null;
+  // Profile identity (0077). Public to any approved member, like
+  // `bio` — `members:view_private` draws the line below these.
+  trailName: string | null;
+  pronouns: string | null;
+  statusLine: string | null;
+  prompts: ProfilePromptAnswer[];
+  disciplines: ProfileDisciplineRating[];
   roles: MemberRoleBadge[];
+  /**
+   * Seasons, gear tallies and the badges they earn. Derived on every
+   * read from waiver, loan and sweep rows — never stored, so a
+   * revoked attestation takes its badge with it.
+   */
+  stats: MemberStats;
   // Private fields — null/empty when caller lacks members:view_private.
   phone: string | null;
   emergencyContacts: EmergencyContactSummary[];
@@ -476,6 +499,9 @@ export async function getMemberDetailAction(
       ucAffiliation: schema.profiles.ucAffiliation,
       avatarKey: schema.profiles.avatarKey,
       bio: schema.profiles.bio,
+      trailName: schema.profiles.trailName,
+      pronouns: schema.profiles.pronouns,
+      statusLine: schema.profiles.statusLine,
       phone: schema.profiles.phone,
     })
     .from(schema.users)
@@ -513,7 +539,7 @@ export async function getMemberDetailAction(
   // queries unconditionally, which is wasted work for the common
   // regular-member caller). Permission gates above decide whether to
   // fetch private contacts and the session count.
-  const [roleRows, contacts, sessionCountRows, waiverStatus] =
+  const [roleRows, contacts, sessionCountRows, waiverStatus, counters, facets] =
     await Promise.all([
       db
         .select({
@@ -553,11 +579,29 @@ export async function getMemberDetailAction(
       canViewWaivers && row.status !== "pending" && row.status !== "rejected"
         ? loadMemberWaiverStatus(userId)
         : Promise.resolve<MemberWaiverStatus | null>(null),
+      // Unconditional, unlike the two above: seasons, badges and the
+      // member's own prompts are public to any approved viewer, so
+      // there is no permission to branch on and nothing saved by
+      // skipping them.
+      loadMemberCounters(userId),
+      loadProfileFacets(userId),
     ]);
 
   const activeSessions = canRevokeSessions
     ? (sessionCountRows[0]?.value ?? 0)
     : null;
+
+  const roles = roleRows.map((r) => ({
+    name: r.roleName,
+    displayName: r.roleDisplayName,
+  }));
+  // `member` is the role every approved account holds, so it says
+  // nothing about service. Matches the header's role-chip filter.
+  const stats = scoreMemberStats(
+    counters,
+    roles.some((r) => r.name !== "member"),
+  );
+  const { prompts, disciplines } = facets;
 
   return {
     userId: row.userId,
@@ -572,10 +616,13 @@ export async function getMemberDetailAction(
     ucAffiliation: row.ucAffiliation,
     avatarKey: row.avatarKey,
     bio: row.bio,
-    roles: roleRows.map((r) => ({
-      name: r.roleName,
-      displayName: r.roleDisplayName,
-    })),
+    trailName: row.trailName,
+    pronouns: row.pronouns,
+    statusLine: row.statusLine,
+    prompts,
+    disciplines,
+    roles,
+    stats,
     phone: canViewPrivate ? row.phone : null,
     emergencyContacts: contacts,
     activeSessions,

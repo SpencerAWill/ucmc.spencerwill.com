@@ -16,6 +16,7 @@
 import {
   Backpack,
   Compass,
+  Flashlight,
   Footprints,
   Gift,
   Hammer,
@@ -58,6 +59,7 @@ const REGISTRY: Record<CuratedIconName, LucideIcon> = {
   Sun,
   Trees,
   Footprints,
+  Flashlight,
   HandHeart,
   Handshake,
   Shovel,
