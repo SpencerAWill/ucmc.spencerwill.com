@@ -4,6 +4,8 @@ import type { Page } from "@playwright/test";
 import {
   SESSION_COOKIE_NAME,
   ensureApprovedUser,
+  execD1,
+  queryD1,
   seedSession,
 } from "./fixtures/db";
 import { waitForHydration } from "./fixtures/hydration";
@@ -231,4 +233,43 @@ test.describe("signed in as an officer", () => {
       await expectNoHorizontalOverflow(page, path);
     });
   }
+
+  /**
+   * `/members/$publicId` cannot sit in the list above — it needs a
+   * real member to point at — and it is the one page built around
+   * free text a member types about themselves, so it is where an
+   * unbreakable string is most likely to widen the document.
+   *
+   * Seeded with deliberately hostile values: a long single-token
+   * email, a name with no spaces to wrap at, and a status line that
+   * runs well past one phone line. The empty profile the plain
+   * fixture produces would pass this while checking nothing.
+   */
+  test("no horizontal overflow: /members/$publicId", async ({ page }) => {
+    const email = `overflow-profile-${Date.now()}@example.com`;
+    ensureApprovedUser(email);
+    const [member] = queryD1<{ userId: string; publicId: string }>(
+      "SELECT u.id AS userId, u.public_id AS publicId FROM users u JOIN user_emails e ON e.user_id = u.id WHERE e.email = ?",
+      email,
+    );
+    const userId = member.userId.replace(/'/g, "''");
+    execD1(`
+      UPDATE profiles SET
+        preferred_name = 'Bartholomewinthroprightson',
+        full_name = 'Bartholomewinthroprightson Vandersomethingorother',
+        trail_name = 'Thelongestpossibletrailnameimaginable',
+        pronouns = 'they/them',
+        status_line = 'Looking for a caving partner in November, ideally someone who owns a vertical kit and is free most weekends'
+      WHERE user_id = '${userId}';
+      INSERT INTO profile_prompts (user_id, prompt_key, answer, position)
+        VALUES ('${userId}', 'trail_snack', 'Supercalifragilisticexpialidociousnessandthensome', 0);
+      INSERT INTO profile_disciplines (user_id, discipline, level)
+        VALUES ('${userId}', 'mountaineering', 'experienced');
+    `);
+
+    const path = `/members/${member.publicId}`;
+    await page.goto(path);
+    await waitForHydration(page);
+    await expectNoHorizontalOverflow(page, path);
+  });
 });

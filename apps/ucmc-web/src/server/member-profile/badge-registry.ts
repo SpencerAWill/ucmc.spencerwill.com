@@ -29,6 +29,15 @@ export const BADGE_KINDS = [
 ] as const;
 export type BadgeKind = (typeof BADGE_KINDS)[number];
 
+/** Section headings for the badge catalog, in the member's words. */
+export const BADGE_KIND_LABELS: Record<BadgeKind, string> = {
+  tenure: "Seasons",
+  gear: "Gear cave",
+  service: "Service",
+  merit: "Out there",
+  social: "Together",
+};
+
 /**
  * Why a badge is not earnable yet, or `null` when it is.
  *

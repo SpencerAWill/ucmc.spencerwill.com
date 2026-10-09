@@ -181,6 +181,14 @@ export const DISCIPLINE_LEVELS = {
 
 export type DisciplineLevel = keyof typeof DISCIPLINE_LEVELS;
 
+/**
+ * Ordered by `rank`, so the level meter's segment count and the
+ * select's option order are read from one list and can't disagree.
+ */
+export const DISCIPLINE_LEVEL_KEYS = (
+  Object.keys(DISCIPLINE_LEVELS) as DisciplineLevel[]
+).sort((a, b) => DISCIPLINE_LEVELS[a].rank - DISCIPLINE_LEVELS[b].rank);
+
 export function isDisciplineLevel(value: string): value is DisciplineLevel {
   return Object.hasOwn(DISCIPLINE_LEVELS, value);
 }
