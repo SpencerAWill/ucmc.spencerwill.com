@@ -53,8 +53,23 @@ export interface GearAnalytics {
   season: string;
   /** Items with `status = 'active'` — the loanable inventory. */
   activeItems: number;
-  /** Coded items currently out, i.e. an open loan against an item. */
+  /**
+   * Coded items currently out — open loans carrying an `item_id`.
+   *
+   * Deliberately excludes counted/model loans so it stays commensurate
+   * with `activeItems`, which counts `gear_items` rows and can never
+   * contain them. See `countedLoansOut`.
+   */
   outNow: number;
+  /**
+   * Open counted loans — one per checkout event, not per unit.
+   *
+   * Reported beside `outNow` rather than folded into it: they have no
+   * `gear_items` row to be a share of, so they belong to no
+   * utilisation ratio until counted checkout (#223) brings stock
+   * levels into the denominator.
+   */
+  countedLoansOut: number;
   overdueNow: number;
   overdueBands: OverdueBand[];
   /** Loans opened within the season. */
@@ -115,10 +130,33 @@ export async function gearAnalyticsAction(input: {
     .from(schema.gearItems)
     .where(eq(schema.gearItems.status, "active"));
 
+  // **Coded items only.** `utilisation` divides this by a count of
+  // `gear_items` rows, so a counted/model loan ("six draws" — one row
+  // carrying `model_id` and a quantity) in the numerator inflates a
+  // ratio whose denominator cannot contain it, and a small inventory
+  // with a few counted checkouts reads over 100% utilisation. The
+  // `gear_loans_item_xor_model` check means filtering on `item_id`
+  // partitions loans cleanly; the counted ones are counted separately
+  // below rather than dropped, so they stay visible.
   const [outNow] = await db
     .select({ n: count() })
     .from(schema.gearLoans)
-    .where(isNull(schema.gearLoans.returnedAt));
+    .where(
+      and(
+        isNull(schema.gearLoans.returnedAt),
+        isNotNull(schema.gearLoans.itemId),
+      ),
+    );
+
+  const [countedOut] = await db
+    .select({ n: count() })
+    .from(schema.gearLoans)
+    .where(
+      and(
+        isNull(schema.gearLoans.returnedAt),
+        isNotNull(schema.gearLoans.modelId),
+      ),
+    );
 
   const openLoans = await db
     .select({ dueAt: schema.gearLoans.dueAt })
@@ -143,6 +181,7 @@ export async function gearAnalyticsAction(input: {
     season,
     activeItems: activeItems.n,
     outNow: outNow.n,
+    countedLoansOut: countedOut.n,
     ...bandOverdue(openLoans, now),
     loansThisSeason: seasonLoans.length,
     medianLoanDays: medianLoanDays(seasonLoans),
@@ -304,33 +343,33 @@ async function loadInspectionHealth(): Promise<{
   uninspectedItems: number;
 }> {
   const db = getDb();
-  const latest = db
-    .select({
-      itemId: schema.gearInspections.itemId,
-      inspectedAt: sql<number>`max(${schema.gearInspections.inspectedAt})`.as(
-        "latest_inspected_at",
-      ),
-    })
-    .from(schema.gearInspections)
-    .where(isNotNull(schema.gearInspections.itemId))
-    .groupBy(schema.gearInspections.itemId)
-    .as("latest");
 
+  // A correlated "latest row per item" subquery rather than a join
+  // against `max(inspected_at)`.
+  //
+  // The join version matched EVERY inspection sharing that maximum,
+  // and `inspected_at` is officer-entered after the fact — so a
+  // same-day fail-then-repass produced two rows at the same instant,
+  // counted the item twice, and still classified it as failing because
+  // the filter only asked whether SOME row at the max was a fail.
+  //
+  // `ORDER BY inspected_at DESC LIMIT 1` is also what
+  // `latestInspectionByItemIds` in `features/gear` does, so the panel
+  // and the rest of the app now agree about which inspection is the
+  // latest. The `id DESC` tiebreak is additional: it makes the choice
+  // deterministic rather than letting SQLite pick among equal rows.
   const [failed] = await db
     .select({ n: count() })
     .from(schema.gearItems)
-    .innerJoin(latest, eq(latest.itemId, schema.gearItems.id))
-    .innerJoin(
-      schema.gearInspections,
-      and(
-        eq(schema.gearInspections.itemId, schema.gearItems.id),
-        eq(schema.gearInspections.inspectedAt, latest.inspectedAt),
-      ),
-    )
     .where(
       and(
         eq(schema.gearItems.status, "active"),
-        eq(schema.gearInspections.result, "fail"),
+        sql`(
+          SELECT ins.result FROM ${schema.gearInspections} ins
+          WHERE ins.item_id = ${schema.gearItems.id}
+          ORDER BY ins.inspected_at DESC, ins.id DESC
+          LIMIT 1
+        ) = 'fail'`,
       ),
     );
 

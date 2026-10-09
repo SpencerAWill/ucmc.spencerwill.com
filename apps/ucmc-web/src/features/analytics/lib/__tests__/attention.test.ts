@@ -56,14 +56,48 @@ describe("gear", () => {
     expect(items[0].severity).toBe("act-now");
   });
 
-  it("reports overdue once, not twice, when some are long overdue", () => {
-    // The long-overdue item supersedes the general one; emitting both
-    // would double-count the same loans in an exception list.
+  it("accounts for every overdue loan, splitting them across two items", () => {
+    // The two sets are disjoint, so reporting both double-counts
+    // nothing. Suppressing the second whenever anything was long
+    // overdue dropped the other 2 loans from the exception list while
+    // the stat tile on the same screen still said "5 overdue".
     const items = buildAttention({
       gear: gear({
         overdueNow: 5,
         overdueBands: [
           { key: "1-7", loans: 2 },
+          { key: "8-21", loans: 0 },
+          { key: "22+", loans: 3 },
+        ],
+      }),
+    });
+    expect(items.map((i) => i.message)).toEqual([
+      "3 loans are more than 21 days overdue",
+      "2 other loans are overdue",
+    ]);
+  });
+
+  it("drops the 'other' when nothing is long overdue", () => {
+    // Nothing for them to be *other* than.
+    const items = buildAttention({
+      gear: gear({
+        overdueNow: 3,
+        overdueBands: [
+          { key: "1-7", loans: 3 },
+          { key: "8-21", loans: 0 },
+          { key: "22+", loans: 0 },
+        ],
+      }),
+    });
+    expect(items[0].message).toBe("3 loans are overdue");
+  });
+
+  it("emits no second item when every overdue loan is long overdue", () => {
+    const items = buildAttention({
+      gear: gear({
+        overdueNow: 3,
+        overdueBands: [
+          { key: "1-7", loans: 0 },
           { key: "8-21", loans: 0 },
           { key: "22+", loans: 3 },
         ],

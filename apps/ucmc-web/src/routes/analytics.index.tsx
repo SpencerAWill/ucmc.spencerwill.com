@@ -3,10 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import {
-  ANALYTICS_PAGE_ORDER,
-  canSeeAnalyticsPage,
-} from "#/config/analytics-pages";
+import { visibleAnalyticsPages } from "#/config/analytics-pages";
 import type { AnalyticsPageKey } from "#/config/analytics-pages";
 import { AnalyticsDoors } from "#/features/analytics/components/analytics-doors";
 import { AnalyticsPage } from "#/features/analytics/components/analytics-page";
@@ -29,6 +26,7 @@ import {
   effectivePermissionsFor,
   requireApproved,
 } from "#/features/auth/guards";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 /**
@@ -99,9 +97,17 @@ export const Route = createFileRoute("/analytics/")({
   },
   loader: async ({ context }) => {
     const has = (permission: string) => context.granted.includes(permission);
+    // `visibleAnalyticsPages`, not `canSeeAnalyticsPage`: the latter
+    // answers permissions only, and warming a page whose `pages.*`
+    // switch is off would surface a tile and an attention row linking
+    // straight to a 404. Same resolution the sidebar, doors and
+    // sub-nav use, which is the whole reason the registry exists.
+    const flags = await context.queryClient.ensureQueryData(
+      publicFlagsQueryOptions(),
+    );
     await Promise.allSettled(
-      ANALYTICS_PAGE_ORDER.filter((key) => canSeeAnalyticsPage(has, key)).map(
-        (key) => WARM_QUERY[key](context.queryClient),
+      visibleAnalyticsPages(has, flags.pages).map((key) =>
+        WARM_QUERY[key](context.queryClient),
       ),
     );
   },
@@ -110,12 +116,17 @@ export const Route = createFileRoute("/analytics/")({
 
 function AnalyticsOverviewPage() {
   const { hasPermission } = useAuth();
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
 
-  const canGear = canSeeAnalyticsPage(hasPermission, "gear");
-  const canCompliance = canSeeAnalyticsPage(hasPermission, "compliance");
-  const canPlatform = canSeeAnalyticsPage(hasPermission, "platform");
-  const canMembership = canSeeAnalyticsPage(hasPermission, "membership");
-  const canActivity = canSeeAnalyticsPage(hasPermission, "activity");
+  // Permissions AND the per-page kill switch, so a panel can never
+  // outlive the page it links to.
+  const visible = new Set(visibleAnalyticsPages(hasPermission, flags.pages));
+  const canGear = visible.has("gear");
+  const canCompliance = visible.has("compliance");
+  const canPlatform = visible.has("platform");
+  const canMembership = visible.has("membership");
+  const canActivity = visible.has("activity");
 
   const gear = useQuery({
     ...gearAnalyticsQueryOptions(null),
@@ -151,12 +162,31 @@ function AnalyticsOverviewPage() {
 
   const anyVisible =
     canGear || canCompliance || canPlatform || canMembership || canActivity;
+
+  const datasets = [
+    { label: "Gear", query: gear, enabled: canGear },
+    { label: "Compliance", query: compliance, enabled: canCompliance },
+    { label: "Platform", query: platform, enabled: canPlatform },
+    { label: "Membership", query: membership, enabled: canMembership },
+    { label: "Activity", query: activity, enabled: canActivity },
+  ];
+
   // Pending only counts queries this viewer is actually running — a
   // disabled query sits in `pending` forever and would otherwise hold
   // the panel on "Checking…" permanently for a partially-granted role.
-  const isPending = [gear, compliance, platform, membership, activity].some(
-    (query) => query.isFetching && query.data === undefined,
+  const isPending = datasets.some(
+    (d) => d.enabled && d.query.isFetching && d.query.data === undefined,
   );
+  // **A failed query must not read as an invisible one.** `buildAttention`
+  // treats `undefined` as "this viewer cannot see that dataset", and a
+  // rejected query leaves `data` undefined with `isFetching` false — so
+  // without this the panel says "nothing needs attention in the data you
+  // can see" while gear actually has three loans 22 days overdue. That is
+  // the same false reassurance `isPending` was added to remove, left open
+  // on the error branch.
+  const failedLabels = datasets
+    .filter((d) => d.enabled && d.query.isError)
+    .map((d) => d.label);
   const season =
     membership.data?.season ??
     compliance.data?.season ??
@@ -226,6 +256,7 @@ function AnalyticsOverviewPage() {
           items={attention}
           anyVisible={anyVisible}
           isPending={isPending}
+          failedLabels={failedLabels}
         />
       </AnalyticsPanel>
 

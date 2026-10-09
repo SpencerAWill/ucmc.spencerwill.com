@@ -113,15 +113,49 @@ describe("previousSeasonOf", () => {
 });
 
 describe("bucketJoins", () => {
-  it("emits all twelve months for every season", () => {
-    // Two lines on one axis need the same twelve x positions, or one
-    // skips a slot instead of sitting at zero.
+  it("emits all twelve months for a season that has fully elapsed", () => {
+    // Two lines on one axis need the same x positions, or one skips a
+    // slot instead of sitting at zero.
     const rows = bucketJoins([
-      { season: "2026-27", instants: [] },
-      { season: "2025-26", instants: [] },
+      { season: "2026-27", instants: [], throughMonthIndex: 11 },
+      { season: "2025-26", instants: [], throughMonthIndex: 11 },
     ]);
     expect(rows).toHaveLength(24);
     expect(rows.filter((row) => row.season === "2026-27")).toHaveLength(12);
+  });
+
+  it("stops the current season at the month it has reached", () => {
+    // A month that has not happened is NOT a month with no joins.
+    // Emitting zeros to July would draw the current line collapsing to
+    // the axis against last season's full curve — the club looking as
+    // though it fell apart, rather than a season still in progress.
+    const rows = bucketJoins([
+      { season: "2026-27", instants: [], throughMonthIndex: 2 },
+    ]);
+    expect(rows).toHaveLength(3);
+    expect(rows.at(-1)?.monthIndex).toBe(2);
+  });
+
+  it("still emits empty months inside the elapsed range", () => {
+    // A quiet month genuinely IS a zero, and the line must sit on the
+    // axis there rather than skipping the slot.
+    const rows = bucketJoins([
+      {
+        season: "2026-27",
+        instants: [at("2026-08-15T12:00:00Z")],
+        throughMonthIndex: 2,
+      },
+    ]);
+    expect(rows.map((r) => r.joined)).toEqual([1, 0, 0]);
+  });
+
+  it("clamps a nonsense through-index rather than running off the axis", () => {
+    expect(
+      bucketJoins([{ season: "2026-27", instants: [], throughMonthIndex: 99 }]),
+    ).toHaveLength(12);
+    expect(
+      bucketJoins([{ season: "2026-27", instants: [], throughMonthIndex: -4 }]),
+    ).toHaveLength(1);
   });
 
   it("indexes August to 0 and July to 11", () => {
@@ -129,6 +163,7 @@ describe("bucketJoins", () => {
       {
         season: "2026-27",
         instants: [at("2026-08-15T12:00:00Z"), at("2027-07-15T12:00:00Z")],
+        throughMonthIndex: 11,
       },
     ]);
     expect(rows.find((r) => r.monthIndex === 0)?.joined).toBe(1);
@@ -140,7 +175,11 @@ describe("bucketJoins", () => {
     // the raw instant would move it into September — the wrong bar, and
     // on Jul 31 the wrong SEASON.
     const rows = bucketJoins([
-      { season: "2026-27", instants: [at("2026-09-01T01:00:00Z")] },
+      {
+        season: "2026-27",
+        instants: [at("2026-09-01T01:00:00Z")],
+        throughMonthIndex: 11,
+      },
     ]);
     expect(rows.find((r) => r.monthIndex === 0)?.joined).toBe(1);
     expect(rows.find((r) => r.monthIndex === 1)?.joined).toBe(0);

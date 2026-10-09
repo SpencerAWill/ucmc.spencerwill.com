@@ -85,11 +85,25 @@ export function buildAttention(inputs: AttentionInputs): AttentionItem[] {
         href: "/analytics/gear",
         linkLabel: "Gear",
       });
-    } else if (overdueNow > 0) {
+    }
+    // The REMAINDER, not the total — and emitted alongside the item
+    // above rather than instead of it.
+    //
+    // These two sets are disjoint, so this double-counts nothing: the
+    // long-overdue item covers the 22+ band and this covers the rest.
+    // Suppressing it entirely whenever anything was long overdue meant
+    // 5 overdue loans (2 recent, 3 ancient) produced one line about
+    // the 3 and silently dropped the other 2 — while the stat tile on
+    // the very same screen read "5 overdue". Two numbers for the same
+    // thing, disagreeing.
+    const recentlyOverdue = overdueNow - longOverdue;
+    if (recentlyOverdue > 0) {
       items.push({
         key: "gear-overdue",
         severity: "watch",
-        message: `${overdueNow} ${plural(overdueNow, "loan is", "loans are")} overdue`,
+        // "other" only when there is something for them to be other
+        // than; on its own the item has no antecedent to refer back to.
+        message: `${recentlyOverdue}${longOverdue > 0 ? " other" : ""} ${plural(recentlyOverdue, "loan is", "loans are")} overdue`,
         href: "/analytics/gear",
         linkLabel: "Gear",
       });

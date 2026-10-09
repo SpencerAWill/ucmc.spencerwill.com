@@ -7,7 +7,17 @@
  *
  * The shell wrapper is in `./analytics-fns.ts`.
  */
-import { and, count, eq, gte, isNull, lt, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  countDistinct,
+  eq,
+  gte,
+  isNull,
+  lt,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 
 import { WAIVER_VERSION } from "#/config/legal";
 import {
@@ -121,8 +131,17 @@ export async function complianceAnalyticsAction(input: {
   // officer queue already answers this shape, and pulling member ids
   // into an `inArray` would walk straight into D1's 100-parameter cap
   // the moment the club outgrows 100 members.
+  //
+  // **`countDistinct`, not `count`.** `attestWaiverAction` deliberately
+  // inserts a NEW row per attestation and leaves earlier ones for the
+  // same `(userId, cycle, version)` in place to preserve history, so a
+  // member attested twice joins twice. Counting rows made `covered`
+  // exceed the number of covered members, which `uncovered` then
+  // clamped to zero — the page reported "every approved member is
+  // covered" while someone who could not legally borrow gear was
+  // invisible, and the attention panel stayed silent about them.
   const [covered] = await db
-    .select({ n: count() })
+    .select({ n: countDistinct(schema.users.id) })
     .from(schema.users)
     .innerJoin(
       schema.waiverAttestations,

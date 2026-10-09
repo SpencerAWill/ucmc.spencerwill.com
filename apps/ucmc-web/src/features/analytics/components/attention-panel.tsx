@@ -31,6 +31,7 @@ export function AttentionPanel({
   items,
   anyVisible,
   isPending,
+  failedLabels,
 }: {
   items: AttentionItem[];
   /**
@@ -54,10 +55,28 @@ export function AttentionPanel({
    * surface where getting it wrong is actively reassuring.
    */
   isPending: boolean;
+  /**
+   * Datasets that errored, by display name.
+   *
+   * A rejected query leaves its data `undefined`, which
+   * `buildAttention` is documented to read as "not visible to this
+   * viewer" — so an error would otherwise be laundered into an
+   * all-clear. Naming the failures keeps the list's silence honest:
+   * whatever it does say, it cannot speak for these.
+   */
+  failedLabels: string[];
 }) {
   if (isPending) {
     return <p className="py-4 text-sm text-muted-foreground">Checking…</p>;
   }
+
+  const failureNote =
+    failedLabels.length === 0 ? null : (
+      <p className="py-3 text-sm text-destructive">
+        Couldn&rsquo;t load {failedLabels.join(", ")}. Anything needing
+        attention there is missing from this list — reload to try again.
+      </p>
+    );
 
   if (!anyVisible) {
     return (
@@ -71,36 +90,41 @@ export function AttentionPanel({
 
   if (items.length === 0) {
     return (
-      <p className="py-4 text-sm text-muted-foreground">
-        Nothing needs attention in the data you can see.
-      </p>
+      failureNote ?? (
+        <p className="py-4 text-sm text-muted-foreground">
+          Nothing needs attention in the data you can see.
+        </p>
+      )
     );
   }
 
   return (
-    <ul className="divide-y">
-      {items.map((item) => (
-        <li
-          key={item.key}
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3"
-        >
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tracking-wide uppercase",
-              CHIP_CLASS[item.severity],
-            )}
+    <>
+      {failureNote}
+      <ul className="divide-y">
+        {items.map((item) => (
+          <li
+            key={item.key}
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3"
           >
-            {CHIP_LABEL[item.severity]}
-          </span>
-          <span className="min-w-0 flex-1 text-sm">{item.message}</span>
-          <Link
-            to={item.href}
-            className="shrink-0 text-sm font-medium text-primary hover:underline"
-          >
-            {item.linkLabel} →
-          </Link>
-        </li>
-      ))}
-    </ul>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tracking-wide uppercase",
+                CHIP_CLASS[item.severity],
+              )}
+            >
+              {CHIP_LABEL[item.severity]}
+            </span>
+            <span className="min-w-0 flex-1 text-sm">{item.message}</span>
+            <Link
+              to={item.href}
+              className="shrink-0 text-sm font-medium text-primary hover:underline"
+            >
+              {item.linkLabel} →
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

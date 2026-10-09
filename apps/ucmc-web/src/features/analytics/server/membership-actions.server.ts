@@ -17,7 +17,11 @@
  */
 import { and, count, eq, gte, isNull, lt, sql } from "drizzle-orm";
 
-import { currentSeason, seasonBoundsFor } from "#/config/club-season";
+import {
+  currentSeason,
+  seasonBoundsFor,
+  seasonOffsetOf,
+} from "#/config/club-season";
 import { CLUB_TIME_ZONE } from "#/config/time";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { getDb, schema } from "#/server/db";
@@ -147,6 +151,13 @@ export async function membershipAnalyticsAction(input: {
       joins.map((entry) => ({
         season: entry.label,
         instants: entry.rows.map((row) => row.createdAt),
+        // Only the season currently in progress stops short. Any other
+        // season on the axis has fully elapsed, including a future one
+        // an officer could reach by typing a season label — which has
+        // no joins at all and should render as a flat line rather than
+        // as a single point.
+        throughMonthIndex:
+          entry.label === currentSeason() ? seasonOffsetOf().monthIndex : 11,
       })),
     ),
     ...(await loadRetention(season, previousSeason)),
@@ -156,17 +167,29 @@ export async function membershipAnalyticsAction(input: {
 }
 
 /**
- * Joins per (season, season-month), with **every month of every season
- * present**.
+ * Joins per (season, season-month), each season emitted up to and
+ * including `throughMonthIndex`.
  *
- * The overlay depends on it: two lines on one axis need the same
- * twelve x positions, and a missing month would make one line skip a
- * slot rather than sit at zero. A partial current season still stops
- * early — those months are genuinely absent from the data, so they are
- * emitted as zero only up to the months that exist in the input.
+ * **A month with no joins and a month that has not happened are
+ * different, and the overlay has to draw them differently.** A
+ * completed season passes 11 and gets all twelve slots, so a quiet
+ * February correctly sits at zero. The CURRENT season passes the month
+ * it has actually reached: emitting zeros for the rest would draw its
+ * line collapsing to the axis from November through July against last
+ * season's full curve, which reads as the club falling apart rather
+ * than as months that have not occurred yet.
+ *
+ * Within the range every month is still emitted, including empty ones
+ * — two lines on one axis need the same x positions up to where they
+ * end, or a line skips a slot instead of sitting at zero.
  */
 export function bucketJoins(
-  seasons: { season: string; instants: Temporal.Instant[] }[],
+  seasons: {
+    season: string;
+    instants: Temporal.Instant[];
+    /** 0 = August. 11 for a season that has fully elapsed. */
+    throughMonthIndex: number;
+  }[],
 ): JoinsByMonth[] {
   const out: JoinsByMonth[] = [];
   for (const entry of seasons) {
@@ -175,7 +198,11 @@ export function bucketJoins(
       const index = seasonMonthIndex(instant);
       counts.set(index, (counts.get(index) ?? 0) + 1);
     }
-    for (let monthIndex = 0; monthIndex < 12; monthIndex += 1) {
+    // Clamped rather than trusted: a caller passing a raw month index
+    // for a season that is not the current one would otherwise either
+    // truncate a complete season or run past the end of the axis.
+    const through = Math.min(Math.max(entry.throughMonthIndex, 0), 11);
+    for (let monthIndex = 0; monthIndex <= through; monthIndex += 1) {
       out.push({
         season: entry.season,
         monthIndex,

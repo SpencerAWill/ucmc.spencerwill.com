@@ -162,16 +162,27 @@ describe("waiver coverage", () => {
     expect(waivers.covered).toBe(0);
   });
 
-  it("never reports negative uncovered", async () => {
-    // Defensive: duplicate live attestations would otherwise push
-    // `covered` past `approved` and render as "-1 still owe a waiver".
+  it("counts a twice-attested member once, not twice", async () => {
+    // `attestWaiverAction` inserts a NEW row per attestation and leaves
+    // earlier ones in place to preserve history, so this is the normal
+    // shape of the data, not an edge case.
+    //
+    // This test previously asserted only `uncovered >= 0` and passed
+    // over a real bug: counting rows made `covered` 2 of 2 approved
+    // members while one of them had never signed, so the page said
+    // "every approved member is covered" and the attention panel said
+    // nothing about a member who could not legally borrow gear.
     await asViewer();
-    const member = await seedMember();
-    await attest(member);
-    await attest(member);
+    const twice = await seedMember();
+    await seedMember();
+    await attest(twice);
+    await attest(twice);
 
     const { waivers } = await complianceAnalyticsAction({ season: SEASON });
-    expect(waivers.uncovered).toBeGreaterThanOrEqual(0);
+    // The viewer seeded by `asViewer` is approved and unattested too.
+    expect(waivers.approved).toBe(3);
+    expect(waivers.covered).toBe(1);
+    expect(waivers.uncovered).toBe(2);
   });
 });
 

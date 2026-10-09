@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { eq } from "drizzle-orm";
+
 import {
   bandOverdue,
   gearAnalyticsAction,
@@ -252,6 +254,79 @@ describe("gearAnalyticsAction", () => {
     expect(result.mostBorrowed).toEqual([
       { model: "Mammut 9.5", manufacturer: "Mammut", loans: 1 },
     ]);
+  });
+
+  it("keeps a counted loan out of the utilisation numerator", async () => {
+    // `utilisation` divides `outNow` by a count of `gear_items` rows, so
+    // a model loan in the numerator is a share of a denominator that
+    // cannot contain it — one counted checkout against a one-item
+    // inventory used to read as 200% utilisation.
+    const viewer = await asViewer();
+    const itemId = await seedItem();
+    const modelId = (
+      await getDb()
+        .select({ modelId: schema.gearItems.modelId })
+        .from(schema.gearItems)
+        .where(eq(schema.gearItems.id, itemId))
+    )[0].modelId;
+
+    await getDb()
+      .insert(schema.gearLoans)
+      .values({
+        id: `gl_${crypto.randomUUID()}`,
+        publicId: `gl_${crypto.randomUUID()}`,
+        modelId,
+        quantity: 6,
+        memberUserId: viewer,
+        checkedOutAt: at("2026-09-10T12:00:00Z"),
+        dueAt: at("2026-09-17T12:00:00Z"),
+      });
+
+    const result = await gearAnalyticsAction({
+      season: SEASON,
+      now: NOW.epochMilliseconds,
+    });
+    expect(result.outNow).toBe(0);
+    // Still visible, just not in the ratio — and one event, not six units.
+    expect(result.countedLoansOut).toBe(1);
+  });
+
+  it("reads the latest inspection, not any inspection sharing its timestamp", async () => {
+    // `inspected_at` is officer-entered after the fact, so a same-day
+    // fail-then-repass lands two rows at the same instant. Joining on
+    // `max(inspected_at)` matched both: the item was counted twice AND
+    // reported as failing even though it subsequently passed — which
+    // also disagreed with `latestInspectionByItemIds`, the helper the
+    // rest of the app reads.
+    const viewer = await asViewer();
+    const itemId = await seedItem();
+    const sameInstant = at("2026-09-12T12:00:00Z");
+    await getDb()
+      .insert(schema.gearInspections)
+      .values([
+        {
+          id: "ins_a",
+          publicId: "ins_a",
+          itemId,
+          inspectedAt: sameInstant,
+          result: "fail",
+        },
+        {
+          id: "ins_b",
+          publicId: "ins_b",
+          itemId,
+          inspectedAt: sameInstant,
+          result: "pass",
+        },
+      ]);
+
+    const result = await gearAnalyticsAction({
+      season: SEASON,
+      now: NOW.epochMilliseconds,
+    });
+    expect(result.failedInspections).toBe(0);
+    expect(result.uninspectedItems).toBe(0);
+    expect(viewer).toBeTruthy();
   });
 
   it("excludes a loan opened in the previous season", async () => {

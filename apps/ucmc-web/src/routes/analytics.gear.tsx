@@ -74,7 +74,7 @@ function AnalyticsGearPage() {
           meta={
             utilisation === null
               ? "No active items in the inventory yet."
-              : `${utilisation.toFixed(0)}% of ${data.activeItems} active items. Point-in-time, not a season figure.`
+              : `${utilisation.toFixed(0)}% of ${data.activeItems} active items. Coded items only; point-in-time, not a season figure.`
           }
         />
         <StatTile
@@ -149,6 +149,17 @@ function AnalyticsGearPage() {
             <span>Loans opened this season</span>
             <span className="font-medium tabular-nums">
               {data.loansThisSeason}
+            </span>
+          </li>
+          <li className="flex items-baseline justify-between py-2">
+            <span>
+              Counted loans out now
+              <span className="ml-2 text-xs text-muted-foreground">
+                no item row, so not in the utilisation figure
+              </span>
+            </span>
+            <span className="font-medium tabular-nums">
+              {data.countedLoansOut}
             </span>
           </li>
           <li className="flex items-baseline justify-between py-2">
