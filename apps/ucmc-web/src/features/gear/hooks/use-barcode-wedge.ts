@@ -70,6 +70,44 @@ export function useBarcodeWedge({
     return node instanceof HTMLElement && node.isContentEditable;
   }, []);
 
+  /**
+   * Wipe a scan target that caught the burst's leading character.
+   *
+   * Nothing can be judged from one keystroke, so the first one is
+   * always allowed through (and `]` opens a tier-1 burst without being
+   * swallowed either). Harmless almost everywhere — but a
+   * `data-wedge-capture` field is one an officer scans into
+   * repeatedly, and a stray character left behind per scan does not
+   * just look untidy: the gear-code combobox queries on its value, so
+   * the leavings accumulate into `SSS` and a dropdown of nonsense.
+   *
+   * The value is set through the prototype's own setter before
+   * dispatching `input`, which is what makes React's synthetic handler
+   * observe the change — assigning `.value` on a controlled input
+   * updates the DOM and leaves React's state stale, so the next render
+   * puts the character straight back.
+   *
+   * Only runs on a burst that actually emitted, so an officer typing a
+   * code by hand is never interrupted: slow keystrokes restart the
+   * buffer and never reach this.
+   */
+  const clearScanTarget = useCallback((node: Element | null) => {
+    if (node === null || !node.hasAttribute("data-wedge-capture")) return;
+    if (
+      !(node instanceof HTMLInputElement) &&
+      !(node instanceof HTMLTextAreaElement)
+    ) {
+      return;
+    }
+    if (node.value === "") return;
+    const setter = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(node) as object,
+      "value",
+    )?.set;
+    setter?.call(node, "");
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+  }, []);
+
   useEffect(() => {
     if (!enabled) {
       stateRef.current = IDLE_WEDGE_STATE;
@@ -125,6 +163,7 @@ export function useBarcodeWedge({
         event.stopPropagation();
       }
       if (result.emit !== null) {
+        clearScanTarget(document.activeElement);
         onScanRef.current(result.emit);
       }
     };
@@ -136,5 +175,5 @@ export function useBarcodeWedge({
       document.removeEventListener("keydown", onKeyDown, true);
       stateRef.current = IDLE_WEDGE_STATE;
     };
-  }, [enabled, isProtectedField]);
+  }, [enabled, isProtectedField, clearScanTarget]);
 }

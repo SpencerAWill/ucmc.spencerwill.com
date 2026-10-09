@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -96,8 +97,25 @@ vi.mock("#/features/gear/components/member-search-combobox", () => ({
     </div>
   ),
 }));
+// A CONTROLLED input wearing `data-wedge-capture`, standing in for the
+// real combobox. Controlled is the load-bearing part: the hook clears a
+// scan target through the prototype's value setter precisely because
+// assigning `.value` on a React-controlled input leaves state stale and
+// the next render puts the character back. An uncontrolled stub would
+// pass either way.
 vi.mock("#/features/gear/components/gear-code-search-combobox", () => ({
-  GearCodeSearchCombobox: () => <div data-testid="gear-combobox" />,
+  GearCodeSearchCombobox: () => {
+    const [value, setValue] = React.useState("");
+    return (
+      <input
+        data-testid="gear-combobox"
+        data-wedge-capture=""
+        aria-label="Gear code"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+    );
+  },
 }));
 vi.mock("#/features/gear/components/due-date-picker", () => ({
   DueDatePicker: () => <div data-testid="due-picker" />,
@@ -529,5 +547,45 @@ describe("GearDeskCheckoutPane keyboard-wedge branch", () => {
       "That didn't look like a gear label.",
     );
     expect(fetchGearByCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves no stray character behind in a declared scan target", async () => {
+    // The first keystroke of a tier-2 burst cannot be judged, so it
+    // reaches the field. Harmless almost everywhere — but this field is
+    // scanned into repeatedly and queries on its value, so one leftover
+    // per scan accumulates into `SSS` and a dropdown of nonsense.
+    fetchGearByCodeMock.mockResolvedValue(GEAR_ROW);
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    const combobox = screen.getByTestId("gear-combobox");
+    const user = userEvent.setup({ delay: null });
+    await user.click(combobox);
+
+    await user.keyboard("CH93{Enter}");
+
+    await waitFor(() =>
+      expect(fetchGearByCodeMock).toHaveBeenCalledWith("CH93"),
+    );
+    expect(combobox).toHaveValue("");
+  });
+
+  it("resolves a burst in a scan target exactly, not by prefix match", async () => {
+    // The reason the attribute exists. That input is already an
+    // accidental wedge target, but cmdk picks the first PREFIX match
+    // while `handleScan` looks the code up exactly — so without the
+    // opt-out one trigger pull means two different things depending on
+    // where focus sat.
+    fetchGearByCodeMock.mockResolvedValue(GEAR_ROW);
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    const user = userEvent.setup({ delay: null });
+    await user.click(screen.getByTestId("gear-combobox"));
+
+    await user.keyboard("CH93{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("row-CH93")).toBeInTheDocument(),
+    );
+    expect(fetchGearByCodeMock).toHaveBeenCalledWith("CH93");
   });
 });

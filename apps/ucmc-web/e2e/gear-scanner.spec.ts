@@ -155,3 +155,66 @@ test("routes a decoded cart QR to the cart-resolve branch", async () => {
     });
   });
 });
+
+/**
+ * The keyboard-wedge path (#215). No camera, so this one uses the
+ * project's ordinary browser rather than `withScannerDesk`'s
+ * fake-capture Chromium.
+ *
+ * What only a real browser can show: the listener is on `document` in
+ * the CAPTURE phase so it beats cmdk and Radix to Enter and Tab, and
+ * `preventDefault` on the terminator keeps the scan away from both. The
+ * jsdom suite stubs the combobox out, so bubble-phase passes every
+ * component test there — this is the only place cmdk is actually in the
+ * tree. `keyboard.type(..., { delay: 0 })` is a faithful wedge: a burst
+ * of printable keys at machine speed followed by Enter.
+ */
+test("adds a piece from a USB keyboard-wedge burst", async ({ page }) => {
+  const email = `e2e-wedge-officer-${Date.now()}@example.com`;
+  ensureApprovedUser(email, { roles: ["role_system_admin"] });
+  const sid = seedSession(email);
+  await page
+    .context()
+    .addCookies([{ name: SESSION_COOKIE_NAME, value: sid, url: BASE_URL }]);
+
+  const code = `WDG${RUN_TAG}`;
+  const now = Date.now();
+  const typeId = `gt_${randomUUID()}`;
+  const modelId = `gm_${randomUUID()}`;
+  const itemId = `gi_${randomUUID()}`;
+  execD1(`
+INSERT INTO gear_types (id, public_id, name, prefix, created_at, updated_at)
+VALUES ('${typeId}', '${randomUUID().replace(/-/g, "").slice(0, 12)}', 'E2E Wedge Type ${RUN_TAG}', 'WDG', ${now}, ${now});
+INSERT INTO gear_models (id, public_id, type_id, name, tracking, created_at, updated_at)
+VALUES ('${modelId}', '${randomUUID().replace(/-/g, "").slice(0, 12)}', '${typeId}', 'E2E Wedge Model ${RUN_TAG}', 'coded', ${now}, ${now});
+INSERT INTO gear_items (id, public_id, model_id, code, status, condition, created_at, updated_at)
+VALUES ('${itemId}', '${randomUUID().replace(/-/g, "").slice(0, 12)}', '${modelId}', '${code}', 'active', 'serviceable', ${now}, ${now});
+`);
+
+  await page.goto("/gear/loans");
+  await waitForHydration(page);
+  await page.getByRole("button", { name: /open gear desk/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /^gear desk$/i }),
+  ).toBeVisible();
+  // No camera involved: the wedge defaults ON, so the desk is listening
+  // the moment the Sheet opens.
+  await expect(page.getByText(/^ready$/i)).toBeVisible();
+
+  // Focused on the code combobox — the case the `data-wedge-capture`
+  // opt-out exists for, and the one where cmdk would otherwise resolve
+  // the burst by prefix match instead of an exact lookup.
+  await page.getByPlaceholder(/enter code/i).click();
+  await page.keyboard.type(code, { delay: 0 });
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("cell", { name: code, exact: true })).toBeVisible(
+    { timeout: 10_000 },
+  );
+  await expect(page.getByText(/items \(1\)/i)).toBeVisible();
+  // The indicator flips once a burst has been seen — the only evidence
+  // of a plugged-in gun a browser can ever have.
+  await expect(page.getByText(/^connected$/i)).toBeVisible();
+  // Nothing leaked into the field the burst was typed into.
+  await expect(page.getByPlaceholder(/enter code/i)).toHaveValue("");
+});
