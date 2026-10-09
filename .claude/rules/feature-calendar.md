@@ -89,7 +89,11 @@ The agenda is stacked `<li>` rows, not a table — a find-one-and-act surface pe
 
 `/calendar` and `/my/calendar` are both in `mobile-overflow.spec.ts`'s route list. The month grid is a seven-column table that cannot reflow, next to a chip row and an agenda of badge-carrying rows — the densest fixed-width surface on the site, and exactly the shape that reaches past the gutter.
 
-The sidebar entry sits in the **public** group (the calendar is public-facing, with an anonymous feed for prospective members) but is still gated on `isApproved`, because `/calendar` runs `requireApproved` and a link that bounces a visitor to sign-in is worse than no link.
+**`/calendar` is a public page** (`0076`), gated like every other one: the `pages.calendar` flag plus `public_calendar:view`, which `role_anonymous` holds. It shipped member-only, which left an incoherence — the anonymous `.ics` feed exists for prospective members, and the only surface linking to it was itself member-only, so its audience could never see it.
+
+**Reaching the page and seeing an event are different questions.** One permission covers anonymous visitors and members alike because the second question is answered per row by `visibility` in the SQL `WHERE`. There is still no `events:view`. **Opening the page did not open its contents**: events default to `visibility = 'members'`, so an officer marks an event public one at a time and a crawler sees only those.
+
+An anonymous visitor gets the public-feed card instead of a Subscribe button — minting a personal token needs an account, and a button that bounces them to sign-in is worse than no button. `/my/calendar` stays member-only and owns personal links only.
 
 ## Test layout
 

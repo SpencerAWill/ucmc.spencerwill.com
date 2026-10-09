@@ -11,6 +11,7 @@ import { calendarOccurrencesQueryOptions } from "#/features/calendar/api/queries
 import { CalendarAgenda } from "#/features/calendar/components/calendar-agenda";
 import { CalendarMonthGrid } from "#/features/calendar/components/calendar-month-grid";
 import { EventFormDialog } from "#/features/calendar/components/event-form-dialog";
+import { PublicFeedCard } from "#/features/calendar/components/public-feed-card";
 import type { EventFormSeed } from "#/features/calendar/components/event-form-dialog";
 import {
   calendarSearchFor,
@@ -66,7 +67,7 @@ export function CalendarPage() {
    * the payload — both bypass role emulation silently. The server
    * re-checks `events:manage` on every write regardless.
    */
-  const { hasPermission } = useAuth();
+  const { hasPermission, isAuthenticated } = useAuth();
   const canManage = hasPermission("events:manage");
 
   const search = useSearch({ from: "/calendar" });
@@ -236,14 +237,24 @@ export function CalendarPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            {/* The whole point of the feature for most members: see it
-             * once here, subscribe, never open the page again. */}
-            <Link to="/my/calendar">
-              <CalendarPlus />
-              Subscribe
-            </Link>
-          </Button>
+          {/*
+           * **Anonymous visitors get no Subscribe button**, because the
+           * thing it leads to — minting a personal token — needs an
+           * account. They are offered the public feed instead, below
+           * the calendar, which is the feed that actually carries what
+           * they can see. Linking them to /my/calendar would be a
+           * button that bounces them to sign-in.
+           */}
+          {isAuthenticated ? (
+            <Button variant="outline" size="sm" asChild>
+              {/* The whole point of the feature for most members: see
+               * it once here, subscribe, never open the page again. */}
+              <Link to="/my/calendar">
+                <CalendarPlus />
+                Subscribe
+              </Link>
+            </Button>
+          ) : null}
           {canManage ? (
             <Button
               size="sm"
@@ -338,6 +349,17 @@ export function CalendarPage() {
           />
         </div>
       </div>
+
+      {/*
+       * The public feed, shown to everyone.
+       *
+       * It lives HERE rather than only on /my/calendar, which was the
+       * incoherence this page's opening fixed: the feed exists for
+       * people without accounts, and /my/calendar is member-only, so
+       * the only viewers of the "share this with anyone" link were the
+       * ones who did not need it.
+       */}
+      {isAuthenticated ? null : <PublicFeedCard />}
 
       <EventFormDialog
         seed={formSeed}

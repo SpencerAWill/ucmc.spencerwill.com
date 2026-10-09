@@ -93,19 +93,6 @@ test("a filtered link carries its filter in the URL", async ({ page }) => {
   expect(row.label).toBe("Trip");
 });
 
-test("the public feed is reachable and needs no token", async ({ page }) => {
-  await signIn(page, "e2e-sub-public");
-  await page.goto("/my/calendar");
-  await waitForHydration(page);
-
-  // Built, routed and tested, but previously linked from nowhere — a
-  // member had nothing to hand a non-member.
-  await expect(
-    page.getByRole("heading", { name: /public calendar/i }),
-  ).toBeVisible();
-  await expect(page.getByText(/\/api\/calendar\/public\.ics/)).toBeVisible();
-});
-
 test("revoking a link kills it", async ({ page }) => {
   const email = await signIn(page, "e2e-sub-revoke");
   await page.goto("/my/calendar");

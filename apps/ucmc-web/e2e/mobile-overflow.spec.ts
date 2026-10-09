@@ -85,6 +85,13 @@ const PUBLIC_ROUTES = [
   "/sponsors",
   "/volunteer",
   "/trips",
+  // The densest fixed-width surface on the site: a seven-column grid
+  // that cannot reflow, a row of filter chips, and an agenda of rows
+  // carrying badges and a meta line. Every one is a way for something
+  // to reach past the gutter. Public since 0076, so it is checked
+  // signed-OUT here — where it also renders the public-feed card, which
+  // puts a long URL in a `<code>` block.
+  "/calendar",
   "/resources",
   "/scholarships",
   "/policies",
@@ -124,11 +131,6 @@ const SIGNED_IN_ROUTES = [
   "/members/waivers",
   "/gear",
   "/gear/loans",
-  // The calendar is the densest fixed-width surface on the site: a
-  // seven-column grid that cannot reflow, a row of filter chips, and an
-  // agenda of rows carrying badges and a meta line. Every one of those
-  // is a way for something to reach past the gutter.
-  "/calendar",
   "/access",
   "/settings",
   "/audit",

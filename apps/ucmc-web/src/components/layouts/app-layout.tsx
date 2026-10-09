@@ -246,6 +246,8 @@ export function SidebarNav() {
   const canViewResources =
     hasPermission("public_resources:view") && pages.resources;
   const canViewGazette = hasPermission("public_gazette:view") && pages.gazette;
+  const canViewCalendar =
+    hasPermission("public_calendar:view") && pages.calendar;
   const canViewAlbum = hasPermission("public_album:view") && pages.album;
 
   // Waivers is the Members entry's only sub-item, so `canSeeWaivers`
@@ -360,20 +362,13 @@ export function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          {/* Calendar sits in the public group because the club
-           * calendar is a public-facing thing — there is an anonymous
-           * .ics feed of public events, and prospective members are a
-           * real audience for it.
-           *
-           * The ENTRY is still gated on `isApproved`, which is not a
-           * contradiction: `/calendar` itself runs `requireApproved`,
-           * so showing the link to a signed-out visitor would offer
-           * them a page that bounces them to sign-in. Grouping is about
-           * where a member looks for it; the gate is about whether the
-           * link works. If the page is ever opened to anonymous
-           * visitors, this condition drops and `canViewCalendar`
-           * becomes a permission like its neighbours. */}
-          {isApproved && pages.calendar ? (
+          {/* The calendar is a public-facing page: an anonymous
+           * visitor sees the events marked public, which is the same
+           * set the anonymous .ics feed serves them. So the entry gates
+           * exactly like its neighbours here — permission plus the
+           * page's own flag — and the `isApproved` special case it
+           * carried while the route was member-only is gone. */}
+          {canViewCalendar ? (
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip="Calendar">
                 <Link to="/calendar">

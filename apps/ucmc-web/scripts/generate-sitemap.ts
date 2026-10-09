@@ -47,6 +47,13 @@ const PUBLIC_ROUTES: Array<{
   // About / membership — informational pages, edited rarely.
   { path: "/about", changefreq: "yearly", priority: "0.7" },
   { path: "/membership", changefreq: "yearly", priority: "0.7" },
+  // The club calendar. `weekly` and a high priority because it is the
+  // one public page whose content genuinely turns over — and the one a
+  // prospective member is most likely to arrive on from a search for
+  // "UC mountaineering club events". Only events an officer marked
+  // public are visible to a crawler, which is the same set the
+  // anonymous .ics feed serves.
+  { path: "/calendar", changefreq: "weekly", priority: "0.8" },
   // Colophon — bumped when the project's open-source story changes.
   { path: "/open-source", changefreq: "yearly", priority: "0.4" },
 ];

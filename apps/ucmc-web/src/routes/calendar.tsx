@@ -1,7 +1,7 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router";
 
 import { PageContainer } from "#/components/layouts/page-container";
-import { requireApproved } from "#/features/auth/guards";
+
 import { calendarOccurrencesQueryOptions } from "#/features/calendar/api/queries";
 import { CalendarPage } from "#/features/calendar/components/calendar-page";
 import { calendarSearchSchema } from "#/features/calendar/lib/calendar-search";
@@ -9,7 +9,7 @@ import {
   clubToday,
   monthWindow,
 } from "#/features/calendar/lib/calendar-window";
-import { requirePageFlag } from "#/features/settings/api/page-guards";
+import { requirePageEnabled } from "#/features/settings/api/page-guards";
 
 /**
  * The club calendar (issue #187).
@@ -19,20 +19,31 @@ import { requirePageFlag } from "#/features/settings/api/page-guards";
  * calendar rather than replacing it. `/calendar` itself renders the
  * empty index child.
  *
- * Gated on `requireApproved` rather than an `events:view` permission.
- * Being an approved member IS the qualification, the same call /trips
- * made — a read permission would be granted to `role_member` on day one
- * and never revoked from anyone. What an individual member can *see* is
- * decided per event by `visibility`, server-side.
+ * **Public**, gated like every other public page: the `pages.calendar`
+ * flag plus `public_calendar:view`, which `role_anonymous` holds. The
+ * club calendar publishes an anonymous `.ics` feed aimed at prospective
+ * members, so a page they cannot open was the wrong shape — the only
+ * surface linking to that feed was itself member-only.
  *
- * Flag first, then auth: a switched-off page 404s uniformly regardless
- * of who is asking.
+ * **Reaching the page and seeing an event are different questions.**
+ * The second is answered per row by `visibility`, server-side, which is
+ * what lets one permission cover anonymous visitors and members alike:
+ * `currentVisibilityScope()` resolves an anonymous viewer to the public
+ * tier and the filtering happens in the SQL `WHERE`. There is still no
+ * `events:view`.
+ *
+ * Events default to `visibility = 'members'`, so opening the page does
+ * not open its contents — an officer marks an event public one at a
+ * time, and the page shows nothing until someone does.
  */
 export const Route = createFileRoute("/calendar")({
   validateSearch: calendarSearchSchema,
   beforeLoad: async ({ context }) => {
-    await requirePageFlag(context.queryClient, "calendar");
-    await requireApproved(context.queryClient, "/calendar");
+    await requirePageEnabled(
+      context.queryClient,
+      "calendar",
+      "public_calendar:view",
+    );
   },
   /**
    * Prefetch the month being shown so SSR has it baked in and the first
