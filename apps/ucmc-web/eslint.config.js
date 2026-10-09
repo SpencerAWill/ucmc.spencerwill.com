@@ -40,6 +40,7 @@ const zonePath = (rel) => new URL(rel, import.meta.url).pathname;
  */
 const FEATURES = [
   "album",
+  "analytics",
   "audit",
   "auth",
   "calendar",

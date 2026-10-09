@@ -201,6 +201,36 @@ export async function requirePermissionOrNotFound(
 }
 
 /**
+ * `requireAnyPermission`, but throwing `notFound()` instead of
+ * redirecting — i.e. the list counterpart of
+ * `requirePermissionOrNotFound`, standing in the same relation to
+ * `requireAnyPermission` as that one does to `requirePermission`.
+ *
+ * The three existing permission *pairs* (`WAIVER_VIEW_PERMISSIONS` and
+ * the two feedback pairs) all want the redirect, which is why this
+ * didn't exist until `/analytics`. Those pages differ in that a viewer
+ * without the data permission should not learn the page is there: each
+ * analytics drill-down is hidden from the nav when its permissions
+ * aren't held, so direct navigation has to produce the same 404 a
+ * switched-off page does, rather than bouncing to `/` and advertising
+ * that something was refused.
+ *
+ * Takes the same `readonly string[]` as `requireAnyPermission` so a
+ * permission-set constant can be handed to either without reshaping.
+ */
+export async function requireAnyPermissionOrNotFound(
+  queryClient: QueryClient,
+  permissions: readonly string[],
+): Promise<Principal> {
+  const principal = await requireApproved(queryClient);
+  const granted = await effectivePermissionsFor(queryClient, principal);
+  if (!permissions.some((p) => granted.includes(p))) {
+    throw notFound();
+  }
+  return principal;
+}
+
+/**
  * Variant of `requirePermissionOrNotFound` that does NOT funnel
  * unauthenticated users through the registration flow. Use for public
  * pages whose visibility is permission-gated but where a viewer

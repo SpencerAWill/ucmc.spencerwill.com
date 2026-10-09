@@ -420,14 +420,71 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
+  // Analytics surfaces. `pages.analytics` is the SECTION *and* a real
+  // page — unlike `pages.members`, which is a grouping node with no page
+  // of its own. /analytics is the root dashboard, and the five children
+  // are its drill-downs, so the parent switch takes the whole area down
+  // while each child can be withdrawn on its own.
   "pages.analytics": z.boolean().default(true).register(registry, {
     label: "Analytics enabled",
     description:
-      "When off, the Analytics “coming soon” sidebar entry is hidden. Analytics has no route yet.",
+      "Master switch for the whole /analytics area. When off, the sidebar entry disappears and every analytics page returns notFound — including the five drill-downs, regardless of their own switches.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    confirm:
+      "This is the master switch for the entire Analytics area — the club-health dashboard and all five drill-downs (Membership, Gear, Activity, Compliance, Platform). Their individual switches keep their values and take effect again when this is switched back on.",
+  }),
+  "pages.analytics_membership": z.boolean().default(true).register(registry, {
+    label: "Analytics · Membership enabled",
+    description:
+      "When off, the Membership drill-down is hidden and /analytics/membership returns notFound. The root dashboard stays reachable.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-09",
+    parent: "analytics",
+  }),
+  "pages.analytics_gear": z.boolean().default(true).register(registry, {
+    label: "Analytics · Gear enabled",
+    description:
+      "When off, the Gear drill-down is hidden and /analytics/gear returns notFound. Does NOT affect the /gear area itself — that has its own switches.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-09",
+    parent: "analytics",
+  }),
+  "pages.analytics_activity": z.boolean().default(true).register(registry, {
+    label: "Analytics · Activity enabled",
+    description:
+      "When off, the Activity drill-down is hidden and /analytics/activity returns notFound. Does NOT affect the calendar or its feeds.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-09",
+    parent: "analytics",
+  }),
+  "pages.analytics_compliance": z.boolean().default(true).register(registry, {
+    label: "Analytics · Compliance enabled",
+    description:
+      "When off, the Compliance drill-down is hidden and /analytics/compliance returns notFound. Waiver verification at /members/waivers is unaffected — this switch hides the reporting view, not the queue officers work from.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-09",
+    parent: "analytics",
+  }),
+  "pages.analytics_platform": z.boolean().default(true).register(registry, {
+    label: "Analytics · Platform enabled",
+    description:
+      "When off, the Platform drill-down is hidden and /analytics/platform returns notFound. Does NOT stop the daily cost snapshot from being recorded — the rows keep accruing so the page is complete when it comes back.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-09",
+    parent: "analytics",
   }),
   "pages.reports": z.boolean().default(true).register(registry, {
     label: "Reports enabled",

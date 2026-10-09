@@ -37,6 +37,7 @@ import {
 
 import { UserMenu } from "#/features/auth/components/user-menu";
 import { ViewAsMenu } from "#/features/auth/components/view-as-menu";
+import { ANALYTICS_PAGE_ICONS } from "#/components/analytics-page-icons";
 import { GitHubIcon } from "#/components/brand-icons";
 import { HeaderMasthead } from "#/components/layouts/header-masthead";
 import { ModeToggle } from "#/components/mode-toggle";
@@ -45,6 +46,11 @@ import {
   REGISTRATION_DISCLAIMER,
   SUBBRAND_DISAMBIGUATION,
 } from "#/config/legal";
+import {
+  ANALYTICS_PAGES,
+  ANALYTICS_VIEW_PERMISSION,
+  visibleAnalyticsPages,
+} from "#/config/analytics-pages";
 import { GITHUB_REPO_URL } from "#/config/site";
 import {
   publicFlagsQueryOptions,
@@ -647,6 +653,13 @@ function SidebarUtilityNav() {
   // more likely to want, which is also why it's the first tab. Falls back to
   // the site surface when the viewer can't reach club at all.
   const feedbackTarget = canClubFeedback ? "/feedback/club" : "/feedback/site";
+  // `analytics:view` opens the area; each drill-down additionally needs
+  // the permission for the data it shows, which is what
+  // `visibleAnalyticsPages` resolves for the sub-menu below. The root
+  // dashboard needs only the former — it is gated panel by panel.
+  const canViewAnalytics =
+    hasPermission(ANALYTICS_VIEW_PERMISSION) && pages.analytics;
+  const analyticsPages = visibleAnalyticsPages(hasPermission, pages);
   const canViewAudit = hasPermission("audit:view");
   const canManageSettings = hasPermission("settings:manage");
   // The permission is still `roles:manage` — the page is named for the
@@ -699,16 +712,55 @@ function SidebarUtilityNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : null}
-        {pages.analytics ? (
+        {canViewAnalytics ? (
           <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-disabled
-              tabIndex={-1}
-              tooltip="Analytics (coming soon)"
-            >
-              <BarChart3 />
-              <span>Analytics</span>
-            </SidebarMenuButton>
+            {/*
+             * Gated on the flag of the page the link actually targets
+             * (`pages.analytics`, the root dashboard) rather than on a
+             * section flag — the effective-flags cascade already folds
+             * the section in, and this is what stops the entry linking
+             * to a page that 404s.
+             *
+             * The sub-menu lists only the drill-downs this viewer may
+             * open: `visibleAnalyticsPages` applies BOTH the per-page
+             * data permission and the per-page flag, from the same
+             * registry the routes guard on.
+             */}
+            <Collapsible className="group/collapsible">
+              <SidebarMenuButton asChild tooltip="Analytics">
+                <Link to="/analytics">
+                  <BarChart3 />
+                  <span>Analytics</span>
+                </Link>
+              </SidebarMenuButton>
+              {analyticsPages.length > 0 ? (
+                <>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuAction className="data-[state=open]:rotate-90">
+                      <ChevronRight />
+                      <span className="sr-only">Toggle sub-menu</span>
+                    </SidebarMenuAction>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {analyticsPages.map((key) => {
+                        const AnalyticsIcon = ANALYTICS_PAGE_ICONS[key];
+                        return (
+                          <SidebarMenuSubItem key={key}>
+                            <SidebarMenuSubButton asChild>
+                              <Link to={ANALYTICS_PAGES[key].path}>
+                                <AnalyticsIcon />
+                                <span>{ANALYTICS_PAGES[key].label}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </>
+              ) : null}
+            </Collapsible>
           </SidebarMenuItem>
         ) : null}
         {pages.reports ? (
