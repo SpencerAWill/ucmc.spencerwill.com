@@ -1,0 +1,100 @@
+import {
+  MY_SUBSCRIPTIONS_QUERY_KEY,
+  calendarOccurrenceQueryKey,
+  calendarOccurrencesQueryKey,
+} from "#/features/calendar/api/query-keys";
+import {
+  getCalendarOccurrenceFn,
+  listCalendarOccurrencesFn,
+  listMySubscriptionsFn,
+} from "#/features/calendar/server/calendar-fns";
+import type { EventKind } from "#/../drizzle/schema";
+
+/**
+ * Occurrences overlapping a window, as the viewer may see them.
+ *
+ * **The payload is viewer-dependent** — an officer sees
+ * `visibility = 'officers'` events a member does not — so this entry
+ * must never be shared across identities. It isn't: the query cache is
+ * per browser session and is rebuilt on sign-in / sign-out, and nothing
+ * caches server-fn responses at the edge.
+ *
+ * A one-minute `staleTime`: the club's schedule changes a few times a
+ * semester, but an officer who has just published a trip expects to see
+ * it on their own calendar, and the mutation hooks invalidate anyway.
+ *
+ * `kinds` exists for callers that genuinely cannot filter client-side.
+ * **`/calendar` is not one of them** — it fetches the window unfiltered
+ * and narrows in memory, so toggling a type does no network work and
+ * the cache holds one entry per month rather than one per month per
+ * filter combination.
+ */
+export function calendarOccurrencesQueryOptions(
+  from: Temporal.Instant,
+  until: Temporal.Instant,
+  kinds?: readonly EventKind[],
+) {
+  const fromMs = from.epochMilliseconds;
+  const untilMs = until.epochMilliseconds;
+  return {
+    queryKey: calendarOccurrencesQueryKey(fromMs, untilMs, kinds),
+    queryFn: () =>
+      listCalendarOccurrencesFn({
+        data: {
+          from: fromMs,
+          until: untilMs,
+          ...(kinds ? { kinds: [...kinds] } : {}),
+        },
+      }),
+    staleTime: 60_000,
+  } as const;
+}
+
+/**
+ * One occurrence, for `/calendar/$publicId`.
+ *
+ * Its own query rather than reading the month list, so the detail route
+ * resolves from a cold load — someone opening a link from an email has
+ * no month in cache, and an event outside the current month would not
+ * be in it anyway.
+ */
+export function calendarOccurrenceQueryOptions(
+  publicId: string,
+  occurrenceStart?: Temporal.Instant,
+) {
+  const occurrenceStartMs = occurrenceStart?.epochMilliseconds;
+  return {
+    queryKey: calendarOccurrenceQueryKey(publicId, occurrenceStartMs),
+    queryFn: () =>
+      getCalendarOccurrenceFn({
+        data: {
+          publicId,
+          // The wire field is `occurrenceStart`, epoch ms. Spelling it
+          // `occurrenceStartMs` here type-checked — a conditional
+          // spread defeats excess-property checking — and would have
+          // silently dropped the slot, resolving every link to a
+          // recurring series back to its anchor.
+          ...(occurrenceStartMs === undefined
+            ? {}
+            : { occurrenceStart: occurrenceStartMs }),
+        },
+      }),
+    staleTime: 60_000,
+  } as const;
+}
+
+/**
+ * The caller's live calendar subscriptions.
+ *
+ * **The payload carries no tokens** — labels, timestamps and ids only.
+ * A token exists in exactly one response, the one that mints it; see
+ * `subscription-actions.server.ts` for why re-shipping a live bearer
+ * credential into every page load would be the wrong trade.
+ */
+export function mySubscriptionsQueryOptions() {
+  return {
+    queryKey: MY_SUBSCRIPTIONS_QUERY_KEY,
+    queryFn: () => listMySubscriptionsFn(),
+    staleTime: 30_000,
+  } as const;
+}

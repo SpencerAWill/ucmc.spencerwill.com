@@ -46,6 +46,12 @@ const USER_TARGETED_ACTIONS = new Set<AuditAction>([
   "passkey.added",
   "passkey.removed",
   "passkey.renamed",
+  // Calendar subscription tokens are self-service too, so both FKs
+  // point at the one member. The `event.*` actions are deliberately
+  // absent: those target an event row, not a user.
+  "calendar_subscription.created",
+  "calendar_subscription.rotated",
+  "calendar_subscription.revoked",
   "role.assigned",
   "role.unassigned",
   "waiver.attested",

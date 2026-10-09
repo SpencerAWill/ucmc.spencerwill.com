@@ -795,6 +795,30 @@ export const auditAction = [
   // Bulk drag-reorder of the sponsor grid. One event per reorder with
   // metadata { count }, same shape as `volunteer_opportunity.reordered`.
   "sponsor.reordered",
+  // Club calendar (#187). `target_id` is the event's `public_id` — the
+  // same string the emitted iCal `UID` derives from, so an audit row
+  // and a member's calendar entry can be matched up when someone asks
+  // why an event moved. Metadata carries { title, kind, visibility } so
+  // the row survives the event being deleted.
+  "event.created",
+  "event.updated",
+  "event.deleted",
+  // A series called off (`canceled_at` set) as distinct from deleted:
+  // the row stays and is published as CANCELLED so subscribers' copies
+  // disappear. Metadata carries { title }.
+  "event.canceled",
+  // One occurrence of a recurring series skipped or moved. Metadata
+  // carries { occurrenceStart, canceled } — the overwhelmingly common
+  // case is a cancellation ("no meeting over spring break").
+  "event.occurrence_overridden",
+  // Personal `.ics` subscription tokens. `target_id` is the
+  // subscription row id, NEVER the token itself — the token is a bearer
+  // credential and the audit viewer renders target_id as visible text.
+  // Metadata carries { label }. Rotation is one event rather than a
+  // revoke + create pair, because the member performed one action.
+  "calendar_subscription.created",
+  "calendar_subscription.rotated",
+  "calendar_subscription.revoked",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -2156,3 +2180,238 @@ export const sponsors = sqliteTable(
 );
 
 export type Sponsor = typeof sponsors.$inferSelect;
+
+/**
+ * What kind of thing an event is (issue #187).
+ *
+ * A closed vocabulary rather than a free-text label, because the value
+ * is a filter key: it appears in the `/calendar` legend, in the `?kind=`
+ * query param of a personal `.ics` feed, and in the `CATEGORIES` line of
+ * every emitted `VEVENT`. A member who subscribes to `?kind=trip` has
+ * that string sitting in their phone's calendar config indefinitely, so
+ * adding a value is cheap but renaming one is not.
+ *
+ * `trip` is listed now even though `features/trips` is still a Google
+ * Form embed — see the `trips` satellite table note on {@link events}.
+ */
+export const eventKind = [
+  "meeting",
+  "trip",
+  "exec",
+  "social",
+  "other",
+] as const;
+export type EventKind = (typeof eventKind)[number];
+
+/**
+ * Who may see an event.
+ *
+ * Three tiers rather than a nullable `required_permission` string: the
+ * DB can validate an enum, and these are the only three audiences the
+ * club could name. The tiers are strictly nested — anyone who can see
+ * `members` can see `public` — which is what lets the feed builder take
+ * a single `visibility IN (...)` set rather than three branches.
+ *
+ *   - `public`   — the anonymous `/api/calendar/public.ics` feed.
+ *   - `members`  — any approved member. The default.
+ *   - `officers` — needs `events:read_private`. Never leaves the worker
+ *                  for anyone else, on either surface.
+ */
+export const eventVisibility = ["public", "members", "officers"] as const;
+export type EventVisibility = (typeof eventVisibility)[number];
+
+/**
+ * One club event — the base table every dated club thing hangs off.
+ *
+ * **This is a supertype, not a peer feature.** `/calendar` and both
+ * `.ics` feeds read *only* this table and never learn that trips or
+ * volunteer outings exist. Kind-specific columns live in satellite
+ * tables keyed on `event_id` (a future `trips` carrying leader,
+ * difficulty, capacity and cost; `volunteer_events` is intended to be
+ * restructured onto the same shape). That keeps the calendar's read a
+ * single indexed range scan, and it keeps the feature-boundary rule
+ * (`import/no-restricted-paths`) satisfiable — the calendar would
+ * otherwise have to import whichever features owned dated rows.
+ *
+ * **`starts_at` is an instant, and recurrence is calendar arithmetic.**
+ * The stored instant anchors the *first* occurrence; later occurrences
+ * are derived by converting to `CLUB_TIME_ZONE` and adding calendar
+ * units (see `recurrence.ts`). A weekly 18:00 meeting must stay at
+ * 18:00 local across the DST boundary, which adding `7 × 24h` to an
+ * epoch does not do — it drifts an hour every March and November.
+ *
+ * `all_day` marks rows whose start is a *calendar date*, stored as
+ * midnight in `CLUB_TIME_ZONE`. Readers must convert back in that zone;
+ * reading the raw instant in UTC lands on the previous day for half the
+ * year, and in the browser's zone it is a hydration mismatch besides.
+ *
+ * `ends_at` is nullable — a point-in-time event (a sign-up deadline)
+ * has no duration. Consumers that need one fall back to the club's
+ * default event length rather than storing a synthetic end.
+ *
+ * `sequence` is iCalendar's, not ours: RFC 5545 requires it to increase
+ * on every published revision of an event, and clients use it to decide
+ * whether an incoming `VEVENT` supersedes the copy they hold. A stale
+ * `sequence` means edits silently never appear in anyone's calendar, so
+ * every update path bumps it. `public_id` is the other half of that
+ * contract — the emitted `UID` derives from it and must be stable for
+ * the life of the row, or clients duplicate the event on every poll.
+ *
+ * `canceled_at` rather than a DELETE for a series an officer calls off:
+ * a cancelled event still has to be *published* as cancelled
+ * (`STATUS:CANCELLED`) so subscribers' copies disappear. A deleted row
+ * simply stops being emitted, which most clients interpret as "no
+ * change" and leave on the calendar forever.
+ */
+export const events = sqliteTable(
+  "events",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    title: text("title").notNull(),
+    description: text("description"),
+    location: text("location"),
+    startsAt: timestamp("starts_at").notNull(),
+    endsAt: timestamp("ends_at"),
+    allDay: integer("all_day", { mode: "boolean" }).notNull().default(false),
+    kind: text("kind", { enum: eventKind }).notNull(),
+    visibility: text("visibility", { enum: eventVisibility })
+      .notNull()
+      .default("members"),
+    /**
+     * RFC 5545 RRULE, restricted to the subset `eventRecurrenceSchema`
+     * validates (FREQ=WEEKLY|MONTHLY, BYDAY, INTERVAL, UNTIL|COUNT).
+     * NULL means a single occurrence. Stored as the wire string rather
+     * than exploded columns because it is emitted verbatim in the
+     * `.ics` — clients do their own expansion, and a round-trip through
+     * columns is a chance to disagree with them.
+     */
+    rrule: text("rrule"),
+    sequence: integer("sequence").notNull().default(0),
+    canceledAt: timestamp("canceled_at"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    // Snapshot of who created / last touched the row, SET NULL on
+    // delete so the row survives an officer's account removal.
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    // The calendar's only read shape: "events visible to this viewer,
+    // overlapping this window". Visibility leads because it is an
+    // equality/IN against a three-value column, so the index narrows to
+    // the viewer's tiers before the range scan on `starts_at`.
+    index("events_visibility_starts_at_idx").on(t.visibility, t.startsAt),
+    // Serves the officer management read and any kind-filtered feed.
+    index("events_starts_at_idx").on(t.startsAt),
+  ],
+);
+
+export type Event = typeof events.$inferSelect;
+
+/**
+ * A single occurrence of a recurring event that departs from its series
+ * — iCalendar's `EXDATE` and `RECURRENCE-ID` overrides in one table.
+ *
+ * `occurrence_start` is the occurrence's *original* start as the series
+ * generates it, and it is the identity of the exception: that is
+ * precisely what `RECURRENCE-ID` carries, so a moved occurrence keeps
+ * pointing at the slot it came from. Changing a series' `starts_at`
+ * therefore orphans its exceptions by design, and the update action
+ * clears them rather than silently re-pointing rows at slots the
+ * officer never looked at.
+ *
+ * `canceled` is the common case by a wide margin — "no meeting over
+ * spring break". The nullable override columns cover the rarer "this
+ * week we're meeting in the gym instead", and NULL means *inherit from
+ * the series* rather than "unset", so an officer who edits the series
+ * title later sees it flow through to every occurrence they only moved.
+ */
+export const eventExceptions = sqliteTable(
+  "event_exceptions",
+  {
+    id: text("id").primaryKey(),
+    eventId: text("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    occurrenceStart: timestamp("occurrence_start").notNull(),
+    canceled: integer("canceled", { mode: "boolean" }).notNull().default(false),
+    // NULL on each of these means "inherit from the series".
+    title: text("title"),
+    description: text("description"),
+    location: text("location"),
+    startsAt: timestamp("starts_at"),
+    endsAt: timestamp("ends_at"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    // One exception per slot. Also the lookup index: every expansion
+    // loads a series' exceptions by `event_id`.
+    uniqueIndex("event_exceptions_event_occurrence_unique").on(
+      t.eventId,
+      t.occurrenceStart,
+    ),
+  ],
+);
+
+export type EventException = typeof eventExceptions.$inferSelect;
+
+/**
+ * A member's subscription token for their personal `.ics` feed.
+ *
+ * **Its own table rather than a column on `users`**, for four reasons
+ * that all showed up when the alternative was written out: rotation
+ * without destroying the history of what was rotated and when; one
+ * labelled token per device, so "revoke my old phone" is possible;
+ * `last_fetched_at` to answer "is Google actually polling this?" when a
+ * member reports a stale calendar; and revocation as a timestamp the
+ * audit log can point at rather than an overwritten value.
+ *
+ * **`token` is a bearer credential.** It ends up in plaintext in
+ * Google's fetchers, in Apple's, and in the member's calendar app
+ * config — so it is a `uuidv7` minted for this purpose alone, never the
+ * session cookie and never `users.public_id`. The feed route resolves
+ * it to a user and then computes visibility from that user's *current*
+ * permissions, so a revoked officer role takes effect on the next poll
+ * rather than being baked in at subscribe time.
+ *
+ * Revocation is `revoked_at`, not a DELETE: a leaked token must stay
+ * un-reissuable, and keeping the row is what guarantees the UNIQUE
+ * index can never hand the same string out twice.
+ */
+export const calendarSubscriptions = sqliteTable(
+  "calendar_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    /** Member-supplied, e.g. "iPhone". NULL until they name it. */
+    label: text("label"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    lastFetchedAt: timestamp("last_fetched_at"),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (t) => [index("calendar_subscriptions_user_idx").on(t.userId)],
+);
+
+export type CalendarSubscription = typeof calendarSubscriptions.$inferSelect;

@@ -62,6 +62,14 @@ In light they happen to hold the same value. **That is a coincidence of
 this palette, not a constraint** — don't collapse them back into one
 token because they currently match.
 
+### The active nav item has its own foreground token
+
+`data-[status=active]` on a sidebar link (TanStack Router sets it) paints `--primary/15` behind **`--sidebar-active-foreground`**, not `text-primary`. The brand green on its own 15% tint measures **3.76:1** against AA's 4.5:1 — a real failure on every signed-in page's active nav item, and it went unmeasured for a long time because `a11y.spec.ts` covers public routes and no public route had a sidebar entry of its own until `/calendar` became public.
+
+Darkening `--primary` instead was rejected: it has ~33 `text-primary` call sites and a deliberate dark-mode inversion (above), so the fix would have rippled through both. The token tracks `--primary` in dark mode, where the contrast problem runs the other way.
+
+**If you add a public route with a sidebar entry, this is the pairing that gets measured.**
+
 ### The focus ring carries contrast on its full-opacity edge
 
 `--ring` is the brand green (mint in dark), not a neutral: SC 1.4.11

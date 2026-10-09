@@ -388,11 +388,28 @@ export const SETTINGS = {
   "pages.calendar": z.boolean().default(true).register(registry, {
     label: "Calendar enabled",
     description:
-      "When off, the Calendar “coming soon” sidebar entry is hidden. Calendar has no route yet.",
+      "When off, the Calendar sidebar entry is hidden and the /calendar route returns notFound for everyone. Does NOT stop the subscribable .ics feeds — those have their own switch, because switching a page off and breaking every member’s phone calendar are different acts.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+  }),
+  // Deliberately NOT folded into `pages.calendar`. Switching off a page
+  // and silently breaking every member's phone calendar are different
+  // acts with different blast radii: a page can be switched back on in
+  // a second, whereas a feed that 404s for a day teaches some clients
+  // to back off their polling, and teaches members to delete the
+  // subscription. Either flag may legitimately be wanted without the
+  // other — a feed kept alive while the page is reworked, or feeds
+  // pulled during an incident while the page keeps serving.
+  "calendar.feed_enabled": z.boolean().default(true).register(registry, {
+    label: "Calendar feeds enabled",
+    description:
+      "When off, the subscribable .ics calendar feeds stop serving and members\u2019 calendar apps will show the club calendar as empty. The /calendar page is unaffected \u2014 that has its own switch.",
+    category: "pages",
+    flagKind: "ops",
+    owner: "system_admin",
+    createdAt: "2026-10-08",
   }),
   "pages.forum": z.boolean().default(true).register(registry, {
     label: "Forum enabled",
@@ -690,6 +707,16 @@ export const SETTINGS = {
     flagKind: "release",
     owner: "system_admin",
     createdAt: "2026-08-21",
+    parent: "my",
+  }),
+  "pages.my_calendar": z.boolean().default(true).register(registry, {
+    label: "My Account \u00b7 Calendar tab enabled",
+    description:
+      "When off, the Calendar tab is hidden and /my/calendar returns notFound, so members cannot mint or revoke calendar subscription links. Existing subscriptions keep working \u2014 the feeds have their own switch (calendar.feed_enabled).",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-08",
     parent: "my",
   }),
   "pages.my_gear": z.boolean().default(true).register(registry, {

@@ -158,6 +158,22 @@
         "namespace_id": "3001",
         "simple": { "limit": 5, "period": 60 },
       },
+      // Calendar feeds are unauthenticated-by-design and publicly
+      // reachable, so they get their own budget rather than sharing
+      // one with a signed-in surface. Keyed by token (and by IP for
+      // the public feed), which is the only identity the request has.
+      //
+      // 60/60s is deliberately loose for a poll-driven endpoint: a
+      // member may subscribe to several kind-filtered feeds from two
+      // devices, and Google re-fetches on its own schedule. The limit
+      // exists to stop a scraper walking token space, not to ration
+      // legitimate polling.
+      {
+        "name": "CALENDAR_RATE_LIMITER",
+        "type": "ratelimit",
+        "namespace_id": "4001",
+        "simple": { "limit": 60, "period": 60 },
+      },
     ],
   },
   "env": {
@@ -217,6 +233,12 @@
             "type": "ratelimit",
             "namespace_id": "3002",
             "simple": { "limit": 5, "period": 60 },
+          },
+          {
+            "name": "CALENDAR_RATE_LIMITER",
+            "type": "ratelimit",
+            "namespace_id": "4002",
+            "simple": { "limit": 60, "period": 60 },
           },
         ],
       },

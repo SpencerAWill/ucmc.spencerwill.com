@@ -36,6 +36,7 @@ import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as ConstitutionRouteImport } from './routes/constitution'
+import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AlbumRouteImport } from './routes/album'
@@ -46,6 +47,7 @@ import { Route as MyIndexRouteImport } from './routes/my.index'
 import { Route as GearIndexRouteImport } from './routes/gear.index'
 import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
+import { Route as CalendarIndexRouteImport } from './routes/calendar.index'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as MyGearRouteImport } from './routes/my.gear'
@@ -56,6 +58,7 @@ import { Route as MembersPublicIdRouteImport } from './routes/members.$publicId'
 import { Route as GearPublicIdRouteImport } from './routes/gear.$publicId'
 import { Route as GazettePublicIdRouteImport } from './routes/gazette.$publicId'
 import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
+import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as MyGearIndexRouteImport } from './routes/my.gear.index'
 import { Route as MembersTabsIndexRouteImport } from './routes/members._tabs.index'
@@ -67,6 +70,7 @@ import { Route as MyTabsProfileRouteImport } from './routes/my._tabs.profile'
 import { Route as MyTabsPreferencesRouteImport } from './routes/my._tabs.preferences'
 import { Route as MyTabsDetailsRouteImport } from './routes/my._tabs.details'
 import { Route as MyTabsContactsRouteImport } from './routes/my._tabs.contacts'
+import { Route as MyTabsCalendarRouteImport } from './routes/my._tabs.calendar'
 import { Route as MembersTabsUnclaimedRouteImport } from './routes/members._tabs.unclaimed'
 import { Route as MembersTabsRejectedRouteImport } from './routes/members._tabs.rejected'
 import { Route as MembersTabsPendingRouteImport } from './routes/members._tabs.pending'
@@ -78,6 +82,7 @@ import { Route as ApiSponsorLogoSplatRouteImport } from './routes/api/sponsor-lo
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf.$'
+import { Route as ApiCalendarSplatRouteImport } from './routes/api/calendar.$'
 import { Route as ApiAvatarsSplatRouteImport } from './routes/api/avatars.$'
 import { Route as ApiAlbumImageSplatRouteImport } from './routes/api/album-image.$'
 import { Route as ApiAccountExportRouteImport } from './routes/api/account.export'
@@ -217,6 +222,11 @@ const ConstitutionRoute = ConstitutionRouteImport.update({
   path: '/constitution',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CalendarRoute = CalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuditRoute = AuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -267,6 +277,11 @@ const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
   path: '/',
   getParentRoute: () => FeedbackRoute,
 } as any)
+const CalendarIndexRoute = CalendarIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CalendarRoute,
+} as any)
 const RegisterProfileRoute = RegisterProfileRouteImport.update({
   id: '/register/profile',
   path: '/register/profile',
@@ -313,6 +328,11 @@ const GazettePublicIdRoute = GazettePublicIdRouteImport.update({
 const FeedbackTabsRoute = FeedbackTabsRouteImport.update({
   id: '/_tabs',
   getParentRoute: () => FeedbackRoute,
+} as any)
+const CalendarPublicIdRoute = CalendarPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => CalendarRoute,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
@@ -367,6 +387,11 @@ const MyTabsDetailsRoute = MyTabsDetailsRouteImport.update({
 const MyTabsContactsRoute = MyTabsContactsRouteImport.update({
   id: '/contacts',
   path: '/contacts',
+  getParentRoute: () => MyTabsRoute,
+} as any)
+const MyTabsCalendarRoute = MyTabsCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
   getParentRoute: () => MyTabsRoute,
 } as any)
 const MembersTabsUnclaimedRoute = MembersTabsUnclaimedRouteImport.update({
@@ -424,6 +449,11 @@ const ApiGazettePdfSplatRoute = ApiGazettePdfSplatRouteImport.update({
   path: '/api/gazette-pdf/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCalendarSplatRoute = ApiCalendarSplatRouteImport.update({
+  id: '/api/calendar/$',
+  path: '/api/calendar/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAvatarsSplatRoute = ApiAvatarsSplatRouteImport.update({
   id: '/api/avatars/$',
   path: '/api/avatars/$',
@@ -447,6 +477,7 @@ export interface FileRoutesByFullPath {
   '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/calendar': typeof CalendarRouteWithChildren
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -475,6 +506,7 @@ export interface FileRoutesByFullPath {
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -482,6 +514,7 @@ export interface FileRoutesByFullPath {
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/calendar/': typeof CalendarIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
@@ -489,6 +522,7 @@ export interface FileRoutesByFullPath {
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/calendar/$': typeof ApiCalendarSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -500,6 +534,7 @@ export interface FileRoutesByFullPath {
   '/members/pending': typeof MembersTabsPendingRoute
   '/members/rejected': typeof MembersTabsRejectedRoute
   '/members/unclaimed': typeof MembersTabsUnclaimedRoute
+  '/my/calendar': typeof MyTabsCalendarRoute
   '/my/contacts': typeof MyTabsContactsRoute
   '/my/details': typeof MyTabsDetailsRoute
   '/my/preferences': typeof MyTabsPreferencesRoute
@@ -542,6 +577,7 @@ export interface FileRoutesByTo {
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/feedback': typeof FeedbackIndexRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
@@ -550,11 +586,13 @@ export interface FileRoutesByTo {
   '/my': typeof MyIndexRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/calendar': typeof CalendarIndexRoute
   '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/calendar/$': typeof ApiCalendarSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -566,6 +604,7 @@ export interface FileRoutesByTo {
   '/members/pending': typeof MembersTabsPendingRoute
   '/members/rejected': typeof MembersTabsRejectedRoute
   '/members/unclaimed': typeof MembersTabsUnclaimedRoute
+  '/my/calendar': typeof MyTabsCalendarRoute
   '/my/contacts': typeof MyTabsContactsRoute
   '/my/details': typeof MyTabsDetailsRoute
   '/my/preferences': typeof MyTabsPreferencesRoute
@@ -584,6 +623,7 @@ export interface FileRoutesById {
   '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/calendar': typeof CalendarRouteWithChildren
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -612,6 +652,7 @@ export interface FileRoutesById {
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
@@ -622,6 +663,7 @@ export interface FileRoutesById {
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/calendar/': typeof CalendarIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
@@ -629,6 +671,7 @@ export interface FileRoutesById {
   '/api/account/export': typeof ApiAccountExportRoute
   '/api/album-image/$': typeof ApiAlbumImageSplatRoute
   '/api/avatars/$': typeof ApiAvatarsSplatRoute
+  '/api/calendar/$': typeof ApiCalendarSplatRoute
   '/api/gazette-pdf/$': typeof ApiGazettePdfSplatRoute
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
@@ -640,6 +683,7 @@ export interface FileRoutesById {
   '/members/_tabs/pending': typeof MembersTabsPendingRoute
   '/members/_tabs/rejected': typeof MembersTabsRejectedRoute
   '/members/_tabs/unclaimed': typeof MembersTabsUnclaimedRoute
+  '/my/_tabs/calendar': typeof MyTabsCalendarRoute
   '/my/_tabs/contacts': typeof MyTabsContactsRoute
   '/my/_tabs/details': typeof MyTabsDetailsRoute
   '/my/_tabs/preferences': typeof MyTabsPreferencesRoute
@@ -660,6 +704,7 @@ export interface FileRouteTypes {
     | '/album'
     | '/anti-hazing'
     | '/audit'
+    | '/calendar'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
@@ -688,6 +733,7 @@ export interface FileRouteTypes {
     | '/volunteer'
     | '/waiver'
     | '/auth/callback'
+    | '/calendar/$publicId'
     | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
@@ -695,6 +741,7 @@ export interface FileRouteTypes {
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
+    | '/calendar/'
     | '/feedback/'
     | '/gazette/'
     | '/gear/'
@@ -702,6 +749,7 @@ export interface FileRouteTypes {
     | '/api/account/export'
     | '/api/album-image/$'
     | '/api/avatars/$'
+    | '/api/calendar/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -713,6 +761,7 @@ export interface FileRouteTypes {
     | '/members/pending'
     | '/members/rejected'
     | '/members/unclaimed'
+    | '/my/calendar'
     | '/my/contacts'
     | '/my/details'
     | '/my/preferences'
@@ -755,6 +804,7 @@ export interface FileRouteTypes {
     | '/volunteer'
     | '/waiver'
     | '/auth/callback'
+    | '/calendar/$publicId'
     | '/feedback'
     | '/gazette/$publicId'
     | '/gear/$publicId'
@@ -763,11 +813,13 @@ export interface FileRouteTypes {
     | '/my'
     | '/register/pending'
     | '/register/profile'
+    | '/calendar'
     | '/gazette'
     | '/gear'
     | '/api/account/export'
     | '/api/album-image/$'
     | '/api/avatars/$'
+    | '/api/calendar/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -779,6 +831,7 @@ export interface FileRouteTypes {
     | '/members/pending'
     | '/members/rejected'
     | '/members/unclaimed'
+    | '/my/calendar'
     | '/my/contacts'
     | '/my/details'
     | '/my/preferences'
@@ -796,6 +849,7 @@ export interface FileRouteTypes {
     | '/album'
     | '/anti-hazing'
     | '/audit'
+    | '/calendar'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
@@ -824,6 +878,7 @@ export interface FileRouteTypes {
     | '/volunteer'
     | '/waiver'
     | '/auth/callback'
+    | '/calendar/$publicId'
     | '/feedback/_tabs'
     | '/gazette/$publicId'
     | '/gear/$publicId'
@@ -834,6 +889,7 @@ export interface FileRouteTypes {
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
+    | '/calendar/'
     | '/feedback/'
     | '/gazette/'
     | '/gear/'
@@ -841,6 +897,7 @@ export interface FileRouteTypes {
     | '/api/account/export'
     | '/api/album-image/$'
     | '/api/avatars/$'
+    | '/api/calendar/$'
     | '/api/gazette-pdf/$'
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
@@ -852,6 +909,7 @@ export interface FileRouteTypes {
     | '/members/_tabs/pending'
     | '/members/_tabs/rejected'
     | '/members/_tabs/unclaimed'
+    | '/my/_tabs/calendar'
     | '/my/_tabs/contacts'
     | '/my/_tabs/details'
     | '/my/_tabs/preferences'
@@ -871,6 +929,7 @@ export interface RootRouteChildren {
   AlbumRoute: typeof AlbumRoute
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
+  CalendarRoute: typeof CalendarRouteWithChildren
   ConstitutionRoute: typeof ConstitutionRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
@@ -904,6 +963,7 @@ export interface RootRouteChildren {
   ApiAccountExportRoute: typeof ApiAccountExportRoute
   ApiAlbumImageSplatRoute: typeof ApiAlbumImageSplatRoute
   ApiAvatarsSplatRoute: typeof ApiAvatarsSplatRoute
+  ApiCalendarSplatRoute: typeof ApiCalendarSplatRoute
   ApiGazettePdfSplatRoute: typeof ApiGazettePdfSplatRoute
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
@@ -1101,6 +1161,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConstitutionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/calendar': {
+      id: '/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/audit': {
       id: '/audit'
       path: '/audit'
@@ -1171,6 +1238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackIndexRouteImport
       parentRoute: typeof FeedbackRoute
     }
+    '/calendar/': {
+      id: '/calendar/'
+      path: '/'
+      fullPath: '/calendar/'
+      preLoaderRoute: typeof CalendarIndexRouteImport
+      parentRoute: typeof CalendarRoute
+    }
     '/register/profile': {
       id: '/register/profile'
       path: '/register/profile'
@@ -1240,6 +1314,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/feedback'
       preLoaderRoute: typeof FeedbackTabsRouteImport
       parentRoute: typeof FeedbackRoute
+    }
+    '/calendar/$publicId': {
+      id: '/calendar/$publicId'
+      path: '/$publicId'
+      fullPath: '/calendar/$publicId'
+      preLoaderRoute: typeof CalendarPublicIdRouteImport
+      parentRoute: typeof CalendarRoute
     }
     '/auth/callback': {
       id: '/auth/callback'
@@ -1316,6 +1397,13 @@ declare module '@tanstack/react-router' {
       path: '/contacts'
       fullPath: '/my/contacts'
       preLoaderRoute: typeof MyTabsContactsRouteImport
+      parentRoute: typeof MyTabsRoute
+    }
+    '/my/_tabs/calendar': {
+      id: '/my/_tabs/calendar'
+      path: '/calendar'
+      fullPath: '/my/calendar'
+      preLoaderRoute: typeof MyTabsCalendarRouteImport
       parentRoute: typeof MyTabsRoute
     }
     '/members/_tabs/unclaimed': {
@@ -1395,6 +1483,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGazettePdfSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/calendar/$': {
+      id: '/api/calendar/$'
+      path: '/api/calendar/$'
+      fullPath: '/api/calendar/$'
+      preLoaderRoute: typeof ApiCalendarSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/avatars/$': {
       id: '/api/avatars/$'
       path: '/api/avatars/$'
@@ -1418,6 +1513,20 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface CalendarRouteChildren {
+  CalendarPublicIdRoute: typeof CalendarPublicIdRoute
+  CalendarIndexRoute: typeof CalendarIndexRoute
+}
+
+const CalendarRouteChildren: CalendarRouteChildren = {
+  CalendarPublicIdRoute: CalendarPublicIdRoute,
+  CalendarIndexRoute: CalendarIndexRoute,
+}
+
+const CalendarRouteWithChildren = CalendarRoute._addFileChildren(
+  CalendarRouteChildren,
+)
 
 interface FeedbackTabsRouteChildren {
   FeedbackTabsClubRoute: typeof FeedbackTabsClubRoute
@@ -1512,6 +1621,7 @@ const MembersRouteWithChildren =
   MembersRoute._addFileChildren(MembersRouteChildren)
 
 interface MyTabsRouteChildren {
+  MyTabsCalendarRoute: typeof MyTabsCalendarRoute
   MyTabsContactsRoute: typeof MyTabsContactsRoute
   MyTabsDetailsRoute: typeof MyTabsDetailsRoute
   MyTabsPreferencesRoute: typeof MyTabsPreferencesRoute
@@ -1521,6 +1631,7 @@ interface MyTabsRouteChildren {
 }
 
 const MyTabsRouteChildren: MyTabsRouteChildren = {
+  MyTabsCalendarRoute: MyTabsCalendarRoute,
   MyTabsContactsRoute: MyTabsContactsRoute,
   MyTabsDetailsRoute: MyTabsDetailsRoute,
   MyTabsPreferencesRoute: MyTabsPreferencesRoute,
@@ -1566,6 +1677,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlbumRoute: AlbumRoute,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
+  CalendarRoute: CalendarRouteWithChildren,
   ConstitutionRoute: ConstitutionRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,
@@ -1599,6 +1711,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAccountExportRoute: ApiAccountExportRoute,
   ApiAlbumImageSplatRoute: ApiAlbumImageSplatRoute,
   ApiAvatarsSplatRoute: ApiAvatarsSplatRoute,
+  ApiCalendarSplatRoute: ApiCalendarSplatRoute,
   ApiGazettePdfSplatRoute: ApiGazettePdfSplatRoute,
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,

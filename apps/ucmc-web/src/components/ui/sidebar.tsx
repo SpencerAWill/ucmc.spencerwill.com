@@ -493,7 +493,14 @@ const sidebarMenuButtonVariants = cva(
   // Tinted with `--primary` (the brand green) rather than
   // `sidebar-accent` (a neutral) so the active item reads at a
   // glance.
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[status=active]:bg-primary/15 data-[status=active]:font-medium data-[status=active]:text-primary data-[status=active]:hover:bg-primary/20 data-[status=active]:hover:text-primary data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  //
+  // **The TEXT is `--sidebar-active-foreground`, not `--primary`.**
+  // The brand green on its own 15% tint measures 3.76:1, under AA's
+  // 4.5:1 — a real failure on every signed-in page's active nav item
+  // that went unmeasured until a public route finally had a sidebar
+  // entry for `a11y.spec.ts` to look at. See `styles.css` for why it is
+  // a separate token rather than a darker `--primary`.
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[status=active]:bg-primary/15 data-[status=active]:font-medium data-[status=active]:text-sidebar-active-foreground data-[status=active]:hover:bg-primary/20 data-[status=active]:hover:text-sidebar-active-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -710,7 +717,7 @@ function SidebarMenuSubButton({
         // Mirror the parent menu-button: TanStack Router's `<Link>`
         // emits `data-status="active"` so sub-items tint with the
         // brand green when on a matching child route.
-        "data-[status=active]:bg-primary/15 data-[status=active]:font-medium data-[status=active]:text-primary data-[status=active]:hover:bg-primary/20 data-[status=active]:hover:text-primary",
+        "data-[status=active]:bg-primary/15 data-[status=active]:font-medium data-[status=active]:text-sidebar-active-foreground data-[status=active]:hover:bg-primary/20 data-[status=active]:hover:text-sidebar-active-foreground",
         size === "sm" && "text-xs",
         size === "md" && "text-sm",
         "group-data-[collapsible=icon]:hidden",

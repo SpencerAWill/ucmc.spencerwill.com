@@ -29,6 +29,7 @@ const ROUTES_UNDER_TEST = [
   "/terms",
   "/about",
   "/membership",
+  "/calendar",
   "/open-source",
 ] as const;
 

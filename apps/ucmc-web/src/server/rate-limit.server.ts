@@ -158,3 +158,29 @@ export async function checkClubFeedbackRateLimit(
     return true;
   }
 }
+
+/**
+ * Gate a calendar feed fetch.
+ *
+ * Keyed by the subscription token, or by IP for the public feed —
+ * those are the only identities an unauthenticated poll carries. This
+ * is the one rate-limited surface with no session at all, which is
+ * precisely why it has its own budget rather than sharing one with a
+ * signed-in endpoint: a scraper walking token space must not be able to
+ * exhaust anything a member needs.
+ *
+ * Fails open on binding error, like every other limiter here.
+ */
+export async function checkCalendarFeedRateLimit(
+  key: string,
+): Promise<boolean> {
+  if (isBypassed()) {
+    return true;
+  }
+  try {
+    const { success } = await env.CALENDAR_RATE_LIMITER.limit({ key });
+    return success;
+  } catch {
+    return true;
+  }
+}

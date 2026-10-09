@@ -246,6 +246,8 @@ export function SidebarNav() {
   const canViewResources =
     hasPermission("public_resources:view") && pages.resources;
   const canViewGazette = hasPermission("public_gazette:view") && pages.gazette;
+  const canViewCalendar =
+    hasPermission("public_calendar:view") && pages.calendar;
   const canViewAlbum = hasPermission("public_album:view") && pages.album;
 
   // Waivers is the Members entry's only sub-item, so `canSeeWaivers`
@@ -360,25 +362,28 @@ export function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
+          {/* The calendar is a public-facing page: an anonymous
+           * visitor sees the events marked public, which is the same
+           * set the anonymous .ics feed serves them. So the entry gates
+           * exactly like its neighbours here — permission plus the
+           * page's own flag — and the `isApproved` special case it
+           * carried while the route was member-only is gone. */}
+          {canViewCalendar ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Calendar">
+                <Link to="/calendar">
+                  <CalendarDays />
+                  <span>Calendar</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarGroup>
 
       {isApproved ? (
         <SidebarGroup>
           <SidebarMenu>
-            {pages.calendar ? (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  aria-disabled
-                  tabIndex={-1}
-                  tooltip="Calendar (coming soon)"
-                >
-                  <CalendarDays />
-                  <span>Calendar</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ) : null}
-
             {pages.forum ? (
               <SidebarMenuItem>
                 <SidebarMenuButton
