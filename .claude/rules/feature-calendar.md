@@ -105,6 +105,23 @@ The unit suites cover the pure layers — recurrence, occurrence building, the s
 
 Title assertions in the authoring spec take `.first()`: a recurring series renders one agenda row per occurrence.
 
+## A known transient from router preloading
+
+`defaultPreload: "intent"` means hovering a link starts its loader. Abandon that hover before the loader settles — move the mouse on, navigate away — and router-core 1.171.13 can log:
+
+```
+TypeError: Cannot read properties of undefined (reading '_nonReactive')
+  at loadRouteMatch (load-matches.js:488)
+```
+
+`loadRouteMatch` does `const match = inner.router.getMatch(matchId)` and dereferences it one line later with no guard; `getMatch` returns `undefined` once the match has been evicted, which is exactly what cancelling a preload does. **It is an unguarded access in the library, not in our routes.**
+
+The calendar makes it reachable rather than causing it: `/calendar` and `/calendar/$publicId` both have loaders that `await ensureQueryData`, so their preloads are genuinely async and can be interrupted. A route with no loader resolves synchronously and never opens the window.
+
+Nothing user-visible happens — the preload was being discarded anyway — so **do not contort route code around it**, and do not write an e2e test for it: a deterministic test cannot reliably hit a cancellation race, and the attempts were flaky in both directions.
+
+The click-through it would have covered is already covered: `calendar-authoring.spec.ts`'s series-edit test clicks an agenda row and reaches the detail sheet. Note that the agenda can be thousands of pixels tall on a local database that has accumulated e2e runs, so anything clicking a row there needs a generous timeout — Playwright is waiting on a scroll, not on the router.
+
 ## Not done yet
 
 - **`meeting.day_time` now has a structured twin** and the two can disagree. Deriving the landing block from a recurring meeting event would mean `landing → events`, which the boundary rule forbids without hoisting.
