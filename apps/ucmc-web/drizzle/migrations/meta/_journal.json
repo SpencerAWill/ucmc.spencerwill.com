@@ -540,6 +540,13 @@
       "when": 1779477596953,
       "tag": "0076_public_calendar_view",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1779477596954,
+      "tag": "0077_member_profile_identity",
+      "breakpoints": true
     }
   ]
 }
