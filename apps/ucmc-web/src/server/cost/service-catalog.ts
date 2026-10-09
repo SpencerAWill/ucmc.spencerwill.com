@@ -188,9 +188,18 @@ export type CostServiceName = keyof typeof COST_SERVICES;
  * reading anybody needs to see.
  */
 export function headroomFraction(
-  service: CostServiceName,
+  service: string,
   quantity: number,
 ): number | null {
-  const { freeLimit } = COST_SERVICES[service];
-  return freeLimit === null ? null : quantity / freeLimit;
+  // Takes `string`, not `CostServiceName`, on purpose: rows come back
+  // from D1 as strings, and a signature narrower than the data forces a
+  // cast at the one call site that matters. An unrecognised service —
+  // a vendor adding a line item we have not catalogued — answers null,
+  // which renders as "no limit known" rather than as 0% used.
+  const meta = COST_SERVICES[service as CostServiceName] as
+    ServiceMeta | undefined;
+  if (meta === undefined || meta.freeLimit === null) {
+    return null;
+  }
+  return quantity / meta.freeLimit;
 }
