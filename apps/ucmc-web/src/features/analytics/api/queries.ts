@@ -2,12 +2,14 @@ import {
   activityAnalyticsQueryKey,
   complianceAnalyticsQueryKey,
   gearAnalyticsQueryKey,
+  membershipAnalyticsQueryKey,
   platformAnalyticsQueryKey,
 } from "#/features/analytics/api/query-keys";
 import {
   activityAnalyticsFn,
   complianceAnalyticsFn,
   gearAnalyticsFn,
+  membershipAnalyticsFn,
   platformAnalyticsFn,
 } from "#/features/analytics/server/analytics-fns";
 
@@ -45,5 +47,13 @@ export function activityAnalyticsQueryOptions(season: string | null) {
   return {
     queryKey: activityAnalyticsQueryKey(season),
     queryFn: () => activityAnalyticsFn({ data: season ? { season } : {} }),
+  } as const;
+}
+
+/** The status funnel, joins on the season axis, retention and tenure. */
+export function membershipAnalyticsQueryOptions(season: string | null) {
+  return {
+    queryKey: membershipAnalyticsQueryKey(season),
+    queryFn: () => membershipAnalyticsFn({ data: season ? { season } : {} }),
   } as const;
 }

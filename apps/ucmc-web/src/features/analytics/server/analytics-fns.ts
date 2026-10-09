@@ -64,3 +64,11 @@ export const activityAnalyticsFn = createServerFn({ method: "GET" })
       await import("#/features/analytics/server/activity-actions.server");
     return activityAnalyticsAction(data);
   });
+
+export const membershipAnalyticsFn = createServerFn({ method: "GET" })
+  .validator(z.object({ season: seasonSchema.optional() }))
+  .handler(async ({ data }) => {
+    const { membershipAnalyticsAction } =
+      await import("#/features/analytics/server/membership-actions.server");
+    return membershipAnalyticsAction(data);
+  });
