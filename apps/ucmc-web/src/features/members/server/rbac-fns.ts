@@ -148,8 +148,12 @@ export const setUserRolesFn = createServerFn({ method: "POST" })
  * Each id becomes a bound parameter in an `IN (...)` plus a row in a
  * multi-row insert, so an uncapped array turns an opaque D1 limit
  * error into the user-visible failure mode.
+ *
+ * Held at 100 to match `D1_MAX_BOUND_PARAMS`, for the same reason as
+ * `BULK_ATTEST_MAX`: the validation read is chunked, so this bounds one
+ * operator action rather than guarding the storage limit.
  */
-export const ROLE_MEMBERS_DIFF_MAX = 200;
+export const ROLE_MEMBERS_DIFF_MAX = 100;
 
 export const setRoleMembersFn = createServerFn({ method: "POST" })
   .validator(

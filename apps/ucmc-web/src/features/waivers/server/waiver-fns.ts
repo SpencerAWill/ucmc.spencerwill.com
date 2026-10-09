@@ -26,8 +26,15 @@ export type {
  * so the officer queue UI can disable / chunk "select all" when the
  * pending list exceeds this — keeping the same number on both sides
  * means the UI never builds a request the server is going to reject.
+ *
+ * Held at 100 to match `D1_MAX_BOUND_PARAMS`. The read behind this
+ * endpoint is chunked (`selectInChunks`), so the cap is no longer load-
+ * bearing for correctness — but a request that fans out to several
+ * statements plus a multi-row insert is still one officer action, and
+ * keeping the ceiling at one statement's worth bounds the blast radius
+ * of a retry. Raising it is safe; lowering the chunk size is not.
  */
-export const BULK_ATTEST_MAX = 200;
+export const BULK_ATTEST_MAX = 100;
 const NOTES_MAX = 500;
 
 // Member-facing reads.
