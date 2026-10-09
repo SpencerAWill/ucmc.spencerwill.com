@@ -16,6 +16,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -2529,5 +2530,36 @@ export const emailSends = sqliteTable(
   (table) => [
     index("email_sends_sent_at_idx").on(table.sentAt),
     index("email_sends_kind_sent_at_idx").on(table.kind, table.sentAt),
+  ],
+);
+
+/**
+ * Daily cost and usage per service — see `0079_cost_snapshots.sql`.
+ *
+ * **Never swept.** Operational spend, not member data, and the reports
+ * feature wants it to live forever.
+ */
+export const costSnapshots = sqliteTable(
+  "cost_snapshots",
+  {
+    source: text("source").notNull(),
+    serviceFamily: text("service_family"),
+    serviceName: text("service_name").notNull(),
+    /** Civil date `YYYY-MM-DD` in `CLUB_TIME_ZONE`, inclusive. */
+    periodStart: text("period_start").notNull(),
+    /** Civil date `YYYY-MM-DD`, EXCLUSIVE. */
+    periodEnd: text("period_end").notNull(),
+    /** Real usage, not the post-allowance billable quantity. */
+    quantity: real("quantity"),
+    unit: text("unit"),
+    costCents: integer("cost_cents"),
+    currency: text("currency"),
+    capturedAt: timestamp("captured_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.source, table.serviceName, table.periodStart],
+    }),
+    index("cost_snapshots_period_idx").on(table.periodStart),
   ],
 );
