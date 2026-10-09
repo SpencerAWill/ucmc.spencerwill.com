@@ -16,6 +16,7 @@
  * lie. See `.claude/rules/notifications.md`.
  */
 import { CLUB_TIME_ZONE } from "#/config/time";
+import { categoryForStage } from "#/features/gear/lib/loan-reminders";
 import type { LoanReminderStage } from "#/features/gear/lib/loan-reminders";
 import type { EmailMessage } from "#/server/email/resend";
 
@@ -74,6 +75,7 @@ export function gearReminderEmail(args: {
 
   if (args.stage === "due_soon") {
     return {
+      kind: categoryForStage(args.stage),
       to: args.to,
       subject:
         args.loans.length === 1
@@ -119,6 +121,11 @@ export function gearReminderEmail(args: {
         : "Please bring it back at the next cave hours.";
 
   return {
+    // Reuses `categoryForStage` rather than re-deriving the mapping:
+    // the rollup's buckets and the preference check must name the same
+    // category, or a report attributes volume to a category members
+    // were never asked about.
+    kind: categoryForStage(args.stage),
     to: args.to,
     // Every rung gets its own subject. The flagged one used to reuse the
     // plain overdue wording, so the escalation was invisible from the

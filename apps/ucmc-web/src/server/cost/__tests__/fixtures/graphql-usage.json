@@ -1,0 +1,173 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "workersInvocationsAdaptive": [
+            {
+              "dimensions": {
+                "date": "2026-09-14",
+                "scriptName": "worker-1"
+              },
+              "sum": {
+                "cpuTimeUs": 10279942,
+                "errors": 0,
+                "requests": 201,
+                "subrequests": 1
+              }
+            },
+            {
+              "dimensions": {
+                "date": "2026-09-13",
+                "scriptName": "worker-2"
+              },
+              "sum": {
+                "cpuTimeUs": 5608268,
+                "errors": 0,
+                "requests": 292,
+                "subrequests": 0
+              }
+            },
+            {
+              "dimensions": {
+                "date": "2026-09-13",
+                "scriptName": "worker-3"
+              },
+              "sum": {
+                "cpuTimeUs": 7580330,
+                "errors": 0,
+                "requests": 1561,
+                "subrequests": 0
+              }
+            },
+            {
+              "dimensions": {
+                "date": "2026-09-13",
+                "scriptName": "worker-1"
+              },
+              "sum": {
+                "cpuTimeUs": 6961974,
+                "errors": 0,
+                "requests": 84,
+                "subrequests": 1
+              }
+            },
+            {
+              "dimensions": {
+                "date": "2026-09-14",
+                "scriptName": "worker-3"
+              },
+              "sum": {
+                "cpuTimeUs": 4765257,
+                "errors": 0,
+                "requests": 695,
+                "subrequests": 0
+              }
+            },
+            {
+              "dimensions": {
+                "date": "2026-09-14",
+                "scriptName": "worker-2"
+              },
+              "sum": {
+                "cpuTimeUs": 4911928,
+                "errors": 0,
+                "requests": 308,
+                "subrequests": 1
+              }
+            }
+          ],
+          "d1AnalyticsAdaptiveGroups": [
+            {
+              "dimensions": {
+                "databaseId": "00000000-0000-0000-0000-000000000000",
+                "date": "2026-09-14"
+              },
+              "sum": {
+                "readQueries": 353,
+                "rowsRead": 585,
+                "rowsWritten": 0,
+                "writeQueries": 0
+              }
+            },
+            {
+              "dimensions": {
+                "databaseId": "00000000-0000-0000-0000-000000000001",
+                "date": "2026-09-14"
+              },
+              "sum": {
+                "readQueries": 1309,
+                "rowsRead": 16256,
+                "rowsWritten": 9,
+                "writeQueries": 9
+              }
+            },
+            {
+              "dimensions": {
+                "databaseId": "00000000-0000-0000-0000-000000000001",
+                "date": "2026-09-13"
+              },
+              "sum": {
+                "readQueries": 1041,
+                "rowsRead": 5400,
+                "rowsWritten": 0,
+                "writeQueries": 0
+              }
+            },
+            {
+              "dimensions": {
+                "databaseId": "00000000-0000-0000-0000-000000000000",
+                "date": "2026-09-13"
+              },
+              "sum": {
+                "readQueries": 117,
+                "rowsRead": 598,
+                "rowsWritten": 0,
+                "writeQueries": 0
+              }
+            }
+          ],
+          "kvOperationsAdaptiveGroups": [
+            {
+              "dimensions": {
+                "actionType": "read",
+                "date": "2026-09-14"
+              },
+              "sum": {
+                "requests": 452
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "write",
+                "date": "2026-09-14"
+              },
+              "sum": {
+                "requests": 33
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "read",
+                "date": "2026-09-13"
+              },
+              "sum": {
+                "requests": 379
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "write",
+                "date": "2026-09-13"
+              },
+              "sum": {
+                "requests": 72
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

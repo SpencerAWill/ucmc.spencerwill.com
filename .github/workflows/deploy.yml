@@ -149,6 +149,7 @@ jobs:
             echo "resend_from_name=$(pulumi stack output resendFromName)"
             echo "turnstile_site_key=$(pulumi stack output turnstileSiteKey)"
             echo "r2_public_host=$(pulumi stack output r2PublicHost)"
+            echo "cloudflare_account_id=$(pulumi stack output cloudflareAccountId)"
           } >> "$GITHUB_OUTPUT"
           # Secret outputs: masked in job logs, used only as env vars for
           # the deploy step. `--show-secrets` is required to get plaintext.
@@ -209,6 +210,7 @@ jobs:
             RESEND_API_KEY
             TURNSTILE_SECRET_KEY
             FEEDBACK_GITHUB_TOKEN
+            CLOUDFLARE_ACCOUNT_READ_TOKEN
             FEEDBACK_GITHUB_REPO
           command: >-
             deploy
@@ -217,11 +219,13 @@ jobs:
             --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthn_rp_name }}
             --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
             --var RESEND_FROM_NAME:${{ steps.pulumi.outputs.resend_from_name }}
+            --var CLOUDFLARE_ACCOUNT_ID:${{ steps.pulumi.outputs.cloudflare_account_id }}
         env:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
           TURNSTILE_SECRET_KEY: ${{ steps.pulumi.outputs.turnstile_secret_key }}
           FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
+          CLOUDFLARE_ACCOUNT_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCOUNT_READ_TOKEN }}
           FEEDBACK_GITHUB_REPO: ${{ vars.FEEDBACK_GITHUB_REPO }}
 
       # ── Post-deploy verification ──────────────────────────────────────
@@ -373,6 +377,7 @@ jobs:
             echo "resend_from_name=$(pulumi stack output resendFromName)"
             echo "turnstile_site_key=$(pulumi stack output turnstileSiteKey)"
             echo "r2_public_host=$(pulumi stack output r2PublicHost)"
+            echo "cloudflare_account_id=$(pulumi stack output cloudflareAccountId)"
           } >> "$GITHUB_OUTPUT"
           echo "::add-mask::$(pulumi stack output resendApiKey --show-secrets)"
           echo "resend_api_key=$(pulumi stack output resendApiKey --show-secrets)" >> "$GITHUB_OUTPUT"
@@ -436,6 +441,7 @@ jobs:
             RESEND_API_KEY
             TURNSTILE_SECRET_KEY
             FEEDBACK_GITHUB_TOKEN
+            CLOUDFLARE_ACCOUNT_READ_TOKEN
             FEEDBACK_GITHUB_REPO
           command: >-
             deploy --env production
@@ -444,11 +450,13 @@ jobs:
             --var WEBAUTHN_RP_NAME:${{ steps.pulumi.outputs.webauthn_rp_name }}
             --var RESEND_FROM:${{ steps.pulumi.outputs.resend_from }}
             --var RESEND_FROM_NAME:${{ steps.pulumi.outputs.resend_from_name }}
+            --var CLOUDFLARE_ACCOUNT_ID:${{ steps.pulumi.outputs.cloudflare_account_id }}
         env:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           RESEND_API_KEY: ${{ steps.pulumi.outputs.resend_api_key }}
           TURNSTILE_SECRET_KEY: ${{ steps.pulumi.outputs.turnstile_secret_key }}
           FEEDBACK_GITHUB_TOKEN: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
+          CLOUDFLARE_ACCOUNT_READ_TOKEN: ${{ secrets.CLOUDFLARE_ACCOUNT_READ_TOKEN }}
           FEEDBACK_GITHUB_REPO: ${{ vars.FEEDBACK_GITHUB_REPO }}
 
       # ── Post-deploy verification ──────────────────────────────────────

@@ -72,7 +72,8 @@ export default {
     // branch each, rather than every job firing on every tick.
     //
     // Schedules currently wired (must match wrangler.jsonc):
-    //   - "0 12 * * *"  → daily retention sweeps + gear reminders
+    //   - "0 12 * * *"  → daily retention sweeps + gear reminders +
+    //                     cost snapshot
     //                     (08:00 EDT / 07:00 EST — see
     //                     ./server/cron/daily-schedule)
     //   - "15 8 1 3 *"  → annual officer-archive snapshot (March 1)
@@ -112,19 +113,27 @@ export default {
       return;
     }
 
-    const [{ runRetentionSweeps }, { runGearLoanReminders }] =
-      await Promise.all([
-        import("./server/cron/retention.server"),
-        import("./server/cron/gear-reminders.server"),
-      ]);
+    const [
+      { runRetentionSweeps },
+      { runGearLoanReminders },
+      { runCostSnapshot },
+    ] = await Promise.all([
+      import("./server/cron/retention.server"),
+      import("./server/cron/gear-reminders.server"),
+      import("./server/cron/cost-snapshot.server"),
+    ]);
     ctx.waitUntil(
       runWithLogContext({ cron: event.cron }, async () => {
         // Independent: a failed sweep must not cost members their
         // reminders, and a provider outage must not stop the retention
         // promises on /privacy from being kept. `allSettled`, not `all`.
-        const [sweeps, reminders] = await Promise.allSettled([
+        const [sweeps, reminders, costs] = await Promise.allSettled([
           runRetentionSweeps(),
           runGearLoanReminders({ now: Temporal.Now.instant() }),
+          // Third independent task: a vendor API outage must not cost
+          // members their reminders, and nothing here may stop the
+          // retention promises on /privacy from being kept.
+          runCostSnapshot(),
         ]);
         if (sweeps.status === "rejected") {
           log.error("retention.sweeps_failed", {
@@ -134,6 +143,11 @@ export default {
         if (reminders.status === "rejected") {
           log.error("gear_reminders.run_failed", {
             error: errorMessage(reminders.reason),
+          });
+        }
+        if (costs.status === "rejected") {
+          log.error("cost.snapshot_failed", {
+            error: errorMessage(costs.reason),
           });
         }
       }),
