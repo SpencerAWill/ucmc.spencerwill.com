@@ -37,6 +37,14 @@ import { CLUB_TIME_ZONE } from "#/config/time";
  * End of the spring semester, give or take — the day a club year's
  * season is considered served. Stored 1-indexed to read like a
  * calendar, matching `CLUB_SEASON_START`.
+ *
+ * It coincides exactly with the Spring/Summer boundary in
+ * `#/config/club-season`, and is deliberately **not** derived from it.
+ * That one is a reporting bucket; this is the finish line of a member's
+ * profile ring. Wiring them together would mean a future change to how
+ * the club slices a season for reports silently moved every member's
+ * arc — two questions that happen to share an answer today, not one
+ * question asked twice.
  */
 export const SEASON_END_CUTOFF = { month: 5, day: 1 } as const;
 

@@ -64,7 +64,7 @@ Two layers, because they catch different things:
 
 ## Mutation testing
 
-`pnpm --filter ucmc-web test:mutation` (Stryker), and a weekly job in `quality.yml`. **A report, not a gate** — `thresholds.break` is `null`. Score when it landed: 100%, 76/76 mutants killed, in about 5 seconds. The list has grown since — seven modules, 317 mutants, 312 killed — so treat the figure as a reading rather than a constant, and **run it after adding a module to `mutate`**: that is where the surviving mutants that mean something show up.
+`pnpm --filter ucmc-web test:mutation` (Stryker), and a weekly job in `quality.yml`. **A report, not a gate** — `thresholds.break` is `null`. Score when it landed: 100%, 76/76 mutants killed, in about 5 seconds. The list has grown since — seven modules, 347 mutants, 339 killed — so treat the figure as a reading rather than a constant, and **run it after adding a module to `mutate`**: that is where the surviving mutants that mean something show up.
 
 It runs against **`vitest.mutation.config.ts`, a plain-Node project that exists only for this** and is deliberately absent from `vitest.config.ts`'s `projects` (the files are already covered by the `workers` project; listing it would run them twice per `pnpm test`). The `workers` pool boots workerd and applies every migration per file (78 and counting), which is unaffordable once per mutant, and `@cloudflare/vitest-plugin` compatibility with Stryker is unverified upstream.
 
