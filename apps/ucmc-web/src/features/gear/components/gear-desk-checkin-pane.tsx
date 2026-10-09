@@ -13,9 +13,13 @@ import {
 } from "#/components/ui/table";
 import { fetchGearByCode } from "#/features/gear/api/queries";
 import { useCheckinLoans } from "#/features/gear/api/use-checkin-loans";
-import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
+import { DeskScanControls } from "#/features/gear/components/desk-scan-controls";
 import { CheckinItemRow } from "#/features/gear/components/gear-desk-item-row";
 import { GearCodeSearchCombobox } from "#/features/gear/components/gear-code-search-combobox";
+import {
+  isForeignSymbology,
+  parseScanPayload,
+} from "#/features/gear/lib/scan-payload";
 import type {
   CheckinLoansResult,
   GearCondition,
@@ -48,11 +52,30 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
     });
   };
 
-  const handleScan = async (code: string) => {
+  const handleScan = async (raw: string) => {
+    const payload = parseScanPayload(raw);
+    if (!payload) {
+      toast.error("That didn't look like a gear label.");
+      return;
+    }
+    if (payload.kind === "cart") {
+      // A member's cart is pre-checkout intent; it says nothing about
+      // what they are handing back. Naming that beats a lookup failure
+      // on a 46-character token.
+      toast.error("That's a cart QR — scan the gear itself to check it in.");
+      return;
+    }
+    const code = payload.code;
     try {
       const row = await fetchGearByCode(code);
       if (!row) {
-        toast.error(`No gear matches code "${code}".`);
+        toast.error(
+          // See the checkout pane: a transmitted AIM symbology we never
+          // print means the officer scanned the manufacturer's own mark.
+          isForeignSymbology(payload.symbology)
+            ? "That's the manufacturer's own tag, not a UCMC label — scan the club tag instead."
+            : `No gear matches code "${code}".`,
+        );
         return;
       }
       if (!row.hasOpenLoan) {
@@ -138,11 +161,8 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
           rationale (sticky's containing block is the grid, not the
           cell; `items-start` keeps the cell content-height). */}
       <div className="grid items-start gap-4 md:grid-cols-[18rem_1fr]">
-        <div className="sticky top-0 z-10 space-y-1.5 bg-background pb-2 md:pb-0">
-          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Scan
-          </Label>
-          <BarcodeScanner onResult={handleScan} />
+        <div className="sticky top-0 z-10 bg-background pb-2 md:pb-0">
+          <DeskScanControls onScan={handleScan} />
         </div>
         <div className="space-y-2">
           <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">

@@ -8,7 +8,21 @@ paths:
 
 ## Source layout (Bulletproof React)
 
-Features live under `src/features/`. Each has `components/`, `api/` (`query-keys.ts`, `queries.ts` exposing `*QueryOptions()` factories, per-mutation `use-*.ts` hooks), and `server/` (server fns + actions + repos + tests). Run `ls src/features/` for the current set.
+Features live under `src/features/`, with four subdirectories. Run `ls src/features/` for the current set.
+
+| Subdirectory  | Holds                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `components/` | The feature's React components.                                                                        |
+| `api/`        | `query-keys.ts`, `queries.ts` exposing `*QueryOptions()` factories, and per-mutation `use-*.ts` hooks. |
+| `server/`     | Server fns + actions + repos + tests.                                                                  |
+| `lib/`        | Pure client-safe helpers — no React, no query client, no `cloudflare:workers`.                         |
+| `hooks/`      | Feature-local React hooks that are **not** data hooks.                                                 |
+
+**`api/` vs `hooks/` is the distinction worth getting right, because both hold files named `use-*.ts`.** A hook in `api/` talks to the query client and carries a cache-invalidation contract — that is what CLAUDE.md means by "every mutation has a `use-*.ts` hook". A hook in `hooks/` holds no query client at all: `gear`'s `use-barcode-wedge` is a document keydown listener over a pure reducer. Putting the second kind in `api/` files it beside 98 mutation hooks that each owe an invalidation contract it does not have, and `mutation-hook-contract.test.tsx` reads that directory structurally.
+
+**`lib/` is where a feature's pure logic goes, and keeping it pure has a second payoff**: `stryker.config.json` can only mutate modules that don't reach `cloudflare:workers`, so a policy extracted to `lib/` is mutation-testable and the same policy inlined into an action is not. `gear/lib/wedge-buffer.ts` and `gear/lib/loan-reminders.ts` are both shaped that way on purpose — every input a parameter, the clock included.
+
+A feature only grows the subdirectories it needs; `hooks/` currently exists under `gear` alone.
 
 Shared/foundational code lives outside features: `src/server/auth/`, `src/server/profile/`, `src/components/` (UI primitives, `profile/`, `layouts/`, `markdown/`, `editor/`), `src/lib/`, `src/hooks/`, `src/config/`. Routes (`src/routes/`) compose features but never the reverse.
 

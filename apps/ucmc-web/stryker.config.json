@@ -10,6 +10,8 @@
   },
   "mutate": [
     "src/config/waiver-cycle.ts",
+    "src/features/gear/lib/scan-payload.ts",
+    "src/features/gear/lib/wedge-buffer.ts",
     "src/lib/sanitize-filename.ts",
     "src/server/log/redact.server.ts"
   ],

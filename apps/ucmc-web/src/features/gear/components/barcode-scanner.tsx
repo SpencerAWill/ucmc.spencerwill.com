@@ -48,6 +48,11 @@ import { Switch } from "#/components/ui/switch";
  * they open the Sheet; once they've toggled it on and granted
  * permission, the scanner auto-starts on subsequent Sheet opens.
  *
+ * Scan feedback is NOT rendered here. `DeskScanControls` owns one
+ * status line for the camera and the USB wedge together — two
+ * confirmations for the same officer action would drift in wording and
+ * in timing, and the wedge has no viewfinder to overlay one on anyway.
+ *
  * Camera picker: laptops at the gear cave commonly attach a USB
  * camera for scanning while the built-in webcam stays for video
  * calls. After permission is granted (which exposes labels) the
@@ -127,11 +132,6 @@ export function BarcodeScanner({
       return window.localStorage.getItem(SELECTED_CAMERA_KEY);
     },
   );
-  const [recentScan, setRecentScan] = useState<{
-    code: string;
-    at: number;
-  } | null>(null);
-
   const stopStream = useCallback(() => {
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
@@ -154,16 +154,6 @@ export function BarcodeScanner({
   useEffect(() => {
     onResultRef.current = onResult;
   }, [onResult]);
-
-  // Clear the "Just scanned" pill ~2 s after each scan so it doesn't
-  // hang around once the officer moves to the next piece.
-  useEffect(() => {
-    if (!recentScan) return;
-    const id = window.setTimeout(() => setRecentScan(null), 2000);
-    return () => {
-      window.clearTimeout(id);
-    };
-  }, [recentScan]);
 
   useEffect(() => {
     if (!enabled) {
@@ -254,7 +244,6 @@ export function BarcodeScanner({
                   // latest parent handler without forcing the effect
                   // (and therefore the camera stream) to restart.
                   onResultRef.current(first);
-                  setRecentScan({ code: first, at: now });
                 }
               }
             } catch {
@@ -361,14 +350,6 @@ export function BarcodeScanner({
             {!streamReady ? (
               <div className="absolute inset-0 flex items-center justify-center text-white">
                 <Loader2 className="size-6 animate-spin" />
-              </div>
-            ) : null}
-            {recentScan ? (
-              <div
-                className="absolute inset-x-3 bottom-3 rounded-md bg-emerald-500/90 px-3 py-2 text-center font-mono text-sm font-semibold text-white shadow-md"
-                aria-live="polite"
-              >
-                Scanned {recentScan.code}
               </div>
             ) : null}
           </>

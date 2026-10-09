@@ -77,8 +77,10 @@ export default defineConfig({
      * Two mobile projects, and `testMatch` confines both to the
      * `mobile-*` specs rather than re-running the whole suite at phone
      * width. That is not thrift — most of the suite is *hostile* to it.
-     * `gear-scanner.spec.ts` launches its own Chromium with fake-camera
-     * flags and would ignore the project's device entirely; the passkey
+     * `gear-scanner.spec.ts`'s camera cases launch their own Chromium
+     * with fake-camera flags and would ignore the project's device
+     * entirely — its keyboard-wedge case does not, but `testMatch`
+     * selects whole files, so the exception changes nothing; the passkey
      * specs drive a WebAuthn virtual authenticator over CDP, which
      * WebKit has no equivalent for. Broadening a mobile project means
      * reckoning with those, not just adding a viewport.

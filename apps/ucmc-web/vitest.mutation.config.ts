@@ -30,6 +30,8 @@ export default defineConfig({
     setupFiles: ["./test/setup-mutation.ts"],
     include: [
       "src/config/__tests__/waiver-cycle.test.ts",
+      "src/features/gear/lib/__tests__/scan-payload.test.ts",
+      "src/features/gear/lib/__tests__/wedge-buffer.test.ts",
       "src/lib/__tests__/sanitize-filename.test.ts",
       "src/lib/__tests__/sanitize-filename.property.test.ts",
       "src/server/log/__tests__/redact.test.ts",

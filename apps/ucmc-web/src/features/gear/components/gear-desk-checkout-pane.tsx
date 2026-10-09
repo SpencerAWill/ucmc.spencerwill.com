@@ -27,18 +27,21 @@ import {
   loanDefaultsQueryOptions,
 } from "#/features/gear/api/queries";
 import { useCheckoutLoans } from "#/features/gear/api/use-checkout-loans";
-import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
+import { DeskScanControls } from "#/features/gear/components/desk-scan-controls";
 import { DueDatePicker } from "#/features/gear/components/due-date-picker";
 import { CheckoutItemRow } from "#/features/gear/components/gear-desk-item-row";
 import { GearCodeSearchCombobox } from "#/features/gear/components/gear-code-search-combobox";
 import { MemberSearchCombobox } from "#/features/gear/components/member-search-combobox";
 import { SKIP_OVERRIDE_FLAG } from "#/features/gear/lib/availability";
 import type { CheckoutOverrideFlag } from "#/features/gear/lib/availability";
-import { isCartToken } from "#/features/gear/lib/cart-token";
 import {
   DEFAULT_LOAN_DURATION_DAYS,
   defaultLoanDurationDays,
 } from "#/features/gear/lib/loan-duration";
+import {
+  isForeignSymbology,
+  parseScanPayload,
+} from "#/features/gear/lib/scan-payload";
 import {
   resolveCartTokenFn,
   getMemberForLoanFn,
@@ -176,15 +179,30 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     });
   };
 
-  const handleScan = async (code: string) => {
-    if (isCartToken(code)) {
-      await handleCartScan(code);
+  const handleScan = async (raw: string) => {
+    const payload = parseScanPayload(raw);
+    if (!payload) {
+      toast.error("That didn't look like a gear label.");
       return;
     }
+    if (payload.kind === "cart") {
+      await handleCartScan(payload.token);
+      return;
+    }
+    const code = payload.code;
     try {
       const row = await fetchGearByCode(code);
       if (!row) {
-        toast.error(`No gear matches code "${code}".`);
+        toast.error(
+          // A reader that transmits its AIM symbology tells us the tag
+          // came off something we never printed — a manufacturer's
+          // DataMatrix on the harness itself, most likely. Naming that
+          // beats "no gear matches 3F8A91C2", which reads as a broken
+          // label.
+          isForeignSymbology(payload.symbology)
+            ? "That's the manufacturer's own tag, not a UCMC label — scan the club tag instead."
+            : `No gear matches code "${code}".`,
+        );
         return;
       }
       if (
@@ -433,11 +451,8 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
           row — without it, the cell would fill the row vertically and
           the viewfinder would visually look stretched. */}
       <div className="grid items-start gap-4 md:grid-cols-[18rem_1fr]">
-        <div className="sticky top-0 z-10 space-y-1.5 bg-background pb-2 md:pb-0">
-          <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Scan
-          </Label>
-          <BarcodeScanner onResult={handleScan} />
+        <div className="sticky top-0 z-10 bg-background pb-2 md:pb-0">
+          <DeskScanControls onScan={handleScan} />
         </div>
         <div className="space-y-2">
           <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
