@@ -120,16 +120,38 @@ describe("rollUpResendSends", () => {
     expect(byDay["2026-10-05"]).toBe(0);
   });
 
-  it("emits an explicit zero for a day with no mail", async () => {
-    // A missing row and a zero mean different things — "not snapshotted
-    // yet" vs "we sent nothing" — and a chart that skips empty days
-    // draws a continuous line across a gap it should show.
+  it("emits an explicit zero for a quiet day once logging has begun", async () => {
+    // A missing row and a zero mean different things — "not measuring"
+    // vs "we sent nothing" — and a chart that skips a quiet day draws a
+    // continuous line across a gap it should show.
+    await seedSend("2026-10-01T16:00:00Z");
+
     const rows = await rollUpResendSends({
       from: "2026-10-01",
       to: "2026-10-03",
     });
+
     expect(rows).toHaveLength(3);
-    expect(rows.every((r) => r.quantity === 0)).toBe(true);
+    expect(rows.map((r) => r.quantity)).toEqual([1, 0, 0]);
+  });
+
+  it("emits nothing for days before the log existed", async () => {
+    // A backfill reaches months further back than the send log does.
+    // Zeros there would claim a measurement that was never taken.
+    await seedSend("2026-10-03T16:00:00Z");
+
+    const rows = await rollUpResendSends({
+      from: "2026-10-01",
+      to: "2026-10-03",
+    });
+
+    expect(rows.map((r) => r.periodStart)).toEqual(["2026-10-03"]);
+  });
+
+  it("emits nothing at all when no send has ever been logged", async () => {
+    expect(
+      await rollUpResendSends({ from: "2026-10-01", to: "2026-10-03" }),
+    ).toEqual([]);
   });
 
   it("counts failed sends too", async () => {

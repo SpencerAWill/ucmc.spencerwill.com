@@ -11,7 +11,7 @@
  * would land in the wrong day's bucket — which matters most for the
  * evening reminder mail this feature exists to count.
  */
-import { and, gte, lt } from "drizzle-orm";
+import { and, asc, gte, lt } from "drizzle-orm";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
 import type { SnapshotRow } from "#/server/cost/snapshot-row";
@@ -33,10 +33,13 @@ function startOfClubDay(date: string): Temporal.Instant {
  * One `resend.sends` row per day in `[from, to]`, counting every send
  * attempt logged that day.
  *
- * **Days with no mail get an explicit zero row.** A missing row and a
- * zero mean different things — "we have not snapshotted that day yet"
- * versus "we sent nothing" — and a chart that silently skips empty days
- * draws a continuous line through a gap it should show.
+ * **Days with no mail get an explicit zero row — but only from the day
+ * logging began.** A missing row and a zero mean different things: "we
+ * were not measuring" versus "we sent nothing". A chart that skips a
+ * quiet day draws a continuous line through a gap it should show, and a
+ * zero written for a day before `email_sends` existed claims a
+ * measurement that was never taken. A backfill reaches months further
+ * back than the log does, so this is the normal case, not an edge one.
  */
 export async function rollUpResendSends(args: {
   from: string;
@@ -65,7 +68,18 @@ export async function rollUpResendSends(args: {
     counts.set(day, (counts.get(day) ?? 0) + 1);
   }
 
-  const first = Temporal.PlainDate.from(args.from);
+  // The first send ever logged is the day this table started being able
+  // to answer the question. Anything earlier gets no row at all.
+  const loggingBegan = await earliestLoggedSendDate();
+  if (loggingBegan === null) {
+    return [];
+  }
+  const windowFrom = args.from > loggingBegan ? args.from : loggingBegan;
+  if (windowFrom > args.to) {
+    return [];
+  }
+
+  const first = Temporal.PlainDate.from(windowFrom);
   const dayCount = first.until(Temporal.PlainDate.from(args.to)).days + 1;
 
   return Array.from({ length: Math.max(0, dayCount) }, (_, offset) => {
@@ -85,4 +99,21 @@ export async function rollUpResendSends(args: {
       currency: null,
     };
   });
+}
+
+/**
+ * Club-local date of the earliest send ever logged, or null when the
+ * log is empty.
+ *
+ * Read separately from the window query rather than inferred from it:
+ * a window containing no sends tells us nothing about whether logging
+ * was running then, which is exactly the distinction this preserves.
+ */
+async function earliestLoggedSendDate(): Promise<string | null> {
+  const rows = await getDb()
+    .select({ sentAt: schema.emailSends.sentAt })
+    .from(schema.emailSends)
+    .orderBy(asc(schema.emailSends.sentAt))
+    .limit(1);
+  return rows.length > 0 ? clubDate(rows[0].sentAt) : null;
 }
