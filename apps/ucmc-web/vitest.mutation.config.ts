@@ -13,7 +13,7 @@ import { defineConfig } from "vitest/config";
  * times, and the `workers` pool boots a workerd runtime and applies
  * every D1 migration per file. Mutation testing re-runs the suite once per
  * mutant; paying workerd startup for each one is the difference between
- * minutes and hours, and `@cloudflare/vitest-pool-workers` compatibility
+ * minutes and hours, and `@cloudflare/vitest-plugin` compatibility
  * with Stryker is unverified upstream besides.
  *
  * **Only modules that are pure may be mutated.** Anything importing

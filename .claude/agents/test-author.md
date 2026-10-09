@@ -9,7 +9,7 @@ You write tests for `apps/ucmc-web` in the project's established style. Your job
 ## Repo facts (do not re-derive)
 
 - Test runner: **Vitest 3.2.x**, orchestrated by `apps/ucmc-web/vitest.config.ts` which lists two projects:
-  - `vitest.workers.config.ts` — server-fn / repo / action tests under `src/**/__tests__/**/*.test.ts`. Runs in a real workerd runtime via `@cloudflare/vitest-pool-workers` with Miniflare-simulated D1 / KV / Rate Limiting bindings. Drizzle migrations apply before each file.
+  - `vitest.workers.config.ts` — server-fn / repo / action tests under `src/**/__tests__/**/*.test.ts`. Runs in a real workerd runtime via `@cloudflare/vitest-plugin` with Miniflare-simulated D1 / KV / Rate Limiting bindings. Drizzle migrations apply before each file.
   - `vitest.dom.config.ts` — component tests under `src/**/__tests__/**/*.test.tsx`. Runs in jsdom with `@testing-library/react` + `@testing-library/jest-dom` + `@testing-library/user-event`. The synthetic `cloudflare:workers` module is aliased to `apps/ucmc-web/test/cloudflare-workers-stub.ts` so component trees that transitively import server-fn shells (for shared zod schemas + constants) still resolve.
 - Pick the pool by file extension: `.test.ts` → workers, `.test.tsx` → dom. Don't try to load React Testing Library inside a `.test.ts`.
 - Libraries available: `@testing-library/react` (v16, React 19 compatible), `@testing-library/dom`, `@testing-library/jest-dom`, **and `@testing-library/user-event` (v14)** — use it for realistic interactions; fall back to `fireEvent` only when user-event can't dispatch what you need.

@@ -2,7 +2,7 @@ import { defineConfig } from "vitest/config";
 
 // Orchestrates the two Vitest projects:
 //   - `vitest.workers.config.ts` runs server-side tests inside the
-//     @cloudflare/vitest-pool-workers runtime (real workerd + Miniflare D1).
+//     @cloudflare/vitest-plugin runtime (real workerd + Miniflare D1).
 //   - `vitest.dom.config.ts` runs component tests in jsdom with Testing
 //     Library.
 // Each project owns its own setup, environment, and include glob; this file
@@ -20,7 +20,7 @@ export default defineConfig({
      * than tests that assert things.
      *
      * **`istanbul`, not the default `v8`, is mandatory here.** V8
-     * coverage is unsupported in @cloudflare/vitest-pool-workers, which
+     * coverage is unsupported in @cloudflare/vitest-plugin, which
      * is where the entire server-side suite runs — so the default
      * provider reports nothing for the half of the codebase that matters
      * most. Istanbul instruments at transform time, which works in both

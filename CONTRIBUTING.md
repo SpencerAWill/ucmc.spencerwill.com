@@ -86,7 +86,7 @@ If your change crosses one of these boundaries, call it out in the PR descriptio
 
 The web app has two Vitest pools:
 
-- **`workers`** — `*.test.ts` runs in real workerd via `@cloudflare/vitest-pool-workers`. D1 migrations are applied once per file; **storage isolation is per file, not per test**, so any test that writes to D1 must clear the relevant tables in `beforeEach`.
+- **`workers`** — `*.test.ts` runs in real workerd via `@cloudflare/vitest-plugin`. D1 migrations are applied once per file; **storage isolation is per file, not per test**, so any test that writes to D1 must clear the relevant tables in `beforeEach`.
 - **`dom`** — `*.test.tsx` runs in jsdom + Testing Library + user-event.
 
 E2E lives in `apps/ucmc-web/e2e/` and runs against a freshly-spawned dev server. Currently only `a11y.spec.ts` runs in CI; full suite locally with `pnpm --filter ucmc-web e2e`.

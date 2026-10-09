@@ -1,13 +1,10 @@
 import path from "node:path";
 
-import {
-  cloudflareTest,
-  readD1Migrations,
-} from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 // Server-side tests run inside a real workerd runtime provided by
-// @cloudflare/vitest-pool-workers — D1, KV, and the Rate Limiting binding
+// @cloudflare/vitest-plugin — D1, KV, and the Rate Limiting binding
 // are all simulated by Miniflare, so tests exercise the same code paths as
 // `pnpm dev`/`wrangler deploy`.
 //

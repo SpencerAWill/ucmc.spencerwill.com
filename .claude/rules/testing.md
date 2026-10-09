@@ -16,13 +16,15 @@ paths:
 
 `pnpm --filter ucmc-web test:coverage`, and a weekly HTML artifact from `quality.yml`. **It is a report, not a gate** — there are no thresholds, on purpose: picking a number before a baseline exists picks it out of the air, and a failing threshold teaches people to write tests that execute lines rather than tests that assert things. Baseline when it landed: 47.66% of statements.
 
-**The provider must stay `istanbul`.** V8 coverage is [unsupported in `@cloudflare/vitest-pool-workers`](https://developers.cloudflare.com/workers/testing/vitest-integration/known-issues/), which is where the whole server-side suite runs — switching to the faster default would silently report nothing for the half of the codebase that matters most, and the number would go _up_.
+**The provider must stay `istanbul`.** V8 coverage is [unsupported in `@cloudflare/vitest-plugin`](https://developers.cloudflare.com/workers/testing/vitest-integration/known-issues/), which is where the whole server-side suite runs — switching to the faster default would silently report nothing for the half of the codebase that matters most, and the number would go _up_.
 
 Excluded from the denominator, each for a reason: `routeTree.gen.ts` (generated), `components/ui/**` (vendored shadcn, same rationale as its knip `entry`), tests/stories/`test-support`, and `*-fns.ts` — those are one-line shells that dynamic-import their action, and tests call the action directly, so counting them measures the boundary rather than the logic.
 
 ## `workers` pool — `*.test.ts`
 
-`vitest.workers.config.ts`. Runs in real workerd via `@cloudflare/vitest-pool-workers` (vitest 4.x + pool 0.16.x), wired as a Vite plugin (`cloudflareTest()`) — **there is no `defineWorkersConfig` / `poolOptions.workers` in this version.**
+`vitest.workers.config.ts`. Runs in real workerd via `@cloudflare/vitest-plugin` (vitest 4.x + plugin 1.3.x), wired as a Vite plugin (`cloudflareTest()`) — **there is no `defineWorkersConfig` / `poolOptions.workers` in this version.**
+
+**The package was renamed.** It was `@cloudflare/vitest-pool-workers`, which is deprecated upstream and will not receive further updates; the export map, the `cloudflareTest()` entry point and the `/types` reference are identical, so the migration was the name. Anything still importing the old name is stale.
 
 Migrations are applied once per file via `test/apply-migrations.ts`. **Storage isolation is per file, not per test**, so any test that writes to D1 must include the relevant tables in its own `beforeEach` cleanup — `auditLog` is a common one to forget. Cookie helpers and rate-limit wrappers are `vi.mock`ed (no request context).
 
@@ -64,7 +66,7 @@ Two layers, because they catch different things:
 
 `pnpm --filter ucmc-web test:mutation` (Stryker), and a weekly job in `quality.yml`. **A report, not a gate** — `thresholds.break` is `null`. Score when it landed: 100%, 76/76 mutants killed, in about 5 seconds. The list has grown since — seven modules, 317 mutants, 312 killed — so treat the figure as a reading rather than a constant, and **run it after adding a module to `mutate`**: that is where the surviving mutants that mean something show up.
 
-It runs against **`vitest.mutation.config.ts`, a plain-Node project that exists only for this** and is deliberately absent from `vitest.config.ts`'s `projects` (the files are already covered by the `workers` project; listing it would run them twice per `pnpm test`). The `workers` pool boots workerd and applies every migration per file (78 and counting), which is unaffordable once per mutant, and `@cloudflare/vitest-pool-workers` compatibility with Stryker is unverified upstream.
+It runs against **`vitest.mutation.config.ts`, a plain-Node project that exists only for this** and is deliberately absent from `vitest.config.ts`'s `projects` (the files are already covered by the `workers` project; listing it would run them twice per `pnpm test`). The `workers` pool boots workerd and applies every migration per file (78 and counting), which is unaffordable once per mutant, and `@cloudflare/vitest-plugin` compatibility with Stryker is unverified upstream.
 
 **Only pure modules can be mutated.** Anything importing `cloudflare:workers`, directly or transitively through `#/server/db`, cannot resolve in that project. That constraint — not a judgement about importance — is what picks the list in `stryker.config.json`.
 
