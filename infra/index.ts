@@ -167,6 +167,12 @@ export const kvNamespaceTitleOutput = kvNamespace.title;
 // between the hostname Pulumi binds and the hostname the app advertises
 // to browsers / WebAuthn.
 export const appBaseUrl = `https://${hostname}`;
+// The account the worker's own resources live in. Passed to the worker
+// as a `--var` so the daily cost snapshot (#268) can build Cloudflare
+// API paths, which all embed it. **Not a secret** — it is an identifier,
+// it appears in every dashboard URL, and it grants nothing on its own;
+// the token that does is a worker secret.
+export const cloudflareAccountId = accountId;
 export const webauthnRpId = hostname;
 export { webauthnRpName };
 // Split into two vars (address + display name) rather than a composed

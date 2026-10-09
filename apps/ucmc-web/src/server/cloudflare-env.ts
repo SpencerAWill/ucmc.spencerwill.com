@@ -33,6 +33,11 @@ export interface WorkerEnv {
   WEBAUTHN_RP_NAME: string;
   RESEND_FROM: string;
   RESEND_FROM_NAME: string;
+  // Cloudflare account the worker's resources live in. Every Billable
+  // Usage / GraphQL Analytics path embeds it. Optional: unset simply
+  // disables the daily cost snapshot, the same way the GitHub mirror
+  // below degrades.
+  CLOUDFLARE_ACCOUNT_ID?: string;
 
   // Secrets — set via `wrangler secret put` in deployed envs, or .env.local
   // locally. RESEND_API_KEY is optional because the email adapter falls
@@ -53,6 +58,25 @@ export interface WorkerEnv {
   // propagate to the user — best-effort only.
   FEEDBACK_GITHUB_TOKEN?: string;
   FEEDBACK_GITHUB_REPO?: string;
+
+  // Cost/usage snapshots (#268) — read ONLY by the daily cron, never by
+  // a route handler. Optional: when unset (or when CLOUDFLARE_ACCOUNT_ID
+  // is), the snapshot task logs and skips, and every other daily task
+  // still runs.
+  //
+  // **Account-scoped and read-only across more than billing**, which is
+  // why it is not named for billing: Billing Read covers
+  // `/billable-usage`, and Workers Scripts Read + D1 Read + Workers KV
+  // Storage Read are each required for their own GraphQL analytics
+  // dataset — Account Analytics Read does NOT cover them, despite what
+  // the docs imply. It therefore reads operational telemetry for the
+  // WHOLE account, including workers unrelated to this app.
+  //
+  // That breadth is why it lives on the cron path and nowhere a request
+  // can reach it. **Adding a scope here widens a credential the whole
+  // account is exposed to** — weigh it like a permission grant, not a
+  // config tweak.
+  CLOUDFLARE_ACCOUNT_READ_TOKEN?: string;
 
   // Dev-only — base URL of the Mailpit sidecar (e.g.
   // "http://mailpit:8025"). When set AND RESEND_API_KEY is absent, the
