@@ -39,6 +39,10 @@ function occurrence(
     kind: "meeting",
     visibility: "members",
     rrule: null,
+    seriesStartsAt: startsAt,
+    seriesEndsAt: null,
+    seriesCanceled: false,
+    occurrenceCanceled: false,
     canceled: false,
     sequence: 0,
     updatedAt: startsAt,
@@ -176,6 +180,92 @@ describe("all-day events", () => {
       endsAt: null,
     });
     expect(ics).toContain("DTEND;VALUE=DATE:20260507");
+  });
+
+  /**
+   * The exclusive end is a CALENDAR day later, not 24 hours later. The
+   * club-local day of the November fall-back is 25 hours long, so a
+   * `+24h` on the instant lands at 23:00 on the *same* date and the
+   * event collapses to zero length on exactly one day a year — which
+   * the May-dated test above cannot see.
+   */
+  it("stays one day long on the fall-back day", () => {
+    const ics = one({
+      allDay: true,
+      startsAt: clubLocal("2026-11-01T00:00"),
+      endsAt: null,
+    });
+    expect(ics).toContain("DTSTART;VALUE=DATE:20261101");
+    expect(ics).toContain("DTEND;VALUE=DATE:20261102");
+  });
+
+  it("stays one day long on the spring-forward day", () => {
+    const ics = one({
+      allDay: true,
+      startsAt: clubLocal("2026-03-08T00:00"),
+      endsAt: null,
+    });
+    expect(ics).toContain("DTEND;VALUE=DATE:20260309");
+  });
+
+  /**
+   * RFC 5545 §3.8.5.1: EXDATE must use the same value type as DTSTART.
+   * A TZID date-time against a `VALUE=DATE` start is discarded by most
+   * clients, so the skipped day would keep showing on every
+   * subscriber's phone while the website hid it.
+   */
+  it("emits EXDATE as a DATE value for an all-day series", () => {
+    const ics = render([
+      {
+        series: occurrence({
+          allDay: true,
+          startsAt: clubLocal("2026-05-06T00:00"),
+          endsAt: null,
+          rrule: "FREQ=WEEKLY;BYDAY=WE",
+        }),
+        exdates: [clubLocal("2026-05-13T00:00")],
+        overrides: [],
+      },
+    ]);
+    expect(ics).toContain("EXDATE;VALUE=DATE:20260513");
+    expect(ics).not.toContain("EXDATE;TZID=");
+  });
+
+  it("emits RECURRENCE-ID as a DATE value for an all-day series", () => {
+    const ics = render([
+      {
+        series: occurrence({
+          allDay: true,
+          startsAt: clubLocal("2026-05-06T00:00"),
+          endsAt: null,
+          rrule: "FREQ=WEEKLY;BYDAY=WE",
+        }),
+        exdates: [],
+        overrides: [
+          occurrence({
+            allDay: true,
+            rrule: null,
+            occurrenceStart: clubLocal("2026-05-13T00:00"),
+            startsAt: clubLocal("2026-05-14T00:00"),
+            endsAt: null,
+          }),
+        ],
+      },
+    ]);
+    expect(ics).toContain("RECURRENCE-ID;VALUE=DATE:20260513");
+    expect(ics).not.toContain("RECURRENCE-ID;TZID=");
+  });
+
+  /** Timed series keep the TZID form. */
+  it("keeps EXDATE as a TZID date-time for a timed series", () => {
+    const ics = render([
+      {
+        series: occurrence({ rrule: "FREQ=WEEKLY;BYDAY=WE" }),
+        exdates: [clubLocal("2026-05-13T18:00")],
+        overrides: [],
+      },
+    ]);
+    expect(ics).toContain(`EXDATE;TZID=${CLUB_TIME_ZONE}:20260513T180000`);
   });
 });
 

@@ -373,6 +373,104 @@ describe("createEventAction", () => {
   });
 });
 
+describe("series identity on an occurrence", () => {
+  /**
+   * **Every occurrence carries the SERIES anchor**, not its own start.
+   * The officer edit dialog seeds `starts_at` from this; seeding from
+   * the occurrence silently re-anchored the whole series, so fixing a
+   * typo on the May 13 instance of a January series deleted every
+   * occurrence before May 13 — from the page and from DTSTART in every
+   * subscriber's feed — and cleared every exception with it.
+   */
+  it("carries the anchor, not the occurrence's own start", async () => {
+    await signInAsAdmin("anchor-carry@example.com");
+    await createEventAction(makeEvent({ rrule: "FREQ=WEEKLY;BYDAY=WE" }));
+
+    const occurrences = await listCalendarOccurrencesAction(WINDOW);
+    expect(occurrences.length).toBeGreaterThan(1);
+    for (const occurrence of occurrences) {
+      expect(wallTime(occurrence.seriesStartsAt)).toBe("2026-05-06T18:00:00");
+    }
+    // ...while their own starts genuinely differ.
+    expect(wallTime(occurrences[1].startsAt)).toBe("2026-05-13T18:00:00");
+  });
+
+  /**
+   * The two cancellation flags stay apart, because the officer controls
+   * read them separately: calling off a series and skipping one week
+   * are different acts. Merged, a cancelled series made every
+   * occurrence look individually cancelled, so the per-slot button
+   * offered "put this one back" and cleared an override that was never
+   * there.
+   */
+  it("reports a cancelled series without claiming the slot was skipped", async () => {
+    await signInAsAdmin("flags-series@example.com");
+    const { publicId } = await createEventAction(
+      makeEvent({ rrule: "FREQ=WEEKLY;BYDAY=WE" }),
+    );
+    await cancelEventAction({ publicId, canceled: true });
+
+    const [occurrence] = await listCalendarOccurrencesAction(WINDOW);
+    expect(occurrence.seriesCanceled).toBe(true);
+    expect(occurrence.occurrenceCanceled).toBe(false);
+    expect(occurrence.canceled).toBe(true);
+  });
+
+  it("reports a skipped slot without claiming the series was cancelled", async () => {
+    await signInAsAdmin("flags-slot@example.com");
+    const { publicId } = await createEventAction(
+      makeEvent({ rrule: "FREQ=WEEKLY;BYDAY=WE" }),
+    );
+    await overrideOccurrenceAction({
+      publicId,
+      occurrenceStart: clubLocal("2026-05-13T18:00"),
+      canceled: true,
+      title: null,
+      description: null,
+      location: null,
+      startsAt: null,
+      endsAt: null,
+    });
+
+    const occurrences = await listCalendarOccurrencesAction(WINDOW);
+    const skipped = occurrences.find(
+      (o) => wallTime(o.occurrenceStart) === "2026-05-13T18:00:00",
+    );
+    expect(skipped?.occurrenceCanceled).toBe(true);
+    expect(skipped?.seriesCanceled).toBe(false);
+
+    const untouched = occurrences.find(
+      (o) => wallTime(o.occurrenceStart) === "2026-05-06T18:00:00",
+    );
+    expect(untouched?.occurrenceCanceled).toBe(false);
+    expect(untouched?.seriesCanceled).toBe(false);
+  });
+
+  /** Moving an occurrence keeps its length. */
+  it("shifts the end with the start when only the start is overridden", async () => {
+    await signInAsAdmin("shift-slot@example.com");
+    const { publicId } = await createEventAction(
+      makeEvent({ rrule: "FREQ=WEEKLY;BYDAY=WE" }),
+    );
+    await overrideOccurrenceAction({
+      publicId,
+      occurrenceStart: clubLocal("2026-05-13T18:00"),
+      canceled: false,
+      title: null,
+      description: null,
+      location: null,
+      startsAt: clubLocal("2026-05-13T20:00"),
+      endsAt: null,
+    });
+
+    const moved = (await listCalendarOccurrencesAction(WINDOW)).find(
+      (o) => wallTime(o.occurrenceStart) === "2026-05-13T18:00:00",
+    );
+    expect(wallTime(moved!.startsAt)).toBe("2026-05-13T20:00:00");
+    expect(wallTime(moved!.endsAt!)).toBe("2026-05-13T21:00:00");
+  });
+});
+
 describe("updateEventAction", () => {
   /**
    * SEQUENCE is RFC 5545's, and it is what clients compare to decide

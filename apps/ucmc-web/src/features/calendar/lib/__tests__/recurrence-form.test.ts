@@ -10,7 +10,8 @@ import {
   weekdayOf,
 } from "#/features/calendar/lib/recurrence-form";
 import type { RecurrenceFormState } from "#/features/calendar/lib/recurrence-form";
-import { parseRrule } from "#/server/events/recurrence";
+import { CLUB_TIME_ZONE } from "#/config/time";
+import { expandOccurrences, parseRrule } from "#/server/events/recurrence";
 
 /** A Wednesday. */
 const ANCHOR = Temporal.PlainDate.from("2026-05-13");
@@ -34,11 +35,76 @@ describe("weekdayOf / ordinalWeekdayOf", () => {
   });
 
   /**
-   * Capped at 4. A literal "5th Wednesday" series would skip most
-   * months; an officer who picks one means the last.
+   * A 5th weekday answers -1 ("the last"), not 4. A literal `5WE`
+   * series would skip most months; clamping to `4` instead produced a
+   * rule that did not include the very date the officer created the
+   * event for — the 4th Wednesday is already past, so the first
+   * occurrence landed in the following month.
    */
-  it("caps a fifth weekday at the fourth", () => {
+  it("answers -1 for a fifth weekday", () => {
+    expect(ordinalWeekdayOf(Temporal.PlainDate.from("2026-09-30"))).toBe(-1);
+  });
+
+  it("keeps a genuine fourth weekday as 4", () => {
     expect(ordinalWeekdayOf(Temporal.PlainDate.from("2026-05-27"))).toBe(4);
+  });
+});
+
+describe("a monthly series anchored on a fifth weekday", () => {
+  /**
+   * The failure the clamp caused, end to end: the event must occur on
+   * the day it was created for.
+   */
+  it("includes the anchor date itself", () => {
+    // 2026-09-30 is the fifth Wednesday of September.
+    const anchor = Temporal.PlainDate.from("2026-09-30");
+    const rule = buildRrule(
+      form({ mode: "monthly", monthlyMode: "nthWeekday" }),
+      anchor,
+    );
+    expect(rule).toBe("FREQ=MONTHLY;BYDAY=-1WE");
+
+    const occurrences = expandOccurrences(
+      {
+        startsAt: anchor
+          .toPlainDateTime({ hour: 18 })
+          .toZonedDateTime(CLUB_TIME_ZONE)
+          .toInstant(),
+        endsAt: null,
+        rrule: rule,
+      },
+      anchor
+        .toPlainDateTime({ hour: 0 })
+        .toZonedDateTime(CLUB_TIME_ZONE)
+        .toInstant(),
+      Temporal.PlainDate.from("2026-12-01")
+        .toPlainDateTime({ hour: 0 })
+        .toZonedDateTime(CLUB_TIME_ZONE)
+        .toInstant(),
+    );
+    expect(
+      occurrences.map((o) =>
+        o.startsAt.toZonedDateTimeISO(CLUB_TIME_ZONE).toPlainDate().toString(),
+      ),
+    ).toEqual(["2026-09-30", "2026-10-28", "2026-11-25"]);
+  });
+
+  it("describes itself as the last weekday", () => {
+    expect(
+      describeRecurrence(
+        form({ mode: "monthly", monthlyMode: "nthWeekday" }),
+        Temporal.PlainDate.from("2026-09-30"),
+      ),
+    ).toBe("Every month on the last Wednesday.");
+  });
+
+  it("describes a genuine fourth weekday as the fourth", () => {
+    expect(
+      describeRecurrence(
+        form({ mode: "monthly", monthlyMode: "nthWeekday" }),
+        Temporal.PlainDate.from("2026-05-27"),
+      ),
+    ).toBe("Every month on the fourth Wednesday.");
   });
 });
 

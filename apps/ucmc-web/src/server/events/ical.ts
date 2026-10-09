@@ -139,6 +139,16 @@ function utcStamp(instant: Temporal.Instant): string {
   return `${pad(zoned.year, 4)}${pad(zoned.month)}${pad(zoned.day)}T${pad(zoned.hour)}${pad(zoned.minute)}${pad(zoned.second)}Z`;
 }
 
+/** The club-local date one calendar day after an instant's. */
+function nextDateStamp(instant: Temporal.Instant): string {
+  const date = instant
+    .toZonedDateTimeISO(CLUB_TIME_ZONE)
+    .toPlainDate()
+    .add({ days: 1 });
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.year}${pad(date.month)}${pad(date.day)}`;
+}
+
 /** `20260506` — a date value, for an all-day event. */
 function dateStamp(instant: Temporal.Instant): string {
   const zoned = instant.toZonedDateTimeISO(CLUB_TIME_ZONE);
@@ -179,7 +189,11 @@ function renderEvent(occurrence: CalendarOccurrence, now: Temporal.Instant) {
     // DTEND is exclusive for DATE values, so a one-day event ends on
     // the following day. Omitting the +1 makes every all-day event
     // render as zero-length and vanish from some month views.
-    lines.push(`DTEND;VALUE=DATE:${dateStamp(end.add({ hours: 24 }))}`);
+    // **The +1 is a CALENDAR day, not 24 hours.** On the November
+    // fall-back day the club-local day is 25 hours long, so adding 24h
+    // to midnight lands at 23:00 on the *same* date and the event
+    // collapses to zero length on exactly one day a year.
+    lines.push(`DTEND;VALUE=DATE:${nextDateStamp(end)}`);
   } else {
     lines.push(
       `DTSTART;TZID=${CLUB_TIME_ZONE}:${localStamp(occurrence.startsAt)}`,
@@ -216,12 +230,32 @@ function renderEvent(occurrence: CalendarOccurrence, now: Temporal.Instant) {
  * what RFC 5545 prefers and what keeps a semester of cancellations from
  * adding thirty lines.
  */
-function renderExdates(dates: readonly Temporal.Instant[]): string[] {
+function renderExdates(
+  dates: readonly Temporal.Instant[],
+  allDay: boolean,
+): string[] {
   if (dates.length === 0) {
     return [];
   }
-  const stamps = dates.map(localStamp).join(",");
-  return [`EXDATE;TZID=${CLUB_TIME_ZONE}:${stamps}`];
+  // **The value type has to match DTSTART** (RFC 5545 §3.8.5.1). An
+  // all-day series carries `DTSTART;VALUE=DATE`, so its EXDATEs must be
+  // DATE values too — a TZID date-time against a DATE start is
+  // discarded by most clients, which leaves a skipped day still showing
+  // on every subscriber's phone while the website hides it.
+  if (allDay) {
+    return [`EXDATE;VALUE=DATE:${dates.map(dateStamp).join(",")}`];
+  }
+  return [`EXDATE;TZID=${CLUB_TIME_ZONE}:${dates.map(localStamp).join(",")}`];
+}
+
+/** `RECURRENCE-ID`, likewise matching DTSTART's value type. */
+function recurrenceIdLine(
+  occurrenceStart: Temporal.Instant,
+  allDay: boolean,
+): string {
+  return allDay
+    ? `RECURRENCE-ID;VALUE=DATE:${dateStamp(occurrenceStart)}`
+    : `RECURRENCE-ID;TZID=${CLUB_TIME_ZONE}:${localStamp(occurrenceStart)}`;
 }
 
 export interface IcalSeries {
@@ -263,7 +297,11 @@ export function renderCalendar(
   for (const entry of entries) {
     const event = renderEvent(entry.series, now);
     // EXDATE belongs inside the VEVENT it modifies, before END:VEVENT.
-    event.splice(event.length - 1, 0, ...renderExdates(entry.exdates));
+    event.splice(
+      event.length - 1,
+      0,
+      ...renderExdates(entry.exdates, entry.series.allDay),
+    );
     lines.push(...event);
 
     for (const override of entry.overrides) {
@@ -277,7 +315,7 @@ export function renderCalendar(
       withoutRule.splice(
         1,
         0,
-        `RECURRENCE-ID;TZID=${CLUB_TIME_ZONE}:${localStamp(override.occurrenceStart)}`,
+        recurrenceIdLine(override.occurrenceStart, override.allDay),
       );
       lines.push(...withoutRule);
     }

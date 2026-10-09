@@ -31,6 +31,13 @@ import type { CalendarOccurrence } from "#/features/calendar/server/calendar-fns
  * things, and the failure mode of conflating them — cancelling a
  * semester when you meant spring break — is not one the undo story
  * covers well.
+ *
+ * Each control therefore reads its OWN flag: `occurrenceCanceled` for
+ * the per-slot button, `seriesCanceled` for the series one. Reading the
+ * merged `canceled` made both lie — with a series cancelled, every
+ * occurrence looked cancelled, so the per-slot button offered "put this
+ * one back" and cleared an override that was never there, reporting
+ * success while changing nothing.
  */
 export function EventOfficerActions({
   occurrence,
@@ -90,7 +97,7 @@ export function EventOfficerActions({
                 publicId: occurrence.publicId,
                 occurrenceStart: occurrence.occurrenceStart.epochMilliseconds,
               };
-              if (occurrence.canceled) {
+              if (occurrence.occurrenceCanceled) {
                 clearOverride.mutate(common, {
                   onSuccess: () => toast.success("Occurrence restored."),
                   onError,
@@ -106,8 +113,8 @@ export function EventOfficerActions({
               }
             }}
           >
-            {occurrence.canceled ? <CalendarPlus /> : <CalendarOff />}
-            {occurrence.canceled
+            {occurrence.occurrenceCanceled ? <CalendarPlus /> : <CalendarOff />}
+            {occurrence.occurrenceCanceled
               ? "Put this occurrence back"
               : "Skip just this occurrence"}
           </Button>
@@ -130,12 +137,12 @@ export function EventOfficerActions({
             cancelEvent.mutate(
               {
                 publicId: occurrence.publicId,
-                canceled: !occurrence.canceled,
+                canceled: !occurrence.seriesCanceled,
               },
               {
                 onSuccess: () =>
                   toast.success(
-                    occurrence.canceled
+                    occurrence.seriesCanceled
                       ? "Event is back on."
                       : "Event cancelled. Subscribers will see it disappear.",
                   ),
@@ -144,8 +151,8 @@ export function EventOfficerActions({
             )
           }
         >
-          {occurrence.canceled ? <Undo2 /> : <CalendarOff />}
-          {occurrence.canceled
+          {occurrence.seriesCanceled ? <Undo2 /> : <CalendarOff />}
+          {occurrence.seriesCanceled
             ? "Un-cancel this event"
             : `Cancel ${isRecurring ? "the whole series" : "this event"}`}
         </Button>

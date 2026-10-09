@@ -134,16 +134,39 @@ export const cancelEventInputSchema = z.object({
  * `occurrenceStart` stays put, which is what keeps the override
  * addressable and what `RECURRENCE-ID` means in the emitted feed.
  */
-export const overrideOccurrenceInputSchema = z.object({
-  publicId: z.string().min(1),
-  occurrenceStart: instantMs,
-  canceled: z.boolean().default(false),
-  title: nullableTrimmed(EVENT_LIMITS.title.max),
-  description: nullableTrimmed(EVENT_LIMITS.description.max),
-  location: nullableTrimmed(EVENT_LIMITS.location.max),
-  startsAt: instantMs.nullable().default(null),
-  endsAt: instantMs.nullable().default(null),
-});
+export const overrideOccurrenceInputSchema = z
+  .object({
+    publicId: z.string().min(1),
+    occurrenceStart: instantMs,
+    canceled: z.boolean().default(false),
+    title: nullableTrimmed(EVENT_LIMITS.title.max),
+    description: nullableTrimmed(EVENT_LIMITS.description.max),
+    location: nullableTrimmed(EVENT_LIMITS.location.max),
+    startsAt: instantMs.nullable().default(null),
+    endsAt: instantMs.nullable().default(null),
+  })
+  /**
+   * Same end-after-start rule the create and update schemas carry.
+   *
+   * It is easy to think an override does not need one, since both
+   * fields are optional — but they resolve *independently* against the
+   * generated span, so setting only `startsAt` to 20:00 inherits the
+   * series' 19:00 end and yields an occurrence that ends before it
+   * begins: rendered "8:00 PM – 7:00 PM", and emitted with DTEND before
+   * DTSTART. No UI reaches that today, but this is a public POST
+   * endpoint and the schema is the only thing standing in front of it.
+   *
+   * Only checked when BOTH are supplied; a lone `startsAt` is a
+   * legitimate "move this occurrence, keep its length", resolved in
+   * `occurrencesForSeries`.
+   */
+  .refine(
+    (value) =>
+      value.startsAt === null ||
+      value.endsAt === null ||
+      Temporal.Instant.compare(value.endsAt, value.startsAt) >= 0,
+    { message: "End time must not be before the start time", path: ["endsAt"] },
+  );
 
 /** Clear an override, putting the occurrence back on the series. */
 export const clearOccurrenceOverrideInputSchema = z.object({

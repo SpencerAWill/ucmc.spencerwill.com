@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { CalendarPlus, Plus } from "lucide-react";
@@ -71,15 +71,41 @@ export function CalendarPage() {
   const [formSeed, setFormSeed] = useState<EventFormSeed | null>(null);
 
   const window = useMemo(() => monthWindow(month), [month]);
-  const { data: occurrences } = useSuspenseQuery(
-    calendarOccurrencesQueryOptions(
-      window.from,
-      window.until,
-      kinds.length > 0 ? kinds : undefined,
-    ),
+
+  /**
+   * **`keepPreviousData`, and no kind filter in the query key.**
+   *
+   * Both halves exist to stop the page blanking. The key contains the
+   * window, so paging months is a new cache entry — under
+   * `useSuspenseQuery` that threw to the nearest Suspense boundary and
+   * replaced the whole page with its fallback, which reads as a full
+   * reload rather than as a month changing. `keepPreviousData` leaves
+   * last month on screen until the next one lands.
+   *
+   * The kind filter is applied **client-side** rather than sent to the
+   * server, so toggling a type does no network work at all. The window
+   * already holds every event this viewer may see; re-fetching a subset
+   * of what is already in memory would make the filter the slowest
+   * control on the page, and would multiply the cache into one entry
+   * per filter combination per month. The server fn keeps its `kinds`
+   * parameter for the `.ics` feed, whose subscribers cannot filter for
+   * themselves.
+   */
+  const { data, isPending } = useQuery({
+    ...calendarOccurrencesQueryOptions(window.from, window.until),
+    placeholderData: keepPreviousData,
+  });
+  const occurrences = useMemo(() => data ?? [], [data]);
+
+  const visible = useMemo(
+    () =>
+      kinds.length === 0
+        ? occurrences
+        : occurrences.filter((occurrence) => kinds.includes(occurrence.kind)),
+    [occurrences, kinds],
   );
 
-  const byDate = useMemo(() => groupByClubDate(occurrences), [occurrences]);
+  const byDate = useMemo(() => groupByClubDate(visible), [visible]);
 
   /**
    * Agenda days: every day of the displayed month that has something
@@ -189,9 +215,11 @@ export function CalendarPage() {
             days={agendaDays}
             onSelect={setDetail}
             emptyLabel={
-              kinds.length > 0
-                ? "Nothing of those types this month."
-                : "Nothing on the calendar this month yet."
+              isPending
+                ? "Loading\u2026"
+                : kinds.length > 0
+                  ? "Nothing of those types this month."
+                  : "Nothing on the calendar this month yet."
             }
           />
         </div>

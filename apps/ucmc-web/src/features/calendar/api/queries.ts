@@ -20,6 +20,12 @@ import type { EventKind } from "#/../drizzle/schema";
  * A one-minute `staleTime`: the club's schedule changes a few times a
  * semester, but an officer who has just published a trip expects to see
  * it on their own calendar, and the mutation hooks invalidate anyway.
+ *
+ * `kinds` exists for callers that genuinely cannot filter client-side.
+ * **`/calendar` is not one of them** — it fetches the window unfiltered
+ * and narrows in memory, so toggling a type does no network work and
+ * the cache holds one entry per month rather than one per month per
+ * filter combination.
  */
 export function calendarOccurrencesQueryOptions(
   from: Temporal.Instant,

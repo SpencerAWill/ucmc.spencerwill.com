@@ -50,13 +50,20 @@ export function weekdayOf(date: Temporal.PlainDate): Weekday {
 
 /**
  * Which ordinal of its weekday a date is within its month: the 2nd
- * Wednesday, the 4th Friday. Capped at 4 rather than running to 5,
- * because a "5th Wednesday" series would skip most months — an officer
- * picking a date in a 5-weekday month means the last one.
+ * Wednesday, the 4th Friday.
+ *
+ * **A 5th weekday answers `-1` ("the last"), not `4`.** A literal
+ * `5WE` series would skip most months, so "last" is what an officer
+ * picking such a date means. Clamping to `4` instead — which this did
+ * at first — produces a rule that does not include the very date the
+ * officer created the event for: anchored on the 5th Wednesday, the
+ * 4th Wednesday of that month is already past, so the first occurrence
+ * lands in the *following* month and the event vanishes from the day
+ * it was made for.
  */
 export function ordinalWeekdayOf(date: Temporal.PlainDate): number {
   const ordinal = Math.floor((date.day - 1) / 7) + 1;
-  return Math.min(ordinal, 4);
+  return ordinal >= 5 ? -1 : ordinal;
 }
 
 /**
@@ -212,5 +219,9 @@ const ORDINAL_NAME: Record<number, string> = {
   1: "first",
   2: "second",
   3: "third",
-  4: "last",
+  4: "fourth",
+  // `-1` is the only negative ordinal the form produces; see
+  // `ordinalWeekdayOf`. Naming `4` "last" would be wrong in any month
+  // with five of that weekday.
+  [-1]: "last",
 };

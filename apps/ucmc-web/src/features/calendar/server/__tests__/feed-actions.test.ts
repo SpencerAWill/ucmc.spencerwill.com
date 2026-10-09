@@ -332,6 +332,35 @@ describe("buildFeedAction", () => {
    * UID, and must not repeat the series' rule — a client would read
    * that as a second infinite series.
    */
+  /**
+   * Moving an occurrence preserves its LENGTH. An override that sets
+   * only `startsAt` means "same event, later that day"; inheriting the
+   * generated end raw produced an occurrence ending before it began,
+   * rendered "8:00 PM – 7:00 PM" and emitted with DTEND before DTSTART.
+   */
+  it("shifts the end with the start when only the start is overridden", async () => {
+    await signInAsAdmin("shift-feed@example.com");
+    const { publicId } = await createEventAction(
+      makeEvent({ rrule: "FREQ=WEEKLY;BYDAY=WE" }),
+    );
+    await overrideOccurrenceAction({
+      publicId,
+      occurrenceStart: clubLocal("2026-05-13T18:00"),
+      canceled: false,
+      title: null,
+      description: null,
+      location: null,
+      startsAt: clubLocal("2026-05-13T20:00"),
+      endsAt: null,
+    });
+    cookieJar.clear();
+
+    const { ics } = await buildFeedAction(MEMBER_SCOPE, "UCMC", undefined, NOW);
+    expect(ics).toContain(`DTSTART;TZID=${CLUB_TIME_ZONE}:20260513T200000`);
+    // The series runs an hour, so the moved occurrence does too.
+    expect(ics).toContain(`DTEND;TZID=${CLUB_TIME_ZONE}:20260513T210000`);
+  });
+
   it("emits a moved occurrence as a RECURRENCE-ID override", async () => {
     await signInAsAdmin("override-feed@example.com");
     const { publicId } = await createEventAction(
@@ -390,6 +419,31 @@ describe("feed ETag", () => {
     const first = await buildFeedAction(MEMBER_SCOPE, "UCMC", undefined, NOW);
     const second = await buildFeedAction(MEMBER_SCOPE, "UCMC", undefined, NOW);
     expect(first.etag).toBe(second.etag);
+  });
+
+  /**
+   * **The test the previous one could not be.** Passing the same `now`
+   * makes any implementation look stable; the real question is whether
+   * two polls a minute apart agree. DTSTAMP is set from the clock on
+   * every render, so hashing the raw body gave a tag that changed every
+   * second — `If-None-Match` matched only within a single second and
+   * every client re-downloaded the whole feed forever.
+   */
+  it("is stable across renders at different times", async () => {
+    await signInAsAdmin("etag-time@example.com");
+    await createEventAction(makeEvent());
+    cookieJar.clear();
+
+    const first = await buildFeedAction(MEMBER_SCOPE, "UCMC", undefined, NOW);
+    const later = await buildFeedAction(
+      MEMBER_SCOPE,
+      "UCMC",
+      undefined,
+      NOW.add({ hours: 6 }),
+    );
+    expect(later.etag).toBe(first.etag);
+    // ...while the bodies legitimately differ, because DTSTAMP moved.
+    expect(later.ics).not.toBe(first.ics);
   });
 
   it("changes when an event changes", async () => {

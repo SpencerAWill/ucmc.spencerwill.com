@@ -84,6 +84,11 @@ describe("parseRrule", () => {
     ["FREQ=WEEKLY;COUNT=0", "count below range"],
     ["FREQ=WEEKLY;BYDAY=2WE", "ordinal under weekly"],
     ["FREQ=MONTHLY;BYDAY=0WE", "zero ordinal"],
+    // Valid RFC 5545 we do not implement. Accepting it let the expander
+    // fall back to day-of-month while the feed emitted the rule
+    // verbatim — the page saying "the 14th" and every subscriber's
+    // client saying "every Wednesday".
+    ["FREQ=MONTHLY;BYDAY=WE", "bare weekday under monthly"],
     ["FREQ=MONTHLY;BYDAY=6WE", "ordinal out of range"],
     ["FREQ=WEEKLY;BYDAY=XX", "not a weekday"],
     ["FREQ=WEEKLY;UNTIL=2026-04-08", "UNTIL not in UTC stamp form"],
@@ -210,6 +215,42 @@ describe("expandOccurrences — DST", () => {
     );
     expect(wallTime(occurrence.startsAt)).toBe("2026-11-04T18:00:00");
     expect(wallTime(occurrence.endsAt!)).toBe("2026-11-04T19:00:00");
+  });
+
+  /**
+   * The test above does NOT actually test its own name: 18:00–19:00 on
+   * Nov 4 is nowhere near a transition, so it passes under exact-elapsed
+   * arithmetic too. This one spans the fall-back hour itself, which is
+   * the only place the two diverge — under exact-elapsed the end came
+   * back as 01:30, i.e. the event displayed as 1:30 – 1:30.
+   */
+  it("holds the local end time for an occurrence spanning the repeated hour", () => {
+    const [occurrence] = expandOccurrences(
+      {
+        startsAt: clubLocal("2026-10-25T01:30"),
+        endsAt: clubLocal("2026-10-25T02:30"),
+        rrule: "FREQ=WEEKLY;BYDAY=SU",
+      },
+      clubLocal("2026-11-01T00:00"),
+      clubLocal("2026-11-02T00:00"),
+    );
+    expect(wallTime(occurrence.startsAt)).toBe("2026-11-01T01:30:00");
+    expect(wallTime(occurrence.endsAt!)).toBe("2026-11-01T02:30:00");
+  });
+
+  /** The spring counterpart: the hour that does not exist. */
+  it("holds the local end time across the spring-forward gap", () => {
+    const [occurrence] = expandOccurrences(
+      {
+        startsAt: clubLocal("2026-03-01T01:30"),
+        endsAt: clubLocal("2026-03-01T03:30"),
+        rrule: "FREQ=WEEKLY;BYDAY=SU",
+      },
+      clubLocal("2026-03-08T00:00"),
+      clubLocal("2026-03-09T00:00"),
+    );
+    expect(wallTime(occurrence.startsAt)).toBe("2026-03-08T01:30:00");
+    expect(wallTime(occurrence.endsAt!)).toBe("2026-03-08T03:30:00");
   });
 });
 

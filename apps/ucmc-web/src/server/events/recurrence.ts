@@ -221,6 +221,19 @@ export function parseRrule(input: string): ParsedRecurrence {
           `BYDAY may not carry an ordinal under FREQ=WEEKLY ("${term}")`,
         );
       }
+      // The mirror of the rule above, and it exists because the
+      // expander cannot honour it. A bare weekday under FREQ=MONTHLY
+      // ("every Wednesday of every month") is valid RFC 5545 that this
+      // subset does not implement — and the expander silently falls
+      // back to the anchor's day-of-month, while the feed emits the
+      // stored rule verbatim. That is the page and the member's phone
+      // disagreeing, which is the exact outcome this parser exists to
+      // make impossible. Reject it; `2WE` is the supported spelling.
+      if (ordinal === null && freq === "MONTHLY") {
+        throw new RecurrenceError(
+          `BYDAY needs an ordinal under FREQ=MONTHLY — use 1${weekday}–4${weekday} or -1${weekday}, not "${term}"`,
+        );
+      }
       if (ordinal !== null && (ordinal === 0 || ordinal < -5 || ordinal > 5)) {
         throw new RecurrenceError(
           `BYDAY ordinal must be between -5 and 5 and non-zero ("${term}")`,
@@ -423,25 +436,38 @@ export function expandOccurrences(
 ): OccurrenceSpan[] {
   const anchorZdt = series.startsAt.toZonedDateTimeISO(CLUB_TIME_ZONE);
 
-  // Wall-clock duration, measured in the club zone. `largestUnit: "hour"`
-  // keeps it a clock quantity rather than a calendar one, so adding it
-  // back cannot shift the occurrence onto a different date.
-  const duration =
+  /**
+   * Wall-clock duration, measured and re-applied on `PlainDateTime`.
+   *
+   * **The re-application is the part that matters.** Adding a
+   * pure-hours `Duration` to a `ZonedDateTime` applies it as *exact*
+   * time, so an occurrence spanning a transition lands on the wrong
+   * local clock: a 01:30–02:30 series on the November fall-back day
+   * would end at 01:30 again. Measuring in days-and-time and adding on
+   * the plain wall clock — then converting once, at the end — is what
+   * actually makes "18:00–19:00 stays 18:00–19:00" true.
+   */
+  const wallDuration =
     series.endsAt === null
       ? null
       : anchorZdt
           .toPlainDateTime()
           .until(
             series.endsAt.toZonedDateTimeISO(CLUB_TIME_ZONE).toPlainDateTime(),
-            {
-              largestUnit: "hour",
-            },
+            { largestUnit: "day" },
           );
 
   const spanFor = (start: Temporal.ZonedDateTime): OccurrenceSpan => ({
     occurrenceStart: start.toInstant(),
     startsAt: start.toInstant(),
-    endsAt: duration === null ? null : start.add(duration).toInstant(),
+    endsAt:
+      wallDuration === null
+        ? null
+        : start
+            .toPlainDateTime()
+            .add(wallDuration)
+            .toZonedDateTime(CLUB_TIME_ZONE)
+            .toInstant(),
   });
 
   if (series.rrule === null) {

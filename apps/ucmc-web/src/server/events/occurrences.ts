@@ -49,14 +49,73 @@ export interface CalendarOccurrence {
    */
   readonly rrule: string | null;
   /**
-   * Cancelled either because the whole series was called off, or
-   * because this one slot was. Kept in the list rather than filtered
-   * out: the page drops them, but the feed has to *publish* them as
+   * The SERIES' own anchor — `events.starts_at`, not this occurrence's.
+   *
+   * Carried so the officer edit dialog can seed from the series rather
+   * than from whichever occurrence happened to be open. Seeding from
+   * the occurrence silently re-anchors the whole series on save: open
+   * the May 13 instance of a weekly series anchored in January, fix a
+   * typo, and every occurrence before May 13 disappears — from the page
+   * and from `DTSTART` in every subscriber's feed — while
+   * `updateEventAction` additionally clears every exception, because it
+   * correctly sees the anchor as moved.
+   */
+  readonly seriesStartsAt: Temporal.Instant;
+  readonly seriesEndsAt: Temporal.Instant | null;
+  /**
+   * The two cancellation flags, kept apart because they mean different
+   * things and drive different controls: calling off a whole series is
+   * not the same act as skipping one week, and an officer needs to be
+   * offered the one they meant.
+   *
+   * Conflating them made both controls lie — with the series cancelled,
+   * every occurrence read as cancelled, so the per-occurrence button
+   * offered "put this one back" and cleared an override that was never
+   * there.
+   */
+  readonly seriesCanceled: boolean;
+  readonly occurrenceCanceled: boolean;
+  /**
+   * Either of the above — the display flag.
+   *
+   * Kept in the payload rather than derived at each of the five call
+   * sites that render a strikethrough, a badge or a `STATUS:` line.
+   * Occurrences are kept in the list rather than filtered out: the page
+   * drops them, but the feed has to *publish* them as
    * `STATUS:CANCELLED` or subscribers' copies never disappear.
    */
   readonly canceled: boolean;
   readonly sequence: number;
   readonly updatedAt: Temporal.Instant;
+}
+
+/**
+ * The span an override resolves to, given what the series generated.
+ *
+ * **Moving an occurrence preserves its length.** An override that sets
+ * `startsAt` and leaves `endsAt` null means "same event, later that
+ * day" — so the end shifts by the same amount. Inheriting the
+ * generated end raw instead produces an occurrence that ends before it
+ * starts the moment anyone moves one later: a 18:00–19:00 slot moved
+ * to 20:00 would render "8:00 PM – 7:00 PM".
+ *
+ * An override that sets both is taken at its word.
+ */
+function resolveOverrideSpan(
+  exception: EventExceptionRow,
+  generatedStart: Temporal.Instant,
+  generatedEnd: Temporal.Instant | null,
+): { startsAt: Temporal.Instant; endsAt: Temporal.Instant | null } {
+  const startsAt = exception.startsAt ?? generatedStart;
+
+  if (exception.endsAt !== null) {
+    return { startsAt, endsAt: exception.endsAt };
+  }
+  if (exception.startsAt === null || generatedEnd === null) {
+    return { startsAt, endsAt: generatedEnd };
+  }
+  const length = generatedStart.until(generatedEnd);
+  return { startsAt, endsAt: startsAt.add(length) };
 }
 
 /**
@@ -85,15 +144,20 @@ export function occurrencesForSeries(
 
   return expandOccurrences(series, from, until).map((span) => {
     const exception = bySlot.get(span.occurrenceStart.toString());
+    const occurrenceCanceled = exception?.canceled ?? false;
+    const resolved = exception
+      ? resolveOverrideSpan(exception, span.startsAt, span.endsAt)
+      : { startsAt: span.startsAt, endsAt: span.endsAt };
     return {
       eventId: series.id,
       publicId: series.publicId,
       occurrenceStart: span.occurrenceStart,
       // NULL on an override column means "inherit from the series",
       // not "unset" — so an officer who later fixes the series title
-      // sees it flow through to occurrences they had only moved.
-      startsAt: exception?.startsAt ?? span.startsAt,
-      endsAt: exception?.endsAt ?? span.endsAt,
+      // sees it flow through to occurrences they had only moved. The
+      // start/end pair is resolved together, so a move keeps its length.
+      startsAt: resolved.startsAt,
+      endsAt: resolved.endsAt,
       allDay: series.allDay,
       title: exception?.title ?? series.title,
       description: exception?.description ?? series.description,
@@ -101,7 +165,11 @@ export function occurrencesForSeries(
       kind: series.kind,
       visibility: series.visibility,
       rrule: series.rrule,
-      canceled: seriesCanceled || (exception?.canceled ?? false),
+      seriesStartsAt: series.startsAt,
+      seriesEndsAt: series.endsAt,
+      seriesCanceled,
+      occurrenceCanceled,
+      canceled: seriesCanceled || occurrenceCanceled,
       sequence: series.sequence,
       updatedAt: series.updatedAt,
     } satisfies CalendarOccurrence;
@@ -161,6 +229,10 @@ export function seriesAsOccurrence(series: EventSeries): CalendarOccurrence {
     kind: series.kind,
     visibility: series.visibility,
     rrule: series.rrule,
+    seriesStartsAt: series.startsAt,
+    seriesEndsAt: series.endsAt,
+    seriesCanceled: series.canceledAt !== null,
+    occurrenceCanceled: false,
     canceled: series.canceledAt !== null,
     sequence: series.sequence,
     updatedAt: series.updatedAt,
@@ -180,15 +252,17 @@ export function overrideAsOccurrence(
   fallbackStart: Temporal.Instant,
   fallbackEnd: Temporal.Instant | null,
 ): CalendarOccurrence {
+  const resolved = resolveOverrideSpan(exception, fallbackStart, fallbackEnd);
   return {
     ...seriesAsOccurrence(series),
     rrule: null,
     occurrenceStart: exception.occurrenceStart,
-    startsAt: exception.startsAt ?? fallbackStart,
-    endsAt: exception.endsAt ?? fallbackEnd,
+    startsAt: resolved.startsAt,
+    endsAt: resolved.endsAt,
     title: exception.title ?? series.title,
     description: exception.description ?? series.description,
     location: exception.location ?? series.location,
+    occurrenceCanceled: exception.canceled,
     canceled: series.canceledAt !== null || exception.canceled,
   };
 }

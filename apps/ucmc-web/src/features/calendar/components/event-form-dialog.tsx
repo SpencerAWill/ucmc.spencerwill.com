@@ -84,15 +84,27 @@ const WEEKDAY_SHORT: Record<Weekday, string> = {
 function seedToForm(seed: EventFormSeed): FormState {
   if (seed.mode === "edit") {
     const { occurrence } = seed;
+    /**
+     * **Seeded from the SERIES anchor, never from the occurrence that
+     * was open.** This dialog edits the whole series, so
+     * `startsAt` here becomes `events.starts_at` on save. Seeding from
+     * `occurrence.startsAt` silently re-anchored the series: open the
+     * May 13 instance of a weekly series anchored in January, fix a
+     * typo in the title, and every occurrence before May 13 vanishes —
+     * from the page and from DTSTART in every subscriber's feed — while
+     * `updateEventAction` correctly reads the anchor as moved and
+     * clears every exception with it. Nothing in the dialog hinted that
+     * the start date had been rewritten.
+     */
     return {
       title: occurrence.title,
       description: occurrence.description ?? "",
       location: occurrence.location ?? "",
-      startsAt: clubInputFromInstant(occurrence.startsAt),
+      startsAt: clubInputFromInstant(occurrence.seriesStartsAt),
       endsAt:
-        occurrence.endsAt === null
+        occurrence.seriesEndsAt === null
           ? ""
-          : clubInputFromInstant(occurrence.endsAt),
+          : clubInputFromInstant(occurrence.seriesEndsAt),
       allDay: occurrence.allDay,
       kind: occurrence.kind,
       visibility: occurrence.visibility,

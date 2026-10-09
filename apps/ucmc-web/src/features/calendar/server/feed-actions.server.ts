@@ -197,15 +197,30 @@ export async function createSubscriptionToken(
 }
 
 /**
- * SHA-256 of the rendered feed, truncated.
+ * SHA-256 of the rendered feed, with `DTSTAMP` lines removed first.
+ *
+ * **Stripping DTSTAMP is what makes the ETag mean anything.** That
+ * property is "when this copy was generated" and is set from
+ * `Temporal.Now` on every request, so hashing the raw body produced a
+ * tag that changed every second regardless of whether a single event
+ * had moved. `If-None-Match` then matched only for two polls inside the
+ * same second, and every client re-downloaded the whole feed forever —
+ * precisely the opposite of the intent.
+ *
+ * Everything that describes the *content* survives the strip, so a
+ * changed title, a new event, a deletion or a cancellation all still
+ * move the tag. A deletion is also why this hashes the rendering rather
+ * than `max(updated_at)`: nothing's timestamp moves when a row
+ * disappears.
  *
  * `crypto.subtle` is available in workerd; this is a cache key, not a
  * security boundary, so the truncation is fine.
  */
 async function contentEtag(body: string): Promise<string> {
+  const stable = body.replace(/^DTSTAMP:.*\r?\n/gm, "");
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(body),
+    new TextEncoder().encode(stable),
   );
   return [...new Uint8Array(digest)]
     .slice(0, 8)
