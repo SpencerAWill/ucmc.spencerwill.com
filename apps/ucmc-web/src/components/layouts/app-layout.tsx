@@ -368,13 +368,11 @@ export function SidebarNav() {
           <SidebarMenu>
             {pages.calendar ? (
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  aria-disabled
-                  tabIndex={-1}
-                  tooltip="Calendar (coming soon)"
-                >
-                  <CalendarDays />
-                  <span>Calendar</span>
+                <SidebarMenuButton asChild tooltip="Calendar">
+                  <Link to="/calendar">
+                    <CalendarDays />
+                    <span>Calendar</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ) : null}

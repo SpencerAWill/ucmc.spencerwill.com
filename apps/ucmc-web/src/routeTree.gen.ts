@@ -36,6 +36,7 @@ import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as ConstitutionRouteImport } from './routes/constitution'
+import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AlbumRouteImport } from './routes/album'
@@ -215,6 +216,11 @@ const DeactivatedRoute = DeactivatedRouteImport.update({
 const ConstitutionRoute = ConstitutionRouteImport.update({
   id: '/constitution',
   path: '/constitution',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarRoute = CalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuditRoute = AuditRouteImport.update({
@@ -447,6 +453,7 @@ export interface FileRoutesByFullPath {
   '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/calendar': typeof CalendarRoute
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -518,6 +525,7 @@ export interface FileRoutesByTo {
   '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/calendar': typeof CalendarRoute
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -584,6 +592,7 @@ export interface FileRoutesById {
   '/album': typeof AlbumRoute
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
+  '/calendar': typeof CalendarRoute
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -660,6 +669,7 @@ export interface FileRouteTypes {
     | '/album'
     | '/anti-hazing'
     | '/audit'
+    | '/calendar'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
@@ -731,6 +741,7 @@ export interface FileRouteTypes {
     | '/album'
     | '/anti-hazing'
     | '/audit'
+    | '/calendar'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
@@ -796,6 +807,7 @@ export interface FileRouteTypes {
     | '/album'
     | '/anti-hazing'
     | '/audit'
+    | '/calendar'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
@@ -871,6 +883,7 @@ export interface RootRouteChildren {
   AlbumRoute: typeof AlbumRoute
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
+  CalendarRoute: typeof CalendarRoute
   ConstitutionRoute: typeof ConstitutionRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
@@ -1099,6 +1112,13 @@ declare module '@tanstack/react-router' {
       path: '/constitution'
       fullPath: '/constitution'
       preLoaderRoute: typeof ConstitutionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calendar': {
+      id: '/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof CalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/audit': {
@@ -1566,6 +1586,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlbumRoute: AlbumRoute,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
+  CalendarRoute: CalendarRoute,
   ConstitutionRoute: ConstitutionRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,

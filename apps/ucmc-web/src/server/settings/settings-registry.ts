@@ -388,7 +388,7 @@ export const SETTINGS = {
   "pages.calendar": z.boolean().default(true).register(registry, {
     label: "Calendar enabled",
     description:
-      "When off, the Calendar “coming soon” sidebar entry is hidden. Calendar has no route yet.",
+      "When off, the Calendar sidebar entry is hidden and the /calendar route returns notFound for everyone. Does NOT stop the subscribable .ics feeds — those have their own switch, because switching a page off and breaking every member’s phone calendar are different acts.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
