@@ -27,8 +27,7 @@ import type {
 import { writeSettingStatement } from "#/server/settings/settings-repo.server";
 
 export type UpdateSettingResult =
-  | { ok: true }
-  | { ok: false; reason: "unknown_key" | "invalid_value" };
+  { ok: true } | { ok: false; reason: "unknown_key" | "invalid_value" };
 
 export async function updateSettingAction(
   input: UpdateSettingInput,

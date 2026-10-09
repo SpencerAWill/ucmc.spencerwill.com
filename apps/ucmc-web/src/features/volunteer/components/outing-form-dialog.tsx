@@ -25,8 +25,7 @@ import { VOLUNTEER_LIMITS } from "#/features/volunteer/server/volunteer-schemas"
 import type { VolunteerEventEntry } from "#/features/volunteer/server/volunteer-fns";
 
 export type OutingFormSeed =
-  | { mode: "create" }
-  | { mode: "edit"; outing: VolunteerEventEntry };
+  { mode: "create" } | { mode: "edit"; outing: VolunteerEventEntry };
 
 interface FormState {
   title: string;

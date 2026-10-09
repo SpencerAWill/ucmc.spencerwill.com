@@ -13,8 +13,7 @@ import type { RecordGearInspectionInput } from "#/features/gear/server/gear-fns"
 /** What was inspected: one coded piece, or a counted model as a batch.
  *  The two invalidate different things, so the hook is told which. */
 export type GearInspectionTarget =
-  | { kind: "item"; publicId: string }
-  | { kind: "model"; publicId: string };
+  { kind: "item"; publicId: string } | { kind: "model"; publicId: string };
 
 export function useRecordGearInspection(target: GearInspectionTarget) {
   const queryClient = useQueryClient();

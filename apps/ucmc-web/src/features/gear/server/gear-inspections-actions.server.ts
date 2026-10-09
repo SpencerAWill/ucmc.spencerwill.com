@@ -66,8 +66,7 @@ export interface GearInspectionTargetInput {
 /** A union rather than a pair of nullables, so the read below narrows
  *  to one branch instead of coalescing an id it knows is there. */
 type ResolvedTarget =
-  | { kind: "item"; id: string }
-  | { kind: "model"; id: string };
+  { kind: "item"; id: string } | { kind: "model"; id: string };
 
 type ResolveInspectionTargetResult =
   | { ok: true; target: ResolvedTarget }
@@ -128,8 +127,7 @@ export interface RecordGearInspectionInput extends GearInspectionTargetInput {
 }
 
 export type RecordGearInspectionResult =
-  | { ok: true; publicId: string }
-  | { ok: false; reason: "not_counted" };
+  { ok: true; publicId: string } | { ok: false; reason: "not_counted" };
 
 async function loadActorName(userId: string): Promise<string> {
   // Snapshot the actor's display name at write time. We prefer the

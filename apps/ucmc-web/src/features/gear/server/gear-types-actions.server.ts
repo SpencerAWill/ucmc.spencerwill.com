@@ -61,8 +61,7 @@ export interface CreateGearTypeInput {
 }
 
 export type CreateGearTypeResult =
-  | { ok: true; publicId: string }
-  | { ok: false; reason: "name_in_use" };
+  { ok: true; publicId: string } | { ok: false; reason: "name_in_use" };
 
 export async function createGearTypeAction(
   input: CreateGearTypeInput,
@@ -101,8 +100,7 @@ export interface EditGearTypeInput extends CreateGearTypeInput {
 }
 
 export type EditGearTypeResult =
-  | { ok: true }
-  | { ok: false; reason: "name_in_use" };
+  { ok: true } | { ok: false; reason: "name_in_use" };
 
 export async function editGearTypeAction(
   input: EditGearTypeInput,
@@ -151,8 +149,7 @@ export async function editGearTypeAction(
 }
 
 export type DeleteGearTypeResult =
-  | { ok: true }
-  | { ok: false; reason: "in_use" };
+  { ok: true } | { ok: false; reason: "in_use" };
 
 export async function deleteGearTypeAction(input: {
   publicId: string;

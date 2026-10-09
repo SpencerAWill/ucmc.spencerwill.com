@@ -832,8 +832,7 @@ export async function editGearAction(
 }
 
 export type DeactivateGearResult =
-  | { ok: true }
-  | { ok: false; reason: "on_loan" };
+  { ok: true } | { ok: false; reason: "on_loan" };
 
 /**
  * Move an item to a terminal status — `retired` (worn / aged out),
@@ -926,8 +925,7 @@ export async function reactivateGearAction(input: {
  * silently un-label something still in service.
  */
 export type ReleaseCodeResult =
-  | { ok: true }
-  | { ok: false; reason: "still_active" | "no_code" };
+  { ok: true } | { ok: false; reason: "still_active" | "no_code" };
 
 export async function releaseGearItemCodeAction(input: {
   publicId: string;

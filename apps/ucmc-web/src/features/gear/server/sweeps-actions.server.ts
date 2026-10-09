@@ -255,8 +255,7 @@ export interface SweepCloseReport {
 }
 
 export type CloseSweepResult =
-  | ({ ok: true } & SweepCloseReport)
-  | { ok: false; reason: "no_open_sweep" };
+  ({ ok: true } & SweepCloseReport) | { ok: false; reason: "no_open_sweep" };
 
 export async function closeSweepAction(
   input: {

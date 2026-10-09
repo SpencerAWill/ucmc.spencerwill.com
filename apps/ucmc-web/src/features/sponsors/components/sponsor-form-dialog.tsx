@@ -28,8 +28,7 @@ import {
 import { useImageResize } from "#/hooks/use-image-resize";
 
 export type SponsorFormSeed =
-  | { mode: "create" }
-  | { mode: "edit"; sponsor: SponsorEntry };
+  { mode: "create" } | { mode: "edit"; sponsor: SponsorEntry };
 
 interface FormState {
   name: string;
