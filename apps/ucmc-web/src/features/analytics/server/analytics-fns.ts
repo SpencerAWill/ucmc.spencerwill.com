@@ -56,3 +56,11 @@ export const gearAnalyticsFn = createServerFn({ method: "GET" })
       await import("#/features/analytics/server/gear-actions.server");
     return gearAnalyticsAction(data);
   });
+
+export const activityAnalyticsFn = createServerFn({ method: "GET" })
+  .validator(z.object({ season: seasonSchema.optional() }))
+  .handler(async ({ data }) => {
+    const { activityAnalyticsAction } =
+      await import("#/features/analytics/server/activity-actions.server");
+    return activityAnalyticsAction(data);
+  });

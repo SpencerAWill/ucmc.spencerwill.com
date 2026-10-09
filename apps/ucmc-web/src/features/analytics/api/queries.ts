@@ -1,9 +1,11 @@
 import {
+  activityAnalyticsQueryKey,
   complianceAnalyticsQueryKey,
   gearAnalyticsQueryKey,
   platformAnalyticsQueryKey,
 } from "#/features/analytics/api/query-keys";
 import {
+  activityAnalyticsFn,
   complianceAnalyticsFn,
   gearAnalyticsFn,
   platformAnalyticsFn,
@@ -35,5 +37,13 @@ export function gearAnalyticsQueryOptions(season: string | null) {
   return {
     queryKey: gearAnalyticsQueryKey(season),
     queryFn: () => gearAnalyticsFn({ data: season ? { season } : {} }),
+  } as const;
+}
+
+/** Events by kind on the season axis, cancellations, and volunteer service. */
+export function activityAnalyticsQueryOptions(season: string | null) {
+  return {
+    queryKey: activityAnalyticsQueryKey(season),
+    queryFn: () => activityAnalyticsFn({ data: season ? { season } : {} }),
   } as const;
 }

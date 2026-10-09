@@ -22,3 +22,7 @@ export function complianceAnalyticsQueryKey(season: string | null) {
 export function gearAnalyticsQueryKey(season: string | null) {
   return [...ANALYTICS_QUERY_KEY, "gear", season] as const;
 }
+
+export function activityAnalyticsQueryKey(season: string | null) {
+  return [...ANALYTICS_QUERY_KEY, "activity", season] as const;
+}
