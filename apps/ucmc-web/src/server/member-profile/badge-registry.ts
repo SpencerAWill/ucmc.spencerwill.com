@@ -193,7 +193,10 @@ export const BADGES = {
   // ── Service.
   officer: {
     label: "Officer",
-    description: "Held an officer role. Thank you.",
+    // Present tense on purpose: it is computed from the roles a
+    // member holds right now, so promising "has held" would be a
+    // claim the data cannot back once a term ends.
+    description: "Serving as a club officer. Thank you.",
     kind: "service",
     art: "officer.svg",
     shape: "shield",

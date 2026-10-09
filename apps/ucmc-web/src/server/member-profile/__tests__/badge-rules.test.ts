@@ -8,7 +8,13 @@ import {
   isBadgeLive,
 } from "../badge-registry";
 import type { BadgeInputs } from "../badge-rules";
-import { awardedBadges, packMuleTier, tenureBadgeFor } from "../badge-rules";
+import {
+  awardedBadges,
+  packMuleTier,
+  showcaseBadges,
+  tenureBadgeFor,
+  tenureBadgesFor,
+} from "../badge-rules";
 
 const NOBODY: BadgeInputs = {
   completedSeasons: 0,
@@ -68,6 +74,57 @@ describe("tenureBadgeFor", () => {
 
   it("holds at the top rung for a long-serving member", () => {
     expect(tenureBadgeFor(9)).toBe("white_oak");
+  });
+});
+
+describe("tenureBadgesFor", () => {
+  it("returns every rung reached, not only the top one", () => {
+    // The catalog renders the whole ladder, so a member three
+    // seasons in must not see Redbud drawn as unearned — they
+    // finished that season.
+    expect(tenureBadgesFor(3)).toEqual(["redbud", "pawpaw", "hemlock"]);
+  });
+
+  it("is empty during a first season", () => {
+    expect(tenureBadgesFor(0)).toEqual([]);
+  });
+
+  it("stops at the top rung for a long-serving member", () => {
+    expect(tenureBadgesFor(12)).toEqual([
+      "redbud",
+      "pawpaw",
+      "hemlock",
+      "hickory",
+      "white_oak",
+    ]);
+  });
+});
+
+describe("showcaseBadges", () => {
+  it("keeps only the current tenure rung", () => {
+    // Four shelf slots filled with Redbud, Pawpaw, Hemlock and
+    // Hickory would bury everything the member actually did.
+    const awards = awardedBadges({
+      ...NOBODY,
+      completedSeasons: 4,
+      gearLoans: 1,
+    });
+    expect(awards.map((b) => b.key)).toEqual([
+      "redbud",
+      "pawpaw",
+      "hemlock",
+      "hickory",
+      "first_rental",
+    ]);
+    expect(showcaseBadges(awards).map((b) => b.key)).toEqual([
+      "hickory",
+      "first_rental",
+    ]);
+  });
+
+  it("leaves a badge set with no tenure rungs alone", () => {
+    const awards = awardedBadges({ ...NOBODY, gearLoans: 1, isOfficer: true });
+    expect(showcaseBadges(awards)).toEqual(awards);
   });
 });
 

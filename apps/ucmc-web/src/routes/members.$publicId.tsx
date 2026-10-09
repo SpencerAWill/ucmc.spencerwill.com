@@ -132,10 +132,12 @@ function MemberDetailPage() {
   }
 
   // A failed read and a member who does not exist are different
-  // answers and must not share a screen. Reporting every failure as
-  // "not found" sent a real reader looking for a deleted account when
-  // the actual cause was a query that threw — the page offered no
-  // retry and no hint that anything had gone wrong.
+  // answers and must not share a screen: "not found" sends a reader
+  // looking for a deleted account when the query merely threw, and
+  // an error screen offers a Retry that can never succeed for a
+  // member who was never there. `getMemberDetailAction` answers
+  // `null` for the second case and throws only for the first, which
+  // is what makes the two distinguishable here.
   if (error) {
     return (
       <PageContainer width="app">
@@ -143,9 +145,11 @@ function MemberDetailPage() {
           <AlertTriangle />
           <AlertTitle>Couldn&rsquo;t load this member.</AlertTitle>
           <AlertDescription className="gap-3">
-            <pre className="max-w-full overflow-x-auto rounded-sm bg-background/60 px-2 py-1 text-xs text-muted-foreground">
-              {error.message}
-            </pre>
+            {/* Deliberately not `error.message`. A server-fn error
+                serializes its message to the client, so a D1 failure
+                would print internal query text to any approved
+                member. The retry is the useful half. */}
+            <p>Something went wrong fetching this profile.</p>
             <Button size="sm" variant="outline" onClick={() => void refetch()}>
               <RefreshCw className="size-3.5" />
               Try again
@@ -174,18 +178,34 @@ function MemberDetailPage() {
     );
   }
 
+  // `tab` is component state and `hasOfficerTab` follows live
+  // permissions, so switching role emulation while sitting on the
+  // Officer tab unmounts both its trigger and its panel and leaves
+  // the controlled `Tabs` on a value nothing matches — a blank
+  // content area. Clamping at render keeps the two in step without
+  // an effect.
+  const activeTab: ProfileTab =
+    tab === "officer" && !hasOfficerTab ? "overview" : tab;
+
   const name = member.preferredName ?? member.fullName;
   const { stats } = member;
 
   // Only tiles with something behind them. A strip padded out with
   // zeros reads as a member who has done nothing, when the truth is
   // usually that the club has not recorded it yet.
+  // A null tally means the viewer may not see it, which is not the
+  // same as zero — both are dropped from the strip, but only one of
+  // them would have been a claim.
   const tiles: ProfileStat[] = [
     { label: "Seasons", value: stats.completedSeasons },
     { label: "Badges", value: stats.badges.length },
     { label: "Gear loans", value: stats.gearLoans },
     { label: "Sweeps", value: stats.sweepsParticipated },
-  ].filter((tile) => tile.value > 0);
+  ].flatMap((tile) =>
+    tile.value !== null && tile.value > 0
+      ? [{ label: tile.label, value: tile.value }]
+      : [],
+  );
 
   const readiness: ReadinessItem[] = [];
   if (canViewWaivers && member.waiverStatus) {
@@ -210,13 +230,18 @@ function MemberDetailPage() {
           : "No emergency contact on file",
     });
   }
-  readiness.push({
-    state: stats.openLoans > 0 ? "warn" : "ok",
-    label:
-      stats.openLoans > 0
-        ? `Holding ${stats.openLoans} item${stats.openLoans > 1 ? "s" : ""} from the gear cave`
-        : "Nothing out from the gear cave",
-  });
+  // Only for a viewer who may see the tallies at all; the Officer
+  // tab is already permission-gated, but the payload is the gate
+  // that matters.
+  if (stats.openLoans !== null) {
+    readiness.push({
+      state: stats.openLoans > 0 ? "warn" : "ok",
+      label:
+        stats.openLoans > 0
+          ? `Holding ${stats.openLoans} item${stats.openLoans > 1 ? "s" : ""} from the gear cave`
+          : "Nothing out from the gear cave",
+    });
+  }
 
   return (
     // Not wrapped in one `PageContainer`: the banner runs the full
@@ -274,7 +299,7 @@ function MemberDetailPage() {
         <ProfileStats stats={tiles} />
 
         <Tabs
-          value={tab}
+          value={activeTab}
           onValueChange={(value) => setTab(value as ProfileTab)}
         >
           {/* Scrolls rather than wraps at phone width: a wrapped tab

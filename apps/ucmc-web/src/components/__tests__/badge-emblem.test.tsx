@@ -62,16 +62,22 @@ describe("BadgeEmblem", () => {
     expect(frame).toHaveAttribute("stroke-dasharray");
   });
 
-  it("gives two emblems with different art distinct clip paths", () => {
-    // SVG ids are document-global: a shared id would make the second
-    // emblem clip to the first one's outline.
+  it("gives every emblem a distinct clip path, identical props included", () => {
+    // SVG ids are document-global: a shared id makes the second
+    // emblem clip to the first one's outline. Varying the art was
+    // not enough of a test — the case that actually occurs is the
+    // catalog rendering seven trip-blocked badges that all share
+    // `coming-soon.svg`, `hex` and `locked`.
     const { container } = render(
       <>
         <BadgeEmblem art="white-oak.svg" shape="circle" />
         <BadgeEmblem art="pack-mule.svg" shape="hex" />
+        <BadgeEmblem art="coming-soon.svg" shape="hex" locked />
+        <BadgeEmblem art="coming-soon.svg" shape="hex" locked />
+        <BadgeEmblem art="coming-soon.svg" shape="hex" locked />
       </>,
     );
     const ids = [...container.querySelectorAll("clipPath")].map((el) => el.id);
-    expect(new Set(ids).size).toBe(2);
+    expect(new Set(ids).size).toBe(5);
   });
 });

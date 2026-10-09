@@ -40,6 +40,7 @@ import type {
 import { loadProfileFacets } from "#/server/member-profile/profile-facets.server";
 import type { MemberWaiverStatus } from "#/server/waivers/current-attestation.server";
 import { requireMembersManager } from "#/features/members/server/permissions.server";
+import { optionalProfileText } from "#/server/profile/profile-schemas";
 
 // ── auth helpers ────────────────────────────────────────────────────────
 
@@ -470,9 +471,19 @@ export interface MemberDetail {
   waiverStatus: MemberWaiverStatus | null;
 }
 
+/**
+ * Returns `null` — rather than throwing — when there is no such
+ * member, so the caller can tell "this profile does not exist" from
+ * "the read failed". Those are different answers and must not share
+ * a screen: reporting a failed query as "member not found" sends a
+ * reader looking for a deleted account, and reporting a missing
+ * member as an error offers them a Retry that can never succeed.
+ *
+ * Anything else still throws.
+ */
 export async function getMemberDetailAction(
   publicId: string,
-): Promise<MemberDetail> {
+): Promise<MemberDetail | null> {
   const principal = await requireApprovedPrincipal();
   const db = getDb();
   const canViewPrivate = principal.permissions.includes("members:view_private");
@@ -517,16 +528,15 @@ export async function getMemberDetailAction(
     .get();
 
   if (!row) {
-    throw new Error("User not found");
+    return null;
   }
   // Unclaimed (officer-pre-added) stubs aren't directory members — they
   // have no profile, no verified email, and no avatar. The list query
   // already excludes them; mirror that here so a manually-typed
   // /members/<publicId> URL can't surface a stub on the detail page.
-  // Treat as 404 so the route renders the same not-found state any
-  // unknown publicId would.
+  // Indistinguishable from an unknown publicId by design.
   if (row.status === "unclaimed") {
-    throw new Error("User not found");
+    return null;
   }
 
   const userId = row.userId;
@@ -600,6 +610,7 @@ export async function getMemberDetailAction(
   const stats = scoreMemberStats(
     counters,
     roles.some((r) => r.name !== "member"),
+    canViewPrivate,
   );
   const { prompts, disciplines } = facets;
 
@@ -924,6 +935,14 @@ export async function adminUpdateProfileAction(input: {
     relationship: schema.ContactRelationship;
   }>;
   ucAffiliation: schema.UcAffiliation;
+  // The fn's validator is `profileInputSchema`, so these arrive
+  // whether or not the sheet renders them. Declared here rather than
+  // left to the spread: an undeclared field still reaches the DB and
+  // still gets written, it just does so invisibly.
+  bio?: string;
+  trailName?: string;
+  pronouns?: string;
+  statusLine?: string;
 }): Promise<{ ok: true }> {
   const principal = await requireMembersManager();
 
@@ -936,7 +955,12 @@ export async function adminUpdateProfileAction(input: {
     throw new Error("User not found");
   }
 
-  const { userId, emergencyContacts, ...profileData } = input;
+  const { userId, emergencyContacts, ...rest } = input;
+  // Same NULL normalisation as the member's own save. Without it an
+  // officer opening and saving the sheet writes `""` over a cleared
+  // trail name, so the two writers disagree about what "not set"
+  // looks like on disk.
+  const profileData = { ...rest, ...optionalProfileText(rest) };
   // Profile upsert + emergency-contact replace + audit row, all
   // committed as one D1 batch. Field names only in audit metadata —
   // the values themselves would be PII by definition since this

@@ -291,17 +291,42 @@ describe("scoreMemberStats", () => {
     await attest(userId, "2025-26", "2025-09-01T04:00:00Z");
 
     const counters = await loadMemberCounters(userId, NOW);
-    const stats = scoreMemberStats(counters, false);
-    // Two closed rings → Pawpaw, the second rung. The running season
-    // must not count, or the badge would outrun the rings.
-    expect(stats.badges.map((b) => b.key)).toEqual(["pawpaw"]);
+    const stats = scoreMemberStats(counters, false, true);
+    // Two closed rings → both rungs reached, topping out at Pawpaw.
+    // The running season must not count, or the badges would outrun
+    // the rings: Hemlock is the third rung and is absent.
+    expect(stats.badges.map((b) => b.key)).toEqual(["redbud", "pawpaw"]);
+  });
+
+  it("hides the raw tallies from a viewer who may not see them", async () => {
+    // Badges survive the projection and the numbers do not: a badge
+    // is a public achievement, an exact loan count is another
+    // member's gear-desk record.
+    const userId = await seedMember();
+    const modelId = await ensureModel();
+    await attest(userId, "2023-24", "2023-09-01T04:00:00Z");
+    await loan(userId, modelId, "2025-10-10T04:00:00Z", "2025-10-09T04:00:00Z");
+
+    const counters = await loadMemberCounters(userId, NOW);
+    const hidden = scoreMemberStats(counters, false, false);
+
+    expect(hidden.gearLoans).toBeNull();
+    expect(hidden.openLoans).toBeNull();
+    expect(hidden.onTimeReturnStreak).toBeNull();
+    expect(hidden.sweepsParticipated).toBeNull();
+    // Null, never 0 — a zero would read as "has never borrowed
+    // anything", which is a claim and in this case a false one.
+    expect(hidden.gearLoans).not.toBe(0);
+    // Earned from the loan that is now hidden, and still shown.
+    expect(hidden.badges.map((b) => b.key)).toContain("first_rental");
+    expect(hidden.completedSeasons).toBe(1);
   });
 
   it("adds the officer badge from the role flag", async () => {
     const userId = await seedMember();
     const counters = await loadMemberCounters(userId, NOW);
-    expect(scoreMemberStats(counters, true).badges.map((b) => b.key)).toEqual([
-      "officer",
-    ]);
+    expect(
+      scoreMemberStats(counters, true, true).badges.map((b) => b.key),
+    ).toEqual(["officer"]);
   });
 });

@@ -18,6 +18,8 @@
  * (issue #257): point it at an R2 key when one exists and fall back
  * to the repo file. Call sites don't change.
  */
+import { useId } from "react";
+
 import { cn } from "#/lib/utils";
 import type {
   BadgeShape,
@@ -90,10 +92,13 @@ export function BadgeEmblem({
   label,
   className,
 }: BadgeEmblemProps) {
-  // Unique per instance so two emblems on one page can't share a
-  // clip path — SVG ids are document-global, and React 18's
-  // `useId` output is valid in one.
-  const clipId = `badge-clip-${shape}-${art.replace(/\W/g, "-")}${locked ? "-l" : ""}`;
+  // `useId`, not a string built from the props. SVG ids are
+  // document-global, and the catalog renders every trip-blocked
+  // badge with the same art, shape and locked state — so a
+  // prop-derived id gave seven elements the same one. It renders
+  // correctly only because the duplicated paths happen to be
+  // identical, which is luck rather than design.
+  const clipId = useId();
   const path = SHAPE_PATHS[shape];
 
   return (

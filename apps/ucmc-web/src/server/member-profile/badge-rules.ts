@@ -47,7 +47,15 @@ export interface BadgeInputs {
   onTimeReturnStreak: number;
   /** Inventory sweeps the member logged at least one item in. */
   sweepsParticipated: number;
-  /** Holds, or has held, any role other than plain `member`. */
+  /**
+   * Currently holds any role other than plain `member`.
+   *
+   * **Current, not historical.** The caller reads live `user_roles`,
+   * so an outgoing officer loses this the moment their role is
+   * removed. Making it retrospective needs a record of past terms —
+   * `historical_officers` is a hand-curated archive keyed on a name
+   * string, not on `user_id`, so it cannot answer this today.
+   */
   isOfficer: boolean;
 }
 
@@ -72,20 +80,24 @@ const CLEAN_RETURN_STREAK = 10;
 const SWEEP_CREW_SWEEPS = 1;
 
 /**
- * The highest tenure badge earned, or `null` during a first season.
+ * Every tenure rung the member has reached, oldest first.
  *
- * Only the top rung is returned. Showing all five at year five would
- * bury the one that means something under four that no longer do —
- * the ring count on the avatar already carries the history.
+ * **All of them, not just the top.** A member in their fourth season
+ * really did finish a first, a second and a third, and the badge
+ * catalog shows the whole ladder — rendering Redbud as locked for
+ * someone three years in states something false. Which of them to
+ * put on the trophy shelf is a display question, answered by
+ * `showcaseBadges` below.
  */
+export function tenureBadgesFor(completedSeasons: number): BadgeKey[] {
+  return TENURE_LADDER.filter((rung) => completedSeasons >= rung.seasons).map(
+    (rung) => rung.key,
+  );
+}
+
+/** The highest rung reached, or `null` during a first season. */
 export function tenureBadgeFor(completedSeasons: number): BadgeKey | null {
-  let earned: BadgeKey | null = null;
-  for (const rung of TENURE_LADDER) {
-    if (completedSeasons >= rung.seasons) {
-      earned = rung.key;
-    }
-  }
-  return earned;
+  return tenureBadgesFor(completedSeasons).at(-1) ?? null;
 }
 
 /**
@@ -142,9 +154,8 @@ export function awardedBadges(inputs: BadgeInputs): AwardedBadge[] {
     awards.push({ key, tier, count });
   };
 
-  const tenure = tenureBadgeFor(inputs.completedSeasons);
-  if (tenure) {
-    push(tenure, null, inputs.completedSeasons);
+  for (const key of tenureBadgesFor(inputs.completedSeasons)) {
+    push(key, null, inputs.completedSeasons);
   }
 
   if (inputs.gearLoans >= FIRST_RENTAL_LOANS) {
@@ -169,4 +180,27 @@ export function awardedBadges(inputs: BadgeInputs): AwardedBadge[] {
   }
 
   return awards;
+}
+
+/**
+ * What the Overview tab's trophy shelf shows: the awarded badges
+ * with the superseded tenure rungs dropped.
+ *
+ * The catalog wants every rung a member reached — anything else
+ * calls a finished season unearned. The shelf wants the opposite:
+ * four slots filled with Redbud, Pawpaw, Hemlock and Hickory buries
+ * everything that is not a birthday, so only the current rung earns
+ * a place and the rest of the slots go to what the member actually
+ * did.
+ */
+export function showcaseBadges(
+  badges: readonly AwardedBadge[],
+): AwardedBadge[] {
+  const tenureKeys = badges
+    .filter((badge) => TENURE_LADDER.some((rung) => rung.key === badge.key))
+    .map((badge) => badge.key);
+  const topRung = tenureKeys.at(-1);
+  return badges.filter(
+    (badge) => !tenureKeys.includes(badge.key) || badge.key === topRung,
+  );
 }

@@ -224,3 +224,48 @@ export const profileFacetsInputSchema = z.object({
 });
 
 export type ProfileFacetsInput = z.infer<typeof profileFacetsInputSchema>;
+
+/**
+ * `""` → `null` for the optional profile text columns.
+ *
+ * Every one of `bio`, `trail_name`, `pronouns` and `status_line` is
+ * nullable, and the schema's stated invariant is that **NULL means
+ * "not set" and `""` never occurs** — readers omit the line entirely
+ * for null, where an empty string is truthy enough to render an
+ * element with its own spacing.
+ *
+ * The zod schemas keep these as plain strings so the forms can bind
+ * them, so the conversion has to happen at the write. It lives here,
+ * once, because there are **three** writers — registration, the
+ * member's own Profile tab, and the admin sheet — and the first
+ * version of this normalised in only one of them, leaving every new
+ * registrant with three empty strings on disk.
+ */
+export function optionalProfileText<
+  T extends {
+    bio?: string;
+    trailName?: string;
+    pronouns?: string;
+    statusLine?: string;
+  },
+>(
+  data: T,
+): {
+  bio?: string | null;
+  trailName?: string | null;
+  pronouns?: string | null;
+  statusLine?: string | null;
+} {
+  const orNull = (value: string | undefined) =>
+    value === undefined ? undefined : value.length > 0 ? value : null;
+  return {
+    ...(data.bio === undefined ? {} : { bio: orNull(data.bio) }),
+    ...(data.trailName === undefined
+      ? {}
+      : { trailName: orNull(data.trailName) }),
+    ...(data.pronouns === undefined ? {} : { pronouns: orNull(data.pronouns) }),
+    ...(data.statusLine === undefined
+      ? {}
+      : { statusLine: orNull(data.statusLine) }),
+  };
+}

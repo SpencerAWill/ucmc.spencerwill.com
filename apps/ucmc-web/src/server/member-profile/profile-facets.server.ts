@@ -24,6 +24,7 @@ import type {
   ProfilePromptKey,
 } from "./profile-prompt-registry";
 import {
+  DISCIPLINE_KEYS,
   isDisciplineKey,
   isDisciplineLevel,
   isProfilePromptKey,
@@ -75,10 +76,21 @@ export async function loadProfileFacets(
         ? [{ key: row.promptKey, answer: row.answer }]
         : [],
     ),
-    disciplines: disciplineRows.flatMap((row) =>
-      isDisciplineKey(row.discipline) && isDisciplineLevel(row.level)
-        ? [{ discipline: row.discipline, level: row.level }]
-        : [],
-    ),
+    // Registry order, not whatever SQLite returns. There is no
+    // ORDER BY that could express it — the order lives in the
+    // registry — and without this the Experience grid comes back
+    // alphabetical by key, which is a different order from the
+    // editor that wrote it and free to change if the plan does.
+    disciplines: disciplineRows
+      .flatMap((row) =>
+        isDisciplineKey(row.discipline) && isDisciplineLevel(row.level)
+          ? [{ discipline: row.discipline, level: row.level }]
+          : [],
+      )
+      .sort(
+        (a, b) =>
+          DISCIPLINE_KEYS.indexOf(a.discipline) -
+          DISCIPLINE_KEYS.indexOf(b.discipline),
+      ),
   };
 }

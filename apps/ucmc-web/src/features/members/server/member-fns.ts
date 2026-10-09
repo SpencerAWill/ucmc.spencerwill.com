@@ -98,7 +98,7 @@ export const listMembersFn = createServerFn({ method: "GET" })
 
 export const getMemberDetailFn = createServerFn({ method: "GET" })
   .validator(z.object({ publicId: z.string().min(1) }))
-  .handler(async ({ data }): Promise<MemberDetail> => {
+  .handler(async ({ data }): Promise<MemberDetail | null> => {
     const { getMemberDetailAction } =
       await import("#/features/members/server/member-actions.server");
     return getMemberDetailAction(data.publicId);

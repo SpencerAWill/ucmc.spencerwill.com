@@ -13,11 +13,6 @@
  */
 import { BadgeEmblem } from "#/components/badge-emblem";
 import { Card, CardContent } from "#/components/ui/card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "#/components/ui/tooltip";
 import type {
   AwardedBadge,
   BadgeKey,
@@ -29,6 +24,7 @@ import {
   BADGE_KINDS,
   BADGE_KIND_LABELS,
 } from "#/server/member-profile/badge-registry";
+import { showcaseBadges } from "#/server/member-profile/badge-rules";
 import { cn } from "#/lib/utils";
 
 /** How many badges the compact summary shows before linking onward. */
@@ -37,9 +33,22 @@ const SHOWCASE_LIMIT = 4;
 function BadgeTile({
   badgeKey,
   award,
+  showDetail,
 }: {
   badgeKey: BadgeKey;
   award: AwardedBadge | undefined;
+  /**
+   * Render the explanation as text under the label.
+   *
+   * **The catalog does; the showcase does not.** This used to be a
+   * tooltip, which is unreachable in the two places that matter
+   * most: a `<figure>` takes no focus, so a keyboard never reaches
+   * it, and Radix tooltips do not open on touch — leaving a phone
+   * reader a grid of drained, dashed badges with nothing anywhere
+   * saying why. On a mobile-first page that is the whole
+   * explanation missing.
+   */
+  showDetail: boolean;
 }) {
   const badge = BADGES[badgeKey];
   const earned = award !== undefined;
@@ -54,28 +63,28 @@ function BadgeTile({
       : badge.description;
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <figure className="flex flex-col items-center gap-1.5 text-center">
-          <BadgeEmblem
-            art={badge.art}
-            shape={badge.shape}
-            tier={award?.tier ?? null}
-            locked={!earned}
-            className="size-14 sm:size-16"
-          />
-          <figcaption
-            className={cn(
-              "text-xs leading-tight font-medium",
-              !earned && "text-muted-foreground",
-            )}
-          >
-            {badge.label}
-          </figcaption>
-        </figure>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-56 text-center">{detail}</TooltipContent>
-    </Tooltip>
+    <figure className="flex flex-col items-center gap-1.5 text-center">
+      <BadgeEmblem
+        art={badge.art}
+        shape={badge.shape}
+        tier={award?.tier ?? null}
+        locked={!earned}
+        className="size-14 sm:size-16"
+      />
+      <figcaption
+        className={cn(
+          "text-xs leading-tight font-medium",
+          !earned && "text-muted-foreground",
+        )}
+      >
+        {badge.label}
+        {showDetail ? (
+          <span className="mt-0.5 block text-[0.7rem] leading-snug font-normal text-muted-foreground">
+            {detail}
+          </span>
+        ) : null}
+      </figcaption>
+    </figure>
   );
 }
 
@@ -90,6 +99,10 @@ export function BadgeShowcase({
   badges: AwardedBadge[];
   onSeeAll: () => void;
 }) {
+  // Superseded tenure rungs are dropped here and only here — the
+  // catalog still shows every season a member finished.
+  const shelf = showcaseBadges(badges);
+
   return (
     <Card>
       <CardContent className="space-y-3">
@@ -100,17 +113,25 @@ export function BadgeShowcase({
             onClick={onSeeAll}
             className="text-xs font-semibold text-primary hover:underline"
           >
-            {badges.length > 0 ? `All ${badges.length} →` : "Browse all →"}
+            {/* Not the earned count: this opens the whole catalog,
+                and "All 2 →" above a grid already showing both of
+                them lands the reader on a page of seventeen. */}
+            Browse all →
           </button>
         </div>
 
-        {badges.length > 0 ? (
+        {shelf.length > 0 ? (
           // Four across even at 390px: the tiles are 56px there, so
           // four fit with room, and a two-up grid would leave the
           // shelf looking half empty.
           <div className="grid grid-cols-4 gap-3">
-            {badges.slice(0, SHOWCASE_LIMIT).map((award) => (
-              <BadgeTile key={award.key} badgeKey={award.key} award={award} />
+            {shelf.slice(0, SHOWCASE_LIMIT).map((award) => (
+              <BadgeTile
+                key={award.key}
+                badgeKey={award.key}
+                award={award}
+                showDetail={false}
+              />
             ))}
           </div>
         ) : (
@@ -146,12 +167,16 @@ export function BadgeCatalog({ badges }: { badges: AwardedBadge[] }) {
               <h2 className="text-sm font-semibold">
                 {BADGE_KIND_LABELS[kind]}
               </h2>
-              <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+              {/* Two across on a phone, not four: each tile now
+                  carries a line of explanation under its label, and
+                  four 80px columns leave no room to read it. */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {keys.map((key) => (
                   <BadgeTile
                     key={key}
                     badgeKey={key}
                     award={awarded.get(key)}
+                    showDetail
                   />
                 ))}
               </div>

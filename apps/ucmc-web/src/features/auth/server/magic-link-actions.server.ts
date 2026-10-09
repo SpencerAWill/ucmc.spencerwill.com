@@ -18,6 +18,7 @@ import {
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
 import { UnauthorizedError } from "#/server/auth/errors.server";
+import { optionalProfileText } from "#/server/profile/profile-schemas";
 import type { ProfileFacets } from "#/server/member-profile/profile-facets.server";
 import { loadProfileFacets } from "#/server/member-profile/profile-facets.server";
 import { resolveEmulatedRole } from "#/server/auth/emulation";
@@ -570,15 +571,16 @@ export async function submitProfileAction(
 
   const email = normalizeEmail(principal?.primaryEmail ?? proof!.email);
 
-  const { emergencyContacts, bio, policiesAck: _ack, ...rest } = data;
-  // Empty/whitespace-only bio normalizes to NULL so the DB has a single
-  // representation of "no bio set". `policiesAck` is enforced by the
-  // zod schema; we don't store the boolean — we record the moment it
-  // was ticked plus the policy version so a future POLICIES_VERSION
-  // bump can require re-ack.
+  const { emergencyContacts, policiesAck: _ack, ...rest } = data;
+  // Every optional text column normalizes to NULL through one shared
+  // helper, so the DB has a single representation of "not set" no
+  // matter which of the three writers got there. `policiesAck` is
+  // enforced by the zod schema; we don't store the boolean — we
+  // record the moment it was ticked plus the policy version so a
+  // future POLICIES_VERSION bump can require re-ack.
   const profileData = {
     ...rest,
-    bio: bio.length > 0 ? bio : null,
+    ...optionalProfileText(rest),
     policiesAcknowledgedAt: Temporal.Now.instant(),
     policiesVersion: POLICIES_VERSION,
   };
@@ -777,19 +779,11 @@ export async function submitPublicProfileAction(
     throw new Error("Not authorized to submit a profile");
   }
 
-  const { bio, trailName, pronouns, statusLine, ...rest } = data;
-  // Empty means "not set", and the columns are nullable so the
-  // profile header can omit the line entirely. Storing `""` would
-  // render an empty element with its own spacing instead.
-  const orNull = (value: string) => (value.length > 0 ? value : null);
   await getDb()
     .update(schema.profiles)
     .set({
-      ...rest,
-      bio: orNull(bio),
-      trailName: orNull(trailName),
-      pronouns: orNull(pronouns),
-      statusLine: orNull(statusLine),
+      ...data,
+      ...optionalProfileText(data),
       updatedAt: Temporal.Now.instant(),
     })
     .where(eq(schema.profiles.userId, principal.userId));

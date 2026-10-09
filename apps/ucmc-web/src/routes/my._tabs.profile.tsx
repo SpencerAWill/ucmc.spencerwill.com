@@ -104,9 +104,13 @@ function AccountProfilePage() {
       )}
       {isLoading || !data?.profile ? null : (
         <ProfileFacetsEditor
-          // Same remount-on-save rule as the form above: the editor
-          // seeds `useState` from these props once.
-          key={data.profile.updatedAt.toString()}
+          // Deliberately NOT keyed on `profile.updatedAt`. This
+          // editor has its own Save and writes different tables, so
+          // remounting it when the form above saves would discard
+          // whatever the member had typed here but not yet
+          // submitted. (It also collided with that form's key —
+          // identical keys on sibling elements, which React warns
+          // about.)
           prompts={data.facets.prompts}
           disciplines={data.facets.disciplines}
         />

@@ -58,8 +58,29 @@ export interface MemberCounters {
   sweepsParticipated: number;
 }
 
-export interface MemberStats extends MemberCounters {
+export interface MemberStats {
+  completedSeasons: number;
+  seasonProgress: number | null;
   badges: AwardedBadge[];
+  /**
+   * The raw gear tallies, or `null` when the viewer lacks
+   * `members:view_private`.
+   *
+   * **Badges stay public; these do not.** A badge is a public
+   * achievement by design — that is the point of the catalog — but
+   * "is holding two items right now" and an exact lifetime loan
+   * count are another member's gear-desk record, which everywhere
+   * else in the app sits behind a permission. Pack Mule already says
+   * "at least ten"; it need not say "thirty-one".
+   *
+   * `null` rather than `0`, matching how `phone` and `activeSessions`
+   * are projected: a zero would read as "has never borrowed
+   * anything", which is a different and sometimes false claim.
+   */
+  gearLoans: number | null;
+  openLoans: number | null;
+  onTimeReturnStreak: number | null;
+  sweepsParticipated: number | null;
 }
 
 /**
@@ -210,6 +231,12 @@ export async function loadMemberCounters(
 export function scoreMemberStats(
   counters: MemberCounters,
   isOfficer: boolean,
+  /**
+   * Whether the viewer may see the raw gear tallies. Badges are
+   * computed from them either way — the projection hides the
+   * numbers, not the achievements.
+   */
+  canSeeTallies: boolean,
 ): MemberStats {
   const inputs: BadgeInputs = {
     completedSeasons: counters.completedSeasons,
@@ -218,5 +245,13 @@ export function scoreMemberStats(
     sweepsParticipated: counters.sweepsParticipated,
     isOfficer,
   };
-  return { ...counters, badges: awardedBadges(inputs) };
+  return {
+    completedSeasons: counters.completedSeasons,
+    seasonProgress: counters.seasonProgress,
+    badges: awardedBadges(inputs),
+    gearLoans: canSeeTallies ? counters.gearLoans : null,
+    openLoans: canSeeTallies ? counters.openLoans : null,
+    onTimeReturnStreak: canSeeTallies ? counters.onTimeReturnStreak : null,
+    sweepsParticipated: canSeeTallies ? counters.sweepsParticipated : null,
+  };
 }

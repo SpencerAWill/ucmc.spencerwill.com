@@ -8,9 +8,11 @@
  * `season-progress.ts`). Someone a quarter of the way into their
  * third season shows two rings and a quarter arc.
  *
- * Rings grow INWARD from a fixed outer edge rather than outward from
- * the avatar, so the component occupies the same box at one season or
- * at nine and the header never reflows as a member accrues years.
+ * Rings grow OUTWARD from the avatar: the first season sits against
+ * the photo and each one after it pushes further out, with the
+ * in-progress arc beyond the lot. The box is sized for the maximum,
+ * so the header never reflows as a member accrues years — a
+ * first-year's rings simply sit tighter in.
  */
 import { UserAvatar } from "#/components/user-avatar";
 import { cn } from "#/lib/utils";
