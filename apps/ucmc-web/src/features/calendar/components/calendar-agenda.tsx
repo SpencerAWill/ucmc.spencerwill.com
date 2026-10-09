@@ -45,8 +45,12 @@ export function CalendarAgenda({
     <div className="space-y-6">
       {days.map(({ date, occurrences }) => (
         <section key={date.toString()} className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground">
-            {formatClubDayHeading(date)}
+          <h3 className="flex items-center gap-3 text-sm font-semibold text-muted-foreground">
+            <span>{formatClubDayHeading(date)}</span>
+            {/* A hairline carrying the heading across the column, so a
+             * long agenda reads as grouped days rather than one run of
+             * rows with occasional labels. */}
+            <span className="h-px flex-1 bg-border" aria-hidden />
           </h3>
           <ul className="space-y-2">
             {occurrences.map((occurrence) => (
@@ -98,9 +102,21 @@ function AgendaRow({ occurrence }: { occurrence: CalendarOccurrence }) {
           ) : null}
         </span>
         {/* Secondary fields demoted to one meta line, so a narrow row
-         * stays two lines tall whatever it carries. */}
+         * stays two lines tall whatever it carries.
+         *
+         * **The time leads and is not muted.** It is the field a reader
+         * scanning a day actually wants, and buried in grey among the
+         * kind and location it read as the least important thing in the
+         * row rather than the most. Tabular numerals keep the times
+         * aligned down the list, which is what makes a column of them
+         * scannable at all. */}
         <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
-          <span>
+          <span
+            className={cn(
+              "font-medium tabular-nums",
+              occurrence.canceled ? "text-muted-foreground" : "text-foreground",
+            )}
+          >
             {formatClubTimeRange(
               occurrence.startsAt,
               occurrence.endsAt,

@@ -62,6 +62,7 @@ A calendar client polls in the background with no cookies and no way to complete
 - **A bad token answers 404, never 403.** Distinguishing "no such token" from "revoked" turns a publicly reachable endpoint into an oracle for walking token space. The token is never logged and never lands in an audit row's `target_id` — the row id goes there, because the audit viewer renders it as visible text.
 - **`calendar_subscriptions` is its own table, not a `users` column**: rotation without destroying history, one labelled token per device, `last_fetched_at` to answer "is Google actually polling this?", and revocation as a timestamp the audit log can point at. Revocation is `revoked_at`, never a DELETE — keeping the row is what guarantees the UNIQUE index can't reissue a leaked token. Revoked rows therefore don't count toward the per-member cap.
 - **A token is returned exactly once**, on the response that mints it. The list query carries labels and timestamps, never tokens; a member who loses their link rotates.
+- **The kind filter is baked into the URL, not stored per member.** `?kind=trip,meeting` is what lets a member subscribe twice from the same account and get trips and meetings as two separately-coloured calendars in their phone, each toggled on its own — which a single stored preference could never give them. Nothing selected means everything; an empty filter and a fully-selected one produce the same feed, which is why the chips start empty rather than all-on.
 
 **Feeds emit series, not expanded occurrences** — one `VEVENT` with its `RRULE`, plus `EXDATE`s and `RECURRENCE-ID` overrides. An expanded feed has a horizon, so a member who subscribes and never opens the site again silently stops seeing the weekly meeting the day it passes. An override must **not** carry the series' `RRULE`, or the client reads it as a second infinite series.
 
@@ -85,6 +86,8 @@ Month grid with **dots, not event chips** — the Apple Calendar / Luma shape. C
 The agenda is stacked `<li>` rows, not a table — a find-one-and-act surface per the responsive-collections rule.
 
 **Times render in `CLUB_TIME_ZONE`, deliberately not through `#/lib/date-format`**, which renders in the viewer's zone. A member in Denver needs the time the club is meeting, and a viewer-zone time would let a row say 4:00 PM under a heading that says Wednesday. The day buckets use the same zone so the two can't disagree. `react-day-picker` is a hard `Date`-and-browser-zone boundary: build its `Date` from the plain date's components, never from the instant.
+
+`/calendar` and `/my/calendar` are both in `mobile-overflow.spec.ts`'s route list. The month grid is a seven-column table that cannot reflow, next to a chip row and an agenda of badge-carrying rows — the densest fixed-width surface on the site, and exactly the shape that reaches past the gutter.
 
 The sidebar entry sits in the **public** group (the calendar is public-facing, with an anonymous feed for prospective members) but is still gated on `isApproved`, because `/calendar` runs `requireApproved` and a link that bounces a visitor to sign-in is worse than no link.
 

@@ -24,6 +24,8 @@ import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import { Toggle } from "#/components/ui/toggle";
+import type { EventKind } from "#/../drizzle/schema";
 import { mySubscriptionsQueryOptions } from "#/features/calendar/api/queries";
 import {
   useCreateSubscription,
@@ -35,7 +37,34 @@ import {
   googleCalendarAddUrl,
   webcalUrl,
 } from "#/features/calendar/lib/feed-url";
+import {
+  EVENT_KIND_DOT,
+  EVENT_KIND_LABEL,
+} from "#/features/calendar/lib/event-display";
 import { formatRelative } from "#/lib/date-format";
+import { cn } from "#/lib/utils";
+
+/**
+ * A label for an unnamed link, so the list is readable.
+ *
+ * A filtered link with no label would otherwise read "Calendar link"
+ * beside four others, and the member revoking one has no way to tell
+ * which is which — the list deliberately carries no tokens to compare.
+ */
+function defaultLabelFor(kinds: readonly EventKind[]): string | null {
+  if (kinds.length === 0) {
+    return null;
+  }
+  return kinds.map((kind) => EVENT_KIND_LABEL[kind]).join(", ");
+}
+
+const KIND_ORDER: readonly EventKind[] = [
+  "meeting",
+  "trip",
+  "social",
+  "exec",
+  "other",
+];
 
 /**
  * Manage the member's calendar subscription links.
@@ -59,7 +88,11 @@ export function SubscribePanel() {
     mySubscriptionsQueryOptions(),
   );
   const [label, setLabel] = useState("");
-  const [freshToken, setFreshToken] = useState<string | null>(null);
+  const [kinds, setKinds] = useState<EventKind[]>([]);
+  const [fresh, setFresh] = useState<{
+    token: string;
+    kinds: EventKind[];
+  } | null>(null);
   const [pendingRevoke, setPendingRevoke] = useState<string | null>(null);
 
   const createSubscription = useCreateSubscription();
@@ -84,28 +117,90 @@ export function SubscribePanel() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-2">
-            <Label htmlFor="subscription-label">
-              What&rsquo;s it for? (optional)
-            </Label>
-            <Input
-              id="subscription-label"
-              placeholder="iPhone"
-              maxLength={60}
-              className="w-56"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
+        <div className="space-y-2">
+          <Label htmlFor="subscription-label">
+            What&rsquo;s it for? (optional)
+          </Label>
+          <Input
+            id="subscription-label"
+            placeholder="iPhone"
+            maxLength={60}
+            className="w-full sm:w-56"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </div>
+
+        {/*
+         * Which kinds this link carries.
+         *
+         * **The filter is baked into the URL, not stored.** That is what
+         * lets a member subscribe twice from the same account and get
+         * trips and meetings as two separately-coloured calendars in
+         * their phone, each toggled on its own — which is what people
+         * who care about this actually want, and what a single stored
+         * preference per member could never give them.
+         *
+         * Nothing selected means everything, stated in the hint rather
+         * than by pre-selecting all five: an empty filter and a
+         * fully-selected one produce the same feed, and pre-selecting
+         * would imply unticking one is how you narrow it.
+         */}
+        <div className="space-y-2">
+          <Label>What should it include?</Label>
+          <div
+            className="flex flex-wrap items-center gap-1.5"
+            role="group"
+            aria-label="Event types to include"
+          >
+            {KIND_ORDER.map((kind) => (
+              <Toggle
+                key={kind}
+                size="sm"
+                variant="outline"
+                pressed={kinds.includes(kind)}
+                onPressedChange={(pressed) =>
+                  setKinds((prev) =>
+                    pressed
+                      ? [...prev, kind]
+                      : prev.filter((value) => value !== kind),
+                  )
+                }
+                className="h-8 rounded-full px-3 text-xs data-[state=on]:bg-accent"
+              >
+                <span
+                  className={cn("size-2 rounded-full", EVENT_KIND_DOT[kind])}
+                  aria-hidden
+                />
+                {EVENT_KIND_LABEL[kind]}
+              </Toggle>
+            ))}
           </div>
+          <p className="text-xs text-muted-foreground">
+            {kinds.length === 0
+              ? "Everything on the club calendar. Pick types to make a narrower link \u2014 subscribe more than once to keep them as separate calendars on your phone."
+              : `Only ${kinds.map((kind) => EVENT_KIND_LABEL[kind].toLowerCase()).join(", ")} events.`}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2">
           <Button
             disabled={busy}
             onClick={() =>
               createSubscription.mutate(
-                { label: label.trim() === "" ? null : label.trim() },
+                {
+                  label:
+                    label.trim() === "" ? defaultLabelFor(kinds) : label.trim(),
+                },
                 {
                   onSuccess: ({ token }) => {
-                    setFreshToken(token);
+                    // The filter is captured WITH the token rather than
+                    // read from state when the link renders: it is baked
+                    // into that URL and nothing afterwards can change
+                    // it, so showing a link that disagrees with the
+                    // chips would be a lie the member only discovers on
+                    // their phone a day later.
+                    setFresh({ token, kinds });
                     setLabel("");
                     toast.success("Calendar link created.");
                   },
@@ -120,8 +215,12 @@ export function SubscribePanel() {
         </div>
       </section>
 
-      {freshToken ? (
-        <FreshLink token={freshToken} onDismiss={() => setFreshToken(null)} />
+      {fresh ? (
+        <FreshLink
+          token={fresh.token}
+          kinds={fresh.kinds}
+          onDismiss={() => setFresh(null)}
+        />
       ) : null}
 
       <section className="space-y-3">
@@ -168,7 +267,11 @@ export function SubscribePanel() {
                         { id: subscription.id },
                         {
                           onSuccess: ({ token }) => {
-                            setFreshToken(token);
+                            // A replacement keeps the OLD link's shape
+                            // only in its label; its filter is not
+                            // stored, so the replacement is unfiltered.
+                            // Said plainly below rather than guessed at.
+                            setFresh({ token, kinds: [] });
                             toast.success(
                               "New link created. The old one stopped working.",
                             );
@@ -252,9 +355,11 @@ export function SubscribePanel() {
  */
 function FreshLink({
   token,
+  kinds,
   onDismiss,
 }: {
   token: string;
+  kinds: readonly EventKind[];
   onDismiss: () => void;
 }) {
   const [origin, setOrigin] = useState<string | null>(null);
@@ -276,7 +381,7 @@ function FreshLink({
     return null;
   }
 
-  const url = feedUrl(origin, token);
+  const url = feedUrl(origin, token, kinds);
 
   return (
     <Alert>
@@ -287,6 +392,18 @@ function FreshLink({
           shown again &mdash; if you lose it, use &ldquo;Replace&rdquo; to make
           a new one.
         </p>
+
+        {kinds.length > 0 ? (
+          <p className="text-sm">
+            This link carries{" "}
+            <strong>
+              {kinds
+                .map((kind) => EVENT_KIND_LABEL[kind].toLowerCase())
+                .join(", ")}
+            </strong>{" "}
+            events only.
+          </p>
+        ) : null}
 
         <code className="block w-full overflow-x-auto rounded bg-muted px-2 py-1 font-mono text-xs">
           {url}

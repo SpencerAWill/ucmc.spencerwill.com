@@ -113,6 +113,7 @@ const SIGNED_IN_ROUTES = [
   "/my/waiver",
   "/my/security",
   "/my/preferences",
+  "/my/calendar",
   "/my/gear",
   "/my/gear/cart",
   "/members",
@@ -123,6 +124,11 @@ const SIGNED_IN_ROUTES = [
   "/members/waivers",
   "/gear",
   "/gear/loans",
+  // The calendar is the densest fixed-width surface on the site: a
+  // seven-column grid that cannot reflow, a row of filter chips, and an
+  // agenda of rows carrying badges and a meta line. Every one of those
+  // is a way for something to reach past the gutter.
+  "/calendar",
   "/access",
   "/settings",
   "/audit",
