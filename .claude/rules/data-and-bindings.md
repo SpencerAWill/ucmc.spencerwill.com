@@ -43,6 +43,19 @@ A prefix is agreed by three places — the minting helper, the URL-stripping hel
 
 In `src/server/db/index.ts`, beside `isUniqueViolation` / `isForeignKeyViolation`. It builds the `%needle%` pattern, escapes `%` / `_` / `\` in the user's input, **and emits the `ESCAPE` clause** — the last part is load-bearing and is why this is one helper rather than a bare needle-builder. SQLite only honours an escape character when the pattern carries an explicit `ESCAPE`, and Drizzle's `like()` never emits one, so escaping without it is _worse_ than not escaping: `50%` becomes `%50\%%`, which matches a literal backslash and therefore nothing.
 
+## D1 binds at most 100 parameters per statement — `selectInChunks` for anything unbounded
+
+`D1_MAX_BOUND_PARAMS = 100` in `src/server/db/index.ts`, pinned against real D1 by `src/server/db/__tests__/d1-bound-params.test.ts` (100 binds, 101 raises `too many SQL variables`). This is D1's limit, not Drizzle's: Drizzle emits a correct statement and the driver refuses to bind it.
+
+So **`inArray(col, ids)` is only safe when `ids` comes from a UI page already bounded well under 100.** When the list is "everything matching X", wrap the read in `selectInChunks(ids, (chunk) => …)`, which splits it into statements D1 accepts and concatenates the rows. `listExceptionsFor` (`src/server/events/events-repo.server.ts`) is the reference call site; the waiver bulk-attest and role-member-diff validation reads are the other two.
+
+Two things that are easy to get wrong:
+
+- **A cap on the caller is not a fix.** `BULK_ATTEST_MAX` and `ROLE_MEMBERS_DIFF_MAX` sat at 200 — exactly double what D1 takes — and the calendar's exception lookup has no cap to raise or lower at all, because its list is every series in the window. Chunk the query; let the caps express what one operator action should cost.
+- **`ORDER BY` does not span chunks.** A single sort cannot cross separate statements, so either sort the merged rows yourself or depend only on ordering within one key — which holds whenever every row for an id lands in the same chunk, as it does when chunking by that id. Pass `reservedParams` for anything else the statement binds (a date range, a status), so adding a filter to a chunked query cannot quietly push it back over the limit.
+
+Found the hard way: see #259. The symptom is a 500 on a page that worked yesterday, once a table crossed ~100 rows in the queried window.
+
 ## Env
 
 `@t3-oss/env-core` + zod (`src/config/env.ts`) for `VITE_*` client vars. Server vars (`APP_BASE_URL`, `WEBAUTHN_RP_*`, `RESEND_*`, `SESSION_SECRET`, `MAILPIT_URL`) reach handlers via the Worker `env` binding through `src/server/cloudflare-env.ts`.
