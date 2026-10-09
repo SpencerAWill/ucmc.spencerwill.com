@@ -29,9 +29,11 @@ import { z } from "zod";
 
 import {
   detailsInputSchema,
+  profileFacetsInputSchema,
   publicProfileInputSchema,
   registrationInputSchema,
 } from "#/server/profile/profile-schemas";
+import type { ProfileFacets } from "#/server/member-profile/profile-facets.server";
 import type { Principal } from "#/server/auth/principal.server";
 import type { EmailProof } from "#/server/auth/proof-cookie.server";
 import type { schema } from "#/server/db";
@@ -176,6 +178,7 @@ export const getProfileFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<{
     profile: Profile | null;
     emergencyContacts: EmergencyContactRow[];
+    facets: ProfileFacets;
   }> => {
     const { getProfileAction } =
       await import("#/features/auth/server/magic-link-actions.server");
@@ -226,6 +229,19 @@ export const submitPublicProfileFn = createServerFn({ method: "POST" })
     const { submitPublicProfileAction } =
       await import("#/features/auth/server/magic-link-actions.server");
     return submitPublicProfileAction(data);
+  });
+
+/**
+ * Replaces the caller's answered prompts and self-rated disciplines.
+ * Its own fn rather than part of the Profile tab's save: these are
+ * rows in two other tables behind a separate form and Save.
+ */
+export const submitProfileFacetsFn = createServerFn({ method: "POST" })
+  .validator(profileFacetsInputSchema)
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { submitProfileFacetsAction } =
+      await import("#/features/auth/server/profile-facets-actions.server");
+    return submitProfileFacetsAction(data);
   });
 
 /**

@@ -6,6 +6,7 @@ import { PROFILE_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { profileQueryOptions } from "#/features/auth/api/queries";
 import { useSubmitPublicProfile } from "#/features/auth/api/use-submit-public-profile";
 import { AvatarEditor } from "#/features/auth/components/avatar-editor";
+import { ProfileFacetsEditor } from "#/features/auth/components/profile-facets-editor";
 import { PasskeyNudge } from "#/features/auth/components/passkey-nudge";
 import { BioFields } from "#/components/profile/bio-fields";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
@@ -99,6 +100,15 @@ function AccountProfilePage() {
                 }
               : EMPTY_PROFILE_FORM_VALUES
           }
+        />
+      )}
+      {isLoading || !data?.profile ? null : (
+        <ProfileFacetsEditor
+          // Same remount-on-save rule as the form above: the editor
+          // seeds `useState` from these props once.
+          key={data.profile.updatedAt.toString()}
+          prompts={data.facets.prompts}
+          disciplines={data.facets.disciplines}
         />
       )}
       <p className="text-xs text-muted-foreground">

@@ -244,7 +244,14 @@ describe("consumeMagicLinkAction", () => {
 describe("getProfileAction", () => {
   it("returns { profile: null } for anonymous callers", async () => {
     const result = await getProfileAction();
-    expect(result).toEqual({ profile: null, emergencyContacts: [] });
+    expect(result).toEqual({
+      profile: null,
+      emergencyContacts: [],
+      // Empty rather than absent: the caller destructures `facets`
+      // unconditionally, so a missing key is a crash on a page that
+      // only has to render "not signed in".
+      facets: { prompts: [], disciplines: [] },
+    });
   });
 
   it("returns { profile: null } for a signed-in user without a profile row", async () => {
@@ -253,7 +260,14 @@ describe("getProfileAction", () => {
     await openSession(userId);
 
     const result = await getProfileAction();
-    expect(result).toEqual({ profile: null, emergencyContacts: [] });
+    expect(result).toEqual({
+      profile: null,
+      emergencyContacts: [],
+      // Empty rather than absent: the caller destructures `facets`
+      // unconditionally, so a missing key is a crash on a page that
+      // only has to render "not signed in".
+      facets: { prompts: [], disciplines: [] },
+    });
   });
 
   it("returns the signed-in user's profile row when one exists", async () => {

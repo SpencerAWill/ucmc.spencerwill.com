@@ -18,6 +18,8 @@ import {
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
 import { UnauthorizedError } from "#/server/auth/errors.server";
+import type { ProfileFacets } from "#/server/member-profile/profile-facets.server";
+import { loadProfileFacets } from "#/server/member-profile/profile-facets.server";
 import { resolveEmulatedRole } from "#/server/auth/emulation";
 import type { Principal } from "#/server/auth/principal.server";
 import {
@@ -280,10 +282,15 @@ export async function getProfileAction(): Promise<{
     phone: string;
     relationship: schema.ContactRelationship;
   }>;
+  facets: ProfileFacets;
 }> {
   const principal = await loadCurrentPrincipal();
   if (!principal) {
-    return { profile: null, emergencyContacts: [] };
+    return {
+      profile: null,
+      emergencyContacts: [],
+      facets: { prompts: [], disciplines: [] },
+    };
   }
   const db = getDb();
   const profile = await db.query.profiles.findFirst({
@@ -299,7 +306,14 @@ export async function getProfileAction(): Promise<{
         .from(schema.emergencyContacts)
         .where(eq(schema.emergencyContacts.userId, principal.userId))
     : [];
-  return { profile: profile ?? null, emergencyContacts: contacts };
+  // Reuses the same loader the member-profile page reads through, so
+  // the edit form can never show a different set from the profile it
+  // is editing — including the drop of keys no longer in the
+  // registry, which only one of the two implementing it would hide.
+  const facets = profile
+    ? await loadProfileFacets(principal.userId)
+    : { prompts: [], disciplines: [] };
+  return { profile: profile ?? null, emergencyContacts: contacts, facets };
 }
 
 export async function signOutAction(): Promise<{ ok: true }> {

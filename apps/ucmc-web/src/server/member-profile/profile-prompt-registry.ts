@@ -73,6 +73,23 @@ export const PROFILE_PROMPTS = {
 
 export type ProfilePromptKey = keyof typeof PROFILE_PROMPTS;
 
+export const PROFILE_PROMPT_KEYS = Object.keys(
+  PROFILE_PROMPTS,
+) as ProfilePromptKey[];
+
+/**
+ * How many prompts a member may answer at once.
+ *
+ * Enforced in zod, not SQL: a CHECK constraint cannot count sibling
+ * rows. Three is a product decision — enough to show a personality,
+ * few enough that the header stays scannable and that choosing which
+ * three is itself a signal.
+ */
+export const MAX_ANSWERED_PROMPTS = 3;
+
+/** One line in the profile's About card, not a paragraph. */
+export const PROMPT_ANSWER_MAX_LENGTH = 180;
+
 /**
  * `Object.hasOwn`, never `in` — the prototype-chain hazard is a
  * repo-wide rule (see `rolePermissionMap` in auth-and-rbac).
@@ -136,6 +153,8 @@ export const DISCIPLINES = {
 } as const satisfies Record<string, DisciplineMeta>;
 
 export type DisciplineKey = keyof typeof DISCIPLINES;
+
+export const DISCIPLINE_KEYS = Object.keys(DISCIPLINES) as DisciplineKey[];
 
 export function isDisciplineKey(value: string): value is DisciplineKey {
   return Object.hasOwn(DISCIPLINES, value);

@@ -12,6 +12,13 @@
  */
 import { isValidPhoneNumber } from "react-phone-number-input";
 import { z } from "zod";
+import {
+  DISCIPLINE_KEYS,
+  DISCIPLINE_LEVEL_KEYS,
+  MAX_ANSWERED_PROMPTS,
+  PROFILE_PROMPT_KEYS,
+  PROMPT_ANSWER_MAX_LENGTH,
+} from "#/server/member-profile/profile-prompt-registry";
 
 import { schema } from "#/server/db";
 
@@ -169,3 +176,51 @@ export const detailsInputSchema = profileInputSchema.pick({
 });
 
 export type DetailsInput = z.infer<typeof detailsInputSchema>;
+
+// ── Profile facets: prompt answers and self-rated disciplines ────────
+//
+// Deliberately NOT part of `profileInputSchema`. Those fields are all
+// columns on `profiles` and one UPDATE writes them; these are rows in
+// two other tables, written by their own action with its own Save.
+// Folding them into the shared shape would also mean registration and
+// the admin sheet carrying arrays they never touch — and `withForm`'s
+// invariant generics make every such addition ripple through every
+// profile form in the app.
+
+export const profilePromptAnswerSchema = z.object({
+  key: z.enum(PROFILE_PROMPT_KEYS),
+  answer: z
+    .string()
+    .trim()
+    .min(1, "Write an answer or remove the prompt")
+    .max(
+      PROMPT_ANSWER_MAX_LENGTH,
+      `At most ${PROMPT_ANSWER_MAX_LENGTH} characters`,
+    ),
+});
+
+export const profileDisciplineRatingSchema = z.object({
+  discipline: z.enum(DISCIPLINE_KEYS),
+  level: z.enum(DISCIPLINE_LEVEL_KEYS),
+});
+
+export const profileFacetsInputSchema = z.object({
+  prompts: z
+    .array(profilePromptAnswerSchema)
+    .max(MAX_ANSWERED_PROMPTS, `Pick at most ${MAX_ANSWERED_PROMPTS} prompts`)
+    // The primary key is (user_id, prompt_key), so a duplicate would
+    // fail at the database with a constraint error the member cannot
+    // act on. Caught here, it names the actual problem.
+    .refine(
+      (rows) => new Set(rows.map((r) => r.key)).size === rows.length,
+      "Each prompt can only be answered once",
+    ),
+  disciplines: z
+    .array(profileDisciplineRatingSchema)
+    .refine(
+      (rows) => new Set(rows.map((r) => r.discipline)).size === rows.length,
+      "Each discipline can only be rated once",
+    ),
+});
+
+export type ProfileFacetsInput = z.infer<typeof profileFacetsInputSchema>;
