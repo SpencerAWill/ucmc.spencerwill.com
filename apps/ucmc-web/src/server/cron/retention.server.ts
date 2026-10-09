@@ -8,6 +8,14 @@
  *   - R2 objects (avatars + landing images) not referenced by any DB
  *     row are deleted from the bucket
  *
+ * It also sweeps `email_sends`, which is **not** a privacy promise and
+ * is deliberately absent from the list above. That table carries no
+ * recipient (see `0078_email_sends.sql`), so nothing in it is personal
+ * data and nothing on `/privacy` speaks to it — it rides this tick
+ * purely because this is where "delete old rows daily" already lives.
+ * Do not add it to the privacy notice; do not let its presence here
+ * suggest it belongs there.
+ *
  * NULL-skip discipline: rows whose timestamp column is NULL are
  * deliberately ignored. `rejected_at` / `deactivated_at` were added in
  * migration 0019, so historical rejections / deactivations don't have
@@ -31,6 +39,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const REJECTED_RETENTION_DAYS = 30;
 const DEACTIVATED_RETENTION_DAYS = 365;
 const REVOKED_WAIVER_RETENTION_DAYS = 90;
+/**
+ * How long the raw email send log is kept.
+ *
+ * The daily rollup into `cost_snapshots` is what survives long-term, so
+ * these rows are redundant once rolled up. The window exists so a
+ * rollup can be re-run or corrected, and so "what is driving volume
+ * this quarter" is answerable at full granularity rather than only
+ * through the aggregate.
+ */
+const EMAIL_SEND_LOG_RETENTION_DAYS = 90;
 
 // Skip orphan-GC for any R2 object uploaded in the last 5 minutes.
 // Avatars are uploaded in two steps (PUT R2, then UPDATE D1); a cron
@@ -70,6 +88,21 @@ export interface SweepCounts {
   deactivatedAccounts: number;
   revokedWaivers: number;
   orphanR2Keys: number;
+  emailSendLog: number;
+}
+
+/** Housekeeping, not a privacy promise — see the module doc comment. */
+export async function sweepEmailSendLog(
+  now: Temporal.Instant,
+): Promise<number> {
+  const cutoff = now.subtract({
+    milliseconds: EMAIL_SEND_LOG_RETENTION_DAYS * DAY_MS,
+  });
+  const deleted = await getDb()
+    .delete(schema.emailSends)
+    .where(lt(schema.emailSends.sentAt, cutoff))
+    .returning({ id: schema.emailSends.id });
+  return deleted.length;
 }
 
 export async function sweepRejectedRegistrations(
@@ -307,6 +340,7 @@ export async function runRetentionSweeps(
     deactivatedAccounts: 0,
     revokedWaivers: 0,
     orphanR2Keys: 0,
+    emailSendLog: 0,
   };
 
   // Each sweep is wrapped so an error in one (e.g. R2 outage) doesn't
@@ -326,6 +360,7 @@ export async function runRetentionSweeps(
       name: "orphanR2Keys",
       run: () => sweepOrphanR2Keys(now, options.minOrphanAgeMs),
     },
+    { name: "emailSendLog", run: () => sweepEmailSendLog(now) },
   ];
 
   for (const sweep of sweeps) {

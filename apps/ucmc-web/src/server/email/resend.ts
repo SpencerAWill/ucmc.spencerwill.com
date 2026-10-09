@@ -20,6 +20,8 @@
  * sees an error rather than a phantom success.
  */
 import { env } from "#/server/cloudflare-env";
+import type { EmailKind } from "#/server/email/email-kinds";
+import { recordEmailSend } from "#/server/email/email-send-log.server";
 import { redactString } from "#/server/log/redact.server";
 
 export class EmailNotConfiguredError extends Error {
@@ -33,6 +35,12 @@ export class EmailNotConfiguredError extends Error {
 }
 
 export interface EmailMessage {
+  /**
+   * What this email IS, for the usage rollup (#268). Set by the template
+   * functions below rather than at the call site, so a new send cannot
+   * reach a provider uncounted.
+   */
+  kind: EmailKind;
   to: string;
   subject: string;
   text: string;
@@ -63,17 +71,30 @@ export interface EmailMessage {
 }
 
 export async function sendEmail(message: EmailMessage): Promise<void> {
-  // Tier 1 — Resend (production)
-  if (env.RESEND_API_KEY) {
-    await sendViaResend(message);
+  // Tier 1 — Resend (production). Tier 2 — Mailpit (dev sidecar).
+  const send = env.RESEND_API_KEY
+    ? () => sendViaResend(message)
+    : env.MAILPIT_URL
+      ? () => sendViaMailpit(message)
+      : null;
+
+  if (send) {
+    try {
+      await send();
+    } catch (err) {
+      // A rejected send is still a send attempt and still tells us about
+      // volume; recording only successes would make our figures
+      // disagree with the provider's own count in exactly the months
+      // something was wrong.
+      await recordEmailSend({ kind: message.kind, ok: false });
+      throw err;
+    }
+    await recordEmailSend({ kind: message.kind, ok: true });
     return;
   }
 
-  // Tier 2 — Mailpit (dev sidecar)
-  if (env.MAILPIT_URL) {
-    await sendViaMailpit(message);
-    return;
-  }
+  // Deliberately NOT recorded: no provider is configured, so nothing was
+  // attempted. A misconfiguration is not email volume.
 
   // No provider — fail loudly. An earlier revision logged a
   // structured-warning placeholder here, but the rest of the system
@@ -163,6 +184,9 @@ export function magicLinkEmail(args: {
         ? "sign-in"
         : "email-verification";
   return {
+    // Not a notification category: a member cannot switch off the
+    // email that signs them in. See `email-kinds.ts`.
+    kind: "auth.magic_link",
     to: args.to,
     subject: `Your UCMC ${subjectVerb} link`,
     text: [

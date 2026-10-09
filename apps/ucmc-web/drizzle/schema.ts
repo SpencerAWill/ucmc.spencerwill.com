@@ -2504,3 +2504,30 @@ export const calendarSubscriptions = sqliteTable(
 );
 
 export type CalendarSubscription = typeof calendarSubscriptions.$inferSelect;
+
+/**
+ * One row per outbound email — see `0078_email_sends.sql`.
+ *
+ * **Carries no recipient on purpose.** No `user_id`, no `to`, no
+ * subject. It is a counter with dimensions, not correspondence, and
+ * that is what keeps it out of the privacy policy, the data export and
+ * the delete cascade. Adding a recipient column is a compliance change,
+ * not a schema tweak.
+ *
+ * `kind` holds an `EmailKind` (`#/server/email/email-kinds`), which
+ * spans both notification categories and auth mail.
+ */
+export const emailSends = sqliteTable(
+  "email_sends",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    sentAt: timestamp("sent_at").notNull(),
+    /** Whether the provider accepted it. A rejected send still counts. */
+    ok: integer("ok", { mode: "boolean" }).notNull(),
+  },
+  (table) => [
+    index("email_sends_sent_at_idx").on(table.sentAt),
+    index("email_sends_kind_sent_at_idx").on(table.kind, table.sentAt),
+  ],
+);

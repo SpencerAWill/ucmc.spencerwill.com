@@ -9,6 +9,7 @@ import {
   sweepDeactivatedAccounts,
   sweepOrphanR2Keys,
   sweepRejectedRegistrations,
+  sweepEmailSendLog,
   sweepRevokedWaiverAttestations,
 } from "#/server/cron/retention.server";
 
@@ -69,6 +70,7 @@ afterEach(async () => {
   // Each suite seeds its own rows; clean slate avoids interactions
   // between tests that both delete from `users`.
   const db = getDb();
+  await db.delete(schema.emailSends);
   await db.delete(schema.waiverAttestations);
   await db.delete(schema.profiles);
   await db.delete(schema.heroSlides);
@@ -378,6 +380,9 @@ describe("runRetentionSweeps", () => {
       deactivatedAccounts: 1,
       revokedWaivers: 1,
       orphanR2Keys: 1,
+      // Seeded nothing for it; the key must still be reported, because
+      // the orchestrator's contract is that every sweep answers.
+      emailSendLog: 0,
     });
 
     // Verify side effects landed.
@@ -391,5 +396,46 @@ describe("runRetentionSweeps", () => {
       .from(schema.users)
       .where(eq(schema.users.id, deactivatedId));
     expect(remainingDeact).toHaveLength(0);
+  });
+});
+
+describe("sweepEmailSendLog", () => {
+  async function seedSend(ageDays: number) {
+    await getDb()
+      .insert(schema.emailSends)
+      .values({
+        id: uid("snd"),
+        kind: "auth.magic_link",
+        sentAt: NOW.subtract({ milliseconds: ageDays * DAY_MS }),
+        ok: true,
+      });
+  }
+
+  it("drops rows past the 90-day window and keeps the rest", async () => {
+    await seedSend(91);
+    await seedSend(89);
+
+    expect(await sweepEmailSendLog(NOW)).toBe(1);
+
+    const left = await getDb().select().from(schema.emailSends);
+    expect(left).toHaveLength(1);
+  });
+
+  it("keeps a row sitting exactly on the boundary", async () => {
+    // The cutoff is `sentAt < cutoff`, so a row stamped exactly at it
+    // survives. Pinned because an off-by-one here silently shortens a
+    // retention window nobody is watching.
+    await seedSend(90);
+
+    expect(await sweepEmailSendLog(NOW)).toBe(0);
+    expect(await getDb().select().from(schema.emailSends)).toHaveLength(1);
+  });
+
+  it("is reported by the orchestrator under its own counter", async () => {
+    await seedSend(120);
+
+    const counts = await runRetentionSweeps(NOW);
+
+    expect(counts.emailSendLog).toBe(1);
   });
 });
