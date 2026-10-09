@@ -67,9 +67,20 @@ function CalendarLayout() {
     <PageContainer width="wide" className="space-y-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Calendar</h1>
+        {/*
+         * **The second sentence is the one that matters**, and it says
+         * what subscribing DOES rather than what it is. Most members
+         * have never heard of an .ics feed and never need to: the thing
+         * worth knowing is that this can live in the calendar app they
+         * already open every day, and that it stays current on its own.
+         * Naming the format here would teach them a word instead of a
+         * reason.
+         */}
         <p className="text-sm text-muted-foreground">
-          Meetings, trips and everything else the club has on. All times are
-          Cincinnati time.
+          Meetings, trips and everything else the club has on, in Cincinnati
+          time. Add it to your phone once and club events keep appearing in your
+          own calendar &mdash; nothing to install, and nothing to check back
+          for.
         </p>
       </header>
 

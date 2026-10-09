@@ -91,9 +91,19 @@ The agenda is stacked `<li>` rows, not a table — a find-one-and-act surface pe
 
 The sidebar entry sits in the **public** group (the calendar is public-facing, with an anonymous feed for prospective members) but is still gated on `isApproved`, because `/calendar` runs `requireApproved` and a link that bounces a visitor to sign-in is worse than no link.
 
+## Test layout
+
+The unit suites cover the pure layers — recurrence, occurrence building, the serializer, the actions. Three e2e specs cover what they structurally cannot:
+
+- **`calendar.spec.ts`** — the page renders, hydrates clean, the grid is a real tap target, range selection and the type filter reach the URL, an event opens at its own route. Every defect this page shipped was invisible to jsdom: a render-time throw, cells that looked right and could not be clicked, a zone-derived `today` that broke hydration. The console-error assertions and the bounding-box check look paranoid and are exactly the two that would have caught them.
+- **`calendar-feed.spec.ts`** — the `.ics` route's HTTP contract, driven through Playwright's `request` because there is no page. This is **the only publicly reachable, session-less endpoint in the app**, so its contract _is_ the security boundary: bad token 404s (never 403, which would make it an oracle), revocation takes effect immediately, `Cache-Control` is `private` for a member feed, the feed flag gates it, and a second fetch yields 304 — the assertion that failed before `DTSTAMP` was stripped from the ETag hash.
+- **`calendar-authoring.spec.ts`** — the recurrence builder, asserting against the stored `rrule` rather than the dialog. It is the highest-consequence control in the feature and its failure mode is not a crash: an officer picks a repeat, saves, and a semester lands on the wrong days in every subscriber's phone with no error anywhere. Also pins that editing a series from a _later_ occurrence does not move its anchor.
+
+Title assertions in the authoring spec take `.first()`: a recurring series renders one agenda row per occurrence.
+
 ## Not done yet
 
 - **`meeting.day_time` now has a structured twin** and the two can disagree. Deriving the landing block from a recurring meeting event would mean `landing → events`, which the boundary rule forbids without hoisting.
-- **A public `/calendar` page** for prospective members becomes natural now that `visibility = 'public'` exists; the data model doesn't preclude it.
+- **A public `/calendar` page** for prospective members becomes natural now that `visibility = 'public'` exists; the data model doesn't preclude it. The public _feed_ is reachable today from `/my/calendar`, so a member has something to hand a non-member — but a prospective member still has no way to find it without being told, and nothing embeds it on the landing page.
 - **Gear due dates / waiver expiry** on the calendar. The satellite shape doesn't preclude a projection later.
 - **Event reminder notifications** — a `notification-registry.ts` entry is the whole change, no migration.
