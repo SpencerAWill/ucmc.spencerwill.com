@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccessRouteImport } from './routes/access'
 import { Route as AlbumRouteImport } from './routes/album'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as CalendarRouteImport } from './routes/calendar'
@@ -43,6 +44,12 @@ import { Route as TripsRouteImport } from './routes/trips'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as VolunteerRouteImport } from './routes/volunteer'
 import { Route as WaiverRouteImport } from './routes/waiver'
+import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
+import { Route as AnalyticsActivityRouteImport } from './routes/analytics.activity'
+import { Route as AnalyticsComplianceRouteImport } from './routes/analytics.compliance'
+import { Route as AnalyticsGearRouteImport } from './routes/analytics.gear'
+import { Route as AnalyticsMembershipRouteImport } from './routes/analytics.membership'
+import { Route as AnalyticsPlatformRouteImport } from './routes/analytics.platform'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as CalendarIndexRouteImport } from './routes/calendar.index'
 import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicId'
@@ -105,6 +112,11 @@ const AccessRoute = AccessRouteImport.update({
 const AlbumRoute = AlbumRouteImport.update({
   id: '/album',
   path: '/album',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AntiHazingRoute = AntiHazingRouteImport.update({
@@ -256,6 +268,36 @@ const WaiverRoute = WaiverRouteImport.update({
   id: '/waiver',
   path: '/waiver',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsIndexRoute = AnalyticsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AnalyticsRoute,
+} as any)
+const AnalyticsActivityRoute = AnalyticsActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AnalyticsRoute,
+} as any)
+const AnalyticsComplianceRoute = AnalyticsComplianceRouteImport.update({
+  id: '/compliance',
+  path: '/compliance',
+  getParentRoute: () => AnalyticsRoute,
+} as any)
+const AnalyticsGearRoute = AnalyticsGearRouteImport.update({
+  id: '/gear',
+  path: '/gear',
+  getParentRoute: () => AnalyticsRoute,
+} as any)
+const AnalyticsMembershipRoute = AnalyticsMembershipRouteImport.update({
+  id: '/membership',
+  path: '/membership',
+  getParentRoute: () => AnalyticsRoute,
+} as any)
+const AnalyticsPlatformRoute = AnalyticsPlatformRouteImport.update({
+  id: '/platform',
+  path: '/platform',
+  getParentRoute: () => AnalyticsRoute,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
@@ -475,6 +517,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/access': typeof AccessRoute
   '/album': typeof AlbumRoute
+  '/analytics': typeof AnalyticsRouteWithChildren
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/calendar': typeof CalendarRouteWithChildren
@@ -505,6 +548,11 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
+  '/analytics/activity': typeof AnalyticsActivityRoute
+  '/analytics/compliance': typeof AnalyticsComplianceRoute
+  '/analytics/gear': typeof AnalyticsGearRoute
+  '/analytics/membership': typeof AnalyticsMembershipRoute
+  '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
@@ -514,6 +562,7 @@ export interface FileRoutesByFullPath {
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/analytics/': typeof AnalyticsIndexRoute
   '/calendar/': typeof CalendarIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
@@ -576,6 +625,11 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
+  '/analytics/activity': typeof AnalyticsActivityRoute
+  '/analytics/compliance': typeof AnalyticsComplianceRoute
+  '/analytics/gear': typeof AnalyticsGearRoute
+  '/analytics/membership': typeof AnalyticsMembershipRoute
+  '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/feedback': typeof FeedbackIndexRoute
@@ -586,6 +640,7 @@ export interface FileRoutesByTo {
   '/my': typeof MyIndexRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/analytics': typeof AnalyticsIndexRoute
   '/calendar': typeof CalendarIndexRoute
   '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
@@ -621,6 +676,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/access': typeof AccessRoute
   '/album': typeof AlbumRoute
+  '/analytics': typeof AnalyticsRouteWithChildren
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/calendar': typeof CalendarRouteWithChildren
@@ -651,6 +707,11 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/volunteer': typeof VolunteerRoute
   '/waiver': typeof WaiverRoute
+  '/analytics/activity': typeof AnalyticsActivityRoute
+  '/analytics/compliance': typeof AnalyticsComplianceRoute
+  '/analytics/gear': typeof AnalyticsGearRoute
+  '/analytics/membership': typeof AnalyticsMembershipRoute
+  '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
@@ -663,6 +724,7 @@ export interface FileRoutesById {
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
+  '/analytics/': typeof AnalyticsIndexRoute
   '/calendar/': typeof CalendarIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
@@ -702,6 +764,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/access'
     | '/album'
+    | '/analytics'
     | '/anti-hazing'
     | '/audit'
     | '/calendar'
@@ -732,6 +795,11 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/volunteer'
     | '/waiver'
+    | '/analytics/activity'
+    | '/analytics/compliance'
+    | '/analytics/gear'
+    | '/analytics/membership'
+    | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
     | '/gazette/$publicId'
@@ -741,6 +809,7 @@ export interface FileRouteTypes {
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
+    | '/analytics/'
     | '/calendar/'
     | '/feedback/'
     | '/gazette/'
@@ -803,6 +872,11 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/volunteer'
     | '/waiver'
+    | '/analytics/activity'
+    | '/analytics/compliance'
+    | '/analytics/gear'
+    | '/analytics/membership'
+    | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
     | '/feedback'
@@ -813,6 +887,7 @@ export interface FileRouteTypes {
     | '/my'
     | '/register/pending'
     | '/register/profile'
+    | '/analytics'
     | '/calendar'
     | '/gazette'
     | '/gear'
@@ -847,6 +922,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/access'
     | '/album'
+    | '/analytics'
     | '/anti-hazing'
     | '/audit'
     | '/calendar'
@@ -877,6 +953,11 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/volunteer'
     | '/waiver'
+    | '/analytics/activity'
+    | '/analytics/compliance'
+    | '/analytics/gear'
+    | '/analytics/membership'
+    | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
     | '/feedback/_tabs'
@@ -889,6 +970,7 @@ export interface FileRouteTypes {
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
+    | '/analytics/'
     | '/calendar/'
     | '/feedback/'
     | '/gazette/'
@@ -927,6 +1009,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AccessRoute: typeof AccessRoute
   AlbumRoute: typeof AlbumRoute
+  AnalyticsRoute: typeof AnalyticsRouteWithChildren
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
   CalendarRoute: typeof CalendarRouteWithChildren
@@ -998,6 +1081,13 @@ declare module '@tanstack/react-router' {
       path: '/album'
       fullPath: '/album'
       preLoaderRoute: typeof AlbumRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/anti-hazing': {
@@ -1209,6 +1299,48 @@ declare module '@tanstack/react-router' {
       fullPath: '/waiver'
       preLoaderRoute: typeof WaiverRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/analytics/': {
+      id: '/analytics/'
+      path: '/'
+      fullPath: '/analytics/'
+      preLoaderRoute: typeof AnalyticsIndexRouteImport
+      parentRoute: typeof AnalyticsRoute
+    }
+    '/analytics/activity': {
+      id: '/analytics/activity'
+      path: '/activity'
+      fullPath: '/analytics/activity'
+      preLoaderRoute: typeof AnalyticsActivityRouteImport
+      parentRoute: typeof AnalyticsRoute
+    }
+    '/analytics/compliance': {
+      id: '/analytics/compliance'
+      path: '/compliance'
+      fullPath: '/analytics/compliance'
+      preLoaderRoute: typeof AnalyticsComplianceRouteImport
+      parentRoute: typeof AnalyticsRoute
+    }
+    '/analytics/gear': {
+      id: '/analytics/gear'
+      path: '/gear'
+      fullPath: '/analytics/gear'
+      preLoaderRoute: typeof AnalyticsGearRouteImport
+      parentRoute: typeof AnalyticsRoute
+    }
+    '/analytics/membership': {
+      id: '/analytics/membership'
+      path: '/membership'
+      fullPath: '/analytics/membership'
+      preLoaderRoute: typeof AnalyticsMembershipRouteImport
+      parentRoute: typeof AnalyticsRoute
+    }
+    '/analytics/platform': {
+      id: '/analytics/platform'
+      path: '/platform'
+      fullPath: '/analytics/platform'
+      preLoaderRoute: typeof AnalyticsPlatformRouteImport
+      parentRoute: typeof AnalyticsRoute
     }
     '/auth/callback': {
       id: '/auth/callback'
@@ -1514,6 +1646,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AnalyticsRouteChildren {
+  AnalyticsActivityRoute: typeof AnalyticsActivityRoute
+  AnalyticsComplianceRoute: typeof AnalyticsComplianceRoute
+  AnalyticsGearRoute: typeof AnalyticsGearRoute
+  AnalyticsMembershipRoute: typeof AnalyticsMembershipRoute
+  AnalyticsPlatformRoute: typeof AnalyticsPlatformRoute
+  AnalyticsIndexRoute: typeof AnalyticsIndexRoute
+}
+
+const AnalyticsRouteChildren: AnalyticsRouteChildren = {
+  AnalyticsActivityRoute: AnalyticsActivityRoute,
+  AnalyticsComplianceRoute: AnalyticsComplianceRoute,
+  AnalyticsGearRoute: AnalyticsGearRoute,
+  AnalyticsMembershipRoute: AnalyticsMembershipRoute,
+  AnalyticsPlatformRoute: AnalyticsPlatformRoute,
+  AnalyticsIndexRoute: AnalyticsIndexRoute,
+}
+
+const AnalyticsRouteWithChildren = AnalyticsRoute._addFileChildren(
+  AnalyticsRouteChildren,
+)
+
 interface CalendarRouteChildren {
   CalendarPublicIdRoute: typeof CalendarPublicIdRoute
   CalendarIndexRoute: typeof CalendarIndexRoute
@@ -1675,6 +1829,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AccessRoute: AccessRoute,
   AlbumRoute: AlbumRoute,
+  AnalyticsRoute: AnalyticsRouteWithChildren,
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
   CalendarRoute: CalendarRouteWithChildren,

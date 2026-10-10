@@ -57,6 +57,7 @@ These bite anywhere in the repo, so they live here rather than in a scoped rule.
 - **Notification categories are not DB rows either** — a new entry in `src/server/notifications/notification-registry.ts` is the whole change. `user_notification_preferences` is sparse: a row exists only when a member moves a category off its registry default. Whether a category can be switched off at all is the registry's `suppressible` field, not a branch in the senders.
 - **Wire the sidebar (`app-layout.tsx`) in the same change as any new public route**, and gate the entry on the flag of the page the link actually targets. This has been caught in review repeatedly.
 - **`events` is a base table, not the calendar's table.** It lives in `src/server/events/` because `features/trips` (and later `volunteer`) will own satellite tables keyed on `event_id`; kind-specific columns go there, never on `events`. The calendar and both `.ics` feeds read only the base table. See `.claude/rules/feature-calendar.md`.
+- **Charts mount through `ChartSurface`, never `<Chart>` directly** (`features/analytics`). It carries the `--chart-*` → `--ts-chart-*` palette bridge, the required `ariaLabel`, the SSR sizing that keeps the full SVG in the HTML response, and the exact-value table three of our six categorical slots oblige. `--chart-*` is **identity** and `--chart-ramp-*` is **magnitude**; using one for the other's job is the most common chart-colour mistake and `styles.css` explains both.
 - **Legal and policy copy is legal review, not word-smithing** — `src/config/legal.ts` and the pages it feeds must match the canonical PDF byte-for-byte. Raise copy changes rather than tidying them.
 
 ## Generated files
@@ -80,5 +81,6 @@ The hook **inspects each command segment's head, not the whole command string**,
 | Always true, everywhere                            | this file                          |
 | Only matters for one area of the codebase          | `.claude/rules/*.md` (`paths:`)    |
 | A multi-step procedure you'd otherwise re-explain  | `.claude/skills/*/SKILL.md`        |
+| A library's own guidance, version-locked           | a symlink in `.claude/skills/`     |
 | A focused review or check with its own tool budget | `.claude/agents/*.md`              |
 | Must happen regardless of what Claude decides      | `.claude/hooks/` + `settings.json` |

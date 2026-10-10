@@ -43,6 +43,7 @@
     "@simplewebauthn/server": "^13.3.2",
     "@t3-oss/env-core": "^0.13.10",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/charts": "1.1.0",
     "@tanstack/react-devtools": "0.10.13",
     "@tanstack/react-form": "1.33.5",
     "@tanstack/react-query": "5.104.0",

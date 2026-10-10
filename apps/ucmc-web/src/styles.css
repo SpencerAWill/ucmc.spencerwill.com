@@ -384,3 +384,37 @@ input[type="search"]::-webkit-search-cancel-button,
 input[type="search"]::-webkit-search-decoration {
   appearance: none;
 }
+
+/* TanStack Charts reads its categorical palette from `--ts-chart-1..6`,
+ * overridable at any container boundary. This is the bridge from our
+ * tokens to that contract, in one place rather than per chart.
+ *
+ * Only the CATEGORICAL family maps here. `--chart-ramp-*` is sequential
+ * and encodes magnitude; handing it to a palette slot is exactly the
+ * mistake the two-family split documented above exists to prevent, and
+ * the library would happily accept it. A chart wanting the ramp asks
+ * for it explicitly through a scale range.
+ *
+ * Nothing is redefined per theme: `--chart-*` already swaps under the
+ * dark selectors, so these inherit the swap for free. The library's
+ * foreground, muted text and grid resolve to `currentColor` and its
+ * background is transparent, so the surrounding card's `color` and
+ * `background` govern them with no further wiring.
+ *
+ * The tooltip is themed through the same boundary — its own chrome
+ * variables rather than a class, which avoids a specificity fight with
+ * the positioning styles it sets inline. */
+.ts-chart-themed {
+  --ts-chart-1: var(--chart-1);
+  --ts-chart-2: var(--chart-2);
+  --ts-chart-3: var(--chart-3);
+  --ts-chart-4: var(--chart-4);
+  --ts-chart-5: var(--chart-5);
+  --ts-chart-6: var(--chart-6);
+
+  --ts-chart-tooltip-background: var(--popover);
+  --ts-chart-tooltip-color: var(--popover-foreground);
+  --ts-chart-tooltip-border: 1px solid var(--border);
+  --ts-chart-tooltip-border-radius: var(--radius);
+  --ts-chart-tooltip-shadow: var(--shadow-md, 0 4px 12px rgb(0 0 0 / 0.12));
+}

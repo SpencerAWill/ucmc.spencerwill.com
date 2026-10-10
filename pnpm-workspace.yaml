@@ -19,6 +19,30 @@ storeDir: node_modules/.store
 # pinned to specific versions (no `latest`) so this is reachable.
 minimumReleaseAge: 10080
 
+# TIME-BOXED quarantine exception — the ONLY one, and it expires.
+#
+# `@tanstack/charts` is the charting library for the officer-only
+# `/analytics` page (issue #267). 1.0.0 shipped 2026-10-03 and 1.1.0 on
+# 2026-10-09, so BOTH were inside the 7-day window when the page was
+# built and `pnpm add` refused outright with
+# ERR_PNPM_NO_MATURE_MATCHING_VERSION.
+#
+# This bypasses the supply-chain delay, which is a deliberate, scoped,
+# and temporary exception to the rule stated below under `overrides` —
+# see `.claude/rules/dependencies.md`, which records it. What bounds the
+# risk: the package is pinned to an exact version, it ships ESM with no
+# install scripts (so `allowBuilds` blocks nothing because there is
+# nothing to block), and it reaches only one route that is behind both a
+# permission and a page flag.
+#
+# DELETE THIS ENTRY ON OR AFTER 2026-10-16, when 1.1.0 matures out of
+# the window on its own. It is not a standing exemption: leaving it in
+# place means the next `@tanstack/charts` version installs with no
+# quarantine at all, which is precisely the hole the setting exists to
+# close.
+minimumReleaseAgeExclude:
+  - "@tanstack/charts"
+
 # Lifecycle-script allowlist. pnpm 11 renamed `onlyBuiltDependencies`
 # (array) to `allowBuilds` (map of package → allow/deny) — see
 # https://pnpm.io/settings#allowbuilds. pnpm records the resolved
@@ -40,8 +64,10 @@ allowBuilds:
 # (the `package.json` location stopped being read). Pin transitive
 # versions above the known-bad range for each CVE. Every target below has
 # already cleared the 7-day `minimumReleaseAge` window, so NONE needs a
-# quarantine exception (`minimumReleaseAgeExclude`) — we never bypass the
-# supply-chain delay. Nearly all of these advisories live in dev/build
+# quarantine exception (`minimumReleaseAgeExclude`). The one exclusion that
+# does exist is `@tanstack/charts` above — a dated, deliberate exception that
+# deletes itself on 2026-10-16; no security override has ever needed one, and
+# none should. Nearly all of these advisories live in dev/build
 # tooling; none reaches the deployed Worker, but we patch what has a mature fix:
 #   - @babel/core <7.29.6  GHSA-4x5r-pxfx-6jf8 (arbitrary file read via sourceMappingURL; via the
 #               TanStack build plugins). Babel jumped 7.29.0 -> 7.29.6, so this is a same-minor patch —
