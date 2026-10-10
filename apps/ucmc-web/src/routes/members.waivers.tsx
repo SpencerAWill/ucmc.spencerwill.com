@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { PageContainer } from "#/components/layouts/page-container";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { Card, CardContent } from "#/components/ui/card";
 import { Checkbox } from "#/components/ui/checkbox";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
@@ -228,184 +227,182 @@ function QueueTable({
   const queueExceedsCap = queue.length > BULK_ATTEST_MAX;
 
   return (
-    <Card>
-      <CardContent className="space-y-4">
-        {queueExceedsCap ? (
-          <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            {queue.length} members are pending attestation.{" "}
-            {canVerify ? (
-              <>
-                &quot;Select all&quot; will pick the {BULK_ATTEST_MAX} oldest
-                entries; bulk attestations are capped at {BULK_ATTEST_MAX} per
-                request.
-              </>
-            ) : null}
-          </p>
-        ) : null}
-        {/* Bulk action bar — present for the whole session rather than
-            mounted on first selection, and inert until something is
-            selected.
+    <div className="space-y-4">
+      {queueExceedsCap ? (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          {queue.length} members are pending attestation.{" "}
+          {canVerify ? (
+            <>
+              &quot;Select all&quot; will pick the {BULK_ATTEST_MAX} oldest
+              entries; bulk attestations are capped at {BULK_ATTEST_MAX} per
+              request.
+            </>
+          ) : null}
+        </p>
+      ) : null}
+      {/* Bulk action bar — present for the whole session rather than
+          mounted on first selection, and inert until something is
+          selected.
 
-            It used to render only while `someSelected`, so ticking the
-            first checkbox inserted a ~76px block above the list and
-            pushed every row down under the officer's finger — the row
-            they had just tapped was no longer where they tapped it, and
-            un-ticking it yanked everything back. That is the worst
-            possible moment for the list to move: the gesture this bar
-            exists to support is working down a stack of papers ticking
-            rows in sequence.
+          It used to render only while `someSelected`, so ticking the
+          first checkbox inserted a ~76px block above the list and
+          pushed every row down under the officer's finger — the row
+          they had just tapped was no longer where they tapped it, and
+          un-ticking it yanked everything back. That is the worst
+          possible moment for the list to move: the gesture this bar
+          exists to support is working down a stack of papers ticking
+          rows in sequence.
 
-            It stays gated on `canVerify`, not shown-and-disabled to
-            everyone, because a read-only viewer (`waivers:view` without
-            `waivers:verify`) has no checkboxes at all — for them the bar
-            could never become live, and a permanently dead control is
-            noise rather than stability.
+          It stays gated on `canVerify`, not shown-and-disabled to
+          everyone, because a read-only viewer (`waivers:view` without
+          `waivers:verify`) has no checkboxes at all — for them the bar
+          could never become live, and a permanently dead control is
+          noise rather than stability.
 
-            Real `disabled`, not `aria-disabled`: unlike the protected
-            role's delete button there is no hidden reason to convey. The
-            control is unavailable, the browser says so, and the reason
-            is the empty selection the officer is looking at. */}
-        {canVerify ? (
-          <div
-            className={cn(
-              "flex flex-col gap-2 rounded-md border bg-muted/40 p-3 transition-opacity sm:flex-row sm:items-end",
-              !someSelected && "opacity-60",
-            )}
-          >
-            <div className="flex-1 space-y-1">
-              <Label htmlFor="bulk-notes" className="text-xs">
-                Optional note (applied to all selected attestations)
-              </Label>
-              <Input
-                id="bulk-notes"
-                value={bulkNotes}
-                onChange={(e) => setBulkNotes(e.target.value)}
-                placeholder="e.g. collected at 9/2 fall kickoff"
-                maxLength={500}
-                disabled={bulkDisabled}
-              />
-            </div>
-            {/* The count is dropped from the label at zero rather than
-                rendering "Attest 0 selected", which reads as a thing
-                you could do. */}
-            <Button onClick={onAttestSelected} disabled={bulkDisabled}>
-              {bulkAttest.isPending
-                ? "Attesting..."
-                : someSelected
-                  ? `Attest ${selected.size} selected`
-                  : "Attest selected"}
-            </Button>
-          </div>
-        ) : null}
-
-        {/* Two renderings of one queue, not a table that has been
-            squeezed. The table has four data columns plus a checkbox and
-            an action; at 390px that is ~55px a column, and the email —
-            the thing an officer matches against the paper in their hand
-            — wrapped to three lines while the affiliation badge and the
-            date fought over the rest. A list row can put the identity on
-            top and demote affiliation and date to one meta line beneath
-            it, which is the shape of the task: read a name, find it on
-            the stack of papers, tap Attest.
-
-            `queue` is the single source of data and `queueRowLabel` the
-            single source of the display name, so the two renderings can
-            disagree about layout but not about content. */}
-        <ul className="space-y-2 sm:hidden">
-          {queue.map((member) => (
-            <QueueCard
-              key={member.userId}
-              member={member}
-              canVerify={canVerify}
-              selected={selected.has(member.userId)}
-              onToggle={() => toggle(member.userId)}
-              onAttest={() => onAttestOne(member.userId, queueRowLabel(member))}
-              attesting={attest.isPending}
+          Real `disabled`, not `aria-disabled`: unlike the protected
+          role's delete button there is no hidden reason to convey. The
+          control is unavailable, the browser says so, and the reason
+          is the empty selection the officer is looking at. */}
+      {canVerify ? (
+        <div
+          className={cn(
+            "flex flex-col gap-2 rounded-md border bg-muted/40 p-3 transition-opacity sm:flex-row sm:items-end",
+            !someSelected && "opacity-60",
+          )}
+        >
+          <div className="flex-1 space-y-1">
+            <Label htmlFor="bulk-notes" className="text-xs">
+              Optional note (applied to all selected attestations)
+            </Label>
+            <Input
+              id="bulk-notes"
+              value={bulkNotes}
+              onChange={(e) => setBulkNotes(e.target.value)}
+              placeholder="e.g. collected at 9/2 fall kickoff"
+              maxLength={500}
+              disabled={bulkDisabled}
             />
-          ))}
-        </ul>
-
-        {/* `overflow-y-hidden` alongside `overflow-x-auto`: a
-            non-`visible` value on one axis computes the other axis'
-            `visible` to `auto`, which leaves the wrapper capturing
-            vertical scroll as well. */}
-        <div className="hidden overflow-x-auto overflow-y-hidden sm:block">
-          <table className="w-full text-sm">
-            <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                {canVerify ? (
-                  <th scope="col" className="w-10 px-2 py-2 text-left">
-                    <Checkbox
-                      aria-label="Select all"
-                      checked={allSelected}
-                      onCheckedChange={toggleAll}
-                    />
-                  </th>
-                ) : null}
-                <th scope="col" className="px-2 py-2 text-left">
-                  Name
-                </th>
-                <th scope="col" className="px-2 py-2 text-left">
-                  Affiliation
-                </th>
-                <th scope="col" className="px-2 py-2 text-left">
-                  Approved
-                </th>
-                {canVerify ? (
-                  <th scope="col" className="px-2 py-2 text-right">
-                    Action
-                  </th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {queue.map((member) => {
-                const label = queueRowLabel(member);
-                return (
-                  <tr key={member.userId} className="border-b last:border-0">
-                    {canVerify ? (
-                      <td className="px-2 py-3">
-                        <Checkbox
-                          aria-label={`Select ${label}`}
-                          checked={selected.has(member.userId)}
-                          onCheckedChange={() => toggle(member.userId)}
-                        />
-                      </td>
-                    ) : null}
-                    <td className="px-2 py-3">
-                      <div className="font-medium">{label}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {member.email}
-                      </div>
-                    </td>
-                    <td className="px-2 py-3">
-                      {member.ucAffiliation ? (
-                        <Badge variant="outline">{member.ucAffiliation}</Badge>
-                      ) : null}
-                    </td>
-                    <td className="px-2 py-3 text-muted-foreground">
-                      {member.approvedAt ? formatDate(member.approvedAt) : "—"}
-                    </td>
-                    {canVerify ? (
-                      <td className="px-2 py-3 text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onAttestOne(member.userId, label)}
-                          disabled={attest.isPending}
-                        >
-                          Attest
-                        </Button>
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          </div>
+          {/* The count is dropped from the label at zero rather than
+              rendering "Attest 0 selected", which reads as a thing
+              you could do. */}
+          <Button onClick={onAttestSelected} disabled={bulkDisabled}>
+            {bulkAttest.isPending
+              ? "Attesting..."
+              : someSelected
+                ? `Attest ${selected.size} selected`
+                : "Attest selected"}
+          </Button>
         </div>
-      </CardContent>
-    </Card>
+      ) : null}
+
+      {/* Two renderings of one queue, not a table that has been
+          squeezed. The table has four data columns plus a checkbox and
+          an action; at 390px that is ~55px a column, and the email —
+          the thing an officer matches against the paper in their hand
+          — wrapped to three lines while the affiliation badge and the
+          date fought over the rest. A list row can put the identity on
+          top and demote affiliation and date to one meta line beneath
+          it, which is the shape of the task: read a name, find it on
+          the stack of papers, tap Attest.
+
+          `queue` is the single source of data and `queueRowLabel` the
+          single source of the display name, so the two renderings can
+          disagree about layout but not about content. */}
+      <ul className="space-y-2 sm:hidden">
+        {queue.map((member) => (
+          <QueueCard
+            key={member.userId}
+            member={member}
+            canVerify={canVerify}
+            selected={selected.has(member.userId)}
+            onToggle={() => toggle(member.userId)}
+            onAttest={() => onAttestOne(member.userId, queueRowLabel(member))}
+            attesting={attest.isPending}
+          />
+        ))}
+      </ul>
+
+      {/* `overflow-y-hidden` alongside `overflow-x-auto`: a
+          non-`visible` value on one axis computes the other axis'
+          `visible` to `auto`, which leaves the wrapper capturing
+          vertical scroll as well. */}
+      <div className="hidden overflow-x-auto overflow-y-hidden sm:block">
+        <table className="w-full text-sm">
+          <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
+            <tr>
+              {canVerify ? (
+                <th scope="col" className="w-10 px-2 py-2 text-left">
+                  <Checkbox
+                    aria-label="Select all"
+                    checked={allSelected}
+                    onCheckedChange={toggleAll}
+                  />
+                </th>
+              ) : null}
+              <th scope="col" className="px-2 py-2 text-left">
+                Name
+              </th>
+              <th scope="col" className="px-2 py-2 text-left">
+                Affiliation
+              </th>
+              <th scope="col" className="px-2 py-2 text-left">
+                Approved
+              </th>
+              {canVerify ? (
+                <th scope="col" className="px-2 py-2 text-right">
+                  Action
+                </th>
+              ) : null}
+            </tr>
+          </thead>
+          <tbody>
+            {queue.map((member) => {
+              const label = queueRowLabel(member);
+              return (
+                <tr key={member.userId} className="border-b last:border-0">
+                  {canVerify ? (
+                    <td className="px-2 py-3">
+                      <Checkbox
+                        aria-label={`Select ${label}`}
+                        checked={selected.has(member.userId)}
+                        onCheckedChange={() => toggle(member.userId)}
+                      />
+                    </td>
+                  ) : null}
+                  <td className="px-2 py-3">
+                    <div className="font-medium">{label}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {member.email}
+                    </div>
+                  </td>
+                  <td className="px-2 py-3">
+                    {member.ucAffiliation ? (
+                      <Badge variant="outline">{member.ucAffiliation}</Badge>
+                    ) : null}
+                  </td>
+                  <td className="px-2 py-3 text-muted-foreground">
+                    {member.approvedAt ? formatDate(member.approvedAt) : "—"}
+                  </td>
+                  {canVerify ? (
+                    <td className="px-2 py-3 text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onAttestOne(member.userId, label)}
+                        disabled={attest.isPending}
+                      >
+                        Attest
+                      </Button>
+                    </td>
+                  ) : null}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
