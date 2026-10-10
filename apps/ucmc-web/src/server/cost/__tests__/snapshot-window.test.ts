@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ANALYTICS_MAX_RANGE_DAYS,
   MAX_RANGE_DAYS,
   TRAILING_DAYS,
+  analyticsWindow,
   planSnapshotWindow,
 } from "#/server/cost/snapshot-window";
 
@@ -69,5 +71,50 @@ describe("planSnapshotWindow", () => {
 
   it("ignores the recorded earliest once backfill is complete", () => {
     expect(plan("2020-01-01", true)).toEqual(plan("2026-06-23", true));
+  });
+});
+
+describe("analyticsWindow", () => {
+  it("asks for at most what the GraphQL API will serve", () => {
+    // Measured against this account on 2026-10-10: a 31-day span
+    // answers for all three datasets, 32 errors with "cannot request a
+    // time range wider than 4w4d". 30 keeps a day of slack because our
+    // civil dates are CLUB_TIME_ZONE and the filter is read in UTC.
+    const { from, to } = analyticsWindow("2026-10-10");
+    expect(to).toBe("2026-10-10");
+    expect(spanDays({ from, to })).toBeLessThanOrEqual(31);
+  });
+
+  it("is trailing, and identical whatever billing is doing", () => {
+    // The deadlock this fixes: analytics was handed the BILLING
+    // window, which is 90 days in backfill mode, so it errored on
+    // every backfill run. The failure landed in `sourcesFailed`, and
+    // the backfill floor is only recorded when that is empty — so the
+    // mode never flipped to trailing, the window stayed 90 days, and
+    // Workers, D1 and KV produced no rows ever while R2 filled in
+    // normally. These two must not share a window again.
+    const backfill = planSnapshotWindow({
+      today: "2026-10-10",
+      earliestSnapshot: "2026-08-01",
+      backfillComplete: false,
+    });
+    expect(backfill.mode).toBe("backfill");
+
+    const analytics = analyticsWindow("2026-10-10");
+    expect(spanDays(backfill)).toBe(MAX_RANGE_DAYS);
+    expect(spanDays(analytics)).toBe(ANALYTICS_MAX_RANGE_DAYS);
+    expect(spanDays(analytics)).toBeLessThan(spanDays(backfill));
+  });
+
+  it("ends on the requested day rather than yesterday", () => {
+    // Today's partial figures are wanted — the trailing re-read
+    // upserts them again tomorrow once they settle.
+    expect(analyticsWindow("2027-01-01").to).toBe("2027-01-01");
+  });
+
+  it("walks the calendar rather than subtracting fixed milliseconds", () => {
+    // Crosses a month and a year boundary; PlainDate arithmetic is
+    // what makes this right without a zone round-trip.
+    expect(analyticsWindow("2027-01-15").from).toBe("2026-12-16");
   });
 });

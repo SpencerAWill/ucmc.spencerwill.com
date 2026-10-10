@@ -17,6 +17,11 @@
  * the others: partial data beats none, and a missing row is honest
  * where a zero row would read as a true measurement of nothing.
  *
+ * **Billing and analytics are read over different windows.** Billing
+ * backfills; analytics cannot, because its datasets reject any range
+ * wider than about a month. Sharing one window deadlocked the job —
+ * see `analyticsWindow` for the mechanism.
+ *
  * ## Backfill
  *
  * On a run with no history, and on each run after until a window comes
@@ -41,7 +46,10 @@ import {
   earliestSnapshotDate,
   upsertSnapshots,
 } from "#/server/cost/snapshot-store.server";
-import { planSnapshotWindow } from "#/server/cost/snapshot-window";
+import {
+  analyticsWindow,
+  planSnapshotWindow,
+} from "#/server/cost/snapshot-window";
 import { CLUB_TIME_ZONE } from "#/config/time";
 import { getKv } from "#/server/kv";
 import { errorMessage, log } from "#/server/log/log.server";
@@ -103,7 +111,13 @@ export async function runCostSnapshot(
     rows.push(...mergeByServiceDay(parseBillableUsage(billing)));
   }
 
-  const analytics = await fetchAnalyticsUsage(window);
+  // **The analytics window is NOT the billing window.** Cloudflare's
+  // GraphQL datasets hold roughly a month and reject a wider range, so
+  // they are read trailing on every run regardless of which mode
+  // billing is in — see `analyticsWindow`, which carries the measured
+  // limit and why this cannot share the planner.
+  const analyticsRange = analyticsWindow(today);
+  const analytics = await fetchAnalyticsUsage(analyticsRange);
   if (analytics === null) {
     sourcesFailed.push("cloudflare_analytics");
   } else {
@@ -117,14 +131,22 @@ export async function runCostSnapshot(
     log.warn("cost.resend_rollup_failed", { error: errorMessage(err) });
   }
 
-  // A backfill window that yielded no VENDOR rows is the bottom of
-  // retention. Resend rows are excluded from that test deliberately:
-  // the rollup emits an explicit zero for every day in range, so
-  // counting them would mean the floor is never detected.
-  const vendorRows = rows.filter((r) => r.source !== "resend");
+  // A backfill window that yielded no rows FROM THE BACKFILLED SOURCE
+  // is the bottom of retention.
+  //
+  // Only billing backfills, so only billing rows answer the question.
+  // Resend is excluded because its rollup emits an explicit zero for
+  // every day in range, which would mean the floor is never detected;
+  // analytics is excluded because it is read trailing and therefore
+  // returns today's rows on every run, including the backfill run that
+  // is trying to establish it has reached the end of billing history.
+  const backfilledRows = rows.filter((r) => r.source === "cloudflare_billing");
   if (
     window.mode === "backfill" &&
-    vendorRows.length === 0 &&
+    backfilledRows.length === 0 &&
+    // A transient vendor outage must not be mistaken for the end of
+    // history. Analytics can no longer appear here structurally, which
+    // is what used to make this condition unsatisfiable forever.
     sourcesFailed.length === 0
   ) {
     await kv.put(BACKFILL_FLOOR_KEY, today);

@@ -4,6 +4,7 @@ import { getDb, schema } from "#/server/db";
 import { getKv } from "#/server/kv";
 import { runCostSnapshot } from "#/server/cron/cost-snapshot.server";
 import * as client from "#/server/cost/cloudflare-client.server";
+import { MAX_RANGE_DAYS } from "#/server/cost/snapshot-window";
 import billableUsage from "#/server/cost/__tests__/fixtures/billable-usage.json";
 import graphqlUsage from "#/server/cost/__tests__/fixtures/graphql-usage.json";
 
@@ -146,6 +147,64 @@ describe("runCostSnapshot", () => {
 
     expect(result.mode).toBe("trailing");
     expect(result.from).toBe("2026-10-06");
+  });
+
+  it("never asks analytics for the billing backfill window", async () => {
+    // THE DEADLOCK, pinned.
+    //
+    // Analytics used to be handed the billing window, which is 90 days
+    // in backfill mode. Cloudflare's GraphQL datasets reject anything
+    // wider than 4w4d (measured: 31 days answers, 32 errors), so the
+    // call failed on every backfill run. The failure landed in
+    // `sourcesFailed`, and the backfill floor is only recorded when
+    // that is empty — so the mode never flipped to trailing, the
+    // window stayed 90 days, and Workers, D1 and KV produced no rows
+    // EVER while R2 filled in normally. Exactly what dev showed.
+    configured();
+    const billing = vi
+      .spyOn(client, "fetchBillableUsage")
+      .mockResolvedValue(billableUsage);
+    const analytics = vi
+      .spyOn(client, "fetchAnalyticsUsage")
+      .mockResolvedValue(graphqlUsage);
+
+    // An empty table puts billing in backfill mode with a 90-day span.
+    const result = await runCostSnapshot(NOW);
+    expect(result.mode).toBe("backfill");
+
+    const billingArgs = billing.mock.calls[0][0];
+    const analyticsArgs = analytics.mock.calls[0][0];
+    const span = (w: { from: string; to: string }) =>
+      Temporal.PlainDate.from(w.from).until(Temporal.PlainDate.from(w.to)).days;
+
+    // 89 days of difference is 90 days inclusive — the first backfill
+    // window is `today - (MAX_RANGE_DAYS - 1) .. today`.
+    expect(span(billingArgs)).toBe(MAX_RANGE_DAYS - 1);
+    // The whole point: analytics stays inside what the API will serve
+    // even while billing is reaching back three months.
+    expect(span(analyticsArgs)).toBeLessThanOrEqual(31);
+    expect(result.sourcesFailed).toEqual([]);
+  });
+
+  it("can still reach the backfill floor once analytics returns rows every run", async () => {
+    // The second half of the deadlock. Analytics is now read trailing,
+    // so it contributes rows on EVERY run including the backfill run
+    // that is trying to establish billing has run dry. The floor test
+    // therefore has to look at billing rows alone — counting any
+    // vendor row would mean the floor is never detected again, which
+    // is the same bug wearing different clothes.
+    configured();
+    vi.spyOn(client, "fetchBillableUsage").mockResolvedValue({ result: [] });
+    vi.spyOn(client, "fetchAnalyticsUsage").mockResolvedValue(graphqlUsage);
+
+    const result = await runCostSnapshot(NOW);
+
+    expect(result.mode).toBe("backfill");
+    expect(result.sourcesFailed).toEqual([]);
+    // Analytics rows landed...
+    expect(result.rowsWritten).toBeGreaterThan(0);
+    // ...and the floor was still recorded, because billing had none.
+    expect(await getKv().get(FLOOR_KEY)).not.toBeNull();
   });
 
   it("re-running the same window replaces rather than duplicates", async () => {

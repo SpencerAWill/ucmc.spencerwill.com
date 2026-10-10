@@ -136,6 +136,27 @@ Pure policy — thresholds, rates, the attention derivation — lives in
 `lib/` so Stryker can mutate it. An identical helper inlined into an
 action is not mutation-testable and cannot be imported by a route.
 
+## The platform page's data has two very different clocks
+
+`cost_snapshots` is fed by one cron but two APIs with incompatible
+retention, and conflating them is a bug this has already had:
+
+| Source                              | Retention                 | Window                         |
+| ----------------------------------- | ------------------------- | ------------------------------ |
+| Billable Usage (R2)                 | ~108 days on this account | backfills, 90-day spans        |
+| GraphQL analytics (Workers, D1, KV) | **~1 month, enforced**    | trailing only, never backfills |
+
+The GraphQL datasets reject any range wider than `4w4d` — measured on
+this account, a 31-day span answers and 32 errors. Handing them the
+billing backfill window deadlocked the whole job: the call failed every
+run, the failure landed in `sourcesFailed`, and the backfill floor is
+only recorded when that list is empty — so the mode never flipped to
+trailing and Workers, D1 and KV produced no rows at all while R2 filled
+in normally. **Keep the two windows separate** (`analyticsWindow` vs
+`planSnapshotWindow`), and keep the floor test looking at billing rows
+alone, since analytics now returns rows on every run including backfill
+ones.
+
 ## Not built yet
 
 - **`member_activity_days`** (§1 of #267) — the append-only rollup
