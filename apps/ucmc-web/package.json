@@ -127,7 +127,7 @@
     "knip": "^6.39.0",
     "storybook": "^10.6.1",
     "tsx": "^4.23.15",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.3.2",
     "vitest": "^4.1.11",
     "wrangler": "^4.146.0"
