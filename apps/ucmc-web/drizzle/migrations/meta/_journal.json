@@ -568,6 +568,13 @@
       "when": 1779477596957,
       "tag": "0080_analytics_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "6",
+      "when": 1779477596958,
+      "tag": "0081_search_fts",
+      "breakpoints": true
     }
   ]
 }
