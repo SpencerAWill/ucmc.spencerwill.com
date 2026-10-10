@@ -26,7 +26,12 @@ import {
 } from "#/server/audit/audit-log.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
-import { getDb, likeContains, schema } from "#/server/db";
+import { getDb, schema } from "#/server/db";
+import {
+  EMAIL_SEARCH,
+  PROFILE_NAME_SEARCH,
+  searchMatches,
+} from "#/server/db/search";
 import { loadMemberWaiverStatus } from "#/server/waivers/current-attestation.server";
 import type { MemberStats } from "#/server/member-profile/member-stats.server";
 import {
@@ -274,33 +279,21 @@ export async function listMembersAction(opts: {
   }
 
   // Free-text search over the names a member is displayed under plus
-  // any of their verified emails.
+  // any of their addresses on file, through the trigram indexes.
   //
-  // The email match is an EXISTS rather than a reference to the page
-  // query's `user_emails` join, for two reasons. First, the count
+  // Both matches are keyed on `users.id` rather than referencing the
+  // page query's `user_emails` join, for two reasons. First, the count
   // query below joins only `profiles`, so a condition naming
   // `user_emails` would be valid in one of the pair and a SQL error in
-  // the other — EXISTS keeps both on one condition set, the same
-  // reason the role filter above is an EXISTS. Second, it widens the
+  // the other. Second, keying the email index by `user_id` widens the
   // match to secondary addresses: an officer who knows a member only
   // by the alternate address they were reached at still finds the row
   // (which then displays that member's primary email).
   const search = opts.search?.trim() ?? "";
   if (search.length > 0) {
     const searchClause = or(
-      likeContains(schema.profiles.fullName, search),
-      likeContains(schema.profiles.preferredName, search),
-      exists(
-        db
-          .select({ one: schema.userEmails.userId })
-          .from(schema.userEmails)
-          .where(
-            and(
-              eq(schema.userEmails.userId, schema.users.id),
-              likeContains(schema.userEmails.email, search),
-            ),
-          ),
-      ),
+      searchMatches(schema.users.id, PROFILE_NAME_SEARCH, "user_id", search),
+      searchMatches(schema.users.id, EMAIL_SEARCH, "user_id", search),
     );
     if (searchClause) {
       conditions.push(searchClause);
