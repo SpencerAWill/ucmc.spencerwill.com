@@ -108,8 +108,16 @@ export function isForeignKeyViolation(err: unknown): boolean {
  * Lives here beside the other dialect-level helpers because three
  * features search text columns and `import/no-restricted-paths` won't
  * let any of them import the others.
+ *
+ * Prose columns with a trigram index search through `searchMatches()`
+ * in `./search.ts` instead, which falls back to this helper for needles
+ * too short to have a trigram. `column` accepts raw SQL for that
+ * fallback, whose columns live on a virtual table Drizzle cannot model.
  */
-export function likeContains(column: AnySQLiteColumn, query: string): SQL {
+export function likeContains(
+  column: AnySQLiteColumn | SQL,
+  query: string,
+): SQL {
   const needle = `%${query.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
   return sql`${column} LIKE ${needle} ESCAPE '\\'`;
 }

@@ -43,7 +43,7 @@ Everything else under those features stays private. Two one-off `ZONE_EXCEPTIONS
 
 - The audit **recorder** (`recordAuditEvent` etc.) is in `src/server/audit/audit-log.server.ts`; only the read-side viewer lives in `features/audit/`.
 - The "current attestation" predicate is in `src/server/waivers/current-attestation.server.ts`.
-- Free-text search is `likeContains()` in `src/server/db/index.ts`.
+- Free-text search is `searchMatches()` in `src/server/db/search.ts` (trigram FTS5) and `likeContains()` in `src/server/db/index.ts`.
 
 ## API layer
 

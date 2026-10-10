@@ -13,6 +13,11 @@ import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { GearAvailability } from "#/features/gear/lib/availability";
 import { DUE_SOON_DAYS, EXPIRING_SOON_DAYS } from "#/features/gear/lib/safety";
 import { getDb, likeContains, schema } from "#/server/db";
+import {
+  GEAR_ITEM_NOTES_SEARCH,
+  GEAR_MODEL_SEARCH,
+  searchMatches,
+} from "#/server/db/search";
 import { gearItemName } from "#/features/gear/lib/labels";
 
 /**
@@ -236,12 +241,18 @@ function itemWhere(filters: ListGearItemFilters) {
     // Model name and manufacturer are in here deliberately: typing
     // "Black Diamond" or "Corax" is how a member searches, and before
     // the model layer those words only existed as free text on each row.
+    // The code stays on `likeContains`: officers type partial codes off
+    // a tag, often under the three characters a trigram needs.
     clauses.push(
       or(
         likeContains(schema.gearItems.code, q),
-        likeContains(schema.gearItems.notesMarkdown, q),
-        likeContains(schema.gearModels.name, q),
-        likeContains(schema.gearModels.manufacturer, q),
+        searchMatches(
+          schema.gearItems.id,
+          GEAR_ITEM_NOTES_SEARCH,
+          "item_id",
+          q,
+        ),
+        searchMatches(schema.gearModels.id, GEAR_MODEL_SEARCH, "model_id", q),
       ),
     );
   }
@@ -1399,8 +1410,7 @@ export async function listGearModelBrowseRows(
     const q = options.q.trim();
     clauses.push(
       or(
-        likeContains(schema.gearModels.name, q),
-        likeContains(schema.gearModels.manufacturer, q),
+        searchMatches(schema.gearModels.id, GEAR_MODEL_SEARCH, "model_id", q),
         likeContains(schema.gearTypes.name, q),
       ),
     );

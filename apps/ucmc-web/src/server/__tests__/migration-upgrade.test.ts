@@ -447,6 +447,56 @@ describe("0071_users_public_id_not_null closes the public-id hole", () => {
   });
 });
 
+describe("0081_search_fts backfills every searchable row", () => {
+  // The triggers only see writes made after the migration. Every member,
+  // address and piece of gear that already existed reaches the indexes
+  // through the INSERT…SELECT backfill alone, so a backfill that missed a
+  // table would leave those rows unsearchable — from-scratch runs start
+  // empty and cannot see it.
+  const BEFORE = "0080_analytics_permission.sql";
+
+  beforeEach(async () => {
+    await applyThrough(BEFORE);
+
+    const seed = [
+      `INSERT INTO users (id, public_id, status) VALUES ('usr_fts', 'ftsftsftsfts', 'approved')`,
+      `INSERT INTO profiles (user_id, full_name, preferred_name, phone, uc_affiliation)
+       VALUES ('usr_fts', 'Robin Goldsmith', 'Robbie', '+15135550100', 'student')`,
+      `INSERT INTO user_emails (id, user_id, email, is_primary, verified_at)
+       VALUES ('uem_fts', 'usr_fts', 'robin.goldsmith@mail.uc.edu', 1, 1)`,
+      `INSERT INTO gear_types (id, public_id, name) VALUES ('gt_fts', 'gtfts', 'Harness')`,
+      `INSERT INTO gear_models (id, public_id, type_id, manufacturer, name)
+       VALUES ('gm_fts', 'gmfts', 'gt_fts', 'Black Diamond', 'Momentum')`,
+      `INSERT INTO gear_items (id, public_id, model_id, code, notes_markdown)
+       VALUES ('gi_fts', 'gifts', 'gm_fts', 'HA1', 'Buckle replaced in 2024')`,
+    ];
+    for (const statement of seed) {
+      await env.MIGRATIONS_DB.prepare(statement).run();
+    }
+
+    await applyRest();
+  });
+
+  it.each([
+    ["profiles_fts", "user_id", "mith", "usr_fts"],
+    ["profiles_fts", "user_id", "robbie", "usr_fts"],
+    ["user_emails_fts", "email_id", "goldsmith@mail", "uem_fts"],
+    ["gear_models_fts", "model_id", "diamond", "gm_fts"],
+    ["gear_items_fts", "item_id", "buckle", "gi_fts"],
+  ])("%s finds the pre-existing row by %s", async (table, key, needle, id) => {
+    const { results } = await env.MIGRATIONS_DB.prepare(
+      `SELECT k.${key} AS id FROM ${table}_keys k
+       JOIN ${table} f ON f.rowid = k.id WHERE ${table} MATCH ?`,
+    )
+      .bind(`"${needle}"`)
+      .all<{ id: string }>();
+    expect(
+      results.map((r) => r.id),
+      `${table} has no entry for a row that existed before 0081`,
+    ).toEqual([id]);
+  });
+});
+
 describe("a populated database upgrades across the most recent migration", () => {
   // Deliberately expressed as "the last one", not as a file name: the
   // newest migration is the one nobody has run against real data yet, so

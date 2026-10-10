@@ -28,8 +28,15 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { getDb, likeContains, schema } from "#/server/db";
+import {
+  EMAIL_SEARCH,
+  GEAR_MODEL_SEARCH,
+  PROFILE_NAME_SEARCH,
+  searchMatches,
+} from "#/server/db/search";
 import { DEFAULT_LOAN_SORT_DIRECTION } from "#/features/gear/lib/loan-sort";
 import type {
   LoanSortDirection,
@@ -189,6 +196,66 @@ function toLoanRow(r: RawLoanRow): LoanListRow {
  *  join condition that makes a single query serve both loan kinds. */
 const MODEL_VIA_LOAN_OR_ITEM = sql`${schema.gearModels.id} = coalesce(${schema.gearLoans.modelId}, ${schema.gearItems.modelId})`;
 
+/**
+ * The loan list's free-text search: item code, product (manufacturer or
+ * name), borrower's full name, borrower's PRIMARY email.
+ *
+ * Every branch is an `IN` on a `gear_loans` column that carries an index
+ * (`item_id`, `model_id`, `member_user_id`), and that shape is the point.
+ * The obvious form — OR-ing matches against the joined `gear_items`,
+ * `gear_models`, `profiles` and `user_emails` columns — cannot use any
+ * index, because no single table owns the whole OR: SQLite walks every
+ * loan, joins it out, and then tests it, and moving those columns onto
+ * trigram indexes changed nothing measurable (#189: ~40 ms at 25k loans
+ * either way). Phrased against the loan's own keys, SQLite resolves each
+ * branch to a small id set first and touches only the loans in it.
+ *
+ * The model branch is split in two because a loan names its model
+ * either directly (counted stock) or through its item (coded), the same
+ * `coalesce` `MODEL_VIA_LOAN_OR_ITEM` joins through. The subqueries name
+ * `gear_items` and `user_emails` while the outer query joins them too;
+ * SQL resolves a column against the innermost FROM first, so they are
+ * not correlated.
+ */
+function loanSearchWhere(q: string): SQL | undefined {
+  const db = getDb();
+  const matchingItems = db
+    .select({ id: schema.gearItems.id })
+    .from(schema.gearItems)
+    .where(
+      or(
+        likeContains(schema.gearItems.code, q),
+        searchMatches(
+          schema.gearItems.modelId,
+          GEAR_MODEL_SEARCH,
+          "model_id",
+          q,
+        ),
+      ),
+    );
+  const membersByPrimaryEmail = db
+    .select({ id: schema.userEmails.userId })
+    .from(schema.userEmails)
+    .where(
+      and(
+        eq(schema.userEmails.isPrimary, true),
+        searchMatches(schema.userEmails.id, EMAIL_SEARCH, "email_id", q),
+      ),
+    );
+  return or(
+    inArray(schema.gearLoans.itemId, matchingItems),
+    searchMatches(schema.gearLoans.modelId, GEAR_MODEL_SEARCH, "model_id", q),
+    searchMatches(
+      schema.gearLoans.memberUserId,
+      PROFILE_NAME_SEARCH,
+      "user_id",
+      q,
+      ["full_name"],
+    ),
+    inArray(schema.gearLoans.memberUserId, membersByPrimaryEmail),
+  );
+}
+
 // ── insert ─────────────────────────────────────────────────────────────
 
 export interface InsertLoanRow {
@@ -325,7 +392,8 @@ export interface ListLoansFilters {
   tab?: "active" | "history";
   memberUserId?: string;
   /** Free-text against item code, model name, manufacturer, member
-   *  full name, or member primary email (LIKE %q%). */
+   *  full name, or member primary email — a substring match, through
+   *  `loanSearchWhere`. */
   q?: string;
   /** Active-only filter: due before now. */
   overdueOnly?: boolean;
@@ -372,16 +440,7 @@ export async function listLoans(
     clauses.push(sql`${schema.gearLoans.dueAt} < (unixepoch() * 1000)`);
   }
   if (options.q && options.q.trim().length > 0) {
-    const q = options.q.trim();
-    clauses.push(
-      or(
-        likeContains(schema.gearItems.code, q),
-        likeContains(schema.gearModels.name, q),
-        likeContains(schema.gearModels.manufacturer, q),
-        likeContains(schema.profiles.fullName, q),
-        likeContains(schema.userEmails.email, q),
-      ),
-    );
+    clauses.push(loanSearchWhere(options.q.trim()));
   }
   const where = clauses.length === 0 ? undefined : and(...clauses);
   const sort =
@@ -717,8 +776,9 @@ export interface MemberSearchResult {
 
 /**
  * Approved-member search keyed on name OR primary email. Used by the
- * checkout sheet's member combobox. Capped at 20 results; LIKE on
- * `profiles.fullName` and `user_emails.email`.
+ * checkout sheet's member combobox. Capped at 20 results; a trigram
+ * substring match on `profiles.full_name` and the primary
+ * `user_emails.email`.
  */
 export async function searchApprovedMembers(
   q: string,
@@ -746,8 +806,19 @@ export async function searchApprovedMembers(
       and(
         eq(schema.users.status, "approved"),
         or(
-          likeContains(schema.profiles.fullName, q.trim()),
-          likeContains(schema.userEmails.email, q.trim()),
+          searchMatches(
+            schema.users.id,
+            PROFILE_NAME_SEARCH,
+            "user_id",
+            q.trim(),
+            ["full_name"],
+          ),
+          searchMatches(
+            schema.userEmails.id,
+            EMAIL_SEARCH,
+            "email_id",
+            q.trim(),
+          ),
         ),
       ),
     )
