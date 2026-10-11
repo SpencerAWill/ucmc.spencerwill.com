@@ -12,9 +12,9 @@
  * Dual-shape like loans: a hold names either a coded item or a counted
  * model with a quantity, enforced by a CHECK constraint.
  */
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or, sql } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, schema } from "#/server/db";
 
 export interface GearHoldRow {
   id: string;
@@ -208,7 +208,7 @@ export async function liveHeldQuantityForModels(
       quantity: sql<number>`sum(${schema.gearHolds.quantity})`,
     })
     .from(schema.gearHolds)
-    .where(and(inArray(schema.gearHolds.modelId, modelIds), liveWhere(now)))
+    .where(and(inJsonArray(schema.gearHolds.modelId, modelIds), liveWhere(now)))
     .groupBy(schema.gearHolds.modelId);
   for (const row of rows) {
     if (row.modelId !== null) {

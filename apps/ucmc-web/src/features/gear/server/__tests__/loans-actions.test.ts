@@ -1103,3 +1103,24 @@ describe("getLoanDefaultsAction", () => {
     expect((await getLoanDefaultsAction()).caveOpenWeekdays).toEqual([3]);
   });
 });
+
+describe("checkoutLoansAction batch size (#291)", () => {
+  it("checks out 12 pieces in one batch — a loan row binds up to 18, so 7 used to be the most", async () => {
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const pieces: string[] = [];
+    for (const i of Array.from({ length: 12 }, (_unused, k) => k)) {
+      pieces.push(await createGearOk({ typePublicId, code: `BIG${i}` }));
+    }
+    const member = await seedUser("big-batch@example.com");
+
+    const result = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: pieces.map((gearPublicId) => ({ gearPublicId, durationDays: 7 })),
+      notes: null,
+    });
+
+    expect(result.results.filter((r) => r.ok)).toHaveLength(12);
+    expect(await getDb().select().from(schema.gearLoans)).toHaveLength(12);
+  });
+});

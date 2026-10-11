@@ -1,7 +1,7 @@
 import { SQL as SQLExpression, getTableColumns, is, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import type {
   AnySQLiteColumn,
   SQLiteInsertValue,
@@ -187,6 +187,22 @@ export function notInJsonArray(
   values: readonly (string | number)[],
 ): SQL {
   return sql`${column} NOT IN (SELECT value FROM json_each(${JSON.stringify(values)}))`;
+}
+
+/**
+ * `column IN (subquery)` — Drizzle's `inArray`, narrowed to the form that
+ * binds no list. The type takes a query builder (any `SQLWrapper`), and a
+ * plain array isn't one, so this can't be handed the shape #291 exists to
+ * stop. It's how the rest of the app reaches `inArray` now that ESLint
+ * bans importing it directly.
+ */
+export function inSubquery(
+  column: AnySQLiteColumn | SQL,
+  subquery: SQLWrapper,
+): SQL {
+  // What `inArray` itself emits for a subquery; written out because its
+  // overloads won't accept a column-or-SQL union.
+  return sql`${column} in ${subquery}`;
 }
 
 /**
