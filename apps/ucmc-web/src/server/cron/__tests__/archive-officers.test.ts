@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 const { archiveCurrentOfficers, schoolYearForArchiveFire } =
@@ -74,7 +74,7 @@ beforeEach(async () => {
   await db
     .delete(schema.roles)
     .where(
-      inArray(schema.roles.id, [
+      inJsonArray(schema.roles.id, [
         "role_test_president",
         "role_test_treasurer",
         "role_test_secretary",

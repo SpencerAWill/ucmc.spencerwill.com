@@ -1,8 +1,14 @@
-import { sql } from "drizzle-orm";
+import { SQL as SQLExpression, getTableColumns, is, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import type { SQL } from "drizzle-orm";
-import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import type { SQL, SQLWrapper } from "drizzle-orm";
+import type {
+  AnySQLiteColumn,
+  IndexColumn,
+  SQLiteInsertValue,
+  SQLiteTable,
+  SQLiteUpdateSetSource,
+} from "drizzle-orm/sqlite-core";
 
 import { env } from "#/server/cloudflare-env";
 import * as schema from "../../../drizzle/schema.ts";
@@ -134,48 +140,188 @@ export function likeContains(
  */
 export const D1_MAX_BOUND_PARAMS = 100;
 
+// ── statements whose size doesn't depend on the data ─────────────────
+//
+// The rule (#291): **no statement may bind a number of parameters that
+// grows with the data.** D1 refuses anything past 100, and both shapes
+// that grow — `inArray(col, list)` and `insert().values(rows)` — reach it
+// through ordinary use rather than abuse. Three tools, in order of
+// preference:
+//
+//   1. A subquery or join, when the list came out of the database in the
+//      first place. Zero list parameters; the planner does the matching.
+//   2. `inJsonArray` / `notInJsonArray`, when the list came from the
+//      caller. One parameter, whatever the length.
+//   3. `insertStatements` / `insertMany` for multi-row writes, which split
+//      the rows across statements inside one atomic batch.
+//
+// `inArray` / `notInArray` from `drizzle-orm` are banned outside this
+// module by ESLint (`no-restricted-imports`), so the old shape can't come
+// back by habit.
+
 /**
- * Run a `WHERE col IN (…)` read whose id list may exceed what D1 will bind,
- * by splitting it into statements D1 accepts and concatenating the rows.
+ * `column IN (…values)`, binding the whole list as **one** JSON parameter
+ * and expanding it with SQLite's `json_each` — the pattern D1's own docs
+ * give for exactly this ("Expand arrays for IN queries"). Verified against
+ * D1 with 5000 values.
  *
- * Use this wherever the list comes from "everything matching X" rather than
- * from a UI page already bounded well under 100. A cap on the caller is not
- * a substitute: it couples a product decision to a storage limit, and it
- * cannot help the unbounded cases at all.
+ * Use it when the values come from the caller (selected rows, a filter in
+ * the URL). When they came out of a previous query, write the subquery
+ * instead: the database already knows the answer, and shipping it back as
+ * a list is a round trip that only adds risk.
  *
- * `reservedParams` is the number of parameters the same statement binds for
- * anything other than the id list — a date range, a status, a tenant id.
- * Pass it rather than assuming the whole budget is available, so adding a
- * filter to a chunked query cannot silently push it back over the limit.
- *
- * **Ordering is per chunk, not global.** A single `ORDER BY` cannot span
- * separate statements, so callers must either sort the merged rows
- * themselves or depend only on ordering within one key — which holds
- * whenever every row for a given id lands in the same chunk, as it does when
- * chunking by that id.
+ * An empty list matches nothing, as `IN ()` would if SQL allowed it.
+ * Values are compared as JSON scalars: strings stay TEXT and integers stay
+ * INTEGER, which is what every id column here stores. Don't pass booleans
+ * or Temporal values — convert them to the stored form first.
  */
-export async function selectInChunks<TId, TRow>(
-  ids: readonly TId[],
-  select: (chunk: readonly TId[]) => Promise<TRow[]>,
-  options: { readonly reservedParams?: number } = {},
-): Promise<TRow[]> {
-  const reserved = options.reservedParams ?? 0;
-  const perChunk = D1_MAX_BOUND_PARAMS - reserved;
-  if (perChunk < 1) {
-    throw new RangeError(
-      `selectInChunks: reservedParams (${reserved}) leaves no room for ids within D1's ${D1_MAX_BOUND_PARAMS}-parameter limit.`,
-    );
-  }
-  if (ids.length === 0) {
-    return [];
-  }
-  if (ids.length <= perChunk) {
-    return select(ids);
-  }
-  const chunks = Array.from(
-    { length: Math.ceil(ids.length / perChunk) },
-    (_unused, index) => ids.slice(index * perChunk, (index + 1) * perChunk),
+export function inJsonArray(
+  column: AnySQLiteColumn | SQL,
+  values: readonly (string | number)[],
+): SQL {
+  return sql`${column} IN (SELECT value FROM json_each(${JSON.stringify(values)}))`;
+}
+
+/** `column NOT IN (…values)` — see `inJsonArray`. An empty list excludes
+ *  nothing. */
+export function notInJsonArray(
+  column: AnySQLiteColumn | SQL,
+  values: readonly (string | number)[],
+): SQL {
+  return sql`${column} NOT IN (SELECT value FROM json_each(${JSON.stringify(values)}))`;
+}
+
+/**
+ * `column IN (subquery)` — Drizzle's `inArray`, narrowed to the form that
+ * binds no list. The type takes a query builder (any `SQLWrapper`), and a
+ * plain array isn't one, so this can't be handed the shape #291 exists to
+ * stop. It's how the rest of the app reaches `inArray` now that ESLint
+ * bans importing it directly.
+ */
+export function inSubquery(
+  column: AnySQLiteColumn | SQL,
+  subquery: SQLWrapper,
+): SQL {
+  // What `inArray` itself emits for a subquery; written out because its
+  // overloads won't accept a column-or-SQL union.
+  return sql`${column} in ${subquery}`;
+}
+
+/** `column NOT IN (subquery)` — see `inSubquery`. */
+export function notInSubquery(
+  column: AnySQLiteColumn | SQL,
+  subquery: SQLWrapper,
+): SQL {
+  return sql`${column} not in ${subquery}`;
+}
+
+/**
+ * How many rows one multi-row INSERT into `table` can carry.
+ *
+ * A column is counted as bound unless it has a SQL-expression default
+ * (`created_at` defaulting to `unixepoch() * 1000`) **and no row
+ * supplies it** — Drizzle inlines such a default only when the value is
+ * left out. Everything else is counted, including omitted columns with
+ * no default (Drizzle actually writes a literal `null` for those), so
+ * the figure can only overcount, which is the safe direction. Pass the
+ * rows you're about to insert; without them every SQL-default column is
+ * assumed omitted.
+ *
+ * An audit row binds 7, so 14 rows fit. A tag assignment binds 4 once
+ * its `assignedAt` is supplied — the case that showed the rows have to
+ * be consulted at all.
+ *
+ * Assumes the statement binds nothing else. An upsert's `set` must
+ * therefore read `excluded.*` rather than bind JS values — which is what
+ * every upsert here does, and what keeps its size a function of the rows
+ * alone.
+ */
+export function rowsPerInsertStatement(
+  table: SQLiteTable,
+  rows: readonly Record<string, unknown>[] = [],
+): number {
+  const supplied = new Set(
+    rows.flatMap((row) =>
+      Object.entries(row)
+        .filter(([, value]) => value !== undefined)
+        .map(([key]) => key),
+    ),
   );
-  const rows = await Promise.all(chunks.map((chunk) => select(chunk)));
-  return rows.flat();
+  const columns = Object.entries(getTableColumns(table)).filter(
+    ([key, column]) => !is(column.default, SQLExpression) || supplied.has(key),
+  ).length;
+  return Math.floor(D1_MAX_BOUND_PARAMS / columns);
+}
+
+/** `rows` cut into runs of at most `size`. */
+export function chunkRows<T>(rows: readonly T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(rows.length / size) }, (_unused, i) =>
+    rows.slice(i * size, (i + 1) * size),
+  );
+}
+
+type BatchStatement = Parameters<
+  DrizzleD1Database<typeof schema>["batch"]
+>[0][number];
+
+/**
+ * The INSERT statements that write `rows` into `table` without any one of
+ * them binding more than D1 accepts. Spread them into a `db.batch([...])`
+ * alongside the rest of the mutation; on their own, use `insertMany`.
+ *
+ * Splitting inside a batch keeps the write atomic and costs one round
+ * trip: D1 applies its per-query limits to each statement in a batch
+ * individually, and runs the batch as one transaction.
+ */
+export function insertStatements<TTable extends SQLiteTable>(
+  table: TTable,
+  rows: readonly SQLiteInsertValue<TTable>[],
+  options: {
+    /** Skip rows that collide with an existing key, per statement —
+     *  `INSERT … ON CONFLICT DO NOTHING`. */
+    readonly onConflictDoNothing?: boolean;
+    /** Upsert, per statement. `set` must read `excluded.*` — a bound JS
+     *  value there would add parameters the sizing doesn't count. */
+    readonly onConflictDoUpdate?: {
+      readonly target: IndexColumn | IndexColumn[];
+      readonly set: SQLiteUpdateSetSource<TTable>;
+    };
+  } = {},
+): BatchStatement[] {
+  const db = getDb();
+  const { onConflictDoNothing, onConflictDoUpdate } = options;
+  return chunkRows(rows, rowsPerInsertStatement(table, rows)).map((part) => {
+    const insert = db.insert(table).values(part);
+    if (onConflictDoUpdate) {
+      return insert.onConflictDoUpdate({
+        target: onConflictDoUpdate.target,
+        set: onConflictDoUpdate.set,
+      });
+    }
+    return onConflictDoNothing ? insert.onConflictDoNothing() : insert;
+  });
+}
+
+/**
+ * `db.batch` over a list that may be empty. Drizzle types the batch as a
+ * non-empty tuple, and an empty one is a runtime error; every caller that
+ * builds statements from data has to handle that, so it's handled here.
+ */
+export async function runBatch(
+  statements: readonly BatchStatement[],
+): Promise<void> {
+  const first = statements.at(0);
+  if (first === undefined) {
+    return;
+  }
+  await getDb().batch([first, ...statements.slice(1)]);
+}
+
+/** Insert any number of rows atomically. See `insertStatements`. */
+export async function insertMany<TTable extends SQLiteTable>(
+  table: TTable,
+  rows: readonly SQLiteInsertValue<TTable>[],
+  options: Parameters<typeof insertStatements<TTable>>[2] = {},
+): Promise<void> {
+  await runBatch(insertStatements(table, rows, options));
 }

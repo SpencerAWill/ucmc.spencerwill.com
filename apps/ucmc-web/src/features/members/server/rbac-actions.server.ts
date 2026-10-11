@@ -3,16 +3,23 @@
  * the shell + .server.ts split — the shell in `./rbac-fns.ts` loads
  * this via dynamic imports inside its createServerFn handlers.
  */
-import { and, asc, count, eq, inArray, max } from "drizzle-orm";
+import { and, asc, count, eq, max } from "drizzle-orm";
 
 import {
   buildAuditEventStatement,
-  buildBulkAuditEventStatement,
+  buildBulkAuditEventStatements,
 } from "#/server/audit/audit-log.server";
 import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, isUniqueViolation, schema, selectInChunks } from "#/server/db";
+import {
+  getDb,
+  inJsonArray,
+  insertStatements,
+  isUniqueViolation,
+  runBatch,
+  schema,
+} from "#/server/db";
 import { errorMessage, log } from "#/server/log/log.server";
 
 // ── constants ──────────────────────────────────────────────────────────
@@ -415,22 +422,23 @@ export async function setRolePermissionsAction(input: {
     throw new Error("Role not found");
   }
 
+  // Deduped once, so the grants and the audit row describe the same set.
+  const permissionIds = [...new Set(input.permissionIds)];
   // Replace-all strategy: delete existing grants, insert the new
   // set, all atomic with the audit row via D1 batch.
   const stmts = [
     db
       .delete(schema.rolePermissions)
       .where(eq(schema.rolePermissions.roleId, input.roleId)),
-    ...(input.permissionIds.length > 0
-      ? [
-          db.insert(schema.rolePermissions).values(
-            input.permissionIds.map((permissionId) => ({
-              roleId: input.roleId,
-              permissionId,
-            })),
-          ),
-        ]
-      : []),
+    // Split to fit: the catalog is ~45 permissions at 2 parameters each,
+    // five short of D1's ceiling in a single statement (#291).
+    ...insertStatements(
+      schema.rolePermissions,
+      permissionIds.map((permissionId) => ({
+        roleId: input.roleId,
+        permissionId,
+      })),
+    ),
     buildAuditEventStatement({
       actorUserId: principal.userId,
       action: "role.permissions_set",
@@ -438,11 +446,11 @@ export async function setRolePermissionsAction(input: {
       targetId: input.roleId,
       metadata: {
         roleName: role.name,
-        permissionIds: input.permissionIds,
+        permissionIds,
       },
     }),
   ];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  await runBatch(stmts);
 
   // KV invalidation is best-effort post-commit: D1 has already
   // committed the permission change AND the audit row, so throwing
@@ -504,8 +512,11 @@ export async function setUserRolesAction(input: {
     throw new Error("Cannot assign roles to an unclaimed member");
   }
 
-  // Anonymous role cannot be assigned to users.
-  const roleIds = input.roleIds.filter((id) => id !== ANONYMOUS_ROLE_ID);
+  // Anonymous role cannot be assigned to users. Deduped, because a
+  // repeated id would otherwise collide with itself on the insert.
+  const roleIds = [...new Set(input.roleIds)].filter(
+    (id) => id !== ANONYMOUS_ROLE_ID,
+  );
 
   // Approved users must always keep the member role.
   if (user.status === "approved" && !roleIds.includes(MEMBER_ROLE_ID)) {
@@ -526,7 +537,7 @@ export async function setUserRolesAction(input: {
     const existingRoles = await db
       .select({ id: schema.roles.id })
       .from(schema.roles)
-      .where(inArray(schema.roles.id, roleIds));
+      .where(inJsonArray(schema.roles.id, roleIds));
     const existingIds = new Set(existingRoles.map((r) => r.id));
     for (const roleId of roleIds) {
       if (!existingIds.has(roleId)) {
@@ -568,24 +579,17 @@ export async function setUserRolesAction(input: {
 
   // Replace-all: delete existing assignments, insert new set, audit
   // the diff. All atomic via D1 batch.
-  const auditStmt = buildBulkAuditEventStatement(events);
-  const stmts = [
+  const auditStmts = buildBulkAuditEventStatements(events);
+  await runBatch([
     db
       .delete(schema.userRoles)
       .where(eq(schema.userRoles.userId, input.userId)),
-    ...(roleIds.length > 0
-      ? [
-          db.insert(schema.userRoles).values(
-            roleIds.map((roleId) => ({
-              userId: input.userId,
-              roleId,
-            })),
-          ),
-        ]
-      : []),
-    ...(auditStmt ? [auditStmt] : []),
-  ];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+    ...insertStatements(
+      schema.userRoles,
+      roleIds.map((roleId) => ({ userId: input.userId, roleId })),
+    ),
+    ...auditStmts,
+  ]);
 
   return { ok: true };
 }
@@ -682,12 +686,10 @@ export async function setRoleMembersAction(input: {
   // (officer-pre-added) stubs must claim their account first — the
   // same rule the user-keyed path enforces.
   if (addIds.length > 0) {
-    const targetUsers = await selectInChunks(addIds, (chunk) =>
-      db
-        .select({ id: schema.users.id, status: schema.users.status })
-        .from(schema.users)
-        .where(inArray(schema.users.id, [...chunk])),
-    );
+    const targetUsers = await db
+      .select({ id: schema.users.id, status: schema.users.status })
+      .from(schema.users)
+      .where(inJsonArray(schema.users.id, addIds));
     const byId = new Map(targetUsers.map((u) => [u.id, u.status]));
     for (const userId of addIds) {
       const status = byId.get(userId);
@@ -726,7 +728,7 @@ export async function setRoleMembersAction(input: {
   // One audit row per added / removed member, matching the shape the
   // user-keyed path writes, so the audit page answers "who granted X
   // this role?" the same way regardless of which surface did it.
-  const auditStmt = buildBulkAuditEventStatement([
+  const auditStmts = buildBulkAuditEventStatements([
     ...assigned.map((userId) => ({
       actorUserId: principal.userId,
       action: "role.assigned" as const,
@@ -747,7 +749,7 @@ export async function setRoleMembersAction(input: {
   // permissions path uses: `user_roles` rows for *this* role are the
   // only ones in scope, and touching only the delta keeps the
   // statement count flat when a role has many members and one changes.
-  const stmts = [
+  await runBatch([
     ...(unassigned.length > 0
       ? [
           db
@@ -755,24 +757,18 @@ export async function setRoleMembersAction(input: {
             .where(
               and(
                 eq(schema.userRoles.roleId, input.roleId),
-                inArray(schema.userRoles.userId, unassigned),
+                inJsonArray(schema.userRoles.userId, unassigned),
               ),
             ),
         ]
       : []),
-    ...(assigned.length > 0
-      ? [
-          db
-            .insert(schema.userRoles)
-            .values(
-              assigned.map((userId) => ({ userId, roleId: input.roleId })),
-            )
-            .onConflictDoNothing(),
-        ]
-      : []),
-    ...(auditStmt ? [auditStmt] : []),
-  ];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+    ...insertStatements(
+      schema.userRoles,
+      assigned.map((userId) => ({ userId, roleId: input.roleId })),
+      { onConflictDoNothing: true },
+    ),
+    ...auditStmts,
+  ]);
 
   return { ok: true };
 }

@@ -5,18 +5,7 @@
  * shell in `./member-fns.ts` loads this via a dynamic import inside its
  * createServerFn handlers.
  */
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  exists,
-  gte,
-  inArray,
-  lte,
-  or,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gte, lte, or } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import {
@@ -26,7 +15,14 @@ import {
 } from "#/server/audit/audit-log.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
-import { getDb, schema } from "#/server/db";
+import {
+  getDb,
+  inJsonArray,
+  insertMany,
+  insertStatements,
+  runBatch,
+  schema,
+} from "#/server/db";
 import {
   EMAIL_SEARCH,
   PROFILE_NAME_SEARCH,
@@ -234,24 +230,15 @@ export async function listMembersAction(opts: {
     statusList.push("approved");
   }
 
-  const conditions =
-    statusList.length === 1
-      ? [eq(schema.users.status, statusList[0] as schema.UserStatus)]
-      : [
-          inArray(
-            schema.users.status,
-            statusList as [schema.UserStatus, ...schema.UserStatus[]],
-          ),
-        ];
+  // The three comma-split filters bind as one JSON parameter each, so a
+  // URL repeating a value a hundred times costs nothing (#291).
+  const conditions = [inJsonArray(schema.users.status, statusList)];
 
   // Affiliation filter (comma-separated list).
   const affiliationList = opts.affiliations?.split(",").filter(Boolean) ?? [];
   if (affiliationList.length > 0) {
     conditions.push(
-      inArray(
-        schema.profiles.ucAffiliation,
-        affiliationList as [schema.UcAffiliation, ...schema.UcAffiliation[]],
-      ),
+      inJsonArray(schema.profiles.ucAffiliation, affiliationList),
     );
   }
 
@@ -261,7 +248,6 @@ export async function listMembersAction(opts: {
   // with multiple roles; EXISTS keeps the row count to one per user.
   const roleList = opts.roles?.split(",").filter(Boolean) ?? [];
   if (roleList.length > 0) {
-    const roleNames = roleList as [string, ...string[]];
     conditions.push(
       exists(
         db
@@ -271,7 +257,7 @@ export async function listMembersAction(opts: {
           .where(
             and(
               eq(schema.userRoles.userId, schema.users.id),
-              inArray(schema.roles.name, roleNames),
+              inJsonArray(schema.roles.name, roleList),
             ),
           ),
       ),
@@ -367,7 +353,8 @@ export async function listMembersAction(opts: {
           })
           .from(schema.userRoles)
           .innerJoin(schema.roles, eq(schema.roles.id, schema.userRoles.roleId))
-          .where(inArray(schema.userRoles.userId, userIds))
+          // A page can be 500 rows; one JSON parameter at any size.
+          .where(inJsonArray(schema.userRoles.userId, userIds))
           .orderBy(asc(schema.roles.position), asc(schema.roles.name))
       : [];
 
@@ -389,7 +376,7 @@ export async function listMembersAction(opts: {
             relationship: schema.emergencyContacts.relationship,
           })
           .from(schema.emergencyContacts)
-          .where(inArray(schema.emergencyContacts.userId, userIds))
+          .where(inJsonArray(schema.emergencyContacts.userId, userIds))
       : [];
 
   const contactsByUser = new Map<string, EmergencyContactSummary[]>();
@@ -684,16 +671,15 @@ export async function approveRegistrationsAction(
       approvedAt: Temporal.Now.instant(),
       approvedBy: approver.userId,
     })
-    .where(inArray(schema.users.id, userIds))
+    .where(inJsonArray(schema.users.id, userIds))
     .returning({ id: schema.users.id });
   const updatedIds = updated.map(({ id }) => id);
 
-  if (updatedIds.length > 0) {
-    await db
-      .insert(schema.userRoles)
-      .values(updatedIds.map((userId) => ({ userId, roleId: "role_member" })))
-      .onConflictDoNothing();
-  }
+  await insertMany(
+    schema.userRoles,
+    updatedIds.map((userId) => ({ userId, roleId: "role_member" })),
+    { onConflictDoNothing: true },
+  );
 
   // Sequential audit — see `audit-log.server.ts` residual case
   // (`.returning()` result drives the audit set; D1 batches can't
@@ -726,7 +712,7 @@ export async function rejectRegistrationsAction(
   const updated = await getDb()
     .update(schema.users)
     .set({ status: "rejected", rejectedAt: Temporal.Now.instant() })
-    .where(inArray(schema.users.id, userIds))
+    .where(inJsonArray(schema.users.id, userIds))
     .returning({ id: schema.users.id });
 
   // Sequential audit — see `audit-log.server.ts` residual case.
@@ -764,7 +750,7 @@ export async function deactivateMembersAction(
     .set({ status: "deactivated", deactivatedAt: Temporal.Now.instant() })
     .where(
       and(
-        inArray(schema.users.id, userIds),
+        inJsonArray(schema.users.id, userIds),
         eq(schema.users.status, "approved"),
       ),
     )
@@ -778,7 +764,7 @@ export async function deactivateMembersAction(
   if (updatedIds.length > 0) {
     await db
       .delete(schema.sessions)
-      .where(inArray(schema.sessions.userId, updatedIds));
+      .where(inJsonArray(schema.sessions.userId, updatedIds));
   }
 
   // Sequential audit — see `audit-log.server.ts` residual case.
@@ -816,7 +802,7 @@ export async function reactivateMembersAction(
     })
     .where(
       and(
-        inArray(schema.users.id, userIds),
+        inJsonArray(schema.users.id, userIds),
         eq(schema.users.status, "deactivated"),
       ),
     )
@@ -825,12 +811,11 @@ export async function reactivateMembersAction(
 
   // Ensure member role is granted on the rows we actually
   // reactivated (may already exist from prior approval).
-  if (updatedIds.length > 0) {
-    await db
-      .insert(schema.userRoles)
-      .values(updatedIds.map((userId) => ({ userId, roleId: "role_member" })))
-      .onConflictDoNothing();
-  }
+  await insertMany(
+    schema.userRoles,
+    updatedIds.map((userId) => ({ userId, roleId: "role_member" })),
+    { onConflictDoNothing: true },
+  );
 
   // Sequential audit — see `audit-log.server.ts` residual case.
   await recordAuditEvents(
@@ -860,7 +845,7 @@ export async function unrejectMembersAction(
     .set({ status: "pending", rejectedAt: null })
     .where(
       and(
-        inArray(schema.users.id, userIds),
+        inJsonArray(schema.users.id, userIds),
         eq(schema.users.status, "rejected"),
       ),
     )
@@ -969,19 +954,16 @@ export async function adminUpdateProfileAction(input: {
     db
       .delete(schema.emergencyContacts)
       .where(eq(schema.emergencyContacts.userId, userId)),
-    ...(emergencyContacts.length > 0
-      ? [
-          db.insert(schema.emergencyContacts).values(
-            emergencyContacts.map((ec) => ({
-              id: `ec_${uuidv7()}`,
-              userId,
-              name: ec.name,
-              phone: ec.phone,
-              relationship: ec.relationship,
-            })),
-          ),
-        ]
-      : []),
+    ...insertStatements(
+      schema.emergencyContacts,
+      emergencyContacts.map((ec) => ({
+        id: `ec_${uuidv7()}`,
+        userId,
+        name: ec.name,
+        phone: ec.phone,
+        relationship: ec.relationship,
+      })),
+    ),
     buildAuditEventStatement({
       actorUserId: principal.userId,
       action: "profile.force_edited",
@@ -992,7 +974,7 @@ export async function adminUpdateProfileAction(input: {
       },
     }),
   ];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  await runBatch(stmts);
 
   return { ok: true };
 }

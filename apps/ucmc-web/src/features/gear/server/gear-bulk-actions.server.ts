@@ -20,10 +20,10 @@ import {
   getGearTagsByPublicIds,
 } from "#/features/gear/server/repo.server";
 import {
-  buildBulkAuditEventStatement,
+  buildBulkAuditEventStatements,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
-import { getDb } from "#/server/db";
+import { runBatch } from "#/server/db";
 import type { schema } from "#/server/db";
 
 export interface BulkResult {
@@ -65,7 +65,7 @@ export async function bulkDeactivateGearAction(input: {
     deactivatedBy: principal.userId,
     reason: input.reason,
   });
-  const auditStmt = buildBulkAuditEventStatement(
+  const auditStmts = buildBulkAuditEventStatements(
     eligible.map((r) => ({
       actorUserId: principal.userId,
       action: "gear.deactivated",
@@ -79,9 +79,9 @@ export async function bulkDeactivateGearAction(input: {
       },
     })),
   );
-  // Both statements are non-null here because `eligible.length > 0`.
-  if (deactivateStmt && auditStmt) {
-    await getDb().batch([deactivateStmt, auditStmt]);
+  // `deactivateStmt` is non-null here because `eligible.length > 0`.
+  if (deactivateStmt) {
+    await runBatch([deactivateStmt, ...auditStmts]);
   }
   return {
     affected: eligible.length,

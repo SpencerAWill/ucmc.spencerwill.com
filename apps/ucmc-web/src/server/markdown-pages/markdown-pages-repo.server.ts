@@ -4,9 +4,9 @@
  * page that hasn't been seeded yet renders the empty state instead
  * of crashing on a missing row.
  */
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, schema } from "#/server/db";
 import type { MarkdownPageSlug } from "#/server/markdown-pages/slugs";
 
 export async function readMarkdownPage(
@@ -38,7 +38,7 @@ export async function readMarkdownPages(
       markdown: schema.markdownPages.markdown,
     })
     .from(schema.markdownPages)
-    .where(inArray(schema.markdownPages.slug, slugs as MarkdownPageSlug[]));
+    .where(inJsonArray(schema.markdownPages.slug, slugs));
   const out = new Map<MarkdownPageSlug, string>();
   for (const row of rows) {
     out.set(row.slug, row.markdown);

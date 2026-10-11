@@ -21,7 +21,7 @@
 import { eq } from "drizzle-orm";
 
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb } from "#/server/db";
+import { getDb, insertStatements, runBatch } from "#/server/db";
 import type { ProfileFacetsInput } from "#/server/profile/profile-schemas";
 import * as schema from "../../../../drizzle/schema";
 
@@ -46,40 +46,35 @@ export async function submitProfileFacetsAction(
       .where(eq(schema.profileDisciplines.userId, userId)),
   ];
 
-  if (data.prompts.length > 0) {
-    stmts.push(
-      db.insert(schema.profilePrompts).values(
-        data.prompts.map((prompt, i) => ({
-          userId,
-          promptKey: prompt.key,
-          answer: prompt.answer,
-          // Index in the submitted array IS the member's ordering —
-          // the form lets them reorder, and nothing else reads this
-          // column except the profile's `ORDER BY`.
-          position: i,
-          updatedAt: now,
-        })),
-      ),
-    );
-  }
+  // Split to fit like every multi-row write (#291). Small today — three
+  // prompts, seven disciplines — but bounded only by the registries,
+  // which grow without anyone looking at this file.
+  stmts.push(
+    ...insertStatements(
+      schema.profilePrompts,
+      data.prompts.map((prompt, i) => ({
+        userId,
+        promptKey: prompt.key,
+        answer: prompt.answer,
+        // Index in the submitted array IS the member's ordering —
+        // the form lets them reorder, and nothing else reads this
+        // column except the profile's `ORDER BY`.
+        position: i,
+        updatedAt: now,
+      })),
+    ),
+    ...insertStatements(
+      schema.profileDisciplines,
+      data.disciplines.map((rating) => ({
+        userId,
+        discipline: rating.discipline,
+        level: rating.level,
+        updatedAt: now,
+      })),
+    ),
+  );
 
-  if (data.disciplines.length > 0) {
-    stmts.push(
-      db.insert(schema.profileDisciplines).values(
-        data.disciplines.map((rating) => ({
-          userId,
-          discipline: rating.discipline,
-          level: rating.level,
-          updatedAt: now,
-        })),
-      ),
-    );
-  }
-
-  // `db.batch` needs a non-empty tuple; the two deletes always make
-  // it so, which is why they are unconditional rather than skipped
-  // when the member is clearing everything.
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  await runBatch(stmts);
 
   return { ok: true };
 }

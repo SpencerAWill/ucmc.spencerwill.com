@@ -8,11 +8,18 @@
  * matching item IDs and merge in TypeScript. Two D1 round-trips total
  * per list request, but the shape is straightforward and easy to test.
  */
-import { and, asc, count, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import type { GearAvailability } from "#/features/gear/lib/availability";
 import { DUE_SOON_DAYS, EXPIRING_SOON_DAYS } from "#/features/gear/lib/safety";
-import { getDb, likeContains, schema } from "#/server/db";
+import {
+  getDb,
+  inJsonArray,
+  insertMany,
+  likeContains,
+  schema,
+} from "#/server/db";
 import {
   GEAR_ITEM_NOTES_SEARCH,
   GEAR_MODEL_SEARCH,
@@ -262,30 +269,11 @@ function itemWhere(filters: ListGearItemFilters) {
   if (filters.serviceLife) {
     clauses.push(serviceLifeWhere(filters.serviceLife));
   }
-  for (const facet of filters.attributes ?? []) {
-    const match = attributeValueMatch(facet);
-    if (match === null) {
-      continue;
-    }
-    // Both levels are checked because the repo is not told which one
-    // the definition lives at, and a def only ever has rows in its own
-    // level's table — so the union is exact, not a guess.
-    clauses.push(
-      sql`(
-        EXISTS (
-          SELECT 1 FROM ${schema.gearItemAttributeValues} iv
-          WHERE iv.item_id = ${schema.gearItems.id}
-            AND iv.def_id = ${facet.defId}
-            AND ${match}
-        )
-        OR EXISTS (
-          SELECT 1 FROM ${schema.gearModelAttributeValues} mv
-          WHERE mv.model_id = ${schema.gearItems.modelId}
-            AND mv.def_id = ${facet.defId}
-            AND ${match}
-        )
-      )`,
-    );
+  const facets = (filters.attributes ?? []).filter(
+    (facet) => facet.texts.length > 0 || facet.numbers.length > 0,
+  );
+  if (facets.length > 0) {
+    clauses.push(attributeFacetsWhere(facets));
   }
   if (filters.tagIds && filters.tagIds.length > 0) {
     const tagIds = filters.tagIds;
@@ -293,7 +281,7 @@ function itemWhere(filters: ListGearItemFilters) {
       sql`${schema.gearItems.id} IN (
         SELECT ${schema.gearTagAssignments.itemId}
         FROM ${schema.gearTagAssignments}
-        WHERE ${inArray(schema.gearTagAssignments.tagId, tagIds)}
+        WHERE ${inJsonArray(schema.gearTagAssignments.tagId, tagIds)}
         GROUP BY ${schema.gearTagAssignments.itemId}
         HAVING COUNT(DISTINCT ${schema.gearTagAssignments.tagId}) = ${tagIds.length}
       )`,
@@ -390,35 +378,54 @@ function serviceLifeWhere(filter: "expired" | "expiring" | "unknown") {
 }
 
 /**
- * The value test inside a facet's EXISTS, written once so the item and
- * model halves can't drift. Column names are bare because the caller
- * aliases both tables to `iv` / `mv` — and identical bare names is
- * precisely why one fragment can serve both.
+ * Every selected attribute facet, as **one bound parameter**.
+ *
+ * Facets AND together and each facet's values OR, so a piece matches when
+ * no facet fails to match it: `NOT EXISTS (a facet WHERE NOT matched)`.
+ * The facets travel as a JSON array of `{ d, t, n }` — def id, text
+ * values, number values — and `json_each` unpacks them inside the
+ * statement.
+ *
+ * It used to be one `EXISTS` per facet with a placeholder per value, both
+ * halves bound twice (item level and model level). With the 20 facets ×
+ * 50 values the schema allows, that reached 2040 parameters, and a single
+ * facet with ~48 values was enough to fail (#291).
+ *
+ * Both levels are checked because the repo isn't told which one a
+ * definition lives at, and a def only ever has rows in its own level's
+ * table — so the union is exact, not a guess.
  */
-function attributeValueMatch(facet: AttributeFilter) {
-  const parts = [];
-  if (facet.texts.length > 0) {
-    // Each value gets its own placeholder: handing drizzle the array
-    // whole binds one array-shaped parameter, which SQLite rejects.
-    parts.push(
-      sql`value_text IN (${sql.join(
-        facet.texts.map((t) => sql`${t}`),
-        sql`, `,
-      )})`,
-    );
-  }
-  if (facet.numbers.length > 0) {
-    parts.push(
-      sql`value_number IN (${sql.join(
-        facet.numbers.map((n) => sql`${n}`),
-        sql`, `,
-      )})`,
-    );
-  }
-  if (parts.length === 0) {
-    return null;
-  }
-  return sql`(${sql.join(parts, sql` OR `)})`;
+function attributeFacetsWhere(facets: AttributeFilter[]): SQL {
+  const json = JSON.stringify(
+    facets.map((facet) => ({
+      d: facet.defId,
+      t: facet.texts,
+      n: facet.numbers,
+    })),
+  );
+  // Bare `value_text` / `value_number`: both value tables use the same
+  // column names, which is what lets one fragment serve `iv` and `mv`.
+  const matches = (alias: string) => sql`(
+    ${sql.raw(alias)}.value_text IN (SELECT value FROM json_each(f.value, '$.t'))
+    OR ${sql.raw(alias)}.value_number IN (SELECT value FROM json_each(f.value, '$.n'))
+  )`;
+  return sql`NOT EXISTS (
+    SELECT 1 FROM json_each(${json}) AS f
+    WHERE NOT (
+      EXISTS (
+        SELECT 1 FROM ${schema.gearItemAttributeValues} iv
+        WHERE iv.item_id = ${schema.gearItems.id}
+          AND iv.def_id = json_extract(f.value, '$.d')
+          AND ${matches("iv")}
+      )
+      OR EXISTS (
+        SELECT 1 FROM ${schema.gearModelAttributeValues} mv
+        WHERE mv.model_id = ${schema.gearItems.modelId}
+          AND mv.def_id = json_extract(f.value, '$.d')
+          AND ${matches("mv")}
+      )
+    )
+  )`;
 }
 
 /**
@@ -583,9 +590,9 @@ export async function listTagsForItemIds(
   if (itemIds.length === 0) return map;
   const db = getDb();
   const where = options.includeInternal
-    ? inArray(schema.gearTagAssignments.itemId, itemIds)
+    ? inJsonArray(schema.gearTagAssignments.itemId, itemIds)
     : and(
-        inArray(schema.gearTagAssignments.itemId, itemIds),
+        inJsonArray(schema.gearTagAssignments.itemId, itemIds),
         eq(schema.gearTags.visibility, "public"),
       );
   const rows = await db
@@ -750,9 +757,9 @@ export async function releaseGearItemCode(id: string): Promise<void> {
 }
 
 /**
- * Bulk variants for the toolbar-driven multi-select operations.
- * Drizzle's `where inArray(...)` translates to `WHERE id IN (...)`,
- * which D1 happily plans as a single round-trip. The caller computes
+ * Bulk variants for the toolbar-driven multi-select operations. The id
+ * list binds as one `json_each` parameter (`inJsonArray`), so a 500-row
+ * selection is one statement like a 5-row one (#291). The caller computes
  * prior values (for audit metadata) BEFORE calling these — we don't
  * .returning() because that doubles the planner cost.
  */
@@ -790,7 +797,7 @@ export function buildBulkDeactivateStatement(input: {
     })
     .where(
       and(
-        inArray(schema.gearItems.id, input.ids),
+        inJsonArray(schema.gearItems.id, input.ids),
         eq(schema.gearItems.status, "active"),
       ),
     );
@@ -811,7 +818,7 @@ export async function bulkMarkGearItemsReactivated(
     })
     .where(
       and(
-        inArray(schema.gearItems.id, ids),
+        inJsonArray(schema.gearItems.id, ids),
         sql`${schema.gearItems.status} <> 'active'`,
       ),
     );
@@ -826,7 +833,7 @@ export async function bulkSetGearItemCondition(input: {
   await db
     .update(schema.gearItems)
     .set({ condition: input.condition, updatedAt: Temporal.Now.instant() })
-    .where(inArray(schema.gearItems.id, input.ids));
+    .where(inJsonArray(schema.gearItems.id, input.ids));
 }
 
 export async function bulkSetGearItemWhereabouts(input: {
@@ -845,14 +852,24 @@ export async function bulkSetGearItemWhereabouts(input: {
       whereaboutsNote: input.note,
       updatedAt: Temporal.Now.instant(),
     })
-    .where(inArray(schema.gearItems.id, input.ids));
+    .where(inJsonArray(schema.gearItems.id, input.ids));
 }
 
 /**
  * Add the given tags to every item in `itemIds`, leaving existing tag
- * assignments untouched. Uses `INSERT OR IGNORE` semantics via
- * Drizzle's `onConflictDoNothing` so duplicate (itemId, tagId) pairs
- * aren't an error — saves the caller from having to dedupe.
+ * assignments untouched. `ON CONFLICT DO NOTHING` means duplicate
+ * (itemId, tagId) pairs aren't an error, which saves the caller from
+ * having to dedupe.
+ *
+ * **One statement, four parameters, at any size.** The cross product is
+ * built inside SQLite from two `json_each` lists rather than in
+ * JavaScript. As rows it is up to 500 items × 50 tags = 25,000, which
+ * even split to fit D1 would be a thousand statements in one batch,
+ * holding the write lock for all of them (#291).
+ *
+ * `WHERE true` resolves a known SQLite parse ambiguity: without it, the
+ * `ON` of `ON CONFLICT` would be read as a join constraint on the
+ * SELECT.
  */
 export async function bulkAddGearItemTags(input: {
   itemIds: string[];
@@ -861,18 +878,14 @@ export async function bulkAddGearItemTags(input: {
 }): Promise<void> {
   if (input.itemIds.length === 0 || input.tagIds.length === 0) return;
   const now = Temporal.Now.instant();
-  const rows = input.itemIds.flatMap((itemId) =>
-    input.tagIds.map((tagId) => ({
-      itemId,
-      tagId,
-      assignedAt: now,
-      assignedBy: input.assignedBy,
-    })),
-  );
-  await getDb()
-    .insert(schema.gearTagAssignments)
-    .values(rows)
-    .onConflictDoNothing();
+  await getDb().run(sql`
+    INSERT INTO ${schema.gearTagAssignments} (item_id, tag_id, assigned_at, assigned_by)
+    SELECT i.value, t.value, ${now.epochMilliseconds}, ${input.assignedBy}
+    FROM json_each(${JSON.stringify(input.itemIds)}) AS i
+    CROSS JOIN json_each(${JSON.stringify(input.tagIds)}) AS t
+    WHERE true
+    ON CONFLICT DO NOTHING
+  `);
 }
 
 /**
@@ -910,7 +923,7 @@ export async function getGearLabelsByPublicIds(
       schema.gearTypes,
       eq(schema.gearTypes.id, schema.gearModels.typeId),
     )
-    .where(inArray(schema.gearItems.publicId, publicIds));
+    .where(inJsonArray(schema.gearItems.publicId, publicIds));
   const byPublicId = new Map(rows.map((r) => [r.publicId, r]));
   return publicIds.flatMap((id) => {
     const row = byPublicId.get(id);
@@ -952,7 +965,7 @@ export async function getGearItemsByPublicIds(publicIds: string[]): Promise<
       status: schema.gearItems.status,
     })
     .from(schema.gearItems)
-    .where(inArray(schema.gearItems.publicId, publicIds));
+    .where(inJsonArray(schema.gearItems.publicId, publicIds));
 }
 
 // ── gear inspections ────────────────────────────────────────────────────
@@ -1077,7 +1090,7 @@ export async function latestInspectionByItemIds(
       result: schema.gearInspections.result,
     })
     .from(schema.gearInspections)
-    .where(inArray(schema.gearInspections.itemId, itemIds))
+    .where(inJsonArray(schema.gearInspections.itemId, itemIds))
     .orderBy(desc(schema.gearInspections.inspectedAt));
   for (const row of rows) {
     if (row.itemId === null || map.has(row.itemId)) continue;
@@ -1108,7 +1121,7 @@ export async function latestInspectionByModelIds(
       result: schema.gearInspections.result,
     })
     .from(schema.gearInspections)
-    .where(inArray(schema.gearInspections.modelId, modelIds))
+    .where(inJsonArray(schema.gearInspections.modelId, modelIds))
     .orderBy(desc(schema.gearInspections.inspectedAt));
   for (const row of rows) {
     if (row.modelId === null || map.has(row.modelId)) continue;
@@ -1156,7 +1169,7 @@ export async function getGearTypesByPublicIds(
   return db
     .select()
     .from(schema.gearTypes)
-    .where(inArray(schema.gearTypes.publicId, publicIds));
+    .where(inJsonArray(schema.gearTypes.publicId, publicIds));
 }
 
 export async function insertGearType(input: {
@@ -1241,7 +1254,7 @@ export async function getGearTagsByPublicIds(
   return db
     .select()
     .from(schema.gearTags)
-    .where(inArray(schema.gearTags.publicId, publicIds));
+    .where(inJsonArray(schema.gearTags.publicId, publicIds));
 }
 
 export async function insertGearTag(input: {
@@ -1310,21 +1323,20 @@ export async function setGearItemTags(input: {
       .where(
         and(
           eq(schema.gearTagAssignments.itemId, input.itemId),
-          inArray(schema.gearTagAssignments.tagId, removed),
+          inJsonArray(schema.gearTagAssignments.tagId, removed),
         ),
       );
   }
-  if (added.length > 0) {
-    const now = Temporal.Now.instant();
-    await db.insert(schema.gearTagAssignments).values(
-      added.map((tagId) => ({
-        itemId: input.itemId,
-        tagId,
-        assignedAt: now,
-        assignedBy: input.assignedBy,
-      })),
-    );
-  }
+  const now = Temporal.Now.instant();
+  await insertMany(
+    schema.gearTagAssignments,
+    added.map((tagId) => ({
+      itemId: input.itemId,
+      tagId,
+      assignedAt: now,
+      assignedBy: input.assignedBy,
+    })),
+  );
   return { added, removed };
 }
 

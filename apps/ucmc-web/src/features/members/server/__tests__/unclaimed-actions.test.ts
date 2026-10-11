@@ -466,3 +466,23 @@ describe("claim integration (db-level invariants)", () => {
     expect(row?.verifiedAt?.epochMilliseconds).toBe(at.epochMilliseconds);
   });
 });
+
+describe("pre-add and delete at scale (#291)", () => {
+  it("pre-adds 60 members and deletes them all", async () => {
+    // Old limits: 20 rows each in the users / user_emails inserts and
+    // 14 audit rows, all in one all-or-nothing batch.
+    await signInAsApprover();
+    const entries = Array.from({ length: 60 }, (_unused, i) => ({
+      name: `Bulk Member ${i}`,
+      email: `bulk-${i}-${crypto.randomUUID()}@example.com`,
+    }));
+
+    const added = await preAddOk({ entries });
+    expect(added.created).toHaveLength(60);
+
+    const result = await deleteUnclaimedMembersAction({
+      userIds: added.created.map((c) => c.userId),
+    });
+    expect(result.deletedIds).toHaveLength(60);
+  });
+});

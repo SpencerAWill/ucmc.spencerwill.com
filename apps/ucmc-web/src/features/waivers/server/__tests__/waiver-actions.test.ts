@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WAIVER_VERSION } from "#/config/legal";
 import { currentSeason } from "#/config/club-season";
-import { getDb, schema } from "#/server/db";
+import { getDb, insertMany, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
@@ -506,5 +506,31 @@ describe("listMyWaiverHistoryAction", () => {
     expect(history[0]?.id).toBe(second);
     expect(history[1]?.id).toBe(first);
     expect(history[0]?.attestedByUserId).toBe(officer);
+  });
+});
+
+describe("bulkAttestWaiversAction at BULK_ATTEST_MAX (#291)", () => {
+  it("attests a full 100-member stack — attestation and audit inserts both split", async () => {
+    // An attestation row and an audit row each bind 7 parameters, so a
+    // single statement held 14; anything past that failed and rolled
+    // back the batch.
+    await signInAsOfficer();
+    const ids = Array.from(
+      { length: 100 },
+      () => `user_${crypto.randomUUID()}`,
+    );
+    await insertMany(
+      schema.users,
+      ids.map((id) => ({
+        id,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        status: "approved" as const,
+      })),
+    );
+
+    const { count } = await bulkAttestWaiversAction({ userIds: ids });
+
+    expect(count).toBe(100);
+    expect(await getDb().query.waiverAttestations.findMany()).toHaveLength(100);
   });
 });

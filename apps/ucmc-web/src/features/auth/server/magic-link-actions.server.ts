@@ -42,7 +42,13 @@ import type {
   PublicProfileInput,
   RegistrationInput,
 } from "#/server/profile/profile-schemas";
-import { getDb, isUniqueViolation, schema } from "#/server/db";
+import {
+  getDb,
+  insertStatements,
+  isUniqueViolation,
+  runBatch,
+  schema,
+} from "#/server/db";
 import {
   checkAuthRateLimitByEmail,
   checkAuthRateLimitByIp,
@@ -663,19 +669,18 @@ export async function submitProfileAction(
       .delete(schema.emergencyContacts)
       .where(eq(schema.emergencyContacts.userId, userId)),
   ];
-  if (emergencyContacts.length > 0) {
-    stmts.push(
-      db.insert(schema.emergencyContacts).values(
-        emergencyContacts.map((ec) => ({
-          id: `ec_${uuidv7()}`,
-          userId,
-          name: ec.name,
-          phone: ec.phone,
-          relationship: ec.relationship,
-        })),
-      ),
-    );
-  }
+  stmts.push(
+    ...insertStatements(
+      schema.emergencyContacts,
+      emergencyContacts.map((ec) => ({
+        id: `ec_${uuidv7()}`,
+        userId,
+        name: ec.name,
+        phone: ec.phone,
+        relationship: ec.relationship,
+      })),
+    ),
+  );
   // Officer-pre-added (unclaimed) users land here with `principal.status
   // === "unclaimed"` and no profile. The pre-add itself was the
   // approval signal, so flip them straight to "approved" and NULL the
@@ -740,7 +745,7 @@ export async function submitProfileAction(
         ),
     );
   }
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  await runBatch(stmts);
 
   if (!principal) {
     await openSession(userId);
@@ -821,20 +826,19 @@ export async function submitDetailsAction(
       .delete(schema.emergencyContacts)
       .where(eq(schema.emergencyContacts.userId, principal.userId)),
   ];
-  if (emergencyContacts.length > 0) {
-    stmts.push(
-      db.insert(schema.emergencyContacts).values(
-        emergencyContacts.map((ec) => ({
-          id: `ec_${uuidv7()}`,
-          userId: principal.userId,
-          name: ec.name,
-          phone: ec.phone,
-          relationship: ec.relationship,
-        })),
-      ),
-    );
-  }
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  stmts.push(
+    ...insertStatements(
+      schema.emergencyContacts,
+      emergencyContacts.map((ec) => ({
+        id: `ec_${uuidv7()}`,
+        userId: principal.userId,
+        name: ec.name,
+        phone: ec.phone,
+        relationship: ec.relationship,
+      })),
+    ),
+  );
+  await runBatch(stmts);
 
   return { ok: true };
 }

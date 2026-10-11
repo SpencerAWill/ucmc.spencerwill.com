@@ -8,9 +8,9 @@
  * handles: `coded` models have item rows, `counted` models have stock
  * quantities and no items at all.
  */
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, schema } from "#/server/db";
 
 export interface GearModelRow {
   id: string;
@@ -145,7 +145,7 @@ export async function getGearModelsByPublicIds(
       schema.gearTypes,
       eq(schema.gearTypes.id, schema.gearModels.typeId),
     )
-    .where(inArray(schema.gearModels.publicId, publicIds));
+    .where(inJsonArray(schema.gearModels.publicId, publicIds));
   return rows.map(toModelRow);
 }
 
@@ -239,7 +239,7 @@ export async function listStockForModelIds(
       quantity: schema.gearStockLevels.quantity,
     })
     .from(schema.gearStockLevels)
-    .where(inArray(schema.gearStockLevels.modelId, modelIds));
+    .where(inJsonArray(schema.gearStockLevels.modelId, modelIds));
   for (const row of rows) {
     const list = map.get(row.modelId) ?? [];
     list.push({ condition: row.condition, quantity: row.quantity });

@@ -105,7 +105,10 @@ export const setRolePermissionsFn = createServerFn({ method: "POST" })
   .validator(
     z.object({
       roleId: z.string().min(1),
-      permissionIds: z.array(z.string().min(1)),
+      // A product bound, roughly ten times the catalog: the insert is
+      // split to fit D1 (#291), so this only stops one request fanning
+      // out into hundreds of statements.
+      permissionIds: z.array(z.string().min(1)).max(500),
     }),
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {
@@ -145,13 +148,10 @@ export const setUserRolesFn = createServerFn({ method: "POST" })
  * request the server is going to reject — the reason
  * `BULK_ATTEST_MAX` is shared the same way.
  *
- * Each id becomes a bound parameter in an `IN (...)` plus a row in a
- * multi-row insert, so an uncapped array turns an opaque D1 limit
- * error into the user-visible failure mode.
- *
- * Held at 100 to match `D1_MAX_BOUND_PARAMS`, for the same reason as
- * `BULK_ATTEST_MAX`: the validation read is chunked, so this bounds one
- * operator action rather than guarding the storage limit.
+ * **A product bound, not a storage one**, like `BULK_ATTEST_MAX`: the
+ * reads bind the lists as one `json_each` parameter and the inserts are
+ * split to fit D1 (#291), so no statement's size depends on this
+ * number. It bounds what one operator save may change.
  */
 export const ROLE_MEMBERS_DIFF_MAX = 100;
 

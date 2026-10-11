@@ -15,7 +15,6 @@ import {
   gte,
   isNull,
   lt,
-  notInArray,
   sql,
 } from "drizzle-orm";
 
@@ -28,7 +27,7 @@ import {
   semesterBoundsFor,
 } from "#/config/club-season";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, schema } from "#/server/db";
+import { getDb, notInSubquery, schema } from "#/server/db";
 import { currentAttestationFilter } from "#/server/waivers/current-attestation.server";
 
 /**
@@ -129,7 +128,7 @@ export async function complianceAnalyticsAction(input: {
 
   // An anti-join rather than loading ids and filtering in JS: the
   // officer queue already answers this shape, and pulling member ids
-  // into an `inArray` would walk straight into D1's 100-parameter cap
+  // into an id list would walk straight into D1's 100-parameter cap
   // the moment the club outgrows 100 members.
   //
   // **`countDistinct`, not `count`.** `attestWaiverAction` deliberately
@@ -174,7 +173,7 @@ export async function complianceAnalyticsAction(input: {
     .where(
       and(
         eq(schema.users.status, "approved"),
-        notInArray(
+        notInSubquery(
           schema.users.id,
           db
             .select({ userId: schema.emergencyContacts.userId })

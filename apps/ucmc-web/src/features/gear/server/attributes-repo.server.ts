@@ -11,9 +11,9 @@
  * `value_number` — and which one a kind uses is decided once, in
  * `coerceAttributeValue`. This module writes whatever it is handed.
  */
-import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, insertMany, schema } from "#/server/db";
 
 export interface GearAttributeDefRow {
   id: string;
@@ -64,7 +64,7 @@ async function attachTypes(
       eq(schema.gearTypes.id, schema.gearAttributeDefTypes.typeId),
     )
     .where(
-      inArray(
+      inJsonArray(
         schema.gearAttributeDefTypes.defId,
         rows.map((r) => r.id),
       ),
@@ -191,11 +191,10 @@ export async function setGearAttributeDefTypes(
   await db
     .delete(schema.gearAttributeDefTypes)
     .where(eq(schema.gearAttributeDefTypes.defId, defId));
-  if (typeIds.length > 0) {
-    await db
-      .insert(schema.gearAttributeDefTypes)
-      .values(typeIds.map((typeId) => ({ defId, typeId })));
-  }
+  await insertMany(
+    schema.gearAttributeDefTypes,
+    typeIds.map((typeId) => ({ defId, typeId })),
+  );
 }
 
 /** How many answers a def carries, at either level. The manage dialog
@@ -270,7 +269,7 @@ async function valuesFor(
       schema.gearAttributeDefs,
       eq(schema.gearAttributeDefs.id, defColumn),
     )
-    .where(inArray(ownerColumn, ownerIds))
+    .where(inJsonArray(ownerColumn, ownerIds))
     .orderBy(
       asc(schema.gearAttributeDefs.position),
       asc(schema.gearAttributeDefs.label),
@@ -349,32 +348,30 @@ async function writeValues(
     await db.delete(table).where(
       and(
         eq(ownerColumn, ownerId),
-        inArray(
+        inJsonArray(
           defColumn,
           cleared.map((w) => w.defId),
         ),
       ),
     );
   }
-  if (present.length > 0) {
-    await db
-      .insert(table)
-      .values(
-        present.map((w) => ({
-          [ownerKey]: ownerId,
-          defId: w.defId,
-          valueText: w.valueText,
-          valueNumber: w.valueNumber,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [ownerColumn, defColumn],
-        set: {
-          valueText: sql`excluded.value_text`,
-          valueNumber: sql`excluded.value_number`,
-        },
-      });
-  }
+  // Split to fit D1 (#291): 4 parameters a row allowed only 25 answers
+  // per statement. The `excluded.*` upsert binds nothing extra.
+  const rows = present.map((w) => ({
+    [ownerKey]: ownerId,
+    defId: w.defId,
+    valueText: w.valueText,
+    valueNumber: w.valueNumber,
+  }));
+  await insertMany(table, rows, {
+    onConflictDoUpdate: {
+      target: [ownerColumn, defColumn],
+      set: {
+        valueText: sql`excluded.value_text`,
+        valueNumber: sql`excluded.value_number`,
+      },
+    },
+  });
 }
 
 export function setModelAttributeValues(

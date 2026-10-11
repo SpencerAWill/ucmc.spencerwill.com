@@ -9,28 +9,26 @@
  * `coalesce(loans.model_id, items.model_id)` — which is why the joins
  * below look heavier than the old single `innerJoin(gear)`.
  *
- * `insertLoans` batches all rows into a single D1 round-trip via
- * Drizzle's multi-values insert. The partial unique index
+ * `insertLoans` writes all rows in one D1 round trip: a batch of
+ * multi-row inserts, each sized to fit D1's 100-parameter limit (#291),
+ * applied as one transaction. The partial unique index
  * `gear_loans_one_active_per_item` is what actually wins races against
  * a concurrent second officer — the action layer's pre-check is just
  * for UX. Counted stock has no such index: it is guarded by an
  * available-quantity read-then-write that can over-lend by one under a
  * true tie, which the cave prefers to taking a lock.
  */
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { getDb, likeContains, schema } from "#/server/db";
+import {
+  getDb,
+  inJsonArray,
+  inSubquery,
+  insertMany,
+  likeContains,
+  schema,
+} from "#/server/db";
 import {
   EMAIL_SEARCH,
   GEAR_MODEL_SEARCH,
@@ -243,7 +241,7 @@ function loanSearchWhere(q: string): SQL | undefined {
       ),
     );
   return or(
-    inArray(schema.gearLoans.itemId, matchingItems),
+    inSubquery(schema.gearLoans.itemId, matchingItems),
     searchMatches(schema.gearLoans.modelId, GEAR_MODEL_SEARCH, "model_id", q),
     searchMatches(
       schema.gearLoans.memberUserId,
@@ -252,7 +250,7 @@ function loanSearchWhere(q: string): SQL | undefined {
       q,
       ["full_name"],
     ),
-    inArray(schema.gearLoans.memberUserId, membersByPrimaryEmail),
+    inSubquery(schema.gearLoans.memberUserId, membersByPrimaryEmail),
   );
 }
 
@@ -273,9 +271,15 @@ export interface InsertLoanRow {
   checkoutNotes: string | null;
 }
 
+/**
+ * Split to fit D1: a loan row binds up to 18 parameters, so one
+ * multi-row INSERT held at most 7 and an 8-piece desk checkout failed
+ * (#291). One atomic batch, so a unique violation on any row (the race
+ * the partial index catches) still rolls back the whole insert, which is
+ * what the checkout's replay path expects.
+ */
 export async function insertLoans(rows: InsertLoanRow[]): Promise<void> {
-  if (rows.length === 0) return;
-  await getDb().insert(schema.gearLoans).values(rows);
+  await insertMany(schema.gearLoans, rows);
 }
 
 // ── reads ──────────────────────────────────────────────────────────────
@@ -318,7 +322,7 @@ export async function getOpenLoansForItemIds(
     .from(schema.gearLoans)
     .where(
       and(
-        inArray(schema.gearLoans.itemId, itemIds),
+        inJsonArray(schema.gearLoans.itemId, itemIds),
         isNull(schema.gearLoans.returnedAt),
       ),
     );
@@ -349,7 +353,7 @@ export async function openLoanQuantityForModels(
     .from(schema.gearLoans)
     .where(
       and(
-        inArray(schema.gearLoans.modelId, modelIds),
+        inJsonArray(schema.gearLoans.modelId, modelIds),
         isNull(schema.gearLoans.returnedAt),
       ),
     )
@@ -762,7 +766,7 @@ export async function advanceLoanReminderStage(input: {
   await getDb()
     .update(schema.gearLoans)
     .set({ reminderStage: input.stage, lastRemindedAt: input.now })
-    .where(inArray(schema.gearLoans.id, input.loanIds));
+    .where(inJsonArray(schema.gearLoans.id, input.loanIds));
 }
 
 // ── search helpers (back the gear-desk lookups) ────────────────────────
@@ -894,7 +898,7 @@ export async function lookupBackfillMemberByEmail(
     .where(
       and(
         eq(schema.userEmails.email, normalizedEmail),
-        inArray(schema.users.status, ["approved", "unclaimed"]),
+        inJsonArray(schema.users.status, ["approved", "unclaimed"]),
       ),
     )
     .limit(1);
@@ -1018,7 +1022,7 @@ export async function getCartHydrationRowsByPublicIds(
         isNull(schema.gearLoans.returnedAt),
       ),
     )
-    .where(inArray(schema.gearItems.publicId, publicIds));
+    .where(inJsonArray(schema.gearItems.publicId, publicIds));
   return rows.map((r) => ({
     publicId: r.publicId,
     code: r.code,

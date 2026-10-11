@@ -34,7 +34,7 @@
 import { and, asc, eq } from "drizzle-orm";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
-import { getDb, schema } from "#/server/db";
+import { getDb, insertMany, schema } from "#/server/db";
 
 export interface ArchiveOfficersResult {
   schoolYear: string;
@@ -146,7 +146,9 @@ export async function archiveCurrentOfficers(
     name: entry.names.join(", "),
   }));
 
-  await db.insert(schema.historicalOfficers).values(inserts);
+  // One row per officer role — fine at 5 columns until there are 21
+  // roles, so split to fit rather than count on that (#291).
+  await insertMany(schema.historicalOfficers, inserts);
 
   return {
     schoolYear,

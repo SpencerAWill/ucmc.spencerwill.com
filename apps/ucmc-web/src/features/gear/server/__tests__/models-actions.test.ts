@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, insertMany, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
@@ -602,5 +602,38 @@ describe("a counted model's batch date of manufacture", () => {
       (m) => m.publicId === publicId,
     );
     expect(model?.lastInspectedAtMs).toBeNull();
+  });
+});
+
+describe("listGearModelsAction at scale (#291)", () => {
+  it("lists 130 models unscoped — the 'All types' view that broke past ~100", async () => {
+    // Every per-model detail read (attribute values, stock, on-loan,
+    // held, last inspection) bound one parameter per model.
+    await signInAsManager();
+    const typePublicId = await createType();
+    const type = (
+      await getDb()
+        .select({ id: schema.gearTypes.id })
+        .from(schema.gearTypes)
+        .where(eq(schema.gearTypes.publicId, typePublicId))
+    ).at(0);
+    if (!type) throw new Error("type missing");
+    const now = Temporal.Now.instant();
+    await insertMany(
+      schema.gearModels,
+      Array.from({ length: 130 }, (_unused, i) => ({
+        id: `gm_${crypto.randomUUID()}`,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        typeId: type.id,
+        name: `Scale model ${i}`,
+        tracking: i % 2 === 0 ? ("counted" as const) : ("coded" as const),
+        createdAt: now,
+        updatedAt: now,
+      })),
+    );
+
+    const models = await listGearModelsAction({});
+
+    expect(models.length).toBeGreaterThanOrEqual(130);
   });
 });

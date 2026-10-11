@@ -11,7 +11,7 @@
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { Temporal } from "temporal-polyfill";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, schema } from "#/server/db";
 import { gearItemName } from "#/features/gear/lib/labels";
 
 export interface GearSweepRow {
@@ -317,12 +317,9 @@ export async function markItemsMissing(
   await getDb()
     .update(schema.gearItems)
     .set({ whereabouts: "missing", whereaboutsAsOf: asOf, updatedAt: asOf })
-    .where(
-      sql`${schema.gearItems.id} IN (${sql.join(
-        itemIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`,
-    );
+    // Every active item the sweep didn't see — unbounded, so one JSON
+    // parameter rather than one per id (#291).
+    .where(inJsonArray(schema.gearItems.id, itemIds));
 }
 
 export interface CountedReconciliationRow {
