@@ -94,10 +94,7 @@ export const profileInputSchema = z.object({
       `At most ${PROFILE_LIMITS.preferredName.max} characters`,
     ),
   phone: phoneSchema,
-  // A sanity bound, not a storage one: the contacts insert is split to
-  // fit D1 at any length (#291). Ten is far past anyone's real list and
-  // keeps one form submission from writing an unbounded number of rows.
-  emergencyContacts: z.array(emergencyContactSchema).max(10),
+  emergencyContacts: z.array(emergencyContactSchema),
   ucAffiliation: z.enum(schema.ucAffiliation, {
     error: "Required",
   }),

@@ -105,7 +105,10 @@ export const setRolePermissionsFn = createServerFn({ method: "POST" })
   .validator(
     z.object({
       roleId: z.string().min(1),
-      permissionIds: z.array(z.string().min(1)),
+      // A product bound, roughly ten times the catalog: the insert is
+      // split to fit D1 (#291), so this only stops one request fanning
+      // out into hundreds of statements.
+      permissionIds: z.array(z.string().min(1)).max(500),
     }),
   )
   .handler(async ({ data }): Promise<{ ok: true }> => {

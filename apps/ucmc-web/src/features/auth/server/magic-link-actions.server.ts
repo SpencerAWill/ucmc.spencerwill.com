@@ -46,6 +46,7 @@ import {
   getDb,
   insertStatements,
   isUniqueViolation,
+  runBatch,
   schema,
 } from "#/server/db";
 import {
@@ -744,7 +745,7 @@ export async function submitProfileAction(
         ),
     );
   }
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  await runBatch(stmts);
 
   if (!principal) {
     await openSession(userId);
@@ -837,7 +838,7 @@ export async function submitDetailsAction(
       })),
     ),
   );
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  await runBatch(stmts);
 
   return { ok: true };
 }

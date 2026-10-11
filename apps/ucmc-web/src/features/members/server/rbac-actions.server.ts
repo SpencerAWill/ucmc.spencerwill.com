@@ -422,6 +422,8 @@ export async function setRolePermissionsAction(input: {
     throw new Error("Role not found");
   }
 
+  // Deduped once, so the grants and the audit row describe the same set.
+  const permissionIds = [...new Set(input.permissionIds)];
   // Replace-all strategy: delete existing grants, insert the new
   // set, all atomic with the audit row via D1 batch.
   const stmts = [
@@ -432,7 +434,7 @@ export async function setRolePermissionsAction(input: {
     // five short of D1's ceiling in a single statement (#291).
     ...insertStatements(
       schema.rolePermissions,
-      [...new Set(input.permissionIds)].map((permissionId) => ({
+      permissionIds.map((permissionId) => ({
         roleId: input.roleId,
         permissionId,
       })),
@@ -444,11 +446,11 @@ export async function setRolePermissionsAction(input: {
       targetId: input.roleId,
       metadata: {
         roleName: role.name,
-        permissionIds: input.permissionIds,
+        permissionIds,
       },
     }),
   ];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+  await runBatch(stmts);
 
   // KV invalidation is best-effort post-commit: D1 has already
   // committed the permission change AND the audit row, so throwing
