@@ -865,6 +865,9 @@ export type WriteOffLoanResult =
  * Close a counted loan short: what is still out is written into
  * `quantityLost` and the loan stops counting against the member.
  *
+ * The lost units also come off the serviceable stock count (see
+ * `writeOffLoanShortfall`) — otherwise `takeable` would hand them out.
+ *
  * **This is the only way a counted loan closes without every unit back,
  * and it is a `gear:manage` judgement, with a reason, on the audit
  * page.** A short return deliberately leaves the loan open, because a
@@ -892,6 +895,7 @@ export async function writeOffLoanShortfallAction(input: {
 
   const written = await writeOffLoanShortfall({
     id: loan.id,
+    modelId: loan.modelId,
     now: Temporal.Now.instant(),
     returnedToUserId: principal.userId,
   });
@@ -908,6 +912,10 @@ export async function writeOffLoanShortfallAction(input: {
       modelId: loan.modelId,
       quantity: loan.quantity,
       quantityLost: written.quantityLost,
+      // The same units come off serviceable stock in the same
+      // transaction — recorded so the stock history has an entry for
+      // the drop, which no `gear_model.stock_adjusted` row explains.
+      serviceableStockReduced: written.quantityLost,
       reason: input.reason,
     },
   });

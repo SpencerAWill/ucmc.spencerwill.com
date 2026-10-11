@@ -830,31 +830,69 @@ export async function recordCountedReturn(input: {
 
 /**
  * Close a counted loan short, writing what is still out into
- * `quantityLost`. Returns the units written off, or null when the loan
- * was already closed or isn't counted — guarded in the statement so a
- * return landing at the same moment can't be written off as lost.
+ * `quantityLost` **and taking the same units off the serviceable shelf
+ * count**. Returns the units written off, or null when the loan was
+ * already closed or isn't counted.
+ *
+ * The stock half is not optional. `gear_stock_levels` counts every unit
+ * the club owns, the ones out with members included, and `takeable` is
+ * serviceable minus what is out. Closing the loan alone stops those
+ * units counting as "out" while leaving them in "owned" — so the desk
+ * would start offering draws that are at the bottom of a river. Loans
+ * only ever draw from the serviceable bucket, so that is the one that
+ * shrinks.
+ *
+ * One D1 batch, which is a transaction: the stock decrement reads the
+ * loan's outstanding units BEFORE the close, and evaluates to zero if
+ * the loan is already closed, so a return or second write-off landing
+ * at the same moment can't double-count. `max(0, …)` is belt and braces
+ * — the stock editor's `below_on_loan` refusal already keeps
+ * serviceable at or above what is out.
  */
 export async function writeOffLoanShortfall(input: {
   id: string;
+  modelId: string;
   now: Temporal.Instant;
   returnedToUserId: string;
 }): Promise<{ quantityLost: number } | null> {
-  const rows = await getDb()
-    .update(schema.gearLoans)
-    .set({
-      returnedAt: input.now,
-      returnedToUserId: input.returnedToUserId,
-      quantityLost: sql`${schema.gearLoans.quantity} - ${schema.gearLoans.quantityReturned}`,
-    })
-    .where(
-      and(
-        eq(schema.gearLoans.id, input.id),
-        isNull(schema.gearLoans.returnedAt),
-        isNotNull(schema.gearLoans.modelId),
+  const db = getDb();
+  const outstandingIfOpen = sql`coalesce((
+    SELECT ${schema.gearLoans.quantity} - ${schema.gearLoans.quantityReturned}
+    FROM ${schema.gearLoans}
+    WHERE ${schema.gearLoans.id} = ${input.id}
+      AND ${schema.gearLoans.returnedAt} IS NULL
+      AND ${schema.gearLoans.modelId} IS NOT NULL
+  ), 0)`;
+  const [, closed] = await db.batch([
+    db
+      .update(schema.gearStockLevels)
+      .set({
+        quantity: sql`max(0, ${schema.gearStockLevels.quantity} - ${outstandingIfOpen})`,
+        updatedAt: input.now,
+      })
+      .where(
+        and(
+          eq(schema.gearStockLevels.modelId, input.modelId),
+          eq(schema.gearStockLevels.condition, "serviceable"),
+        ),
       ),
-    )
-    .returning({ quantityLost: schema.gearLoans.quantityLost });
-  return rows.at(0) ?? null;
+    db
+      .update(schema.gearLoans)
+      .set({
+        returnedAt: input.now,
+        returnedToUserId: input.returnedToUserId,
+        quantityLost: sql`${schema.gearLoans.quantity} - ${schema.gearLoans.quantityReturned}`,
+      })
+      .where(
+        and(
+          eq(schema.gearLoans.id, input.id),
+          isNull(schema.gearLoans.returnedAt),
+          isNotNull(schema.gearLoans.modelId),
+        ),
+      )
+      .returning({ quantityLost: schema.gearLoans.quantityLost }),
+  ]);
+  return closed.at(0) ?? null;
 }
 
 export async function extendLoanDueAt(input: {

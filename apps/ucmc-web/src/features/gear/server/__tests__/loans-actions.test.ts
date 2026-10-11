@@ -1199,6 +1199,42 @@ describe("writeOffLoanShortfallAction", () => {
     });
   });
 
+  it("takes the lost units off the shelf, so the desk can't lend them", async () => {
+    const { draws, loanPublicId } = await seedCountedLoan(6, 6);
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 5)] });
+
+    await writeOffLoanShortfallAction({
+      publicId: loanPublicId,
+      reason: "Lost",
+    });
+
+    const [desk] = await searchCountedModelsForDeskAction({ q: "Draws" });
+    expect(desk).toMatchObject({ publicId: draws.publicId, takeable: 5 });
+    const stock = await getDb()
+      .select()
+      .from(schema.gearStockLevels)
+      .where(eq(schema.gearStockLevels.modelId, draws.id));
+    expect(stock.find((s) => s.condition === "serviceable")?.quantity).toBe(5);
+  });
+
+  it("writes off nothing twice — a second attempt leaves the shelf alone", async () => {
+    const { draws, loanPublicId } = await seedCountedLoan(6, 6);
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 4)] });
+    await writeOffLoanShortfallAction({ publicId: loanPublicId, reason: "a" });
+
+    const again = await writeOffLoanShortfallAction({
+      publicId: loanPublicId,
+      reason: "b",
+    });
+
+    expect(again).toEqual({ ok: false, reason: "loan_returned" });
+    const stock = await getDb()
+      .select()
+      .from(schema.gearStockLevels)
+      .where(eq(schema.gearStockLevels.modelId, draws.id));
+    expect(stock.find((s) => s.condition === "serviceable")?.quantity).toBe(4);
+  });
+
   it("is a gear:manage judgement — a desk keeper is refused", async () => {
     const { loanPublicId } = await seedCountedLoan(10, 6);
     await signInAsDeskKeeper();
