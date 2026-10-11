@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "#/components/ui/tooltip";
 import { DeskQuantityInput } from "#/features/gear/components/desk-quantity-input";
 import {
+  CheckinItemRow,
+  CheckoutItemRow,
   CountedCheckinItemRow,
   CountedCheckoutItemRow,
 } from "#/features/gear/components/gear-desk-item-row";
@@ -174,5 +176,50 @@ describe("CountedCheckinItemRow", () => {
     expect(
       screen.getByText("1 still out — the loan stays open for it"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("coded rows name their gear too", () => {
+  const harness = {
+    publicId: "gear_corax",
+    code: "CH93",
+    name: "Petzl Corax",
+    typeName: "Harness",
+    thumbnailKey: null,
+    status: "active" as const,
+    condition: "serviceable" as const,
+    hasOpenLoan: true,
+    openLoanMemberFullName: "Riley Chen",
+    openLoanMemberAvatarKey: null,
+  };
+
+  it("shows product and type under a checkout row", () => {
+    inTable(
+      <CheckoutItemRow
+        row={harness}
+        durationDays={7}
+        onDurationChange={() => {}}
+        onRemove={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Petzl Corax")).toBeInTheDocument();
+    expect(screen.getByText(/· Harness/)).toBeInTheDocument();
+  });
+
+  it("shows product and type under a check-in row", () => {
+    inTable(
+      <CheckinItemRow
+        row={harness}
+        conditionAtReturn={null}
+        onConditionChange={() => {}}
+        notes=""
+        onNotesChange={() => {}}
+        onRemove={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Petzl Corax")).toBeInTheDocument();
+    expect(screen.getByText(/· Harness/)).toBeInTheDocument();
   });
 });

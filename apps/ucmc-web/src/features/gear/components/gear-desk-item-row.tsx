@@ -43,9 +43,10 @@ import { CONDITION_LABEL } from "#/features/gear/lib/labels";
 
 /**
  * Row components for the gear-desk items table. The parent pane owns
- * the surrounding `<Table>`/`<TableHeader>`; each row here renders one
- * or two `<TableRow>`s — the second only when there's a per-row error,
- * which sits beneath the controls so the column grid stays intact.
+ * the surrounding `<Table>`/`<TableHeader>`; each row here renders its
+ * controls, then a `SubjectLine` naming the gear, then an error line
+ * when there is one. Both extra lines span every column beneath the
+ * controls, so the column grid stays intact.
  *
  * Table (vs. the shadcn `Item` primitive) buys real column alignment
  * for free: `<thead>` sets the column widths once and every `<tr>`
@@ -55,14 +56,16 @@ import { CONDITION_LABEL } from "#/features/gear/lib/labels";
 const CODE_CELL_CLASS = "w-20 font-mono font-semibold align-middle";
 
 /**
- * The line under a counted row naming what it is. A coded row's code
- * is its identity and its name rides in the row's `title`; a counted
- * row has no code, so the quantity takes the first cell and the name
- * needs a line of its own. A second `<tr>` spanning every column —
- * the same shape as the error line — rather than a wider first cell,
- * so the column grid holds at phone width.
+ * The line under every desk row naming what it is: product, type, and
+ * for a counted row how many there are. A coded row's code is enough to
+ * find the tag, but not to tell the officer they're handing over the
+ * Corax rather than the Sitta; a counted row has no code at all, so the
+ * quantity takes the first cell and this line is its only name. A second
+ * `<tr>` spanning every column — the same shape as the error line —
+ * rather than a wider first cell, so the column grid holds at phone
+ * width.
  */
-function CountedSubjectLine({
+function SubjectLine({
   colSpan,
   name,
   typeName,
@@ -72,7 +75,8 @@ function CountedSubjectLine({
   colSpan: number;
   name: string;
   typeName: string;
-  detail: string;
+  /** Counted rows only: availability, or how many were lent. */
+  detail?: string;
   warning?: string | null;
 }) {
   return (
@@ -84,7 +88,8 @@ function CountedSubjectLine({
         <span className="font-medium">{name}</span>
         <span className="text-muted-foreground">
           {" "}
-          · {typeName} · {detail}
+          · {typeName}
+          {detail ? ` · ${detail}` : null}
         </span>
         {warning ? (
           <span className="mt-0.5 flex items-center gap-1 text-amber-700 dark:text-amber-400">
@@ -134,7 +139,10 @@ export function CheckoutItemRow({
     <>
       <TableRow
         title={`${row.typeName} · ${row.name}`}
-        className={error ? "border-destructive/40" : undefined}
+        className={cn(
+          "border-b-0",
+          error ? "border-destructive/40" : undefined,
+        )}
       >
         <TableCell className={CODE_CELL_CLASS}>{row.code}</TableCell>
         <TableCell className="align-middle">
@@ -158,6 +166,7 @@ export function CheckoutItemRow({
           </Button>
         </TableCell>
       </TableRow>
+      <SubjectLine colSpan={3} name={row.name} typeName={row.typeName} />
       {error ? <RowError colSpan={3} error={error} /> : null}
     </>
   );
@@ -184,7 +193,10 @@ export function CheckinItemRow({
     <>
       <TableRow
         title={`${row.typeName} · ${row.name}`}
-        className={error ? "border-destructive/40" : undefined}
+        className={cn(
+          "border-b-0",
+          error ? "border-destructive/40" : undefined,
+        )}
       >
         <TableCell className={CODE_CELL_CLASS}>{row.code}</TableCell>
         <TableCell className="w-44 align-middle">
@@ -250,6 +262,7 @@ export function CheckinItemRow({
           </div>
         </TableCell>
       </TableRow>
+      <SubjectLine colSpan={4} name={row.name} typeName={row.typeName} />
       {error ? <RowError colSpan={4} error={error} /> : null}
     </>
   );
@@ -420,7 +433,7 @@ export function CountedCheckoutItemRow({
           </Button>
         </TableCell>
       </TableRow>
-      <CountedSubjectLine
+      <SubjectLine
         colSpan={3}
         name={model.name}
         typeName={model.typeName}
@@ -513,7 +526,7 @@ export function CountedCheckinItemRow({
           </div>
         </TableCell>
       </TableRow>
-      <CountedSubjectLine
+      <SubjectLine
         colSpan={4}
         name={loan.name}
         typeName={loan.typeName}
