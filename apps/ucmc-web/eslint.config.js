@@ -281,8 +281,8 @@ export default [
    * `notInJsonArray` for a list from the caller (one JSON parameter at any
    * length), `inSubquery` / `notInSubquery` for a list the database
    * already holds (typed to reject an array). Drizzle's relational-query
-   * callback (`where: (t, { inArray }) => …`) bypasses an import ban, so
-   * it is restricted by syntax as well.
+   * callback (`where: (t, ops) => ops.inArray(…)`) bypasses an import
+   * ban, so it is restricted by syntax as well.
    *
    * The one exemption is the test that pins D1's ceiling, which must
    * build exactly the statement this rule forbids.
@@ -294,21 +294,34 @@ export default [
       "no-restricted-imports": [
         "error",
         {
+          // Every entry point Drizzle re-exports them from, not just the
+          // package root — `drizzle-orm/sql` would otherwise walk past.
           paths: [
-            {
-              name: "drizzle-orm",
-              importNames: ["inArray", "notInArray"],
-              message:
-                "Binds one D1 parameter per element (cap 100, #291). Use inJsonArray / notInJsonArray or inSubquery / notInSubquery from #/server/db.",
-            },
-          ],
+            "drizzle-orm",
+            "drizzle-orm/sql",
+            "drizzle-orm/sql/expressions",
+            "drizzle-orm/sql/expressions/conditions",
+          ].map((name) => ({
+            name,
+            importNames: ["inArray", "notInArray"],
+            message:
+              "Binds one D1 parameter per element (cap 100, #291). Use inJsonArray / notInJsonArray or inSubquery / notInSubquery from #/server/db.",
+          })),
         },
       ],
       "no-restricted-syntax": [
         "error",
+        // The relational-query callback hands the operators in as an
+        // argument, so neither import ban sees them: destructured
+        // (`(t, { inArray }) => …`) or reached through it (`ops.inArray`).
         {
           selector:
             "ObjectPattern > Property[key.name=/^(inArray|notInArray)$/]",
+          message:
+            "Drizzle's relational-query inArray binds one D1 parameter per element (#291). Use inJsonArray from #/server/db.",
+        },
+        {
+          selector: "MemberExpression[property.name=/^(inArray|notInArray)$/]",
           message:
             "Drizzle's relational-query inArray binds one D1 parameter per element (#291). Use inJsonArray from #/server/db.",
         },
