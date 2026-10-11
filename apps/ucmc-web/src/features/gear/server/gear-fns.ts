@@ -580,24 +580,58 @@ const recordGearInspectionInputSchema = z
 
 // ── loans ──────────────────────────────────────────────────────────────
 
-const checkoutLoansInputSchema = z.object({
+// 0 is allowed for same-day checkouts (e.g. exec borrows gear for a
+// meeting and returns it the same evening). The due-at computation
+// snaps to end-of-day so a 0-day loan is still valid until 23:59:59.
+const loanDurationDays = z.number().int().min(0).max(90);
+
+// One bin rarely holds more than a few dozen draws; the ceiling is a
+// runaway guard against a fat-fingered "600", not a policy. The real
+// limit is the available-quantity check in the action.
+export const MAX_COUNTED_LOAN_QUANTITY = 200;
+
+const countedQuantity = z.number().int().min(1).max(MAX_COUNTED_LOAN_QUANTITY);
+
+/**
+ * Per-row, not per-request: one desk batch is routinely "a harness and
+ * six draws", so the union belongs on the row. `kind` is required on
+ * both arms — an optional discriminant would let a counted row missing
+ * its tag fall through to the coded arm and fail as `not_found`.
+ */
+const checkoutRowSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("coded"),
+    gearPublicId: z.string().min(1),
+    durationDays: loanDurationDays,
+  }),
+  z.object({
+    kind: z.literal("counted"),
+    modelPublicId: z.string().min(1),
+    quantity: countedQuantity,
+    durationDays: loanDurationDays,
+  }),
+]);
+
+/** The publicId a row is keyed on — its piece, or its model. Two rows
+ *  naming the same subject in one batch is a client bug: the desk
+ *  merges them, and for a counted model the second row's
+ *  availability check would race the first's insert in the same
+ *  request. */
+const checkoutRowKey = (row: z.infer<typeof checkoutRowSchema>) =>
+  row.kind === "coded" ? row.gearPublicId : row.modelPublicId;
+
+export const checkoutLoansInputSchema = z.object({
   memberPublicId: z.string().min(1),
-  // Up to 50 items per checkout flow; large enough for any realistic
+  // Up to 50 rows per checkout flow; large enough for any realistic
   // gear-cave batch, small enough that audit-event fan-out + per-row
   // pre-checks fit comfortably in a worker request.
   items: z
-    .array(
-      z.object({
-        gearPublicId: z.string().min(1),
-        // 0 is allowed for same-day checkouts (e.g. exec borrows gear
-        // for a meeting and returns it the same evening). The due-at
-        // computation snaps to end-of-day so a 0-day loan is still
-        // valid until 23:59:59.
-        durationDays: z.number().int().min(0).max(90),
-      }),
-    )
+    .array(checkoutRowSchema)
     .min(1)
-    .max(50),
+    .max(50)
+    .refine((rows) => new Set(rows.map(checkoutRowKey)).size === rows.length, {
+      message: "each piece or model may appear once per batch",
+    }),
   notes: z.string().max(2_000).nullable(),
   // Officer overrides. Declared here or Zod strips them and the action
   // never sees the flag the desk sent — `gear:manage` is re-checked in

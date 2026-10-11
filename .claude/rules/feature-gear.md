@@ -195,7 +195,13 @@ Each loan names **either** a coded item (`item_id`) **or** a counted model with 
 
 Counted loans support **partial return**: `quantity_returned` climbs as units come back; the shortfall lands in `quantity_lost` when the loan closes.
 
-**The partial unique index `gear_loans_one_active_per_item` on `(item_id) WHERE returned_at IS NULL` is the race protector — the per-row pre-check in the action is UX only.** It applies to coded loans only; counted stock is guarded by an available-quantity read-then-write that can over-lend by one under a true tie, which the cave prefers to taking a lock. Deactivating on-loan gear is blocked (typed `on_loan` result; the FK is also `RESTRICT`).
+**The partial unique index `gear_loans_one_active_per_item` on `(item_id) WHERE returned_at IS NULL` is the race protector — the per-row pre-check in the action is UX only.** It applies to coded loans only. Deactivating on-loan gear is blocked (typed `on_loan` result; the FK is also `RESTRICT`).
+
+**Counted stock is guarded by a conditional insert, `insertCountedLoanIfAvailable`** — `INSERT … SELECT … WHERE serviceable − outstanding − held >= quantity`, one statement. There is no unit to make unique, so an index can't do it; a read-then-write can over-lend under a true tie (two officers each see six draws and each hand out six). D1 runs one statement at a time against a single SQLite writer, so the subqueries and the insert are atomic with respect to every other write — no lock, and nothing stored that could disagree with the loan table. #223 weighed accepting the over-lend (the old note here) and chose this because it costs one statement. The availability SQL repeats `takeable`'s arithmetic and `liveWhere`'s hold window: it has to run inside the insert, so it can't call either. If they drift, the desk refuses what browse promised.
+
+- **Checkout input is a per-row union** (`kind: "coded" | "counted"`), not per request: a real batch is "a harness and six draws". The discriminant is **required on both arms** — optional, a counted row missing its tag falls through to the coded arm and fails as `not_found`. The boundary refuses the same piece or model twice in one batch.
+- **Two refusals are counted-only.** `insufficient_stock` (the shelf is short, holds aside) is a **hard stop** — `overrideHolds` lets the held units go, never units that aren't there. `on_hold` is reported only when the shelf _would_ cover it without the hold, so the override affordance appears exactly when overriding can work. A refused row carries `available` so the desk can say "only 4 left".
+- `loan.checked_out` carries **`level: "item" | "model"` and `quantity`** — the vocabulary batch inspections already use — so a six-draw loan reads differently from one harness.
 
 `LoanSummary.gearPublicId` is **nullable** — a counted loan has no item page to open. `<LoanSubjectLink>` owns that branch, because an `<a>` with no `href` still reads as a link.
 

@@ -7,7 +7,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { createGearInputSchema } from "#/features/gear/server/gear-fns";
+import {
+  checkoutLoansInputSchema,
+  createGearInputSchema,
+  MAX_COUNTED_LOAN_QUANTITY,
+} from "#/features/gear/server/gear-fns";
 
 const baseInput = {
   typePublicId: "type1",
@@ -53,6 +57,65 @@ describe("createGearInputSchema acquiredAt range", () => {
   it("rejects non-integer timestamps", () => {
     expect(() =>
       createGearInputSchema.parse({ ...baseInput, acquiredAt: 1.5 }),
+    ).toThrow();
+  });
+});
+
+describe("checkoutLoansInputSchema rows", () => {
+  const base = { memberPublicId: "m1", notes: null };
+
+  it("accepts a mixed batch of a coded piece and a counted quantity", () => {
+    expect(() =>
+      checkoutLoansInputSchema.parse({
+        ...base,
+        items: [
+          { kind: "coded", gearPublicId: "g1", durationDays: 7 },
+          {
+            kind: "counted",
+            modelPublicId: "m-draws",
+            quantity: 6,
+            durationDays: 7,
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it("requires the discriminant, so a counted row can't fall through to coded", () => {
+    expect(() =>
+      checkoutLoansInputSchema.parse({
+        ...base,
+        items: [{ modelPublicId: "m-draws", quantity: 6, durationDays: 7 }],
+      }),
+    ).toThrow();
+  });
+
+  it("bounds the quantity to 1…MAX_COUNTED_LOAN_QUANTITY", () => {
+    const row = (quantity: number) => ({
+      ...base,
+      items: [
+        { kind: "counted", modelPublicId: "m", quantity, durationDays: 7 },
+      ],
+    });
+    expect(() => checkoutLoansInputSchema.parse(row(0))).toThrow();
+    expect(() => checkoutLoansInputSchema.parse(row(1.5))).toThrow();
+    expect(() =>
+      checkoutLoansInputSchema.parse(row(MAX_COUNTED_LOAN_QUANTITY)),
+    ).not.toThrow();
+    expect(() =>
+      checkoutLoansInputSchema.parse(row(MAX_COUNTED_LOAN_QUANTITY + 1)),
+    ).toThrow();
+  });
+
+  it("refuses the same model twice in one batch", () => {
+    const counted = {
+      kind: "counted",
+      modelPublicId: "m-draws",
+      quantity: 2,
+      durationDays: 7,
+    };
+    expect(() =>
+      checkoutLoansInputSchema.parse({ ...base, items: [counted, counted] }),
     ).toThrow();
   });
 });

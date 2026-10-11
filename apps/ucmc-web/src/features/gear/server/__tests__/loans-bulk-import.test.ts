@@ -398,7 +398,7 @@ describe("bulkImportLoansAction skip reasons", () => {
     // Real open loan for m1 → backfill for m2 should be skipped.
     await checkoutLoansAction({
       memberPublicId: m1.publicId,
-      items: [{ gearPublicId, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId, durationDays: 7 }],
       notes: null,
     });
 

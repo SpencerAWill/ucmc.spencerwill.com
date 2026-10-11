@@ -327,7 +327,7 @@ describe("GearDeskCheckoutPane officer override", () => {
     const onSuccess = checkoutMutateMock.mock.calls[0]?.[1]?.onSuccess;
     act(() => {
       onSuccess({
-        results: [{ ok: false, gearPublicId: "gear_a", reason }],
+        results: [{ ok: false, kind: "coded", gearPublicId: "gear_a", reason }],
       });
     });
     await waitFor(() =>
@@ -370,7 +370,13 @@ describe("GearDeskCheckoutPane officer override", () => {
     expect(checkoutMutateMock).toHaveBeenCalledTimes(2);
     expect(checkoutMutateMock.mock.calls[1]?.[0]).toMatchObject({
       memberPublicId: "u_member_public",
-      items: [{ gearPublicId: "gear_a", durationDays: expect.any(Number) }],
+      items: [
+        {
+          kind: "coded",
+          gearPublicId: "gear_a",
+          durationDays: expect.any(Number),
+        },
+      ],
       overrideHolds: true,
     });
     // Only the flag the refusal called for — a hold override is not a

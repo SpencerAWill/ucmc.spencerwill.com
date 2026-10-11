@@ -14,9 +14,9 @@
  * applied as one transaction. The partial unique index
  * `gear_loans_one_active_per_item` is what actually wins races against
  * a concurrent second officer — the action layer's pre-check is just
- * for UX. Counted stock has no such index: it is guarded by an
- * available-quantity read-then-write that can over-lend by one under a
- * true tie, which the cave prefers to taking a lock.
+ * for UX. Counted stock can't use an index — there is no unit to make
+ * unique — so `insertCountedLoanIfAvailable` guards it with a
+ * conditional insert instead.
  */
 import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -362,6 +362,189 @@ export async function openLoanQuantityForModels(
     if (row.modelId !== null) map.set(row.modelId, Number(row.outstanding));
   }
   return map;
+}
+
+// ── counted checkout ───────────────────────────────────────────────────
+
+/**
+ * Units of a counted model the desk could hand out at `now`, as a SQL
+ * scalar: serviceable stock − outstanding on open loans − live holds.
+ *
+ * The same arithmetic `takeable` uses on browse, written a second time
+ * because this copy has to run INSIDE the insert's statement — that is
+ * the whole point of it. The hold window repeats `liveWhere` in
+ * `holds-repo.server.ts` for the same reason; if the two ever disagree
+ * the desk will refuse what browse promised, or the reverse.
+ *
+ * `respectHolds: false` is the officer's `overrideHolds` — the held
+ * quantity stops counting against the request, the stock and loans
+ * still do. An override can push past a hold, never past the shelf.
+ */
+function countedAvailableSql(
+  modelId: string,
+  now: Temporal.Instant,
+  respectHolds: boolean,
+): SQL {
+  const nowMs = now.epochMilliseconds;
+  const serviceable = sql`coalesce((
+    SELECT ${schema.gearStockLevels.quantity} FROM ${schema.gearStockLevels}
+    WHERE ${schema.gearStockLevels.modelId} = ${modelId}
+      AND ${schema.gearStockLevels.condition} = 'serviceable'
+  ), 0)`;
+  const outstanding = sql`coalesce((
+    SELECT sum(${schema.gearLoans.quantity} - ${schema.gearLoans.quantityReturned})
+    FROM ${schema.gearLoans}
+    WHERE ${schema.gearLoans.modelId} = ${modelId}
+      AND ${schema.gearLoans.returnedAt} IS NULL
+  ), 0)`;
+  if (!respectHolds) {
+    return sql`(${serviceable} - ${outstanding})`;
+  }
+  const held = sql`coalesce((
+    SELECT sum(${schema.gearHolds.quantity}) FROM ${schema.gearHolds}
+    WHERE ${schema.gearHolds.modelId} = ${modelId}
+      AND ${schema.gearHolds.releasedAt} IS NULL
+      AND ${schema.gearHolds.startsAt} <= ${nowMs}
+      AND ${schema.gearHolds.endsAt} > ${nowMs}
+  ), 0)`;
+  return sql`(${serviceable} - ${outstanding} - ${held})`;
+}
+
+/**
+ * Insert a counted loan **only if the model still has the units**, in
+ * one statement. Returns false when the guard refused it.
+ *
+ * **This is the race protector for counted stock**, the counterpart of
+ * the partial unique index `gear_loans_one_active_per_item` for coded
+ * pieces. A read-then-write — check `takeable`, then insert — can
+ * over-lend under a true tie: two officers each see six draws left and
+ * each hand out six. `INSERT … SELECT … WHERE available >= quantity`
+ * closes that without a lock, because D1 executes one statement at a
+ * time against a single SQLite writer: the availability subqueries and
+ * the insert are atomic with respect to every other write. The action's
+ * own availability read is UX only — it picks the refusal message.
+ *
+ * Raw SQL because Drizzle's `insert().select()` wants a query builder
+ * projecting every column, and the guard is a scalar comparison rather
+ * than a FROM. The columns not listed take their schema defaults
+ * (`quantity_returned`, `quantity_lost`, `reminder_stage`).
+ */
+export async function insertCountedLoanIfAvailable(
+  row: InsertLoanRow & { modelId: string },
+  options: { now: Temporal.Instant; respectHolds: boolean },
+): Promise<boolean> {
+  const available = countedAvailableSql(
+    row.modelId,
+    options.now,
+    options.respectHolds,
+  );
+  const inserted = await getDb().all<{ id: string }>(sql`
+    INSERT INTO ${schema.gearLoans} (
+      id, public_id, item_id, model_id, quantity, member_user_id,
+      checked_out_by_user_id, checked_out_at, due_at, checkout_notes
+    )
+    SELECT
+      ${row.id}, ${row.publicId}, NULL, ${row.modelId}, ${row.quantity},
+      ${row.memberUserId}, ${row.checkedOutByUserId},
+      ${row.checkedOutAt.epochMilliseconds}, ${row.dueAt.epochMilliseconds},
+      ${row.checkoutNotes}
+    WHERE ${available} >= ${row.quantity}
+    RETURNING id
+  `);
+  return inserted.length > 0;
+}
+
+/** A counted model as the gear desk sees it: what it is, and how many
+ *  can go out. */
+export interface CountedDeskModelRow {
+  modelId: string;
+  publicId: string;
+  name: string;
+  typeName: string;
+  imageKey: string | null;
+}
+
+const COUNTED_DESK_MODEL_COLUMNS = {
+  modelId: schema.gearModels.id,
+  publicId: schema.gearModels.publicId,
+  modelName: schema.gearModels.name,
+  manufacturer: schema.gearModels.manufacturer,
+  typeName: schema.gearTypes.name,
+  imageKey: schema.gearModels.imageKey,
+} as const;
+
+function toCountedDeskModelRow(r: {
+  modelId: string;
+  publicId: string;
+  modelName: string;
+  manufacturer: string | null;
+  typeName: string;
+  imageKey: string | null;
+}): CountedDeskModelRow {
+  return {
+    modelId: r.modelId,
+    publicId: r.publicId,
+    name: gearItemName({ manufacturer: r.manufacturer, name: r.modelName }),
+    typeName: r.typeName,
+    imageKey: r.imageKey,
+  };
+}
+
+/**
+ * Counted models whose manufacturer or name contains `q`, for the
+ * desk's combobox. Counted only: a coded model is reached through its
+ * pieces' codes, and offering it here would invite a quantity loan the
+ * action refuses.
+ */
+export async function searchCountedModelsForDesk(
+  q: string,
+  limit = 8,
+): Promise<CountedDeskModelRow[]> {
+  const trimmed = q.trim();
+  if (trimmed.length === 0) return [];
+  const rows = await getDb()
+    .select(COUNTED_DESK_MODEL_COLUMNS)
+    .from(schema.gearModels)
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .where(
+      and(
+        eq(schema.gearModels.tracking, "counted"),
+        searchMatches(
+          schema.gearModels.id,
+          GEAR_MODEL_SEARCH,
+          "model_id",
+          trimmed,
+        ),
+      ),
+    )
+    .orderBy(asc(schema.gearModels.name))
+    .limit(limit);
+  return rows.map(toCountedDeskModelRow);
+}
+
+/** Exact lookup behind a scanned `ucmc-model:` bin label. Returns the
+ *  model whatever its tracking, so the caller can say "that's a coded
+ *  model" rather than "not found". */
+export async function getDeskModelByPublicId(
+  publicId: string,
+): Promise<(CountedDeskModelRow & { tracking: schema.GearTracking }) | null> {
+  const rows = await getDb()
+    .select({
+      ...COUNTED_DESK_MODEL_COLUMNS,
+      tracking: schema.gearModels.tracking,
+    })
+    .from(schema.gearModels)
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .where(eq(schema.gearModels.publicId, publicId))
+    .limit(1);
+  const r = rows.at(0);
+  return r ? { ...toCountedDeskModelRow(r), tracking: r.tracking } : null;
 }
 
 export async function getLoanByPublicId(

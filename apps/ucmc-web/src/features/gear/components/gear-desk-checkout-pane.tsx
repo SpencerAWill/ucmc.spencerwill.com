@@ -71,6 +71,8 @@ const SKIP_LABEL: Record<CheckoutSkipReason, string> = {
   already_on_loan: "Already checked out to someone else",
   on_hold: "Held for a trip",
   member_blocked: "Member is blocked — overdue gear outstanding",
+  not_counted: "Tracked by code — scan the piece itself",
+  insufficient_stock: "Not enough on the shelf",
 };
 
 /**
@@ -318,6 +320,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
       {
         memberPublicId: member.publicId,
         items: rows.map((i) => ({
+          kind: "coded" as const,
           gearPublicId: i.row.publicId,
           durationDays: i.durationDays,
         })),
@@ -341,7 +344,8 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
             prev.flatMap((item) => {
               if (!submittedIds.has(item.row.publicId)) return [item];
               const refusal = skipped.find(
-                (sk) => sk.gearPublicId === item.row.publicId,
+                (sk) =>
+                  sk.kind === "coded" && sk.gearPublicId === item.row.publicId,
               );
               if (!refusal) return [];
               return [

@@ -48,17 +48,20 @@ const {
   checkinLoansAction,
   checkoutLoansAction,
   extendLoanAction,
+  getDeskModelAction,
   getLoanDefaultsAction,
   getLoanDetailAction,
   getMemberForLoanAction,
   listLoansAction,
   listMyLoansAction,
+  searchCountedModelsForDeskAction,
 } = await import("#/features/gear/server/loans-actions.server");
-const { createGearModelAction } =
+const { createGearModelAction, setGearModelStockAction } =
   await import("#/features/gear/server/models-actions.server");
 const { placeGearHoldAction } =
   await import("#/features/gear/server/holds-actions.server");
-const { listLoans } = await import("#/features/gear/server/loans-repo.server");
+const { insertCountedLoanIfAvailable, listLoans } =
+  await import("#/features/gear/server/loans-repo.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -285,9 +288,9 @@ describe("checkoutLoansAction", () => {
     const result = await checkoutLoansAction({
       memberPublicId: member.publicId,
       items: [
-        { gearPublicId: a, durationDays: 7 },
-        { gearPublicId: b, durationDays: 3 },
-        { gearPublicId: c, durationDays: 14 },
+        { kind: "coded", gearPublicId: a, durationDays: 7 },
+        { kind: "coded", gearPublicId: b, durationDays: 3 },
+        { kind: "coded", gearPublicId: c, durationDays: 14 },
       ],
       notes: "weekend trip",
     });
@@ -332,23 +335,25 @@ describe("checkoutLoansAction", () => {
     const other = await seedUser("other@example.com");
     await checkoutLoansAction({
       memberPublicId: other.publicId,
-      items: [{ gearPublicId: onLoan, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: onLoan, durationDays: 7 }],
       notes: null,
     });
 
     const result = await checkoutLoansAction({
       memberPublicId: member.publicId,
       items: [
-        { gearPublicId: ok, durationDays: 7 },
-        { gearPublicId: "missing-public-id", durationDays: 7 },
-        { gearPublicId: retired, durationDays: 7 },
-        { gearPublicId: damaged, durationDays: 7 },
-        { gearPublicId: onLoan, durationDays: 7 },
+        { kind: "coded", gearPublicId: ok, durationDays: 7 },
+        { kind: "coded", gearPublicId: "missing-public-id", durationDays: 7 },
+        { kind: "coded", gearPublicId: retired, durationDays: 7 },
+        { kind: "coded", gearPublicId: damaged, durationDays: 7 },
+        { kind: "coded", gearPublicId: onLoan, durationDays: 7 },
       ],
       notes: null,
     });
 
-    const skips = result.results.flatMap((r) => (r.ok ? [] : [r]));
+    const skips = result.results.flatMap((r) =>
+      !r.ok && r.kind === "coded" ? [r] : [],
+    );
     const reasonsByGear = Object.fromEntries(
       skips.map((s) => [s.gearPublicId, s.reason]),
     );
@@ -376,7 +381,7 @@ describe("checkoutLoansAction", () => {
     // when the racing checkout tries to insert a second open row.
     await checkoutLoansAction({
       memberPublicId: other.publicId,
-      items: [{ gearPublicId: a, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: a, durationDays: 7 }],
       notes: null,
     });
 
@@ -385,13 +390,15 @@ describe("checkoutLoansAction", () => {
       const result = await checkoutLoansAction({
         memberPublicId: member.publicId,
         items: [
-          { gearPublicId: a, durationDays: 7 },
-          { gearPublicId: b, durationDays: 7 },
+          { kind: "coded", gearPublicId: a, durationDays: 7 },
+          { kind: "coded", gearPublicId: b, durationDays: 7 },
         ],
         notes: null,
       });
       const byGear = Object.fromEntries(
-        result.results.map((r) => [r.gearPublicId, r] as const),
+        result.results.flatMap((r) =>
+          r.kind === "coded" ? [[r.gearPublicId, r] as const] : [],
+        ),
       );
       const aResult = byGear[a];
       const bResult = byGear[b];
@@ -446,12 +453,12 @@ describe("checkoutLoansAction hold override", () => {
 
     const result = await checkoutLoansAction({
       memberPublicId,
-      items: [{ gearPublicId, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId, durationDays: 7 }],
       notes: null,
     });
 
     expect(result.results).toEqual([
-      { ok: false, gearPublicId, reason: "on_hold" },
+      { ok: false, kind: "coded", gearPublicId, reason: "on_hold" },
     ]);
   });
 
@@ -460,7 +467,7 @@ describe("checkoutLoansAction hold override", () => {
 
     const result = await checkoutLoansAction({
       memberPublicId,
-      items: [{ gearPublicId, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId, durationDays: 7 }],
       notes: null,
       overrideHolds: true,
     });
@@ -489,13 +496,13 @@ describe("checkoutLoansAction hold override", () => {
 
     const result = await checkoutLoansAction({
       memberPublicId,
-      items: [{ gearPublicId, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId, durationDays: 7 }],
       notes: null,
       overrideHolds: true,
     });
 
     expect(result.results).toEqual([
-      { ok: false, gearPublicId, reason: "on_hold" },
+      { ok: false, kind: "coded", gearPublicId, reason: "on_hold" },
     ]);
     const loans = await getDb().select().from(schema.gearLoans);
     expect(loans).toHaveLength(0);
@@ -503,6 +510,433 @@ describe("checkoutLoansAction hold override", () => {
 });
 
 // ── check-in ───────────────────────────────────────────────────────────
+
+// ── counted checkout ───────────────────────────────────────────────────
+
+/**
+ * A counted model with `serviceable` draws on the shelf. Created by the
+ * signed-in caller, so call it as an admin.
+ */
+async function seedCountedModel(serviceable: number): Promise<{
+  publicId: string;
+  id: string;
+}> {
+  const typePublicId = await createTypeOk();
+  const created = await createGearModelAction({
+    typePublicId,
+    name: `Draws ${crypto.randomUUID()}`,
+    manufacturer: "BD",
+    description: null,
+    tracking: "counted",
+    msrpCents: null,
+    serviceLifeYears: null,
+    manufacturedAtMs: null,
+    inspectionIntervalDays: null,
+    productUrl: null,
+  });
+  if (!created.ok)
+    throw new Error(`createGearModel: ${JSON.stringify(created)}`);
+  const stocked = await setGearModelStockAction({
+    publicId: created.publicId,
+    stock: [{ condition: "serviceable", quantity: serviceable }],
+  });
+  if (!stocked.ok) throw new Error(`setStock: ${JSON.stringify(stocked)}`);
+  const row = (
+    await getDb()
+      .select({ id: schema.gearModels.id })
+      .from(schema.gearModels)
+      .where(eq(schema.gearModels.publicId, created.publicId))
+  ).at(0);
+  if (!row) throw new Error("model row missing");
+  return { publicId: created.publicId, id: row.id };
+}
+
+function countedRow(modelPublicId: string, quantity: number) {
+  return {
+    kind: "counted" as const,
+    modelPublicId,
+    quantity,
+    durationDays: 7,
+  };
+}
+
+function auditMetadata(row: { metadataJson: string | null }) {
+  return row.metadataJson
+    ? (JSON.parse(row.metadataJson) as Record<string, unknown>)
+    : {};
+}
+
+describe("checkoutLoansAction counted rows", () => {
+  it("checks out a mixed batch — one harness and six draws", async () => {
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const harness = await createGearOk({ typePublicId, code: "CH1" });
+    const draws = await seedCountedModel(10);
+    const member = await seedUser("mixed@example.com");
+
+    const result = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [
+        { kind: "coded", gearPublicId: harness, durationDays: 7 },
+        countedRow(draws.publicId, 6),
+      ],
+      notes: null,
+    });
+
+    expect(result.results).toHaveLength(2);
+    expect(result.results.every((r) => r.ok)).toBe(true);
+    const countedLoan = (
+      await getDb()
+        .select()
+        .from(schema.gearLoans)
+        .where(eq(schema.gearLoans.modelId, draws.id))
+    )[0];
+    expect(countedLoan).toMatchObject({
+      itemId: null,
+      quantity: 6,
+      quantityReturned: 0,
+      returnedAt: null,
+      reminderStage: "none",
+    });
+  });
+
+  it("records level and quantity on loan.checked_out", async () => {
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const harness = await createGearOk({ typePublicId, code: "CH1" });
+    const draws = await seedCountedModel(10);
+    const member = await seedUser("audit@example.com");
+
+    await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [
+        { kind: "coded", gearPublicId: harness, durationDays: 7 },
+        countedRow(draws.publicId, 6),
+      ],
+      notes: null,
+    });
+
+    const audits = (await getDb().select().from(schema.auditLog)).filter(
+      (r) => r.action === "loan.checked_out",
+    );
+    const levels = audits.map((a) => {
+      const m = auditMetadata(a);
+      return [m.level, m.quantity];
+    });
+    expect(levels).toEqual(
+      expect.arrayContaining([
+        ["item", 1],
+        ["model", 6],
+      ]),
+    );
+    const modelAudit = audits.find((a) => auditMetadata(a).level === "model");
+    expect(modelAudit?.targetId).toBe(draws.id);
+  });
+
+  it("lends exactly up to the shelf and refuses one past it", async () => {
+    await signInAsLoanManager();
+    const draws = await seedCountedModel(10);
+    const first = await seedUser("first@example.com");
+    const second = await seedUser("second@example.com");
+
+    const six = await checkoutLoansAction({
+      memberPublicId: first.publicId,
+      items: [countedRow(draws.publicId, 6)],
+      notes: null,
+    });
+    expect(six.results[0]?.ok).toBe(true);
+
+    // 4 left. Asking for 5 is one too many, and says how many there are.
+    const five = await checkoutLoansAction({
+      memberPublicId: second.publicId,
+      items: [countedRow(draws.publicId, 5)],
+      notes: null,
+    });
+    expect(five.results).toEqual([
+      {
+        ok: false,
+        kind: "counted",
+        modelPublicId: draws.publicId,
+        reason: "insufficient_stock",
+        available: 4,
+      },
+    ]);
+
+    // Exactly the remainder goes out.
+    const four = await checkoutLoansAction({
+      memberPublicId: second.publicId,
+      items: [countedRow(draws.publicId, 4)],
+      notes: null,
+    });
+    expect(four.results[0]?.ok).toBe(true);
+
+    const one = await checkoutLoansAction({
+      memberPublicId: second.publicId,
+      items: [countedRow(draws.publicId, 1)],
+      notes: null,
+    });
+    expect(one.results[0]).toMatchObject({
+      ok: false,
+      reason: "insufficient_stock",
+      available: 0,
+    });
+    const loans = await getDb()
+      .select()
+      .from(schema.gearLoans)
+      .where(eq(schema.gearLoans.modelId, draws.id));
+    expect(loans.reduce((sum, l) => sum + l.quantity, 0)).toBe(10);
+  });
+
+  it("guards the insert itself — two concurrent requests can't both take the last six", async () => {
+    // Bypasses the action, whose availability read could otherwise mask
+    // the race: this pins that the conditional insert is what holds.
+    const admin = await signInAsLoanManager();
+    const draws = await seedCountedModel(10);
+    const member = await seedUser("race@example.com");
+    const now = Temporal.Now.instant();
+    const row = () => ({
+      id: `gl_${crypto.randomUUID()}`,
+      publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+      itemId: null,
+      modelId: draws.id,
+      quantity: 6,
+      memberUserId: member.id,
+      checkedOutByUserId: admin.id,
+      checkedOutAt: now,
+      dueAt: now.add({ hours: 24 * 7 }),
+      checkoutNotes: null,
+    });
+
+    const outcomes = await Promise.all([
+      insertCountedLoanIfAvailable(row(), { now, respectHolds: true }),
+      insertCountedLoanIfAvailable(row(), { now, respectHolds: true }),
+    ]);
+
+    expect(outcomes.filter(Boolean)).toHaveLength(1);
+    const loans = await getDb()
+      .select()
+      .from(schema.gearLoans)
+      .where(eq(schema.gearLoans.modelId, draws.id));
+    expect(loans).toHaveLength(1);
+  });
+
+  it("refuses a coded model as not_counted and an unknown one as not_found", async () => {
+    await signInAsLoanManager();
+    const typePublicId = await createTypeOk();
+    const codedModel = await modelForType(typePublicId);
+    const member = await seedUser("wrongkind@example.com");
+
+    const result = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [countedRow(codedModel, 2), countedRow("no-such-model", 2)],
+      notes: null,
+    });
+
+    expect(
+      result.results.map((r) => (r.ok ? "ok" : [r.kind, r.reason])),
+    ).toEqual([
+      ["counted", "not_counted"],
+      ["counted", "not_found"],
+    ]);
+    expect(await getDb().select().from(schema.gearLoans)).toHaveLength(0);
+  });
+
+  it("refuses every row, counted included, for a blocked member", async () => {
+    await signInAsLoanManager();
+    const draws = await seedCountedModel(10);
+    const member = await seedUser("blocked@example.com");
+    const admin = await signInAsLoanManager("Backdater");
+    // An open loan 30 days overdue blocks at the default 21.
+    const longAgo = Temporal.Now.instant().subtract({ hours: 24 * 37 });
+    await getDb()
+      .insert(schema.gearLoans)
+      .values({
+        id: `gl_${crypto.randomUUID()}`,
+        publicId: "overdue00001",
+        modelId: draws.id,
+        quantity: 1,
+        memberUserId: member.id,
+        checkedOutByUserId: admin.id,
+        checkedOutAt: longAgo,
+        dueAt: longAgo.add({ hours: 24 * 7 }),
+      });
+
+    const result = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [countedRow(draws.publicId, 2)],
+      notes: null,
+    });
+
+    expect(result.results).toEqual([
+      {
+        ok: false,
+        kind: "counted",
+        modelPublicId: draws.publicId,
+        reason: "member_blocked",
+        available: null,
+      },
+    ]);
+  });
+});
+
+describe("checkoutLoansAction counted rows under a hold", () => {
+  /** Ten draws with six held for a trip, leaving four takeable. */
+  async function seedHeldDraws(): Promise<{
+    draws: { publicId: string; id: string };
+    memberPublicId: string;
+  }> {
+    await signInAsLoanManager();
+    const draws = await seedCountedModel(10);
+    const now = Date.now();
+    const hold = await placeGearHoldAction({
+      modelPublicId: draws.publicId,
+      quantity: 6,
+      reason: "Held for the Red River trip",
+      startsAtMs: now - 3600_000,
+      endsAtMs: now + 86_400_000,
+    });
+    if (!hold.ok) throw new Error(`placeGearHold failed: ${hold.reason}`);
+    const member = await seedUser("held-draws@example.com");
+    return { draws, memberPublicId: member.publicId };
+  }
+
+  it("refuses past the held quantity as on_hold, naming what's left", async () => {
+    const { draws, memberPublicId } = await seedHeldDraws();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [countedRow(draws.publicId, 5)],
+      notes: null,
+    });
+
+    expect(result.results[0]).toMatchObject({
+      ok: false,
+      reason: "on_hold",
+      available: 4,
+    });
+  });
+
+  it("lends the unheld remainder without any override", async () => {
+    const { draws, memberPublicId } = await seedHeldDraws();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [countedRow(draws.publicId, 4)],
+      notes: null,
+    });
+
+    expect(result.results[0]?.ok).toBe(true);
+  });
+
+  it("lets a gear:manage officer override into the held units", async () => {
+    const { draws, memberPublicId } = await seedHeldDraws();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [countedRow(draws.publicId, 8)],
+      notes: null,
+      overrideHolds: true,
+    });
+
+    expect(result.results[0]?.ok).toBe(true);
+    const audit = (await getDb().select().from(schema.auditLog)).find(
+      (r) => r.action === "loan.checked_out",
+    );
+    expect(audit && auditMetadata(audit).overrideHolds).toBe(true);
+  });
+
+  it("never overrides past the shelf itself", async () => {
+    const { draws, memberPublicId } = await seedHeldDraws();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [countedRow(draws.publicId, 11)],
+      notes: null,
+      overrideHolds: true,
+    });
+
+    expect(result.results[0]).toMatchObject({
+      ok: false,
+      reason: "insufficient_stock",
+      available: 10,
+    });
+  });
+
+  it("ignores overrideHolds from a gear:loan keeper", async () => {
+    const { draws, memberPublicId } = await seedHeldDraws();
+    await signInAsDeskKeeper();
+
+    const result = await checkoutLoansAction({
+      memberPublicId,
+      items: [countedRow(draws.publicId, 5)],
+      notes: null,
+      overrideHolds: true,
+    });
+
+    expect(result.results[0]).toMatchObject({ ok: false, reason: "on_hold" });
+  });
+});
+
+describe("desk lookups for counted models", () => {
+  it("searches counted models only, with takeable net of loans and holds", async () => {
+    await signInAsLoanManager();
+    const draws = await seedCountedModel(10);
+    const typePublicId = await createTypeOk();
+    await modelForType(typePublicId); // a coded model that must not appear
+    const member = await seedUser("lookup@example.com");
+    await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [countedRow(draws.publicId, 3)],
+      notes: null,
+    });
+    const now = Date.now();
+    await placeGearHoldAction({
+      modelPublicId: draws.publicId,
+      quantity: 2,
+      reason: "Trip",
+      startsAtMs: now - 1000,
+      endsAtMs: now + 86_400_000,
+    });
+
+    const rows = await searchCountedModelsForDeskAction({ q: "Draws" });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        publicId: draws.publicId,
+        takeable: 5,
+        held: 2,
+      }),
+    ]);
+  });
+
+  it("resolves a bin label, and names a coded model rather than hiding it", async () => {
+    await signInAsLoanManager();
+    const draws = await seedCountedModel(4);
+    const typePublicId = await createTypeOk();
+    const coded = await modelForType(typePublicId);
+
+    expect(await getDeskModelAction({ publicId: draws.publicId })).toEqual({
+      ok: true,
+      model: expect.objectContaining({ publicId: draws.publicId, takeable: 4 }),
+    });
+    expect(await getDeskModelAction({ publicId: coded })).toEqual({
+      ok: false,
+      reason: "not_counted",
+    });
+    expect(await getDeskModelAction({ publicId: "nope" })).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+  });
+
+  it("requires gear:loan", async () => {
+    await signInAsMember();
+    await expect(
+      searchCountedModelsForDeskAction({ q: "Draws" }),
+    ).rejects.toThrow();
+    await expect(getDeskModelAction({ publicId: "x" })).rejects.toThrow();
+  });
+});
 
 describe("checkinLoansAction", () => {
   it("closes a single loan and emits loan.checked_in", async () => {
@@ -512,7 +946,7 @@ describe("checkinLoansAction", () => {
     const member = await seedUser("borrower@example.com", "Test Borrower");
     await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
 
@@ -536,12 +970,12 @@ describe("checkinLoansAction", () => {
     const m2 = await seedUser("m2@example.com", "Bob");
     await checkoutLoansAction({
       memberPublicId: m1.publicId,
-      items: [{ gearPublicId: a, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: a, durationDays: 7 }],
       notes: null,
     });
     await checkoutLoansAction({
       memberPublicId: m2.publicId,
-      items: [{ gearPublicId: b, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: b, durationDays: 7 }],
       notes: null,
     });
 
@@ -564,7 +998,7 @@ describe("checkinLoansAction", () => {
     const member = await seedUser("borrower@example.com");
     await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
 
@@ -615,7 +1049,7 @@ describe("extendLoanAction", () => {
     const member = await seedUser("borrower@example.com");
     const checkout = await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
     const loanPublicId = checkout.results
@@ -639,7 +1073,7 @@ describe("extendLoanAction", () => {
     const member = await seedUser("borrower@example.com");
     const checkout = await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
     const loanPublicId = checkout.results
@@ -663,7 +1097,7 @@ describe("extendLoanAction", () => {
     const member = await seedUser("borrower@example.com");
     const checkout = await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
     const loanPublicId = checkout.results
@@ -694,7 +1128,7 @@ describe("extendLoanAction", () => {
     const member = await seedUser(`late-${crypto.randomUUID()}@example.com`);
     const checkout = await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
     const publicId = checkout.results
@@ -785,7 +1219,7 @@ describe("extendLoanAction", () => {
     const member = await seedUser("ontime@example.com");
     const checkout = await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
     const loanPublicId = checkout.results
@@ -848,7 +1282,7 @@ describe("listMyLoansAction", () => {
     await assignRole(member.id, "role_member");
     await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
 
@@ -876,7 +1310,7 @@ describe("deactivateGearAction with open loan", () => {
     const member = await seedUser("borrower@example.com");
     await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
 
@@ -895,7 +1329,7 @@ describe("deactivateGearAction with open loan", () => {
     const member = await seedUser("borrower@example.com");
     await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
     await checkinLoansAction({
@@ -919,7 +1353,7 @@ describe("getLoanDetailAction", () => {
     const member = await seedUser("borrower@example.com", "Borrower One");
     const checkout = await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
     const loanPublicId = checkout.results
@@ -940,7 +1374,7 @@ describe("listLoans search", () => {
     const member = await seedUser("findme@example.com", "Search Target");
     await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: [{ gearPublicId: gear, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId: gear, durationDays: 7 }],
       notes: null,
     });
 
@@ -1006,14 +1440,16 @@ describe("listLoansAction sort direction", () => {
     const checkout = await checkoutLoansAction({
       memberPublicId: member.publicId,
       items: [
-        { gearPublicId: dueSoon, durationDays: 1 },
-        { gearPublicId: dueLater, durationDays: 30 },
+        { kind: "coded", gearPublicId: dueSoon, durationDays: 1 },
+        { kind: "coded", gearPublicId: dueLater, durationDays: 30 },
       ],
       notes: null,
     });
     const loanFor = new Map(
       checkout.results.flatMap((r) =>
-        r.ok ? [[r.gearPublicId, r.loanPublicId] as const] : [],
+        r.ok && r.kind === "coded"
+          ? [[r.gearPublicId, r.loanPublicId] as const]
+          : [],
       ),
     );
     const soonLoan = loanFor.get(dueSoon);
@@ -1116,7 +1552,11 @@ describe("checkoutLoansAction batch size (#291)", () => {
 
     const result = await checkoutLoansAction({
       memberPublicId: member.publicId,
-      items: pieces.map((gearPublicId) => ({ gearPublicId, durationDays: 7 })),
+      items: pieces.map((gearPublicId) => ({
+        kind: "coded" as const,
+        gearPublicId,
+        durationDays: 7,
+      })),
       notes: null,
     });
 
