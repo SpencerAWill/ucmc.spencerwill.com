@@ -4,8 +4,10 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import type {
   AnySQLiteColumn,
+  IndexColumn,
   SQLiteInsertValue,
   SQLiteTable,
+  SQLiteUpdateSetSource,
 } from "drizzle-orm/sqlite-core";
 
 import { env } from "#/server/cloudflare-env";
@@ -229,11 +231,13 @@ export function notInSubquery(
  * its `assignedAt` is supplied — the case that showed the rows have to
  * be consulted at all.
  *
- * `reservedParams` is anything else the same statement binds.
+ * Assumes the statement binds nothing else. An upsert's `set` must
+ * therefore read `excluded.*` rather than bind JS values — which is what
+ * every upsert here does, and what keeps its size a function of the rows
+ * alone.
  */
 export function rowsPerInsertStatement(
   table: SQLiteTable,
-  reservedParams = 0,
   rows: readonly Record<string, unknown>[] = [],
 ): number {
   const supplied = new Set(
@@ -246,15 +250,7 @@ export function rowsPerInsertStatement(
   const columns = Object.entries(getTableColumns(table)).filter(
     ([key, column]) => !is(column.default, SQLExpression) || supplied.has(key),
   ).length;
-  const perStatement = Math.floor(
-    (D1_MAX_BOUND_PARAMS - reservedParams) / columns,
-  );
-  if (perStatement < 1) {
-    throw new RangeError(
-      `rowsPerInsertStatement: one row of ${columns} columns plus ${reservedParams} reserved parameters exceeds D1's ${D1_MAX_BOUND_PARAMS}.`,
-    );
-  }
-  return perStatement;
+  return Math.floor(D1_MAX_BOUND_PARAMS / columns);
 }
 
 /** `rows` cut into runs of at most `size`. */
@@ -284,12 +280,25 @@ export function insertStatements<TTable extends SQLiteTable>(
     /** Skip rows that collide with an existing key, per statement —
      *  `INSERT … ON CONFLICT DO NOTHING`. */
     readonly onConflictDoNothing?: boolean;
+    /** Upsert, per statement. `set` must read `excluded.*` — a bound JS
+     *  value there would add parameters the sizing doesn't count. */
+    readonly onConflictDoUpdate?: {
+      readonly target: IndexColumn | IndexColumn[];
+      readonly set: SQLiteUpdateSetSource<TTable>;
+    };
   } = {},
 ): BatchStatement[] {
   const db = getDb();
-  return chunkRows(rows, rowsPerInsertStatement(table, 0, rows)).map((part) => {
+  const { onConflictDoNothing, onConflictDoUpdate } = options;
+  return chunkRows(rows, rowsPerInsertStatement(table, rows)).map((part) => {
     const insert = db.insert(table).values(part);
-    return options.onConflictDoNothing ? insert.onConflictDoNothing() : insert;
+    if (onConflictDoUpdate) {
+      return insert.onConflictDoUpdate({
+        target: onConflictDoUpdate.target,
+        set: onConflictDoUpdate.set,
+      });
+    }
+    return onConflictDoNothing ? insert.onConflictDoNothing() : insert;
   });
 }
 
@@ -312,7 +321,7 @@ export async function runBatch(
 export async function insertMany<TTable extends SQLiteTable>(
   table: TTable,
   rows: readonly SQLiteInsertValue<TTable>[],
-  options: { readonly onConflictDoNothing?: boolean } = {},
+  options: Parameters<typeof insertStatements<TTable>>[2] = {},
 ): Promise<void> {
   await runBatch(insertStatements(table, rows, options));
 }

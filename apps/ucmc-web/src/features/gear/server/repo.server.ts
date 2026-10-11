@@ -857,9 +857,19 @@ export async function bulkSetGearItemWhereabouts(input: {
 
 /**
  * Add the given tags to every item in `itemIds`, leaving existing tag
- * assignments untouched. Uses `INSERT OR IGNORE` semantics via
- * Drizzle's `onConflictDoNothing` so duplicate (itemId, tagId) pairs
- * aren't an error — saves the caller from having to dedupe.
+ * assignments untouched. `ON CONFLICT DO NOTHING` means duplicate
+ * (itemId, tagId) pairs aren't an error, which saves the caller from
+ * having to dedupe.
+ *
+ * **One statement, four parameters, at any size.** The cross product is
+ * built inside SQLite from two `json_each` lists rather than in
+ * JavaScript. As rows it is up to 500 items × 50 tags = 25,000, which
+ * even split to fit D1 would be a thousand statements in one batch,
+ * holding the write lock for all of them (#291).
+ *
+ * `WHERE true` resolves a known SQLite parse ambiguity: without it, the
+ * `ON` of `ON CONFLICT` would be read as a join constraint on the
+ * SELECT.
  */
 export async function bulkAddGearItemTags(input: {
   itemIds: string[];
@@ -868,18 +878,14 @@ export async function bulkAddGearItemTags(input: {
 }): Promise<void> {
   if (input.itemIds.length === 0 || input.tagIds.length === 0) return;
   const now = Temporal.Now.instant();
-  const rows = input.itemIds.flatMap((itemId) =>
-    input.tagIds.map((tagId) => ({
-      itemId,
-      tagId,
-      assignedAt: now,
-      assignedBy: input.assignedBy,
-    })),
-  );
-  // A cross product — 500 items × 50 tags — so it's split to fit D1.
-  await insertMany(schema.gearTagAssignments, rows, {
-    onConflictDoNothing: true,
-  });
+  await getDb().run(sql`
+    INSERT INTO ${schema.gearTagAssignments} (item_id, tag_id, assigned_at, assigned_by)
+    SELECT i.value, t.value, ${now.epochMilliseconds}, ${input.assignedBy}
+    FROM json_each(${JSON.stringify(input.itemIds)}) AS i
+    CROSS JOIN json_each(${JSON.stringify(input.tagIds)}) AS t
+    WHERE true
+    ON CONFLICT DO NOTHING
+  `);
 }
 
 /**

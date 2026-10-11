@@ -8,51 +8,36 @@
 import { asc, sql } from "drizzle-orm";
 
 import type { SnapshotRow } from "#/server/cost/snapshot-row";
-import {
-  chunkRows,
-  getDb,
-  rowsPerInsertStatement,
-  runBatch,
-  schema,
-} from "#/server/db";
+import { getDb, insertMany, schema } from "#/server/db";
 
 export async function upsertSnapshots(rows: SnapshotRow[]): Promise<number> {
   if (rows.length === 0) {
     return 0;
   }
-  const db = getDb();
   const capturedAt = Temporal.Now.instant();
   const stamped = rows.map((row) => ({ ...row, capturedAt }));
   // Sized from the table rather than a hand-counted constant: the old
   // `ROWS_PER_STATEMENT = 10` assumed nine bound columns when there were
   // ten, so it sat exactly on D1's 100 and one more column would have
   // broken it (#291). One batch also makes the upsert atomic.
-  await runBatch(
-    chunkRows(
-      stamped,
-      rowsPerInsertStatement(schema.costSnapshots, 0, stamped),
-    ).map((part) =>
-      db
-        .insert(schema.costSnapshots)
-        .values(part)
-        .onConflictDoUpdate({
-          target: [
-            schema.costSnapshots.source,
-            schema.costSnapshots.serviceName,
-            schema.costSnapshots.periodStart,
-          ],
-          set: {
-            quantity: sql`excluded.quantity`,
-            unit: sql`excluded.unit`,
-            costCents: sql`excluded.cost_cents`,
-            currency: sql`excluded.currency`,
-            serviceFamily: sql`excluded.service_family`,
-            periodEnd: sql`excluded.period_end`,
-            capturedAt: sql`excluded.captured_at`,
-          },
-        }),
-    ),
-  );
+  await insertMany(schema.costSnapshots, stamped, {
+    onConflictDoUpdate: {
+      target: [
+        schema.costSnapshots.source,
+        schema.costSnapshots.serviceName,
+        schema.costSnapshots.periodStart,
+      ],
+      set: {
+        quantity: sql`excluded.quantity`,
+        unit: sql`excluded.unit`,
+        costCents: sql`excluded.cost_cents`,
+        currency: sql`excluded.currency`,
+        serviceFamily: sql`excluded.service_family`,
+        periodEnd: sql`excluded.period_end`,
+        capturedAt: sql`excluded.captured_at`,
+      },
+    },
+  });
   return rows.length;
 }
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 
 import { getDb, insertMany, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
@@ -441,6 +441,27 @@ describe("bulk actions at scale (#291)", () => {
     });
 
     expect(result.affected).toBe(150);
+  });
+
+  it("tags the largest legal selection — 500 pieces × 50 tags — in one statement, idempotently", async () => {
+    // 25,000 assignments. Built in JavaScript and split to fit, that was
+    // a thousand statements in one batch; as INSERT … SELECT over two
+    // json_each lists it is one statement binding four parameters.
+    await signInAsManager();
+    const ids = await seedPieces(500);
+    const tags: string[] = [];
+    for (const i of Array.from({ length: 50 }, (_unused, k) => k)) {
+      tags.push(await createTagOk(`max-${i}-${crypto.randomUUID()}`));
+    }
+
+    await bulkAddGearItemTagsAction({ publicIds: ids, tagPublicIds: tags });
+    // A second run collides on every pair and must change nothing.
+    await bulkAddGearItemTagsAction({ publicIds: ids, tagPublicIds: tags });
+
+    const total = (
+      await getDb().select({ n: count() }).from(schema.gearTagAssignments)
+    ).at(0);
+    expect(total?.n).toBe(25_000);
   });
 
   it("tags 40 pieces with 3 tags — a 120-row cross product", async () => {

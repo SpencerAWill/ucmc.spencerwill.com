@@ -13,15 +13,7 @@
  */
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 
-import {
-  chunkRows,
-  getDb,
-  inJsonArray,
-  insertMany,
-  rowsPerInsertStatement,
-  runBatch,
-  schema,
-} from "#/server/db";
+import { getDb, inJsonArray, insertMany, schema } from "#/server/db";
 
 export interface GearAttributeDefRow {
   id: string;
@@ -371,20 +363,15 @@ async function writeValues(
     valueText: w.valueText,
     valueNumber: w.valueNumber,
   }));
-  await runBatch(
-    chunkRows(rows, rowsPerInsertStatement(table, 0, rows)).map((part) =>
-      db
-        .insert(table)
-        .values(part)
-        .onConflictDoUpdate({
-          target: [ownerColumn, defColumn],
-          set: {
-            valueText: sql`excluded.value_text`,
-            valueNumber: sql`excluded.value_number`,
-          },
-        }),
-    ),
-  );
+  await insertMany(table, rows, {
+    onConflictDoUpdate: {
+      target: [ownerColumn, defColumn],
+      set: {
+        valueText: sql`excluded.value_text`,
+        valueNumber: sql`excluded.value_number`,
+      },
+    },
+  });
 }
 
 export function setModelAttributeValues(

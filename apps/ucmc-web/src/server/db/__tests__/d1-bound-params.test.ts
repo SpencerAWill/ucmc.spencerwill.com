@@ -131,16 +131,12 @@ describe("insertMany / insertStatements", () => {
     // 7 columns: id, actor, action, targetUser, targetType, targetId,
     // metadata — the audit row that broke every 15-target bulk action.
     expect(rowsPerInsertStatement(schema.auditLog)).toBe(14);
-    expect(rowsPerInsertStatement(schema.auditLog, 30)).toBe(10);
     // A loan has 18 columns and none default to a SQL expression, so 5
     // rows. Conservative on purpose: D1 actually took 7 of the desk's
     // checkout rows (and refused 8 — why an 8-piece checkout failed),
     // because Drizzle inlines `null` for an omitted column with no
     // default. Counting it anyway costs an extra statement, never a 500.
     expect(rowsPerInsertStatement(schema.gearLoans)).toBe(5);
-    expect(() =>
-      rowsPerInsertStatement(schema.auditLog, D1_MAX_BOUND_PARAMS),
-    ).toThrow(RangeError);
   });
 
   it("counts a SQL-default column as bound once a row supplies it", () => {
@@ -148,7 +144,7 @@ describe("insertMany / insertStatements", () => {
     // only when the value is left out. The bulk tagger supplies it, and
     // counting it as inlined is exactly how that insert overflowed.
     const omitted = rowsPerInsertStatement(schema.gearTagAssignments);
-    const supplied = rowsPerInsertStatement(schema.gearTagAssignments, 0, [
+    const supplied = rowsPerInsertStatement(schema.gearTagAssignments, [
       {
         itemId: "i",
         tagId: "t",
