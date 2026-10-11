@@ -271,6 +271,51 @@ export default [
     },
   },
   /**
+   * #291: no statement may bind a number of parameters that grows with
+   * the data. D1 refuses past 100, and `inArray(col, list)` binds one per
+   * element — the shape behind #259 and the 37 unbounded sites #291's
+   * audit found. A ban on the import, not a review checklist, because the
+   * old shape is what anyone fluent in Drizzle writes by habit.
+   *
+   * The replacements live in `src/server/db/index.ts`: `inJsonArray` /
+   * `notInJsonArray` for a list from the caller (one JSON parameter at any
+   * length), `inSubquery` / `notInSubquery` for a list the database
+   * already holds (typed to reject an array). Drizzle's relational-query
+   * callback (`where: (t, { inArray }) => …`) bypasses an import ban, so
+   * it is restricted by syntax as well.
+   *
+   * The one exemption is the test that pins D1's ceiling, which must
+   * build exactly the statement this rule forbids.
+   */
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/server/db/__tests__/d1-bound-params.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "drizzle-orm",
+              importNames: ["inArray", "notInArray"],
+              message:
+                "Binds one D1 parameter per element (cap 100, #291). Use inJsonArray / notInJsonArray or inSubquery / notInSubquery from #/server/db.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "ObjectPattern > Property[key.name=/^(inArray|notInArray)$/]",
+          message:
+            "Drizzle's relational-query inArray binds one D1 parameter per element (#291). Use inJsonArray from #/server/db.",
+        },
+      ],
+    },
+  },
+  /**
    * Test-file lint. `@tanstack/eslint-config` pulls in neither of these
    * plugins (checked: it brings `@stylistic`, `import-x`, `n` and
    * `typescript-eslint`), so nothing was catching the class of mistake
