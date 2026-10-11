@@ -213,7 +213,7 @@ Counted loans support **partial return**: `quantity_returned` climbs as units co
 
 Officer-only flows gate on `gear:loan` (separate from `gear:manage` so a "gear cave keeper" role can be delegated independently); `/my/gear` is member-self-read on `gear:read` plus an in-action borrower filter.
 
-The **gear-desk Sheet** hosts checkout and check-in behind a tab toggle. An earlier mobile FAB iteration was dropped because the FAB's fixed positioning fought the sidebar's stacking context.
+The **gear-desk Sheet** hosts checkout and check-in behind a compact Check out / Check in tab switch **on the header row beside the title** — it was a full-width tab bar of its own, a whole row for two words on the screen where vertical space matters most. The row reserves `pr-8` for the Sheet's absolutely-positioned close button and wraps the switch under the title rather than colliding, though it fits on one line down to 360px. An earlier mobile FAB iteration was dropped because the FAB's fixed positioning fought the sidebar's stacking context.
 
 Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`, `loan.extended`, `loan.written_off`, `loan.cart_scanned`. Gear-side: `gear.added`, `gear.updated`, `gear.deactivated`, `gear.reactivated`, `gear.code_released`, `gear.tags_changed`, `gear_model.*`. **`gear.retired` / `gear.unretired` remain in the enum for historical rows only** — nothing emits them.
 
