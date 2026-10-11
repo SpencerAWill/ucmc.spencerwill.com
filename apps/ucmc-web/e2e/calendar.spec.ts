@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
@@ -68,7 +70,10 @@ function seedEvent(
   title: string,
   visibility: "public" | "members" = "members",
 ): string {
-  const publicId = `e2e${Date.now().toString(36)}`.slice(0, 12);
+  // Random, not `Date.now()`: tests seed two events back to back, and two
+  // calls inside one millisecond produced the same id and failed on
+  // UNIQUE(events.public_id).
+  const publicId = `e2e${randomUUID().replace(/-/g, "").slice(0, 9)}`;
   const startsAt = Date.now() + 2 * 24 * 60 * 60 * 1000;
   execD1(
     `INSERT INTO events (id, public_id, title, starts_at, ends_at, kind, visibility)
