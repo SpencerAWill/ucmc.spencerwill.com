@@ -109,8 +109,8 @@ export function BarcodeScanner({
 }: {
   /** Fires for EACH detected scan while the scanner is enabled. The
    *  scanner stays live until the officer toggles it off or closes
-   *  the Sheet. A 1.5 s per-code cooldown suppresses duplicate fires
-   *  while a single label sits in the camera's view. */
+   *  the Sheet. A label held in view fires ONCE; the same code fires
+   *  again only after it has been out of view for 1.5 s. */
   onResult: (code: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -203,15 +203,23 @@ export function BarcodeScanner({
         if (flags.cancelled) return;
         const detector = new Ctor({ formats: [...BARCODE_FORMATS] });
 
-        // Persistent-scan loop. Two layers of dedupe:
-        //   1. `lastFired` (this closure) — suppresses same-code
-        //      re-fire within `SAME_CODE_COOLDOWN_MS`, which keeps
-        //      holding-a-label-in-view from firing 30×.
-        //   2. The parent pane's items list already filters duplicate
-        //      publicIds at `addRow`, so a same-code re-fire outside
-        //      the cooldown is also a no-op there.
-        const SAME_CODE_COOLDOWN_MS = 1500;
-        let lastFired: { code: string; at: number } | null = null;
+        // Persistent-scan loop. The detector reports a label on every
+        // frame it's in view — dozens of times a second — and one label
+        // held in front of the camera is one scan, however long it stays
+        // there. So a code fires once, then not again until it has been
+        // OUT of view for `SAME_CODE_GAP_MS`.
+        //
+        // The window slides: `seenAt` is refreshed on every sighting,
+        // not only when the code fires. It used to be measured from the
+        // last fire, so a label held still re-fired every 1.5 s — a
+        // fresh "can't be checked out" toast each time, and for a cart
+        // QR a fresh cart resolve and `loan.cart_scanned` audit row.
+        // Taking the label away and showing it again is still a rescan.
+        const SAME_CODE_GAP_MS = 1500;
+        const lastSeen: { code: string | null; seenAt: number } = {
+          code: null,
+          seenAt: 0,
+        };
 
         // A `detect()` throw is usually transient — the browser rejects
         // on a frame that isn't ready yet — so one failure means nothing
@@ -234,12 +242,12 @@ export function BarcodeScanner({
               const first = results[0]?.rawValue;
               if (first) {
                 const now = performance.now();
-                const isCooldownRepeat =
-                  lastFired !== null &&
-                  lastFired.code === first &&
-                  now - lastFired.at < SAME_CODE_COOLDOWN_MS;
-                if (!isCooldownRepeat) {
-                  lastFired = { code: first, at: now };
+                const stillInView =
+                  lastSeen.code === first &&
+                  now - lastSeen.seenAt < SAME_CODE_GAP_MS;
+                lastSeen.code = first;
+                lastSeen.seenAt = now;
+                if (!stillInView) {
                   // Read through the ref so this closure uses the
                   // latest parent handler without forcing the effect
                   // (and therefore the camera stream) to restart.

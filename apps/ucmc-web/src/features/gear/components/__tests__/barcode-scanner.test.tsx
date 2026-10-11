@@ -111,3 +111,28 @@ describe("BarcodeScanner detect-failure handling", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("BarcodeScanner one label, one scan", () => {
+  it("fires once for a label held in view, and again only after it leaves", async () => {
+    // A detector reports the label on every frame. The clock advances
+    // 200 ms per frame: 40 frames (8 s) in view, 10 frames (2 s) out of
+    // view, then back. Measured from the last FIRE, the old cooldown
+    // re-fired every 1.5 s of that hold — five scans of one label.
+    const clock = { t: 0, frame: 0 };
+    vi.spyOn(performance, "now").mockImplementation(() => clock.t);
+    stubCameraStack(() => {
+      clock.frame += 1;
+      clock.t += 200;
+      const inView = clock.frame <= 40 || clock.frame > 50;
+      return Promise.resolve(inView ? [{ rawValue: "CH93" }] : []);
+    });
+    const onResult = vi.fn();
+
+    render(<BarcodeScanner onResult={onResult} />);
+
+    await waitFor(() => expect(clock.frame).toBeGreaterThan(60), {
+      timeout: 5000,
+    });
+    expect(onResult).toHaveBeenCalledTimes(2);
+  });
+});
