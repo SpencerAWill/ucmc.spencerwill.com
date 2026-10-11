@@ -31,6 +31,40 @@ export function GearLabelSheet({
   labels: GearLabel[];
   format?: BarcodeFormat;
 }) {
+  if (labels.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No printable labels — all selected gear is either retired or has no
+        code.
+      </p>
+    );
+  }
+
+  return (
+    <LabelPrintArea minLabelWidth="2in">
+      {labels.map((label) => (
+        <LabelCard key={label.publicId} label={label} format={format} />
+      ))}
+    </LabelPrintArea>
+  );
+}
+
+/**
+ * The printable grid both label sheets render into. Owns the print
+ * stylesheet, so a second sheet (bin labels for counted stock) reuses
+ * the visibility flip rather than injecting its own copy of it — two
+ * copies of `body * { visibility: hidden }` disagreeing about which
+ * subtree to re-show is exactly what the warning above is about. The
+ * two sheets are never mounted at once: each lives in its own dialog.
+ */
+export function LabelPrintArea({
+  minLabelWidth,
+  children,
+}: {
+  /** CSS length; the grid fits as many columns as this allows. */
+  minLabelWidth: string;
+  children: React.ReactNode;
+}) {
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = `
@@ -60,23 +94,14 @@ export function GearLabelSheet({
     };
   }, []);
 
-  if (labels.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No printable labels — all selected gear is either retired or has no
-        code.
-      </p>
-    );
-  }
-
   return (
     <div
       className="gear-labels-print-area grid gap-2"
-      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(2in, 1fr))" }}
+      style={{
+        gridTemplateColumns: `repeat(auto-fill, minmax(min(${minLabelWidth}, 100%), 1fr))`,
+      }}
     >
-      {labels.map((label) => (
-        <LabelCard key={label.publicId} label={label} format={format} />
-      ))}
+      {children}
     </div>
   );
 }

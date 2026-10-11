@@ -115,6 +115,17 @@ export const memberForLoanByPublicIdQueryKey = (publicId: string) =>
 export const gearCodeSearchQueryKey = (q: string) =>
   ["gear", "loans", "search-gear-code", q] as const;
 
+/** The desk's counted-model search. Under the models prefix because
+ *  each row carries `takeable`, so a counted checkout or return — which
+ *  invalidates that prefix — refreshes the number the officer sees. */
+export const countedDeskSearchQueryKey = (q: string) =>
+  ["gear-models", "desk-search", q] as const;
+
+/** Open counted loans for the check-in pane. Under the loans LIST
+ *  prefix so every checkout and check-in refreshes it. */
+export const openCountedLoanSearchQueryKey = (q: string) =>
+  ["gear", "loans", "list", "open-counted", q] as const;
+
 /** Models are scoped by type in the picker, so the key carries it —
  *  `null` is the unscoped "every model" list. */
 export const GEAR_MODELS_QUERY_KEY = ["gear-models"] as const;

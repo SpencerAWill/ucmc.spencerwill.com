@@ -15,18 +15,20 @@ type Mode = "checkout" | "checkin";
 
 /**
  * Gear-cave action surface — one Sheet that hosts both the checkout
- * and check-in flows, with a tab toggle at the top. Opens from a
+ * and check-in flows, with a compact Check out / Check in switch on the
+ * header row beside the title. Opens from a
  * single always-visible "Gear desk" button in the page header
  * (`GearDeskTrigger`) which adapts responsively — icon-only on narrow
  * widths, icon + label on `sm` and up. An earlier mobile-FAB iteration
  * was dropped because the FAB's fixed positioning fought with the
  * sidebar's stacking context.
  *
- * Selection state lives inside each pane and resets when the Sheet
- * closes; switching modes within the same open session intentionally
- * preserves the pane state on the other side so an officer can
- * jump back and forth (e.g. take three returns, then check out
- * something else) without losing what they typed.
+ * Selection state lives inside each pane and is lost when the pane
+ * unmounts — on close, and on switching modes, since only the active
+ * pane is rendered. (An earlier note here claimed the other side's state
+ * survived a switch; it never did.) Mounting both would keep it, but
+ * would also mount two scan columns: two wedge listeners and, with the
+ * camera on, two streams.
  */
 export function GearDeskSheet({
   open,
@@ -59,21 +61,30 @@ export function GearDeskSheet({
         className="w-full overflow-y-auto px-4 pb-6 sm:max-w-3xl"
       >
         <SheetHeader className="px-0">
-          <SheetTitle>Gear desk</SheetTitle>
+          {/* Title and mode on one row. The mode switch used to be a
+              full-width tab bar of its own under the description — a
+              whole row of the Sheet for two words, on the screen where
+              vertical space matters most. `pr-8` clears the Sheet's
+              close button, which sits absolutely in the top-right
+              corner; `flex-wrap` lets the switch drop under the title
+              rather than collide with it if a phone is narrower still. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pr-8">
+            <SheetTitle>Gear desk</SheetTitle>
+            <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+              <TabsList className="h-8">
+                <TabsTrigger value="checkout" className="px-2.5 text-xs">
+                  Check out
+                </TabsTrigger>
+                <TabsTrigger value="checkin" className="px-2.5 text-xs">
+                  Check in
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
           <SheetDescription>
             Scan or search to check gear in and out at the cave.
           </SheetDescription>
         </SheetHeader>
-        <Tabs
-          value={mode}
-          onValueChange={(v) => setMode(v as Mode)}
-          className="mt-2"
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="checkout">Check out</TabsTrigger>
-            <TabsTrigger value="checkin">Check in</TabsTrigger>
-          </TabsList>
-        </Tabs>
         <div className="mt-4">
           {mode === "checkout" ? (
             <GearDeskCheckoutPane onSuccess={handleSuccess} />

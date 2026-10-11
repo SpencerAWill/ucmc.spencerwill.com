@@ -31,18 +31,32 @@ import {
   getGearItemByPublicId,
   updateGearItemById,
 } from "#/features/gear/server/repo.server";
+import { countedTakeable } from "#/features/gear/lib/counted-stock";
+import type { CountedStockTerms } from "#/features/gear/lib/counted-stock";
+import { liveHeldQuantityForModels } from "#/features/gear/server/holds-repo.server";
+import {
+  getGearModelByPublicId,
+  listStockForModelIds,
+} from "#/features/gear/server/models-repo.server";
 import {
   extendLoanDueAt,
+  getDeskModelByPublicId,
   getItemByCode,
   getLoanByPublicId,
   getActiveHoldForItem,
   getOpenLoanForItem,
+  insertCountedLoanIfAvailable,
   insertLoans,
   listLoans,
   listLoansForMember,
+  listOpenCountedLoans,
   markLoanReturned,
+  openLoanQuantityForModels,
+  recordCountedReturn,
+  writeOffLoanShortfall,
   getApprovedMemberByPublicId,
   searchApprovedMembers,
+  searchCountedModelsForDesk,
   searchItemsByCode,
 } from "#/features/gear/server/loans-repo.server";
 import { parseWeekdayList } from "#/lib/weekdays";
@@ -53,7 +67,9 @@ import type {
   LoanSortKey,
 } from "#/features/gear/lib/loan-sort";
 import type {
+  CountedDeskModelRow,
   GearCodeSearchRow,
+  InsertLoanRow,
   LoanListRow,
   ListLoansOptions,
   ListLoansResult,
@@ -79,6 +95,12 @@ export interface LoanSummary {
    *  loan — "six draws" — and the list surfaces had no way to say so. */
   quantity: number;
   quantityReturned: number;
+  /** Units written off when a counted loan was closed short. */
+  quantityLost: number;
+  /** A quantity of a counted model rather than one coded piece. Explicit
+   *  because the proxies lie: a coded piece that was never tagged also
+   *  has no code. */
+  isCounted: boolean;
   thumbnailKey: string | null;
   typeName: string;
   memberPublicId: string;
@@ -107,6 +129,8 @@ function toSummary(row: LoanListRow): LoanSummary {
     gearName: row.name,
     quantity: row.quantity,
     quantityReturned: row.quantityReturned,
+    quantityLost: row.quantityLost,
+    isCounted: row.isCounted,
     thumbnailKey: row.thumbnailKey,
     typeName: row.typeName,
     memberPublicId: row.memberPublicId,
@@ -123,9 +147,20 @@ function toSummary(row: LoanListRow): LoanSummary {
 
 // ── checkout ────────────────────────────────────────────────────────────
 
+/** One row of a desk batch: a coded piece, or a quantity of a counted
+ *  model. Per-row, so "a harness and six draws" is one checkout. */
+export type CheckoutRowInput =
+  | { kind: "coded"; gearPublicId: string; durationDays: number }
+  | {
+      kind: "counted";
+      modelPublicId: string;
+      quantity: number;
+      durationDays: number;
+    };
+
 export interface CheckoutLoansInput {
   memberPublicId: string;
-  items: Array<{ gearPublicId: string; durationDays: number }>;
+  items: CheckoutRowInput[];
   notes: string | null;
   /** Officer overrides, both `gear:manage`-gated and both audited. A
    *  non-manager passing either is ignored rather than rejected — the
@@ -141,20 +176,101 @@ export type CheckoutSkipReason =
   | "not_serviceable"
   | "already_on_loan"
   | "on_hold"
-  | "member_blocked";
+  | "member_blocked"
+  /** A `ucmc-model:` row naming a model tracked unit by unit. */
+  | "not_counted"
+  /** Fewer serviceable units on the shelf than were asked for, holds
+   *  aside. A hard stop: no override hands out draws that aren't there. */
+  | "insufficient_stock";
 
 export type CheckoutResult =
   | {
       ok: true;
+      kind: "coded";
       gearPublicId: string;
       loanPublicId: string;
       code: string | null;
     }
-  | { ok: false; gearPublicId: string; reason: CheckoutSkipReason };
+  | {
+      ok: true;
+      kind: "counted";
+      modelPublicId: string;
+      loanPublicId: string;
+      quantity: number;
+    }
+  | {
+      ok: false;
+      kind: "coded";
+      gearPublicId: string;
+      reason: CheckoutSkipReason;
+    }
+  | {
+      ok: false;
+      kind: "counted";
+      modelPublicId: string;
+      reason: CheckoutSkipReason;
+      /** Units the desk could have handed out when this row was refused,
+       *  so the message can say "only 4 left" rather than just "no". */
+      available: number | null;
+    };
 
 export interface CheckoutLoansResult {
   results: CheckoutResult[];
 }
+
+function refuseRow(
+  row: CheckoutRowInput,
+  reason: CheckoutSkipReason,
+  available: number | null = null,
+): CheckoutResult {
+  return row.kind === "coded"
+    ? { ok: false, kind: "coded", gearPublicId: row.gearPublicId, reason }
+    : {
+        ok: false,
+        kind: "counted",
+        modelPublicId: row.modelPublicId,
+        reason,
+        available,
+      };
+}
+
+function clampDuration(durationDays: number): number {
+  return Math.min(
+    MAX_LOAN_DURATION_DAYS,
+    Math.max(0, Math.floor(durationDays)),
+  );
+}
+
+/**
+ * Serviceable stock, units outstanding on open loans, and the live held
+ * quantity per counted model — the three terms of `takeable`. Read by
+ * the desk lookups and to explain a refusal; the authoritative check is
+ * the conditional insert, which recomputes them in SQL.
+ */
+async function countedStockTerms(
+  modelIds: string[],
+  now: Temporal.Instant,
+): Promise<Map<string, CountedStockTerms>> {
+  const [stock, onLoan, held] = await Promise.all([
+    listStockForModelIds(modelIds),
+    openLoanQuantityForModels(modelIds),
+    liveHeldQuantityForModels(modelIds, now),
+  ]);
+  return new Map(
+    modelIds.map((id) => [
+      id,
+      {
+        serviceable:
+          stock.get(id)?.find((s) => s.condition === "serviceable")?.quantity ??
+          0,
+        onLoan: onLoan.get(id) ?? 0,
+        held: held.get(id) ?? 0,
+      },
+    ]),
+  );
+}
+
+const NO_STOCK: CountedStockTerms = { serviceable: 0, onLoan: 0, held: 0 };
 
 async function resolveMember(memberPublicId: string): Promise<{
   userId: string;
@@ -171,6 +287,13 @@ async function resolveMember(memberPublicId: string): Promise<{
   // deactivated all fail closed.
   if (row.status !== "approved") return null;
   return { userId: row.id };
+}
+
+/** A row that passed its pre-check, carried to the insert and audit. */
+interface PendingLoan {
+  insert: InsertLoanRow;
+  code: string | null;
+  durationDays: number;
 }
 
 export async function checkoutLoansAction(
@@ -209,62 +332,87 @@ export async function checkoutLoansAction(
   const overrideHolds = input.overrideHolds === true && canOverride;
   if (standing.standing === "blocked" && !overrideStanding) {
     return {
-      results: input.items.map((item) => ({
-        ok: false as const,
-        gearPublicId: item.gearPublicId,
-        reason: "member_blocked" as const,
-      })),
+      results: input.items.map((row) => refuseRow(row, "member_blocked")),
     };
   }
 
   const results: CheckoutResult[] = [];
-  const validRows: Array<{
-    insert: Parameters<typeof insertLoans>[0][number];
-    /** Carried through from the input so the success/skip result keeps
-     *  the caller's original publicId for UI display. */
-    gearPublicId: string;
-    gearId: string;
-    code: string | null;
-    durationDays: number;
-    dueAt: Temporal.Instant;
-  }> = [];
+  const coded: Array<PendingLoan & { gearPublicId: string }> = [];
+  const counted: Array<
+    PendingLoan & {
+      modelPublicId: string;
+      modelId: string;
+      quantity: number;
+    }
+  > = [];
+
+  const pendingInsert = (
+    durationDays: number,
+    subject:
+      { itemId: string; modelId: null } | { itemId: null; modelId: string },
+    quantity: number,
+  ): { insert: InsertLoanRow; durationDays: number } => {
+    const duration = clampDuration(durationDays);
+    return {
+      insert: {
+        id: `gl_${uuidv7()}`,
+        publicId: generatePublicId(),
+        ...subject,
+        quantity,
+        memberUserId: member.userId,
+        checkedOutByUserId: principal.userId,
+        checkedOutAt: now,
+        dueAt: computeDueAt(now, duration),
+        checkoutNotes: input.notes,
+      },
+      durationDays: duration,
+    };
+  };
 
   // Sequential pre-check: small N (typical batch ≤ 10), and we need
-  // per-row resolution outcomes. The bulk insert + audit fan-out
-  // happens after the loop in two D1 round-trips.
-  for (const item of input.items) {
-    const gear = await getGearItemByPublicId(item.gearPublicId);
-    if (!gear) {
-      results.push({
-        ok: false,
-        gearPublicId: item.gearPublicId,
-        reason: "not_found",
+  // per-row resolution outcomes. The coded rows go in as one bulk
+  // insert after the loop; counted rows each take a guarded insert.
+  for (const row of input.items) {
+    if (row.kind === "counted") {
+      const model = await getGearModelByPublicId(row.modelPublicId);
+      if (!model) {
+        results.push(refuseRow(row, "not_found"));
+        continue;
+      }
+      if (model.tracking !== "counted") {
+        results.push(refuseRow(row, "not_counted"));
+        continue;
+      }
+      counted.push({
+        ...pendingInsert(
+          row.durationDays,
+          { itemId: null, modelId: model.id },
+          Math.floor(row.quantity),
+        ),
+        code: null,
+        modelPublicId: row.modelPublicId,
+        modelId: model.id,
+        quantity: Math.floor(row.quantity),
       });
+      continue;
+    }
+
+    const gear = await getGearItemByPublicId(row.gearPublicId);
+    if (!gear) {
+      results.push(refuseRow(row, "not_found"));
       continue;
     }
     if (gear.status !== "active") {
-      results.push({
-        ok: false,
-        gearPublicId: item.gearPublicId,
-        reason: "retired",
-      });
+      results.push(refuseRow(row, "retired"));
       continue;
     }
     if (gear.condition !== "serviceable") {
-      results.push({
-        ok: false,
-        gearPublicId: item.gearPublicId,
-        reason: "not_serviceable",
-      });
+      results.push(refuseRow(row, "not_serviceable"));
       continue;
     }
     const existing = await getOpenLoanForItem(gear.id);
     if (existing) {
-      results.push({
-        ok: false,
-        gearPublicId: item.gearPublicId,
-        reason: "already_on_loan",
-      });
+      results.push(refuseRow(row, "already_on_loan"));
       continue;
     }
     // A live hold blocks the desk the same way it blocks the member —
@@ -273,98 +421,109 @@ export async function checkoutLoansAction(
     if (!overrideHolds) {
       const held = await getActiveHoldForItem(gear.id, now);
       if (held) {
-        results.push({
-          ok: false,
-          gearPublicId: item.gearPublicId,
-          reason: "on_hold",
-        });
+        results.push(refuseRow(row, "on_hold"));
         continue;
       }
     }
-    const duration = Math.min(
-      MAX_LOAN_DURATION_DAYS,
-      Math.max(0, Math.floor(item.durationDays)),
-    );
-    const dueAt = computeDueAt(now, duration);
-    const id = `gl_${uuidv7()}`;
-    const publicId = generatePublicId();
-    validRows.push({
-      insert: {
-        id,
-        publicId,
-        // Coded checkout: one named item, quantity 1. Counted checkout
-        // (a quantity against a model) comes in with the desk's
-        // counted pane and sets `modelId` instead.
-        itemId: gear.id,
-        modelId: null,
-        quantity: 1,
-        memberUserId: member.userId,
-        checkedOutByUserId: principal.userId,
-        checkedOutAt: now,
-        dueAt,
-        checkoutNotes: input.notes,
-      },
-      gearPublicId: item.gearPublicId,
-      gearId: gear.id,
+    coded.push({
+      // Coded checkout: one named item, quantity 1.
+      ...pendingInsert(row.durationDays, { itemId: gear.id, modelId: null }, 1),
       code: gear.code,
-      durationDays: duration,
-      dueAt,
+      gearPublicId: row.gearPublicId,
     });
   }
 
-  if (validRows.length === 0) {
-    return { results };
-  }
+  const landed: PendingLoan[] = [];
+  const landCoded = (row: (typeof coded)[number]) => {
+    landed.push(row);
+    results.push({
+      ok: true,
+      kind: "coded",
+      gearPublicId: row.gearPublicId,
+      loanPublicId: row.insert.publicId,
+      code: row.code,
+    });
+  };
 
   // Try the bulk insert first. The partial unique index is what wins
   // races between two officers checking out the same piece at the same
   // instant — pre-check above is a UX nicety, not authoritative.
-  try {
-    await insertLoans(validRows.map((r) => r.insert));
-    for (const row of validRows) {
-      results.push({
-        ok: true,
-        gearPublicId: row.gearPublicId,
-        loanPublicId: row.insert.publicId,
-        code: row.code,
-      });
-    }
-    await emitCheckoutAudits(principal.userId, member.userId, validRows, {
-      overrideStanding,
-      overrideHolds,
-    });
-    return { results };
-  } catch (err) {
-    if (!isUniqueViolation(err)) throw err;
-  }
+  /** Insert, answering false (rather than throwing) when the partial
+   *  unique index refused it — the one failure the caller handles. */
+  const insertCoded = (rows: InsertLoanRow[]): Promise<boolean> =>
+    insertLoans(rows).then(
+      () => true,
+      (err: unknown) => {
+        if (!isUniqueViolation(err)) throw err;
+        return false;
+      },
+    );
+  const bulkLanded =
+    coded.length > 0 && (await insertCoded(coded.map((r) => r.insert)));
+  if (bulkLanded) coded.forEach(landCoded);
+  const codedRaced = coded.length > 0 && !bulkLanded;
 
   // Slow path (race): the bulk insert failed because at least one
   // piece was checked out by a concurrent officer. Replay row-by-row
   // so the winners still land and the loser is reported as skipped.
-  const survivors: typeof validRows = [];
-  for (const row of validRows) {
-    try {
-      await insertLoans([row.insert]);
-      survivors.push(row);
-      results.push({
-        ok: true,
-        gearPublicId: row.gearPublicId,
-        loanPublicId: row.insert.publicId,
-        code: row.code,
-      });
-    } catch (innerErr) {
-      if (isUniqueViolation(innerErr)) {
-        results.push({
-          ok: false,
-          gearPublicId: row.gearPublicId,
-          reason: "already_on_loan",
-        });
+  if (codedRaced) {
+    for (const row of coded) {
+      if (await insertCoded([row.insert])) {
+        landCoded(row);
         continue;
       }
-      throw innerErr;
+      results.push({
+        ok: false,
+        kind: "coded",
+        gearPublicId: row.gearPublicId,
+        reason: "already_on_loan",
+      });
     }
   }
-  await emitCheckoutAudits(principal.userId, member.userId, survivors, {
+
+  // Counted rows, one guarded insert each. Sequential on purpose: two
+  // rows for different models are independent, but the guard is only
+  // as good as the statement order, and the zod boundary already
+  // refuses two rows for one model.
+  for (const row of counted) {
+    const inserted = await insertCountedLoanIfAvailable(
+      { ...row.insert, modelId: row.modelId },
+      { now, respectHolds: !overrideHolds },
+    );
+    if (inserted) {
+      landed.push(row);
+      results.push({
+        ok: true,
+        kind: "counted",
+        modelPublicId: row.modelPublicId,
+        loanPublicId: row.insert.publicId,
+        quantity: row.quantity,
+      });
+      continue;
+    }
+    // Refused. Read the terms back only to say WHY, and how many there
+    // were: a hold is the officer's to override, an empty shelf is not.
+    // This read can disagree with the statement that just refused (a
+    // return may have landed in between), which costs a message that
+    // is a beat stale — never a wrong loan.
+    const terms =
+      (await countedStockTerms([row.modelId], now)).get(row.modelId) ??
+      NO_STOCK;
+    const free = countedTakeable(terms, { respectHolds: false });
+    const takeable = countedTakeable(terms, { respectHolds: !overrideHolds });
+    results.push({
+      ok: false,
+      kind: "counted",
+      modelPublicId: row.modelPublicId,
+      reason:
+        !overrideHolds && free >= row.quantity
+          ? "on_hold"
+          : "insufficient_stock",
+      available: takeable,
+    });
+  }
+
+  await emitCheckoutAudits(principal.userId, member.userId, landed, {
     overrideStanding,
     overrideHolds,
   });
@@ -374,20 +533,13 @@ export async function checkoutLoansAction(
 async function emitCheckoutAudits(
   actorUserId: string,
   memberUserId: string,
-  rows: Array<{
-    insert: {
-      itemId: string | null;
-      modelId: string | null;
-      dueAt: Temporal.Instant;
-    };
-    code: string | null;
-    durationDays: number;
-  }>,
+  rows: PendingLoan[],
   /** Recorded on every row of the batch. An override is a judgement an
    *  officer made about this checkout, so it belongs on the event the
    *  audit page shows, not only in the desk's memory. */
   overrides: { overrideStanding: boolean; overrideHolds: boolean },
 ): Promise<void> {
+  if (rows.length === 0) return;
   await recordAuditEvents(
     rows.map((r) => ({
       actorUserId,
@@ -396,6 +548,11 @@ async function emitCheckoutAudits(
       targetId: r.insert.itemId ?? r.insert.modelId,
       metadata: {
         memberUserId,
+        // `level` + `quantity` tell a six-draw loan from one harness.
+        // Same vocabulary batch inspections already use, rather than a
+        // second one for the same distinction.
+        level: r.insert.itemId !== null ? "item" : "model",
+        quantity: r.insert.quantity,
         itemId: r.insert.itemId,
         modelId: r.insert.modelId,
         dueAt: r.insert.dueAt.epochMilliseconds,
@@ -411,30 +568,76 @@ async function emitCheckoutAudits(
 
 // ── check-in ────────────────────────────────────────────────────────────
 
+/** One row of a check-in batch: a coded piece by its code, or units of
+ *  an open counted loan. Counted rows name the LOAN, not the model —
+ *  two members can have the same draws out, and "three came back"
+ *  has to land on somebody's loan. */
+export type CheckinRowInput =
+  | {
+      kind: "coded";
+      gearPublicId: string;
+      conditionAtReturn: schema.GearCondition | null;
+      notes: string | null;
+    }
+  | {
+      kind: "counted";
+      loanPublicId: string;
+      /** Units handed back in THIS return, not a running total. */
+      quantity: number;
+      notes: string | null;
+    };
+
 export interface CheckinLoansInput {
-  items: Array<{
-    gearPublicId: string;
-    conditionAtReturn: schema.GearCondition | null;
-    notes: string | null;
-  }>;
+  items: CheckinRowInput[];
 }
 
-export type CheckinSkipReason = "not_found" | "no_open_loan";
+export type CheckinSkipReason =
+  | "not_found"
+  | "no_open_loan"
+  /** A counted row naming a coded loan — the desk resolves those by
+   *  code. */
+  | "not_counted"
+  /** More units than are still out on the loan. */
+  | "exceeds_outstanding";
+
+interface CheckinBorrower {
+  loanPublicId: string;
+  memberPublicId: string;
+  memberFullName: string;
+  overdue: boolean;
+}
 
 export type CheckinResult =
-  | {
+  | ({ ok: true; kind: "coded"; gearPublicId: string } & CheckinBorrower)
+  | ({
       ok: true;
+      kind: "counted";
+      /** Units taken back in this return. */
+      quantity: number;
+      /** Still out after it. Zero means the loan closed. */
+      outstanding: number;
+    } & CheckinBorrower)
+  | {
+      ok: false;
+      kind: "coded";
       gearPublicId: string;
-      loanPublicId: string;
-      memberPublicId: string;
-      memberFullName: string;
-      overdue: boolean;
+      reason: CheckinSkipReason;
     }
-  | { ok: false; gearPublicId: string; reason: CheckinSkipReason };
+  | {
+      ok: false;
+      kind: "counted";
+      loanPublicId: string;
+      reason: CheckinSkipReason;
+      /** Units still out, when the loan exists — lets the desk say "only
+       *  2 are out" for an `exceeds_outstanding`. */
+      outstanding: number | null;
+    };
 
 export interface CheckinLoansResult {
   results: CheckinResult[];
 }
+
+const DAY_MS = 1000 * 60 * 60 * 24;
 
 export async function checkinLoansAction(
   input: CheckinLoansInput,
@@ -446,10 +649,18 @@ export async function checkinLoansAction(
     [];
 
   for (const item of input.items) {
+    if (item.kind === "counted") {
+      const outcome = await checkinCountedRow(item, principal.userId, now);
+      results.push(outcome.result);
+      if (outcome.audit) auditPayloads.push(outcome.audit);
+      continue;
+    }
+
     const gear = await getGearItemByPublicId(item.gearPublicId);
     if (!gear) {
       results.push({
         ok: false,
+        kind: "coded",
         gearPublicId: item.gearPublicId,
         reason: "not_found",
       });
@@ -459,6 +670,7 @@ export async function checkinLoansAction(
     if (!loan) {
       results.push({
         ok: false,
+        kind: "coded",
         gearPublicId: item.gearPublicId,
         reason: "no_open_loan",
       });
@@ -510,9 +722,9 @@ export async function checkinLoansAction(
       .limit(1);
     const memberRow = memberRows.at(0);
 
-    const daysHeldMs =
-      now.epochMilliseconds - loan.checkedOutAt.epochMilliseconds;
-    const daysHeld = Math.round(daysHeldMs / (1000 * 60 * 60 * 24));
+    const daysHeld = Math.round(
+      (now.epochMilliseconds - loan.checkedOutAt.epochMilliseconds) / DAY_MS,
+    );
     const overdue = Temporal.Instant.compare(now, loan.dueAt) > 0;
 
     auditPayloads.push({
@@ -522,6 +734,7 @@ export async function checkinLoansAction(
       targetId: gear.id,
       metadata: {
         memberUserId: loan.memberUserId,
+        level: "item",
         gearId: gear.id,
         code: gear.code,
         conditionAtReturn: item.conditionAtReturn,
@@ -532,6 +745,7 @@ export async function checkinLoansAction(
 
     results.push({
       ok: true,
+      kind: "coded",
       gearPublicId: item.gearPublicId,
       loanPublicId: loan.publicId,
       memberPublicId: memberRow?.publicId ?? "",
@@ -544,6 +758,174 @@ export async function checkinLoansAction(
     await recordAuditEvents(auditPayloads);
   }
   return { results };
+}
+
+/**
+ * One counted row. A short return keeps the loan open for what is
+ * still out; only the last unit closes it. There is deliberately no
+ * condition-at-return here: one condition for six draws says nothing
+ * about which one has the sticky gate, and stock buckets are corrected
+ * by counting the bin (`setGearModelStockAction`), not inferred from a
+ * return.
+ */
+async function checkinCountedRow(
+  item: Extract<CheckinRowInput, { kind: "counted" }>,
+  actorUserId: string,
+  now: Temporal.Instant,
+): Promise<{
+  result: CheckinResult;
+  audit: Parameters<typeof recordAuditEvents>[0][number] | null;
+}> {
+  const refuse = (
+    reason: CheckinSkipReason,
+    outstanding: number | null = null,
+  ) => ({
+    result: {
+      ok: false as const,
+      kind: "counted" as const,
+      loanPublicId: item.loanPublicId,
+      reason,
+      outstanding,
+    },
+    audit: null,
+  });
+
+  const loan = await getLoanByPublicId(item.loanPublicId);
+  if (!loan) return refuse("not_found");
+  if (!loan.isCounted) return refuse("not_counted");
+  if (loan.returnedAt !== null) return refuse("no_open_loan");
+  const units = Math.floor(item.quantity);
+  const outstandingBefore = loan.quantity - loan.quantityReturned;
+  if (units > outstandingBefore) {
+    return refuse("exceeds_outstanding", outstandingBefore);
+  }
+
+  const applied = await recordCountedReturn({
+    id: loan.id,
+    units,
+    now,
+    returnedToUserId: actorUserId,
+    checkinNotes: item.notes,
+  });
+  if (!applied) {
+    // The guard refused what the read above allowed: another return or
+    // a write-off landed in between. Re-read so the desk is told which.
+    const fresh = await getLoanByPublicId(item.loanPublicId);
+    if (!fresh || fresh.returnedAt !== null) return refuse("no_open_loan");
+    return refuse(
+      "exceeds_outstanding",
+      fresh.quantity - fresh.quantityReturned,
+    );
+  }
+
+  const outstanding = applied.quantity - applied.quantityReturned;
+  const overdue = Temporal.Instant.compare(now, loan.dueAt) > 0;
+  return {
+    result: {
+      ok: true,
+      kind: "counted",
+      loanPublicId: loan.publicId,
+      memberPublicId: loan.memberPublicId,
+      memberFullName: loan.memberFullName,
+      overdue,
+      quantity: units,
+      outstanding,
+    },
+    audit: {
+      actorUserId,
+      action: "loan.checked_in",
+      targetType: "gear",
+      targetId: loan.modelId,
+      metadata: {
+        memberUserId: loan.memberUserId,
+        level: "model",
+        loanId: loan.id,
+        modelId: loan.modelId,
+        // This return, the running total, and the loan's size — enough
+        // to read "3 of 6, 1 still out" straight off the audit page
+        // without joining back to the loan.
+        quantityReturned: units,
+        totalReturned: applied.quantityReturned,
+        quantity: applied.quantity,
+        closed: applied.closed,
+        daysHeld: Math.round(
+          (now.epochMilliseconds - loan.checkedOutAt.epochMilliseconds) /
+            DAY_MS,
+        ),
+        overdue,
+      },
+    },
+  };
+}
+
+// ── write-off ───────────────────────────────────────────────────────────
+
+export type WriteOffLoanResult =
+  | { ok: true; quantityLost: number }
+  | {
+      ok: false;
+      reason: "not_found" | "loan_returned" | "not_counted" | "requires_manage";
+    };
+
+/**
+ * Close a counted loan short: what is still out is written into
+ * `quantityLost` and the loan stops counting against the member.
+ *
+ * The lost units also come off the serviceable stock count (see
+ * `writeOffLoanShortfall`) — otherwise `takeable` would hand them out.
+ *
+ * **This is the only way a counted loan closes without every unit back,
+ * and it is a `gear:manage` judgement, with a reason, on the audit
+ * page.** A short return deliberately leaves the loan open, because a
+ * missing draw is far likelier in somebody's pack than lost — and a
+ * write-off also clears the borrower's overdue standing on it, which is
+ * exactly the escape the extend override exists to stop. So it takes
+ * the same shape: resolved against the REAL principal (a `gear:loan`
+ * keeper can't inherit it; emulation can't fake it), reason required.
+ *
+ * Counted only. A coded piece that never came back is a whereabouts
+ * problem (`missing`) on a named unit, which this would erase.
+ */
+export async function writeOffLoanShortfallAction(input: {
+  publicId: string;
+  reason: string;
+}): Promise<WriteOffLoanResult> {
+  const principal = await requireGearLoanManager();
+  if (!principal.permissions.includes("gear:manage")) {
+    return { ok: false, reason: "requires_manage" };
+  }
+  const loan = await getLoanByPublicId(input.publicId);
+  if (!loan) return { ok: false, reason: "not_found" };
+  if (!loan.isCounted) return { ok: false, reason: "not_counted" };
+  if (loan.returnedAt !== null) return { ok: false, reason: "loan_returned" };
+
+  const written = await writeOffLoanShortfall({
+    id: loan.id,
+    modelId: loan.modelId,
+    now: Temporal.Now.instant(),
+    returnedToUserId: principal.userId,
+  });
+  if (!written) return { ok: false, reason: "loan_returned" };
+
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "loan.written_off",
+    targetType: "gear",
+    targetId: loan.modelId,
+    metadata: {
+      memberUserId: loan.memberUserId,
+      loanId: loan.id,
+      modelId: loan.modelId,
+      quantity: loan.quantity,
+      quantityLost: written.quantityLost,
+      // The same units come off serviceable stock in the same
+      // transaction — recorded so the stock history has an entry for
+      // the drop, which no `gear_model.stock_adjusted` row explains.
+      serviceableStockReduced: written.quantityLost,
+      reason: input.reason,
+    },
+  });
+  return { ok: true, quantityLost: written.quantityLost };
 }
 
 // ── extend ──────────────────────────────────────────────────────────────
@@ -846,4 +1228,122 @@ export async function getItemByCodeAction(input: {
 }): Promise<GearLookupRow | null> {
   await requireGearLoanManager();
   return getItemByCode(input.code);
+}
+
+// ── counted stock at the desk ───────────────────────────────────────────
+
+/** A counted model as the desk offers it: identity plus how many can go
+ *  out right now. `held` is surfaced separately so the row can say "4
+ *  available · 6 held for a trip" instead of a bare 4. */
+export interface DeskCountedModel {
+  publicId: string;
+  name: string;
+  typeName: string;
+  imageKey: string | null;
+  /** Serviceable − out on loan − held. What a checkout without an
+   *  override can take. */
+  takeable: number;
+  held: number;
+}
+
+async function withTakeable(
+  rows: CountedDeskModelRow[],
+): Promise<DeskCountedModel[]> {
+  const terms = await countedStockTerms(
+    rows.map((r) => r.modelId),
+    Temporal.Now.instant(),
+  );
+  return rows.map((r) => {
+    const t = terms.get(r.modelId) ?? NO_STOCK;
+    return {
+      publicId: r.publicId,
+      name: r.name,
+      typeName: r.typeName,
+      imageKey: r.imageKey,
+      takeable: countedTakeable(t),
+      held: t.held,
+    };
+  });
+}
+
+export async function searchCountedModelsForDeskAction(input: {
+  q: string;
+}): Promise<DeskCountedModel[]> {
+  await requireGearLoanManager();
+  return withTakeable(await searchCountedModelsForDesk(input.q));
+}
+
+export type DeskModelLookupResult =
+  | { ok: true; model: DeskCountedModel }
+  | { ok: false; reason: "not_found" | "not_counted" };
+
+/** What a scanned `ucmc-model:` bin label resolves to at checkout. */
+export async function getDeskModelAction(input: {
+  publicId: string;
+}): Promise<DeskModelLookupResult> {
+  await requireGearLoanManager();
+  const row = await getDeskModelByPublicId(input.publicId);
+  if (!row) return { ok: false, reason: "not_found" };
+  // A bin label is only ever printed for a counted model, but a model
+  // can flip back to coded after its label went on the bin. Say so
+  // rather than offering a quantity the checkout will refuse.
+  if (row.tracking !== "counted") return { ok: false, reason: "not_counted" };
+  const model = (await withTakeable([row])).at(0);
+  if (!model) return { ok: false, reason: "not_found" };
+  return { ok: true, model };
+}
+
+/** An open counted loan as the check-in pane lists it. */
+export interface DeskCountedLoan {
+  loanPublicId: string;
+  modelPublicId: string;
+  name: string;
+  typeName: string;
+  thumbnailKey: string | null;
+  quantity: number;
+  /** Units still out — what this return can take back at most. */
+  outstanding: number;
+  memberPublicId: string;
+  memberFullName: string;
+  memberAvatarKey: string | null;
+  dueAt: Temporal.Instant;
+}
+
+function toDeskCountedLoan(row: LoanListRow): DeskCountedLoan {
+  return {
+    loanPublicId: row.publicId,
+    modelPublicId: row.modelPublicId,
+    name: row.name,
+    typeName: row.typeName,
+    thumbnailKey: row.thumbnailKey,
+    quantity: row.quantity,
+    outstanding: row.quantity - row.quantityReturned,
+    memberPublicId: row.memberPublicId,
+    memberFullName: row.memberFullName,
+    memberAvatarKey: row.memberAvatarKey,
+    dueAt: row.dueAt,
+  };
+}
+
+/** Free-text search over open counted loans, by model or borrower —
+ *  "draws" or "Riley" both find Riley's six draws. */
+export async function searchOpenCountedLoansAction(input: {
+  q: string;
+}): Promise<DeskCountedLoan[]> {
+  await requireGearLoanManager();
+  if (input.q.trim().length === 0) return [];
+  return (await listOpenCountedLoans({ q: input.q })).map(toDeskCountedLoan);
+}
+
+/** Every open loan of one counted model — what a scanned bin label
+ *  means at check-in: "who has these out?" */
+export async function listOpenCountedLoansForModelAction(input: {
+  modelPublicId: string;
+}): Promise<DeskCountedLoan[]> {
+  await requireGearLoanManager();
+  const model = await getDeskModelByPublicId(input.modelPublicId);
+  if (!model) return [];
+  return (await listOpenCountedLoans({ modelId: model.modelId }, 50)).map(
+    toDeskCountedLoan,
+  );
 }

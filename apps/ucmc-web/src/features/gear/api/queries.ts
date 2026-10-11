@@ -20,8 +20,10 @@ import {
   LOANS_QUERY_KEY,
   MY_CART_QUERY_KEY,
   MY_LOANS_QUERY_KEY,
+  countedDeskSearchQueryKey,
   gearCodeSearchQueryKey,
   gearDetailQueryKey,
+  openCountedLoanSearchQueryKey,
   COUNTED_MODELS_FOR_INSPECTION_QUERY_KEY,
   gearInspectionsQueryKey,
   gearModelInspectionsQueryKey,
@@ -32,6 +34,7 @@ import {
   memberLoanSearchQueryKey,
 } from "#/features/gear/api/query-keys";
 import {
+  getDeskModelFn,
   getLoanDefaultsFn,
   getItemByCodeFn,
   getGearDetailFn,
@@ -54,8 +57,11 @@ import {
   listGearTypesFn,
   listLoansFn,
   listMyLoansFn,
+  listOpenCountedLoansForModelFn,
+  searchCountedModelsForDeskFn,
   searchItemsByCodeFn,
   searchMembersForLoanFn,
+  searchOpenCountedLoansFn,
   suggestCodeForTypeFn,
 } from "#/features/gear/server/gear-fns";
 import type {
@@ -323,6 +329,37 @@ export function gearCodeSearchQueryOptions(q: string) {
     queryFn: () => searchItemsByCodeFn({ data: { q: trimmed } }),
     enabled: trimmed.length > 0,
   } as const;
+}
+
+/** Counted models matching the desk's search text, with `takeable`. */
+export function countedDeskSearchQueryOptions(q: string) {
+  const trimmed = q.trim();
+  return {
+    queryKey: countedDeskSearchQueryKey(trimmed),
+    queryFn: () => searchCountedModelsForDeskFn({ data: { q: trimmed } }),
+    enabled: trimmed.length > 0,
+  } as const;
+}
+
+/** Open counted loans matching the check-in search, by model or borrower. */
+export function openCountedLoanSearchQueryOptions(q: string) {
+  const trimmed = q.trim();
+  return {
+    queryKey: openCountedLoanSearchQueryKey(trimmed),
+    queryFn: () => searchOpenCountedLoansFn({ data: { q: trimmed } }),
+    enabled: trimmed.length > 0,
+  } as const;
+}
+
+/** What a scanned `ucmc-model:` bin label names, for the checkout pane.
+ *  Imperative like `fetchGearByCode`: a scan is an event, not a view. */
+export function fetchDeskModel(publicId: string) {
+  return getDeskModelFn({ data: { publicId } });
+}
+
+/** Who has a scanned bin label's model out, for the check-in pane. */
+export function fetchOpenCountedLoansForModel(publicId: string) {
+  return listOpenCountedLoansForModelFn({ data: { publicId } });
 }
 
 /**

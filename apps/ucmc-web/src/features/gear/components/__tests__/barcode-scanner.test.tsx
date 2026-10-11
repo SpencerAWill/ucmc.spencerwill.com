@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { TooltipProvider } from "#/components/ui/tooltip";
 import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
 
 /**
@@ -17,8 +19,16 @@ import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
 
 const FAILURE_LIMIT = 30;
 
-function stubCameraStack(detect: () => Promise<{ rawValue: string }[]>) {
-  const track = { stop: vi.fn() };
+function stubCameraStack(
+  detect: () => Promise<{ rawValue: string }[]>,
+  options: { torch?: boolean } = {},
+) {
+  const track = {
+    kind: "video",
+    stop: vi.fn(),
+    getCapabilities: () => (options.torch ? { torch: true } : {}),
+    applyConstraints: vi.fn().mockResolvedValue(undefined),
+  };
   const stream = { getTracks: () => [track] } as unknown as MediaStream;
 
   Object.defineProperty(globalThis.navigator, "mediaDevices", {
@@ -52,11 +62,8 @@ function stubCameraStack(detect: () => Promise<{ rawValue: string }[]>) {
   vi.stubGlobal("cancelAnimationFrame", (id: number) => {
     clearTimeout(id);
   });
+  return { track };
 }
-
-beforeEach(() => {
-  window.localStorage.setItem("ucmc:gear-scanner:enabled", "true");
-});
 
 afterEach(() => {
   window.localStorage.clear();
@@ -72,7 +79,9 @@ describe("BarcodeScanner detect-failure handling", () => {
     );
     const onResult = vi.fn();
 
-    render(<BarcodeScanner onResult={onResult} />);
+    render(
+      <BarcodeScanner onResult={onResult} enabled onEnabledChange={() => {}} />,
+    );
 
     await waitFor(
       () => {
@@ -98,7 +107,9 @@ describe("BarcodeScanner detect-failure handling", () => {
     });
     const onResult = vi.fn();
 
-    render(<BarcodeScanner onResult={onResult} />);
+    render(
+      <BarcodeScanner onResult={onResult} enabled onEnabledChange={() => {}} />,
+    );
 
     await waitFor(
       () => expect(onResult).toHaveBeenCalledWith("ucmc-cart:abc"),
@@ -109,5 +120,76 @@ describe("BarcodeScanner detect-failure handling", () => {
     expect(
       screen.queryByText(/Scanner can't read the camera feed/i),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("BarcodeScanner one label, one scan", () => {
+  it("fires once for a label held in view, and again only after it leaves", async () => {
+    // A detector reports the label on every frame. The clock advances
+    // 200 ms per frame: 40 frames (8 s) in view, 10 frames (2 s) out of
+    // view, then back. Measured from the last FIRE, the old cooldown
+    // re-fired every 1.5 s of that hold — five scans of one label.
+    const clock = { t: 0, frame: 0 };
+    vi.spyOn(performance, "now").mockImplementation(() => clock.t);
+    stubCameraStack(() => {
+      clock.frame += 1;
+      clock.t += 200;
+      const inView = clock.frame <= 40 || clock.frame > 50;
+      return Promise.resolve(inView ? [{ rawValue: "CH93" }] : []);
+    });
+    const onResult = vi.fn();
+
+    render(
+      <BarcodeScanner onResult={onResult} enabled onEnabledChange={() => {}} />,
+    );
+
+    await waitFor(() => expect(clock.frame).toBeGreaterThan(60), {
+      timeout: 5000,
+    });
+    expect(onResult).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("BarcodeScanner flashlight", () => {
+  function renderLive() {
+    return render(
+      <TooltipProvider>
+        <BarcodeScanner
+          onResult={() => {}}
+          enabled
+          onEnabledChange={() => {}}
+        />
+      </TooltipProvider>,
+    );
+  }
+
+  it("offers a flashlight when the camera has a torch, and turns it on", async () => {
+    const { track } = stubCameraStack(() => Promise.resolve([]), {
+      torch: true,
+    });
+    renderLive();
+
+    const light = await screen.findByRole("button", { name: "Flashlight" });
+    expect(light).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(light);
+
+    expect(track.applyConstraints).toHaveBeenCalledWith({
+      advanced: [{ torch: true }],
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Flashlight" }),
+      ).toHaveAttribute("aria-pressed", "true"),
+    );
+  });
+
+  it("offers none when the camera reports no torch — iOS, most webcams", async () => {
+    stubCameraStack(() => Promise.resolve([]));
+    renderLive();
+
+    await screen.findByLabelText("Camera viewfinder");
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Flashlight" })).toBeNull(),
+    );
   });
 });

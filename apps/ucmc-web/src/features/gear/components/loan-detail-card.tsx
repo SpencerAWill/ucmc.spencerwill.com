@@ -38,9 +38,14 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
         </LoanSubjectLink>
         <div className="flex-1 space-y-2">
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-10 items-center justify-center rounded border border-primary/30 bg-primary/10 px-3 font-mono text-lg font-semibold text-primary">
-              {loan.code ?? "—"}
-            </span>
+            {/* A counted loan has no code to show, and an empty chip
+                reads as a missing one. A coded piece that is untagged
+                keeps the dash — there, a missing code IS the news. */}
+            {!loan.isCounted ? (
+              <span className="inline-flex h-10 items-center justify-center rounded border border-primary/30 bg-primary/10 px-3 font-mono text-lg font-semibold text-primary">
+                {loan.code ?? "—"}
+              </span>
+            ) : null}
             <div>
               <CardTitle>
                 {loan.quantity > 1 ? `${loan.quantity} × ` : ""}
@@ -72,6 +77,11 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
                 Returned condition: {CONDITION_LABEL[loan.conditionAtReturn]}
               </Badge>
             ) : null}
+            {loan.quantityLost > 0 ? (
+              <Badge variant="destructive">
+                {loan.quantityLost} written off
+              </Badge>
+            ) : null}
           </div>
         </div>
       </CardHeader>
@@ -98,6 +108,17 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
             </dt>
             <dd>{formatDate(loan.dueAt)}</dd>
           </div>
+          {/* A counted loan can come back a few at a time, and an open
+              one with units back is the case an officer is looking at
+              this page to resolve. */}
+          {loan.isCounted ? (
+            <div>
+              <dt className="text-xs text-muted-foreground">Returned</dt>
+              <dd className="tabular-nums">
+                {loan.quantityReturned} of {loan.quantity}
+              </dd>
+            </div>
+          ) : null}
           {loan.checkedOutByName ? (
             <div>
               <dt className="text-xs text-muted-foreground">Issued by</dt>

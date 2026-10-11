@@ -14,7 +14,7 @@
  * Creating still wants a type, because a model hangs off one.
  */
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Boxes, Edit, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Barcode, Boxes, Edit, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -58,7 +58,13 @@ import {
 } from "#/features/gear/components/gear-attribute-fields";
 import type { AttributeFormValues } from "#/features/gear/components/gear-attribute-fields";
 import { GearModelSafetyBadges } from "#/features/gear/components/gear-model-safety-badges";
-import { CONDITION_LABEL, TRACKING_LABEL } from "#/features/gear/lib/labels";
+import { ModelBinLabelPane } from "#/features/gear/components/model-bin-label-pane";
+import { countedTakeable } from "#/features/gear/lib/counted-stock";
+import {
+  CONDITION_LABEL,
+  gearItemName,
+  TRACKING_LABEL,
+} from "#/features/gear/lib/labels";
 import { toDateInputValue } from "#/lib/date-format";
 import {
   GEAR_CONDITION_VALUES,
@@ -74,7 +80,8 @@ type Mode =
   | { kind: "list" }
   | { kind: "create" }
   | { kind: "edit"; model: GearModelSummaryDto }
-  | { kind: "stock"; model: GearModelSummaryDto };
+  | { kind: "stock"; model: GearModelSummaryDto }
+  | { kind: "label"; model: GearModelSummaryDto };
 
 export function GearModelsManageDialog({
   open,
@@ -156,7 +163,9 @@ export function GearModelsManageDialog({
                   ? "New model"
                   : mode.kind === "stock"
                     ? `Stock — ${mode.model.name}`
-                    : `Edit ${mode.model.name}`}
+                    : mode.kind === "label"
+                      ? `Bin label — ${mode.model.name}`
+                      : `Edit ${mode.model.name}`}
             </DialogTitle>
             <DialogDescription>
               The product a piece of gear is — "BD HotForge 12cm". Everything
@@ -191,6 +200,7 @@ export function GearModelsManageDialog({
                 onCreate={() => setMode({ kind: "create" })}
                 onEdit={(model) => setMode({ kind: "edit", model })}
                 onEditStock={(model) => setMode({ kind: "stock", model })}
+                onPrintLabel={(model) => setMode({ kind: "label", model })}
                 onDelete={(model) => {
                   setDeleteError(null);
                   setPendingDelete(model);
@@ -200,6 +210,15 @@ export function GearModelsManageDialog({
           ) : mode.kind === "stock" ? (
             <StockPane
               model={mode.model}
+              onDone={() => setMode({ kind: "list" })}
+            />
+          ) : mode.kind === "label" ? (
+            <ModelBinLabelPane
+              model={{
+                publicId: mode.model.publicId,
+                name: gearItemName(mode.model),
+                typeName: mode.model.type.name,
+              }}
               onDone={() => setMode({ kind: "list" })}
             />
           ) : (
@@ -261,6 +280,7 @@ function ListPane({
   onCreate,
   onEdit,
   onEditStock,
+  onPrintLabel,
   onDelete,
   canCreate,
   scoped,
@@ -270,6 +290,7 @@ function ListPane({
   onCreate: () => void;
   onEdit: (model: GearModelSummaryDto) => void;
   onEditStock: (model: GearModelSummaryDto) => void;
+  onPrintLabel: (model: GearModelSummaryDto) => void;
   onDelete: (model: GearModelSummaryDto) => void;
   /** A new model needs a type to hang off, so creating still wants one
    *  picked even though browsing no longer does. */
@@ -350,19 +371,29 @@ function ListPane({
                   </p>
                 </ItemContent>
                 <ItemActions>
-                  {/* Stock only. Batch inspections live on the
-                   * Inspections worklist, which rides on `gear:inspect`
-                   * — a second door here would be the same log behind
-                   * the stricter grant. */}
+                  {/* Stock and bin label only. Batch inspections live on
+                   * the Inspections worklist, which rides on
+                   * `gear:inspect` — a second door here would be the
+                   * same log behind the stricter grant. */}
                   {model.tracking === "counted" ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEditStock(model)}
-                      aria-label={`Stock for ${model.name}`}
-                    >
-                      <Boxes className="size-4" />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEditStock(model)}
+                        aria-label={`Stock for ${model.name}`}
+                      >
+                        <Boxes className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onPrintLabel(model)}
+                        aria-label={`Bin label for ${model.name}`}
+                      >
+                        <Barcode className="size-4" />
+                      </Button>
+                    </>
                   ) : null}
                   <Button
                     variant="ghost"
@@ -748,7 +779,11 @@ function StockPane({
   const serviceable = allValid
     ? (parsed.find((row) => row.condition === "serviceable")?.quantity ?? 0)
     : 0;
-  const takeable = Math.max(0, serviceable - model.onLoan - model.onHold);
+  const takeable = countedTakeable({
+    serviceable,
+    onLoan: model.onLoan,
+    held: model.onHold,
+  });
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -768,7 +803,7 @@ function StockPane({
           }
           setError(
             result.reason === "below_on_loan"
-              ? `${result.onLoan} ${result.onLoan === 1 ? "unit is" : "units are"} out on loan, so the serviceable count can't go below that. Check those in first, or write them off at check-in.`
+              ? `${result.onLoan} ${result.onLoan === 1 ? "unit is" : "units are"} out on loan, so the serviceable count can't go below that. Check those in first, or write them off from the loan's page.`
               : result.reason === "not_counted"
                 ? "This model tracks its units individually, so its count comes from those pieces."
                 : "That model no longer exists.",

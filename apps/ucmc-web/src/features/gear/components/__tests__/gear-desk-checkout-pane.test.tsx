@@ -5,9 +5,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
+import { MODEL_LABEL_PREFIX } from "#/features/gear/lib/model-label";
 import { WEDGE_SENTINEL } from "#/features/gear/lib/wedge-buffer";
 import { GearDeskCheckoutPane } from "#/features/gear/components/gear-desk-checkout-pane";
-import type { LoanDefaults } from "#/features/gear/server/loans-actions.server";
+import type {
+  DeskCountedModel,
+  LoanDefaults,
+} from "#/features/gear/server/loans-actions.server";
 
 // ── module mocks ────────────────────────────────────────────────────────
 
@@ -21,6 +25,8 @@ const getMemberForLoanFnMock = vi.hoisted(() =>
   })),
 );
 const fetchGearByCodeMock = vi.hoisted(() => vi.fn());
+const fetchDeskModelMock = vi.hoisted(() => vi.fn());
+const toastInfoMock = vi.hoisted(() => vi.fn());
 const toastErrorMock = vi.hoisted(() => vi.fn());
 const toastSuccessMock = vi.hoisted(() => vi.fn());
 const toastWarningMock = vi.hoisted(() => vi.fn());
@@ -30,6 +36,7 @@ vi.mock("sonner", () => ({
     error: toastErrorMock,
     success: toastSuccessMock,
     warning: toastWarningMock,
+    info: toastInfoMock,
   },
 }));
 
@@ -40,6 +47,7 @@ vi.mock("#/features/gear/server/gear-fns", () => ({
 
 vi.mock("#/features/gear/api/queries", () => ({
   fetchGearByCode: fetchGearByCodeMock,
+  fetchDeskModel: fetchDeskModelMock,
   // The pane reads `gear.defaultLoanDays` and `gear.caveOpenDays` for its
   // duration prefill. Neither value matters to any case here, but the
   // factory has to exist or `useQuery` throws before the component
@@ -103,8 +111,16 @@ vi.mock("#/features/gear/components/member-search-combobox", () => ({
 // assigning `.value` on a React-controlled input leaves state stale and
 // the next render puts the character back. An uncontrolled stub would
 // pass either way.
+// Its props are captured so a test can pick a counted model the way the
+// real combobox's "Counted" group would.
+const comboboxProps = vi.hoisted<{
+  current: { onPickCounted: (model: DeskCountedModel) => void } | null;
+}>(() => ({ current: null }));
 vi.mock("#/features/gear/components/gear-code-search-combobox", () => ({
-  GearCodeSearchCombobox: () => {
+  GearCodeSearchCombobox: (props: {
+    onPickCounted: (model: DeskCountedModel) => void;
+  }) => {
+    comboboxProps.current = props;
     const [value, setValue] = React.useState("");
     return (
       <input
@@ -121,6 +137,39 @@ vi.mock("#/features/gear/components/due-date-picker", () => ({
   DueDatePicker: () => <div data-testid="due-picker" />,
 }));
 vi.mock("#/features/gear/components/gear-desk-item-row", () => ({
+  CountedCheckoutItemRow: ({
+    model,
+    quantity,
+    onQuantityChange,
+    onRemove,
+    autoFocus,
+    error,
+  }: {
+    model: { publicId: string; name: string };
+    quantity: number;
+    onQuantityChange: (q: number) => void;
+    onRemove: () => void;
+    autoFocus?: boolean;
+    error?: string;
+  }) => (
+    <tr>
+      <td
+        data-testid={`counted-${model.publicId}`}
+        data-autofocus={String(autoFocus === true)}
+      >
+        <button type="button" onClick={onRemove}>
+          remove {model.publicId}
+        </button>
+        {quantity} × {model.name}
+        <button type="button" onClick={() => onQuantityChange(quantity + 1)}>
+          more {model.publicId}
+        </button>
+        {error ? (
+          <span data-testid={`error-${model.publicId}`}>{error}</span>
+        ) : null}
+      </td>
+    </tr>
+  ),
   CheckoutItemRow: ({
     row,
     error,
@@ -154,11 +203,14 @@ beforeEach(() => {
   resolveCartTokenFnMock.mockReset();
   getMemberForLoanFnMock.mockClear();
   fetchGearByCodeMock.mockReset();
+  fetchDeskModelMock.mockReset();
+  toastInfoMock.mockReset();
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
   toastWarningMock.mockReset();
   checkoutMutateMock.mockReset();
   scannerOnResult.current = null;
+  comboboxProps.current = null;
   viewerPermissions.current = ["gear:loan"];
 });
 
@@ -327,7 +379,7 @@ describe("GearDeskCheckoutPane officer override", () => {
     const onSuccess = checkoutMutateMock.mock.calls[0]?.[1]?.onSuccess;
     act(() => {
       onSuccess({
-        results: [{ ok: false, gearPublicId: "gear_a", reason }],
+        results: [{ ok: false, kind: "coded", gearPublicId: "gear_a", reason }],
       });
     });
     await waitFor(() =>
@@ -370,7 +422,13 @@ describe("GearDeskCheckoutPane officer override", () => {
     expect(checkoutMutateMock).toHaveBeenCalledTimes(2);
     expect(checkoutMutateMock.mock.calls[1]?.[0]).toMatchObject({
       memberPublicId: "u_member_public",
-      items: [{ gearPublicId: "gear_a", durationDays: expect.any(Number) }],
+      items: [
+        {
+          kind: "coded",
+          gearPublicId: "gear_a",
+          durationDays: expect.any(Number),
+        },
+      ],
       overrideHolds: true,
     });
     // Only the flag the refusal called for — a hold override is not a
@@ -666,6 +724,294 @@ describe("GearDeskCheckoutPane keyboard-wedge branch", () => {
     expect(screen.queryByText(/scanned/i)).not.toBeInTheDocument();
     expect(toastErrorMock).toHaveBeenCalledWith(
       "That didn't look like a gear label.",
+    );
+  });
+});
+
+describe("GearDeskCheckoutPane counted rows", () => {
+  const draws: DeskCountedModel = {
+    publicId: "model_draws",
+    name: "BD HotForge 12cm",
+    typeName: "Quickdraw",
+    imageKey: null,
+    takeable: 10,
+    held: 6,
+  };
+
+  /** A member from a cart scan (the only member path the stubbed
+   *  combobox offers) with a harness in the batch, plus the draws. */
+  async function seedMixedBatch(): Promise<void> {
+    resolveCartTokenFnMock.mockResolvedValue({
+      ok: true,
+      cart: {
+        memberPublicId: "u_member_public",
+        memberFullName: "Cart Member",
+        primaryEmail: "member@example.com",
+        items: [
+          {
+            publicId: "gear_a",
+            code: "CR1",
+            typeName: "Harness",
+            thumbnailKey: null,
+            status: "active",
+            condition: "serviceable",
+            hasOpenLoan: false,
+            availability: "loanable",
+            addedAt: 1,
+          },
+        ],
+      },
+    });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    await scannerOnResult.current!(`${CART_TOKEN_PREFIX}token-abc`);
+    await waitFor(() =>
+      expect(screen.getByTestId("row-CR1")).toBeInTheDocument(),
+    );
+    act(() => comboboxProps.current!.onPickCounted(draws));
+    await waitFor(() =>
+      expect(screen.getByTestId("counted-model_draws")).toBeInTheDocument(),
+    );
+  }
+
+  it("submits a mixed batch as one checkout, counting units on the button", async () => {
+    await seedMixedBatch();
+    await userEvent.click(
+      screen.getByRole("button", { name: "more model_draws" }),
+    );
+
+    // 1 harness + 2 draws.
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Check out 3 items$/ }),
+    );
+
+    expect(checkoutMutateMock.mock.calls[0]?.[0]).toMatchObject({
+      items: [
+        { kind: "coded", gearPublicId: "gear_a" },
+        { kind: "counted", modelPublicId: "model_draws", quantity: 2 },
+      ],
+    });
+  });
+
+  it("adds a model once — picking it again keeps one row", async () => {
+    await seedMixedBatch();
+
+    act(() => comboboxProps.current!.onPickCounted(draws));
+
+    expect(screen.getAllByTestId("counted-model_draws")).toHaveLength(1);
+  });
+
+  it("keeps a refused counted row with how many were left", async () => {
+    await seedMixedBatch();
+    await userEvent.click(screen.getByRole("button", { name: /^Check out/ }));
+    const onSuccess = checkoutMutateMock.mock.calls[0]?.[1]?.onSuccess;
+
+    act(() => {
+      onSuccess({
+        results: [
+          {
+            ok: true,
+            kind: "coded",
+            gearPublicId: "gear_a",
+            loanPublicId: "l1",
+            code: "CR1",
+          },
+          {
+            ok: false,
+            kind: "counted",
+            modelPublicId: "model_draws",
+            reason: "insufficient_stock",
+            available: 0,
+          },
+        ],
+      });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("error-model_draws")).toHaveTextContent(
+        "Only 0 on the shelf",
+      ),
+    );
+    expect(screen.queryByTestId("row-CR1")).not.toBeInTheDocument();
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^Checked out 1 piece to Cart Member \(1 skipped\)/,
+      ),
+    );
+  });
+
+  it("overrides a held counted row, naming it by quantity and model", async () => {
+    viewerPermissions.current = ["gear:loan", "gear:manage"];
+    await seedMixedBatch();
+    await userEvent.click(screen.getByRole("button", { name: /^Check out/ }));
+    const onSuccess = checkoutMutateMock.mock.calls[0]?.[1]?.onSuccess;
+    act(() => {
+      onSuccess({
+        results: [
+          {
+            ok: true,
+            kind: "coded",
+            gearPublicId: "gear_a",
+            loanPublicId: "l1",
+            code: "CR1",
+          },
+          {
+            ok: false,
+            kind: "counted",
+            modelPublicId: "model_draws",
+            reason: "on_hold",
+            available: 0,
+          },
+        ],
+      });
+    });
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Override and check out" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("1 × BD HotForge 12cm"),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Override and check out" }),
+    );
+
+    expect(checkoutMutateMock.mock.calls[1]?.[0]).toMatchObject({
+      items: [{ kind: "counted", modelPublicId: "model_draws", quantity: 1 }],
+      overrideHolds: true,
+    });
+  });
+});
+
+describe("GearDeskCheckoutPane bin-label scans", () => {
+  const draws: DeskCountedModel = {
+    publicId: "k3v9x0p2m1aa",
+    name: "BD HotForge 12cm",
+    typeName: "Quickdraw",
+    imageKey: null,
+    takeable: 10,
+    held: 0,
+  };
+
+  it("adds the bin's model at quantity 1 without a code lookup", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: true, model: draws });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    await act(async () => {
+      await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+    });
+
+    expect(fetchDeskModelMock).toHaveBeenCalledWith("k3v9x0p2m1aa");
+    expect(fetchGearByCodeMock).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("counted-k3v9x0p2m1aa")).toHaveTextContent(
+      "1 × BD HotForge 12cm",
+    );
+  });
+
+  it("leaves focus where it was, so the next scan can't land in the quantity", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: true, model: draws });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    const before = document.activeElement;
+
+    await act(async () => {
+      await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+    });
+    await screen.findByTestId("counted-k3v9x0p2m1aa");
+
+    expect(document.activeElement).toBe(before);
+  });
+
+  it("names a model that went back to coded rather than calling it missing", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: false, reason: "not_counted" });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    await act(async () => {
+      await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+    });
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringMatching(/tracked by code/),
+    );
+  });
+
+  it("doesn't add the same bin twice", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: true, model: draws });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    for (let i = 0; i < 2; i += 1) {
+      await act(async () => {
+        await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+      });
+    }
+
+    expect(screen.getAllByTestId("counted-k3v9x0p2m1aa")).toHaveLength(1);
+    expect(toastInfoMock).toHaveBeenCalledWith(
+      expect.stringMatching(/already in this batch/),
+    );
+  });
+});
+
+describe("GearDeskCheckoutPane bin-scan races", () => {
+  const draws: DeskCountedModel = {
+    publicId: "k3v9x0p2m1aa",
+    name: "BD HotForge 12cm",
+    typeName: "Quickdraw",
+    imageKey: null,
+    takeable: 10,
+    held: 0,
+  };
+
+  it("adds one row when the same bin is scanned twice inside a lookup", async () => {
+    // Both lookups are in flight at once, so both scans start from a
+    // render with no row — the duplicate check has to live in the
+    // updater, not only in the handler.
+    const lookup: { release: () => void } = { release: () => {} };
+    const gate = new Promise<void>((resolve) => {
+      lookup.release = resolve;
+    });
+    fetchDeskModelMock.mockImplementation(async () => {
+      await gate;
+      return { ok: true, model: draws };
+    });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    const scans = [
+      scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`),
+      scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`),
+    ];
+    await act(async () => {
+      lookup.release();
+      await Promise.all(scans);
+    });
+
+    expect(screen.getAllByTestId("counted-k3v9x0p2m1aa")).toHaveLength(1);
+  });
+
+  it("doesn't hand an earlier pick's autofocus to a row a scan adds", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: true, model: draws });
+    renderPane();
+    await waitFor(() => expect(comboboxProps.current).not.toBeNull());
+    act(() => comboboxProps.current!.onPickCounted(draws));
+    expect(await screen.findByTestId("counted-k3v9x0p2m1aa")).toHaveAttribute(
+      "data-autofocus",
+      "true",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "remove k3v9x0p2m1aa" }),
+    );
+
+    await act(async () => {
+      await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+    });
+
+    expect(await screen.findByTestId("counted-k3v9x0p2m1aa")).toHaveAttribute(
+      "data-autofocus",
+      "false",
     );
   });
 });

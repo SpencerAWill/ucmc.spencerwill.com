@@ -14,9 +14,9 @@
  * applied as one transaction. The partial unique index
  * `gear_loans_one_active_per_item` is what actually wins races against
  * a concurrent second officer — the action layer's pre-check is just
- * for UX. Counted stock has no such index: it is guarded by an
- * available-quantity read-then-write that can over-lend by one under a
- * true tie, which the cave prefers to taking a lock.
+ * for UX. Counted stock can't use an index — there is no unit to make
+ * unique — so `insertCountedLoanIfAvailable` guards it with a
+ * conditional insert instead.
  */
 import { and, asc, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -364,6 +364,233 @@ export async function openLoanQuantityForModels(
   return map;
 }
 
+// ── counted checkout ───────────────────────────────────────────────────
+
+/**
+ * Units of a counted model the desk could hand out at `now`, as a SQL
+ * scalar: serviceable stock − outstanding on open loans − live holds.
+ *
+ * The same arithmetic `takeable` uses on browse, written a second time
+ * because this copy has to run INSIDE the insert's statement — that is
+ * the whole point of it. The hold window repeats `liveWhere` in
+ * `holds-repo.server.ts` for the same reason; if the two ever disagree
+ * the desk will refuse what browse promised, or the reverse.
+ *
+ * `respectHolds: false` is the officer's `overrideHolds` — the held
+ * quantity stops counting against the request, the stock and loans
+ * still do. An override can push past a hold, never past the shelf.
+ */
+function countedAvailableSql(
+  modelId: string,
+  now: Temporal.Instant,
+  respectHolds: boolean,
+): SQL {
+  const nowMs = now.epochMilliseconds;
+  const serviceable = sql`coalesce((
+    SELECT ${schema.gearStockLevels.quantity} FROM ${schema.gearStockLevels}
+    WHERE ${schema.gearStockLevels.modelId} = ${modelId}
+      AND ${schema.gearStockLevels.condition} = 'serviceable'
+  ), 0)`;
+  const outstanding = sql`coalesce((
+    SELECT sum(${schema.gearLoans.quantity} - ${schema.gearLoans.quantityReturned})
+    FROM ${schema.gearLoans}
+    WHERE ${schema.gearLoans.modelId} = ${modelId}
+      AND ${schema.gearLoans.returnedAt} IS NULL
+  ), 0)`;
+  if (!respectHolds) {
+    return sql`(${serviceable} - ${outstanding})`;
+  }
+  const held = sql`coalesce((
+    SELECT sum(${schema.gearHolds.quantity}) FROM ${schema.gearHolds}
+    WHERE ${schema.gearHolds.modelId} = ${modelId}
+      AND ${schema.gearHolds.releasedAt} IS NULL
+      AND ${schema.gearHolds.startsAt} <= ${nowMs}
+      AND ${schema.gearHolds.endsAt} > ${nowMs}
+  ), 0)`;
+  return sql`(${serviceable} - ${outstanding} - ${held})`;
+}
+
+/**
+ * Insert a counted loan **only if the model still has the units**, in
+ * one statement. Returns false when the guard refused it.
+ *
+ * **This is the race protector for counted stock**, the counterpart of
+ * the partial unique index `gear_loans_one_active_per_item` for coded
+ * pieces. A read-then-write — check `takeable`, then insert — can
+ * over-lend under a true tie: two officers each see six draws left and
+ * each hand out six. `INSERT … SELECT … WHERE available >= quantity`
+ * closes that without a lock, because D1 executes one statement at a
+ * time against a single SQLite writer: the availability subqueries and
+ * the insert are atomic with respect to every other write. The action's
+ * own availability read is UX only — it picks the refusal message.
+ *
+ * Raw SQL because Drizzle's `insert().select()` wants a query builder
+ * projecting every column, and the guard is a scalar comparison rather
+ * than a FROM. The columns not listed take their schema defaults
+ * (`quantity_returned`, `quantity_lost`, `reminder_stage`).
+ */
+export async function insertCountedLoanIfAvailable(
+  row: InsertLoanRow & { modelId: string },
+  options: { now: Temporal.Instant; respectHolds: boolean },
+): Promise<boolean> {
+  const available = countedAvailableSql(
+    row.modelId,
+    options.now,
+    options.respectHolds,
+  );
+  const inserted = await getDb().all<{ id: string }>(sql`
+    INSERT INTO ${schema.gearLoans} (
+      id, public_id, item_id, model_id, quantity, member_user_id,
+      checked_out_by_user_id, checked_out_at, due_at, checkout_notes
+    )
+    SELECT
+      ${row.id}, ${row.publicId}, NULL, ${row.modelId}, ${row.quantity},
+      ${row.memberUserId}, ${row.checkedOutByUserId},
+      ${row.checkedOutAt.epochMilliseconds}, ${row.dueAt.epochMilliseconds},
+      ${row.checkoutNotes}
+    WHERE ${available} >= ${row.quantity}
+    RETURNING id
+  `);
+  return inserted.length > 0;
+}
+
+/** A counted model as the gear desk sees it: what it is, and how many
+ *  can go out. */
+export interface CountedDeskModelRow {
+  modelId: string;
+  publicId: string;
+  name: string;
+  typeName: string;
+  imageKey: string | null;
+}
+
+const COUNTED_DESK_MODEL_COLUMNS = {
+  modelId: schema.gearModels.id,
+  publicId: schema.gearModels.publicId,
+  modelName: schema.gearModels.name,
+  manufacturer: schema.gearModels.manufacturer,
+  typeName: schema.gearTypes.name,
+  imageKey: schema.gearModels.imageKey,
+} as const;
+
+function toCountedDeskModelRow(r: {
+  modelId: string;
+  publicId: string;
+  modelName: string;
+  manufacturer: string | null;
+  typeName: string;
+  imageKey: string | null;
+}): CountedDeskModelRow {
+  return {
+    modelId: r.modelId,
+    publicId: r.publicId,
+    name: gearItemName({ manufacturer: r.manufacturer, name: r.modelName }),
+    typeName: r.typeName,
+    imageKey: r.imageKey,
+  };
+}
+
+/**
+ * Counted models whose manufacturer or name contains `q`, for the
+ * desk's combobox. Counted only: a coded model is reached through its
+ * pieces' codes, and offering it here would invite a quantity loan the
+ * action refuses.
+ */
+export async function searchCountedModelsForDesk(
+  q: string,
+  limit = 8,
+): Promise<CountedDeskModelRow[]> {
+  const trimmed = q.trim();
+  if (trimmed.length === 0) return [];
+  const rows = await getDb()
+    .select(COUNTED_DESK_MODEL_COLUMNS)
+    .from(schema.gearModels)
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .where(
+      and(
+        eq(schema.gearModels.tracking, "counted"),
+        searchMatches(
+          schema.gearModels.id,
+          GEAR_MODEL_SEARCH,
+          "model_id",
+          trimmed,
+        ),
+      ),
+    )
+    .orderBy(asc(schema.gearModels.name))
+    .limit(limit);
+  return rows.map(toCountedDeskModelRow);
+}
+
+/** Exact lookup behind a scanned `ucmc-model:` bin label. Returns the
+ *  model whatever its tracking, so the caller can say "that's a coded
+ *  model" rather than "not found". */
+export async function getDeskModelByPublicId(
+  publicId: string,
+): Promise<(CountedDeskModelRow & { tracking: schema.GearTracking }) | null> {
+  const rows = await getDb()
+    .select({
+      ...COUNTED_DESK_MODEL_COLUMNS,
+      tracking: schema.gearModels.tracking,
+    })
+    .from(schema.gearModels)
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .where(eq(schema.gearModels.publicId, publicId))
+    .limit(1);
+  const r = rows.at(0);
+  return r ? { ...toCountedDeskModelRow(r), tracking: r.tracking } : null;
+}
+
+/**
+ * Open counted loans, for the check-in pane: either every open loan of
+ * one model (a scanned bin label — "who has these draws?") or those
+ * matching free text on the model or the borrower. Soonest-due first,
+ * so a member with two loans of the same draws hands back the one
+ * that goes overdue first.
+ */
+export async function listOpenCountedLoans(
+  filter: { modelId: string } | { q: string },
+  limit = 10,
+): Promise<LoanListRow[]> {
+  const narrow =
+    "modelId" in filter
+      ? eq(schema.gearLoans.modelId, filter.modelId)
+      : loanSearchWhere(filter.q.trim());
+  const rows = await getDb()
+    .select(LOAN_COLUMNS)
+    .from(schema.gearLoans)
+    .leftJoin(
+      schema.gearItems,
+      eq(schema.gearItems.id, schema.gearLoans.itemId),
+    )
+    .innerJoin(schema.gearModels, MODEL_VIA_LOAN_OR_ITEM)
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.gearLoans.memberUserId))
+    .innerJoin(
+      schema.profiles,
+      eq(schema.profiles.userId, schema.gearLoans.memberUserId),
+    )
+    .where(
+      and(
+        isNotNull(schema.gearLoans.modelId),
+        isNull(schema.gearLoans.returnedAt),
+        narrow,
+      ),
+    )
+    .orderBy(asc(schema.gearLoans.dueAt))
+    .limit(limit);
+  return rows.map(toLoanRow);
+}
+
 export async function getLoanByPublicId(
   publicId: string,
 ): Promise<LoanListRow | null> {
@@ -537,19 +764,135 @@ export async function markLoanReturned(input: {
 }
 
 /**
- * Partial return on a counted loan: some draws come back, the loan stays
- * open for the rest. Leaves `returnedAt` null on purpose — the loan is
- * closed by `markLoanReturned` when the last unit lands or an officer
- * writes off the shortfall.
+ * Units of a counted loan coming back. Closes the loan when the last
+ * one lands; otherwise leaves it open — and overdue-able — for the
+ * rest. Returns null when the guard refused it: the loan was closed,
+ * wasn't counted, or `units` is more than is still out.
+ *
+ * **An increment in one guarded statement, not a read-modify-write.**
+ * Two officers each taking three draws back from the same loan would
+ * otherwise both read `quantityReturned = 0` and both write 3, losing a
+ * return and leaving the member holding draws they handed in. SQLite
+ * evaluates every SET expression against the row as it was before the
+ * update, so the CASEs all see the old `quantity_returned`.
+ *
+ * Never writes `quantityLost`. A short return is not a loss — "five of
+ * six came back" is far likelier a sixth still in somebody's pack than
+ * a write-off — so the loan stays open until the draw turns up or an
+ * officer writes it off (`writeOffLoanShortfall`). That is the same
+ * call sweeps make: a shortfall is reported, the loss is somebody's
+ * decision.
  */
-export async function recordPartialReturn(input: {
+export async function recordCountedReturn(input: {
   id: string;
+  units: number;
+  now: Temporal.Instant;
+  returnedToUserId: string;
+  /** Replaces the loan's check-in notes only when given — a later
+   *  partial return with nothing to say keeps the earlier note. */
+  checkinNotes: string | null;
+}): Promise<{
+  quantity: number;
   quantityReturned: number;
-}): Promise<void> {
-  await getDb()
+  closed: boolean;
+} | null> {
+  const nowMs = input.now.epochMilliseconds;
+  const completes = sql`${schema.gearLoans.quantityReturned} + ${input.units} = ${schema.gearLoans.quantity}`;
+  const rows = await getDb()
     .update(schema.gearLoans)
-    .set({ quantityReturned: input.quantityReturned })
-    .where(eq(schema.gearLoans.id, input.id));
+    .set({
+      quantityReturned: sql`${schema.gearLoans.quantityReturned} + ${input.units}`,
+      returnedAt: sql`CASE WHEN ${completes} THEN ${nowMs} ELSE NULL END`,
+      returnedToUserId: sql`CASE WHEN ${completes} THEN ${input.returnedToUserId} ELSE ${schema.gearLoans.returnedToUserId} END`,
+      checkinNotes: sql`coalesce(${input.checkinNotes}, ${schema.gearLoans.checkinNotes})`,
+    })
+    .where(
+      and(
+        eq(schema.gearLoans.id, input.id),
+        isNull(schema.gearLoans.returnedAt),
+        isNotNull(schema.gearLoans.modelId),
+        sql`${schema.gearLoans.quantityReturned} + ${input.units} <= ${schema.gearLoans.quantity}`,
+      ),
+    )
+    .returning({
+      quantity: schema.gearLoans.quantity,
+      quantityReturned: schema.gearLoans.quantityReturned,
+      returnedAt: schema.gearLoans.returnedAt,
+    });
+  const row = rows.at(0);
+  if (!row) return null;
+  return {
+    quantity: row.quantity,
+    quantityReturned: row.quantityReturned,
+    closed: row.returnedAt !== null,
+  };
+}
+
+/**
+ * Close a counted loan short, writing what is still out into
+ * `quantityLost` **and taking the same units off the serviceable shelf
+ * count**. Returns the units written off, or null when the loan was
+ * already closed or isn't counted.
+ *
+ * The stock half is not optional. `gear_stock_levels` counts every unit
+ * the club owns, the ones out with members included, and `takeable` is
+ * serviceable minus what is out. Closing the loan alone stops those
+ * units counting as "out" while leaving them in "owned" — so the desk
+ * would start offering draws that are at the bottom of a river. Loans
+ * only ever draw from the serviceable bucket, so that is the one that
+ * shrinks.
+ *
+ * One D1 batch, which is a transaction: the stock decrement reads the
+ * loan's outstanding units BEFORE the close, and evaluates to zero if
+ * the loan is already closed, so a return or second write-off landing
+ * at the same moment can't double-count. `max(0, …)` is belt and braces
+ * — the stock editor's `below_on_loan` refusal already keeps
+ * serviceable at or above what is out.
+ */
+export async function writeOffLoanShortfall(input: {
+  id: string;
+  modelId: string;
+  now: Temporal.Instant;
+  returnedToUserId: string;
+}): Promise<{ quantityLost: number } | null> {
+  const db = getDb();
+  const outstandingIfOpen = sql`coalesce((
+    SELECT ${schema.gearLoans.quantity} - ${schema.gearLoans.quantityReturned}
+    FROM ${schema.gearLoans}
+    WHERE ${schema.gearLoans.id} = ${input.id}
+      AND ${schema.gearLoans.returnedAt} IS NULL
+      AND ${schema.gearLoans.modelId} IS NOT NULL
+  ), 0)`;
+  const [, closed] = await db.batch([
+    db
+      .update(schema.gearStockLevels)
+      .set({
+        quantity: sql`max(0, ${schema.gearStockLevels.quantity} - ${outstandingIfOpen})`,
+        updatedAt: input.now,
+      })
+      .where(
+        and(
+          eq(schema.gearStockLevels.modelId, input.modelId),
+          eq(schema.gearStockLevels.condition, "serviceable"),
+        ),
+      ),
+    db
+      .update(schema.gearLoans)
+      .set({
+        returnedAt: input.now,
+        returnedToUserId: input.returnedToUserId,
+        quantityLost: sql`${schema.gearLoans.quantity} - ${schema.gearLoans.quantityReturned}`,
+      })
+      .where(
+        and(
+          eq(schema.gearLoans.id, input.id),
+          isNull(schema.gearLoans.returnedAt),
+          isNotNull(schema.gearLoans.modelId),
+        ),
+      )
+      .returning({ quantityLost: schema.gearLoans.quantityLost }),
+  ]);
+  return closed.at(0) ?? null;
 }
 
 export async function extendLoanDueAt(input: {
@@ -690,6 +1033,7 @@ export async function listOpenLoansForReminders(): Promise<
       modelName: schema.gearModels.name,
       manufacturer: schema.gearModels.manufacturer,
       quantity: schema.gearLoans.quantity,
+      quantityReturned: schema.gearLoans.quantityReturned,
       itemId: schema.gearLoans.itemId,
     })
     .from(schema.gearLoans)
@@ -733,7 +1077,9 @@ export async function listOpenLoansForReminders(): Promise<
     // because "six draws" IS the loan and there is no unit to point at.
     const gearLabel =
       r.itemId === null
-        ? `${r.quantity} x ${product}`
+        ? // What is still out, not what was lent: after "five of six
+          // came back" the email must ask for one draw, not six.
+          `${r.quantity - r.quantityReturned} x ${product}`
         : r.code
           ? `${product} (${r.code})`
           : product;

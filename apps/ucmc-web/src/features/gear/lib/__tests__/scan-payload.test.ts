@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
 import {
+  MODEL_LABEL_PREFIX,
+  modelLabelPayload,
+} from "#/features/gear/lib/model-label";
+import {
   isForeignSymbology,
   parseScanPayload,
 } from "#/features/gear/lib/scan-payload";
@@ -23,6 +27,29 @@ describe("parseScanPayload", () => {
       token: TOKEN,
       symbology: null,
     });
+  });
+
+  it("reads a bin label by its prefix, round-tripping what the printer encodes", () => {
+    expect(parseScanPayload(modelLabelPayload("k3v9x0p2m1aa"))).toEqual({
+      kind: "model",
+      modelPublicId: "k3v9x0p2m1aa",
+      symbology: null,
+    });
+  });
+
+  it("reads a bin label off a CODE128 scan with its AIM identifier", () => {
+    expect(parseScanPayload(`]C0${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`)).toEqual({
+      kind: "model",
+      modelPublicId: "k3v9x0p2m1aa",
+      symbology: "C0",
+    });
+  });
+
+  it("refuses a bin-label prefix with nothing usable after it", () => {
+    // A mangled label, not a code that happens to start "ucmc-model:" —
+    // treating it as one would round-trip a lookup that can't match.
+    expect(parseScanPayload(MODEL_LABEL_PREFIX)).toBeNull();
+    expect(parseScanPayload(`${MODEL_LABEL_PREFIX}ab cd`)).toBeNull();
   });
 
   it("accepts a three-character code", () => {

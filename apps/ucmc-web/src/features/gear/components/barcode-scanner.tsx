@@ -1,15 +1,44 @@
-import { Camera, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-
-import { Label } from "#/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "#/components/ui/select";
-import { Switch } from "#/components/ui/switch";
+  Camera,
+  Flashlight,
+  FlashlightOff,
+  Loader2,
+  SwitchCamera,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "#/components/ui/tooltip";
+import { VIEWFINDER_CONTROL_CLASS } from "#/features/gear/components/viewfinder-control";
+import { Toggle } from "#/components/ui/toggle";
+import { cn } from "#/lib/utils";
+
+/**
+ * `torch` is a real constraint on a camera track (Image Capture spec)
+ * but missing from TypeScript's DOM lib. Android Chrome supports it;
+ * iOS Safari and desktop webcams report no such capability, which is
+ * why the flashlight control only renders when the track says so.
+ */
+interface TorchCapabilities extends MediaTrackCapabilities {
+  torch?: boolean;
+}
+
+function supportsTorch(track: MediaStreamTrack | undefined): boolean {
+  if (!track || typeof track.getCapabilities !== "function") return false;
+  return (track.getCapabilities() as TorchCapabilities).torch === true;
+}
 
 /**
  * Inline camera-based barcode scanner. Designed to live directly in
@@ -55,9 +84,10 @@ import { Switch } from "#/components/ui/switch";
  *
  * Camera picker: laptops at the gear cave commonly attach a USB
  * camera for scanning while the built-in webcam stays for video
- * calls. After permission is granted (which exposes labels) the
- * `Select` lets the officer pick. The choice persists across sessions
- * via localStorage.
+ * calls. After permission is granted (which exposes labels) a
+ * "Switch camera" icon appears in the viewfinder's top-left stack and
+ * opens a menu of cameras — only while the camera is on and there's
+ * more than one. The choice persists across sessions via localStorage.
  */
 
 /** Format whitelist matches what our label printer emits (CODE128) plus
@@ -66,7 +96,6 @@ import { Switch } from "#/components/ui/switch";
 const BARCODE_FORMATS = ["code_128", "qr_code"] as const;
 
 const SELECTED_CAMERA_KEY = "ucmc:gear-scanner:camera";
-const SCANNER_ENABLED_KEY = "ucmc:gear-scanner:enabled";
 
 // Minimal typings for the BarcodeDetector contract — same shape across
 // the native API and the ponyfill, so one set of types covers both.
@@ -106,25 +135,36 @@ async function loadBarcodeDetector(): Promise<BarcodeDetectorCtor> {
 
 export function BarcodeScanner({
   onResult,
+  enabled,
+  onEnabledChange,
+  overlayLeft,
+  overlayRight,
 }: {
   /** Fires for EACH detected scan while the scanner is enabled. The
    *  scanner stays live until the officer toggles it off or closes
-   *  the Sheet. A 1.5 s per-code cooldown suppresses duplicate fires
-   *  while a single label sits in the camera's view. */
+   *  the Sheet. A label held in view fires ONCE; the same code fires
+   *  again only after it has been out of view for 1.5 s. */
   onResult: (code: string) => void;
+  /** Controlled by the parent, whose switch row sits beside the
+   *  handheld scanner's — two inputs, one row. The viewfinder's own
+   *  "tap to start" and a denied permission both report back through
+   *  `onEnabledChange`. */
+  enabled: boolean;
+  onEnabledChange: (next: boolean) => void;
+  /** Controls floated over the viewfinder's top corners. Rendered as
+   *  siblings of the "tap to start" button, never inside it, so a click
+   *  on one doesn't also start the camera. */
+  overlayLeft?: ReactNode;
+  overlayRight?: ReactNode;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // Enabled flag: persisted in localStorage so a returning officer
-  // auto-starts where they left off. SSR-safe initial-state callback.
-  const [enabled, setEnabled] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(SCANNER_ENABLED_KEY) === "true";
-  });
   const [error, setError] = useState<string | null>(null);
   const [streamReady, setStreamReady] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
     () => {
@@ -142,6 +182,27 @@ export function BarcodeScanner({
       streamRef.current = null;
     }
     setStreamReady(false);
+    // A stopped track takes its torch with it; the state follows, so a
+    // restarted (or switched) camera never claims a light that's off.
+    setTorchSupported(false);
+    setTorchOn(false);
+  }, []);
+
+  const setTorch = useCallback((next: boolean) => {
+    const track = streamRef.current
+      ?.getTracks()
+      .find((t) => t.kind === "video");
+    if (!track) return;
+    // `advanced` is how a non-standard constraint is requested without
+    // the whole call failing on a browser that doesn't know it.
+    void track
+      .applyConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet],
+      })
+      .then(() => setTorchOn(next))
+      .catch(() => {
+        setTorchOn(false);
+      });
   }, []);
 
   // Capture `onResult` in a ref so the camera-startup effect doesn't
@@ -154,6 +215,12 @@ export function BarcodeScanner({
   useEffect(() => {
     onResultRef.current = onResult;
   }, [onResult]);
+  // Same reasoning: the camera effect reports a denied permission
+  // through this, and must not restart when its identity changes.
+  const onEnabledChangeRef = useRef(onEnabledChange);
+  useEffect(() => {
+    onEnabledChangeRef.current = onEnabledChange;
+  }, [onEnabledChange]);
 
   useEffect(() => {
     if (!enabled) {
@@ -188,6 +255,9 @@ export function BarcodeScanner({
         video.srcObject = stream;
         await video.play();
         setStreamReady(true);
+        setTorchSupported(
+          supportsTorch(stream.getTracks().find((t) => t.kind === "video")),
+        );
 
         // Enumerate AFTER getting a stream — labels are only exposed
         // once camera permission has been granted at least once for
@@ -203,15 +273,23 @@ export function BarcodeScanner({
         if (flags.cancelled) return;
         const detector = new Ctor({ formats: [...BARCODE_FORMATS] });
 
-        // Persistent-scan loop. Two layers of dedupe:
-        //   1. `lastFired` (this closure) — suppresses same-code
-        //      re-fire within `SAME_CODE_COOLDOWN_MS`, which keeps
-        //      holding-a-label-in-view from firing 30×.
-        //   2. The parent pane's items list already filters duplicate
-        //      publicIds at `addRow`, so a same-code re-fire outside
-        //      the cooldown is also a no-op there.
-        const SAME_CODE_COOLDOWN_MS = 1500;
-        let lastFired: { code: string; at: number } | null = null;
+        // Persistent-scan loop. The detector reports a label on every
+        // frame it's in view — dozens of times a second — and one label
+        // held in front of the camera is one scan, however long it stays
+        // there. So a code fires once, then not again until it has been
+        // OUT of view for `SAME_CODE_GAP_MS`.
+        //
+        // The window slides: `seenAt` is refreshed on every sighting,
+        // not only when the code fires. It used to be measured from the
+        // last fire, so a label held still re-fired every 1.5 s — a
+        // fresh "can't be checked out" toast each time, and for a cart
+        // QR a fresh cart resolve and `loan.cart_scanned` audit row.
+        // Taking the label away and showing it again is still a rescan.
+        const SAME_CODE_GAP_MS = 1500;
+        const lastSeen: { code: string | null; seenAt: number } = {
+          code: null,
+          seenAt: 0,
+        };
 
         // A `detect()` throw is usually transient — the browser rejects
         // on a frame that isn't ready yet — so one failure means nothing
@@ -234,12 +312,12 @@ export function BarcodeScanner({
               const first = results[0]?.rawValue;
               if (first) {
                 const now = performance.now();
-                const isCooldownRepeat =
-                  lastFired !== null &&
-                  lastFired.code === first &&
-                  now - lastFired.at < SAME_CODE_COOLDOWN_MS;
-                if (!isCooldownRepeat) {
-                  lastFired = { code: first, at: now };
+                const stillInView =
+                  lastSeen.code === first &&
+                  now - lastSeen.seenAt < SAME_CODE_GAP_MS;
+                lastSeen.code = first;
+                lastSeen.seenAt = now;
+                if (!stillInView) {
                   // Read through the ref so this closure uses the
                   // latest parent handler without forcing the effect
                   // (and therefore the camera stream) to restart.
@@ -269,8 +347,7 @@ export function BarcodeScanner({
           setError("Camera permission denied.");
           // If permission was denied, flip the toggle off so the next
           // open doesn't auto-retry and re-trigger the same error.
-          setEnabled(false);
-          window.localStorage.setItem(SCANNER_ENABLED_KEY, "false");
+          onEnabledChangeRef.current(false);
         } else if (err instanceof Error && err.name === "NotFoundError") {
           setError("No camera found on this device.");
         } else if (
@@ -305,11 +382,6 @@ export function BarcodeScanner({
     // time the parent re-renders.
   }, [enabled, selectedDeviceId, stopStream]);
 
-  const onToggle = (next: boolean) => {
-    setEnabled(next);
-    window.localStorage.setItem(SCANNER_ENABLED_KEY, String(next));
-  };
-
   const onDeviceChange = (id: string) => {
     setSelectedDeviceId(id);
     window.localStorage.setItem(SELECTED_CAMERA_KEY, id);
@@ -325,11 +397,11 @@ export function BarcodeScanner({
         {!enabled ? (
           <button
             type="button"
-            onClick={() => onToggle(true)}
+            onClick={() => onEnabledChange(true)}
             className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white/80 transition-colors hover:bg-neutral-900"
           >
             <Camera className="size-8 opacity-60" />
-            <p>Tap to start the scanner</p>
+            <p>Tap to start the camera</p>
             <p className="text-xs text-white/50">
               Hold a gear label in view to capture
             </p>
@@ -351,39 +423,122 @@ export function BarcodeScanner({
               <div className="absolute inset-0 flex items-center justify-center text-white">
                 <Loader2 className="size-6 animate-spin" />
               </div>
-            ) : null}
+            ) : (
+              <AimingFrame />
+            )}
           </>
         )}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Switch
-            id="scanner-toggle"
-            checked={enabled}
-            onCheckedChange={onToggle}
-          />
-          <Label htmlFor="scanner-toggle" className="text-sm">
-            Scanner
-          </Label>
-        </div>
-        {enabled && devices.length > 1 ? (
-          <Select
-            value={selectedDeviceId ?? devices[0].deviceId}
-            onValueChange={onDeviceChange}
-          >
-            <SelectTrigger className="ml-auto h-8 w-auto gap-1.5 px-2 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {devices.map((d, i) => (
-                <SelectItem key={d.deviceId} value={d.deviceId}>
-                  {d.label || `Camera ${i + 1}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {overlayLeft || (enabled && (devices.length > 1 || torchSupported)) ? (
+          <div className="absolute top-2 left-2 z-10 flex flex-col gap-1.5">
+            {overlayLeft}
+            {/* The flashlight, only when the running camera reports a
+                torch — Android Chrome does, iOS Safari and most laptop
+                webcams don't. Off on every start: a light left on is a
+                flat battery. */}
+            {enabled && torchSupported ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Toggle
+                    size="sm"
+                    pressed={torchOn}
+                    onPressedChange={setTorch}
+                    aria-label="Flashlight"
+                    className={VIEWFINDER_CONTROL_CLASS}
+                  >
+                    {torchOn ? <Flashlight /> : <FlashlightOff />}
+                  </Toggle>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {torchOn ? "Flashlight on" : "Flashlight off"}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            {/* Last in the stack, so the controls above don't shift when
+                it appears. Only when there's a choice to make: one
+                camera, or the camera off, and it's absent. */}
+            {enabled && devices.length > 1 ? (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger
+                      aria-label="Switch camera"
+                      className={cn(VIEWFINDER_CONTROL_CLASS)}
+                    >
+                      <SwitchCamera />
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Switch camera</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Camera</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={selectedDeviceId ?? devices[0].deviceId}
+                    onValueChange={onDeviceChange}
+                  >
+                    {devices.map((d, i) => (
+                      <DropdownMenuRadioItem
+                        key={d.deviceId}
+                        value={d.deviceId}
+                      >
+                        {d.label || `Camera ${i + 1}`}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        ) : null}
+        {overlayRight ? (
+          <div className="absolute top-2 right-2 z-10 flex gap-1.5">
+            {overlayRight}
+          </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Where to hold the label. Wide and short because our labels are
+ * CODE128 strips, corners only so it frames rather than hides the
+ * preview, and `pointer-events-none` so it never eats a tap. The
+ * detector reads the whole frame regardless — this is guidance for a
+ * first-time officer, not a crop.
+ */
+function AimingFrame() {
+  const corner = "absolute size-4 border-white/80";
+  return (
+    <div
+      aria-hidden
+      // The drop-shadow keeps white corners visible over a white label —
+      // the preview behind them is whatever the camera sees.
+      className="pointer-events-none absolute inset-x-[15%] top-1/2 h-[38%] -translate-y-1/2 drop-shadow-[0_0_2px_rgba(0,0,0,0.9)]"
+    >
+      <span
+        className={cn(
+          corner,
+          "top-0 left-0 rounded-tl-md border-t-2 border-l-2",
+        )}
+      />
+      <span
+        className={cn(
+          corner,
+          "top-0 right-0 rounded-tr-md border-t-2 border-r-2",
+        )}
+      />
+      <span
+        className={cn(
+          corner,
+          "bottom-0 left-0 rounded-bl-md border-b-2 border-l-2",
+        )}
+      />
+      <span
+        className={cn(
+          corner,
+          "right-0 bottom-0 rounded-br-md border-r-2 border-b-2",
+        )}
+      />
     </div>
   );
 }

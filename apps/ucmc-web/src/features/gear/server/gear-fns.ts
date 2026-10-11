@@ -93,9 +93,14 @@ import type {
 import type {
   CheckinLoansInput,
   CheckinLoansResult,
+  CheckinRowInput,
   CheckoutLoansInput,
   CheckoutLoansResult,
+  CheckoutRowInput,
   CheckoutSkipReason,
+  DeskCountedLoan,
+  DeskCountedModel,
+  DeskModelLookupResult,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
@@ -104,6 +109,7 @@ import type {
   LoanDetail,
   LoanSummary,
   MyLoansResult,
+  WriteOffLoanResult,
 } from "#/features/gear/server/loans-actions.server";
 import type {
   AddToCartResult,
@@ -221,6 +227,8 @@ export type {
   CheckoutLoansInput,
   CheckoutLoansResult,
   CheckoutSkipReason,
+  DeskCountedLoan,
+  DeskCountedModel,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
@@ -230,6 +238,7 @@ export type {
   LoanSummary,
   MemberSearchResult,
   RecordGearInspectionInput,
+  WriteOffLoanResult,
   RecordGearInspectionResult,
   DeactivateGearResult,
   ReleaseCodeResult,
@@ -580,24 +589,61 @@ const recordGearInspectionInputSchema = z
 
 // ── loans ──────────────────────────────────────────────────────────────
 
-const checkoutLoansInputSchema = z.object({
+// 0 is allowed for same-day checkouts (e.g. exec borrows gear for a
+// meeting and returns it the same evening). The due-at computation
+// snaps to end-of-day so a 0-day loan is still valid until 23:59:59.
+const loanDurationDays = z.number().int().min(0).max(90);
+
+// One bin rarely holds more than a few dozen draws; the ceiling is a
+// runaway guard against a fat-fingered "600", not a policy. The real
+// limit is the available-quantity check in the action.
+export const MAX_COUNTED_LOAN_QUANTITY = 200;
+
+const countedQuantity = z.number().int().min(1).max(MAX_COUNTED_LOAN_QUANTITY);
+
+/**
+ * Per-row, not per-request: one desk batch is routinely "a harness and
+ * six draws", so the union belongs on the row. `kind` is required on
+ * both arms — an optional discriminant would let a counted row missing
+ * its tag fall through to the coded arm and fail as `not_found`.
+ */
+const checkoutRowSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("coded"),
+    gearPublicId: z.string().min(1),
+    durationDays: loanDurationDays,
+  }),
+  z.object({
+    kind: z.literal("counted"),
+    modelPublicId: z.string().min(1),
+    quantity: countedQuantity,
+    durationDays: loanDurationDays,
+  }),
+  // Checked against the action's hand-written row type: a field added
+  // to one arm of `CheckoutRowInput` and not here fails to compile,
+  // rather than reaching the action as undefined.
+]) satisfies z.ZodType<CheckoutRowInput>;
+
+/** The publicId a row is keyed on — its piece, or its model. Two rows
+ *  naming the same subject in one batch is a client bug: the desk
+ *  merges them, and for a counted model the second row's
+ *  availability check would race the first's insert in the same
+ *  request. */
+const checkoutRowKey = (row: z.infer<typeof checkoutRowSchema>) =>
+  row.kind === "coded" ? row.gearPublicId : row.modelPublicId;
+
+export const checkoutLoansInputSchema = z.object({
   memberPublicId: z.string().min(1),
-  // Up to 50 items per checkout flow; large enough for any realistic
+  // Up to 50 rows per checkout flow; large enough for any realistic
   // gear-cave batch, small enough that audit-event fan-out + per-row
   // pre-checks fit comfortably in a worker request.
   items: z
-    .array(
-      z.object({
-        gearPublicId: z.string().min(1),
-        // 0 is allowed for same-day checkouts (e.g. exec borrows gear
-        // for a meeting and returns it the same evening). The due-at
-        // computation snaps to end-of-day so a 0-day loan is still
-        // valid until 23:59:59.
-        durationDays: z.number().int().min(0).max(90),
-      }),
-    )
+    .array(checkoutRowSchema)
     .min(1)
-    .max(50),
+    .max(50)
+    .refine((rows) => new Set(rows.map(checkoutRowKey)).size === rows.length, {
+      message: "each piece or model may appear once per batch",
+    }),
   notes: z.string().max(2_000).nullable(),
   // Officer overrides. Declared here or Zod strips them and the action
   // never sees the flag the desk sent — `gear:manage` is re-checked in
@@ -607,17 +653,37 @@ const checkoutLoansInputSchema = z.object({
   overrideHolds: z.boolean().optional(),
 });
 
-const checkinLoansInputSchema = z.object({
+/** Per-row like checkout. A counted row names the open LOAN rather
+ *  than the model, because two borrowers can have the same draws out,
+ *  and `quantity` is this return's units, not a running total. */
+const checkinRowSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("coded"),
+    gearPublicId: z.string().min(1),
+    conditionAtReturn: z.enum(GEAR_CONDITION_VALUES).nullable(),
+    notes: z.string().max(2_000).nullable(),
+  }),
+  z.object({
+    kind: z.literal("counted"),
+    loanPublicId: z.string().min(1),
+    quantity: countedQuantity,
+    notes: z.string().max(2_000).nullable(),
+  }),
+  // Same guard as checkout's: the action's type and this schema agree.
+]) satisfies z.ZodType<CheckinRowInput>;
+
+/** The publicId a check-in row is keyed on — its piece, or its LOAN. */
+const checkinRowKey = (row: z.infer<typeof checkinRowSchema>) =>
+  row.kind === "coded" ? row.gearPublicId : row.loanPublicId;
+
+export const checkinLoansInputSchema = z.object({
   items: z
-    .array(
-      z.object({
-        gearPublicId: z.string().min(1),
-        conditionAtReturn: z.enum(GEAR_CONDITION_VALUES).nullable(),
-        notes: z.string().max(2_000).nullable(),
-      }),
-    )
+    .array(checkinRowSchema)
     .min(1)
-    .max(50),
+    .max(50)
+    .refine((rows) => new Set(rows.map(checkinRowKey)).size === rows.length, {
+      message: "each piece or loan may appear once per batch",
+    }),
 });
 
 const extendLoanInputSchema = z.object({
@@ -660,6 +726,21 @@ const memberByPublicIdInputSchema = z.object({
 
 const gearCodeSearchInputSchema = z.object({
   q: z.string().min(1).max(64),
+});
+
+const deskTextSearchInputSchema = z.object({
+  q: z.string().min(1).max(200),
+});
+
+const writeOffLoanInputSchema = z.object({
+  publicId: z.string().min(1),
+  // Required and non-blank: a write-off clears the borrower's standing
+  // on the loan, so "why" is the point of the audit row.
+  reason: z.string().trim().min(1).max(500),
+});
+
+const deskModelInputSchema = z.object({
+  publicId: z.string().min(1).max(64),
 });
 
 const gearByCodeInputSchema = z.object({
@@ -1114,6 +1195,46 @@ export const getItemByCodeFn = createServerFn({ method: "GET" })
     const { getItemByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
     return getItemByCodeAction(data);
+  });
+
+export const searchCountedModelsForDeskFn = createServerFn({ method: "GET" })
+  .validator(deskTextSearchInputSchema)
+  .handler(async ({ data }): Promise<DeskCountedModel[]> => {
+    const { searchCountedModelsForDeskAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return searchCountedModelsForDeskAction(data);
+  });
+
+export const getDeskModelFn = createServerFn({ method: "GET" })
+  .validator(deskModelInputSchema)
+  .handler(async ({ data }): Promise<DeskModelLookupResult> => {
+    const { getDeskModelAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return getDeskModelAction(data);
+  });
+
+export const listOpenCountedLoansForModelFn = createServerFn({ method: "GET" })
+  .validator(deskModelInputSchema)
+  .handler(async ({ data }): Promise<DeskCountedLoan[]> => {
+    const { listOpenCountedLoansForModelAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return listOpenCountedLoansForModelAction({ modelPublicId: data.publicId });
+  });
+
+export const searchOpenCountedLoansFn = createServerFn({ method: "GET" })
+  .validator(deskTextSearchInputSchema)
+  .handler(async ({ data }): Promise<DeskCountedLoan[]> => {
+    const { searchOpenCountedLoansAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return searchOpenCountedLoansAction(data);
+  });
+
+export const writeOffLoanShortfallFn = createServerFn({ method: "POST" })
+  .validator(writeOffLoanInputSchema)
+  .handler(async ({ data }): Promise<WriteOffLoanResult> => {
+    const { writeOffLoanShortfallAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return writeOffLoanShortfallAction(data);
   });
 
 // ── cart shells ────────────────────────────────────────────────────────

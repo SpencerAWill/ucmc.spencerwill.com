@@ -369,7 +369,7 @@ describe("getMyCartAction availability", () => {
     const officer = await signInAsLoanOfficer();
     await checkoutLoansAction({
       memberPublicId: borrower.publicId,
-      items: [{ gearPublicId, durationDays: 7 }],
+      items: [{ kind: "coded", gearPublicId, durationDays: 7 }],
       notes: null,
     });
 

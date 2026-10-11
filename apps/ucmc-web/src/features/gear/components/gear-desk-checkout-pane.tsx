@@ -23,13 +23,17 @@ import { Textarea } from "#/components/ui/textarea";
 import { CLUB_TIME_ZONE } from "#/config/time";
 import { useAuth } from "#/features/auth/api/use-auth";
 import {
+  fetchDeskModel,
   fetchGearByCode,
   loanDefaultsQueryOptions,
 } from "#/features/gear/api/queries";
 import { useCheckoutLoans } from "#/features/gear/api/use-checkout-loans";
 import { DeskScanControls } from "#/features/gear/components/desk-scan-controls";
 import { DueDatePicker } from "#/features/gear/components/due-date-picker";
-import { CheckoutItemRow } from "#/features/gear/components/gear-desk-item-row";
+import {
+  CheckoutItemRow,
+  CountedCheckoutItemRow,
+} from "#/features/gear/components/gear-desk-item-row";
 import { GearCodeSearchCombobox } from "#/features/gear/components/gear-code-search-combobox";
 import { MemberSearchCombobox } from "#/features/gear/components/member-search-combobox";
 import { SKIP_OVERRIDE_FLAG } from "#/features/gear/lib/availability";
@@ -38,6 +42,7 @@ import {
   DEFAULT_LOAN_DURATION_DAYS,
   defaultLoanDurationDays,
 } from "#/features/gear/lib/loan-duration";
+import { sumDeskUnits } from "#/features/gear/lib/desk-units";
 import {
   isForeignSymbology,
   parseScanPayload,
@@ -49,19 +54,49 @@ import {
 import type {
   CartItemAvailability,
   CartItemRow,
+  CheckoutLoansResult,
   CheckoutSkipReason,
+  DeskCountedModel,
   GearLookupRow,
   MemberSearchResult,
 } from "#/features/gear/server/gear-fns";
 
-interface CheckoutItem {
-  row: GearLookupRow;
+type CheckoutResult = CheckoutLoansResult["results"][number];
+
+interface CheckoutItemState {
   durationDays: number;
   error?: string;
   /** Set only by a server refusal, and only for the rows the server
    *  actually refused. `error` alone can't drive the override affordance
    *  — cart rows carry a pre-submit `error` the server never saw. */
   blocked?: CheckoutSkipReason;
+}
+
+/** One row of the batch: a coded piece, or a quantity of a counted
+ *  model. Mirrors the server's per-row union. */
+type CheckoutItem =
+  | (CheckoutItemState & { kind: "coded"; row: GearLookupRow })
+  | (CheckoutItemState & {
+      kind: "counted";
+      model: DeskCountedModel;
+      quantity: number;
+    });
+
+/** The publicId a row is keyed on — the same identity the server echoes
+ *  back on each result, so refusals reconcile onto the right row. */
+function itemKey(item: CheckoutItem): string {
+  return item.kind === "coded" ? item.row.publicId : item.model.publicId;
+}
+
+function resultKey(result: CheckoutResult): string {
+  return result.kind === "coded" ? result.gearPublicId : result.modelPublicId;
+}
+
+/** How the override dialog names a row: its code, or "6 × BD HotForge". */
+function itemLabel(item: CheckoutItem): string {
+  return item.kind === "coded"
+    ? item.row.code
+    : `${item.quantity} × ${item.model.name}`;
 }
 
 const SKIP_LABEL: Record<CheckoutSkipReason, string> = {
@@ -71,7 +106,25 @@ const SKIP_LABEL: Record<CheckoutSkipReason, string> = {
   already_on_loan: "Already checked out to someone else",
   on_hold: "Held for a trip",
   member_blocked: "Member is blocked — overdue gear outstanding",
+  not_counted: "Tracked by code — scan the piece itself",
+  insufficient_stock: "Not enough on the shelf",
 };
+
+/** A refusal's message. Counted refusals carry how many there were, so
+ *  "only 4 available" can replace a bare "not enough". */
+function refusalMessage(
+  refusal: Extract<CheckoutResult, { ok: false }>,
+): string {
+  if (refusal.kind === "counted" && refusal.available !== null) {
+    if (refusal.reason === "insufficient_stock") {
+      return `Only ${refusal.available} on the shelf`;
+    }
+    if (refusal.reason === "on_hold") {
+      return `Held for a trip — only ${refusal.available} free`;
+    }
+  }
+  return SKIP_LABEL[refusal.reason];
+}
 
 /**
  * Maps a cart row's availability flag to the same vocabulary the
@@ -116,6 +169,7 @@ function cartItemToCheckoutItem(
     openLoanMemberAvatarKey: null,
   };
   return {
+    kind: "coded",
     row,
     durationDays: defaultDurationDays,
     error: CART_AVAILABILITY_LABEL[cartItem.availability],
@@ -169,15 +223,57 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   const canOverride = hasPermission("gear:manage");
   const [overrideOpen, setOverrideOpen] = useState(false);
 
+  // The row whose quantity field should take focus — set when a counted
+  // model joins the batch, because the next thing the officer does is
+  // type how many. Keyed rather than a ref so it survives the row
+  // mounting after the state update.
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+
   const addRow = (row: GearLookupRow) => {
     setItems((prev) => {
       // Prevent duplicates in the batch — server would reject the
       // second one with `already_on_loan` after the first inserts,
       // but the UX is better if the row's just rejected up front.
-      if (prev.some((i) => i.row.publicId === row.publicId)) return prev;
-      return [...prev, { row, durationDays: defaultDurationDays }];
+      if (prev.some((i) => itemKey(i) === row.publicId)) return prev;
+      return [
+        ...prev,
+        { kind: "coded", row, durationDays: defaultDurationDays },
+      ];
     });
   };
+
+  /** Add a counted model at quantity 1, or — when it's already in the
+   *  batch — leave it be and send focus back to its quantity. The boundary
+   *  refuses a model twice per batch, and "how many" is one field. */
+  const addCounted = (
+    model: DeskCountedModel,
+    { focus = true }: { focus?: boolean } = {},
+  ) => {
+    setItems((prev) => {
+      // Re-checked inside the updater, not only by the caller: two scans
+      // of one bin inside a lookup's round trip both pass a check made
+      // against the render they started in.
+      if (prev.some((i) => itemKey(i) === model.publicId)) return prev;
+      return [
+        ...prev,
+        {
+          kind: "counted",
+          model,
+          quantity: 1,
+          durationDays: defaultDurationDays,
+        },
+      ];
+    });
+    // Cleared on a scan rather than left pointing at an earlier pick:
+    // a stale key would hand autoFocus to whatever row mounts next for
+    // that model, scans included.
+    setFocusKey(focus ? model.publicId : null);
+  };
+
+  const updateItem = (key: string, patch: Partial<CheckoutItemState>) =>
+    setItems((prev) =>
+      prev.map((p) => (itemKey(p) === key ? { ...p, ...patch } : p)),
+    );
 
   const handleScan = async (raw: string) => {
     const payload = parseScanPayload(raw);
@@ -187,6 +283,10 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     }
     if (payload.kind === "cart") {
       await handleCartScan(payload.token);
+      return;
+    }
+    if (payload.kind === "model") {
+      await handleBinScan(payload.modelPublicId);
       return;
     }
     const code = payload.code;
@@ -217,6 +317,40 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     } catch {
       toast.error("Couldn't look up that code.");
     }
+  };
+
+  /**
+   * Resolve a scanned `ucmc-model:` bin label: add the model at quantity
+   * 1, for the officer to correct.
+   *
+   * **Focus deliberately stays where it was.** Moving it into the new
+   * row's quantity field would be the natural next step for a human,
+   * but the wedge treats a focused number field as text it must not
+   * capture into — so the next scan from a gun without an AIM prefix
+   * would type "CH93" into the quantity and set it to 93. A pick from
+   * the combobox does focus the field, because the officer is already
+   * typing.
+   */
+  const handleBinScan = async (modelPublicId: string) => {
+    const resolved = await fetchDeskModel(modelPublicId).catch(() => null);
+    if (resolved === null) {
+      toast.error("Couldn't look up that bin label.");
+      return;
+    }
+    if (!resolved.ok) {
+      toast.error(
+        resolved.reason === "not_counted"
+          ? "That bin's model is tracked by code now — scan the pieces themselves."
+          : "That bin label doesn't match any gear model.",
+      );
+      return;
+    }
+    const { model } = resolved;
+    if (items.some((i) => itemKey(i) === model.publicId)) {
+      toast.info(`${model.name} is already in this batch — set the quantity.`);
+      return;
+    }
+    addCounted(model, { focus: false });
   };
 
   /**
@@ -275,7 +409,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     setItems((prev) => {
       const next = [...prev];
       for (const cartItem of codedItems) {
-        if (next.some((i) => i.row.publicId === cartItem.publicId)) continue;
+        if (next.some((i) => itemKey(i) === cartItem.publicId)) continue;
         next.push(cartItemToCheckoutItem(cartItem, defaultDurationDays));
       }
       return next;
@@ -312,42 +446,56 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
       toast.error("Add at least one gear piece.");
       return;
     }
-    const submittedIds = new Set(rows.map((r) => r.row.publicId));
-    const untouched = items.filter((i) => !submittedIds.has(i.row.publicId));
+    const submittedIds = new Set(rows.map(itemKey));
+    const untouched = items.filter((i) => !submittedIds.has(itemKey(i)));
     checkout.mutate(
       {
         memberPublicId: member.publicId,
-        items: rows.map((i) => ({
-          gearPublicId: i.row.publicId,
-          durationDays: i.durationDays,
-        })),
+        items: rows.map((i) =>
+          i.kind === "coded"
+            ? {
+                kind: "coded" as const,
+                gearPublicId: i.row.publicId,
+                durationDays: i.durationDays,
+              }
+            : {
+                kind: "counted" as const,
+                modelPublicId: i.model.publicId,
+                quantity: i.quantity,
+                durationDays: i.durationDays,
+              },
+        ),
         notes: notes.trim() || null,
         ...overrides,
       },
       {
         onSuccess: (data) => {
-          const ok = data.results.filter((r) => r.ok);
+          const ok = data.results.flatMap((r) => (r.ok ? [r] : []));
           const skipped = data.results.flatMap((r) => (r.ok ? [] : [r]));
           if (ok.length > 0) {
+            // Units, not rows: "6 draws and a harness" is seven pieces
+            // in the member's hands, which is what the officer confirms.
+            const pieces = sumDeskUnits(ok);
             const tail =
               skipped.length > 0 ? ` (${skipped.length} skipped)` : "";
             toast.success(
-              `Checked out ${ok.length} ${ok.length === 1 ? "piece" : "pieces"} to ${member.fullName}${tail}`,
+              `Checked out ${pieces} ${pieces === 1 ? "piece" : "pieces"} to ${member.fullName}${tail}`,
             );
           }
           // Keep skipped rows in the form with their reason so the
           // officer can fix and retry without re-adding.
           setItems((prev) =>
             prev.flatMap((item) => {
-              if (!submittedIds.has(item.row.publicId)) return [item];
+              const key = itemKey(item);
+              if (!submittedIds.has(key)) return [item];
               const refusal = skipped.find(
-                (sk) => sk.gearPublicId === item.row.publicId,
+                (sk) => sk.kind === item.kind && resultKey(sk) === key,
               );
               if (!refusal) return [];
               return [
                 {
                   ...item,
-                  error: SKIP_LABEL[refusal.reason],
+                  error: refusalMessage(refusal),
                   blocked: refusal.reason,
                 },
               ];
@@ -387,6 +535,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   const overrideReasons = Array.from(
     new Set(overridable.map((o) => SKIP_LABEL[o.reason])),
   );
+  const batchUnits = sumDeskUnits(items);
 
   const confirmOverride = () => {
     setOverrideOpen(false);
@@ -456,41 +605,79 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
         </div>
         <div className="space-y-2">
           <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Items ({items.length})
+            Items ({batchUnits})
           </Label>
           {items.length === 0 ? (
             <p className="rounded-md border border-dashed bg-muted/40 p-4 text-center text-sm text-muted-foreground">
-              Scan a barcode or search for a code below to add gear.
+              Scan a barcode or search below — a code, or counted gear like
+              draws.
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-20">Code</TableHead>
+                  {/* "Gear", not "Code": a counted row puts its
+                      quantity in this column, since it has no code. */}
+                  <TableHead className="w-20">Gear</TableHead>
                   <TableHead>Due</TableHead>
                   <TableHead className="w-10" aria-label="Actions" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((item, idx) => (
-                  <CheckoutItemRow
-                    key={item.row.publicId}
-                    row={item.row}
-                    durationDays={item.durationDays}
-                    onDurationChange={(d) =>
-                      setItems((prev) =>
-                        prev.map((p, pi) =>
-                          pi === idx ? { ...p, durationDays: d } : p,
-                        ),
-                      )
-                    }
-                    error={item.error}
-                    caveOpenWeekdays={caveOpenWeekdays}
-                    onRemove={() =>
-                      setItems((prev) => prev.filter((_, pi) => pi !== idx))
-                    }
-                  />
-                ))}
+                {items.map((item) => {
+                  const key = itemKey(item);
+                  const remove = () => {
+                    setItems((prev) => prev.filter((p) => itemKey(p) !== key));
+                    if (focusKey === key) setFocusKey(null);
+                  };
+                  if (item.kind === "counted") {
+                    return (
+                      <CountedCheckoutItemRow
+                        key={key}
+                        model={item.model}
+                        quantity={item.quantity}
+                        onQuantityChange={(quantity) =>
+                          setItems((prev) =>
+                            prev.map((p) =>
+                              itemKey(p) === key && p.kind === "counted"
+                                ? // A changed quantity is a new request:
+                                  // a refusal of the old one no longer
+                                  // describes it.
+                                  {
+                                    ...p,
+                                    quantity,
+                                    error: undefined,
+                                    blocked: undefined,
+                                  }
+                                : p,
+                            ),
+                          )
+                        }
+                        durationDays={item.durationDays}
+                        onDurationChange={(d) =>
+                          updateItem(key, { durationDays: d })
+                        }
+                        error={item.error}
+                        caveOpenWeekdays={caveOpenWeekdays}
+                        onRemove={remove}
+                        autoFocus={focusKey === key}
+                      />
+                    );
+                  }
+                  return (
+                    <CheckoutItemRow
+                      key={key}
+                      row={item.row}
+                      durationDays={item.durationDays}
+                      onDurationChange={(d) =>
+                        updateItem(key, { durationDays: d })
+                      }
+                      error={item.error}
+                      caveOpenWeekdays={caveOpenWeekdays}
+                      onRemove={remove}
+                    />
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -502,8 +689,9 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
           <GearCodeSearchCombobox
             mode="checkout"
             onPick={addRow}
+            onPickCounted={addCounted}
             disabled={checkout.isPending}
-            excludePublicIds={items.map((i) => i.row.publicId)}
+            excludePublicIds={items.map(itemKey)}
           />
         </div>
       </div>
@@ -558,7 +746,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
         >
           {checkout.isPending
             ? "Checking out…"
-            : `Check out ${items.length || ""} ${items.length === 1 ? "item" : "items"}`.trim()}
+            : `Check out ${batchUnits || ""} ${batchUnits === 1 ? "item" : "items"}`.trim()}
         </Button>
       </div>
 
@@ -573,12 +761,18 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
           </DialogHeader>
           <ul className="space-y-1 text-sm">
             {overridable.map((o) => (
-              <li key={o.item.row.publicId} className="flex gap-2">
-                <span className="font-mono font-semibold">
-                  {o.item.row.code}
+              <li key={itemKey(o.item)} className="flex gap-2">
+                <span
+                  className={
+                    o.item.kind === "coded"
+                      ? "font-mono font-semibold"
+                      : "font-semibold"
+                  }
+                >
+                  {itemLabel(o.item)}
                 </span>
                 <span className="text-muted-foreground">
-                  {SKIP_LABEL[o.reason]}
+                  {o.item.error ?? SKIP_LABEL[o.reason]}
                 </span>
               </li>
             ))}

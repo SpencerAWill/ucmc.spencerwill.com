@@ -1,4 +1,5 @@
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
+import { MODEL_LABEL_PREFIX } from "#/features/gear/lib/model-label";
 
 /**
  * The gear desk's scan-payload discriminator — the one place that
@@ -10,8 +11,8 @@ import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
  * producer. It stopped being fine the moment a second producer existed
  * — see #224 finding 5 — because two call sites in two panes plus a
  * keyboard-wedge path is three copies of a decision that must agree.
- * #223 adds a third payload shape (`ucmc-model:` bin labels for counted
- * stock) and it belongs here as one branch, not as a fourth copy.
+ * #223's bin labels for counted stock (`ucmc-model:`) are the third
+ * shape, and they are one branch here rather than a fourth copy.
  *
  * Deliberately NOT a Zod schema: the `kind` is decided by prefix and the
  * code half has no shape to validate against (below).
@@ -43,6 +44,7 @@ const MAX_CODE_LENGTH = 64;
 
 export type ScanPayload =
   | { kind: "cart"; token: string; symbology: string | null }
+  | { kind: "model"; modelPublicId: string; symbology: string | null }
   | { kind: "code"; code: string; symbology: string | null };
 
 /**
@@ -79,6 +81,21 @@ export function parseScanPayload(raw: string): ScanPayload | null {
 
   if (value.startsWith(CART_TOKEN_PREFIX)) {
     return { kind: "cart", token: value, symbology };
+  }
+  if (value.startsWith(MODEL_LABEL_PREFIX)) {
+    const modelPublicId = value.slice(MODEL_LABEL_PREFIX.length);
+    // A prefix with nothing usable after it is a mangled label, not a
+    // gear code that happens to start with "ucmc-model:" — no code
+    // does, and treating it as one would round-trip a lookup that
+    // cannot match.
+    if (
+      modelPublicId.length === 0 ||
+      modelPublicId.length > MAX_CODE_LENGTH ||
+      /\s/.test(modelPublicId)
+    ) {
+      return null;
+    }
+    return { kind: "model", modelPublicId, symbology };
   }
   // Codes are freeform — `suggestCode` is advisory and an officer may
   // type anything — so there is no pattern to validate against without

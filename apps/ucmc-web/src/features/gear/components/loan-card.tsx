@@ -45,9 +45,13 @@ export function LoanCard({ loan }: { loan: LoanSummary }) {
             </div>
             <div className="min-w-0 space-y-1 p-3 sm:p-4">
               <div className="flex items-center gap-2">
-                <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
-                  {loan.code ?? "—"}
-                </span>
+                {/* Counted loans have no code; an untagged coded piece
+                    keeps its dash, where a missing code is the news. */}
+                {!loan.isCounted ? (
+                  <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
+                    {loan.code ?? "—"}
+                  </span>
+                ) : null}
                 <span className="truncate text-sm font-medium">
                   {/* A counted loan IS its quantity — "six draws" — and
                       the row used to name the product alone, which read
@@ -58,6 +62,11 @@ export function LoanCard({ loan }: { loan: LoanSummary }) {
               </div>
               <p className="text-xs text-muted-foreground">
                 {loan.typeName} · {loan.memberFullName}
+                {/* An open counted loan with some units back is still
+                    open for the rest — the list should say how many. */}
+                {loan.returnedAt === null && loan.quantityReturned > 0
+                  ? ` · ${loan.quantity - loan.quantityReturned} still out`
+                  : ""}
               </p>
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 {loan.returnedAt ? (
