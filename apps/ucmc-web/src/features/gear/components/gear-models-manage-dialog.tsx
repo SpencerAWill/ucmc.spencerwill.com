@@ -59,6 +59,7 @@ import {
 import type { AttributeFormValues } from "#/features/gear/components/gear-attribute-fields";
 import { GearModelSafetyBadges } from "#/features/gear/components/gear-model-safety-badges";
 import { ModelBinLabelPane } from "#/features/gear/components/model-bin-label-pane";
+import { countedTakeable } from "#/features/gear/lib/counted-stock";
 import {
   CONDITION_LABEL,
   gearItemName,
@@ -778,7 +779,11 @@ function StockPane({
   const serviceable = allValid
     ? (parsed.find((row) => row.condition === "serviceable")?.quantity ?? 0)
     : 0;
-  const takeable = Math.max(0, serviceable - model.onLoan - model.onHold);
+  const takeable = countedTakeable({
+    serviceable,
+    onLoan: model.onLoan,
+    held: model.onHold,
+  });
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -31,6 +31,8 @@ import {
   getGearItemByPublicId,
   updateGearItemById,
 } from "#/features/gear/server/repo.server";
+import { countedTakeable } from "#/features/gear/lib/counted-stock";
+import type { CountedStockTerms } from "#/features/gear/lib/counted-stock";
 import { liveHeldQuantityForModels } from "#/features/gear/server/holds-repo.server";
 import {
   getGearModelByPublicId,
@@ -237,12 +239,6 @@ function clampDuration(durationDays: number): number {
     MAX_LOAN_DURATION_DAYS,
     Math.max(0, Math.floor(durationDays)),
   );
-}
-
-interface CountedStockTerms {
-  serviceable: number;
-  onLoan: number;
-  held: number;
 }
 
 /**
@@ -513,8 +509,8 @@ export async function checkoutLoansAction(
     const terms =
       (await countedStockTerms([row.modelId], now)).get(row.modelId) ??
       NO_STOCK;
-    const free = Math.max(0, terms.serviceable - terms.onLoan);
-    const takeable = overrideHolds ? free : Math.max(0, free - terms.held);
+    const free = countedTakeable(terms, { respectHolds: false });
+    const takeable = countedTakeable(terms, { respectHolds: !overrideHolds });
     results.push({
       ok: false,
       kind: "counted",
@@ -1264,7 +1260,7 @@ async function withTakeable(
       name: r.name,
       typeName: r.typeName,
       imageKey: r.imageKey,
-      takeable: Math.max(0, t.serviceable - t.onLoan - t.held),
+      takeable: countedTakeable(t),
       held: t.held,
     };
   });

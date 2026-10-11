@@ -93,8 +93,10 @@ import type {
 import type {
   CheckinLoansInput,
   CheckinLoansResult,
+  CheckinRowInput,
   CheckoutLoansInput,
   CheckoutLoansResult,
+  CheckoutRowInput,
   CheckoutSkipReason,
   DeskCountedLoan,
   DeskCountedModel,
@@ -617,7 +619,10 @@ const checkoutRowSchema = z.discriminatedUnion("kind", [
     quantity: countedQuantity,
     durationDays: loanDurationDays,
   }),
-]);
+  // Checked against the action's hand-written row type: a field added
+  // to one arm of `CheckoutRowInput` and not here fails to compile,
+  // rather than reaching the action as undefined.
+]) satisfies z.ZodType<CheckoutRowInput>;
 
 /** The publicId a row is keyed on — its piece, or its model. Two rows
  *  naming the same subject in one batch is a client bug: the desk
@@ -664,22 +669,21 @@ const checkinRowSchema = z.discriminatedUnion("kind", [
     quantity: countedQuantity,
     notes: z.string().max(2_000).nullable(),
   }),
-]);
+  // Same guard as checkout's: the action's type and this schema agree.
+]) satisfies z.ZodType<CheckinRowInput>;
+
+/** The publicId a check-in row is keyed on — its piece, or its LOAN. */
+const checkinRowKey = (row: z.infer<typeof checkinRowSchema>) =>
+  row.kind === "coded" ? row.gearPublicId : row.loanPublicId;
 
 export const checkinLoansInputSchema = z.object({
   items: z
     .array(checkinRowSchema)
     .min(1)
     .max(50)
-    .refine(
-      (rows) =>
-        new Set(
-          rows.map((r) =>
-            r.kind === "coded" ? r.gearPublicId : r.loanPublicId,
-          ),
-        ).size === rows.length,
-      { message: "each piece or loan may appear once per batch" },
-    ),
+    .refine((rows) => new Set(rows.map(checkinRowKey)).size === rows.length, {
+      message: "each piece or loan may appear once per batch",
+    }),
 });
 
 const extendLoanInputSchema = z.object({

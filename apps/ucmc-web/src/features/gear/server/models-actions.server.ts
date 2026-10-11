@@ -8,6 +8,7 @@
  * spending only when a surface can be delegated separately, which this
  * one can't.
  */
+import { countedTakeable } from "#/features/gear/lib/counted-stock";
 import { uuidv7 } from "uuidv7";
 
 import {
@@ -469,12 +470,11 @@ export async function listGearModelBrowseAction(
         ? // Subtract what is out and what is spoken for. Holds on a
           // counted model are quantities, so they reduce the number a
           // member sees rather than blocking a particular unit.
-          Math.max(
-            0,
-            serviceable -
-              (onLoanByModel.get(row.modelId) ?? 0) -
-              (heldByModel.get(row.modelId) ?? 0),
-          )
+          countedTakeable({
+            serviceable,
+            onLoan: onLoanByModel.get(row.modelId) ?? 0,
+            held: heldByModel.get(row.modelId) ?? 0,
+          })
         : // Not `row.available`: an untagged piece counts as available
           // in the rollup — it is in the cave and nothing is wrong with
           // it — but the desk has nothing to scan, so promising it
