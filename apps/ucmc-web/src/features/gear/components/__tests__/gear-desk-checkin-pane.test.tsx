@@ -218,6 +218,11 @@ describe("GearDeskCheckinPane counted rows", () => {
         "Only 2 still out on this loan",
       ),
     );
+    // The row takes the server's count too, not only the message: the
+    // field would otherwise keep offering 6 and be refused again.
+    expect(screen.getByTestId("counted-loan_riley")).toHaveTextContent(
+      "2 of 2",
+    );
   });
 });
 

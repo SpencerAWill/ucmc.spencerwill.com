@@ -447,34 +447,36 @@ export async function checkoutLoansAction(
   // Try the bulk insert first. The partial unique index is what wins
   // races between two officers checking out the same piece at the same
   // instant — pre-check above is a UX nicety, not authoritative.
-  let codedRaced = false;
-  if (coded.length > 0) {
-    try {
-      await insertLoans(coded.map((r) => r.insert));
-      coded.forEach(landCoded);
-    } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
-      codedRaced = true;
-    }
-  }
+  /** Insert, answering false (rather than throwing) when the partial
+   *  unique index refused it — the one failure the caller handles. */
+  const insertCoded = (rows: InsertLoanRow[]): Promise<boolean> =>
+    insertLoans(rows).then(
+      () => true,
+      (err: unknown) => {
+        if (!isUniqueViolation(err)) throw err;
+        return false;
+      },
+    );
+  const bulkLanded =
+    coded.length > 0 && (await insertCoded(coded.map((r) => r.insert)));
+  if (bulkLanded) coded.forEach(landCoded);
+  const codedRaced = coded.length > 0 && !bulkLanded;
 
   // Slow path (race): the bulk insert failed because at least one
   // piece was checked out by a concurrent officer. Replay row-by-row
   // so the winners still land and the loser is reported as skipped.
   if (codedRaced) {
     for (const row of coded) {
-      try {
-        await insertLoans([row.insert]);
+      if (await insertCoded([row.insert])) {
         landCoded(row);
-      } catch (innerErr) {
-        if (!isUniqueViolation(innerErr)) throw innerErr;
-        results.push({
-          ok: false,
-          kind: "coded",
-          gearPublicId: row.gearPublicId,
-          reason: "already_on_loan",
-        });
+        continue;
       }
+      results.push({
+        ok: false,
+        kind: "coded",
+        gearPublicId: row.gearPublicId,
+        reason: "already_on_loan",
+      });
     }
   }
 

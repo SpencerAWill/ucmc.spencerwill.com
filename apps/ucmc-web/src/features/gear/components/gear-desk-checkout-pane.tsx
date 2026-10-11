@@ -42,6 +42,7 @@ import {
   DEFAULT_LOAN_DURATION_DAYS,
   defaultLoanDurationDays,
 } from "#/features/gear/lib/loan-duration";
+import { sumDeskUnits } from "#/features/gear/lib/desk-units";
 import {
   isForeignSymbology,
   parseScanPayload,
@@ -96,11 +97,6 @@ function itemLabel(item: CheckoutItem): string {
   return item.kind === "coded"
     ? item.row.code
     : `${item.quantity} × ${item.model.name}`;
-}
-
-/** Units a row hands out — 1 for a piece, the quantity for a model. */
-function itemUnits(item: CheckoutItem): number {
-  return item.kind === "coded" ? 1 : item.quantity;
 }
 
 const SKIP_LABEL: Record<CheckoutSkipReason, string> = {
@@ -249,8 +245,14 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   /** Add a counted model at quantity 1, or — when it's already in the
    *  batch — leave it be and send focus back to its quantity. The boundary
    *  refuses a model twice per batch, and "how many" is one field. */
-  const addCounted = (model: DeskCountedModel) => {
+  const addCounted = (
+    model: DeskCountedModel,
+    { focus = true }: { focus?: boolean } = {},
+  ) => {
     setItems((prev) => {
+      // Re-checked inside the updater, not only by the caller: two scans
+      // of one bin inside a lookup's round trip both pass a check made
+      // against the render they started in.
       if (prev.some((i) => itemKey(i) === model.publicId)) return prev;
       return [
         ...prev,
@@ -262,7 +264,10 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
         },
       ];
     });
-    setFocusKey(model.publicId);
+    // Cleared on a scan rather than left pointing at an earlier pick:
+    // a stale key would hand autoFocus to whatever row mounts next for
+    // that model, scans included.
+    setFocusKey(focus ? model.publicId : null);
   };
 
   const updateItem = (key: string, patch: Partial<CheckoutItemState>) =>
@@ -327,10 +332,8 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
    * typing.
    */
   const handleBinScan = async (modelPublicId: string) => {
-    let resolved;
-    try {
-      resolved = await fetchDeskModel(modelPublicId);
-    } catch {
+    const resolved = await fetchDeskModel(modelPublicId).catch(() => null);
+    if (resolved === null) {
       toast.error("Couldn't look up that bin label.");
       return;
     }
@@ -347,15 +350,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
       toast.info(`${model.name} is already in this batch — set the quantity.`);
       return;
     }
-    setItems((prev) => [
-      ...prev,
-      {
-        kind: "counted",
-        model,
-        quantity: 1,
-        durationDays: defaultDurationDays,
-      },
-    ]);
+    addCounted(model, { focus: false });
   };
 
   /**
@@ -480,10 +475,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
           if (ok.length > 0) {
             // Units, not rows: "6 draws and a harness" is seven pieces
             // in the member's hands, which is what the officer confirms.
-            const pieces = ok.reduce(
-              (sum, r) => sum + (r.kind === "coded" ? 1 : r.quantity),
-              0,
-            );
+            const pieces = sumDeskUnits(ok);
             const tail =
               skipped.length > 0 ? ` (${skipped.length} skipped)` : "";
             toast.success(
@@ -543,7 +535,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
   const overrideReasons = Array.from(
     new Set(overridable.map((o) => SKIP_LABEL[o.reason])),
   );
-  const batchUnits = items.reduce((sum, i) => sum + itemUnits(i), 0);
+  const batchUnits = sumDeskUnits(items);
 
   const confirmOverride = () => {
     setOverrideOpen(false);
@@ -634,8 +626,10 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
               <TableBody>
                 {items.map((item) => {
                   const key = itemKey(item);
-                  const remove = () =>
+                  const remove = () => {
                     setItems((prev) => prev.filter((p) => itemKey(p) !== key));
+                    if (focusKey === key) setFocusKey(null);
+                  };
                   if (item.kind === "counted") {
                     return (
                       <CountedCheckoutItemRow

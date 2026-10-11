@@ -34,6 +34,7 @@ import {
   isForeignSymbology,
   parseScanPayload,
 } from "#/features/gear/lib/scan-payload";
+import { sumDeskUnits } from "#/features/gear/lib/desk-units";
 import { formatDate } from "#/lib/date-format";
 import type {
   CheckinLoansResult,
@@ -118,7 +119,9 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
         { kind: "counted", loan, quantity: loan.outstanding, notes: "" },
       ];
     });
-    if (focus) setFocusKey(loan.loanPublicId);
+    // Cleared on a scan so an earlier pick's key can't hand autoFocus to
+    // the row a scan adds — see the checkout pane.
+    setFocusKey(focus ? loan.loanPublicId : null);
   };
 
   // Open loans a scanned bin label matched when there was more than one
@@ -133,10 +136,10 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
    * next scan.
    */
   const handleBinScan = async (modelPublicId: string) => {
-    let loans;
-    try {
-      loans = await fetchOpenCountedLoansForModel(modelPublicId);
-    } catch {
+    const loans = await fetchOpenCountedLoansForModel(modelPublicId).catch(
+      () => null,
+    );
+    if (loans === null) {
       toast.error("Couldn't look up that bin label.");
       return;
     }
@@ -236,10 +239,7 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
               borrowers.size === 1
                 ? `from ${[...borrowers][0]}`
                 : `from ${borrowers.size} members`;
-            const pieces = ok.reduce(
-              (sum, r) => sum + (r.kind === "coded" ? 1 : r.quantity),
-              0,
-            );
+            const pieces = sumDeskUnits(ok);
             // A short return leaves the loan open; say so in the
             // confirmation, so nobody reads "checked in" as "closed".
             const stillOut = ok.reduce(
@@ -260,13 +260,27 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
                 (s) => s.kind === i.kind && resultKey(s) === itemKey(i),
               );
               if (!refusal) return [];
-              const error =
+              if (
+                i.kind === "counted" &&
                 refusal.kind === "counted" &&
                 refusal.reason === "exceeds_outstanding" &&
                 refusal.outstanding !== null
-                  ? `Only ${refusal.outstanding} still out on this loan`
-                  : SKIP_LABEL[refusal.reason];
-              return [{ ...i, error }];
+              ) {
+                // Somebody else's return landed first. Take the server's
+                // count into the row itself — its max, its "of N out" and
+                // its quantity — not only into the message, or the field
+                // keeps offering the stale number and refuses again.
+                const outstanding = refusal.outstanding;
+                return [
+                  {
+                    ...i,
+                    loan: { ...i.loan, outstanding },
+                    quantity: Math.min(i.quantity, Math.max(1, outstanding)),
+                    error: `Only ${outstanding} still out on this loan`,
+                  },
+                ];
+              }
+              return [{ ...i, error: SKIP_LABEL[refusal.reason] }];
             });
           });
           if (skipped.length === 0) onSuccess();
@@ -279,10 +293,7 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
 
   // Units, not rows — six draws coming back is six items, the same
   // count the checkout button uses.
-  const returningUnits = items.reduce(
-    (sum, i) => sum + (i.kind === "coded" ? 1 : i.quantity),
-    0,
-  );
+  const returningUnits = sumDeskUnits(items);
 
   // Group rows by borrower name when more than one shows up. Mirrors
   // the sketch in the plan: small borrower-name header above each
@@ -341,10 +352,12 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
                     ) : null}
                     {group.map((item) => {
                       const key = itemKey(item);
-                      const remove = () =>
+                      const remove = () => {
                         setItems((prev) =>
                           prev.filter((p) => itemKey(p) !== key),
                         );
+                        if (focusKey === key) setFocusKey(null);
+                      };
                       const setNotes = (notes: string) =>
                         updateItem(key, (p) => ({ ...p, notes }));
                       if (item.kind === "counted") {

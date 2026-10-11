@@ -141,15 +141,25 @@ vi.mock("#/features/gear/components/gear-desk-item-row", () => ({
     model,
     quantity,
     onQuantityChange,
+    onRemove,
+    autoFocus,
     error,
   }: {
     model: { publicId: string; name: string };
     quantity: number;
     onQuantityChange: (q: number) => void;
+    onRemove: () => void;
+    autoFocus?: boolean;
     error?: string;
   }) => (
     <tr>
-      <td data-testid={`counted-${model.publicId}`}>
+      <td
+        data-testid={`counted-${model.publicId}`}
+        data-autofocus={String(autoFocus === true)}
+      >
+        <button type="button" onClick={onRemove}>
+          remove {model.publicId}
+        </button>
         {quantity} × {model.name}
         <button type="button" onClick={() => onQuantityChange(quantity + 1)}>
           more {model.publicId}
@@ -941,6 +951,67 @@ describe("GearDeskCheckoutPane bin-label scans", () => {
     expect(screen.getAllByTestId("counted-k3v9x0p2m1aa")).toHaveLength(1);
     expect(toastInfoMock).toHaveBeenCalledWith(
       expect.stringMatching(/already in this batch/),
+    );
+  });
+});
+
+describe("GearDeskCheckoutPane bin-scan races", () => {
+  const draws: DeskCountedModel = {
+    publicId: "k3v9x0p2m1aa",
+    name: "BD HotForge 12cm",
+    typeName: "Quickdraw",
+    imageKey: null,
+    takeable: 10,
+    held: 0,
+  };
+
+  it("adds one row when the same bin is scanned twice inside a lookup", async () => {
+    // Both lookups are in flight at once, so both scans start from a
+    // render with no row — the duplicate check has to live in the
+    // updater, not only in the handler.
+    const lookup: { release: () => void } = { release: () => {} };
+    const gate = new Promise<void>((resolve) => {
+      lookup.release = resolve;
+    });
+    fetchDeskModelMock.mockImplementation(async () => {
+      await gate;
+      return { ok: true, model: draws };
+    });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    const scans = [
+      scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`),
+      scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`),
+    ];
+    await act(async () => {
+      lookup.release();
+      await Promise.all(scans);
+    });
+
+    expect(screen.getAllByTestId("counted-k3v9x0p2m1aa")).toHaveLength(1);
+  });
+
+  it("doesn't hand an earlier pick's autofocus to a row a scan adds", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: true, model: draws });
+    renderPane();
+    await waitFor(() => expect(comboboxProps.current).not.toBeNull());
+    act(() => comboboxProps.current!.onPickCounted(draws));
+    expect(await screen.findByTestId("counted-k3v9x0p2m1aa")).toHaveAttribute(
+      "data-autofocus",
+      "true",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "remove k3v9x0p2m1aa" }),
+    );
+
+    await act(async () => {
+      await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+    });
+
+    expect(await screen.findByTestId("counted-k3v9x0p2m1aa")).toHaveAttribute(
+      "data-autofocus",
+      "false",
     );
   });
 });
