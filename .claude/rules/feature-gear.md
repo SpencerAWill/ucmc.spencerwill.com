@@ -193,7 +193,13 @@ reason instead of being swept along.
 
 Each loan names **either** a coded item (`item_id`) **or** a counted model with a quantity (`model_id` + `quantity`, "six draws"). A CHECK constraint enforces exactly one. Every read path LEFT JOINs items and resolves the model through `coalesce(loans.model_id, items.model_id)` — one query serves both kinds, rather than two near-identical tables and two of every query behind `/my/gear`, the overdue list and member standing.
 
-Counted loans support **partial return**: `quantity_returned` climbs as units come back; the shortfall lands in `quantity_lost` when the loan closes.
+Counted loans support **partial return**: `quantity_returned` climbs as units come back, and the last unit closes the loan.
+
+- **A short return leaves the loan open — and overdue-able — for what is still out.** "Five of six came back" is far likelier a sixth in somebody's pack than a loss, so nothing is written off at the desk; it is the same call sweeps make ("a shortfall is reported, the write-off stays somebody's decision"). `recordCountedReturn` is one guarded `UPDATE … SET quantity_returned = quantity_returned + n … WHERE quantity_returned + n <= quantity RETURNING`, not a read-modify-write: two officers each taking three draws back from one loan would otherwise both write 3 and lose a return. SQLite evaluates every SET against the pre-update row, which is what lets the `CASE` that stamps `returned_at` see the old count.
+- **`writeOffLoanShortfallAction` is the only way a counted loan closes short** — `gear:manage`, a required reason, audited as `loan.written_off`, the units still out written into `quantity_lost`. It is gated like the overdue extend because it is the same escape: closing the loan clears the borrower's standing on it. Resolved against the real principal; a desk keeper gets `requires_manage`. **Counted only** — a coded piece that never came back is a `missing` whereabouts on a named unit, which a write-off would erase.
+- **A counted check-in row names the loan, not the model** (`loanPublicId` + this return's `quantity`, not a running total). Two members can have the same draws out, and "three came back" has to land on somebody's loan. There is **no condition-at-return** on a counted row: one condition for six draws says nothing about which has the sticky gate, and stock buckets are corrected by counting the bin, not inferred from a return.
+- `loan.checked_in` for a counted row carries `level: "model"`, this return's units, the running total and `closed`, so "3 of 6, 1 still out" reads straight off the audit page.
+- **Backfill stays coded-only.** `bulkImportLoansAction` resolves rows by code; a CSV column for counted quantities is its own piece of work and nobody has asked for it.
 
 **The partial unique index `gear_loans_one_active_per_item` on `(item_id) WHERE returned_at IS NULL` is the race protector — the per-row pre-check in the action is UX only.** It applies to coded loans only. Deactivating on-loan gear is blocked (typed `on_loan` result; the FK is also `RESTRICT`).
 
@@ -209,7 +215,7 @@ Officer-only flows gate on `gear:loan` (separate from `gear:manage` so a "gear c
 
 The **gear-desk Sheet** hosts checkout and check-in behind a tab toggle. An earlier mobile FAB iteration was dropped because the FAB's fixed positioning fought the sidebar's stacking context.
 
-Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`, `loan.extended`, `loan.cart_scanned`. Gear-side: `gear.added`, `gear.updated`, `gear.deactivated`, `gear.reactivated`, `gear.code_released`, `gear.tags_changed`, `gear_model.*`. **`gear.retired` / `gear.unretired` remain in the enum for historical rows only** — nothing emits them.
+Audit actions: `loan.checked_out` (one per row, `bulk: true`), `loan.checked_in`, `loan.extended`, `loan.written_off`, `loan.cart_scanned`. Gear-side: `gear.added`, `gear.updated`, `gear.deactivated`, `gear.reactivated`, `gear.code_released`, `gear.tags_changed`, `gear_model.*`. **`gear.retired` / `gear.unretired` remain in the enum for historical rows only** — nothing emits them.
 
 **The audit action list exists twice** — `auditAction` in `drizzle/schema.ts` (the column enum) and `AUDIT_ACTIONS` in `features/audit/server/audit-fns.ts` (the filter dropdown). Nothing keeps them in sync; add to both.
 

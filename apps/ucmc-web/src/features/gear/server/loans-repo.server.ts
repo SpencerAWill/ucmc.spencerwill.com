@@ -547,6 +547,50 @@ export async function getDeskModelByPublicId(
   return r ? { ...toCountedDeskModelRow(r), tracking: r.tracking } : null;
 }
 
+/**
+ * Open counted loans, for the check-in pane: either every open loan of
+ * one model (a scanned bin label — "who has these draws?") or those
+ * matching free text on the model or the borrower. Soonest-due first,
+ * so a member with two loans of the same draws hands back the one
+ * that goes overdue first.
+ */
+export async function listOpenCountedLoans(
+  filter: { modelId: string } | { q: string },
+  limit = 10,
+): Promise<LoanListRow[]> {
+  const narrow =
+    "modelId" in filter
+      ? eq(schema.gearLoans.modelId, filter.modelId)
+      : loanSearchWhere(filter.q.trim());
+  const rows = await getDb()
+    .select(LOAN_COLUMNS)
+    .from(schema.gearLoans)
+    .leftJoin(
+      schema.gearItems,
+      eq(schema.gearItems.id, schema.gearLoans.itemId),
+    )
+    .innerJoin(schema.gearModels, MODEL_VIA_LOAN_OR_ITEM)
+    .innerJoin(
+      schema.gearTypes,
+      eq(schema.gearTypes.id, schema.gearModels.typeId),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.gearLoans.memberUserId))
+    .innerJoin(
+      schema.profiles,
+      eq(schema.profiles.userId, schema.gearLoans.memberUserId),
+    )
+    .where(
+      and(
+        isNotNull(schema.gearLoans.modelId),
+        isNull(schema.gearLoans.returnedAt),
+        narrow,
+      ),
+    )
+    .orderBy(asc(schema.gearLoans.dueAt))
+    .limit(limit);
+  return rows.map(toLoanRow);
+}
+
 export async function getLoanByPublicId(
   publicId: string,
 ): Promise<LoanListRow | null> {
@@ -720,19 +764,97 @@ export async function markLoanReturned(input: {
 }
 
 /**
- * Partial return on a counted loan: some draws come back, the loan stays
- * open for the rest. Leaves `returnedAt` null on purpose — the loan is
- * closed by `markLoanReturned` when the last unit lands or an officer
- * writes off the shortfall.
+ * Units of a counted loan coming back. Closes the loan when the last
+ * one lands; otherwise leaves it open — and overdue-able — for the
+ * rest. Returns null when the guard refused it: the loan was closed,
+ * wasn't counted, or `units` is more than is still out.
+ *
+ * **An increment in one guarded statement, not a read-modify-write.**
+ * Two officers each taking three draws back from the same loan would
+ * otherwise both read `quantityReturned = 0` and both write 3, losing a
+ * return and leaving the member holding draws they handed in. SQLite
+ * evaluates every SET expression against the row as it was before the
+ * update, so the CASEs all see the old `quantity_returned`.
+ *
+ * Never writes `quantityLost`. A short return is not a loss — "five of
+ * six came back" is far likelier a sixth still in somebody's pack than
+ * a write-off — so the loan stays open until the draw turns up or an
+ * officer writes it off (`writeOffLoanShortfall`). That is the same
+ * call sweeps make: a shortfall is reported, the loss is somebody's
+ * decision.
  */
-export async function recordPartialReturn(input: {
+export async function recordCountedReturn(input: {
   id: string;
+  units: number;
+  now: Temporal.Instant;
+  returnedToUserId: string;
+  /** Replaces the loan's check-in notes only when given — a later
+   *  partial return with nothing to say keeps the earlier note. */
+  checkinNotes: string | null;
+}): Promise<{
+  quantity: number;
   quantityReturned: number;
-}): Promise<void> {
-  await getDb()
+  closed: boolean;
+} | null> {
+  const nowMs = input.now.epochMilliseconds;
+  const completes = sql`${schema.gearLoans.quantityReturned} + ${input.units} = ${schema.gearLoans.quantity}`;
+  const rows = await getDb()
     .update(schema.gearLoans)
-    .set({ quantityReturned: input.quantityReturned })
-    .where(eq(schema.gearLoans.id, input.id));
+    .set({
+      quantityReturned: sql`${schema.gearLoans.quantityReturned} + ${input.units}`,
+      returnedAt: sql`CASE WHEN ${completes} THEN ${nowMs} ELSE NULL END`,
+      returnedToUserId: sql`CASE WHEN ${completes} THEN ${input.returnedToUserId} ELSE ${schema.gearLoans.returnedToUserId} END`,
+      checkinNotes: sql`coalesce(${input.checkinNotes}, ${schema.gearLoans.checkinNotes})`,
+    })
+    .where(
+      and(
+        eq(schema.gearLoans.id, input.id),
+        isNull(schema.gearLoans.returnedAt),
+        isNotNull(schema.gearLoans.modelId),
+        sql`${schema.gearLoans.quantityReturned} + ${input.units} <= ${schema.gearLoans.quantity}`,
+      ),
+    )
+    .returning({
+      quantity: schema.gearLoans.quantity,
+      quantityReturned: schema.gearLoans.quantityReturned,
+      returnedAt: schema.gearLoans.returnedAt,
+    });
+  const row = rows.at(0);
+  if (!row) return null;
+  return {
+    quantity: row.quantity,
+    quantityReturned: row.quantityReturned,
+    closed: row.returnedAt !== null,
+  };
+}
+
+/**
+ * Close a counted loan short, writing what is still out into
+ * `quantityLost`. Returns the units written off, or null when the loan
+ * was already closed or isn't counted — guarded in the statement so a
+ * return landing at the same moment can't be written off as lost.
+ */
+export async function writeOffLoanShortfall(input: {
+  id: string;
+  now: Temporal.Instant;
+  returnedToUserId: string;
+}): Promise<{ quantityLost: number } | null> {
+  const rows = await getDb()
+    .update(schema.gearLoans)
+    .set({
+      returnedAt: input.now,
+      returnedToUserId: input.returnedToUserId,
+      quantityLost: sql`${schema.gearLoans.quantity} - ${schema.gearLoans.quantityReturned}`,
+    })
+    .where(
+      and(
+        eq(schema.gearLoans.id, input.id),
+        isNull(schema.gearLoans.returnedAt),
+        isNotNull(schema.gearLoans.modelId),
+      ),
+    )
+    .returning({ quantityLost: schema.gearLoans.quantityLost });
+  return rows.at(0) ?? null;
 }
 
 export async function extendLoanDueAt(input: {

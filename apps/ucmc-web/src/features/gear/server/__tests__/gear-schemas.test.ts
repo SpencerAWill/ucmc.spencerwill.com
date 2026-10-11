@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkinLoansInputSchema,
   checkoutLoansInputSchema,
   createGearInputSchema,
   MAX_COUNTED_LOAN_QUANTITY,
@@ -116,6 +117,40 @@ describe("checkoutLoansInputSchema rows", () => {
     };
     expect(() =>
       checkoutLoansInputSchema.parse({ ...base, items: [counted, counted] }),
+    ).toThrow();
+  });
+});
+
+describe("checkinLoansInputSchema rows", () => {
+  const counted = {
+    kind: "counted",
+    loanPublicId: "loan1",
+    quantity: 3,
+    notes: null,
+  };
+
+  it("accepts a coded piece and a counted return in one batch", () => {
+    expect(() =>
+      checkinLoansInputSchema.parse({
+        items: [
+          {
+            kind: "coded",
+            gearPublicId: "g1",
+            conditionAtReturn: null,
+            notes: null,
+          },
+          counted,
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it("refuses a zero-unit return and the same loan twice", () => {
+    expect(() =>
+      checkinLoansInputSchema.parse({ items: [{ ...counted, quantity: 0 }] }),
+    ).toThrow();
+    expect(() =>
+      checkinLoansInputSchema.parse({ items: [counted, counted] }),
     ).toThrow();
   });
 });

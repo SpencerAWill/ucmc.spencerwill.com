@@ -800,6 +800,9 @@ export const auditAction = [
   "loan.checked_out",
   "loan.checked_in",
   "loan.extended",
+  // A `gear:manage` officer closed a counted loan short: the units still
+  // out were written into `quantity_lost`. Metadata carries the reason.
+  "loan.written_off",
   // Officer scanned a member's gear-cart QR at the checkout desk
   // (resolveCartTokenAction). One event per scan, with metadata
   // { memberUserId, itemCount } so the audit trail captures officer

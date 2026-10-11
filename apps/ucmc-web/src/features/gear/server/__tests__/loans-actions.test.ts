@@ -54,13 +54,16 @@ const {
   getMemberForLoanAction,
   listLoansAction,
   listMyLoansAction,
+  listOpenCountedLoansForModelAction,
   searchCountedModelsForDeskAction,
+  searchOpenCountedLoansAction,
+  writeOffLoanShortfallAction,
 } = await import("#/features/gear/server/loans-actions.server");
 const { createGearModelAction, setGearModelStockAction } =
   await import("#/features/gear/server/models-actions.server");
 const { placeGearHoldAction } =
   await import("#/features/gear/server/holds-actions.server");
-const { insertCountedLoanIfAvailable, listLoans } =
+const { insertCountedLoanIfAvailable, listLoans, recordCountedReturn } =
   await import("#/features/gear/server/loans-repo.server");
 const { openSession } = await import("#/server/auth/session.server");
 
@@ -938,6 +941,306 @@ describe("desk lookups for counted models", () => {
   });
 });
 
+// ── counted check-in ───────────────────────────────────────────────────
+
+/** Lends `quantity` of a fresh counted model to a fresh member, as an
+ *  admin, and returns everything a check-in test needs. */
+async function seedCountedLoan(
+  serviceable: number,
+  quantity: number,
+  memberName = "Draw Borrower",
+): Promise<{
+  draws: { publicId: string; id: string };
+  member: { id: string; publicId: string };
+  loanPublicId: string;
+}> {
+  await signInAsLoanManager();
+  const draws = await seedCountedModel(serviceable);
+  const member = await seedUser(
+    `draws-${crypto.randomUUID()}@example.com`,
+    memberName,
+  );
+  const checkout = await checkoutLoansAction({
+    memberPublicId: member.publicId,
+    items: [countedRow(draws.publicId, quantity)],
+    notes: null,
+  });
+  const loan = checkout.results.at(0);
+  if (!loan?.ok) throw new Error(`seed checkout: ${JSON.stringify(loan)}`);
+  return { draws, member, loanPublicId: loan.loanPublicId };
+}
+
+function countedReturn(loanPublicId: string, quantity: number) {
+  return { kind: "counted" as const, loanPublicId, quantity, notes: null };
+}
+
+async function loanRow(publicId: string) {
+  const row = (
+    await getDb()
+      .select()
+      .from(schema.gearLoans)
+      .where(eq(schema.gearLoans.publicId, publicId))
+  ).at(0);
+  if (!row) throw new Error("loan row missing");
+  return row;
+}
+
+describe("checkinLoansAction counted rows", () => {
+  it("keeps a short return open, and closes it when the last unit lands", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 6);
+
+    const five = await checkinLoansAction({
+      items: [countedReturn(loanPublicId, 5)],
+    });
+    expect(five.results[0]).toMatchObject({
+      ok: true,
+      kind: "counted",
+      quantity: 5,
+      outstanding: 1,
+    });
+    expect(await loanRow(loanPublicId)).toMatchObject({
+      quantityReturned: 5,
+      quantityLost: 0,
+      returnedAt: null,
+    });
+
+    const last = await checkinLoansAction({
+      items: [countedReturn(loanPublicId, 1)],
+    });
+    expect(last.results[0]).toMatchObject({ ok: true, outstanding: 0 });
+    const closed = await loanRow(loanPublicId);
+    expect(closed.quantityReturned).toBe(6);
+    expect(closed.quantityLost).toBe(0);
+    expect(closed.returnedAt).not.toBeNull();
+
+    const closes = (await getDb().select().from(schema.auditLog))
+      .filter((r) => r.action === "loan.checked_in")
+      .map((r) => {
+        const m = auditMetadata(r);
+        return [m.level, m.quantityReturned, m.totalReturned, m.closed];
+      });
+    expect(closes).toEqual([
+      ["model", 5, 5, false],
+      ["model", 1, 6, true],
+    ]);
+  });
+
+  it("releases returned units back to the shelf, and only those", async () => {
+    const { draws, loanPublicId } = await seedCountedLoan(6, 6);
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 2)] });
+    const next = await seedUser("next@example.com");
+
+    const three = await checkoutLoansAction({
+      memberPublicId: next.publicId,
+      items: [countedRow(draws.publicId, 3)],
+      notes: null,
+    });
+    expect(three.results[0]).toMatchObject({
+      ok: false,
+      reason: "insufficient_stock",
+      available: 2,
+    });
+    const two = await checkoutLoansAction({
+      memberPublicId: next.publicId,
+      items: [countedRow(draws.publicId, 2)],
+      notes: null,
+    });
+    expect(two.results[0]?.ok).toBe(true);
+  });
+
+  it("refuses more than is still out, and changes nothing", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 6);
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 4)] });
+
+    const result = await checkinLoansAction({
+      items: [countedReturn(loanPublicId, 3)],
+    });
+
+    expect(result.results).toEqual([
+      {
+        ok: false,
+        kind: "counted",
+        loanPublicId,
+        reason: "exceeds_outstanding",
+        outstanding: 2,
+      },
+    ]);
+    expect((await loanRow(loanPublicId)).quantityReturned).toBe(4);
+  });
+
+  it("guards the increment itself — two concurrent returns can't over-return", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 6);
+    const loan = await loanRow(loanPublicId);
+    const admin = await signInAsLoanManager("Second desk");
+    const now = Temporal.Now.instant();
+    const ret = () =>
+      recordCountedReturn({
+        id: loan.id,
+        units: 4,
+        now,
+        returnedToUserId: admin.id,
+        checkinNotes: null,
+      });
+
+    const outcomes = await Promise.all([ret(), ret()]);
+
+    expect(outcomes.filter((o) => o !== null)).toHaveLength(1);
+    expect((await loanRow(loanPublicId)).quantityReturned).toBe(4);
+  });
+
+  it("refuses a coded loan as not_counted and a closed one as no_open_loan", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 2);
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 2)] });
+    const typePublicId = await createTypeOk();
+    const harness = await createGearOk({ typePublicId, code: "CH1" });
+    const member = await seedUser("coded@example.com");
+    const coded = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [{ kind: "coded", gearPublicId: harness, durationDays: 7 }],
+      notes: null,
+    });
+    const codedLoan = coded.results.at(0);
+    if (!codedLoan?.ok) throw new Error("coded checkout failed");
+
+    const result = await checkinLoansAction({
+      items: [
+        countedReturn(codedLoan.loanPublicId, 1),
+        countedReturn(loanPublicId, 1),
+        countedReturn("no-such-loan", 1),
+      ],
+    });
+
+    expect(result.results.map((r) => (r.ok ? "ok" : r.reason))).toEqual([
+      "not_counted",
+      "no_open_loan",
+      "not_found",
+    ]);
+  });
+
+  it("checks in a coded piece and counted draws from different borrowers in one batch", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 6, "Draw Holder");
+    const typePublicId = await createTypeOk();
+    const harness = await createGearOk({ typePublicId, code: "CH1" });
+    const other = await seedUser("harness@example.com", "Harness Holder");
+    await checkoutLoansAction({
+      memberPublicId: other.publicId,
+      items: [{ kind: "coded", gearPublicId: harness, durationDays: 7 }],
+      notes: null,
+    });
+
+    const result = await checkinLoansAction({
+      items: [
+        {
+          kind: "coded",
+          gearPublicId: harness,
+          conditionAtReturn: null,
+          notes: null,
+        },
+        countedReturn(loanPublicId, 6),
+      ],
+    });
+
+    expect(result.results.every((r) => r.ok)).toBe(true);
+    expect(
+      result.results.flatMap((r) => (r.ok ? [r.memberFullName] : [])),
+    ).toEqual(["Harness Holder", "Draw Holder"]);
+  });
+
+  it("lists open counted loans by model and by borrower name, outstanding net of returns", async () => {
+    const { draws, loanPublicId } = await seedCountedLoan(10, 6, "Riley Draws");
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 2)] });
+
+    const byModel = await listOpenCountedLoansForModelAction({
+      modelPublicId: draws.publicId,
+    });
+    const byName = await searchOpenCountedLoansAction({ q: "Riley" });
+
+    for (const rows of [byModel, byName]) {
+      expect(rows).toEqual([
+        expect.objectContaining({
+          loanPublicId,
+          quantity: 6,
+          outstanding: 4,
+          memberFullName: "Riley Draws",
+        }),
+      ]);
+    }
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 4)] });
+    expect(
+      await listOpenCountedLoansForModelAction({
+        modelPublicId: draws.publicId,
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("writeOffLoanShortfallAction", () => {
+  it("closes a short loan, writing what's still out into quantityLost", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 6);
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 5)] });
+
+    const result = await writeOffLoanShortfallAction({
+      publicId: loanPublicId,
+      reason: "Dropped off the crag at Red River",
+    });
+
+    expect(result).toEqual({ ok: true, quantityLost: 1 });
+    const row = await loanRow(loanPublicId);
+    expect(row.quantityLost).toBe(1);
+    expect(row.quantityReturned).toBe(5);
+    expect(row.returnedAt).not.toBeNull();
+    const audit = (await getDb().select().from(schema.auditLog)).find(
+      (r) => r.action === "loan.written_off",
+    );
+    expect(audit && auditMetadata(audit)).toMatchObject({
+      quantity: 6,
+      quantityLost: 1,
+      reason: "Dropped off the crag at Red River",
+    });
+  });
+
+  it("is a gear:manage judgement — a desk keeper is refused", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 6);
+    await signInAsDeskKeeper();
+
+    const result = await writeOffLoanShortfallAction({
+      publicId: loanPublicId,
+      reason: "Lost",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "requires_manage" });
+    expect((await loanRow(loanPublicId)).returnedAt).toBeNull();
+  });
+
+  it("refuses a coded loan and an already-closed one", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 1);
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 1)] });
+    const typePublicId = await createTypeOk();
+    const harness = await createGearOk({ typePublicId, code: "CH1" });
+    const member = await seedUser("lost-harness@example.com");
+    const coded = await checkoutLoansAction({
+      memberPublicId: member.publicId,
+      items: [{ kind: "coded", gearPublicId: harness, durationDays: 7 }],
+      notes: null,
+    });
+    const codedLoan = coded.results.at(0);
+    if (!codedLoan?.ok) throw new Error("coded checkout failed");
+
+    expect(
+      await writeOffLoanShortfallAction({
+        publicId: codedLoan.loanPublicId,
+        reason: "Lost",
+      }),
+    ).toEqual({ ok: false, reason: "not_counted" });
+    expect(
+      await writeOffLoanShortfallAction({
+        publicId: loanPublicId,
+        reason: "x",
+      }),
+    ).toEqual({ ok: false, reason: "loan_returned" });
+  });
+});
+
 describe("checkinLoansAction", () => {
   it("closes a single loan and emits loan.checked_in", async () => {
     await signInAsLoanManager();
@@ -951,7 +1254,14 @@ describe("checkinLoansAction", () => {
     });
 
     const result = await checkinLoansAction({
-      items: [{ gearPublicId: gear, conditionAtReturn: null, notes: null }],
+      items: [
+        {
+          kind: "coded",
+          gearPublicId: gear,
+          conditionAtReturn: null,
+          notes: null,
+        },
+      ],
     });
     const ok = result.results.flatMap((r) => (r.ok ? [r] : []));
     expect(ok).toHaveLength(1);
@@ -981,8 +1291,18 @@ describe("checkinLoansAction", () => {
 
     const result = await checkinLoansAction({
       items: [
-        { gearPublicId: a, conditionAtReturn: null, notes: null },
-        { gearPublicId: b, conditionAtReturn: null, notes: null },
+        {
+          kind: "coded",
+          gearPublicId: a,
+          conditionAtReturn: null,
+          notes: null,
+        },
+        {
+          kind: "coded",
+          gearPublicId: b,
+          conditionAtReturn: null,
+          notes: null,
+        },
       ],
     });
     const ok = result.results.flatMap((r) => (r.ok ? [r] : []));
@@ -1005,6 +1325,7 @@ describe("checkinLoansAction", () => {
     await checkinLoansAction({
       items: [
         {
+          kind: "coded",
           gearPublicId: gear,
           conditionAtReturn: "needs_repair",
           notes: "snapped buckle",
@@ -1029,10 +1350,18 @@ describe("checkinLoansAction", () => {
     const gear = await createGearOk({ typePublicId, code: "CH1" });
 
     const result = await checkinLoansAction({
-      items: [{ gearPublicId: gear, conditionAtReturn: null, notes: null }],
+      items: [
+        {
+          kind: "coded",
+          gearPublicId: gear,
+          conditionAtReturn: null,
+          notes: null,
+        },
+      ],
     });
     expect(result.results[0]).toEqual({
       ok: false,
+      kind: "coded",
       gearPublicId: gear,
       reason: "no_open_loan",
     });
@@ -1080,7 +1409,14 @@ describe("extendLoanAction", () => {
       .flatMap((r) => (r.ok ? [r.loanPublicId] : []))
       .at(0)!;
     await checkinLoansAction({
-      items: [{ gearPublicId: gear, conditionAtReturn: null, notes: null }],
+      items: [
+        {
+          kind: "coded",
+          gearPublicId: gear,
+          conditionAtReturn: null,
+          notes: null,
+        },
+      ],
     });
 
     const result = await extendLoanAction({
@@ -1333,7 +1669,14 @@ describe("deactivateGearAction with open loan", () => {
       notes: null,
     });
     await checkinLoansAction({
-      items: [{ gearPublicId: gear, conditionAtReturn: null, notes: null }],
+      items: [
+        {
+          kind: "coded",
+          gearPublicId: gear,
+          conditionAtReturn: null,
+          notes: null,
+        },
+      ],
     });
 
     const result = await deactivateGearAction({

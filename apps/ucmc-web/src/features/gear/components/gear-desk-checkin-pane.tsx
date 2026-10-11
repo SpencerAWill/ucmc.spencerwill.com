@@ -39,6 +39,8 @@ const SKIP_LABEL: Record<
 > = {
   not_found: "No longer in inventory",
   no_open_loan: "No open loan to close — already returned?",
+  not_counted: "Tracked by code — scan the piece itself",
+  exceeds_outstanding: "More than are still out on this loan",
 };
 
 export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
@@ -96,6 +98,7 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
     checkin.mutate(
       {
         items: items.map((i) => ({
+          kind: "coded" as const,
           gearPublicId: i.row.publicId,
           conditionAtReturn: i.conditionAtReturn,
           notes: i.notes.trim() || null,
@@ -120,11 +123,14 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
             );
           }
           setItems((prev) => {
-            const skippedIds = new Set(skipped.map((s) => s.gearPublicId));
+            const codedSkips = skipped.flatMap((s) =>
+              s.kind === "coded" ? [s] : [],
+            );
+            const skippedIds = new Set(codedSkips.map((s) => s.gearPublicId));
             return prev
               .filter((i) => skippedIds.has(i.row.publicId))
               .map((i) => {
-                const reason = skipped.find(
+                const reason = codedSkips.find(
                   (s) => s.gearPublicId === i.row.publicId,
                 );
                 return {

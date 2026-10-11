@@ -47,8 +47,11 @@ import {
   insertLoans,
   listLoans,
   listLoansForMember,
+  listOpenCountedLoans,
   markLoanReturned,
   openLoanQuantityForModels,
+  recordCountedReturn,
+  writeOffLoanShortfall,
   getApprovedMemberByPublicId,
   searchApprovedMembers,
   searchCountedModelsForDesk,
@@ -559,30 +562,76 @@ async function emitCheckoutAudits(
 
 // ── check-in ────────────────────────────────────────────────────────────
 
+/** One row of a check-in batch: a coded piece by its code, or units of
+ *  an open counted loan. Counted rows name the LOAN, not the model —
+ *  two members can have the same draws out, and "three came back"
+ *  has to land on somebody's loan. */
+export type CheckinRowInput =
+  | {
+      kind: "coded";
+      gearPublicId: string;
+      conditionAtReturn: schema.GearCondition | null;
+      notes: string | null;
+    }
+  | {
+      kind: "counted";
+      loanPublicId: string;
+      /** Units handed back in THIS return, not a running total. */
+      quantity: number;
+      notes: string | null;
+    };
+
 export interface CheckinLoansInput {
-  items: Array<{
-    gearPublicId: string;
-    conditionAtReturn: schema.GearCondition | null;
-    notes: string | null;
-  }>;
+  items: CheckinRowInput[];
 }
 
-export type CheckinSkipReason = "not_found" | "no_open_loan";
+export type CheckinSkipReason =
+  | "not_found"
+  | "no_open_loan"
+  /** A counted row naming a coded loan — the desk resolves those by
+   *  code. */
+  | "not_counted"
+  /** More units than are still out on the loan. */
+  | "exceeds_outstanding";
+
+interface CheckinBorrower {
+  loanPublicId: string;
+  memberPublicId: string;
+  memberFullName: string;
+  overdue: boolean;
+}
 
 export type CheckinResult =
-  | {
+  | ({ ok: true; kind: "coded"; gearPublicId: string } & CheckinBorrower)
+  | ({
       ok: true;
+      kind: "counted";
+      /** Units taken back in this return. */
+      quantity: number;
+      /** Still out after it. Zero means the loan closed. */
+      outstanding: number;
+    } & CheckinBorrower)
+  | {
+      ok: false;
+      kind: "coded";
       gearPublicId: string;
-      loanPublicId: string;
-      memberPublicId: string;
-      memberFullName: string;
-      overdue: boolean;
+      reason: CheckinSkipReason;
     }
-  | { ok: false; gearPublicId: string; reason: CheckinSkipReason };
+  | {
+      ok: false;
+      kind: "counted";
+      loanPublicId: string;
+      reason: CheckinSkipReason;
+      /** Units still out, when the loan exists — lets the desk say "only
+       *  2 are out" for an `exceeds_outstanding`. */
+      outstanding: number | null;
+    };
 
 export interface CheckinLoansResult {
   results: CheckinResult[];
 }
+
+const DAY_MS = 1000 * 60 * 60 * 24;
 
 export async function checkinLoansAction(
   input: CheckinLoansInput,
@@ -594,10 +643,18 @@ export async function checkinLoansAction(
     [];
 
   for (const item of input.items) {
+    if (item.kind === "counted") {
+      const outcome = await checkinCountedRow(item, principal.userId, now);
+      results.push(outcome.result);
+      if (outcome.audit) auditPayloads.push(outcome.audit);
+      continue;
+    }
+
     const gear = await getGearItemByPublicId(item.gearPublicId);
     if (!gear) {
       results.push({
         ok: false,
+        kind: "coded",
         gearPublicId: item.gearPublicId,
         reason: "not_found",
       });
@@ -607,6 +664,7 @@ export async function checkinLoansAction(
     if (!loan) {
       results.push({
         ok: false,
+        kind: "coded",
         gearPublicId: item.gearPublicId,
         reason: "no_open_loan",
       });
@@ -658,9 +716,9 @@ export async function checkinLoansAction(
       .limit(1);
     const memberRow = memberRows.at(0);
 
-    const daysHeldMs =
-      now.epochMilliseconds - loan.checkedOutAt.epochMilliseconds;
-    const daysHeld = Math.round(daysHeldMs / (1000 * 60 * 60 * 24));
+    const daysHeld = Math.round(
+      (now.epochMilliseconds - loan.checkedOutAt.epochMilliseconds) / DAY_MS,
+    );
     const overdue = Temporal.Instant.compare(now, loan.dueAt) > 0;
 
     auditPayloads.push({
@@ -670,6 +728,7 @@ export async function checkinLoansAction(
       targetId: gear.id,
       metadata: {
         memberUserId: loan.memberUserId,
+        level: "item",
         gearId: gear.id,
         code: gear.code,
         conditionAtReturn: item.conditionAtReturn,
@@ -680,6 +739,7 @@ export async function checkinLoansAction(
 
     results.push({
       ok: true,
+      kind: "coded",
       gearPublicId: item.gearPublicId,
       loanPublicId: loan.publicId,
       memberPublicId: memberRow?.publicId ?? "",
@@ -692,6 +752,166 @@ export async function checkinLoansAction(
     await recordAuditEvents(auditPayloads);
   }
   return { results };
+}
+
+/**
+ * One counted row. A short return keeps the loan open for what is
+ * still out; only the last unit closes it. There is deliberately no
+ * condition-at-return here: one condition for six draws says nothing
+ * about which one has the sticky gate, and stock buckets are corrected
+ * by counting the bin (`setGearModelStockAction`), not inferred from a
+ * return.
+ */
+async function checkinCountedRow(
+  item: Extract<CheckinRowInput, { kind: "counted" }>,
+  actorUserId: string,
+  now: Temporal.Instant,
+): Promise<{
+  result: CheckinResult;
+  audit: Parameters<typeof recordAuditEvents>[0][number] | null;
+}> {
+  const refuse = (
+    reason: CheckinSkipReason,
+    outstanding: number | null = null,
+  ) => ({
+    result: {
+      ok: false as const,
+      kind: "counted" as const,
+      loanPublicId: item.loanPublicId,
+      reason,
+      outstanding,
+    },
+    audit: null,
+  });
+
+  const loan = await getLoanByPublicId(item.loanPublicId);
+  if (!loan) return refuse("not_found");
+  if (!loan.isCounted) return refuse("not_counted");
+  if (loan.returnedAt !== null) return refuse("no_open_loan");
+  const units = Math.floor(item.quantity);
+  const outstandingBefore = loan.quantity - loan.quantityReturned;
+  if (units > outstandingBefore) {
+    return refuse("exceeds_outstanding", outstandingBefore);
+  }
+
+  const applied = await recordCountedReturn({
+    id: loan.id,
+    units,
+    now,
+    returnedToUserId: actorUserId,
+    checkinNotes: item.notes,
+  });
+  if (!applied) {
+    // The guard refused what the read above allowed: another return or
+    // a write-off landed in between. Re-read so the desk is told which.
+    const fresh = await getLoanByPublicId(item.loanPublicId);
+    if (!fresh || fresh.returnedAt !== null) return refuse("no_open_loan");
+    return refuse(
+      "exceeds_outstanding",
+      fresh.quantity - fresh.quantityReturned,
+    );
+  }
+
+  const outstanding = applied.quantity - applied.quantityReturned;
+  const overdue = Temporal.Instant.compare(now, loan.dueAt) > 0;
+  return {
+    result: {
+      ok: true,
+      kind: "counted",
+      loanPublicId: loan.publicId,
+      memberPublicId: loan.memberPublicId,
+      memberFullName: loan.memberFullName,
+      overdue,
+      quantity: units,
+      outstanding,
+    },
+    audit: {
+      actorUserId,
+      action: "loan.checked_in",
+      targetType: "gear",
+      targetId: loan.modelId,
+      metadata: {
+        memberUserId: loan.memberUserId,
+        level: "model",
+        loanId: loan.id,
+        modelId: loan.modelId,
+        // This return, the running total, and the loan's size — enough
+        // to read "3 of 6, 1 still out" straight off the audit page
+        // without joining back to the loan.
+        quantityReturned: units,
+        totalReturned: applied.quantityReturned,
+        quantity: applied.quantity,
+        closed: applied.closed,
+        daysHeld: Math.round(
+          (now.epochMilliseconds - loan.checkedOutAt.epochMilliseconds) /
+            DAY_MS,
+        ),
+        overdue,
+      },
+    },
+  };
+}
+
+// ── write-off ───────────────────────────────────────────────────────────
+
+export type WriteOffLoanResult =
+  | { ok: true; quantityLost: number }
+  | {
+      ok: false;
+      reason: "not_found" | "loan_returned" | "not_counted" | "requires_manage";
+    };
+
+/**
+ * Close a counted loan short: what is still out is written into
+ * `quantityLost` and the loan stops counting against the member.
+ *
+ * **This is the only way a counted loan closes without every unit back,
+ * and it is a `gear:manage` judgement, with a reason, on the audit
+ * page.** A short return deliberately leaves the loan open, because a
+ * missing draw is far likelier in somebody's pack than lost — and a
+ * write-off also clears the borrower's overdue standing on it, which is
+ * exactly the escape the extend override exists to stop. So it takes
+ * the same shape: resolved against the REAL principal (a `gear:loan`
+ * keeper can't inherit it; emulation can't fake it), reason required.
+ *
+ * Counted only. A coded piece that never came back is a whereabouts
+ * problem (`missing`) on a named unit, which this would erase.
+ */
+export async function writeOffLoanShortfallAction(input: {
+  publicId: string;
+  reason: string;
+}): Promise<WriteOffLoanResult> {
+  const principal = await requireGearLoanManager();
+  if (!principal.permissions.includes("gear:manage")) {
+    return { ok: false, reason: "requires_manage" };
+  }
+  const loan = await getLoanByPublicId(input.publicId);
+  if (!loan) return { ok: false, reason: "not_found" };
+  if (!loan.isCounted) return { ok: false, reason: "not_counted" };
+  if (loan.returnedAt !== null) return { ok: false, reason: "loan_returned" };
+
+  const written = await writeOffLoanShortfall({
+    id: loan.id,
+    now: Temporal.Now.instant(),
+    returnedToUserId: principal.userId,
+  });
+  if (!written) return { ok: false, reason: "loan_returned" };
+
+  await recordAuditEvent({
+    actorUserId: principal.userId,
+    action: "loan.written_off",
+    targetType: "gear",
+    targetId: loan.modelId,
+    metadata: {
+      memberUserId: loan.memberUserId,
+      loanId: loan.id,
+      modelId: loan.modelId,
+      quantity: loan.quantity,
+      quantityLost: written.quantityLost,
+      reason: input.reason,
+    },
+  });
+  return { ok: true, quantityLost: written.quantityLost };
 }
 
 // ── extend ──────────────────────────────────────────────────────────────
@@ -1057,4 +1277,59 @@ export async function getDeskModelAction(input: {
   const model = (await withTakeable([row])).at(0);
   if (!model) return { ok: false, reason: "not_found" };
   return { ok: true, model };
+}
+
+/** An open counted loan as the check-in pane lists it. */
+export interface DeskCountedLoan {
+  loanPublicId: string;
+  modelPublicId: string;
+  name: string;
+  typeName: string;
+  thumbnailKey: string | null;
+  quantity: number;
+  /** Units still out — what this return can take back at most. */
+  outstanding: number;
+  memberPublicId: string;
+  memberFullName: string;
+  memberAvatarKey: string | null;
+  dueAt: Temporal.Instant;
+}
+
+function toDeskCountedLoan(row: LoanListRow): DeskCountedLoan {
+  return {
+    loanPublicId: row.publicId,
+    modelPublicId: row.modelPublicId,
+    name: row.name,
+    typeName: row.typeName,
+    thumbnailKey: row.thumbnailKey,
+    quantity: row.quantity,
+    outstanding: row.quantity - row.quantityReturned,
+    memberPublicId: row.memberPublicId,
+    memberFullName: row.memberFullName,
+    memberAvatarKey: row.memberAvatarKey,
+    dueAt: row.dueAt,
+  };
+}
+
+/** Free-text search over open counted loans, by model or borrower —
+ *  "draws" or "Riley" both find Riley's six draws. */
+export async function searchOpenCountedLoansAction(input: {
+  q: string;
+}): Promise<DeskCountedLoan[]> {
+  await requireGearLoanManager();
+  if (input.q.trim().length === 0) return [];
+  return (await listOpenCountedLoans({ q: input.q })).map(toDeskCountedLoan);
+}
+
+/** Every open loan of one counted model — what a scanned bin label
+ *  means at check-in: "who has these out?" */
+export async function listOpenCountedLoansForModelAction(input: {
+  modelPublicId: string;
+}): Promise<DeskCountedLoan[]> {
+  await requireGearLoanManager();
+  const model = await getDeskModelByPublicId(input.modelPublicId);
+  if (!model) return [];
+  return (await listOpenCountedLoans({ modelId: model.modelId }, 50)).map(
+    toDeskCountedLoan,
+  );
 }

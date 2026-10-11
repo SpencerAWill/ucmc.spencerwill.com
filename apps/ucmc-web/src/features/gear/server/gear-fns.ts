@@ -641,17 +641,38 @@ export const checkoutLoansInputSchema = z.object({
   overrideHolds: z.boolean().optional(),
 });
 
-const checkinLoansInputSchema = z.object({
+/** Per-row like checkout. A counted row names the open LOAN rather
+ *  than the model, because two borrowers can have the same draws out,
+ *  and `quantity` is this return's units, not a running total. */
+const checkinRowSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("coded"),
+    gearPublicId: z.string().min(1),
+    conditionAtReturn: z.enum(GEAR_CONDITION_VALUES).nullable(),
+    notes: z.string().max(2_000).nullable(),
+  }),
+  z.object({
+    kind: z.literal("counted"),
+    loanPublicId: z.string().min(1),
+    quantity: countedQuantity,
+    notes: z.string().max(2_000).nullable(),
+  }),
+]);
+
+export const checkinLoansInputSchema = z.object({
   items: z
-    .array(
-      z.object({
-        gearPublicId: z.string().min(1),
-        conditionAtReturn: z.enum(GEAR_CONDITION_VALUES).nullable(),
-        notes: z.string().max(2_000).nullable(),
-      }),
-    )
+    .array(checkinRowSchema)
     .min(1)
-    .max(50),
+    .max(50)
+    .refine(
+      (rows) =>
+        new Set(
+          rows.map((r) =>
+            r.kind === "coded" ? r.gearPublicId : r.loanPublicId,
+          ),
+        ).size === rows.length,
+      { message: "each piece or loan may appear once per batch" },
+    ),
 });
 
 const extendLoanInputSchema = z.object({
