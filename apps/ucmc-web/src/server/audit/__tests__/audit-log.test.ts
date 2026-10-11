@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, runBatch, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import {
   buildAuditEventStatement,
-  buildBulkAuditEventStatement,
+  buildBulkAuditEventStatements,
   recordAuditEvent,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
@@ -210,30 +210,57 @@ describe("buildAuditEventStatement (atomic batch path)", () => {
     expect(auditRows[0]?.action).toBe("registration.approved");
   });
 
-  it("buildBulkAuditEventStatement returns null on empty input", () => {
-    // Important contract: callers that compute events from a
-    // `.returning()` result must be able to handle the empty case
-    // without `db.batch` choking on a zero-row insert.
-    expect(buildBulkAuditEventStatement([])).toBeNull();
+  it("buildBulkAuditEventStatements returns no statements for no events", () => {
+    // Callers compute events from a `.returning()` that may match
+    // nothing, and spread the result straight into a batch.
+    expect(buildBulkAuditEventStatements([])).toEqual([]);
   });
 
-  it("buildBulkAuditEventStatement returns a single statement for many events", async () => {
+  it("buildBulkAuditEventStatements writes many events", async () => {
     const actor = await seedUser();
     const t1 = await seedUser();
     const t2 = await seedUser();
 
-    const stmt = buildBulkAuditEventStatement([
-      { actorUserId: actor, action: "registration.approved", targetUserId: t1 },
-      { actorUserId: actor, action: "registration.approved", targetUserId: t2 },
-    ]);
-    expect(stmt).not.toBeNull();
-    await stmt!;
+    await runBatch(
+      buildBulkAuditEventStatements([
+        {
+          actorUserId: actor,
+          action: "registration.approved",
+          targetUserId: t1,
+        },
+        {
+          actorUserId: actor,
+          action: "registration.approved",
+          targetUserId: t2,
+        },
+      ]),
+    );
 
     const rows = await getDb()
       .select()
       .from(schema.auditLog)
       .where(eq(schema.auditLog.actorUserId, actor));
     expect(rows).toHaveLength(2);
+  });
+
+  it("records 15+ events — the count that used to break every bulk action", async () => {
+    // An audit row binds 7 parameters, so one 15-event INSERT was 105
+    // and D1 refused it (#291). 200 spans fifteen statements.
+    const actor = await seedUser();
+
+    await recordAuditEvents(
+      Array.from({ length: 200 }, (_unused, i) => ({
+        actorUserId: actor,
+        action: "settings_updated" as const,
+        targetId: `t${i}`,
+      })),
+    );
+
+    const rows = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.actorUserId, actor));
+    expect(rows).toHaveLength(200);
   });
 });
 

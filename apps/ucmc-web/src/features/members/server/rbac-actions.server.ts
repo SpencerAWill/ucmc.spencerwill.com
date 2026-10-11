@@ -7,12 +7,18 @@ import { and, asc, count, eq, inArray, max } from "drizzle-orm";
 
 import {
   buildAuditEventStatement,
-  buildBulkAuditEventStatement,
+  buildBulkAuditEventStatements,
 } from "#/server/audit/audit-log.server";
 import { invalidateAnonymousPermissionsCache } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, isUniqueViolation, schema, selectInChunks } from "#/server/db";
+import {
+  getDb,
+  isUniqueViolation,
+  runBatch,
+  schema,
+  selectInChunks,
+} from "#/server/db";
 import { errorMessage, log } from "#/server/log/log.server";
 
 // ── constants ──────────────────────────────────────────────────────────
@@ -568,8 +574,8 @@ export async function setUserRolesAction(input: {
 
   // Replace-all: delete existing assignments, insert new set, audit
   // the diff. All atomic via D1 batch.
-  const auditStmt = buildBulkAuditEventStatement(events);
-  const stmts = [
+  const auditStmts = buildBulkAuditEventStatements(events);
+  await runBatch([
     db
       .delete(schema.userRoles)
       .where(eq(schema.userRoles.userId, input.userId)),
@@ -583,9 +589,8 @@ export async function setUserRolesAction(input: {
           ),
         ]
       : []),
-    ...(auditStmt ? [auditStmt] : []),
-  ];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+    ...auditStmts,
+  ]);
 
   return { ok: true };
 }
@@ -726,7 +731,7 @@ export async function setRoleMembersAction(input: {
   // One audit row per added / removed member, matching the shape the
   // user-keyed path writes, so the audit page answers "who granted X
   // this role?" the same way regardless of which surface did it.
-  const auditStmt = buildBulkAuditEventStatement([
+  const auditStmts = buildBulkAuditEventStatements([
     ...assigned.map((userId) => ({
       actorUserId: principal.userId,
       action: "role.assigned" as const,
@@ -747,7 +752,7 @@ export async function setRoleMembersAction(input: {
   // permissions path uses: `user_roles` rows for *this* role are the
   // only ones in scope, and touching only the delta keeps the
   // statement count flat when a role has many members and one changes.
-  const stmts = [
+  await runBatch([
     ...(unassigned.length > 0
       ? [
           db
@@ -770,9 +775,8 @@ export async function setRoleMembersAction(input: {
             .onConflictDoNothing(),
         ]
       : []),
-    ...(auditStmt ? [auditStmt] : []),
-  ];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+    ...auditStmts,
+  ]);
 
   return { ok: true };
 }

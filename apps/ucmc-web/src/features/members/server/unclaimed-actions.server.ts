@@ -26,12 +26,12 @@ import { uuidv7 } from "uuidv7";
 import { requireMembersManager } from "#/features/members/server/permissions.server";
 import {
   buildAuditEventStatement,
-  buildBulkAuditEventStatement,
+  buildBulkAuditEventStatements,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import { generatePublicId } from "#/server/auth/ids";
-import { getDb, isUniqueViolation, schema } from "#/server/db";
+import { getDb, isUniqueViolation, runBatch, schema } from "#/server/db";
 
 const DEFAULT_LIMIT = 50;
 
@@ -272,7 +272,7 @@ export async function preAddUnclaimedMembersAction(args: {
   // Bundling into the same `db.batch` makes the pre-add atomic with
   // its audit row(s), so a failed batch can't strand a created user
   // without an audit trail.
-  const auditInsert = buildBulkAuditEventStatement(
+  const auditInserts = buildBulkAuditEventStatements(
     created.map((row) => ({
       actorUserId: approver.userId,
       action: "member.pre_added",
@@ -282,13 +282,7 @@ export async function preAddUnclaimedMembersAction(args: {
   );
 
   try {
-    // `auditInsert` is non-null whenever `created.length > 0`, which is
-    // guaranteed at this point (we returned early above when toCreate
-    // was empty). The narrow keeps drizzle's batch tuple type happy.
-    if (!auditInsert) {
-      throw new Error("audit insert missing for non-empty created list");
-    }
-    await db.batch([userInserts, emailInserts, auditInsert]);
+    await runBatch([userInserts, emailInserts, ...auditInserts]);
     return { ok: true, created, skipped };
   } catch (err) {
     if (!isUniqueViolation(err, "user_emails.email")) {

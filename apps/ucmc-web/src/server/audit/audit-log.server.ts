@@ -33,7 +33,7 @@
  *
  * **Atomic vs sequential.** This module exposes two flavors:
  *
- *   - `buildAuditEventStatement` / `buildBulkAuditEventStatement`
+ *   - `buildAuditEventStatement` / `buildBulkAuditEventStatements`
  *     return the prepared INSERT(s) so callers can spread them into
  *     a `db.batch([...])` together with the parent mutation. That's
  *     the **preferred path** — D1 batches are atomic at the storage
@@ -99,7 +99,7 @@
  */
 import { uuidv7 } from "uuidv7";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, insertStatements, runBatch, schema } from "#/server/db";
 
 export type AuditAction = schema.AuditAction;
 
@@ -144,21 +144,19 @@ export function buildAuditEventStatement(event: AuditEventInput) {
 }
 
 /**
- * Returns a single multi-row INSERT statement for many audit events,
- * or `null` when the input is empty (drizzle's batch can't handle a
- * zero-row insert). Same usage pattern as `buildAuditEventStatement`.
+ * The INSERT statements for many audit events — **a list, not one
+ * statement**. Spread it into the caller's `db.batch([...])`; an empty
+ * input gives an empty list, so a `.returning()` that matched nothing
+ * needs no special case.
  *
- * Returns `null` rather than throwing on empty input because callers
- * commonly compute the events from a `.returning()` result that may
- * legitimately be empty (e.g. a bulk update that matched no rows).
+ * It used to be one multi-row INSERT, and an audit row binds 7
+ * parameters, so the 15th event pushed it past D1's 100 and every bulk
+ * action touching 15+ targets failed — inside an all-or-nothing batch,
+ * taking the mutation down with it (#291). `insertStatements` sizes each
+ * statement to fit, and the batch keeps them atomic.
  */
-export function buildBulkAuditEventStatement(
-  events: AuditEventInput[],
-): ReturnType<typeof buildAuditEventStatement> | null {
-  if (events.length === 0) {
-    return null;
-  }
-  return getDb().insert(schema.auditLog).values(events.map(buildRow));
+export function buildBulkAuditEventStatements(events: AuditEventInput[]) {
+  return insertStatements(schema.auditLog, events.map(buildRow));
 }
 
 export async function recordAuditEvent(event: AuditEventInput): Promise<void> {
@@ -174,8 +172,5 @@ export async function recordAuditEvent(event: AuditEventInput): Promise<void> {
 export async function recordAuditEvents(
   events: AuditEventInput[],
 ): Promise<void> {
-  const stmt = buildBulkAuditEventStatement(events);
-  if (stmt) {
-    await stmt;
-  }
+  await runBatch(buildBulkAuditEventStatements(events));
 }

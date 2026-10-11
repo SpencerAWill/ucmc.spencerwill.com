@@ -16,11 +16,11 @@ import { WAIVER_VERSION } from "#/config/legal";
 import { currentSeason } from "#/config/club-season";
 import {
   buildAuditEventStatement,
-  buildBulkAuditEventStatement,
+  buildBulkAuditEventStatements,
 } from "#/server/audit/audit-log.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, schema, selectInChunks } from "#/server/db";
+import { getDb, runBatch, schema, selectInChunks } from "#/server/db";
 import {
   currentAttestationFilter,
   currentlyAttestedUserIds,
@@ -310,7 +310,7 @@ export async function bulkAttestWaiversAction(input: {
   // above already established every userId is approved, so the
   // attestation INSERT is safe to execute as a multi-row write
   // alongside its audit twins.
-  const auditStmt = buildBulkAuditEventStatement(
+  const auditStmts = buildBulkAuditEventStatements(
     rows.map((row) => ({
       actorUserId: officer.userId,
       action: "waiver.attested",
@@ -320,15 +320,10 @@ export async function bulkAttestWaiversAction(input: {
       metadata: { cycle, version: WAIVER_VERSION, bulk: true },
     })),
   );
-  // `auditStmt` is non-null in practice because we returned early
-  // when userIds was empty, but use the spread-conditional pattern
-  // used by the other batched call sites so a future change to the
-  // early-return logic doesn't silently leave a `null` in the batch.
-  const stmts = [
+  await runBatch([
     db.insert(schema.waiverAttestations).values(rows),
-    ...(auditStmt ? [auditStmt] : []),
-  ];
-  await db.batch(stmts as [(typeof stmts)[number], ...typeof stmts]);
+    ...auditStmts,
+  ]);
 
   return { count: rows.length };
 }
