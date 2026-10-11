@@ -375,7 +375,9 @@ export function BarcodeScanner({
               <div className="absolute inset-0 flex items-center justify-center text-white">
                 <Loader2 className="size-6 animate-spin" />
               </div>
-            ) : null}
+            ) : (
+              <AimingFrame />
+            )}
           </>
         )}
         {overlayLeft || (enabled && devices.length > 1) ? (
@@ -423,6 +425,50 @@ export function BarcodeScanner({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Where to hold the label. Wide and short because our labels are
+ * CODE128 strips, corners only so it frames rather than hides the
+ * preview, and `pointer-events-none` so it never eats a tap. The
+ * detector reads the whole frame regardless — this is guidance for a
+ * first-time officer, not a crop.
+ */
+function AimingFrame() {
+  const corner = "absolute size-4 border-white/80";
+  return (
+    <div
+      aria-hidden
+      // The drop-shadow keeps white corners visible over a white label —
+      // the preview behind them is whatever the camera sees.
+      className="pointer-events-none absolute inset-x-[15%] top-1/2 h-[38%] -translate-y-1/2 drop-shadow-[0_0_2px_rgba(0,0,0,0.9)]"
+    >
+      <span
+        className={cn(
+          corner,
+          "top-0 left-0 rounded-tl-md border-t-2 border-l-2",
+        )}
+      />
+      <span
+        className={cn(
+          corner,
+          "top-0 right-0 rounded-tr-md border-t-2 border-r-2",
+        )}
+      />
+      <span
+        className={cn(
+          corner,
+          "bottom-0 left-0 rounded-bl-md border-b-2 border-l-2",
+        )}
+      />
+      <span
+        className={cn(
+          corner,
+          "right-0 bottom-0 rounded-br-md border-r-2 border-b-2",
+        )}
+      />
     </div>
   );
 }
