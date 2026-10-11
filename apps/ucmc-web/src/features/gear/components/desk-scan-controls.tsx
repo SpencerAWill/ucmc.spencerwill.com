@@ -1,10 +1,17 @@
-import { Keyboard } from "lucide-react";
+import { Camera, ScanBarcode, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Label } from "#/components/ui/label";
-import { Switch } from "#/components/ui/switch";
+import { Toggle } from "#/components/ui/toggle";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "#/components/ui/tooltip";
 import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
+import { VIEWFINDER_CONTROL_CLASS } from "#/features/gear/components/viewfinder-control";
 import { useBarcodeWedge } from "#/features/gear/hooks/use-barcode-wedge";
+import { useScanBeep } from "#/features/gear/hooks/use-scan-beep";
 import { parseScanPayload } from "#/features/gear/lib/scan-payload";
 import { cn } from "#/lib/utils";
 
@@ -23,9 +30,25 @@ import { cn } from "#/lib/utils";
  * permission prompt the moment the Sheet opens, while a wedge that is
  * simply not plugged in costs nothing at all. Both choices persist per
  * officer in localStorage.
+ *
+ * **Both inputs are icon toggles floated over the viewfinder's corners**
+ * (camera and its scan sound stacked top-left, handheld top-right),
+ * each with a tooltip, named for what the officer holds: "Camera" and
+ * "Handheld scanner". They were labelled switches in a row of their
+ * own, "Scanner" and "USB scanner" — but both are scanners, and the
+ * handheld path isn't USB specifically: a Bluetooth gun in keyboard
+ * mode arrives the same way. The handheld's ready / connected state is
+ * a badge on its icon, spelled out in the tooltip and in an
+ * `aria-describedby` for screen readers, since a tooltip never opens
+ * on touch. The camera's toggle lives here rather than inside
+ * `BarcodeScanner`; the viewfinder is controlled.
  */
 
 const WEDGE_ENABLED_KEY = "ucmc:gear-scanner:wedge";
+// The key predates the rename and is kept, so an officer's saved
+// choice survives it.
+const CAMERA_ENABLED_KEY = "ucmc:gear-scanner:enabled";
+const SOUND_ENABLED_KEY = "ucmc:gear-scanner:sound";
 
 export function DeskScanControls({
   onScan,
@@ -39,6 +62,27 @@ export function DeskScanControls({
     // "false" turns it off.
     return window.localStorage.getItem(WEDGE_ENABLED_KEY) !== "false";
   });
+  const [cameraEnabled, setCameraEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(CAMERA_ENABLED_KEY) === "true";
+  });
+  const onCameraToggle = useCallback((next: boolean) => {
+    setCameraEnabled(next);
+    window.localStorage.setItem(CAMERA_ENABLED_KEY, String(next));
+  }, []);
+  // Off by default — a desk that starts beeping unasked in a quiet
+  // room is worse than one the officer has to switch on once.
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SOUND_ENABLED_KEY) === "true";
+  });
+  const { beep, prime } = useScanBeep(soundEnabled);
+  const onSoundToggle = (next: boolean) => {
+    // The click IS the gesture that lets the audio context start.
+    if (next) prime();
+    setSoundEnabled(next);
+    window.localStorage.setItem(SOUND_ENABLED_KEY, String(next));
+  };
   const [lastScan, setLastScan] = useState<{
     raw: string;
     source: "camera" | "wedge";
@@ -70,9 +114,13 @@ export function DeskScanControls({
   const handleCameraResult = useCallback(
     (raw: string) => {
       announce(raw, "camera");
+      // Camera only: a handheld gun beeps on its own, and two tones for
+      // one trigger pull is noise. Only for a payload that parses — the
+      // same rule as the green confirmation line.
+      if (parseScanPayload(raw) !== null) beep();
       onScan(raw);
     },
-    [announce, onScan],
+    [announce, beep, onScan],
   );
 
   const handleWedgeScan = useCallback(
@@ -98,6 +146,12 @@ export function DeskScanControls({
     };
   }, [seq]);
 
+  const handheldStatus = !wedgeEnabled
+    ? "Handheld scanner off"
+    : wedgeSeen
+      ? "Handheld scanner connected"
+      : "Handheld scanner ready — a scan confirms it's plugged in";
+
   const onWedgeToggle = (next: boolean) => {
     setWedgeEnabled(next);
     window.localStorage.setItem(WEDGE_ENABLED_KEY, String(next));
@@ -108,34 +162,84 @@ export function DeskScanControls({
       <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
         Scan
       </Label>
-      <BarcodeScanner onResult={handleCameraResult} />
-
-      <div className="flex items-center gap-2 pt-1">
-        <Switch
-          id="wedge-toggle"
-          checked={wedgeEnabled}
-          onCheckedChange={onWedgeToggle}
-        />
-        <Label
-          htmlFor="wedge-toggle"
-          className="flex items-center gap-1.5 text-sm"
-        >
-          <Keyboard className="size-3.5 opacity-70" aria-hidden />
-          USB scanner
-        </Label>
-        {wedgeEnabled ? (
-          <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span
-              className={cn(
-                "size-1.5 rounded-full",
-                wedgeSeen ? "bg-emerald-500" : "bg-muted-foreground/40",
-              )}
-              aria-hidden
-            />
-            {wedgeSeen ? "Connected" : "Ready"}
-          </span>
-        ) : null}
-      </div>
+      <BarcodeScanner
+        onResult={handleCameraResult}
+        enabled={cameraEnabled}
+        onEnabledChange={onCameraToggle}
+        overlayLeft={
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Toggle
+                  size="sm"
+                  pressed={cameraEnabled}
+                  onPressedChange={onCameraToggle}
+                  aria-label="Camera"
+                  className={VIEWFINDER_CONTROL_CLASS}
+                >
+                  <Camera />
+                </Toggle>
+              </TooltipTrigger>
+              <TooltipContent>
+                {cameraEnabled ? "Camera on — click to stop" : "Camera off"}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Toggle
+                  size="sm"
+                  pressed={soundEnabled}
+                  onPressedChange={onSoundToggle}
+                  aria-label="Scan sound"
+                  className={VIEWFINDER_CONTROL_CLASS}
+                >
+                  {soundEnabled ? <Volume2 /> : <VolumeX />}
+                </Toggle>
+              </TooltipTrigger>
+              <TooltipContent>
+                {soundEnabled
+                  ? "Scan sound on — beeps on each camera scan"
+                  : "Scan sound off"}
+              </TooltipContent>
+            </Tooltip>
+          </>
+        }
+        overlayRight={
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Toggle
+                  size="sm"
+                  pressed={wedgeEnabled}
+                  onPressedChange={onWedgeToggle}
+                  aria-label="Handheld scanner"
+                  aria-describedby="handheld-status"
+                  className={cn(VIEWFINDER_CONTROL_CLASS, "relative")}
+                >
+                  <ScanBarcode />
+                  {/* The ready / connected badge. Grey until a burst
+                      arrives — the browser can't enumerate HID devices,
+                      so a scan is the only evidence a gun is plugged in
+                      that we will ever have — then green. */}
+                  {wedgeEnabled ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "absolute top-0.5 right-0.5 size-2 rounded-full ring-2 ring-black/60",
+                        wedgeSeen ? "bg-emerald-500" : "bg-neutral-400",
+                      )}
+                    />
+                  ) : null}
+                </Toggle>
+              </TooltipTrigger>
+              <TooltipContent>{handheldStatus}</TooltipContent>
+            </Tooltip>
+            <span id="handheld-status" className="sr-only">
+              {handheldStatus}
+            </span>
+          </>
+        }
+      />
 
       {/* One confirmation for both input paths. `aria-live` rather than
           a toast: a scan is a high-frequency, low-stakes event, and a
@@ -149,7 +253,7 @@ export function DeskScanControls({
           <>
             Scanned <span className="font-mono">{lastScan.raw}</span>
             <span className="text-muted-foreground">
-              {lastScan.source === "wedge" ? " (USB)" : " (camera)"}
+              {lastScan.source === "wedge" ? " (handheld)" : " (camera)"}
             </span>
           </>
         ) : null}

@@ -98,7 +98,9 @@ VALUES ('${drawsModelId}', 'serviceable', 10, ${now});
   // ── check-in: scan the bin, take five back ───────────────────────────
   await page.getByRole("button", { name: /open gear desk/i }).click();
   await page.getByRole("tab", { name: /check in/i }).click();
-  await expect(page.getByText(/^ready$/i)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Handheld scanner" }),
+  ).toHaveAccessibleDescription(/ready/i);
   // `~` is the wedge sentinel: a tier-1 burst, the way a gun configured
   // with a plain preamble announces itself. Terminator in the same
   // `type()` call so the last gap stays under the reducer's budget.

@@ -1,15 +1,22 @@
-import { Camera, Loader2 } from "lucide-react";
+import { Camera, Loader2, SwitchCamera } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
-import { Label } from "#/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "#/components/ui/select";
-import { Switch } from "#/components/ui/switch";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "#/components/ui/tooltip";
+import { VIEWFINDER_CONTROL_CLASS } from "#/features/gear/components/viewfinder-control";
+import { cn } from "#/lib/utils";
 
 /**
  * Inline camera-based barcode scanner. Designed to live directly in
@@ -55,9 +62,10 @@ import { Switch } from "#/components/ui/switch";
  *
  * Camera picker: laptops at the gear cave commonly attach a USB
  * camera for scanning while the built-in webcam stays for video
- * calls. After permission is granted (which exposes labels) the
- * `Select` lets the officer pick. The choice persists across sessions
- * via localStorage.
+ * calls. After permission is granted (which exposes labels) a
+ * "Switch camera" icon appears in the viewfinder's top-left stack and
+ * opens a menu of cameras — only while the camera is on and there's
+ * more than one. The choice persists across sessions via localStorage.
  */
 
 /** Format whitelist matches what our label printer emits (CODE128) plus
@@ -66,7 +74,6 @@ import { Switch } from "#/components/ui/switch";
 const BARCODE_FORMATS = ["code_128", "qr_code"] as const;
 
 const SELECTED_CAMERA_KEY = "ucmc:gear-scanner:camera";
-const SCANNER_ENABLED_KEY = "ucmc:gear-scanner:enabled";
 
 // Minimal typings for the BarcodeDetector contract — same shape across
 // the native API and the ponyfill, so one set of types covers both.
@@ -106,23 +113,32 @@ async function loadBarcodeDetector(): Promise<BarcodeDetectorCtor> {
 
 export function BarcodeScanner({
   onResult,
+  enabled,
+  onEnabledChange,
+  overlayLeft,
+  overlayRight,
 }: {
   /** Fires for EACH detected scan while the scanner is enabled. The
    *  scanner stays live until the officer toggles it off or closes
    *  the Sheet. A label held in view fires ONCE; the same code fires
    *  again only after it has been out of view for 1.5 s. */
   onResult: (code: string) => void;
+  /** Controlled by the parent, whose switch row sits beside the
+   *  handheld scanner's — two inputs, one row. The viewfinder's own
+   *  "tap to start" and a denied permission both report back through
+   *  `onEnabledChange`. */
+  enabled: boolean;
+  onEnabledChange: (next: boolean) => void;
+  /** Controls floated over the viewfinder's top corners. Rendered as
+   *  siblings of the "tap to start" button, never inside it, so a click
+   *  on one doesn't also start the camera. */
+  overlayLeft?: ReactNode;
+  overlayRight?: ReactNode;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // Enabled flag: persisted in localStorage so a returning officer
-  // auto-starts where they left off. SSR-safe initial-state callback.
-  const [enabled, setEnabled] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(SCANNER_ENABLED_KEY) === "true";
-  });
   const [error, setError] = useState<string | null>(null);
   const [streamReady, setStreamReady] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -154,6 +170,12 @@ export function BarcodeScanner({
   useEffect(() => {
     onResultRef.current = onResult;
   }, [onResult]);
+  // Same reasoning: the camera effect reports a denied permission
+  // through this, and must not restart when its identity changes.
+  const onEnabledChangeRef = useRef(onEnabledChange);
+  useEffect(() => {
+    onEnabledChangeRef.current = onEnabledChange;
+  }, [onEnabledChange]);
 
   useEffect(() => {
     if (!enabled) {
@@ -277,8 +299,7 @@ export function BarcodeScanner({
           setError("Camera permission denied.");
           // If permission was denied, flip the toggle off so the next
           // open doesn't auto-retry and re-trigger the same error.
-          setEnabled(false);
-          window.localStorage.setItem(SCANNER_ENABLED_KEY, "false");
+          onEnabledChangeRef.current(false);
         } else if (err instanceof Error && err.name === "NotFoundError") {
           setError("No camera found on this device.");
         } else if (
@@ -313,11 +334,6 @@ export function BarcodeScanner({
     // time the parent re-renders.
   }, [enabled, selectedDeviceId, stopStream]);
 
-  const onToggle = (next: boolean) => {
-    setEnabled(next);
-    window.localStorage.setItem(SCANNER_ENABLED_KEY, String(next));
-  };
-
   const onDeviceChange = (id: string) => {
     setSelectedDeviceId(id);
     window.localStorage.setItem(SELECTED_CAMERA_KEY, id);
@@ -333,11 +349,11 @@ export function BarcodeScanner({
         {!enabled ? (
           <button
             type="button"
-            onClick={() => onToggle(true)}
+            onClick={() => onEnabledChange(true)}
             className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white/80 transition-colors hover:bg-neutral-900"
           >
             <Camera className="size-8 opacity-60" />
-            <p>Tap to start the scanner</p>
+            <p>Tap to start the camera</p>
             <p className="text-xs text-white/50">
               Hold a gear label in view to capture
             </p>
@@ -362,34 +378,49 @@ export function BarcodeScanner({
             ) : null}
           </>
         )}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Switch
-            id="scanner-toggle"
-            checked={enabled}
-            onCheckedChange={onToggle}
-          />
-          <Label htmlFor="scanner-toggle" className="text-sm">
-            Scanner
-          </Label>
-        </div>
-        {enabled && devices.length > 1 ? (
-          <Select
-            value={selectedDeviceId ?? devices[0].deviceId}
-            onValueChange={onDeviceChange}
-          >
-            <SelectTrigger className="ml-auto h-8 w-auto gap-1.5 px-2 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {devices.map((d, i) => (
-                <SelectItem key={d.deviceId} value={d.deviceId}>
-                  {d.label || `Camera ${i + 1}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {overlayLeft || (enabled && devices.length > 1) ? (
+          <div className="absolute top-2 left-2 z-10 flex flex-col gap-1.5">
+            {overlayLeft}
+            {/* Last in the stack, so the controls above don't shift when
+                it appears. Only when there's a choice to make: one
+                camera, or the camera off, and it's absent. */}
+            {enabled && devices.length > 1 ? (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger
+                      aria-label="Switch camera"
+                      className={cn(VIEWFINDER_CONTROL_CLASS)}
+                    >
+                      <SwitchCamera />
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Switch camera</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Camera</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={selectedDeviceId ?? devices[0].deviceId}
+                    onValueChange={onDeviceChange}
+                  >
+                    {devices.map((d, i) => (
+                      <DropdownMenuRadioItem
+                        key={d.deviceId}
+                        value={d.deviceId}
+                      >
+                        {d.label || `Camera ${i + 1}`}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        ) : null}
+        {overlayRight ? (
+          <div className="absolute top-2 right-2 z-10 flex gap-1.5">
+            {overlayRight}
+          </div>
         ) : null}
       </div>
     </div>

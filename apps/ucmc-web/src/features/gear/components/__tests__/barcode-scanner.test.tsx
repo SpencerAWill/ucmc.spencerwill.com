@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BarcodeScanner } from "#/features/gear/components/barcode-scanner";
 
@@ -54,10 +54,6 @@ function stubCameraStack(detect: () => Promise<{ rawValue: string }[]>) {
   });
 }
 
-beforeEach(() => {
-  window.localStorage.setItem("ucmc:gear-scanner:enabled", "true");
-});
-
 afterEach(() => {
   window.localStorage.clear();
   vi.unstubAllGlobals();
@@ -72,7 +68,9 @@ describe("BarcodeScanner detect-failure handling", () => {
     );
     const onResult = vi.fn();
 
-    render(<BarcodeScanner onResult={onResult} />);
+    render(
+      <BarcodeScanner onResult={onResult} enabled onEnabledChange={() => {}} />,
+    );
 
     await waitFor(
       () => {
@@ -98,7 +96,9 @@ describe("BarcodeScanner detect-failure handling", () => {
     });
     const onResult = vi.fn();
 
-    render(<BarcodeScanner onResult={onResult} />);
+    render(
+      <BarcodeScanner onResult={onResult} enabled onEnabledChange={() => {}} />,
+    );
 
     await waitFor(
       () => expect(onResult).toHaveBeenCalledWith("ucmc-cart:abc"),
@@ -128,7 +128,9 @@ describe("BarcodeScanner one label, one scan", () => {
     });
     const onResult = vi.fn();
 
-    render(<BarcodeScanner onResult={onResult} />);
+    render(
+      <BarcodeScanner onResult={onResult} enabled onEnabledChange={() => {}} />,
+    );
 
     await waitFor(() => expect(clock.frame).toBeGreaterThan(60), {
       timeout: 5000,

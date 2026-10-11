@@ -103,7 +103,7 @@ async function openDeskAndStartScanner(page: Page): Promise<void> {
   ).toBeVisible();
   // The scanner defaults to OFF so the permission prompt doesn't fire on
   // every Sheet open; the placeholder is the button that starts it.
-  await page.getByRole("button", { name: /tap to start the scanner/i }).click();
+  await page.getByRole("button", { name: /tap to start the camera/i }).click();
   await expect(page.getByLabel(/camera viewfinder/i)).toBeVisible({
     timeout: 15_000,
   });
@@ -198,8 +198,11 @@ VALUES ('${itemId}', '${randomUUID().replace(/-/g, "").slice(0, 12)}', '${modelI
     page.getByRole("heading", { name: /^gear desk$/i }),
   ).toBeVisible();
   // No camera involved: the wedge defaults ON, so the desk is listening
-  // the moment the Sheet opens.
-  await expect(page.getByText(/^ready$/i)).toBeVisible();
+  // the moment the Sheet opens. Its readiness is a badge on the overlay
+  // icon, spelled out in the toggle's accessible description.
+  const handheld = page.getByRole("button", { name: "Handheld scanner" });
+  await expect(handheld).toHaveAttribute("aria-pressed", "true");
+  await expect(handheld).toHaveAccessibleDescription(/ready/i);
 
   // Focused on the code combobox — the case the `data-wedge-capture`
   // opt-out exists for, and the one where cmdk would otherwise resolve
@@ -217,9 +220,9 @@ VALUES ('${itemId}', '${randomUUID().replace(/-/g, "").slice(0, 12)}', '${modelI
     { timeout: 10_000 },
   );
   await expect(page.getByText(/items \(1\)/i)).toBeVisible();
-  // The indicator flips once a burst has been seen — the only evidence
-  // of a plugged-in gun a browser can ever have.
-  await expect(page.getByText(/^connected$/i)).toBeVisible();
+  // The badge flips once a burst has been seen — the only evidence of a
+  // plugged-in gun a browser can ever have.
+  await expect(handheld).toHaveAccessibleDescription(/connected/i);
   // Nothing leaked into the field the burst was typed into.
   await expect(page.getByPlaceholder(/enter code/i)).toHaveValue("");
 });
