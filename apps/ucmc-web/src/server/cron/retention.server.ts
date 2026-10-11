@@ -28,9 +28,9 @@
  * `runRetentionSweeps()` runs them sequentially and aggregates a
  * structured result that the scheduled handler logs.
  */
-import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, eq, isNotNull, lt } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, schema } from "#/server/db";
 import { errorMessage, log } from "#/server/log/log.server";
 import { getPublicBucket } from "#/server/r2";
 
@@ -268,7 +268,7 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
           valueJson: schema.landingSettings.valueJson,
         })
         .from(schema.landingSettings)
-        .where(inArray(schema.landingSettings.key, SETTINGS_IMAGE_KEYS)),
+        .where(inJsonArray(schema.landingSettings.key, SETTINGS_IMAGE_KEYS)),
       db
         .select({ key: schema.gazetteIssues.pdfKey })
         .from(schema.gazetteIssues),

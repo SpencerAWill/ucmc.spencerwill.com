@@ -3,10 +3,10 @@
  * — actions enforce authorization. Each list returns rows in `sort_order`
  * ascending so callers don't need to re-sort.
  */
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 import type { HeroPage } from "#/features/landing/lib/hero-pages";
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, schema } from "#/server/db";
 
 // ── Settings (singleton key/value) ──────────────────────────────────────
 
@@ -405,5 +405,5 @@ export async function findSlidesByImageKeys(keys: string[]) {
   return db
     .select()
     .from(schema.heroSlides)
-    .where(inArray(schema.heroSlides.imageKey, keys));
+    .where(inJsonArray(schema.heroSlides.imageKey, keys));
 }

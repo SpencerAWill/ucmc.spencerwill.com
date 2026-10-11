@@ -19,20 +19,10 @@
  * forget. A required parameter is the middle ground: you cannot call
  * these without saying what the viewer may see.
  */
-import {
-  and,
-  asc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  or,
-} from "drizzle-orm";
+import { and, asc, eq, gte, isNotNull, isNull, lt, or } from "drizzle-orm";
 
 import type { EventKind, EventVisibility } from "#/../drizzle/schema";
-import { getDb, schema, selectInChunks } from "#/server/db";
+import { getDb, inJsonArray, schema } from "#/server/db";
 
 /**
  * The visibility tiers a given viewer may read.
@@ -126,7 +116,7 @@ export async function listEventSeriesForWindow(
 ): Promise<EventSeries[]> {
   const kindFilter =
     kinds && kinds.length > 0
-      ? inArray(schema.events.kind, [...kinds])
+      ? inJsonArray(schema.events.kind, [...kinds])
       : undefined;
 
   return getDb()
@@ -134,7 +124,7 @@ export async function listEventSeriesForWindow(
     .from(schema.events)
     .where(
       and(
-        inArray(schema.events.visibility, [...scope]),
+        inJsonArray(schema.events.visibility, [...scope]),
         kindFilter,
         // Upper bound applies to every row, recurring or not: a series
         // can never produce an occurrence before its own anchor.
@@ -165,7 +155,7 @@ export async function getEventByPublicId(
     .where(
       and(
         eq(schema.events.publicId, publicId),
-        inArray(schema.events.visibility, [...scope]),
+        inJsonArray(schema.events.visibility, [...scope]),
       ),
     )
     .limit(1);
@@ -216,28 +206,24 @@ export async function listExceptionsFor(
     return grouped;
   }
 
-  // Chunked: the window's series count is unbounded — every event the club
-  // has ever scheduled inside it lands in this one `IN (...)` — so past ~100
-  // events this exceeded D1's bound-parameter limit and 500'd /calendar and
-  // both .ics feeds. Each event's rows stay within a single chunk, so the
-  // per-event ordering the expander depends on survives the split even
-  // though the `ORDER BY` no longer spans the whole read.
-  const rows = await selectInChunks([...eventIds], (chunk) =>
-    getDb()
-      .select({
-        eventId: schema.eventExceptions.eventId,
-        occurrenceStart: schema.eventExceptions.occurrenceStart,
-        canceled: schema.eventExceptions.canceled,
-        title: schema.eventExceptions.title,
-        description: schema.eventExceptions.description,
-        location: schema.eventExceptions.location,
-        startsAt: schema.eventExceptions.startsAt,
-        endsAt: schema.eventExceptions.endsAt,
-      })
-      .from(schema.eventExceptions)
-      .where(inArray(schema.eventExceptions.eventId, [...chunk]))
-      .orderBy(asc(schema.eventExceptions.occurrenceStart)),
-  );
+  // The window's series count is unbounded — every event the club has
+  // ever scheduled inside it — so past ~100 events a one-parameter-per-id
+  // `IN (...)` 500'd /calendar and both .ics feeds (#259). One JSON
+  // parameter keeps it a single statement with a single `ORDER BY` (#291).
+  const rows = await getDb()
+    .select({
+      eventId: schema.eventExceptions.eventId,
+      occurrenceStart: schema.eventExceptions.occurrenceStart,
+      canceled: schema.eventExceptions.canceled,
+      title: schema.eventExceptions.title,
+      description: schema.eventExceptions.description,
+      location: schema.eventExceptions.location,
+      startsAt: schema.eventExceptions.startsAt,
+      endsAt: schema.eventExceptions.endsAt,
+    })
+    .from(schema.eventExceptions)
+    .where(inJsonArray(schema.eventExceptions.eventId, [...eventIds]))
+    .orderBy(asc(schema.eventExceptions.occurrenceStart));
 
   for (const { eventId, ...rest } of rows) {
     const bucket = grouped.get(eventId);

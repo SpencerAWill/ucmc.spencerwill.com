@@ -205,6 +205,14 @@ export function inSubquery(
   return sql`${column} in ${subquery}`;
 }
 
+/** `column NOT IN (subquery)` — see `inSubquery`. */
+export function notInSubquery(
+  column: AnySQLiteColumn | SQL,
+  subquery: SQLWrapper,
+): SQL {
+  return sql`${column} not in ${subquery}`;
+}
+
 /**
  * How many rows one multi-row INSERT into `table` can carry.
  *
@@ -307,50 +315,4 @@ export async function insertMany<TTable extends SQLiteTable>(
   options: { readonly onConflictDoNothing?: boolean } = {},
 ): Promise<void> {
   await runBatch(insertStatements(table, rows, options));
-}
-
-/**
- * Run a `WHERE col IN (…)` read whose id list may exceed what D1 will bind,
- * by splitting it into statements D1 accepts and concatenating the rows.
- *
- * Use this wherever the list comes from "everything matching X" rather than
- * from a UI page already bounded well under 100. A cap on the caller is not
- * a substitute: it couples a product decision to a storage limit, and it
- * cannot help the unbounded cases at all.
- *
- * `reservedParams` is the number of parameters the same statement binds for
- * anything other than the id list — a date range, a status, a tenant id.
- * Pass it rather than assuming the whole budget is available, so adding a
- * filter to a chunked query cannot silently push it back over the limit.
- *
- * **Ordering is per chunk, not global.** A single `ORDER BY` cannot span
- * separate statements, so callers must either sort the merged rows
- * themselves or depend only on ordering within one key — which holds
- * whenever every row for a given id lands in the same chunk, as it does when
- * chunking by that id.
- */
-export async function selectInChunks<TId, TRow>(
-  ids: readonly TId[],
-  select: (chunk: readonly TId[]) => Promise<TRow[]>,
-  options: { readonly reservedParams?: number } = {},
-): Promise<TRow[]> {
-  const reserved = options.reservedParams ?? 0;
-  const perChunk = D1_MAX_BOUND_PARAMS - reserved;
-  if (perChunk < 1) {
-    throw new RangeError(
-      `selectInChunks: reservedParams (${reserved}) leaves no room for ids within D1's ${D1_MAX_BOUND_PARAMS}-parameter limit.`,
-    );
-  }
-  if (ids.length === 0) {
-    return [];
-  }
-  if (ids.length <= perChunk) {
-    return select(ids);
-  }
-  const chunks = Array.from(
-    { length: Math.ceil(ids.length / perChunk) },
-    (_unused, index) => ids.slice(index * perChunk, (index + 1) * perChunk),
-  );
-  const rows = await Promise.all(chunks.map((chunk) => select(chunk)));
-  return rows.flat();
 }
