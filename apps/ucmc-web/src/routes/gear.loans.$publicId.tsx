@@ -51,7 +51,7 @@ function LoanDetailPage() {
   // — the action re-checks both. `hasPermission`, not the payload, so
   // role emulation narrows it like every other gate.
   const canWriteOff =
-    isActive && data.gearPublicId === null && hasPermission("gear:manage");
+    isActive && data.isCounted && hasPermission("gear:manage");
   return (
     <PageContainer width="app" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -94,7 +94,11 @@ function LoanDetailPage() {
         open={extendOpen}
         onOpenChange={setExtendOpen}
       />
-      {canWriteOff ? (
+      {/* Stays mounted while open, not only while `canWriteOff`: a
+          successful write-off closes the loan, the detail refetch flips
+          `canWriteOff` false, and unmounting there would drop the
+          mutation's onSuccess — its toast and its close — on the floor. */}
+      {canWriteOff || writeOffOpen ? (
         <LoanWriteOffDialog
           loan={data}
           open={writeOffOpen}

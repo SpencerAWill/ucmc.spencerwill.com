@@ -95,6 +95,10 @@ export interface LoanSummary {
   quantityReturned: number;
   /** Units written off when a counted loan was closed short. */
   quantityLost: number;
+  /** A quantity of a counted model rather than one coded piece. Explicit
+   *  because the proxies lie: a coded piece that was never tagged also
+   *  has no code. */
+  isCounted: boolean;
   thumbnailKey: string | null;
   typeName: string;
   memberPublicId: string;
@@ -124,6 +128,7 @@ function toSummary(row: LoanListRow): LoanSummary {
     quantity: row.quantity,
     quantityReturned: row.quantityReturned,
     quantityLost: row.quantityLost,
+    isCounted: row.isCounted,
     thumbnailKey: row.thumbnailKey,
     typeName: row.typeName,
     memberPublicId: row.memberPublicId,

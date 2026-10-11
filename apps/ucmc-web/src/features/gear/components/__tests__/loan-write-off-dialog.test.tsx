@@ -22,6 +22,7 @@ const loan: LoanDetail = {
   quantity: 6,
   quantityReturned: 5,
   quantityLost: 0,
+  isCounted: true,
   thumbnailKey: null,
   typeName: "Quickdraw",
   memberPublicId: "u_riley",

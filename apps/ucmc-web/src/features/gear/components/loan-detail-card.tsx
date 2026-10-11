@@ -38,11 +38,12 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
         </LoanSubjectLink>
         <div className="flex-1 space-y-2">
           <div className="flex items-center gap-3">
-            {/* A counted loan has no code, and an empty chip reads as a
-                missing one. */}
-            {loan.code !== null ? (
+            {/* A counted loan has no code to show, and an empty chip
+                reads as a missing one. A coded piece that is untagged
+                keeps the dash — there, a missing code IS the news. */}
+            {!loan.isCounted ? (
               <span className="inline-flex h-10 items-center justify-center rounded border border-primary/30 bg-primary/10 px-3 font-mono text-lg font-semibold text-primary">
-                {loan.code}
+                {loan.code ?? "—"}
               </span>
             ) : null}
             <div>
@@ -110,7 +111,7 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
           {/* A counted loan can come back a few at a time, and an open
               one with units back is the case an officer is looking at
               this page to resolve. */}
-          {loan.gearPublicId === null ? (
+          {loan.isCounted ? (
             <div>
               <dt className="text-xs text-muted-foreground">Returned</dt>
               <dd className="tabular-nums">

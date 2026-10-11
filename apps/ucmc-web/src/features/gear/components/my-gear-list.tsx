@@ -114,9 +114,11 @@ function MyLoanRow({ loan }: { loan: LoanSummary }) {
             </div>
             <div className="min-w-0 space-y-1 p-3 sm:p-4">
               <div className="flex items-center gap-2">
-                {loan.code !== null ? (
+                {/* Counted loans have no code; an untagged coded piece
+                    keeps its dash, where a missing code is the news. */}
+                {!loan.isCounted ? (
                   <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
-                    {loan.code}
+                    {loan.code ?? "—"}
                   </span>
                 ) : null}
                 <span className="truncate text-sm font-medium">
