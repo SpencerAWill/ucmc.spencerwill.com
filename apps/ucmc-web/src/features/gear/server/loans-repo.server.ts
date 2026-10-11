@@ -1033,6 +1033,7 @@ export async function listOpenLoansForReminders(): Promise<
       modelName: schema.gearModels.name,
       manufacturer: schema.gearModels.manufacturer,
       quantity: schema.gearLoans.quantity,
+      quantityReturned: schema.gearLoans.quantityReturned,
       itemId: schema.gearLoans.itemId,
     })
     .from(schema.gearLoans)
@@ -1076,7 +1077,9 @@ export async function listOpenLoansForReminders(): Promise<
     // because "six draws" IS the loan and there is no unit to point at.
     const gearLabel =
       r.itemId === null
-        ? `${r.quantity} x ${product}`
+        ? // What is still out, not what was lent: after "five of six
+          // came back" the email must ask for one draw, not six.
+          `${r.quantity - r.quantityReturned} x ${product}`
         : r.code
           ? `${product} (${r.code})`
           : product;

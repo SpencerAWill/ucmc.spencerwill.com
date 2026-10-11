@@ -63,8 +63,12 @@ const { createGearModelAction, setGearModelStockAction } =
   await import("#/features/gear/server/models-actions.server");
 const { placeGearHoldAction } =
   await import("#/features/gear/server/holds-actions.server");
-const { insertCountedLoanIfAvailable, listLoans, recordCountedReturn } =
-  await import("#/features/gear/server/loans-repo.server");
+const {
+  insertCountedLoanIfAvailable,
+  listLoans,
+  listOpenLoansForReminders,
+  recordCountedReturn,
+} = await import("#/features/gear/server/loans-repo.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -1046,6 +1050,17 @@ describe("checkinLoansAction counted rows", () => {
       notes: null,
     });
     expect(two.results[0]?.ok).toBe(true);
+  });
+
+  it("reminds the member about what is still out, not what was lent", async () => {
+    const { loanPublicId } = await seedCountedLoan(10, 6);
+    await checkinLoansAction({ items: [countedReturn(loanPublicId, 5)] });
+
+    const candidate = (await listOpenLoansForReminders()).find(
+      (c) => c.publicId === loanPublicId,
+    );
+
+    expect(candidate?.gearLabel).toMatch(/^1 x BD Draws /);
   });
 
   it("refuses more than is still out, and changes nothing", async () => {
