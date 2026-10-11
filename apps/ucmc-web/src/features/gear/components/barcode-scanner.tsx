@@ -1,4 +1,10 @@
-import { Camera, Loader2, SwitchCamera } from "lucide-react";
+import {
+  Camera,
+  Flashlight,
+  FlashlightOff,
+  Loader2,
+  SwitchCamera,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -16,7 +22,23 @@ import {
   TooltipTrigger,
 } from "#/components/ui/tooltip";
 import { VIEWFINDER_CONTROL_CLASS } from "#/features/gear/components/viewfinder-control";
+import { Toggle } from "#/components/ui/toggle";
 import { cn } from "#/lib/utils";
+
+/**
+ * `torch` is a real constraint on a camera track (Image Capture spec)
+ * but missing from TypeScript's DOM lib. Android Chrome supports it;
+ * iOS Safari and desktop webcams report no such capability, which is
+ * why the flashlight control only renders when the track says so.
+ */
+interface TorchCapabilities extends MediaTrackCapabilities {
+  torch?: boolean;
+}
+
+function supportsTorch(track: MediaStreamTrack | undefined): boolean {
+  if (!track || typeof track.getCapabilities !== "function") return false;
+  return (track.getCapabilities() as TorchCapabilities).torch === true;
+}
 
 /**
  * Inline camera-based barcode scanner. Designed to live directly in
@@ -141,6 +163,8 @@ export function BarcodeScanner({
 
   const [error, setError] = useState<string | null>(null);
   const [streamReady, setStreamReady] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(
     () => {
@@ -158,6 +182,27 @@ export function BarcodeScanner({
       streamRef.current = null;
     }
     setStreamReady(false);
+    // A stopped track takes its torch with it; the state follows, so a
+    // restarted (or switched) camera never claims a light that's off.
+    setTorchSupported(false);
+    setTorchOn(false);
+  }, []);
+
+  const setTorch = useCallback((next: boolean) => {
+    const track = streamRef.current
+      ?.getTracks()
+      .find((t) => t.kind === "video");
+    if (!track) return;
+    // `advanced` is how a non-standard constraint is requested without
+    // the whole call failing on a browser that doesn't know it.
+    void track
+      .applyConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet],
+      })
+      .then(() => setTorchOn(next))
+      .catch(() => {
+        setTorchOn(false);
+      });
   }, []);
 
   // Capture `onResult` in a ref so the camera-startup effect doesn't
@@ -210,6 +255,9 @@ export function BarcodeScanner({
         video.srcObject = stream;
         await video.play();
         setStreamReady(true);
+        setTorchSupported(
+          supportsTorch(stream.getTracks().find((t) => t.kind === "video")),
+        );
 
         // Enumerate AFTER getting a stream — labels are only exposed
         // once camera permission has been granted at least once for
@@ -380,9 +428,31 @@ export function BarcodeScanner({
             )}
           </>
         )}
-        {overlayLeft || (enabled && devices.length > 1) ? (
+        {overlayLeft || (enabled && (devices.length > 1 || torchSupported)) ? (
           <div className="absolute top-2 left-2 z-10 flex flex-col gap-1.5">
             {overlayLeft}
+            {/* The flashlight, only when the running camera reports a
+                torch — Android Chrome does, iOS Safari and most laptop
+                webcams don't. Off on every start: a light left on is a
+                flat battery. */}
+            {enabled && torchSupported ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Toggle
+                    size="sm"
+                    pressed={torchOn}
+                    onPressedChange={setTorch}
+                    aria-label="Flashlight"
+                    className={VIEWFINDER_CONTROL_CLASS}
+                  >
+                    {torchOn ? <Flashlight /> : <FlashlightOff />}
+                  </Toggle>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {torchOn ? "Flashlight on" : "Flashlight off"}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             {/* Last in the stack, so the controls above don't shift when
                 it appears. Only when there's a choice to make: one
                 camera, or the camera off, and it's absent. */}
