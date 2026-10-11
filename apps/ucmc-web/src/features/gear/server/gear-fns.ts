@@ -96,6 +96,8 @@ import type {
   CheckoutLoansInput,
   CheckoutLoansResult,
   CheckoutSkipReason,
+  DeskCountedLoan,
+  DeskCountedModel,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
@@ -221,6 +223,8 @@ export type {
   CheckoutLoansInput,
   CheckoutLoansResult,
   CheckoutSkipReason,
+  DeskCountedLoan,
+  DeskCountedModel,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
@@ -717,6 +721,10 @@ const gearCodeSearchInputSchema = z.object({
   q: z.string().min(1).max(64),
 });
 
+const deskTextSearchInputSchema = z.object({
+  q: z.string().min(1).max(200),
+});
+
 const gearByCodeInputSchema = z.object({
   code: z.string().min(1).max(64),
 });
@@ -1169,6 +1177,22 @@ export const getItemByCodeFn = createServerFn({ method: "GET" })
     const { getItemByCodeAction } =
       await import("#/features/gear/server/loans-actions.server");
     return getItemByCodeAction(data);
+  });
+
+export const searchCountedModelsForDeskFn = createServerFn({ method: "GET" })
+  .validator(deskTextSearchInputSchema)
+  .handler(async ({ data }): Promise<DeskCountedModel[]> => {
+    const { searchCountedModelsForDeskAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return searchCountedModelsForDeskAction(data);
+  });
+
+export const searchOpenCountedLoansFn = createServerFn({ method: "GET" })
+  .validator(deskTextSearchInputSchema)
+  .handler(async ({ data }): Promise<DeskCountedLoan[]> => {
+    const { searchOpenCountedLoansAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return searchOpenCountedLoansAction(data);
   });
 
 // ── cart shells ────────────────────────────────────────────────────────

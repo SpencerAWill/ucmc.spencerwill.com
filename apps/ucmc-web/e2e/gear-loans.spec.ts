@@ -89,8 +89,8 @@ VALUES ('${g2Id}', '${g2PublicId}', '${modelId}', '${code2}', 'active', 'service
 
   // Code search is an always-visible inline CommandInput at the bottom
   // of the items list — no "Search code" button trigger to click.
-  // Placeholder is `Enter code (CH1, LJ3…) and press Enter` in checkout
-  // mode and `Enter code to check in…` in check-in mode.
+  // Placeholder is `Enter code (CH1…) or gear name, press Enter` in
+  // checkout mode and `Enter code to check in, or a name…` in check-in.
   const checkoutCodeInput = page.getByPlaceholder(
     /enter code \(.*press enter/i,
   );

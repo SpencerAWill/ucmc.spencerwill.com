@@ -7,7 +7,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
 import { WEDGE_SENTINEL } from "#/features/gear/lib/wedge-buffer";
 import { GearDeskCheckoutPane } from "#/features/gear/components/gear-desk-checkout-pane";
-import type { LoanDefaults } from "#/features/gear/server/loans-actions.server";
+import type {
+  DeskCountedModel,
+  LoanDefaults,
+} from "#/features/gear/server/loans-actions.server";
 
 // ── module mocks ────────────────────────────────────────────────────────
 
@@ -103,8 +106,16 @@ vi.mock("#/features/gear/components/member-search-combobox", () => ({
 // assigning `.value` on a React-controlled input leaves state stale and
 // the next render puts the character back. An uncontrolled stub would
 // pass either way.
+// Its props are captured so a test can pick a counted model the way the
+// real combobox's "Counted" group would.
+const comboboxProps = vi.hoisted<{
+  current: { onPickCounted: (model: DeskCountedModel) => void } | null;
+}>(() => ({ current: null }));
 vi.mock("#/features/gear/components/gear-code-search-combobox", () => ({
-  GearCodeSearchCombobox: () => {
+  GearCodeSearchCombobox: (props: {
+    onPickCounted: (model: DeskCountedModel) => void;
+  }) => {
+    comboboxProps.current = props;
     const [value, setValue] = React.useState("");
     return (
       <input
@@ -121,6 +132,29 @@ vi.mock("#/features/gear/components/due-date-picker", () => ({
   DueDatePicker: () => <div data-testid="due-picker" />,
 }));
 vi.mock("#/features/gear/components/gear-desk-item-row", () => ({
+  CountedCheckoutItemRow: ({
+    model,
+    quantity,
+    onQuantityChange,
+    error,
+  }: {
+    model: { publicId: string; name: string };
+    quantity: number;
+    onQuantityChange: (q: number) => void;
+    error?: string;
+  }) => (
+    <tr>
+      <td data-testid={`counted-${model.publicId}`}>
+        {quantity} × {model.name}
+        <button type="button" onClick={() => onQuantityChange(quantity + 1)}>
+          more {model.publicId}
+        </button>
+        {error ? (
+          <span data-testid={`error-${model.publicId}`}>{error}</span>
+        ) : null}
+      </td>
+    </tr>
+  ),
   CheckoutItemRow: ({
     row,
     error,
@@ -159,6 +193,7 @@ beforeEach(() => {
   toastWarningMock.mockReset();
   checkoutMutateMock.mockReset();
   scannerOnResult.current = null;
+  comboboxProps.current = null;
   viewerPermissions.current = ["gear:loan"];
 });
 
@@ -673,5 +708,161 @@ describe("GearDeskCheckoutPane keyboard-wedge branch", () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       "That didn't look like a gear label.",
     );
+  });
+});
+
+describe("GearDeskCheckoutPane counted rows", () => {
+  const draws: DeskCountedModel = {
+    publicId: "model_draws",
+    name: "BD HotForge 12cm",
+    typeName: "Quickdraw",
+    imageKey: null,
+    takeable: 10,
+    held: 6,
+  };
+
+  /** A member from a cart scan (the only member path the stubbed
+   *  combobox offers) with a harness in the batch, plus the draws. */
+  async function seedMixedBatch(): Promise<void> {
+    resolveCartTokenFnMock.mockResolvedValue({
+      ok: true,
+      cart: {
+        memberPublicId: "u_member_public",
+        memberFullName: "Cart Member",
+        primaryEmail: "member@example.com",
+        items: [
+          {
+            publicId: "gear_a",
+            code: "CR1",
+            typeName: "Harness",
+            thumbnailKey: null,
+            status: "active",
+            condition: "serviceable",
+            hasOpenLoan: false,
+            availability: "loanable",
+            addedAt: 1,
+          },
+        ],
+      },
+    });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    await scannerOnResult.current!(`${CART_TOKEN_PREFIX}token-abc`);
+    await waitFor(() =>
+      expect(screen.getByTestId("row-CR1")).toBeInTheDocument(),
+    );
+    act(() => comboboxProps.current!.onPickCounted(draws));
+    await waitFor(() =>
+      expect(screen.getByTestId("counted-model_draws")).toBeInTheDocument(),
+    );
+  }
+
+  it("submits a mixed batch as one checkout, counting units on the button", async () => {
+    await seedMixedBatch();
+    await userEvent.click(
+      screen.getByRole("button", { name: "more model_draws" }),
+    );
+
+    // 1 harness + 2 draws.
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Check out 3 items$/ }),
+    );
+
+    expect(checkoutMutateMock.mock.calls[0]?.[0]).toMatchObject({
+      items: [
+        { kind: "coded", gearPublicId: "gear_a" },
+        { kind: "counted", modelPublicId: "model_draws", quantity: 2 },
+      ],
+    });
+  });
+
+  it("adds a model once — picking it again keeps one row", async () => {
+    await seedMixedBatch();
+
+    act(() => comboboxProps.current!.onPickCounted(draws));
+
+    expect(screen.getAllByTestId("counted-model_draws")).toHaveLength(1);
+  });
+
+  it("keeps a refused counted row with how many were left", async () => {
+    await seedMixedBatch();
+    await userEvent.click(screen.getByRole("button", { name: /^Check out/ }));
+    const onSuccess = checkoutMutateMock.mock.calls[0]?.[1]?.onSuccess;
+
+    act(() => {
+      onSuccess({
+        results: [
+          {
+            ok: true,
+            kind: "coded",
+            gearPublicId: "gear_a",
+            loanPublicId: "l1",
+            code: "CR1",
+          },
+          {
+            ok: false,
+            kind: "counted",
+            modelPublicId: "model_draws",
+            reason: "insufficient_stock",
+            available: 0,
+          },
+        ],
+      });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("error-model_draws")).toHaveTextContent(
+        "Only 0 on the shelf",
+      ),
+    );
+    expect(screen.queryByTestId("row-CR1")).not.toBeInTheDocument();
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^Checked out 1 piece to Cart Member \(1 skipped\)/,
+      ),
+    );
+  });
+
+  it("overrides a held counted row, naming it by quantity and model", async () => {
+    viewerPermissions.current = ["gear:loan", "gear:manage"];
+    await seedMixedBatch();
+    await userEvent.click(screen.getByRole("button", { name: /^Check out/ }));
+    const onSuccess = checkoutMutateMock.mock.calls[0]?.[1]?.onSuccess;
+    act(() => {
+      onSuccess({
+        results: [
+          {
+            ok: true,
+            kind: "coded",
+            gearPublicId: "gear_a",
+            loanPublicId: "l1",
+            code: "CR1",
+          },
+          {
+            ok: false,
+            kind: "counted",
+            modelPublicId: "model_draws",
+            reason: "on_hold",
+            available: 0,
+          },
+        ],
+      });
+    });
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Override and check out" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("1 × BD HotForge 12cm"),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Override and check out" }),
+    );
+
+    expect(checkoutMutateMock.mock.calls[1]?.[0]).toMatchObject({
+      items: [{ kind: "counted", modelPublicId: "model_draws", quantity: 1 }],
+      overrideHolds: true,
+    });
   });
 });

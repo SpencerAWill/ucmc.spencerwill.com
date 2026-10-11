@@ -298,6 +298,16 @@ It also strips an **AIM symbology identifier** (ISO/IEC 15424) — `]` + symbolo
 
 `isCartToken()` is gone. knip caught it losing its last call site, which is what knip is kept green for — a second, weaker discriminator beside the real one is the drift.
 
+### Counted rows at the desk
+
+**No separate counted pane: a counted row sits in the same table as the coded ones.** The batch the desk actually sees is "a harness and six draws", and two panes would have made it two submits, two standing checks and two override passes. #223 weighed a separate tab and a split sub-section and took the mixed list.
+
+- **The combobox gains a second group, from a second query** — `searchCountedModelsForDesk` at checkout, `listOpenCountedLoans` at check-in. Widening `searchItemsByCode` into a union instead would have changed what a typed `CH9` matches; coded results stay first, so a code + Enter adds the piece it always did. At check-in the counted group searches **loans**, by model _or borrower_ — a return has to land on somebody's loan, and "Riley" is how the officer thinks of it.
+- **A counted row puts its quantity where the code would be** and names the model on a second `<tr>` spanning the columns, the same shape as the error line. A wider first cell would have broken the column grid at phone width, which is where this Sheet is most often used. The header reads **"Gear"**, not "Code", for that reason.
+- **Asking for more than `takeable` is advised against, never blocked.** A `gear:manage` officer may override into held units, and the server is the authority on the shelf. Check-in caps the field at what's still out, because there the server refuses more and no override exists.
+- **The button and the item count are in units** ("Check out 7 items" for a harness and six draws); a row count would undercount what is in the member's hands. A short return's toast says how many are **still out**, so "checked in" never reads as "closed".
+- `DeskQuantityInput` keeps a text draft so the officer can clear the box to type "12", and stays `text-base` below `md` — anything smaller and iOS zooms the page on focus.
+
 ### USB keyboard-wedge scanners
 
 Cheap USB scanners are HID keyboard wedges: they "type" the payload then a terminator. No permission, no camera, far faster for a batch of returns. **The browser cannot tell one from a keyboard** — a `keydown` carries no device identity — so recognition is a heuristic, and `lib/wedge-buffer.ts` is all of it, as a pure reducer with the clock as a parameter.
@@ -322,7 +332,7 @@ Four things that are the way they are on purpose:
 
 **The wedge defaults ON (`ucmc:gear-scanner:wedge`), the camera defaults OFF.** A camera that starts itself fires a permission prompt the moment the Sheet opens; a wedge that is simply not plugged in costs nothing.
 
-**`DeskScanControls` owns the Scan column** — camera, wedge, and **one** confirmation line for both. Both panes rendered that column verbatim before, and #223's counted pane would have been a third copy. The camera scanner's in-viewfinder "Scanned CH93" pill moved there: two confirmations for one officer action drift in wording and timing, and the wedge has no viewfinder to overlay one on.
+**`DeskScanControls` owns the Scan column** — camera, wedge, and **one** confirmation line for both. Both panes rendered that column verbatim before; #223 was going to add a third copy as a separate counted pane, and doesn't, because counted rows live in the two existing panes (below). The camera scanner's in-viewfinder "Scanned CH93" pill moved there: two confirmations for one officer action drift in wording and timing, and the wedge has no viewfinder to overlay one on.
 
 **Scanner config, for whoever buys the gun** (all set by scanning setup barcodes from its manual): "Transmit Code ID Character" = **AIM** (defaults to None; if the reader has no AIM option, set the prefix/preamble to `~` instead) · terminator = **Enter** (Tab also works) · keyboard layout = **US**, the one that actually bites, since a mismatch on a shared cave laptop produces silently mangled codes rather than an error · and **leave it in keyboard-wedge mode**. Do not flip it to HID POS: that is the better protocol (decoded data plus symbology in one report, reachable via WebHID) but it takes the gun _out_ of keyboard mode, so it stops working in every other application on that laptop. A **2D imager** reads our CODE128 labels _and_ a member's cart QR off their phone; a 1D laser reads the labels only.
 

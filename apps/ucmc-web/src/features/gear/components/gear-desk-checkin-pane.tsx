@@ -14,7 +14,10 @@ import {
 import { fetchGearByCode } from "#/features/gear/api/queries";
 import { useCheckinLoans } from "#/features/gear/api/use-checkin-loans";
 import { DeskScanControls } from "#/features/gear/components/desk-scan-controls";
-import { CheckinItemRow } from "#/features/gear/components/gear-desk-item-row";
+import {
+  CheckinItemRow,
+  CountedCheckinItemRow,
+} from "#/features/gear/components/gear-desk-item-row";
 import { GearCodeSearchCombobox } from "#/features/gear/components/gear-code-search-combobox";
 import {
   isForeignSymbology,
@@ -22,19 +25,49 @@ import {
 } from "#/features/gear/lib/scan-payload";
 import type {
   CheckinLoansResult,
+  DeskCountedLoan,
   GearCondition,
   GearLookupRow,
 } from "#/features/gear/server/gear-fns";
 
-interface CheckinItem {
-  row: GearLookupRow;
-  conditionAtReturn: GearCondition | null;
-  notes: string;
-  error?: string;
+/** One row of the batch: a coded piece by its code, or units coming
+ *  back on one open counted loan. Mirrors the server's per-row union. */
+type CheckinItem =
+  | {
+      kind: "coded";
+      row: GearLookupRow;
+      conditionAtReturn: GearCondition | null;
+      notes: string;
+      error?: string;
+    }
+  | {
+      kind: "counted";
+      loan: DeskCountedLoan;
+      quantity: number;
+      notes: string;
+      error?: string;
+    };
+
+type CheckinResult = CheckinLoansResult["results"][number];
+
+/** The publicId a row is keyed on — its piece, or its LOAN (never the
+ *  model: two borrowers can have the same draws out). */
+function itemKey(item: CheckinItem): string {
+  return item.kind === "coded" ? item.row.publicId : item.loan.loanPublicId;
+}
+
+function resultKey(result: CheckinResult): string {
+  return result.kind === "coded" ? result.gearPublicId : result.loanPublicId;
+}
+
+function borrowerName(item: CheckinItem): string {
+  return item.kind === "coded"
+    ? (item.row.openLoanMemberFullName ?? "Unknown")
+    : item.loan.memberFullName;
 }
 
 const SKIP_LABEL: Record<
-  Extract<CheckinLoansResult["results"][number], { ok: false }>["reason"],
+  Extract<CheckinResult, { ok: false }>["reason"],
   string
 > = {
   not_found: "No longer in inventory",
@@ -47,12 +80,34 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
   const [items, setItems] = useState<CheckinItem[]>([]);
   const checkin = useCheckinLoans();
 
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+
   const addRow = (row: GearLookupRow) => {
     setItems((prev) => {
-      if (prev.some((i) => i.row.publicId === row.publicId)) return prev;
-      return [...prev, { row, conditionAtReturn: null, notes: "" }];
+      if (prev.some((i) => itemKey(i) === row.publicId)) return prev;
+      return [
+        ...prev,
+        { kind: "coded", row, conditionAtReturn: null, notes: "" },
+      ];
     });
   };
+
+  /** Add an open counted loan, prefilled to everything still out — "all
+   *  six came back" is the common case, and the field takes focus so a
+   *  short return is one keystroke away. */
+  const addCountedLoan = (loan: DeskCountedLoan) => {
+    setItems((prev) => {
+      if (prev.some((i) => itemKey(i) === loan.loanPublicId)) return prev;
+      return [
+        ...prev,
+        { kind: "counted", loan, quantity: loan.outstanding, notes: "" },
+      ];
+    });
+    setFocusKey(loan.loanPublicId);
+  };
+
+  const updateItem = (key: string, patch: (item: CheckinItem) => CheckinItem) =>
+    setItems((prev) => prev.map((p) => (itemKey(p) === key ? patch(p) : p)));
 
   const handleScan = async (raw: string) => {
     const payload = parseScanPayload(raw);
@@ -97,12 +152,21 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
     }
     checkin.mutate(
       {
-        items: items.map((i) => ({
-          kind: "coded" as const,
-          gearPublicId: i.row.publicId,
-          conditionAtReturn: i.conditionAtReturn,
-          notes: i.notes.trim() || null,
-        })),
+        items: items.map((i) =>
+          i.kind === "coded"
+            ? {
+                kind: "coded" as const,
+                gearPublicId: i.row.publicId,
+                conditionAtReturn: i.conditionAtReturn,
+                notes: i.notes.trim() || null,
+              }
+            : {
+                kind: "counted" as const,
+                loanPublicId: i.loan.loanPublicId,
+                quantity: i.quantity,
+                notes: i.notes.trim() || null,
+              },
+        ),
       },
       {
         onSuccess: (data) => {
@@ -116,28 +180,38 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
               borrowers.size === 1
                 ? `from ${[...borrowers][0]}`
                 : `from ${borrowers.size} members`;
-            const tail =
-              skipped.length > 0 ? ` (${skipped.length} skipped)` : "";
+            const pieces = ok.reduce(
+              (sum, r) => sum + (r.kind === "coded" ? 1 : r.quantity),
+              0,
+            );
+            // A short return leaves the loan open; say so in the
+            // confirmation, so nobody reads "checked in" as "closed".
+            const stillOut = ok.reduce(
+              (sum, r) => sum + (r.kind === "counted" ? r.outstanding : 0),
+              0,
+            );
+            const tail = [
+              stillOut > 0 ? `${stillOut} still out` : null,
+              skipped.length > 0 ? `${skipped.length} skipped` : null,
+            ].filter((part) => part !== null);
             toast.success(
-              `Checked in ${ok.length} ${ok.length === 1 ? "piece" : "pieces"} ${borrowerSummary}${tail}`,
+              `Checked in ${pieces} ${pieces === 1 ? "piece" : "pieces"} ${borrowerSummary}${tail.length > 0 ? ` (${tail.join(", ")})` : ""}`,
             );
           }
           setItems((prev) => {
-            const codedSkips = skipped.flatMap((s) =>
-              s.kind === "coded" ? [s] : [],
-            );
-            const skippedIds = new Set(codedSkips.map((s) => s.gearPublicId));
-            return prev
-              .filter((i) => skippedIds.has(i.row.publicId))
-              .map((i) => {
-                const reason = codedSkips.find(
-                  (s) => s.gearPublicId === i.row.publicId,
-                );
-                return {
-                  ...i,
-                  error: reason ? SKIP_LABEL[reason.reason] : undefined,
-                };
-              });
+            return prev.flatMap((i) => {
+              const refusal = skipped.find(
+                (s) => s.kind === i.kind && resultKey(s) === itemKey(i),
+              );
+              if (!refusal) return [];
+              const error =
+                refusal.kind === "counted" &&
+                refusal.reason === "exceeds_outstanding" &&
+                refusal.outstanding !== null
+                  ? `Only ${refusal.outstanding} still out on this loan`
+                  : SKIP_LABEL[refusal.reason];
+              return [{ ...i, error }];
+            });
           });
           if (skipped.length === 0) onSuccess();
         },
@@ -147,11 +221,18 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
     );
   };
 
+  // Units, not rows — six draws coming back is six items, the same
+  // count the checkout button uses.
+  const returningUnits = items.reduce(
+    (sum, i) => sum + (i.kind === "coded" ? 1 : i.quantity),
+    0,
+  );
+
   // Group rows by borrower name when more than one shows up. Mirrors
   // the sketch in the plan: small borrower-name header above each
   // group so the officer can confirm visually who's returning what.
   const groups = items.reduce<Map<string, CheckinItem[]>>((acc, item) => {
-    const name = item.row.openLoanMemberFullName ?? "Unknown";
+    const name = borrowerName(item);
     const list = acc.get(name) ?? [];
     list.push(item);
     acc.set(name, list);
@@ -172,18 +253,18 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
         </div>
         <div className="space-y-2">
           <Label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Returning ({items.length})
+            Returning ({returningUnits})
           </Label>
           {items.length === 0 ? (
             <p className="rounded-md border border-dashed bg-muted/40 p-4 text-center text-sm text-muted-foreground">
-              Scan a barcode or search for a code below to check gear back in.
-              Multiple borrowers in one batch is fine.
+              Scan a barcode or search below — a code, counted gear, or the
+              borrower&apos;s name. Multiple borrowers in one batch is fine.
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-20">Code</TableHead>
+                  <TableHead className="w-20">Gear</TableHead>
                   <TableHead>Condition</TableHead>
                   <TableHead className="w-10">User</TableHead>
                   <TableHead className="w-10" aria-label="Actions" />
@@ -203,33 +284,50 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
                       </TableRow>
                     ) : null}
                     {group.map((item) => {
-                      const idx = items.indexOf(item);
+                      const key = itemKey(item);
+                      const remove = () =>
+                        setItems((prev) =>
+                          prev.filter((p) => itemKey(p) !== key),
+                        );
+                      const setNotes = (notes: string) =>
+                        updateItem(key, (p) => ({ ...p, notes }));
+                      if (item.kind === "counted") {
+                        return (
+                          <CountedCheckinItemRow
+                            key={key}
+                            loan={item.loan}
+                            quantity={item.quantity}
+                            onQuantityChange={(quantity) =>
+                              updateItem(key, (p) =>
+                                p.kind === "counted"
+                                  ? { ...p, quantity, error: undefined }
+                                  : p,
+                              )
+                            }
+                            notes={item.notes}
+                            onNotesChange={setNotes}
+                            error={item.error}
+                            onRemove={remove}
+                            autoFocus={focusKey === key}
+                          />
+                        );
+                      }
                       return (
                         <CheckinItemRow
-                          key={item.row.publicId}
+                          key={key}
                           row={item.row}
                           conditionAtReturn={item.conditionAtReturn}
                           onConditionChange={(c) =>
-                            setItems((prev) =>
-                              prev.map((p, pi) =>
-                                pi === idx ? { ...p, conditionAtReturn: c } : p,
-                              ),
+                            updateItem(key, (p) =>
+                              p.kind === "coded"
+                                ? { ...p, conditionAtReturn: c }
+                                : p,
                             )
                           }
                           notes={item.notes}
-                          onNotesChange={(notes) =>
-                            setItems((prev) =>
-                              prev.map((p, pi) =>
-                                pi === idx ? { ...p, notes } : p,
-                              ),
-                            )
-                          }
+                          onNotesChange={setNotes}
                           error={item.error}
-                          onRemove={() =>
-                            setItems((prev) =>
-                              prev.filter((_, pi) => pi !== idx),
-                            )
-                          }
+                          onRemove={remove}
                         />
                       );
                     })}
@@ -244,8 +342,9 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
           <GearCodeSearchCombobox
             mode="checkin"
             onPick={addRow}
+            onPickCounted={addCountedLoan}
             disabled={checkin.isPending}
-            excludePublicIds={items.map((i) => i.row.publicId)}
+            excludePublicIds={items.map(itemKey)}
           />
         </div>
       </div>
@@ -257,7 +356,7 @@ export function GearDeskCheckinPane({ onSuccess }: { onSuccess: () => void }) {
         >
           {checkin.isPending
             ? "Checking in…"
-            : `Check in ${items.length || ""} ${items.length === 1 ? "item" : "items"}`.trim()}
+            : `Check in ${returningUnits || ""} ${returningUnits === 1 ? "item" : "items"}`.trim()}
         </Button>
       </div>
     </div>
