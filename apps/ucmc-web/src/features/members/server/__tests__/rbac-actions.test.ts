@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, insertMany, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
@@ -1003,5 +1003,51 @@ describe("reorderRolesAction", () => {
     await expect(reorderRolesAction({ orderedRoleIds: dup })).rejects.toThrow(
       /Duplicate role id/,
     );
+  });
+});
+
+describe("setRoleMembersAction at ROLE_MEMBERS_DIFF_MAX (#291)", () => {
+  it("adds 100 members and then removes them", async () => {
+    // Old limits: 50 rows in the user_roles insert, 14 audit rows, and
+    // 99 ids in the DELETE's IN list beside the role id.
+    await signInAsAdmin();
+    await createRoleAction({
+      name: "test_trip_leader",
+      displayName: "Trip Leader",
+    });
+    const ids = Array.from(
+      { length: 100 },
+      () => `user_${crypto.randomUUID()}`,
+    );
+    await insertMany(
+      schema.users,
+      ids.map((id) => ({
+        id,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        status: "approved" as const,
+      })),
+    );
+
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: ids,
+      remove: [],
+    });
+    const held = await getDb()
+      .select()
+      .from(schema.userRoles)
+      .where(eq(schema.userRoles.roleId, "role_test_trip_leader"));
+    expect(held).toHaveLength(100);
+
+    await setRoleMembersAction({
+      roleId: "role_test_trip_leader",
+      add: [],
+      remove: ids,
+    });
+    const after = await getDb()
+      .select()
+      .from(schema.userRoles)
+      .where(eq(schema.userRoles.roleId, "role_test_trip_leader"));
+    expect(after).toHaveLength(0);
   });
 });

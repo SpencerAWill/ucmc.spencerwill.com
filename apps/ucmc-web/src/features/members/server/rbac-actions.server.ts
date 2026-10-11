@@ -3,7 +3,7 @@
  * the shell + .server.ts split — the shell in `./rbac-fns.ts` loads
  * this via dynamic imports inside its createServerFn handlers.
  */
-import { and, asc, count, eq, inArray, max } from "drizzle-orm";
+import { and, asc, count, eq, max } from "drizzle-orm";
 
 import {
   buildAuditEventStatement,
@@ -14,10 +14,11 @@ import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import {
   getDb,
+  inJsonArray,
+  insertStatements,
   isUniqueViolation,
   runBatch,
   schema,
-  selectInChunks,
 } from "#/server/db";
 import { errorMessage, log } from "#/server/log/log.server";
 
@@ -427,16 +428,15 @@ export async function setRolePermissionsAction(input: {
     db
       .delete(schema.rolePermissions)
       .where(eq(schema.rolePermissions.roleId, input.roleId)),
-    ...(input.permissionIds.length > 0
-      ? [
-          db.insert(schema.rolePermissions).values(
-            input.permissionIds.map((permissionId) => ({
-              roleId: input.roleId,
-              permissionId,
-            })),
-          ),
-        ]
-      : []),
+    // Split to fit: the catalog is ~45 permissions at 2 parameters each,
+    // five short of D1's ceiling in a single statement (#291).
+    ...insertStatements(
+      schema.rolePermissions,
+      [...new Set(input.permissionIds)].map((permissionId) => ({
+        roleId: input.roleId,
+        permissionId,
+      })),
+    ),
     buildAuditEventStatement({
       actorUserId: principal.userId,
       action: "role.permissions_set",
@@ -510,8 +510,11 @@ export async function setUserRolesAction(input: {
     throw new Error("Cannot assign roles to an unclaimed member");
   }
 
-  // Anonymous role cannot be assigned to users.
-  const roleIds = input.roleIds.filter((id) => id !== ANONYMOUS_ROLE_ID);
+  // Anonymous role cannot be assigned to users. Deduped, because a
+  // repeated id would otherwise collide with itself on the insert.
+  const roleIds = [...new Set(input.roleIds)].filter(
+    (id) => id !== ANONYMOUS_ROLE_ID,
+  );
 
   // Approved users must always keep the member role.
   if (user.status === "approved" && !roleIds.includes(MEMBER_ROLE_ID)) {
@@ -532,7 +535,7 @@ export async function setUserRolesAction(input: {
     const existingRoles = await db
       .select({ id: schema.roles.id })
       .from(schema.roles)
-      .where(inArray(schema.roles.id, roleIds));
+      .where(inJsonArray(schema.roles.id, roleIds));
     const existingIds = new Set(existingRoles.map((r) => r.id));
     for (const roleId of roleIds) {
       if (!existingIds.has(roleId)) {
@@ -579,16 +582,10 @@ export async function setUserRolesAction(input: {
     db
       .delete(schema.userRoles)
       .where(eq(schema.userRoles.userId, input.userId)),
-    ...(roleIds.length > 0
-      ? [
-          db.insert(schema.userRoles).values(
-            roleIds.map((roleId) => ({
-              userId: input.userId,
-              roleId,
-            })),
-          ),
-        ]
-      : []),
+    ...insertStatements(
+      schema.userRoles,
+      roleIds.map((roleId) => ({ userId: input.userId, roleId })),
+    ),
     ...auditStmts,
   ]);
 
@@ -687,12 +684,10 @@ export async function setRoleMembersAction(input: {
   // (officer-pre-added) stubs must claim their account first — the
   // same rule the user-keyed path enforces.
   if (addIds.length > 0) {
-    const targetUsers = await selectInChunks(addIds, (chunk) =>
-      db
-        .select({ id: schema.users.id, status: schema.users.status })
-        .from(schema.users)
-        .where(inArray(schema.users.id, [...chunk])),
-    );
+    const targetUsers = await db
+      .select({ id: schema.users.id, status: schema.users.status })
+      .from(schema.users)
+      .where(inJsonArray(schema.users.id, addIds));
     const byId = new Map(targetUsers.map((u) => [u.id, u.status]));
     for (const userId of addIds) {
       const status = byId.get(userId);
@@ -760,21 +755,16 @@ export async function setRoleMembersAction(input: {
             .where(
               and(
                 eq(schema.userRoles.roleId, input.roleId),
-                inArray(schema.userRoles.userId, unassigned),
+                inJsonArray(schema.userRoles.userId, unassigned),
               ),
             ),
         ]
       : []),
-    ...(assigned.length > 0
-      ? [
-          db
-            .insert(schema.userRoles)
-            .values(
-              assigned.map((userId) => ({ userId, roleId: input.roleId })),
-            )
-            .onConflictDoNothing(),
-        ]
-      : []),
+    ...insertStatements(
+      schema.userRoles,
+      assigned.map((userId) => ({ userId, roleId: input.roleId })),
+      { onConflictDoNothing: true },
+    ),
     ...auditStmts,
   ]);
 

@@ -228,6 +228,10 @@ export function chunkRows<T>(rows: readonly T[], size: number): T[][] {
   );
 }
 
+type BatchStatement = Parameters<
+  DrizzleD1Database<typeof schema>["batch"]
+>[0][number];
+
 /**
  * The INSERT statements that write `rows` into `table` without any one of
  * them binding more than D1 accepts. Spread them into a `db.batch([...])`
@@ -240,16 +244,18 @@ export function chunkRows<T>(rows: readonly T[], size: number): T[][] {
 export function insertStatements<TTable extends SQLiteTable>(
   table: TTable,
   rows: readonly SQLiteInsertValue<TTable>[],
-) {
+  options: {
+    /** Skip rows that collide with an existing key, per statement —
+     *  `INSERT … ON CONFLICT DO NOTHING`. */
+    readonly onConflictDoNothing?: boolean;
+  } = {},
+): BatchStatement[] {
   const db = getDb();
-  return chunkRows(rows, rowsPerInsertStatement(table)).map((part) =>
-    db.insert(table).values(part),
-  );
+  return chunkRows(rows, rowsPerInsertStatement(table)).map((part) => {
+    const insert = db.insert(table).values(part);
+    return options.onConflictDoNothing ? insert.onConflictDoNothing() : insert;
+  });
 }
-
-type BatchStatement = Parameters<
-  DrizzleD1Database<typeof schema>["batch"]
->[0][number];
 
 /**
  * `db.batch` over a list that may be empty. Drizzle types the batch as a
@@ -270,8 +276,9 @@ export async function runBatch(
 export async function insertMany<TTable extends SQLiteTable>(
   table: TTable,
   rows: readonly SQLiteInsertValue<TTable>[],
+  options: { readonly onConflictDoNothing?: boolean } = {},
 ): Promise<void> {
-  await runBatch(insertStatements(table, rows));
+  await runBatch(insertStatements(table, rows, options));
 }
 
 /**

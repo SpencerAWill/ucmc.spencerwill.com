@@ -20,7 +20,13 @@ import {
 } from "#/server/audit/audit-log.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { getDb, runBatch, schema, selectInChunks } from "#/server/db";
+import {
+  getDb,
+  inJsonArray,
+  insertStatements,
+  runBatch,
+  schema,
+} from "#/server/db";
 import {
   currentAttestationFilter,
   currentlyAttestedUserIds,
@@ -275,12 +281,10 @@ export async function bulkAttestWaiversAction(input: {
   // Pre-validate every target is approved — fail before any insert if
   // even one is wrong. drizzle-kit doesn't expose a true transaction
   // over D1, so the pre-check + multi-row insert is best-effort.
-  const allTargets = await selectInChunks(userIds, (chunk) =>
-    db.query.users.findMany({
-      where: (users, { inArray }) => inArray(users.id, [...chunk]),
-      columns: { id: true, status: true },
-    }),
-  );
+  const allTargets = await db
+    .select({ id: schema.users.id, status: schema.users.status })
+    .from(schema.users)
+    .where(inJsonArray(schema.users.id, userIds));
   const found = new Set(allTargets.map((t) => t.id));
   for (const id of userIds) {
     if (!found.has(id)) {
@@ -321,7 +325,9 @@ export async function bulkAttestWaiversAction(input: {
     })),
   );
   await runBatch([
-    db.insert(schema.waiverAttestations).values(rows),
+    // An attestation row binds 7 parameters, so even within
+    // BULK_ATTEST_MAX one statement held only 14 (#291).
+    ...insertStatements(schema.waiverAttestations, rows),
     ...auditStmts,
   ]);
 

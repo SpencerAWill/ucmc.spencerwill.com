@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, insertMany, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
@@ -1329,5 +1329,92 @@ describe("getMemberDetailAction waiver status", () => {
     const detail = await detailOf(publicId);
 
     expect(detail.waiverStatus).toBeNull();
+  });
+});
+
+// ── #291: bulk paths past D1's 100-parameter ceiling ──────────────────
+
+describe("bulk lifecycle at scale (#291)", () => {
+  /** `n` bare users in one statement-per-chunk batch — seeding them
+   *  one by one would dominate the test's runtime. */
+  async function seedBare(n: number, status: schema.UserStatus) {
+    const ids = Array.from({ length: n }, () => `user_${crypto.randomUUID()}`);
+    await insertMany(
+      schema.users,
+      ids.map((id) => ({
+        id,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        status,
+      })),
+    );
+    return ids;
+  }
+
+  it("approves 120 registrations — UPDATE, role grants and audit all past their old limits", async () => {
+    // Old limits: 100 ids in the UPDATE, 50 role grants, 14 audit rows.
+    await signInAsAdmin();
+    const ids = await seedBare(120, "pending");
+
+    await approveRegistrationsAction(ids);
+
+    const db = getDb();
+    const approved = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.status, "approved"));
+    expect(approved.filter((r) => ids.includes(r.id))).toHaveLength(120);
+    const grants = await db
+      .select()
+      .from(schema.userRoles)
+      .where(eq(schema.userRoles.roleId, "role_member"));
+    expect(grants.filter((g) => ids.includes(g.userId))).toHaveLength(120);
+    const audits = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "registration.approved"));
+    expect(audits).toHaveLength(120);
+  });
+
+  it("deactivates and reactivates 110 members", async () => {
+    await signInAsAdmin();
+    const ids = await seedBare(110, "approved");
+
+    await deactivateMembersAction(ids);
+    await reactivateMembersAction(ids);
+
+    const audits = await getDb().select().from(schema.auditLog);
+    expect(
+      audits.filter((a) => a.action === "member.deactivated"),
+    ).toHaveLength(110);
+    expect(
+      audits.filter((a) => a.action === "member.reactivated"),
+    ).toHaveLength(110);
+  });
+
+  it("rejects and un-rejects 105 registrations", async () => {
+    await signInAsAdmin();
+    const ids = await seedBare(105, "pending");
+
+    await rejectRegistrationsAction(ids);
+    await unrejectMembersAction(ids);
+
+    const pending = await getDb()
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.status, "pending"));
+    expect(pending.filter((r) => ids.includes(r.id))).toHaveLength(105);
+  });
+
+  it("filters the directory by a status list repeated past the ceiling", async () => {
+    // The comma-split filters used to bind one parameter per entry, and
+    // nothing deduped them — a hand-built URL could take the page down.
+    await signInAsAdmin();
+    await seedUser("listed@example.com");
+
+    const result = await listMembersAction({
+      statuses: Array.from({ length: 150 }, () => "approved").join(","),
+    });
+
+    expect(result.rows.length).toBeGreaterThan(0);
   });
 });

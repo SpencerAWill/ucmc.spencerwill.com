@@ -4,10 +4,10 @@
  * `users`, `profiles`, `user_roles`, and `role_permissions` once per
  * request and handed to loaders/guards/server-fns.
  */
-import { asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 
 import { withLegacyPermissionAliases } from "#/server/auth/permission-aliases";
-import { getDb, schema } from "#/server/db";
+import { getDb, inJsonArray, notInJsonArray, schema } from "#/server/db";
 import { getKv } from "#/server/kv";
 
 export interface Principal {
@@ -192,7 +192,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
           eq(schema.permissions.id, schema.rolePermissions.permissionId),
         )
         .where(
-          notInArray(schema.roles.id, [
+          notInJsonArray(schema.roles.id, [
             ANONYMOUS_ROLE_ID,
             SYSTEM_ADMIN_ROLE_ID,
           ]),
@@ -226,7 +226,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
         schema.permissions,
         eq(schema.permissions.id, schema.rolePermissions.permissionId),
       )
-      .where(inArray(schema.rolePermissions.roleId, roleIds));
+      .where(inJsonArray(schema.rolePermissions.roleId, roleIds));
 
     // Build per-role map using role names.
     const roleIdToName = new Map(userRoleRows.map((r) => [r.roleId, r.name]));

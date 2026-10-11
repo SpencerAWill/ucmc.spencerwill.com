@@ -27,12 +27,13 @@ export type {
  * pending list exceeds this — keeping the same number on both sides
  * means the UI never builds a request the server is going to reject.
  *
- * Held at 100 to match `D1_MAX_BOUND_PARAMS`. The read behind this
- * endpoint is chunked (`selectInChunks`), so the cap is no longer load-
- * bearing for correctness — but a request that fans out to several
- * statements plus a multi-row insert is still one officer action, and
- * keeping the ceiling at one statement's worth bounds the blast radius
- * of a retry. Raising it is safe; lowering the chunk size is not.
+ * **A product bound, not a storage one.** Every statement behind the
+ * endpoint is sized independently of it (#291): the validation read
+ * binds the list as one `json_each` parameter, and the attestation and
+ * audit inserts are split to fit D1. An earlier note here called the cap
+ * "no longer load-bearing" while the attestation insert still failed at
+ * 15 rows — it is only true now. 100 bounds one officer action and the
+ * blast radius of a retry; raising it is safe.
  */
 export const BULK_ATTEST_MAX = 100;
 const NOTES_MAX = 500;

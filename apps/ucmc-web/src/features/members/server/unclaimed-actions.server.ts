@@ -20,7 +20,7 @@
  * later via a separate `members:preadd` permission if granular RBAC is
  * needed.
  */
-import { and, count, desc, eq, exists, gte, inArray, lte } from "drizzle-orm";
+import { and, count, desc, eq, exists, gte, lte } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { requireMembersManager } from "#/features/members/server/permissions.server";
@@ -31,7 +31,14 @@ import {
 } from "#/server/audit/audit-log.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import { generatePublicId } from "#/server/auth/ids";
-import { getDb, isUniqueViolation, runBatch, schema } from "#/server/db";
+import {
+  getDb,
+  inJsonArray,
+  insertStatements,
+  isUniqueViolation,
+  runBatch,
+  schema,
+} from "#/server/db";
 
 const DEFAULT_LIMIT = 50;
 
@@ -219,7 +226,7 @@ export async function preAddUnclaimedMembersAction(args: {
   const taken = await db
     .select({ email: schema.userEmails.email })
     .from(schema.userEmails)
-    .where(inArray(schema.userEmails.email, candidateEmails));
+    .where(inJsonArray(schema.userEmails.email, candidateEmails));
   const takenSet = new Set(taken.map((row) => row.email));
 
   const toCreate: OkEntry[] = [];
@@ -249,7 +256,8 @@ export async function preAddUnclaimedMembersAction(args: {
     email: entry.email,
   }));
 
-  const userInserts = db.insert(schema.users).values(
+  const userInserts = insertStatements(
+    schema.users,
     created.map((row) => ({
       id: row.userId,
       publicId: row.publicId,
@@ -258,7 +266,8 @@ export async function preAddUnclaimedMembersAction(args: {
       unclaimedAt: now,
     })),
   );
-  const emailInserts = db.insert(schema.userEmails).values(
+  const emailInserts = insertStatements(
+    schema.userEmails,
     created.map((row) => ({
       id: `uem_${uuidv7()}`,
       userId: row.userId,
@@ -282,7 +291,7 @@ export async function preAddUnclaimedMembersAction(args: {
   );
 
   try {
-    await runBatch([userInserts, emailInserts, ...auditInserts]);
+    await runBatch([...userInserts, ...emailInserts, ...auditInserts]);
     return { ok: true, created, skipped };
   } catch (err) {
     if (!isUniqueViolation(err, "user_emails.email")) {
@@ -571,7 +580,7 @@ export async function deleteUnclaimedMembersAction(args: {
     )
     .where(
       and(
-        inArray(schema.users.id, args.userIds),
+        inJsonArray(schema.users.id, args.userIds),
         eq(schema.users.status, "unclaimed"),
       ),
     );
@@ -588,7 +597,7 @@ export async function deleteUnclaimedMembersAction(args: {
     .delete(schema.users)
     .where(
       and(
-        inArray(schema.users.id, idsToDelete),
+        inJsonArray(schema.users.id, idsToDelete),
         eq(schema.users.status, "unclaimed"),
       ),
     )
