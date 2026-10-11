@@ -58,6 +58,11 @@ export function LoanCard({ loan }: { loan: LoanSummary }) {
               </div>
               <p className="text-xs text-muted-foreground">
                 {loan.typeName} · {loan.memberFullName}
+                {/* An open counted loan with some units back is still
+                    open for the rest — the list should say how many. */}
+                {loan.returnedAt === null && loan.quantityReturned > 0
+                  ? ` · ${loan.quantity - loan.quantityReturned} still out`
+                  : ""}
               </p>
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 {loan.returnedAt ? (

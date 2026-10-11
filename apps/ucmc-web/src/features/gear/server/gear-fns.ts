@@ -106,6 +106,7 @@ import type {
   LoanDetail,
   LoanSummary,
   MyLoansResult,
+  WriteOffLoanResult,
 } from "#/features/gear/server/loans-actions.server";
 import type {
   AddToCartResult,
@@ -234,6 +235,7 @@ export type {
   LoanSummary,
   MemberSearchResult,
   RecordGearInspectionInput,
+  WriteOffLoanResult,
   RecordGearInspectionResult,
   DeactivateGearResult,
   ReleaseCodeResult,
@@ -725,6 +727,13 @@ const deskTextSearchInputSchema = z.object({
   q: z.string().min(1).max(200),
 });
 
+const writeOffLoanInputSchema = z.object({
+  publicId: z.string().min(1),
+  // Required and non-blank: a write-off clears the borrower's standing
+  // on the loan, so "why" is the point of the audit row.
+  reason: z.string().trim().min(1).max(500),
+});
+
 const gearByCodeInputSchema = z.object({
   code: z.string().min(1).max(64),
 });
@@ -1193,6 +1202,14 @@ export const searchOpenCountedLoansFn = createServerFn({ method: "GET" })
     const { searchOpenCountedLoansAction } =
       await import("#/features/gear/server/loans-actions.server");
     return searchOpenCountedLoansAction(data);
+  });
+
+export const writeOffLoanShortfallFn = createServerFn({ method: "POST" })
+  .validator(writeOffLoanInputSchema)
+  .handler(async ({ data }): Promise<WriteOffLoanResult> => {
+    const { writeOffLoanShortfallAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return writeOffLoanShortfallAction(data);
   });
 
 // ── cart shells ────────────────────────────────────────────────────────

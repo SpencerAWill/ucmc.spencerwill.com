@@ -1,15 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, CalendarClock, Inbox } from "lucide-react";
+import { ArrowLeft, CalendarClock, Inbox, PackageX } from "lucide-react";
 import { useState } from "react";
 
 import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { requirePermission } from "#/features/auth/guards";
 import { loanDetailQueryOptions } from "#/features/gear/api/queries";
 import { GearDeskTrigger } from "#/features/gear/components/gear-desk-trigger";
 import { LoanDetailCard } from "#/features/gear/components/loan-detail-card";
 import { LoanExtendDialog } from "#/features/gear/components/loan-extend-dialog";
+import { LoanWriteOffDialog } from "#/features/gear/components/loan-write-off-dialog";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 export const Route = createFileRoute("/gear/loans/$publicId")({
@@ -25,6 +27,8 @@ function LoanDetailPage() {
   const { publicId } = Route.useParams();
   const { data, isLoading, error } = useQuery(loanDetailQueryOptions(publicId));
   const [extendOpen, setExtendOpen] = useState(false);
+  const [writeOffOpen, setWriteOffOpen] = useState(false);
+  const { hasPermission } = useAuth();
 
   if (isLoading) {
     return <p className="p-4 text-sm text-muted-foreground">Loading…</p>;
@@ -43,6 +47,11 @@ function LoanDetailPage() {
     );
   }
   const isActive = data.returnedAt === null;
+  // Only an open COUNTED loan can close short, and only on `gear:manage`
+  // — the action re-checks both. `hasPermission`, not the payload, so
+  // role emulation narrows it like every other gate.
+  const canWriteOff =
+    isActive && data.gearPublicId === null && hasPermission("gear:manage");
   return (
     <PageContainer width="app" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -52,7 +61,7 @@ function LoanDetailPage() {
             Back to loans
           </Link>
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isActive ? (
             <Button
               variant="outline"
@@ -61,6 +70,16 @@ function LoanDetailPage() {
             >
               <CalendarClock className="size-4" />
               Extend
+            </Button>
+          ) : null}
+          {canWriteOff ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setWriteOffOpen(true)}
+            >
+              <PackageX className="size-4" />
+              Write off
             </Button>
           ) : null}
           {/* The desk trigger opens the same Sheet officers use everywhere
@@ -75,6 +94,13 @@ function LoanDetailPage() {
         open={extendOpen}
         onOpenChange={setExtendOpen}
       />
+      {canWriteOff ? (
+        <LoanWriteOffDialog
+          loan={data}
+          open={writeOffOpen}
+          onOpenChange={setWriteOffOpen}
+        />
+      ) : null}
       {/* A counted loan ("six draws") has no single item page to open,
           so the link only renders for a coded loan. */}
       <div className="flex justify-end">

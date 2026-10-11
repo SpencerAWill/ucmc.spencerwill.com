@@ -93,6 +93,8 @@ export interface LoanSummary {
    *  loan — "six draws" — and the list surfaces had no way to say so. */
   quantity: number;
   quantityReturned: number;
+  /** Units written off when a counted loan was closed short. */
+  quantityLost: number;
   thumbnailKey: string | null;
   typeName: string;
   memberPublicId: string;
@@ -121,6 +123,7 @@ function toSummary(row: LoanListRow): LoanSummary {
     gearName: row.name,
     quantity: row.quantity,
     quantityReturned: row.quantityReturned,
+    quantityLost: row.quantityLost,
     thumbnailKey: row.thumbnailKey,
     typeName: row.typeName,
     memberPublicId: row.memberPublicId,

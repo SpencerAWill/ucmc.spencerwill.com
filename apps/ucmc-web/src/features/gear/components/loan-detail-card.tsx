@@ -72,6 +72,11 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
                 Returned condition: {CONDITION_LABEL[loan.conditionAtReturn]}
               </Badge>
             ) : null}
+            {loan.quantityLost > 0 ? (
+              <Badge variant="destructive">
+                {loan.quantityLost} written off
+              </Badge>
+            ) : null}
           </div>
         </div>
       </CardHeader>
@@ -98,6 +103,17 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
             </dt>
             <dd>{formatDate(loan.dueAt)}</dd>
           </div>
+          {/* A counted loan can come back a few at a time, and an open
+              one with units back is the case an officer is looking at
+              this page to resolve. */}
+          {loan.gearPublicId === null ? (
+            <div>
+              <dt className="text-xs text-muted-foreground">Returned</dt>
+              <dd className="tabular-nums">
+                {loan.quantityReturned} of {loan.quantity}
+              </dd>
+            </div>
+          ) : null}
           {loan.checkedOutByName ? (
             <div>
               <dt className="text-xs text-muted-foreground">Issued by</dt>
