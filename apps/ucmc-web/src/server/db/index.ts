@@ -192,33 +192,45 @@ export function notInJsonArray(
 /**
  * How many rows one multi-row INSERT into `table` can carry.
  *
- * Counts every column Drizzle may bind: for each row it emits a parameter
- * per column — values given, `null`s, and literal or `$defaultFn` defaults
- * alike. Only columns with a SQL-expression default are left out, because
- * Drizzle inlines those. An audit row binds 7, so 14 rows fit; a loan row
- * binds 13, so 7.
+ * A column is counted as bound unless it has a SQL-expression default
+ * (`created_at` defaulting to `unixepoch() * 1000`) **and no row
+ * supplies it** — Drizzle inlines such a default only when the value is
+ * left out. Everything else is counted, including omitted columns with
+ * no default (Drizzle actually writes a literal `null` for those), so
+ * the figure can only overcount, which is the safe direction. Pass the
+ * rows you're about to insert; without them every SQL-default column is
+ * assumed omitted.
  *
- * `reservedParams` is anything else the same statement binds — an upsert's
- * `SET` values, say.
+ * An audit row binds 7, so 14 rows fit. A tag assignment binds 4 once
+ * its `assignedAt` is supplied — the case that showed the rows have to
+ * be consulted at all.
+ *
+ * `reservedParams` is anything else the same statement binds.
  */
 export function rowsPerInsertStatement(
   table: SQLiteTable,
   reservedParams = 0,
+  rows: readonly Record<string, unknown>[] = [],
 ): number {
-  // A column whose default is a SQL expression (`created_at` defaulting
-  // to `unixepoch() * 1000`) is inlined into the statement when the row
-  // leaves it out, not bound. Every other column is counted as bound
-  // even if a given row omits it — the safe direction.
-  const columns = Object.values(getTableColumns(table)).filter(
-    (column) => !is(column.default, SQLExpression),
+  const supplied = new Set(
+    rows.flatMap((row) =>
+      Object.entries(row)
+        .filter(([, value]) => value !== undefined)
+        .map(([key]) => key),
+    ),
+  );
+  const columns = Object.entries(getTableColumns(table)).filter(
+    ([key, column]) => !is(column.default, SQLExpression) || supplied.has(key),
   ).length;
-  const rows = Math.floor((D1_MAX_BOUND_PARAMS - reservedParams) / columns);
-  if (rows < 1) {
+  const perStatement = Math.floor(
+    (D1_MAX_BOUND_PARAMS - reservedParams) / columns,
+  );
+  if (perStatement < 1) {
     throw new RangeError(
       `rowsPerInsertStatement: one row of ${columns} columns plus ${reservedParams} reserved parameters exceeds D1's ${D1_MAX_BOUND_PARAMS}.`,
     );
   }
-  return rows;
+  return perStatement;
 }
 
 /** `rows` cut into runs of at most `size`. */
@@ -251,7 +263,7 @@ export function insertStatements<TTable extends SQLiteTable>(
   } = {},
 ): BatchStatement[] {
   const db = getDb();
-  return chunkRows(rows, rowsPerInsertStatement(table)).map((part) => {
+  return chunkRows(rows, rowsPerInsertStatement(table, 0, rows)).map((part) => {
     const insert = db.insert(table).values(part);
     return options.onConflictDoNothing ? insert.onConflictDoNothing() : insert;
   });

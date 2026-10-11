@@ -221,6 +221,23 @@ describe("insertMany / insertStatements", () => {
     ).toThrow(RangeError);
   });
 
+  it("counts a SQL-default column as bound once a row supplies it", () => {
+    // `assigned_at` defaults to a SQL expression, which Drizzle inlines
+    // only when the value is left out. The bulk tagger supplies it, and
+    // counting it as inlined is exactly how that insert overflowed.
+    const omitted = rowsPerInsertStatement(schema.gearTagAssignments);
+    const supplied = rowsPerInsertStatement(schema.gearTagAssignments, 0, [
+      {
+        itemId: "i",
+        tagId: "t",
+        assignedAt: Temporal.Now.instant(),
+        assignedBy: null,
+      },
+    ]);
+    expect(supplied).toBe(25);
+    expect(omitted).toBeGreaterThan(supplied);
+  });
+
   it("writes 300 audit rows — 22 statements, one atomic batch", async () => {
     const rows = Array.from({ length: 300 }, (_unused, i) => ({
       id: `audit_probe_${i}`,
