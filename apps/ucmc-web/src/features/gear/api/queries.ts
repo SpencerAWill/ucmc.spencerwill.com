@@ -34,6 +34,7 @@ import {
   memberLoanSearchQueryKey,
 } from "#/features/gear/api/query-keys";
 import {
+  getDeskModelFn,
   getLoanDefaultsFn,
   getItemByCodeFn,
   getGearDetailFn,
@@ -56,6 +57,7 @@ import {
   listGearTypesFn,
   listLoansFn,
   listMyLoansFn,
+  listOpenCountedLoansForModelFn,
   searchCountedModelsForDeskFn,
   searchItemsByCodeFn,
   searchMembersForLoanFn,
@@ -347,6 +349,17 @@ export function openCountedLoanSearchQueryOptions(q: string) {
     queryFn: () => searchOpenCountedLoansFn({ data: { q: trimmed } }),
     enabled: trimmed.length > 0,
   } as const;
+}
+
+/** What a scanned `ucmc-model:` bin label names, for the checkout pane.
+ *  Imperative like `fetchGearByCode`: a scan is an event, not a view. */
+export function fetchDeskModel(publicId: string) {
+  return getDeskModelFn({ data: { publicId } });
+}
+
+/** Who has a scanned bin label's model out, for the check-in pane. */
+export function fetchOpenCountedLoansForModel(publicId: string) {
+  return listOpenCountedLoansForModelFn({ data: { publicId } });
 }
 
 /**

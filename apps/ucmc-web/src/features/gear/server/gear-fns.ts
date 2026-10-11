@@ -98,6 +98,7 @@ import type {
   CheckoutSkipReason,
   DeskCountedLoan,
   DeskCountedModel,
+  DeskModelLookupResult,
   ExtendLoanResult,
   GearLookupRow,
   ListLoansActionInput,
@@ -734,6 +735,10 @@ const writeOffLoanInputSchema = z.object({
   reason: z.string().trim().min(1).max(500),
 });
 
+const deskModelInputSchema = z.object({
+  publicId: z.string().min(1).max(64),
+});
+
 const gearByCodeInputSchema = z.object({
   code: z.string().min(1).max(64),
 });
@@ -1194,6 +1199,22 @@ export const searchCountedModelsForDeskFn = createServerFn({ method: "GET" })
     const { searchCountedModelsForDeskAction } =
       await import("#/features/gear/server/loans-actions.server");
     return searchCountedModelsForDeskAction(data);
+  });
+
+export const getDeskModelFn = createServerFn({ method: "GET" })
+  .validator(deskModelInputSchema)
+  .handler(async ({ data }): Promise<DeskModelLookupResult> => {
+    const { getDeskModelAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return getDeskModelAction(data);
+  });
+
+export const listOpenCountedLoansForModelFn = createServerFn({ method: "GET" })
+  .validator(deskModelInputSchema)
+  .handler(async ({ data }): Promise<DeskCountedLoan[]> => {
+    const { listOpenCountedLoansForModelAction } =
+      await import("#/features/gear/server/loans-actions.server");
+    return listOpenCountedLoansForModelAction({ modelPublicId: data.publicId });
   });
 
 export const searchOpenCountedLoansFn = createServerFn({ method: "GET" })

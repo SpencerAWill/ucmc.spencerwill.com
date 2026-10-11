@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
+import { MODEL_LABEL_PREFIX } from "#/features/gear/lib/model-label";
 import { WEDGE_SENTINEL } from "#/features/gear/lib/wedge-buffer";
 import { GearDeskCheckoutPane } from "#/features/gear/components/gear-desk-checkout-pane";
 import type {
@@ -24,6 +25,8 @@ const getMemberForLoanFnMock = vi.hoisted(() =>
   })),
 );
 const fetchGearByCodeMock = vi.hoisted(() => vi.fn());
+const fetchDeskModelMock = vi.hoisted(() => vi.fn());
+const toastInfoMock = vi.hoisted(() => vi.fn());
 const toastErrorMock = vi.hoisted(() => vi.fn());
 const toastSuccessMock = vi.hoisted(() => vi.fn());
 const toastWarningMock = vi.hoisted(() => vi.fn());
@@ -33,6 +36,7 @@ vi.mock("sonner", () => ({
     error: toastErrorMock,
     success: toastSuccessMock,
     warning: toastWarningMock,
+    info: toastInfoMock,
   },
 }));
 
@@ -43,6 +47,7 @@ vi.mock("#/features/gear/server/gear-fns", () => ({
 
 vi.mock("#/features/gear/api/queries", () => ({
   fetchGearByCode: fetchGearByCodeMock,
+  fetchDeskModel: fetchDeskModelMock,
   // The pane reads `gear.defaultLoanDays` and `gear.caveOpenDays` for its
   // duration prefill. Neither value matters to any case here, but the
   // factory has to exist or `useQuery` throws before the component
@@ -188,6 +193,8 @@ beforeEach(() => {
   resolveCartTokenFnMock.mockReset();
   getMemberForLoanFnMock.mockClear();
   fetchGearByCodeMock.mockReset();
+  fetchDeskModelMock.mockReset();
+  toastInfoMock.mockReset();
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
   toastWarningMock.mockReset();
@@ -864,5 +871,76 @@ describe("GearDeskCheckoutPane counted rows", () => {
       items: [{ kind: "counted", modelPublicId: "model_draws", quantity: 1 }],
       overrideHolds: true,
     });
+  });
+});
+
+describe("GearDeskCheckoutPane bin-label scans", () => {
+  const draws: DeskCountedModel = {
+    publicId: "k3v9x0p2m1aa",
+    name: "BD HotForge 12cm",
+    typeName: "Quickdraw",
+    imageKey: null,
+    takeable: 10,
+    held: 0,
+  };
+
+  it("adds the bin's model at quantity 1 without a code lookup", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: true, model: draws });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    await act(async () => {
+      await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+    });
+
+    expect(fetchDeskModelMock).toHaveBeenCalledWith("k3v9x0p2m1aa");
+    expect(fetchGearByCodeMock).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("counted-k3v9x0p2m1aa")).toHaveTextContent(
+      "1 × BD HotForge 12cm",
+    );
+  });
+
+  it("leaves focus where it was, so the next scan can't land in the quantity", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: true, model: draws });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    const before = document.activeElement;
+
+    await act(async () => {
+      await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+    });
+    await screen.findByTestId("counted-k3v9x0p2m1aa");
+
+    expect(document.activeElement).toBe(before);
+  });
+
+  it("names a model that went back to coded rather than calling it missing", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: false, reason: "not_counted" });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+
+    await act(async () => {
+      await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+    });
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringMatching(/tracked by code/),
+    );
+  });
+
+  it("doesn't add the same bin twice", async () => {
+    fetchDeskModelMock.mockResolvedValue({ ok: true, model: draws });
+    renderPane();
+    await waitFor(() => expect(scannerOnResult.current).not.toBeNull());
+    for (let i = 0; i < 2; i += 1) {
+      await act(async () => {
+        await scannerOnResult.current!(`${MODEL_LABEL_PREFIX}k3v9x0p2m1aa`);
+      });
+    }
+
+    expect(screen.getAllByTestId("counted-k3v9x0p2m1aa")).toHaveLength(1);
+    expect(toastInfoMock).toHaveBeenCalledWith(
+      expect.stringMatching(/already in this batch/),
+    );
   });
 });

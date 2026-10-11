@@ -23,6 +23,7 @@ import { Textarea } from "#/components/ui/textarea";
 import { CLUB_TIME_ZONE } from "#/config/time";
 import { useAuth } from "#/features/auth/api/use-auth";
 import {
+  fetchDeskModel,
   fetchGearByCode,
   loanDefaultsQueryOptions,
 } from "#/features/gear/api/queries";
@@ -279,6 +280,10 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
       await handleCartScan(payload.token);
       return;
     }
+    if (payload.kind === "model") {
+      await handleBinScan(payload.modelPublicId);
+      return;
+    }
     const code = payload.code;
     try {
       const row = await fetchGearByCode(code);
@@ -307,6 +312,50 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
     } catch {
       toast.error("Couldn't look up that code.");
     }
+  };
+
+  /**
+   * Resolve a scanned `ucmc-model:` bin label: add the model at quantity
+   * 1, for the officer to correct.
+   *
+   * **Focus deliberately stays where it was.** Moving it into the new
+   * row's quantity field would be the natural next step for a human,
+   * but the wedge treats a focused number field as text it must not
+   * capture into — so the next scan from a gun without an AIM prefix
+   * would type "CH93" into the quantity and set it to 93. A pick from
+   * the combobox does focus the field, because the officer is already
+   * typing.
+   */
+  const handleBinScan = async (modelPublicId: string) => {
+    let resolved;
+    try {
+      resolved = await fetchDeskModel(modelPublicId);
+    } catch {
+      toast.error("Couldn't look up that bin label.");
+      return;
+    }
+    if (!resolved.ok) {
+      toast.error(
+        resolved.reason === "not_counted"
+          ? "That bin's model is tracked by code now — scan the pieces themselves."
+          : "That bin label doesn't match any gear model.",
+      );
+      return;
+    }
+    const { model } = resolved;
+    if (items.some((i) => itemKey(i) === model.publicId)) {
+      toast.info(`${model.name} is already in this batch — set the quantity.`);
+      return;
+    }
+    setItems((prev) => [
+      ...prev,
+      {
+        kind: "counted",
+        model,
+        quantity: 1,
+        durationDays: defaultDurationDays,
+      },
+    ]);
   };
 
   /**

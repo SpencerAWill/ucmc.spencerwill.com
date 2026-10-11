@@ -290,7 +290,22 @@ The tick is `0 12 * * *` — **08:00 EDT / 07:00 EST** in Cincinnati. The hour i
 
 ### Two ways a code reaches the desk, one discriminator
 
-**`parseScanPayload` (`lib/scan-payload.ts`) is the only place that decides what a scanned string is.** `handleScan` used to branch inline — `ucmc-cart:` prefix → resolve a cart, anything else → treat it as a short code — which was fine while the camera was the only producer. #224 finding 5 called it out; #215 made it real by adding a second producer. #223's counted-stock bin labels (`ucmc-model:`) add one branch here, not a fourth copy across two panes and a wedge path.
+**`parseScanPayload` (`lib/scan-payload.ts`) is the only place that decides what a scanned string is.** `handleScan` used to branch inline — `ucmc-cart:` prefix → resolve a cart, anything else → treat it as a short code — which was fine while the camera was the only producer. #224 finding 5 called it out; #215 made it real by adding a second producer.
+
+**The payload namespace, all of it:**
+
+| Payload                      | Kind    | Printed by                       | Desk does                                                  |
+| ---------------------------- | ------- | -------------------------------- | ---------------------------------------------------------- |
+| `ucmc-cart:<uuid>`           | `cart`  | the member's cart QR (5 min TTL) | checkout: resolve the snapshot; check-in: refuse, say why  |
+| `ucmc-model:<modelPublicId>` | `model` | a counted model's **bin label**  | checkout: add the model at qty 1; check-in: find its loans |
+| anything else                | `code`  | an item label                    | exact `getItemByCode`                                      |
+
+**Bin labels (#223) need a prefix of their own.** A bare publicId would be ambiguous against a short code — both are freeform lowercase alphanumerics — and a third bare-string shape would make the discriminator guesswork. `MODEL_LABEL_PREFIX` and `modelLabelPayload()` live in `lib/model-label.ts` so the printer and the parser build the string the same way, and the desk never tests the prefix inline. A prefix with nothing usable after it parses to `null` (a mangled label), not to a code.
+
+- **Per model, not per physical bin.** A model split across two bins wants two copies of one label, which the print pane's "Copies" field gives for free; a bin entity would be a new table for no new question answered.
+- **Always CODE128, on a wider card** (`ModelBinLabelPane`, the barcode button on a counted model's row in the models dialog). The payload is lowercase with a `:`, which CODE39 can't encode, and ~23 characters needs ~3.5″ at a bar width a phone camera resolves. A QR would shut out 1D lasers. The pane reuses `LabelPrintArea` — the print stylesheet lives once, in `gear-label-sheet.tsx`.
+- **A bin scan does not move focus into the new quantity field.** The wedge treats a focused number field as text it must not capture into, so the _next_ scan from a gun without an AIM prefix would type `CH93` into the quantity and set it to 93. A pick from the combobox does focus it, because the officer is typing there already.
+- **At check-in a bin names a model, and a return lands on a loan.** One open loan of it: added. Several: a "Whose are these?" chooser. A model flipped back to coded after its label went on the bin says so, rather than "not found".
 
 It also strips an **AIM symbology identifier** (ISO/IEC 15424) — `]` + symbology char + modifier — which a reader prepends when "Transmit Code ID Character" is set to AIM. **Our labels transmit `]C0`, plain CODE128; `]C1` is GS1-128, which we never emit**, so the parser matches the identifier's _shape_. A discriminator hardcoded to the `]C1` most documentation leads with would have failed on every real scan.
 
@@ -443,6 +458,6 @@ The `models` view on `/gear` — one card per product, with its units bucketed. 
 
 ## Not built yet
 
-Counted stock is entered and reported, but **the desk still can't hand out a quantity** — checkout resolves a code, and the counted pane behind it is unbuilt. Nothing is marked `counted` until the cave names which models are. Reservations (member-initiated, converting into a loan at the desk), and qualification gating are deliberately deferred.
+Nothing is marked `counted` until the cave names which models are. Member-facing counted requests (the cart is item-keyed and stays that way), reservations (member-initiated, converting into a loan at the desk), counted backfill, and qualification gating are deliberately deferred.
 
 **No attribute definitions are seeded.** Which attributes exist, at which level, with which options in which order, is the cave's call — a guessed set would be worse than an empty one, because officers would edit around it rather than replace it.

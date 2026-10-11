@@ -1,20 +1,28 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GearDeskCheckinPane } from "#/features/gear/components/gear-desk-checkin-pane";
+import { MODEL_LABEL_PREFIX } from "#/features/gear/lib/model-label";
 import type { DeskCountedLoan } from "#/features/gear/server/loans-actions.server";
 
 // ── module mocks ────────────────────────────────────────────────────────
 
 const toastSuccessMock = vi.hoisted(() => vi.fn());
+const toastErrorMock = vi.hoisted(() => vi.fn());
 vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), success: toastSuccessMock, warning: vi.fn() },
+  toast: {
+    error: toastErrorMock,
+    success: toastSuccessMock,
+    warning: vi.fn(),
+  },
 }));
 
+const fetchLoansForModelMock = vi.hoisted(() => vi.fn());
 vi.mock("#/features/gear/api/queries", () => ({
   fetchGearByCode: vi.fn(),
+  fetchOpenCountedLoansForModel: fetchLoansForModelMock,
 }));
 
 const checkinMutateMock = vi.hoisted(() => vi.fn());
@@ -22,8 +30,14 @@ vi.mock("#/features/gear/api/use-checkin-loans", () => ({
   useCheckinLoans: () => ({ mutate: checkinMutateMock, isPending: false }),
 }));
 
+const onScanRef = vi.hoisted<{ current: ((raw: string) => unknown) | null }>(
+  () => ({ current: null }),
+);
 vi.mock("#/features/gear/components/desk-scan-controls", () => ({
-  DeskScanControls: () => <div data-testid="scan-controls" />,
+  DeskScanControls: ({ onScan }: { onScan: (raw: string) => unknown }) => {
+    onScanRef.current = onScan;
+    return <div data-testid="scan-controls" />;
+  },
 }));
 
 // The combobox's "Counted" group is how an open counted loan joins the
@@ -99,6 +113,8 @@ function renderPane() {
 
 beforeEach(() => {
   checkinMutateMock.mockReset();
+  fetchLoansForModelMock.mockReset();
+  toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
   comboboxProps.current = null;
 });
@@ -202,5 +218,58 @@ describe("GearDeskCheckinPane counted rows", () => {
         "Only 2 still out on this loan",
       ),
     );
+  });
+});
+
+describe("GearDeskCheckinPane bin-label scans", () => {
+  async function scanBin(): Promise<void> {
+    await waitFor(() => expect(onScanRef.current).not.toBeNull());
+    await act(async () => {
+      await onScanRef.current!(`${MODEL_LABEL_PREFIX}model_draws`);
+    });
+  }
+
+  it("adds the one open loan of the bin's model", async () => {
+    fetchLoansForModelMock.mockResolvedValue([makeLoan()]);
+    renderPane();
+
+    await scanBin();
+
+    expect(fetchLoansForModelMock).toHaveBeenCalledWith("model_draws");
+    expect(await screen.findByTestId("counted-loan_riley")).toBeInTheDocument();
+  });
+
+  it("asks whose when two members have the same gear out", async () => {
+    fetchLoansForModelMock.mockResolvedValue([
+      makeLoan(),
+      makeLoan({
+        loanPublicId: "loan_sam",
+        memberFullName: "Sam Okafor",
+        outstanding: 2,
+      }),
+    ]);
+    renderPane();
+
+    await scanBin();
+    const dialog = await screen.findByRole("dialog", {
+      name: "Whose are these?",
+    });
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /Sam Okafor/ }),
+    );
+
+    expect(await screen.findByTestId("counted-loan_sam")).toHaveTextContent(
+      "2 of 2",
+    );
+    expect(screen.queryByTestId("counted-loan_riley")).not.toBeInTheDocument();
+  });
+
+  it("says so when nobody has the gear out", async () => {
+    fetchLoansForModelMock.mockResolvedValue([]);
+    renderPane();
+
+    await scanBin();
+
+    expect(toastErrorMock).toHaveBeenCalledWith("Nobody has that gear out.");
   });
 });
