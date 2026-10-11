@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import {
   D1_MAX_BOUND_PARAMS,
   getDb,
+  inJsonArray,
+  insertMany,
+  insertStatements,
+  notInJsonArray,
+  rowsPerInsertStatement,
+  runBatch,
   schema,
   selectInChunks,
 } from "#/server/db";
@@ -135,5 +141,142 @@ describe("selectInChunks", () => {
         reservedParams: D1_MAX_BOUND_PARAMS,
       }),
     ).rejects.toThrow(RangeError);
+  });
+});
+
+async function seedUsers(count: number, prefix: string): Promise<string[]> {
+  const seeded = Array.from(
+    { length: count },
+    (_unused, i) => `${prefix}_${i}`,
+  );
+  await insertMany(
+    schema.users,
+    seeded.map((id) => ({
+      id,
+      publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+      status: "approved" as const,
+    })),
+  );
+  return seeded;
+}
+
+describe("inJsonArray", () => {
+  it("binds any length as one parameter — 5000 values, far past the ceiling", async () => {
+    const real = await seedUsers(3, "user_json");
+    const list = [...ids(4997), ...real];
+
+    const rows = await getDb()
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(inJsonArray(schema.users.id, list));
+
+    expect(rows.map((r) => r.id).sort()).toEqual([...real].sort());
+  });
+
+  it("matches nothing for an empty list", async () => {
+    await seedUsers(2, "user_json_empty");
+    const rows = await getDb()
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(inJsonArray(schema.users.id, []));
+    expect(rows).toEqual([]);
+  });
+
+  it("keeps integers integers, so a numeric column still matches", async () => {
+    const rows = await getDb().all<{ n: number }>(
+      sql`SELECT 7 AS n WHERE 7 IN (SELECT value FROM json_each(${JSON.stringify([3, 7])}))`,
+    );
+    expect(rows).toEqual([{ n: 7 }]);
+  });
+});
+
+describe("notInJsonArray", () => {
+  it("excludes the listed values and nothing else, at any length", async () => {
+    const seeded = await seedUsers(4, "user_notin");
+    const rows = await getDb()
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(notInJsonArray(schema.users.id, [...ids(500), seeded[0] ?? ""]));
+    // Other tests in this file seed users too; only this test's rows
+    // say anything about what was excluded.
+    const mine = rows.map((r) => r.id).filter((id) => seeded.includes(id));
+    expect(mine.sort()).toEqual(seeded.slice(1).sort());
+  });
+});
+
+describe("insertMany / insertStatements", () => {
+  it("sizes a statement by the table's column count", () => {
+    // 7 columns: id, actor, action, targetUser, targetType, targetId,
+    // metadata — the audit row that broke every 15-target bulk action.
+    expect(rowsPerInsertStatement(schema.auditLog)).toBe(14);
+    expect(rowsPerInsertStatement(schema.auditLog, 30)).toBe(10);
+    // A loan has 18 columns and none default to a SQL expression, so 5
+    // rows. Conservative on purpose: D1 actually took 7 of the desk's
+    // checkout rows (and refused 8 — why an 8-piece checkout failed),
+    // because Drizzle inlines `null` for an omitted column with no
+    // default. Counting it anyway costs an extra statement, never a 500.
+    expect(rowsPerInsertStatement(schema.gearLoans)).toBe(5);
+    expect(() =>
+      rowsPerInsertStatement(schema.auditLog, D1_MAX_BOUND_PARAMS),
+    ).toThrow(RangeError);
+  });
+
+  it("writes 300 audit rows — 22 statements, one atomic batch", async () => {
+    const rows = Array.from({ length: 300 }, (_unused, i) => ({
+      id: `audit_probe_${i}`,
+      actorUserId: null,
+      action: "settings_updated" as const,
+      targetUserId: null,
+      targetType: null,
+      targetId: `t${i}`,
+      metadataJson: null,
+    }));
+    expect(insertStatements(schema.auditLog, rows)).toHaveLength(22);
+
+    await insertMany(schema.auditLog, rows);
+
+    const written = await getDb()
+      .select({ id: schema.auditLog.id })
+      .from(schema.auditLog)
+      .where(
+        inJsonArray(
+          schema.auditLog.id,
+          rows.map((r) => r.id),
+        ),
+      );
+    expect(written).toHaveLength(300);
+  });
+
+  it("rolls back every chunk when one fails", async () => {
+    const good = Array.from({ length: 20 }, (_unused, i) => ({
+      id: `audit_rollback_${i}`,
+      actorUserId: null,
+      action: "settings_updated" as const,
+      targetUserId: null,
+      targetType: null,
+      targetId: null,
+      metadataJson: null,
+    }));
+    // The last row repeats the first's primary key, so the second
+    // statement fails after the first has run.
+    const rows = [...good, { ...good[0], targetId: "dupe" }];
+
+    await expect(insertMany(schema.auditLog, rows)).rejects.toThrow();
+
+    const written = await getDb()
+      .select({ id: schema.auditLog.id })
+      .from(schema.auditLog)
+      .where(
+        inJsonArray(
+          schema.auditLog.id,
+          good.map((r) => r.id),
+        ),
+      );
+    expect(written).toEqual([]);
+  });
+
+  it("does nothing for no rows", async () => {
+    await expect(insertMany(schema.auditLog, [])).resolves.toBeUndefined();
+    await expect(runBatch([])).resolves.toBeUndefined();
   });
 });

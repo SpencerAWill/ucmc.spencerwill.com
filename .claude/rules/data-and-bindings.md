@@ -53,18 +53,24 @@ A prefix is agreed by three places — the minting helper, the URL-stripping hel
 
 `likeContains(column, query)` lives in `src/server/db/index.ts`, beside `isUniqueViolation` / `isForeignKeyViolation`. It builds the `%needle%` pattern, escapes `%` / `_` / `\` in the user's input, **and emits the `ESCAPE` clause** — the last part is load-bearing and is why this is one helper rather than a bare needle-builder. SQLite only honours an escape character when the pattern carries an explicit `ESCAPE`, and Drizzle's `like()` never emits one, so escaping without it is _worse_ than not escaping: `50%` becomes `%50\%%`, which matches a literal backslash and therefore nothing.
 
-## D1 binds at most 100 parameters per statement — `selectInChunks` for anything unbounded
+## No statement may bind a data-dependent number of parameters (#291)
 
-`D1_MAX_BOUND_PARAMS = 100` in `src/server/db/index.ts`, pinned against real D1 by `src/server/db/__tests__/d1-bound-params.test.ts` (100 binds, 101 raises `too many SQL variables`). This is D1's limit, not Drizzle's: Drizzle emits a correct statement and the driver refuses to bind it.
+`D1_MAX_BOUND_PARAMS = 100` in `src/server/db/index.ts`, pinned against real D1 by `src/server/db/__tests__/d1-bound-params.test.ts` (100 binds, 101 raises `too many SQL variables`). This is D1's limit — the [limits page](https://developers.cloudflare.com/d1/platform/limits/) — not Drizzle's: Drizzle emits a correct statement and the driver refuses to bind it.
 
-So **`inArray(col, ids)` is only safe when `ids` comes from a UI page already bounded well under 100.** When the list is "everything matching X", wrap the read in `selectInChunks(ids, (chunk) => …)`, which splits it into statements D1 accepts and concatenates the rows. `listExceptionsFor` (`src/server/events/events-repo.server.ts`) is the reference call site; the waiver bulk-attest and role-member-diff validation reads are the other two.
+Two ordinary shapes grow with the data, and both reach 100 through normal use:
 
-Two things that are easy to get wrong:
+- **`inArray(col, list)`** binds one parameter per element.
+- **`insert().values(rows)`** binds one parameter per column **per row**. Far tighter than it looks: an audit row binds 7, so 15 audit events in one statement fail — which is how every bulk action that touched 15+ targets broke at once, and an 8-piece desk checkout with it.
 
-- **A cap on the caller is not a fix.** `BULK_ATTEST_MAX` and `ROLE_MEMBERS_DIFF_MAX` sat at 200 — exactly double what D1 takes — and the calendar's exception lookup has no cap to raise or lower at all, because its list is every series in the window. Chunk the query; let the caps express what one operator action should cost.
-- **`ORDER BY` does not span chunks.** A single sort cannot cross separate statements, so either sort the merged rows yourself or depend only on ordering within one key — which holds whenever every row for an id lands in the same chunk, as it does when chunking by that id. Pass `reservedParams` for anything else the statement binds (a date range, a status), so adding a filter to a chunked query cannot quietly push it back over the limit.
+So the rule is about the statement's shape, not about call sites that happen to have broken. Three tools, in order of preference:
 
-Found the hard way: see #259. The symptom is a 500 on a page that worked yesterday, once a table crossed ~100 rows in the queried window.
+1. **A subquery or join, when the list came out of the database.** `WHERE model_id IN (SELECT id FROM gear_models WHERE type_id = ?)` — one parameter, the planner does the matching, and there is no list to outgrow anything. Fetching ids in JavaScript only to hand them back is the round trip to remove.
+2. **`inJsonArray(col, values)` / `notInJsonArray`, when the list came from the caller.** One JSON parameter expanded by `json_each`, at any length (verified with 5000). This is the pattern D1's own docs give: [Expand arrays for IN queries](https://developers.cloudflare.com/d1/reference/query-json). An empty list matches nothing.
+3. **`insertStatements(table, rows)` / `insertMany`, for multi-row writes.** Splits the rows into statements of `rowsPerInsertStatement(table)` and runs them in one batch. D1 applies its per-query limits to **each statement in a batch** and runs the batch as a transaction, so the write stays atomic and costs one round trip. `rowsPerInsertStatement` counts every column except SQL-expression defaults — conservative, because Drizzle inlines `null` for an omitted column with no default; an extra statement costs nothing, a miscount costs a 500. Use `runBatch` for a statement list that may be empty: Drizzle's batch is typed as a non-empty tuple.
+
+Why not chunked reads (`selectInChunks`, from #261): they turn one query into several, and **Workers Free allows 50 D1 queries per invocation**. `json_each` and a subquery stay at one. Caps on callers are not a fix either — they couple a product decision to a storage limit, and #291's audit found twenty caps that still let a statement past 100.
+
+Found the hard way twice: #259 (a 500 once a table crossed ~100 rows in the window) and #291 (an audit of every query: 37 unbounded, 20 capped above the limit).
 
 ## Env
 
