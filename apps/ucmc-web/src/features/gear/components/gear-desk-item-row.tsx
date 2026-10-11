@@ -77,7 +77,10 @@ function CountedSubjectLine({
 }) {
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={colSpan} className="pt-0 text-xs">
+      {/* `whitespace-normal` overrides the table cell's `nowrap`: a
+          model name is long, and unwrapped it widens the table past
+          the Sheet and shoves the remove button off-screen. */}
+      <TableCell colSpan={colSpan} className="pt-0 text-xs whitespace-normal">
         <span className="font-medium">{name}</span>
         <span className="text-muted-foreground">
           {" "}
@@ -97,7 +100,10 @@ function CountedSubjectLine({
 function RowError({ colSpan, error }: { colSpan: number; error: string }) {
   return (
     <TableRow className="border-destructive/40">
-      <TableCell colSpan={colSpan} className="pt-0 text-xs text-destructive">
+      <TableCell
+        colSpan={colSpan}
+        className="pt-0 text-xs whitespace-normal text-destructive"
+      >
         <span className="flex items-center gap-1">
           <AlertTriangle className="size-3" />
           {error}

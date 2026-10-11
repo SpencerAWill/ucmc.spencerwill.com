@@ -75,15 +75,17 @@ export function GearCodeSearchCombobox({
 }) {
   const [input, setInput] = useState("");
   const deferred = useDeferredValue(input);
-  const { data } = useQuery(gearCodeSearchQueryOptions(deferred));
+  const { data, isFetching: fetchingCodes } = useQuery(
+    gearCodeSearchQueryOptions(deferred),
+  );
   // Both counted queries are declared and only the mode's own is
   // enabled — hooks can't be called conditionally, and an unconditional
   // disabled query costs nothing.
-  const { data: countedModels } = useQuery({
+  const { data: countedModels, isFetching: fetchingModels } = useQuery({
     ...countedDeskSearchQueryOptions(deferred),
     enabled: modeProps.mode === "checkout" && deferred.trim().length > 0,
   });
-  const { data: countedLoans } = useQuery({
+  const { data: countedLoans, isFetching: fetchingLoans } = useQuery({
     ...openCountedLoanSearchQueryOptions(deferred),
     enabled: modeProps.mode === "checkin" && deferred.trim().length > 0,
   });
@@ -142,9 +144,13 @@ export function GearCodeSearchCombobox({
       {input.trim().length > 0 ? (
         <CommandList>
           <CommandEmpty>
-            {modeProps.mode === "checkout"
-              ? "No eligible gear matches."
-              : "No open loan matches."}
+            {/* Two queries race here; saying "no match" while the
+                counted one is still in flight reads as a wrong answer. */}
+            {fetchingCodes || fetchingModels || fetchingLoans
+              ? "Searching…"
+              : modeProps.mode === "checkout"
+                ? "No eligible gear matches."
+                : "No open loan matches."}
           </CommandEmpty>
           {results.length > 0 ? (
             <CommandGroup

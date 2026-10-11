@@ -70,7 +70,11 @@ export function ModelBinLabelPane({
           {Array.from({ length: copies }, (_, i) => (
             <div
               key={i}
-              className="gear-label-card space-y-1 rounded border bg-white p-2 text-black"
+              // `min-w-0`: a grid item's minimum is its min-content
+              // width, which for the barcode is the SVG's intrinsic
+              // pixel width — wider than a phone. Without it the card
+              // pushes the whole dialog off-screen.
+              className="gear-label-card min-w-0 space-y-1 rounded border bg-white p-2 text-black"
             >
               <p className="truncate text-sm font-semibold">{model.name}</p>
               <p className="text-xs">{model.typeName} · counted</p>
@@ -79,7 +83,7 @@ export function ModelBinLabelPane({
                 format="CODE128"
                 heightPx={48}
                 barWidth={1.2}
-                className="w-full"
+                className="h-auto w-full max-w-full"
               />
             </div>
           ))}
