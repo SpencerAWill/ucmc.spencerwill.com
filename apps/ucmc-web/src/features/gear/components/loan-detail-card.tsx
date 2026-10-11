@@ -38,9 +38,13 @@ export function LoanDetailCard({ loan }: { loan: LoanDetail }) {
         </LoanSubjectLink>
         <div className="flex-1 space-y-2">
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-10 items-center justify-center rounded border border-primary/30 bg-primary/10 px-3 font-mono text-lg font-semibold text-primary">
-              {loan.code ?? "—"}
-            </span>
+            {/* A counted loan has no code, and an empty chip reads as a
+                missing one. */}
+            {loan.code !== null ? (
+              <span className="inline-flex h-10 items-center justify-center rounded border border-primary/30 bg-primary/10 px-3 font-mono text-lg font-semibold text-primary">
+                {loan.code}
+              </span>
+            ) : null}
             <div>
               <CardTitle>
                 {loan.quantity > 1 ? `${loan.quantity} × ` : ""}

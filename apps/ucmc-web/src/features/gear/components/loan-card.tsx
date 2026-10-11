@@ -45,9 +45,11 @@ export function LoanCard({ loan }: { loan: LoanSummary }) {
             </div>
             <div className="min-w-0 space-y-1 p-3 sm:p-4">
               <div className="flex items-center gap-2">
-                <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
-                  {loan.code ?? "—"}
-                </span>
+                {loan.code !== null ? (
+                  <span className="rounded border border-primary/30 bg-primary/10 px-1.5 font-mono text-xs font-semibold text-primary">
+                    {loan.code}
+                  </span>
+                ) : null}
                 <span className="truncate text-sm font-medium">
                   {/* A counted loan IS its quantity — "six draws" — and
                       the row used to name the product alone, which read
