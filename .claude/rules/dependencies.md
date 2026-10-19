@@ -9,11 +9,12 @@ paths:
 
 # Dependencies & supply chain
 
-**pnpm config lives in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11 stopped reading the `pnpm.*` block in `package.json` — `overrides`, `peerDependencyRules`, `auditConfig`, `minimumReleaseAge`, and `allowBuilds` must all be in the workspace file or they silently no-op.
+**pnpm config lives in `pnpm-workspace.yaml`, not `package.json`.** pnpm 11 stopped reading the `pnpm.*` block in `package.json` — `overrides`, `peerDependencyRules`, `auditConfig`, `minimumReleaseAge`, `trustPolicy`, and `allowBuilds` must all be in the workspace file or they silently no-op.
 
-## The three hardening mechanisms
+## The four hardening mechanisms
 
 - **`minimumReleaseAge: 10080`** quarantines any version published in the last 7 days — the primary defense against publish-compromise incidents (e.g. the TanStack `latest`-tag hijack). **Never spec a dep as `"latest"`**: it bypasses the resolver's age check and is exactly what got hijacked. Every direct dep gets an exact version or a caret pin where every in-range version is ≥7 days old.
+- **`trustPolicy: no-downgrade`** fails install when a newly resolved version has weaker publish provenance than an earlier-published version of the same package — what a hijacked maintainer token publishing outside the project's trusted CI looks like (#315). The quarantine catches a bad release by its _age_; this catches it by _how it was published_. **It checks only versions being resolved**, never ones already in the lockfile (not even under `--force`). **CI never runs it**: every workflow installs with `--frozen-lockfile`, which resolves nothing. It fires only where the lockfile is re-resolved — a local `pnpm add`/`pnpm update`, or Dependabot's updater. There, a downgrade shows up as an update Dependabot fails to open (check its job logs), not as a red PR — and only if Dependabot's own pnpm honors `trustPolicy`; if it doesn't, the lockfile it writes is never checked at all. Exceptions go in `trustPolicyExclude` as **exact versions with a comment giving the reason**, never a bare package name, so a new downgrade on the same package still fails. To check the whole tree, resolve it from scratch with no lockfile (copy the manifests and `pnpm-workspace.yaml` to a scratch dir, `pnpm install --lockfile-only --ignore-scripts`).
 - **`allowBuilds`** (renamed from pnpm 10's `onlyBuiltDependencies`) is a map of `pkg: true|false`. Lifecycle scripts run only for listed packages; everything else is blocked. Audit pnpm's actual decisions in `node_modules/.modules.yaml`.
 - **`.npmrc`** pins `registry=https://registry.npmjs.org/` so an environment-level registry override can't redirect us to a poisoned mirror.
 

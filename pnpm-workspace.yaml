@@ -19,6 +19,30 @@ storeDir: node_modules/.store
 # pinned to specific versions (no `latest`) so this is reachable.
 minimumReleaseAge: 10080
 
+# Fails install when a newly resolved version has weaker publish provenance
+# than a version of the same package published before it — the signature
+# of a hijacked maintainer token publishing outside the project's trusted
+# CI (#315). It complements the quarantine above: that catches a bad
+# release by its age, this one by how it was published.
+#
+# It judges only versions being RESOLVED — a Dependabot bump, `pnpm add`,
+# anything that re-resolves the lockfile. Versions already locked are not
+# re-checked, even under `--force`. CI installs with `--frozen-lockfile`,
+# which resolves nothing, so CI never runs this check: it fires only where
+# the lockfile is re-resolved — locally, or in Dependabot's updater (where
+# a downgrade means the update PR is never opened, not that it goes red,
+# and only if Dependabot's pnpm honors this setting at all).
+trustPolicy: no-downgrade
+# Exact versions only, each with its reason, so a NEW downgrade on the same
+# package still fails. Found by resolving the whole workspace from scratch
+# with no lockfile; this was the only one.
+trustPolicyExclude:
+  # A 6.x maintenance release published in July 2023 without provenance,
+  # after 7.5.4 had it. pnpm judges trust by publish date, not semver, so
+  # the older line reads as a downgrade. Pulled in by @babel/core (via
+  # @vitest/coverage-istanbul and the TanStack build plugins).
+  - semver@6.3.1
+
 # Lifecycle-script allowlist. pnpm 11 renamed `onlyBuiltDependencies`
 # (array) to `allowBuilds` (map of package → allow/deny) — see
 # https://pnpm.io/settings#allowbuilds. pnpm records the resolved
