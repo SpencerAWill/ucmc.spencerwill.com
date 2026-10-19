@@ -117,18 +117,22 @@ export async function requireAuth({
 /**
  * Require a signed-in, approved user with a completed profile. Steps
  * through the registration funnel: no profile → /register/profile, not
- * yet approved → /register/pending.
+ * yet approved → /register/pending, each with `?redirect=<here>`.
  */
 export async function requireApproved(args: GuardArgs): Promise<Principal> {
   const principal = await requireAuth(args);
+  // The funnel pages carry the return path on, so a registrant who
+  // started from a gated page can still be offered it from /pending.
+  const returnPath = returnPathOf(args.location);
+  const search = returnPath === null ? {} : { redirect: returnPath };
   if (!principal.hasProfile) {
-    throw redirect({ to: "/register/profile" });
+    throw redirect({ to: "/register/profile", search });
   }
   if (principal.status === "deactivated") {
     throw redirect({ to: "/deactivated" });
   }
   if (principal.status !== "approved") {
-    throw redirect({ to: "/register/pending" });
+    throw redirect({ to: "/register/pending", search });
   }
   return principal;
 }
@@ -370,6 +374,7 @@ export async function requireCurrentWaiver(
 
 export async function requireRegistrationContext(
   queryClient: QueryClient,
+  returnTo: string | undefined,
 ): Promise<RegistrationContext> {
   // Proof cookie is the first-time-registrant path; check it first so a
   // stale session never shadows a freshly-verified email.
@@ -379,7 +384,12 @@ export async function requireRegistrationContext(
   }
   const principal = await getPrincipal(queryClient);
   if (!principal) {
-    throw redirect({ to: "/sign-in" });
+    // Starting over keeps the page they were after.
+    const returnPath = safeReturnPath(returnTo);
+    throw redirect({
+      to: "/sign-in",
+      search: returnPath === null ? undefined : { redirect: returnPath },
+    });
   }
   if (principal.hasProfile) {
     throw redirect({ to: "/my/profile" });

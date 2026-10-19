@@ -136,7 +136,7 @@ describe("SignInWithPasskeyButton", () => {
     });
   });
 
-  it("routes to /register/profile when the user has no profile", async () => {
+  it("routes to /register/profile, carrying the return path, when the user has no profile", async () => {
     const user = userEvent.setup();
     webauthnAuthenticateBeginFn.mockResolvedValue({
       ok: true,
@@ -149,17 +149,19 @@ describe("SignInWithPasskeyButton", () => {
       status: "pending",
     });
 
-    renderButton();
+    renderButton("/members");
     await user.click(
       await screen.findByRole("button", { name: /sign in with a passkey/i }),
     );
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith({ to: "/register/profile" });
+      expect(navigateMock).toHaveBeenCalledWith({
+        href: `/register/profile?redirect=${encodeURIComponent("/members")}`,
+      });
     });
   });
 
-  it("routes to /register/pending when the user has a profile but is unapproved", async () => {
+  it("routes to /register/pending, carrying the return path, when the user is unapproved", async () => {
     const user = userEvent.setup();
     webauthnAuthenticateBeginFn.mockResolvedValue({
       ok: true,
@@ -172,13 +174,15 @@ describe("SignInWithPasskeyButton", () => {
       status: "pending",
     });
 
-    renderButton();
+    renderButton("/members");
     await user.click(
       await screen.findByRole("button", { name: /sign in with a passkey/i }),
     );
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith({ to: "/register/pending" });
+      expect(navigateMock).toHaveBeenCalledWith({
+        href: `/register/pending?redirect=${encodeURIComponent("/members")}`,
+      });
     });
   });
 

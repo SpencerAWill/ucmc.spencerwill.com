@@ -8,6 +8,7 @@ import { Checkbox } from "#/components/ui/checkbox";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { useSubmitProfile } from "#/features/auth/api/use-submit-profile";
+import { postSignInHref } from "#/features/auth/lib/post-sign-in";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import type { RegistrationInput } from "#/server/profile/profile-schemas";
@@ -23,7 +24,7 @@ export interface ProfileFormDefaults {
 export function ProfileForm({
   email,
   defaults,
-  redirectTo = "/register/pending",
+  returnTo,
 }: {
   /**
    * Shown as a read-only field at the top of the form. Comes from the
@@ -33,7 +34,8 @@ export function ProfileForm({
    */
   email: string;
   defaults?: ProfileFormDefaults;
-  redirectTo?: "/register/pending" | "/" | "/my/profile";
+  /** The page the visitor asked for before signing in, if any. */
+  returnTo?: string;
 }) {
   const navigate = useNavigate();
 
@@ -89,12 +91,16 @@ export function ProfileForm({
           form.reset(form.state.values);
           // Officer-pre-added users who claim land on this submit with
           // status flipped straight to "approved" (no pending wait).
-          // Send them to /my/profile instead of the registration
-          // funnel's pending page so they don't see a misleading
-          // "we're reviewing your account" interstitial.
-          const destination =
-            result.status === "approved" ? "/my/profile" : redirectTo;
-          await navigate({ to: destination });
+          // Send them to the page they asked for, or /my/profile,
+          // instead of the funnel's pending page so they don't see a
+          // misleading "we're reviewing your account" interstitial.
+          await navigate({
+            href: postSignInHref(
+              { hasProfile: true, status: result.status },
+              returnTo,
+              "/my/profile",
+            ),
+          });
         },
         onError: () => {
           toast.error("Couldn’t save your profile. Please try again.");

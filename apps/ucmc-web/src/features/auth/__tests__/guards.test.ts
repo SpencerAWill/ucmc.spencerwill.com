@@ -202,6 +202,26 @@ describe("every account-status guard carries the return path", () => {
   });
 });
 
+describe("requireApproved carries the return path into the funnel", () => {
+  it.each([
+    ["/register/profile", makePrincipal({ hasProfile: false })],
+    ["/register/pending", makePrincipal({ status: "pending" })],
+  ])("to %s", async (to, principal) => {
+    const thrown = thrownBy(
+      await capture(() =>
+        requireApproved(
+          argsFor(clientWithPrincipal(principal), "/members?q=ada"),
+        ),
+      ),
+    );
+    expect(isRedirect(thrown)).toBe(true);
+    expect(
+      (thrown as { options: { to: string; search?: { redirect?: string } } })
+        .options,
+    ).toMatchObject({ to, search: { redirect: "/members?q=ada" } });
+  });
+});
+
 describe("requirePermission", () => {
   it("returns the principal when they hold the permission", async () => {
     const client = clientWithPrincipal(
