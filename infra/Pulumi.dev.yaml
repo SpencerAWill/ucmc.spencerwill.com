@@ -10,7 +10,12 @@ config:
   ucmc-infra:kvNamespaceTitle: ucmc-web-dev-kv
   ucmc-infra:webauthnRpName: UCMC (dev)
   ucmc-infra:resendFromName: UCMC
-  # Resend free tier allows only one verified domain per account, so the
-  # prod stack owns the Resend resources and dev borrows the sending key
-  # + from-address via a StackReference. See `index.ts` for the logic.
-  ucmc-infra:resendOwnerStack: prod
+  # Dev sends no email: it goes to the outbox at /dev/outbox, behind
+  # Cloudflare Access, instead (#297, docs/adr/0001-dev-email-outbox.md).
+  # Never on prod — `outbox.ts` refuses it there. This replaces borrowing
+  # prod's Resend key, so dev holds no sending credentials at all.
+  ucmc-infra:emailOutbox: "true"
+  ucmc-infra:outboxViewers: '["spencer.a.will@gmail.com"]'
+  # The Zero Trust organization is account-wide and shared with
+  # flareling; it moves to SpencerAWill/spencerwill.com#3 eventually.
+  ucmc-infra:accessTeamDomain: late-hat-fec1.cloudflareaccess.com
