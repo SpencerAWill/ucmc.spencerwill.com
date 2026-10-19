@@ -541,18 +541,72 @@ describe("setRolePermissionsAction", () => {
     expect(grants).toEqual([]);
   });
 
+  it("refuses a permission the anonymous role may not hold, writing nothing", async () => {
+    // Every signed-in viewer inherits the anonymous role's grants (#300),
+    // so `waivers:view` there would be a Waivers entry for the whole site.
+    await signInAsAdmin();
+    const db = getDb();
+    const grantsBefore = await db
+      .select({ permissionId: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, "role_anonymous"));
+    await db.delete(schema.auditLog);
+
+    await expect(
+      setRolePermissionsAction({
+        roleId: "role_anonymous",
+        permissionIds: ["perm_public_calendar_view", "perm_waivers_view"],
+      }),
+    ).rejects.toThrow(/anonymous role: waivers:view$/);
+
+    const grantsAfter = await db
+      .select({ permissionId: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, "role_anonymous"));
+    expect(grantsAfter).toEqual(grantsBefore);
+    expect(await db.select().from(schema.auditLog)).toEqual([]);
+  });
+
+  it("grants the anonymous role permissions declared public", async () => {
+    await signInAsAdmin();
+    await setRolePermissionsAction({
+      roleId: "role_anonymous",
+      permissionIds: ["perm_public_calendar_view", "perm_history_view"],
+    });
+
+    const grants = await getDb()
+      .select({ permissionId: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, "role_anonymous"));
+    expect(grants.map((g) => g.permissionId).sort()).toEqual([
+      "perm_history_view",
+      "perm_public_calendar_view",
+    ]);
+  });
+
+  it("still lets other roles hold permissions anonymous can't", async () => {
+    await signInAsAdmin();
+    await createRoleAction({ name: "desk", displayName: "Desk" });
+    await expect(
+      setRolePermissionsAction({
+        roleId: "role_desk",
+        permissionIds: ["perm_waivers_view"],
+      }),
+    ).resolves.toEqual({ ok: true });
+  });
+
   it("invalidates the anonymous permissions cache when anonymous is touched", async () => {
     await signInAsAdmin();
     const kv = getKv();
-    await kv.put("anonymous:permissions", JSON.stringify(["roles:manage"]));
-    expect(await kv.get("anonymous:permissions")).not.toBeNull();
+    await kv.put("anonymous:permissions:v2", JSON.stringify(["roles:manage"]));
+    expect(await kv.get("anonymous:permissions:v2")).not.toBeNull();
 
     await setRolePermissionsAction({
       roleId: "role_anonymous",
       permissionIds: [],
     });
 
-    expect(await kv.get("anonymous:permissions")).toBeNull();
+    expect(await kv.get("anonymous:permissions:v2")).toBeNull();
   });
 });
 

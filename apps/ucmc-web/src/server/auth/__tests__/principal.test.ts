@@ -225,18 +225,36 @@ describe("loadAnonymousPermissions", () => {
 
   it("returns permissions assigned to the anonymous role", async () => {
     const db = getDb();
-    // Grant members:manage to anonymous for this test.
     await db
       .insert(schema.rolePermissions)
       .values({
         roleId: "role_anonymous",
-        permissionId: "perm_members_manage",
+        permissionId: "perm_public_calendar_view",
       })
       .onConflictDoNothing();
 
     await invalidateAnonymousPermissionsCache();
     const perms = await loadAnonymousPermissions();
-    expect(perms).toContain("members:manage");
+    expect(perms).toContain("public_calendar:view");
+  });
+
+  it("drops a grant the permission doesn't allow on the anonymous role", async () => {
+    // Every signed-in viewer inherits these grants (#300), so a row
+    // written around `setRolePermissionsAction` (seed script, raw SQL)
+    // must stay inert rather than hand the whole site `members:manage`.
+    const db = getDb();
+    await db
+      .insert(schema.rolePermissions)
+      .values([
+        { roleId: "role_anonymous", permissionId: "perm_members_manage" },
+        { roleId: "role_anonymous", permissionId: "perm_history_view" },
+      ])
+      .onConflictDoNothing();
+
+    await invalidateAnonymousPermissionsCache();
+    const perms = await loadAnonymousPermissions();
+    expect(perms).toContain("history:view");
+    expect(perms).not.toContain("members:manage");
   });
 
   it("caches results in KV so a second call skips DB", async () => {
@@ -252,7 +270,7 @@ describe("loadAnonymousPermissions", () => {
       .insert(schema.rolePermissions)
       .values({
         roleId: "role_anonymous",
-        permissionId: "perm_roles_manage",
+        permissionId: "perm_public_album_view",
       })
       .onConflictDoNothing();
 
@@ -263,6 +281,6 @@ describe("loadAnonymousPermissions", () => {
     // After invalidation, the fresh data appears.
     await invalidateAnonymousPermissionsCache();
     const third = await loadAnonymousPermissions();
-    expect(third).toContain("roles:manage");
+    expect(third).toContain("public_album:view");
   });
 });

@@ -4,7 +4,7 @@
  * `users`, `profiles`, `user_roles`, and `role_permissions` once per
  * request and handed to loaders/guards/server-fns.
  */
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { withLegacyPermissionAliases } from "#/server/auth/permission-aliases";
 import { getDb, inJsonArray, notInJsonArray, schema } from "#/server/db";
@@ -287,7 +287,10 @@ const SYSTEM_ADMIN_ROLE_ID = "role_system_admin";
 
 // ── anonymous permissions ──────────────────────────────────────────────
 
-const ANONYMOUS_CACHE_KEY = "anonymous:permissions";
+// Versioned so the deploy that added the `anonymous_grantable` filter
+// (0083) couldn't keep serving a set cached before it for the TTL.
+// Bump again whenever what this loader returns changes shape or rules.
+const ANONYMOUS_CACHE_KEY = "anonymous:permissions:v2";
 const ANONYMOUS_CACHE_TTL = 300; // 5 minutes
 
 /**
@@ -311,7 +314,16 @@ export async function loadAnonymousPermissions(): Promise<string[]> {
       schema.permissions,
       eq(schema.permissions.id, schema.rolePermissions.permissionId),
     )
-    .where(eq(schema.rolePermissions.roleId, ANONYMOUS_ROLE_ID));
+    // Only permissions declared public (0083). `setRolePermissionsAction`
+    // refuses anything else for this role, so this filter only matters
+    // for a row written around it — and it keeps such a row inert, since
+    // every signed-in viewer inherits these grants (#300).
+    .where(
+      and(
+        eq(schema.rolePermissions.roleId, ANONYMOUS_ROLE_ID),
+        eq(schema.permissions.anonymousGrantable, true),
+      ),
+    );
 
   const perms = withLegacyPermissionAliases(rows.map((r) => r.name));
   await kv.put(ANONYMOUS_CACHE_KEY, JSON.stringify(perms), {

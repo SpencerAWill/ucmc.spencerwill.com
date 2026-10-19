@@ -320,6 +320,13 @@ export const permissions = sqliteTable(
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     description: text("description"),
+    // Whether the `anonymous` pseudo-role may hold this permission.
+    // Signed-in viewers keep every anonymous grant (#300), so this is
+    // the list of what may be public; set per permission by migration
+    // (0083), since `:view` alone doesn't say it (`waivers:view`).
+    anonymousGrantable: integer("anonymous_grantable", { mode: "boolean" })
+      .notNull()
+      .default(false),
   },
   (t) => [uniqueIndex("permissions_name_unique").on(t.name)],
 );

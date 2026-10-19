@@ -111,3 +111,50 @@ describe("permission catalog", () => {
     expect(rows).toEqual([]);
   });
 });
+
+/**
+ * Pins migration 0083's list of permissions the `anonymous` role may
+ * hold. Every signed-in viewer inherits those grants (#300), so growing
+ * this set makes a permission public to the whole site: a change here
+ * should be a deliberate migration, not a side effect.
+ */
+describe("anonymous-grantable permissions", () => {
+  it("are exactly the public page views and history:view", async () => {
+    const rows = await getDb()
+      .select({ name: schema.permissions.name })
+      .from(schema.permissions)
+      .where(eq(schema.permissions.anonymousGrantable, true))
+      .orderBy(asc(schema.permissions.name));
+
+    expect(rows.map((r) => r.name)).toEqual([
+      "history:view",
+      "public_album:view",
+      "public_calendar:view",
+      "public_gazette:view",
+      "public_gear_cave:view",
+      "public_policies:view",
+      "public_resources:view",
+      "public_scholarships:view",
+      "public_sponsors:view",
+      "public_volunteer:view",
+    ]);
+  });
+
+  it("leaves every seeded anonymous grant inside that set", async () => {
+    const rows = await getDb()
+      .select({
+        name: schema.permissions.name,
+        grantable: schema.permissions.anonymousGrantable,
+      })
+      .from(schema.rolePermissions)
+      .innerJoin(
+        schema.permissions,
+        eq(schema.permissions.id, schema.rolePermissions.permissionId),
+      )
+      .where(eq(schema.rolePermissions.roleId, "role_anonymous"));
+
+    // Non-empty, or the check below passes vacuously.
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.filter((r) => !r.grantable)).toEqual([]);
+  });
+});

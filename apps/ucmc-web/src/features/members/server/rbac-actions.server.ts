@@ -65,6 +65,8 @@ export interface PermissionSummary {
   id: string;
   name: string;
   description: string | null;
+  /** May the `anonymous` role hold it? See migration 0083. */
+  anonymousGrantable: boolean;
 }
 
 // ── auth helpers ───────────────────────────────────────────────────────
@@ -395,6 +397,7 @@ export async function listPermissionsAction(): Promise<PermissionSummary[]> {
     id: r.id,
     name: r.name,
     description: r.description,
+    anonymousGrantable: r.anonymousGrantable,
   }));
 }
 
@@ -424,6 +427,29 @@ export async function setRolePermissionsAction(input: {
 
   // Deduped once, so the grants and the audit row describe the same set.
   const permissionIds = [...new Set(input.permissionIds)];
+
+  // Every signed-in viewer inherits the anonymous role's grants (#300),
+  // so only permissions declared public may go on it (migration 0083).
+  // The role sheet doesn't offer the rest; this is the enforcement.
+  if (input.roleId === ANONYMOUS_ROLE_ID && permissionIds.length > 0) {
+    const refused = await db
+      .select({ name: schema.permissions.name })
+      .from(schema.permissions)
+      .where(
+        and(
+          inJsonArray(schema.permissions.id, permissionIds),
+          eq(schema.permissions.anonymousGrantable, false),
+        ),
+      );
+    if (refused.length > 0) {
+      throw new Error(
+        `Cannot grant to the anonymous role: ${refused
+          .map((r) => r.name)
+          .sort()
+          .join(", ")}`,
+      );
+    }
+  }
   // Replace-all strategy: delete existing grants, insert the new
   // set, all atomic with the audit row via D1 batch.
   const stmts = [
