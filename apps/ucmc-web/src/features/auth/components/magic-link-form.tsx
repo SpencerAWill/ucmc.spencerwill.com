@@ -9,6 +9,7 @@ import { env } from "#/config/env";
 import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { useRequestMagicLink } from "#/features/auth/api/use-request-magic-link";
 import { DevOutboxLink } from "#/features/auth/components/dev-outbox-link";
+import { postSignInHref } from "#/features/auth/lib/post-sign-in";
 import { useAppForm } from "#/lib/form/form";
 import {
   webauthnAuthenticateBeginFn,
@@ -202,19 +203,8 @@ function usePasskeyAutofill({ redirectTo }: { redirectTo?: string }): void {
         if (signal.aborted || !finish.ok) {
           return;
         }
-        // Mirror the /auth/callback decision table exactly.
         await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-        if (!finish.hasProfile) {
-          await navigate({ to: "/register/profile" });
-          return;
-        }
-        if (finish.status !== "approved") {
-          await navigate({ to: "/register/pending" });
-          return;
-        }
-        const target =
-          redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
-        await navigate({ to: target });
+        await navigate({ href: postSignInHref(finish, redirectTo) });
       } catch {
         // User cancelled, browser timed out, or the ceremony was aborted
         // by a newer call. Silent fallback to magic-link is fine —

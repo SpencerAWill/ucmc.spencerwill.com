@@ -83,12 +83,12 @@ const WARM_QUERY: Record<
  */
 export const Route = createFileRoute("/analytics/")({
   staticData: { pageFlag: "analytics" },
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "analytics");
     // The parent layout already ran `requirePermission`, so this is a
     // cached read rather than a second gate — it exists to get the
     // principal into scope for the permission resolution below.
-    const principal = await requireApproved(context.queryClient);
+    const principal = await requireApproved({ context, location });
     const granted = await effectivePermissionsFor(
       context.queryClient,
       principal,

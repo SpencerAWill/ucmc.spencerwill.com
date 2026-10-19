@@ -20,12 +20,12 @@ import { requireEnabledPages } from "#/features/settings/api/page-guards";
  * instead of redirecting.
  */
 export const Route = createFileRoute("/feedback/_tabs")({
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     // Enforce the active surface's `pages.*` kill switch before the
     // approved-only guard so a disabled surface 404s uniformly instead of
     // redirecting an anonymous visitor to sign-in first.
     await requireEnabledPages(context.queryClient, matches);
-    await requireApproved(context.queryClient);
+    await requireApproved({ context, location });
   },
   component: FeedbackTabsLayout,
 });

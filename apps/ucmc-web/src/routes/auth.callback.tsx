@@ -4,14 +4,16 @@ import { z } from "zod";
 import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { useConsumeMagicLink } from "#/features/auth/api/use-consume-magic-link";
+import { callbackHref } from "#/features/auth/lib/post-sign-in";
+import { safeReturnPath } from "#/lib/safe-return-path";
 import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
 
 const callbackSearchSchema = z.object({
   token: z.string().min(1),
   // Optional post-sign-in destination round-tripped by route guards
-  // that redirect anonymous users to /sign-in?redirect=<path>. Only
-  // consumed when an approved user lands here — other branches of the
-  // decision table have fixed destinations.
+  // that redirect anonymous users to /sign-in?redirect=<path>. An
+  // approved user goes straight there; anyone still registering carries
+  // it on to /register/profile or /register/pending.
   redirect: z.string().optional(),
 });
 
@@ -29,6 +31,9 @@ const callbackSearchSchema = z.object({
  *   user + profile, not approved → /register/pending    (session opened)
  *   user + profile, approved     → search.redirect ?? "/"
  *
+ * The two /register pages carry `?redirect` along; the table itself is
+ * `callbackHref` / `postSignInHref`, shared with both passkey paths.
+ *
  * Failure paths send the user back to /sign-in with a hint the UI can
  * read so it renders a contextual banner.
  */
@@ -42,6 +47,10 @@ function CallbackPage() {
   const navigate = useNavigate();
   const mutation = useConsumeMagicLink();
 
+  // A failed link sends them back to request another; keep the target
+  // so the next link still lands where they were going.
+  const retryRedirect = safeReturnPath(redirectTo) ?? undefined;
+
   const onContinue = () => {
     // The hook invalidates the session query cache on success, BEFORE
     // we navigate, so the destination route's guard sees the fresh
@@ -53,6 +62,7 @@ function CallbackPage() {
           await navigate({
             to: "/sign-in",
             search: {
+              redirect: retryRedirect,
               invalid: result.reason === "invalid" ? true : undefined,
               rate_limited: result.reason === "rate_limited" ? true : undefined,
             },
@@ -60,26 +70,13 @@ function CallbackPage() {
           return;
         }
 
-        if (result.mode === "session") {
-          if (!result.hasProfile) {
-            await navigate({ to: "/register/profile" });
-            return;
-          }
-          if (result.status !== "approved") {
-            await navigate({ to: "/register/pending" });
-            return;
-          }
-          const target =
-            redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
-          await navigate({ to: target });
-          return;
-        }
-
-        // mode === "proof" — first-time registrant.
-        await navigate({ to: "/register/profile" });
+        await navigate({ href: callbackHref(result, redirectTo) });
       },
       onError: async () => {
-        await navigate({ to: "/sign-in", search: { invalid: true } });
+        await navigate({
+          to: "/sign-in",
+          search: { redirect: retryRedirect, invalid: true },
+        });
       },
     });
   };

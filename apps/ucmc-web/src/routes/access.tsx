@@ -23,9 +23,9 @@ import { requirePageFlag } from "#/features/settings/api/page-guards";
  * (uniform 404 when off, regardless of permission), then the permission.
  */
 export const Route = createFileRoute("/access")({
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "access");
-    await requirePermission(context.queryClient, "roles:manage");
+    await requirePermission({ context, location }, "roles:manage");
   },
   component: AccessPage,
 });

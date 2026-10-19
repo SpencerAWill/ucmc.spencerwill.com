@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 
 import { PageContainer } from "#/components/layouts/page-container";
 import { ProfileForm } from "#/features/auth/components/profile-form";
@@ -26,10 +27,18 @@ import { requireRegistrationContext } from "#/features/auth/guards";
  * upserts the profile, opens a session if one isn't already open,
  * clears the proof cookie if present, and the form navigates to
  * /register/pending.
+ *
+ * `?redirect` is the page the registrant asked for before signing in. It
+ * is carried on to /register/pending, or followed straight away when the
+ * submit approves the account (a claimed officer pre-add).
  */
 export const Route = createFileRoute("/register/profile")({
-  beforeLoad: async ({ context }) => {
-    const reg = await requireRegistrationContext(context.queryClient);
+  validateSearch: z.object({ redirect: z.string().optional() }),
+  beforeLoad: async ({ context, search }) => {
+    const reg = await requireRegistrationContext(
+      context.queryClient,
+      search.redirect,
+    );
     return { reg };
   },
   component: ProfilePage,
@@ -37,6 +46,7 @@ export const Route = createFileRoute("/register/profile")({
 
 function ProfilePage() {
   const { reg } = Route.useRouteContext();
+  const { redirect } = Route.useSearch();
   return (
     <PageContainer width="prose" className="flex flex-col gap-8">
       <header className="space-y-2">
@@ -46,7 +56,7 @@ function ProfilePage() {
           You can add emergency contacts and a short bio on the next page.
         </p>
       </header>
-      <ProfileForm email={reg.email} redirectTo="/register/pending" />
+      <ProfileForm email={reg.email} returnTo={redirect} />
     </PageContainer>
   );
 }

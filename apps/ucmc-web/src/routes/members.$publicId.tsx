@@ -73,9 +73,9 @@ import { requirePageFlag } from "#/features/settings/api/page-guards";
 import type { MemberDetail } from "#/features/members/server/member-fns";
 
 export const Route = createFileRoute("/members/$publicId")({
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "members_detail");
-    await requireApproved(context.queryClient);
+    await requireApproved({ context, location });
   },
   component: MemberDetailPage,
   errorComponent: RouteErrorFallback,

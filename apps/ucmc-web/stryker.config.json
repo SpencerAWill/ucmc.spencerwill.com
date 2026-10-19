@@ -12,6 +12,7 @@
     "src/config/club-season.ts",
     "src/features/gear/lib/scan-payload.ts",
     "src/features/gear/lib/wedge-buffer.ts",
+    "src/lib/safe-return-path.ts",
     "src/lib/sanitize-filename.ts",
     "src/server/member-profile/badge-rules.ts",
     "src/server/member-profile/season-progress.ts",

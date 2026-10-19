@@ -24,10 +24,10 @@ const PAGE = ANALYTICS_PAGES.gear;
  */
 export const Route = createFileRoute("/analytics/gear")({
   staticData: { pageFlag: "analytics_gear" },
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "analytics_gear");
     await requireAnyPermissionOrNotFound(
-      context.queryClient,
+      { context, location },
       PAGE.dataPermissions,
     );
   },

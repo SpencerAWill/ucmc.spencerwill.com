@@ -15,11 +15,16 @@ import {
   CLUB_FEEDBACK_PERMISSIONS,
   SITE_FEEDBACK_PERMISSIONS,
   effectivePermissionsFor,
+  requireAnyPermission,
+  requireAnyPermissionOrNotFound,
   requireApproved,
+  requireAuth,
+  requireCurrentWaiver,
   requirePermission,
   requirePermissionOrNotFound,
   requireViewPermission,
 } from "#/features/auth/guards";
+import type { GuardArgs } from "#/features/auth/guards";
 import type { Principal } from "#/server/auth/principal.server";
 
 function makePrincipal(overrides: Partial<Principal> = {}): Principal {
@@ -61,6 +66,15 @@ function clientWithPrincipal(
   return client;
 }
 
+/** The `beforeLoad` arguments a guard reads, for a visitor at `href`. */
+function argsFor(client: QueryClient, href = "/somewhere"): GuardArgs {
+  const url = new URL(href, "https://ucmc.example");
+  return {
+    context: { queryClient: client },
+    location: { pathname: url.pathname, searchStr: url.search },
+  };
+}
+
 /** Run a guard, catching its thrown redirect/notFound so tests can
  *  introspect the throw shape instead of crashing. */
 async function capture<T>(
@@ -95,30 +109,33 @@ function thrownBy(
 describe("requireApproved", () => {
   it("returns the principal when status=approved + hasProfile", async () => {
     const client = clientWithPrincipal(makePrincipal());
-    const principal = await requireApproved(client);
+    const principal = await requireApproved(argsFor(client));
     expect(principal.userId).toBe("u_test");
   });
 
   it("redirects to /sign-in when no principal is cached", async () => {
     const client = clientWithPrincipal(null);
-    const result = await capture(() => requireApproved(client, "/somewhere"));
+    const result = await capture(() =>
+      requireApproved(argsFor(client, "/gear/abc?tab=loans#history")),
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(isRedirect(result.thrown)).toBe(true);
-    // The redirect carries the original location so the post-sign-in
-    // bounce sends the user back where they tried to go.
+    // The redirect carries the original location — path and search,
+    // never the hash — so the post-sign-in bounce sends the user back
+    // where they tried to go.
     const opts = (
       result.thrown as Response & {
         options: { to: string; search?: { redirect?: string } };
       }
     ).options;
     expect(opts.to).toBe("/sign-in");
-    expect(opts.search?.redirect).toBe("/somewhere");
+    expect(opts.search?.redirect).toBe("/gear/abc?tab=loans");
   });
 
   it("redirects to /register/profile when the principal has no profile", async () => {
     const client = clientWithPrincipal(makePrincipal({ hasProfile: false }));
-    const result = await capture(() => requireApproved(client));
+    const result = await capture(() => requireApproved(argsFor(client)));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(isRedirect(result.thrown)).toBe(true);
@@ -131,7 +148,7 @@ describe("requireApproved", () => {
     const client = clientWithPrincipal(
       makePrincipal({ status: "deactivated" }),
     );
-    const result = await capture(() => requireApproved(client));
+    const result = await capture(() => requireApproved(argsFor(client)));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(isRedirect(result.thrown)).toBe(true);
@@ -142,7 +159,7 @@ describe("requireApproved", () => {
 
   it("redirects to /register/pending for any other non-approved status", async () => {
     const client = clientWithPrincipal(makePrincipal({ status: "pending" }));
-    const result = await capture(() => requireApproved(client));
+    const result = await capture(() => requireApproved(argsFor(client)));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(isRedirect(result.thrown)).toBe(true);
@@ -152,19 +169,96 @@ describe("requireApproved", () => {
   });
 });
 
+describe("every account-status guard carries the return path", () => {
+  // The point of taking the beforeLoad args whole: no guard can bounce a
+  // signed-out visitor to a bare /sign-in. Table-driven so a new guard
+  // is one row.
+  const guards: [string, (args: GuardArgs) => Promise<unknown>][] = [
+    ["requireAuth", requireAuth],
+    ["requireApproved", requireApproved],
+    ["requireCurrentWaiver", requireCurrentWaiver],
+    ["requirePermission", (a) => requirePermission(a, "gear:read")],
+    [
+      "requirePermissionOrNotFound",
+      (a) => requirePermissionOrNotFound(a, "gear:read"),
+    ],
+    ["requireAnyPermission", (a) => requireAnyPermission(a, ["gear:read"])],
+    [
+      "requireAnyPermissionOrNotFound",
+      (a) => requireAnyPermissionOrNotFound(a, ["gear:read"]),
+    ],
+  ];
+
+  it.each(guards)("%s", async (_name, guard) => {
+    const client = clientWithPrincipal(null);
+    const thrown = thrownBy(
+      await capture(() => guard(argsFor(client, "/members?q=ada"))),
+    );
+    expect(isRedirect(thrown)).toBe(true);
+    expect(
+      (thrown as { options: { to: string; search?: { redirect?: string } } })
+        .options,
+    ).toMatchObject({ to: "/sign-in", search: { redirect: "/members?q=ada" } });
+  });
+});
+
+describe("requireAuth on a sign-in-flow page", () => {
+  // /deactivated and /register/pending call requireAuth themselves; a
+  // return path to them would land the next sign-in on a stale status
+  // page, or nest ?redirect= inside itself.
+  it.each(["/deactivated", "/register/pending?redirect=%2Fmembers"])(
+    "%s carries no return path",
+    async (path) => {
+      const thrown = thrownBy(
+        await capture(() =>
+          requireAuth(argsFor(clientWithPrincipal(null), path)),
+        ),
+      );
+      expect(isRedirect(thrown)).toBe(true);
+      expect(
+        (thrown as { options: { search?: { redirect?: string } } }).options
+          .search,
+      ).toEqual({});
+    },
+  );
+});
+
+describe("requireApproved carries the return path into the funnel", () => {
+  it.each([
+    ["/register/profile", makePrincipal({ hasProfile: false })],
+    ["/register/pending", makePrincipal({ status: "pending" })],
+  ])("to %s", async (to, principal) => {
+    const thrown = thrownBy(
+      await capture(() =>
+        requireApproved(
+          argsFor(clientWithPrincipal(principal), "/members?q=ada"),
+        ),
+      ),
+    );
+    expect(isRedirect(thrown)).toBe(true);
+    expect(
+      (thrown as { options: { to: string; search?: { redirect?: string } } })
+        .options,
+    ).toMatchObject({ to, search: { redirect: "/members?q=ada" } });
+  });
+});
+
 describe("requirePermission", () => {
   it("returns the principal when they hold the permission", async () => {
     const client = clientWithPrincipal(
       makePrincipal({ permissions: ["members:manage"] }),
     );
-    const principal = await requirePermission(client, "members:manage");
+    const principal = await requirePermission(
+      argsFor(client),
+      "members:manage",
+    );
     expect(principal.permissions).toContain("members:manage");
   });
 
   it("redirects to / when the approved principal lacks the permission", async () => {
     const client = clientWithPrincipal(makePrincipal({ permissions: [] }));
     const result = await capture(() =>
-      requirePermission(client, "members:manage"),
+      requirePermission(argsFor(client), "members:manage"),
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -177,7 +271,7 @@ describe("requirePermission", () => {
   it("inherits requireApproved's redirect when the user isn't approved yet", async () => {
     const client = clientWithPrincipal(makePrincipal({ status: "pending" }));
     const result = await capture(() =>
-      requirePermission(client, "members:manage"),
+      requirePermission(argsFor(client), "members:manage"),
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -194,7 +288,7 @@ describe("requirePermissionOrNotFound", () => {
       makePrincipal({ permissions: ["members:manage"] }),
     );
     const principal = await requirePermissionOrNotFound(
-      client,
+      argsFor(client),
       "members:manage",
     );
     expect(principal.permissions).toContain("members:manage");
@@ -203,7 +297,7 @@ describe("requirePermissionOrNotFound", () => {
   it("throws notFound (not a redirect) when the approved principal lacks the permission", async () => {
     const client = clientWithPrincipal(makePrincipal({ permissions: [] }));
     const result = await capture(() =>
-      requirePermissionOrNotFound(client, "members:manage"),
+      requirePermissionOrNotFound(argsFor(client), "members:manage"),
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -220,7 +314,7 @@ describe("requirePermissionOrNotFound", () => {
     // from `requireApproved` (not a 404).
     const client = clientWithPrincipal(makePrincipal({ status: "pending" }));
     const result = await capture(() =>
-      requirePermissionOrNotFound(client, "members:manage"),
+      requirePermissionOrNotFound(argsFor(client), "members:manage"),
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -249,7 +343,7 @@ describe("role preview ('View as')", () => {
     // straight in. `requirePermission` is what gates that route.
     const client = clientWithPrincipal(sysAdmin, "member");
     const result = await capture(() =>
-      requirePermission(client, "settings:manage"),
+      requirePermission(argsFor(client), "settings:manage"),
     );
     expect(result.ok).toBe(false);
     expect(isRedirect(thrownBy(result))).toBe(true);
@@ -258,7 +352,7 @@ describe("role preview ('View as')", () => {
   it("404s a previewed role on a notFound-style route", async () => {
     const client = clientWithPrincipal(sysAdmin, "member");
     const result = await capture(() =>
-      requirePermissionOrNotFound(client, "members:manage"),
+      requirePermissionOrNotFound(argsFor(client), "members:manage"),
     );
     expect(result.ok).toBe(false);
     expect(isNotFound(thrownBy(result))).toBe(true);
@@ -266,7 +360,7 @@ describe("role preview ('View as')", () => {
 
   it("still allows what the previewed role does hold", async () => {
     const client = clientWithPrincipal(sysAdmin, "member");
-    const principal = await requirePermission(client, "gear:read");
+    const principal = await requirePermission(argsFor(client), "gear:read");
     // The guard returns the REAL principal — a preview narrows what you
     // can reach, it doesn't rewrite who you are. Server actions read
     // this same real principal and are unaffected.
@@ -278,7 +372,7 @@ describe("role preview ('View as')", () => {
     // Without this, previewing a low-permission role could eject an
     // admin from their own /my/* pages.
     const client = clientWithPrincipal(sysAdmin, "member");
-    const principal = await requireApproved(client);
+    const principal = await requireApproved(argsFor(client));
     expect(principal.userId).toBe("u_test");
   });
 
@@ -292,7 +386,7 @@ describe("role preview ('View as')", () => {
     });
     const client = clientWithPrincipal(member, "system_admin");
     const result = await capture(() =>
-      requirePermission(client, "settings:manage"),
+      requirePermission(argsFor(client), "settings:manage"),
     );
     expect(result.ok).toBe(false);
     expect(isRedirect(thrownBy(result))).toBe(true);

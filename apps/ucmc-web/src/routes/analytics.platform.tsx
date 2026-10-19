@@ -39,10 +39,10 @@ const PAGE = ANALYTICS_PAGES.platform;
  */
 export const Route = createFileRoute("/analytics/platform")({
   staticData: { pageFlag: "analytics_platform" },
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "analytics_platform");
     await requireAnyPermissionOrNotFound(
-      context.queryClient,
+      { context, location },
       PAGE.dataPermissions,
     );
   },

@@ -20,9 +20,9 @@ import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export const Route = createFileRoute("/feedback/_tabs/site")({
   staticData: { pageFlag: "feedback_site" },
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
-    const principal = await requireApproved(context.queryClient);
+    const principal = await requireApproved({ context, location });
     const granted = await effectivePermissionsFor(
       context.queryClient,
       principal,

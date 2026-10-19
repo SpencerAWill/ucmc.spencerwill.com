@@ -40,10 +40,10 @@ const PAGE = ANALYTICS_PAGES.activity;
  */
 export const Route = createFileRoute("/analytics/activity")({
   staticData: { pageFlag: "analytics_activity" },
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "analytics_activity");
     await requireAnyPermissionOrNotFound(
-      context.queryClient,
+      { context, location },
       PAGE.dataPermissions,
     );
   },

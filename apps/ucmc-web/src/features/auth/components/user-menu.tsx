@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Backpack,
   LayoutDashboard,
@@ -20,11 +20,21 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { useAuth } from "#/features/auth/api/use-auth";
+import {
+  returnPathSearch,
+  signInReturnPath,
+} from "#/features/auth/lib/post-sign-in";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export function UserMenu() {
   const { principal, isLoading, emulatedRole, signOut } = useAuth();
   const navigate = useNavigate();
+  // Signing in from a public page lands back on it. Path + search only,
+  // like the guards, so the SSR and hydrated hrefs agree.
+  const returnPath = useLocation({
+    select: (location) =>
+      signInReturnPath(location.pathname, location.searchStr),
+  });
   // Per-page kill switches for the personal menu items. Hooks run before
   // the early returns below to satisfy the rules of hooks.
   const flagsOptions = publicFlagsQueryOptions();
@@ -43,6 +53,7 @@ export function UserMenu() {
     return (
       <Link
         to="/sign-in"
+        search={returnPathSearch(returnPath)}
         aria-label="Sign in"
         className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >

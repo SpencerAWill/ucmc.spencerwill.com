@@ -21,12 +21,12 @@ import {
  * also hides on a lack of permission.
  */
 export const Route = createFileRoute("/members/_tabs")({
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     // Enforce the active tab's `pages.*` kill switch before the
     // approved-only guard so a disabled tab 404s uniformly instead of
     // redirecting an anonymous visitor to sign-in first.
     await requireEnabledPages(context.queryClient, matches);
-    await requireApproved(context.queryClient);
+    await requireApproved({ context, location });
   },
   component: MembersTabsLayout,
 });

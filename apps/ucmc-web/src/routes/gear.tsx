@@ -10,12 +10,12 @@ import { requireEnabledPages } from "#/features/settings/api/page-guards";
  * those affordances client-side via `useAuth().hasPermission(...)`.
  */
 export const Route = createFileRoute("/gear")({
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     // Enforce the leaf's `pages.*` kill switch before the auth guard so a
     // disabled page 404s uniformly instead of redirecting anonymous /
     // unauthorized visitors to sign-in first.
     await requireEnabledPages(context.queryClient, matches);
-    await requirePermission(context.queryClient, "gear:read");
+    await requirePermission({ context, location }, "gear:read");
   },
   component: GearLayout,
 });

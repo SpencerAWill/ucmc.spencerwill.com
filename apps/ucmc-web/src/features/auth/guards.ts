@@ -6,6 +6,7 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { notFound, redirect } from "@tanstack/react-router";
+import type { ParsedLocation } from "@tanstack/react-router";
 
 import {
   SESSION_QUERY_KEY,
@@ -16,6 +17,39 @@ import { effectivePermissions } from "#/server/auth/emulation";
 import type { Principal } from "#/server/auth/principal.server";
 import { myWaiverStatusQueryOptions } from "#/features/waivers/api/queries";
 import type { WaiverStatus } from "#/features/waivers/api/queries";
+import {
+  postSignInHref,
+  returnPathSearch,
+  signInReturnPath,
+} from "#/features/auth/lib/post-sign-in";
+import { safeReturnPath } from "#/lib/safe-return-path";
+
+/**
+ * The slice of a `beforeLoad`'s arguments the account-status guards
+ * read. They take the arguments object whole — `requireApproved(ctx)` or
+ * `requireApproved({ context, location })` — rather than a bare
+ * `QueryClient`, so a route can't forget to say where the visitor was
+ * going: the location is part of the only argument. Before this, 3 of
+ * ~26 guard calls passed one, and every other gated page signed people
+ * in to `/`.
+ */
+export interface GuardArgs {
+  context: { queryClient: QueryClient };
+  location: Pick<ParsedLocation, "pathname" | "searchStr">;
+}
+
+/**
+ * Where to send the visitor once they've signed in: the page they asked
+ * for, path plus search. Not the hash — `beforeLoad` never sees it during
+ * SSR, so keeping it would make a hard load and a client navigation
+ * disagree. `null` for a page inside the sign-in flow itself
+ * (`/register/pending`, `/deactivated`, ...) — returning there would only
+ * restart the flow or show a stale status — and for a path that fails
+ * `safeReturnPath`. Same rule as the user menu's "Sign in" link.
+ */
+function returnPathOf(location: GuardArgs["location"]): string | null {
+  return signInReturnPath(location.pathname, location.searchStr) ?? null;
+}
 
 interface CachedSession {
   principal: Principal | null;
@@ -68,16 +102,19 @@ export async function effectivePermissionsFor(
   );
 }
 
-/** Require a signed-in session. Redirects to /sign-in otherwise. */
-export async function requireAuth(
-  queryClient: QueryClient,
-  redirectFrom?: string,
-): Promise<Principal> {
-  const principal = await getPrincipal(queryClient);
+/**
+ * Require a signed-in session. Redirects to `/sign-in?redirect=<here>`
+ * otherwise, so signing in lands back on the page that was asked for.
+ */
+export async function requireAuth({
+  context,
+  location,
+}: GuardArgs): Promise<Principal> {
+  const principal = await getPrincipal(context.queryClient);
   if (!principal) {
     throw redirect({
       to: "/sign-in",
-      search: redirectFrom ? { redirect: redirectFrom } : undefined,
+      search: returnPathSearch(returnPathOf(location)),
     });
   }
   return principal;
@@ -86,21 +123,21 @@ export async function requireAuth(
 /**
  * Require a signed-in, approved user with a completed profile. Steps
  * through the registration funnel: no profile → /register/profile, not
- * yet approved → /register/pending.
+ * yet approved → /register/pending, each with `?redirect=<here>`.
  */
-export async function requireApproved(
-  queryClient: QueryClient,
-  redirectFrom?: string,
-): Promise<Principal> {
-  const principal = await requireAuth(queryClient, redirectFrom);
+export async function requireApproved(args: GuardArgs): Promise<Principal> {
+  const principal = await requireAuth(args);
+  // The funnel pages carry the return path on, so a registrant who
+  // started from a gated page can still be offered it from /pending.
+  const search = returnPathSearch(returnPathOf(args.location));
   if (!principal.hasProfile) {
-    throw redirect({ to: "/register/profile" });
+    throw redirect({ to: "/register/profile", search });
   }
   if (principal.status === "deactivated") {
     throw redirect({ to: "/deactivated" });
   }
   if (principal.status !== "approved") {
-    throw redirect({ to: "/register/pending" });
+    throw redirect({ to: "/register/pending", search });
   }
   return principal;
 }
@@ -113,11 +150,14 @@ export async function requireApproved(
  * this particular page).
  */
 export async function requirePermission(
-  queryClient: QueryClient,
+  args: GuardArgs,
   permission: string,
 ): Promise<Principal> {
-  const principal = await requireApproved(queryClient);
-  const granted = await effectivePermissionsFor(queryClient, principal);
+  const principal = await requireApproved(args);
+  const granted = await effectivePermissionsFor(
+    args.context.queryClient,
+    principal,
+  );
   if (!granted.includes(permission)) {
     throw redirect({ to: "/" });
   }
@@ -174,11 +214,14 @@ export const SITE_FEEDBACK_PERMISSIONS = [
  * hand-rolling `includes() || includes()` chains that drift apart.
  */
 export async function requireAnyPermission(
-  queryClient: QueryClient,
+  args: GuardArgs,
   permissions: readonly string[],
 ): Promise<Principal> {
-  const principal = await requireApproved(queryClient);
-  const granted = await effectivePermissionsFor(queryClient, principal);
+  const principal = await requireApproved(args);
+  const granted = await effectivePermissionsFor(
+    args.context.queryClient,
+    principal,
+  );
   if (!permissions.some((p) => granted.includes(p))) {
     throw redirect({ to: "/" });
   }
@@ -196,11 +239,14 @@ export async function requireAnyPermission(
  * registration funnel via `requireApproved`.
  */
 export async function requirePermissionOrNotFound(
-  queryClient: QueryClient,
+  args: GuardArgs,
   permission: string,
 ): Promise<Principal> {
-  const principal = await requireApproved(queryClient);
-  const granted = await effectivePermissionsFor(queryClient, principal);
+  const principal = await requireApproved(args);
+  const granted = await effectivePermissionsFor(
+    args.context.queryClient,
+    principal,
+  );
   if (!granted.includes(permission)) {
     throw notFound();
   }
@@ -226,11 +272,14 @@ export async function requirePermissionOrNotFound(
  * permission-set constant can be handed to either without reshaping.
  */
 export async function requireAnyPermissionOrNotFound(
-  queryClient: QueryClient,
+  args: GuardArgs,
   permissions: readonly string[],
 ): Promise<Principal> {
-  const principal = await requireApproved(queryClient);
-  const granted = await effectivePermissionsFor(queryClient, principal);
+  const principal = await requireApproved(args);
+  const granted = await effectivePermissionsFor(
+    args.context.queryClient,
+    principal,
+  );
   if (!permissions.some((p) => granted.includes(p))) {
     throw notFound();
   }
@@ -284,7 +333,8 @@ export async function requireViewPermission(
  *
  * Anyone else gets bounced:
  *   - no proof and no session  → /sign-in (start over)
- *   - signed-in user *with* a profile → /my/profile (already registered)
+ *   - signed-in user *with* a profile → their `?redirect`, via
+ *     /register/pending if unapproved, else /my/profile (already registered)
  *
  * The shared shape exposes `email` regardless of source, so the form
  * can render its read-only field and the server's submit action (which
@@ -318,11 +368,10 @@ export async function getCurrentWaiverStatus(
  * re-deriving the cycle/version comparison.
  */
 export async function requireCurrentWaiver(
-  queryClient: QueryClient,
-  redirectFrom?: string,
+  args: GuardArgs,
 ): Promise<{ principal: Principal; waiver: WaiverStatus }> {
-  const principal = await requireApproved(queryClient, redirectFrom);
-  const waiver = await getCurrentWaiverStatus(queryClient);
+  const principal = await requireApproved(args);
+  const waiver = await getCurrentWaiverStatus(args.context.queryClient);
   if (!waiver.current) {
     throw redirect({ to: "/my/waiver" });
   }
@@ -331,6 +380,7 @@ export async function requireCurrentWaiver(
 
 export async function requireRegistrationContext(
   queryClient: QueryClient,
+  returnTo: string | undefined,
 ): Promise<RegistrationContext> {
   // Proof cookie is the first-time-registrant path; check it first so a
   // stale session never shadows a freshly-verified email.
@@ -340,10 +390,18 @@ export async function requireRegistrationContext(
   }
   const principal = await getPrincipal(queryClient);
   if (!principal) {
-    throw redirect({ to: "/sign-in" });
+    // Starting over keeps the page they were after.
+    throw redirect({
+      to: "/sign-in",
+      search: returnPathSearch(safeReturnPath(returnTo)),
+    });
   }
   if (principal.hasProfile) {
-    throw redirect({ to: "/my/profile" });
+    // Already registered (a stale tab, the back button): on to the page
+    // they were after, via /register/pending if still awaiting approval.
+    throw redirect({
+      href: postSignInHref(principal, returnTo, "/my/profile"),
+    });
   }
   return { source: "session", email: principal.primaryEmail };
 }

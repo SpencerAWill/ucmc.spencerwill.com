@@ -47,8 +47,8 @@ const auditSearchSchema = z.object({
 
 export const Route = createFileRoute("/audit")({
   validateSearch: auditSearchSchema,
-  beforeLoad: async ({ context }) => {
-    await requirePermission(context.queryClient, "audit:view");
+  beforeLoad: async ({ context, location }) => {
+    await requirePermission({ context, location }, "audit:view");
   },
   component: AuditPage,
 });

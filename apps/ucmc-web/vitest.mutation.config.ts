@@ -32,6 +32,7 @@ export default defineConfig({
       "src/config/__tests__/club-season.test.ts",
       "src/features/gear/lib/__tests__/scan-payload.test.ts",
       "src/features/gear/lib/__tests__/wedge-buffer.test.ts",
+      "src/lib/__tests__/safe-return-path.property.test.ts",
       "src/lib/__tests__/sanitize-filename.test.ts",
       "src/lib/__tests__/sanitize-filename.property.test.ts",
       "src/server/member-profile/__tests__/badge-rules.test.ts",

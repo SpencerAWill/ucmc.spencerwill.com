@@ -44,11 +44,11 @@ import type { MemberNeedingAttestation } from "#/features/waivers/server/waiver-
  * data model and rationale (Bylaw 1.3 keeps medical PII off-platform).
  */
 export const Route = createFileRoute("/members/waivers")({
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "members_waivers");
     // `waivers:view` opens the queue read-only; the attest controls
     // below are separately gated on `waivers:verify`.
-    await requireAnyPermission(context.queryClient, WAIVER_VIEW_PERMISSIONS);
+    await requireAnyPermission({ context, location }, WAIVER_VIEW_PERMISSIONS);
   },
   loader: ({ context }) =>
     context.queryClient.ensureQueryData(waiverPendingQueueQueryOptions()),

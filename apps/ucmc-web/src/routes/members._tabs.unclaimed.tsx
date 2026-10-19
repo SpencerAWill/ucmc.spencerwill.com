@@ -13,9 +13,9 @@ const unclaimedSearchSchema = z.object({
 export const Route = createFileRoute("/members/_tabs/unclaimed")({
   staticData: { pageFlag: "members_unclaimed" },
   validateSearch: unclaimedSearchSchema,
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
-    await requirePermissionOrNotFound(context.queryClient, "members:manage");
+    await requirePermissionOrNotFound({ context, location }, "members:manage");
   },
   component: UnclaimedRoute,
 });

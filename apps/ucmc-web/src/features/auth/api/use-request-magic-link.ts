@@ -18,8 +18,8 @@ export function useRequestMagicLink() {
       // Optional post-sign-in redirect target. Embedded in the emailed
       // callback URL so deep-link guards like `/my/*`'s `requireApproved`
       // can round-trip the user to their original destination after they
-      // click the link. Server-side and client-side both reject values
-      // that don't start with "/" to prevent open-redirect.
+      // click the link. Server-side and client-side both run it through
+      // `safeReturnPath` to prevent open-redirect.
       redirect?: string;
     }) => requestMagicLinkFn({ data: input }),
   });

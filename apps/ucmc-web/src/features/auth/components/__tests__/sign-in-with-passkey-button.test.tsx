@@ -32,13 +32,13 @@ vi.mock("#/features/auth/server/server-fns", () => ({
   signOutFn: vi.fn(),
 }));
 
-function renderButton() {
+function renderButton(redirectTo?: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <SignInWithPasskeyButton />
+      <SignInWithPasskeyButton redirectTo={redirectTo} />
     </QueryClientProvider>,
   );
 }
@@ -98,7 +98,7 @@ describe("SignInWithPasskeyButton", () => {
     );
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+      expect(navigateMock).toHaveBeenCalledWith({ href: "/" });
     });
     expect(startAuthentication).toHaveBeenCalledWith({
       optionsJSON: { challenge: "abc" },
@@ -106,7 +106,37 @@ describe("SignInWithPasskeyButton", () => {
     });
   });
 
-  it("routes to /register/profile when the user has no profile", async () => {
+  it.each([
+    [
+      "the return path, search included",
+      "/gear/abc?tab=loans",
+      "/gear/abc?tab=loans",
+    ],
+    ["home for a protocol-relative return path", "//evil.example", "/"],
+  ])("sends an approved user to %s", async (_label, redirectTo, expected) => {
+    const user = userEvent.setup();
+    webauthnAuthenticateBeginFn.mockResolvedValue({
+      ok: true,
+      options: { challenge: "abc" },
+    });
+    startAuthentication.mockResolvedValue({ id: "cred-1" });
+    webauthnAuthenticateFinishFn.mockResolvedValue({
+      ok: true,
+      hasProfile: true,
+      status: "approved",
+    });
+
+    renderButton(redirectTo);
+    await user.click(
+      await screen.findByRole("button", { name: /sign in with a passkey/i }),
+    );
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({ href: expected });
+    });
+  });
+
+  it("routes to /register/profile, carrying the return path, when the user has no profile", async () => {
     const user = userEvent.setup();
     webauthnAuthenticateBeginFn.mockResolvedValue({
       ok: true,
@@ -119,17 +149,19 @@ describe("SignInWithPasskeyButton", () => {
       status: "pending",
     });
 
-    renderButton();
+    renderButton("/members");
     await user.click(
       await screen.findByRole("button", { name: /sign in with a passkey/i }),
     );
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith({ to: "/register/profile" });
+      expect(navigateMock).toHaveBeenCalledWith({
+        href: `/register/profile?redirect=${encodeURIComponent("/members")}`,
+      });
     });
   });
 
-  it("routes to /register/pending when the user has a profile but is unapproved", async () => {
+  it("routes to /register/pending, carrying the return path, when the user is unapproved", async () => {
     const user = userEvent.setup();
     webauthnAuthenticateBeginFn.mockResolvedValue({
       ok: true,
@@ -142,13 +174,15 @@ describe("SignInWithPasskeyButton", () => {
       status: "pending",
     });
 
-    renderButton();
+    renderButton("/members");
     await user.click(
       await screen.findByRole("button", { name: /sign in with a passkey/i }),
     );
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith({ to: "/register/pending" });
+      expect(navigateMock).toHaveBeenCalledWith({
+        href: `/register/pending?redirect=${encodeURIComponent("/members")}`,
+      });
     });
   });
 

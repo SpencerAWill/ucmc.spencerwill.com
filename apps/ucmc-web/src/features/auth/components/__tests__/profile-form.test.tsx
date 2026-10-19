@@ -88,11 +88,11 @@ describe("ProfileForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("submits the form, shows a success toast, and navigates to the configured target", async () => {
+  it("submits the form, shows a success toast, and carries the return path to /register/pending", async () => {
     const user = userEvent.setup();
-    submitProfileFn.mockResolvedValue({ ok: true });
+    submitProfileFn.mockResolvedValue({ ok: true, status: "pending" });
 
-    renderForm({ redirectTo: "/my/profile" });
+    renderForm({ returnTo: "/gear/abc?tab=loans" });
 
     // The submit button is gated on `isDefaultValue` — so dirty up the form
     // by editing the preferred name before clicking submit.
@@ -122,8 +122,34 @@ describe("ProfileForm", () => {
     await waitFor(() => {
       expect(toastSuccess).toHaveBeenCalledWith("Profile submitted");
     });
-    expect(navigateMock).toHaveBeenCalledWith({ to: "/my/profile" });
+    expect(navigateMock).toHaveBeenCalledWith({
+      href: `/register/pending?redirect=${encodeURIComponent("/gear/abc?tab=loans")}`,
+    });
   });
+
+  it.each([
+    ["the return path", "/gear/abc?tab=loans", "/gear/abc?tab=loans"],
+    ["/my/profile without one", undefined, "/my/profile"],
+  ])(
+    "sends a claim that approves straight away to %s",
+    async (_label, returnTo, expected) => {
+      // An officer pre-add flips to approved on this submit, so there is
+      // no pending wait to carry the return path through.
+      const user = userEvent.setup();
+      submitProfileFn.mockResolvedValue({ ok: true, status: "approved" });
+
+      renderForm({ returnTo });
+      await user.type(screen.getByLabelText(/preferred name/i), "ce");
+      await user.click(screen.getByLabelText(/acknowledge.*policies/i));
+      await user.click(
+        screen.getByRole("button", { name: /submit for review/i }),
+      );
+
+      await waitFor(() => {
+        expect(navigateMock).toHaveBeenCalledWith({ href: expected });
+      });
+    },
+  );
 
   it("enables submit as soon as the ack checkbox is checked, without blurring it", async () => {
     const user = userEvent.setup();

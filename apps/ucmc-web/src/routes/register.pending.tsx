@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { z } from "zod";
 
 import { PageContainer } from "#/components/layouts/page-container";
 import { EMPTY_PROFILE_FORM_VALUES } from "#/components/profile/profile-form-shape";
@@ -8,6 +9,8 @@ import { BioEditor } from "#/features/auth/components/bio-editor";
 import { ContactsEditor } from "#/features/auth/components/contacts-editor";
 import { PasskeyEnrollmentCard } from "#/features/auth/components/passkey-enrollment-card";
 import { requireAuth } from "#/features/auth/guards";
+import { postSignInHref } from "#/features/auth/lib/post-sign-in";
+import { safeReturnPath } from "#/lib/safe-return-path";
 
 import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
 
@@ -28,23 +31,29 @@ import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
  * redirects the two states this page can't serve: an approved member
  * belongs on `/my/profile` (where the same fields sit beside everything
  * else), and a session with no profile row hasn't registered yet.
+ *
+ * `?redirect` is the page the member asked for before signing in. This
+ * is where the funnel stops carrying it — approval can take days — so
+ * it is offered as a link instead: a public page opens, and a
+ * members-only one sends them back here, which is harmless. An approved
+ * member who lands here is sent straight to it.
  */
 export const Route = createFileRoute("/register/pending")({
-  beforeLoad: async ({ context }) => {
-    const principal = await requireAuth(context.queryClient);
-    if (principal.status === "approved") {
-      throw redirect({ to: "/my/profile" });
+  validateSearch: z.object({ redirect: z.string().optional() }),
+  beforeLoad: async ({ context, location, search }) => {
+    const principal = await requireAuth({ context, location });
+    if (principal.status === "approved" || !principal.hasProfile) {
+      throw redirect({
+        href: postSignInHref(principal, search.redirect, "/my/profile"),
+      });
     }
-    if (!principal.hasProfile) {
-      throw redirect({ to: "/register/profile" });
-    }
-    return { principal };
+    return { principal, returnPath: safeReturnPath(search.redirect) };
   },
   component: PendingPage,
 });
 
 function PendingPage() {
-  const { principal } = Route.useRouteContext();
+  const { principal, returnPath } = Route.useRouteContext();
   const { data, isLoading } = useQuery(profileQueryOptions());
 
   // Both editors take the whole shared shape and submit the siblings
@@ -77,6 +86,15 @@ function PendingPage() {
           you&rsquo;ll get an email when you&rsquo;re approved. You can close
           this tab — we won&rsquo;t hold anything up.
         </p>
+        {returnPath === null ? null : (
+          <p className="text-sm text-muted-foreground">
+            Public pages work while you wait:{" "}
+            <a href={returnPath} className="underline underline-offset-4">
+              continue to {returnPath}
+            </a>
+            . Members-only pages open once you&rsquo;re approved.
+          </p>
+        )}
       </header>
 
       <section className="space-y-4">
