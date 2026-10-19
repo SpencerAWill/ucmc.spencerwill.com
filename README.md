@@ -202,7 +202,7 @@ Notable vars: `VITE_TURNSTILE_SITE_KEY` (client-side — leave unset to skip the
 
 #### Worker secrets (deployed envs)
 
-Non-secret runtime vars come from Pulumi stack outputs: `sync-env` writes them into the stack's section of `wrangler.jsonc` before the build. Secrets ride along with the same Worker version through `wrangler deploy --secrets-file`, written by the deploy action (`.github/actions/deploy`) from the GitHub environment and Pulumi's secret outputs, so code and secrets change together. That means **secrets live in GitHub Actions environment secrets**, not in Cloudflare directly: set them once under the `dev` and `prod` GitHub environments and every deploy re-applies them to the Worker. An optional secret left unset keeps whatever value the Worker already has.
+Non-secret runtime vars come from Pulumi stack outputs: `sync-env` writes them into the stack's section of `wrangler.jsonc` before the build. Secrets ride along with the same Worker version through `wrangler deploy --secrets-file`, written by the deploy action (`.github/actions/deploy`) from the GitHub environment and Pulumi's secret outputs, so code and secrets change together. That means **secrets live in GitHub Actions environment secrets**, not in Cloudflare directly: set them once under the `dev` and `prod` GitHub environments and every deploy re-applies them to the Worker. An optional secret left unset keeps whatever value the Worker already has, so to turn one off (the feedback mirror, the cost snapshot), also `wrangler secret delete <NAME> [--env production]` once by hand.
 
 Required per-environment secrets (repo Settings → Environments → `dev` / `prod` → Environment secrets):
 
@@ -240,7 +240,7 @@ One workflow, `CI/CD`, checks every change and deploys `main` ([ADR 0002](docs/a
 2. **`Deploy — dev`** after `required` passes, on every push to `main`.
 3. **`Deploy — prod`** after dev deployed and passed its smoke test, waiting in the same run for a reviewer on the `prod` environment. Approve the newest waiting run; it contains everything before it.
 
-Both deploy jobs run the composite action `.github/actions/deploy`: `pulumi up`, `sync-env`, build, a **D1 restore point** (a Time Travel bookmark, with the restore command, in the job summary), `d1 migrations apply`, `wrangler deploy --secrets-file`, and the Playwright smoke test. **On prod, a failed smoke test runs `wrangler rollback`**: the Worker's code, vars and secrets go back one version; D1 does not, which is why migrations must only add. To undo a migration, restore D1 from the bookmark in the run's summary.
+Both deploy jobs run the composite action `.github/actions/deploy`: `pulumi up`, `sync-env`, build, the secrets file, a **D1 restore point** (a Time Travel bookmark, with the restore command, in the job summary), `d1 migrations apply`, `wrangler deploy --secrets-file`, and the Playwright smoke test. **On prod, a smoke test that fails (or never runs) after the deploy runs `wrangler rollback`**: the Worker's code, vars and secrets go back one version; D1 does not, which is why migrations must only add. To undo a migration, restore D1 from the bookmark in the run's summary.
 
 `workflow_dispatch` re-runs the whole pipeline for `main`'s head, as a break-glass redeploy. `sync-env` (`pnpm --filter ucmc-web sync-env --stack <dev|prod> --outputs <file>`) can be run locally with `--dry-run` against `pulumi stack output --json`.
 

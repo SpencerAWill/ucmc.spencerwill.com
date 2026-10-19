@@ -19,11 +19,13 @@
 #                       dist/server/wrangler.json, which is what every
 #                       later `wrangler` command here reads
 #   3. build            with this stack's public config baked in
-#   4. D1 restore point the way back, since migrations have no "down"
-#   5. migrate          before any code that needs the new schema
-#   6. deploy           code, vars and secrets as ONE Worker version
-#   7. smoke            Playwright against the deployed URL
-#   8. rollback (prod)  the Worker's code, if smoke failed; never D1
+#   4. secrets file     before anything touches D1, so a missing secret
+#                       fails the job while the database is unchanged
+#   5. D1 restore point the way back, since migrations have no "down"
+#   6. migrate          before any code that needs the new schema
+#   7. deploy           code, vars and secrets as ONE Worker version
+#   8. smoke            Playwright against the deployed URL
+#   9. rollback (prod)  the Worker's code, if smoke didn't pass; never D1
 name: Deploy
 description: Deploys one environment's infrastructure and Worker.
 
@@ -142,6 +144,47 @@ runs:
         VITE_R2_PUBLIC_HOST: ${{ steps.stack.outputs.r2_public_host }}
       run: pnpm --filter ucmc-web build
 
+    # Uploaded WITH the Worker version (`--secrets-file`), so code and
+    # secrets change together in one version. `wrangler-action`'s
+    # `secrets:` ran `secret put` once per name before deploying: each
+    # created a version of its own, and a failure halfway left the old
+    # code running with half the new secrets.
+    #
+    # Additive: a secret left out keeps its deployed value, so an unset
+    # optional one (the feedback mirror's) is omitted rather than blanked.
+    # TURNSTILE_SECRET_KEY is the stack's widget; RESEND_API_KEY is empty
+    # on a stack using the dev outbox. Both are masked as soon as read.
+    #
+    # Written BEFORE the restore point and the migration: a missing
+    # SESSION_SECRET or an unreadable stack output must fail the job while
+    # D1 is untouched, not leave it migrated under the old code.
+    - name: Write the secrets file
+      shell: bash
+      working-directory: infra/cloudflare
+      env:
+        STACK: ${{ inputs.stack }}
+        SESSION_SECRET: ${{ inputs.session-secret }}
+        CLOUDFLARE_ACCOUNT_READ_TOKEN: ${{ inputs.cloudflare-account-read-token }}
+        FEEDBACK_GITHUB_TOKEN: ${{ inputs.feedback-github-token }}
+        FEEDBACK_GITHUB_REPO: ${{ inputs.feedback-github-repo }}
+      run: |
+        umask 077
+        TURNSTILE_SECRET_KEY="$(pulumi stack output turnstileSecretKey --show-secrets --stack "$STACK")"
+        echo "::add-mask::$TURNSTILE_SECRET_KEY"
+        RESEND_API_KEY="$(pulumi stack output resendApiKey --show-secrets --stack "$STACK")"
+        if [ -n "$RESEND_API_KEY" ]; then echo "::add-mask::$RESEND_API_KEY"; fi
+        export TURNSTILE_SECRET_KEY RESEND_API_KEY
+        if [ -z "$SESSION_SECRET" ] || [ -z "$TURNSTILE_SECRET_KEY" ]; then
+          echo "::error::SESSION_SECRET or TURNSTILE_SECRET_KEY is empty"
+          exit 1
+        fi
+        jq -n 'env
+          | {SESSION_SECRET, TURNSTILE_SECRET_KEY, RESEND_API_KEY,
+             CLOUDFLARE_ACCOUNT_READ_TOKEN, FEEDBACK_GITHUB_TOKEN, FEEDBACK_GITHUB_REPO}
+          | with_entries(select(.value != null and .value != ""))' \
+          > "$RUNNER_TEMP/secrets.json"
+        echo "Uploading: $(jq -r 'keys | join(", ")' "$RUNNER_TEMP/secrets.json")"
+
     # The bookmark to `wrangler d1 time-travel restore` to if a migration
     # goes wrong (#192). Recorded before every migrate, whether or not
     # there's anything to apply: it's one API call, and the summary then
@@ -183,46 +226,10 @@ runs:
         WRANGLER_SEND_METRICS: "false"
       run: pnpm exec wrangler d1 migrations apply DB --remote
 
-    # Uploaded WITH the Worker version (`--secrets-file`), so code and
-    # secrets change together in one version. `wrangler-action`'s
-    # `secrets:` ran `secret put` once per name before deploying: each
-    # created a version of its own, and a failure halfway left the old
-    # code running with half the new secrets.
-    #
-    # Additive: a secret left out keeps its deployed value, so an unset
-    # optional one (the feedback mirror's) is omitted rather than blanked.
-    # TURNSTILE_SECRET_KEY is the stack's widget; RESEND_API_KEY is empty
-    # on a stack using the dev outbox. Both are masked as soon as read.
-    - name: Write the secrets file
-      shell: bash
-      working-directory: infra/cloudflare
-      env:
-        STACK: ${{ inputs.stack }}
-        SESSION_SECRET: ${{ inputs.session-secret }}
-        CLOUDFLARE_ACCOUNT_READ_TOKEN: ${{ inputs.cloudflare-account-read-token }}
-        FEEDBACK_GITHUB_TOKEN: ${{ inputs.feedback-github-token }}
-        FEEDBACK_GITHUB_REPO: ${{ inputs.feedback-github-repo }}
-      run: |
-        umask 077
-        TURNSTILE_SECRET_KEY="$(pulumi stack output turnstileSecretKey --show-secrets --stack "$STACK")"
-        echo "::add-mask::$TURNSTILE_SECRET_KEY"
-        RESEND_API_KEY="$(pulumi stack output resendApiKey --show-secrets --stack "$STACK")"
-        if [ -n "$RESEND_API_KEY" ]; then echo "::add-mask::$RESEND_API_KEY"; fi
-        export TURNSTILE_SECRET_KEY RESEND_API_KEY
-        if [ -z "$SESSION_SECRET" ] || [ -z "$TURNSTILE_SECRET_KEY" ]; then
-          echo "::error::SESSION_SECRET or TURNSTILE_SECRET_KEY is empty"
-          exit 1
-        fi
-        jq -n 'env
-          | {SESSION_SECRET, TURNSTILE_SECRET_KEY, RESEND_API_KEY,
-             CLOUDFLARE_ACCOUNT_READ_TOKEN, FEEDBACK_GITHUB_TOKEN, FEEDBACK_GITHUB_REPO}
-          | with_entries(select(.value != null and .value != ""))' \
-          > "$RUNNER_TEMP/secrets.json"
-        echo "Uploading: $(jq -r 'keys | join(", ")' "$RUNNER_TEMP/secrets.json")"
-
     # No --env: CLOUDFLARE_ENV (set above for prod) selects it, and the
     # build already flattened wrangler.jsonc to that section.
     - name: Deploy the Worker
+      id: worker
       shell: bash
       working-directory: apps/ucmc-web
       env:
@@ -292,8 +299,16 @@ runs:
     # the migration is the problem), which is why migrations must only add.
     # Prod only: dev stays on the failing version so it can be inspected,
     # and prod never starts after a red dev.
+    #
+    # Whenever the new version went out but smoke didn't PASS, not only
+    # when it failed: a broken Playwright install skips smoke, and that
+    # must not leave prod on a version nothing verified. Never when the
+    # deploy itself failed: then the live version is still the previous
+    # one, and rolling back would go one further.
     - name: Roll back prod
-      if: failure() && steps.smoke.outcome == 'failure' && inputs.stack == 'prod'
+      if: >-
+        failure() && inputs.stack == 'prod' &&
+        steps.worker.outcome == 'success' && steps.smoke.outcome != 'success'
       shell: bash
       working-directory: apps/ucmc-web
       env:
@@ -301,8 +316,8 @@ runs:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         WRANGLER_SEND_METRICS: "false"
       run: |
-        pnpm exec wrangler rollback --yes --message "Smoke test failed for $GITHUB_SHA (run $GITHUB_RUN_ID)"
-        echo "::error::Smoke test failed on prod; rolled the Worker back to the previous version. D1 was not rolled back."
+        pnpm exec wrangler rollback --yes --message "Smoke test failed or didn't run for $GITHUB_SHA (run $GITHUB_RUN_ID)"
+        echo "::error::Prod wasn't verified by the smoke test; rolled the Worker back to the previous version. D1 was not rolled back."
 
     - name: Upload the smoke report
       if: failure() && steps.smoke.outcome == 'failure'

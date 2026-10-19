@@ -790,6 +790,12 @@ jobs:
   # for the `prod` environment's reviewer (infra/github); a waiting job
   # uses no runner time, and an approval request expires after 30 days.
   # A failed prod smoke test rolls the Worker's code back.
+  #
+  # Only main's CURRENT head deploys. Each merge waits for its own
+  # approval, so approving an older waiting run after a newer one shipped
+  # would put prod back on older code, over a schema the newer one may
+  # already have migrated. An approval for a superseded commit fails here,
+  # before anything is touched; approve the newest run instead.
   deploy-prod:
     name: Deploy — prod
     needs: deploy-dev
@@ -805,6 +811,19 @@ jobs:
       group: deploy-prod
       cancel-in-progress: false
     steps:
+      # Unauthenticated: the repo is public (infra/github keeps it so).
+      - name: Refuse a commit main has moved past
+        run: |
+          head=$(git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+          if [ -z "$head" ]; then
+            echo "::error::Couldn't read main's head"
+            exit 1
+          fi
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "::error::main is at $head now, not $GITHUB_SHA. Approve the newest run's prod deploy instead."
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
