@@ -14,6 +14,11 @@ on:
           - prod
         default: dev
 
+# Nothing by default: every job declares the scopes it needs, so a job
+# added without a `permissions:` block gets none rather than the
+# repository's default token permissions (#317).
+permissions: {}
+
 jobs:
   # Computes once which side of the monorepo changed. On `push` we use
   # this to skip infra-dev / web-dev when neither was touched; on

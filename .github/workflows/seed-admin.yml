@@ -29,6 +29,11 @@ on:
         required: true
         type: string
 
+# Nothing by default: every job declares the scopes it needs, so a job
+# added without a `permissions:` block gets none rather than the
+# repository's default token permissions (#317).
+permissions: {}
+
 jobs:
   promote:
     name: Promote on ${{ github.event.inputs.environment }}

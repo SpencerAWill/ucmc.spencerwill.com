@@ -18,6 +18,11 @@ concurrency:
   group: ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Nothing by default: every job declares the scopes it needs, so a job
+# added without a `permissions:` block gets none rather than the
+# repository's default token permissions (#317).
+permissions: {}
+
 jobs:
   # Computes once per run which side of the monorepo changed; downstream
   # jobs use these outputs as their `if:` gate. Replaces the workflow-level
@@ -233,7 +238,11 @@ jobs:
     # also publishes SMTP on 1025, which nothing here speaks.
     services:
       mailpit:
-        image: axllent/mailpit:v1.28
+        # Version AND index digest (#317): a tag can be re-pointed, a digest
+        # can't. Same pin as `.devcontainer/docker-compose.yml`. Dependabot's
+        # github-actions ecosystem doesn't read service images, so bump this
+        # by hand alongside the compose file when Dependabot moves that one.
+        image: axllent/mailpit:v1.31.5@sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea
         ports:
           - 8025:8025
 

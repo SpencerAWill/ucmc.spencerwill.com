@@ -67,7 +67,11 @@ services:
   # Playwright e2e tests poll Mailpit's REST API to retrieve magic-link
   # tokens during sign-in flows.
   mailpit:
-    image: axllent/mailpit:latest
+    # Pinned by version and index digest (#317), like the CI service
+    # container: `latest` changes under a running devcontainer with no
+    # record of what moved. Dependabot's docker-compose ecosystem bumps
+    # both together; keep ci.yml's `e2e-desktop` service on the same pin.
+    image: axllent/mailpit:v1.31.5@sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea
     restart: unless-stopped
     ports:
       - "8025:8025" # Web UI + REST API

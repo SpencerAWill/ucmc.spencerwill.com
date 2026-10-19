@@ -33,6 +33,14 @@ quarantine at all, which is the hole the setting exists to close. The default
 remains: never bypass the delay — prefer an override, pick a patched floor
 that has already matured, or wait.
 
+## Dependabot groups encode compatibility, not tidiness
+
+`.github/dependabot.yml` groups packages that must move together, and keeps apart the ones that must not:
+
+- **`vitest` and `@vitest/*` ride in the `cloudflare` group**, because `@cloudflare/vitest-plugin` peers on a Vitest range and the `@vitest/*` companions peer on the exact Vitest version. A Vitest bump on its own fails install.
+- **`@pulumi/cloudflare` is excluded from every group** (`exclude-patterns` on `pulumi` and both catch-alls), so each provider bump gets a PR of its own. See `infra.md`: 6.21.0 planned a replacement of the dev D1 database.
+- **`@types/node` majors are ignored.** The types follow the Node we run (`.nvmrc`, CI, the devcontainer feature): a major describes APIs the runtime doesn't have. It had drifted to `^26` against Node 24. Raise it by hand in the change that moves `.nvmrc`, and collapse any `"*"`-ranged copies (`@types/qrcode`, `@types/papaparse`, commitlint's loader) onto the same version, or the build carries two sets of Node globals.
+
 ## Rules for clearing an advisory
 
 Read the current pins out of `pnpm-workspace.yaml` — they are not duplicated here, and a copy would drift.
