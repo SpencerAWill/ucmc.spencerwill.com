@@ -286,6 +286,14 @@ export default [
    *
    * The one exemption is the test that pins D1's ceiling, which must
    * build exactly the statement this rule forbids.
+   *
+   * #313 rides in the same `no-restricted-imports` (a second config block
+   * for the rule would replace this one, not add to it): `temporal-polyfill`
+   * and `temporal-polyfill/global` (and their `/full` twins, and the
+   * shim's `install()`) all defer to a native `Temporal` when
+   * the runtime has one, which is how a broken native clock would reach
+   * prod. `#/lib/temporal-install` forces the polyfill onto the global;
+   * code reads the global.
    */
   {
     files: ["src/**/*.{ts,tsx}"],
@@ -297,16 +305,36 @@ export default [
           // Every entry point Drizzle re-exports them from, not just the
           // package root — `drizzle-orm/sql` would otherwise walk past.
           paths: [
-            "drizzle-orm",
-            "drizzle-orm/sql",
-            "drizzle-orm/sql/expressions",
-            "drizzle-orm/sql/expressions/conditions",
-          ].map((name) => ({
-            name,
-            importNames: ["inArray", "notInArray"],
-            message:
-              "Binds one D1 parameter per element (cap 100, #291). Use inJsonArray / notInJsonArray or inSubquery / notInSubquery from #/server/db.",
-          })),
+            ...[
+              "drizzle-orm",
+              "drizzle-orm/sql",
+              "drizzle-orm/sql/expressions",
+              "drizzle-orm/sql/expressions/conditions",
+            ].map((name) => ({
+              name,
+              importNames: ["inArray", "notInArray"],
+              message:
+                "Binds one D1 parameter per element (cap 100, #291). Use inJsonArray / notInJsonArray or inSubquery / notInSubquery from #/server/db.",
+            })),
+            ...[
+              "temporal-polyfill",
+              "temporal-polyfill/global",
+              "temporal-polyfill/full",
+              "temporal-polyfill/full/global",
+            ].map((name) => ({
+              name,
+              message:
+                "Defers to a native Temporal if the runtime has one (#313). Use the global Temporal, installed by #/lib/temporal-install.",
+            })),
+            ...["temporal-polyfill/shim", "temporal-polyfill/full/shim"].map(
+              (name) => ({
+                name,
+                importNames: ["install"],
+                message:
+                  "install() defers to a native Temporal if the runtime has one (#313). Use the global Temporal, installed by #/lib/temporal-install.",
+              }),
+            ),
+          ],
         },
       ],
       "no-restricted-syntax": [

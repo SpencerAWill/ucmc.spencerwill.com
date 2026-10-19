@@ -16,7 +16,6 @@
  *     as the rest of the checkout-desk surface.
  */
 import { eq } from "drizzle-orm";
-import { Temporal } from "temporal-polyfill";
 
 import { CART_TOKEN_PREFIX } from "#/features/gear/lib/cart-token";
 import {

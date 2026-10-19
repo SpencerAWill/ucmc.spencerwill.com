@@ -7,7 +7,11 @@ paths:
 
 ## Temporal is the timestamp type everywhere
 
-Via the `temporal-polyfill` global installed at every entry point (`server-entry.ts`, `router.tsx`, both vitest setup files) — workerd and Safari < 17 have no native Temporal. There is no `date-fns`; raw `Date` survives only at hard external boundaries (R2's `object.uploaded`, `<input type="date">` glue, `Set-Cookie` `maxAge` is a number).
+Via `temporal-polyfill`, installed onto the global by `#/lib/temporal-install`, which every entry point imports first (`server-entry.ts`, `router.tsx`, `.storybook/preview.ts`, the vitest setup files, the e2e DB fixture). Code reads the global `Temporal`.
+
+**The polyfill is forced, not a fallback (#313).** Both `temporal-polyfill/global` and the package root (`import { Temporal } from "temporal-polyfill"`) defer to a native `Temporal` when the runtime has one. In July 2026 workerd briefly shipped one whose clock read epoch 0 inside requests (cloudflare/workerd#6907), and code that deferred would have used it with every test green, since the tests run under the same workerd. ESLint bans both imports in `src/`, along with their `/full` twins and the shim's deferring `install()`. Moving to native Temporal is a deliberate change to `temporal-install.ts` once it has proven stable on Workers, never something the runtime decides.
+
+There is no `date-fns`; raw `Date` survives only at hard external boundaries (R2's `object.uploaded`, `<input type="date">` glue, `Set-Cookie` `maxAge` is a number).
 
 - **DB**: the `drizzle/schema.ts` `timestamp` helper is a `customType` storing integer-ms but reading/writing `Temporal.Instant`. Inserts and query bounds (`gte`/`lt`) pass Instants. `Temporal` values cross the SSR / server-fn wire via the **serialization adapters** registered on `createStart` in `src/start.ts` (`#/lib/temporal-serialization.ts`). Numeric `*Ms` DTO fields stay numbers via `.epochMilliseconds`.
 - **Calendar reasoning runs in `CLUB_TIME_ZONE`** (`src/config/time.ts`, `America/New_York`) — club season, gear due-date end-of-day, officer-archive year, Gazette publish date, the `{year}` token in the header tagline. Convert `instant.toZonedDateTimeISO(CLUB_TIME_ZONE)` first; **never** UTC, never the runtime-default zone. The worker runs UTC and the browser runs the viewer's zone, so reading a calendar field off a raw instant is also a hydration-mismatch source.

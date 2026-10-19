@@ -1,6 +1,6 @@
-// jsdom has no native Temporal; install the polyfill before any test
-// module touches a Temporal value (mirrors the client entry).
-import "temporal-polyfill/global";
+// Install the Temporal polyfill before any test module touches a
+// Temporal value (mirrors the client entry).
+import "#/lib/temporal-install";
 import "@testing-library/jest-dom/vitest";
 
 import { afterEach } from "vitest";
