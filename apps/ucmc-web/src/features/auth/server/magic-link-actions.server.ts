@@ -36,6 +36,8 @@ import {
   rotateSession,
 } from "#/server/auth/session.server";
 import { POLICIES_VERSION } from "#/config/legal";
+import { env } from "#/server/cloudflare-env";
+import { devOutboxHref } from "#/server/email/email-tier";
 import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
 import type {
   DetailsInput,
@@ -141,29 +143,44 @@ async function padTiming(start: number): Promise<void> {
   }
 }
 
+export interface RequestMagicLinkResult {
+  ok: true;
+  /**
+   * `/dev/outbox` on a dev Worker whose mail goes to the outbox, else
+   * null. Environment-only, so every path below returns the same value
+   * and the response still says nothing about the address.
+   */
+  devOutboxHref: string | null;
+}
+
 export async function requestMagicLinkAction(args: {
   email: string;
   turnstileToken: string;
   redirect?: string;
-}): Promise<{ ok: true }> {
+}): Promise<RequestMagicLinkResult> {
   const start = Date.now();
+  // One object for every exit, so no path can drift from the others.
+  const result: RequestMagicLinkResult = {
+    ok: true,
+    devOutboxHref: devOutboxHref(env),
+  };
   try {
     // Turnstile check first — rejects bots before any rate-limit or DB
     // work. Silently succeeds when TURNSTILE_SECRET_KEY is unset (local
     // dev). Returns the same { ok: true } shape on failure so the caller
     // can't distinguish a rejected challenge from a sent email.
     if (args.turnstileToken && !(await verifyTurnstile(args.turnstileToken))) {
-      return { ok: true };
+      return result;
     }
 
     // Both rate-limit checks silently short-circuit to the success shape
     // so the client can't distinguish rate-limited vs honored vs unknown
     // email.
     if (!(await checkAuthRateLimitByIp())) {
-      return { ok: true };
+      return result;
     }
     if (!(await checkAuthRateLimitByEmail(args.email))) {
-      return { ok: true };
+      return result;
     }
 
     const existingUserId = await findUserIdByEmail(args.email);
@@ -174,7 +191,7 @@ export async function requestMagicLinkAction(args: {
       redirect: args.redirect,
     });
 
-    return { ok: true };
+    return result;
   } finally {
     await padTiming(start);
   }

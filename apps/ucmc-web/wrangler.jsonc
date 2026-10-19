@@ -22,6 +22,23 @@
   // handler and adds a `scheduled` handler so cron triggers below
   // reach the retention sweeps. See `src/server-entry.ts`.
   "main": "src/server-entry.ts",
+  // Served ONLY on the custom domains Pulumi binds
+  // (`dev.ucmc.spencerwill.com`, `ucmc.spencerwill.com`). Both keys are
+  // inheritable, so this covers env.production too.
+  //
+  // `workers_dev` defaults to true when the config has no `routes`, and
+  // ours has none (custom domains live in infra/index.ts), so without
+  // this each Worker also answered on `<name>.<subdomain>.workers.dev`.
+  // That hostname skips everything attached to the zone: Cloudflare
+  // Access (the dev outbox's Access app covers the custom domain only,
+  // docs/adr/0001-dev-email-outbox.md), WAF and bot rules. Nothing here
+  // uses it — the smoke test and every link target APP_BASE_URL.
+  //
+  // `preview_urls` is set explicitly because, left unset, wrangler keeps
+  // whatever the Worker already has rather than following `workers_dev`,
+  // and per-version preview URLs are workers.dev hostnames too.
+  "workers_dev": false,
+  "preview_urls": false,
   // Cron schedules (must stay in sync with the dispatcher in
   // src/server-entry.ts):
   //

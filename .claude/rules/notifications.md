@@ -54,7 +54,15 @@ Unlike settings writes, which batch with an audit event. The audit log records *
 
 ## Sending
 
-`src/server/email/resend.ts` has two tiers and **no third**: Resend when `RESEND_API_KEY` is set, Mailpit when `MAILPIT_URL` is, and otherwise it **throws** `EmailNotConfiguredError`. An earlier revision logged the message to the Worker console as a "fallback"; that either dumped magic-link URLs into dashboard-readable Workers Logs or left users staring at a never-arriving email. Failing loudly is the behaviour — don't reintroduce a silent tier.
+`src/server/email/resend.ts` picks its provider through `emailTier()` (`src/server/email/email-tier.ts`), which `/health` reads too so the two can't disagree:
+
+1. **Outbox** when `EMAIL_OUTBOX` is set — **dev only.** The message is stored in D1 and read at `/dev/outbox` behind Cloudflare Access (#297, `docs/adr/0001-dev-email-outbox.md`). It beats Resend on purpose: a Worker secret outlives the deploy that stopped uploading it, so a stale `RESEND_API_KEY` on dev must not put real mail back on the wire. Mailpit still wins over it locally. Without `ACCESS_TEAM_DOMAIN` and `ACCESS_OUTBOX_AUD` the outbox is refused, not accepted into a table nobody can open.
+2. **Resend** when `RESEND_API_KEY` is set.
+3. **Mailpit** when `MAILPIT_URL` is set.
+
+Otherwise it **throws** `EmailNotConfiguredError`. **There is no console tier.** An earlier revision logged the message to the Worker console as a "fallback"; that either dumped magic-link URLs into dashboard-readable Workers Logs or left users staring at a never-arriving email. Failing loudly is the behaviour — don't reintroduce a silent tier. The outbox is not one: it is opted into per stack, readable only through Access (and the page verifies Access's token itself), kept one day, and **infra refuses it on prod** because it holds working sign-in links.
+
+**The "check your email" confirmations link to the outbox on dev, and the server decides when.** `requestMagicLinkAction` and `requestAddEmailAction` return `devOutboxHref` (from `devOutboxHref()` beside `emailTier()`), null unless the outbox tier is active; `DevOutboxLink` renders nothing for null. It must stay a function of the environment alone: the sign-in response is enumeration-proof, and a field that varied with the address would undo that.
 
 **Every reminder carries `gear.caveHoursNote`.** The cave is open about two hours a week (Wednesdays, either side of the meeting), so "bring it back during open hours" without naming them is an instruction a member cannot follow — and it is what makes the day-one overdue notice worth sending at all, since the next chance to return anything may be six days away. It is free text, not a structured schedule: the hours shift each semester, have exceptions, and off-cycle checkouts happen by arrangement. Blank collapses the line and its separator, which is the summer case.
 

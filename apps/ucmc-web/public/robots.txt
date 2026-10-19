@@ -15,5 +15,6 @@ Disallow: /audit
 Disallow: /members
 Disallow: /register
 Disallow: /health
+Disallow: /dev/
 
 Sitemap: https://ucmc.spencerwill.com/sitemap.xml

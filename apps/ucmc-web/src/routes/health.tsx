@@ -44,7 +44,21 @@ function HealthPage() {
                   className="flex items-start justify-between gap-4 p-4"
                 >
                   <div className="space-y-1">
-                    <p className="font-mono text-sm">{check.name}</p>
+                    <p className="font-mono text-sm">
+                      {check.href ? (
+                        // A plain anchor: the only href today is the dev
+                        // outbox, a server route behind Cloudflare Access
+                        // rather than a page in the route tree.
+                        <a
+                          href={check.href}
+                          className="text-primary underline-offset-4 hover:underline"
+                        >
+                          {check.name}
+                        </a>
+                      ) : (
+                        check.name
+                      )}
+                    </p>
                     {check.output ? (
                       <p className="text-xs text-muted-foreground">
                         {check.output}

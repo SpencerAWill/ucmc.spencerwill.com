@@ -36,6 +36,7 @@ import {
 import type { ProfileFacets } from "#/server/member-profile/profile-facets.server";
 import type { Principal } from "#/server/auth/principal.server";
 import type { EmailProof } from "#/server/auth/proof-cookie.server";
+import type { RequestMagicLinkResult } from "#/features/auth/server/magic-link-actions.server";
 import type { schema } from "#/server/db";
 
 // ── types shared with magic-link-actions.server.ts ───────────────────────
@@ -78,7 +79,7 @@ export const requestMagicLinkFn = createServerFn({ method: "POST" })
         .optional(),
     }),
   )
-  .handler(async ({ data }): Promise<{ ok: true }> => {
+  .handler(async ({ data }): Promise<RequestMagicLinkResult> => {
     const { requestMagicLinkAction } =
       await import("#/features/auth/server/magic-link-actions.server");
     return requestMagicLinkAction({

@@ -8,9 +8,9 @@ paths:
 
 **Pulumi**, two stacks (`dev` auto, `prod` manual + approval), state in Pulumi Cloud, `pnpm` runtime. Auth via `CLOUDFLARE_API_TOKEN`.
 
-The **Cloudflare provider** manages Worker custom domains, D1 databases, R2 buckets (private + public, with `R2CustomDomain` `minTls: "1.2"`), KV namespaces, and Resend DNS records (SPF, DKIM, MX). The `spencerwill.com` zone itself is NOT Pulumi-managed. D1/R2/KV are `protect: true`.
+The **Cloudflare provider** manages Worker custom domains, D1 databases, R2 buckets (private + public, with `R2CustomDomain` `minTls: "1.2"`), KV namespaces, Resend DNS records (SPF, DKIM, MX), and on dev the outbox's Access application. The `spencerwill.com` zone itself is NOT Pulumi-managed. D1/R2/KV are `protect: true`.
 
-**Stack outputs consumed by `deploy.yml`:** `d1DatabaseId`, `kvNamespaceId`, `r2PublicHost` (→ `VITE_R2_PUBLIC_HOST`), `resendApiKey`, `resendFromEmail`. Bucket names are exported for drift detection only — wrangler binds buckets by name.
+**Stack outputs consumed by `deploy.yml`:** `d1DatabaseId`, `kvNamespaceId`, `r2PublicHost` (→ `VITE_R2_PUBLIC_HOST`), `resendApiKey` and `resendFromEmail` (prod only), and `emailOutbox` / `accessTeamDomain` / `accessOutboxAud` (dev only). Bucket names are exported for drift detection only — wrangler binds buckets by name.
 
 ## Resend (`infra/resend.ts`)
 
@@ -42,7 +42,15 @@ So a `@pulumi/cloudflare` bump is **not** a routine dependency update here:
 
 Prereq: `RESEND_MANAGEMENT_API_KEY` (full-access) as a GitHub env secret on both environments, and exported locally for `pulumi up`.
 
-**Single-domain sharing** (free-tier limit): prod owns the `ResendDomain`; dev sets `resendOwnerStack: prod` and reads `resendApiKey` + `resendFromEmail` via `pulumi.StackReference`. **Prod must `pulumi up` before dev** so the StackReference resolves. The component is `protect: true` — destroying it re-issues DKIM and invalidates the sending token.
+**Only prod has Resend.** Prod owns the `ResendDomain`; it is `protect: true` — destroying it re-issues DKIM and invalidates the sending token. Dev used to borrow prod's key through `resendOwnerStack: prod` and a `pulumi.StackReference`; since #297 it has no Resend at all and its mail goes to the outbox. `resendOwnerStack` still works for a future stack that should send, and is refused alongside `emailOutbox`.
+
+## The dev email outbox (`infra/outbox.ts`)
+
+`emailOutbox: true` creates a self-hosted `ZeroTrustAccessApplication` on `<hostname>/dev/outbox` with an inline allow policy for `outboxViewers`, and exports its `aud` for the Worker to verify tokens against. **`configureOutbox` throws on the `prod` stack** — the outbox holds working sign-in links. See `docs/adr/0001-dev-email-outbox.md`.
+
+- **The Zero Trust organization is not Pulumi-managed.** It is account-wide and shared with flareling; `accessTeamDomain` is config. Its login methods are set by hand in the dashboard. Organizations created since June 2026 default to the Cloudflare identity provider restricted to account members, so a viewer who isn't an account member needs One-time PIN added (Zero Trust → Integrations → Identity providers).
+- **`CLOUDFLARE_API_TOKEN` needs account-level `Access: Apps and Policies Edit`** for dev's preview and `up`. Without it the dev preview fails on the Access application.
+- **The application covers the custom domain only, so the Workers serve nothing else.** `wrangler.jsonc` sets `workers_dev: false` and `preview_urls: false` (both inherited by `env.production`). `workers_dev` defaults to `true` when there are no `routes`, and ours live in Pulumi, so removing the key quietly reopens a `workers.dev` hostname that bypasses Access, WAF and bot rules. The page's own JWT check is the backstop if it ever is.
 
 ## Workflows
 

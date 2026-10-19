@@ -34,7 +34,9 @@ import {
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import { env } from "#/server/cloudflare-env";
 import { getDb, isUniqueViolation, schema } from "#/server/db";
+import { devOutboxHref } from "#/server/email/email-tier";
 import {
   checkAuthRateLimitByEmail,
   checkAuthRateLimitByIp,
@@ -58,7 +60,11 @@ export type ListMyEmailsResult =
   { ok: true; emails: EmailRow[] } | { ok: false; reason: "unauthorized" };
 
 export type RequestAddEmailResult =
-  | { ok: true }
+  | {
+      ok: true;
+      /** `/dev/outbox` when this Worker's mail goes there, else null. */
+      devOutboxHref: string | null;
+    }
   | {
       ok: false;
       reason:
@@ -173,7 +179,7 @@ export async function requestAddEmailAction(args: {
     intent: "add_email",
     targetUserId: principal.userId,
   });
-  return { ok: true };
+  return { ok: true, devOutboxHref: devOutboxHref(env) };
 }
 
 // ── add (consume) ───────────────────────────────────────────────────────

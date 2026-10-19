@@ -10,7 +10,8 @@
 import { sql } from "drizzle-orm";
 
 import { env } from "#/server/cloudflare-env";
-import { getDb } from "#/server/db";
+import { getDb, schema } from "#/server/db";
+import { DEV_OUTBOX_PATH, emailTier } from "#/server/email/email-tier";
 import { getKv } from "#/server/kv";
 import { getPrivateBucket } from "#/server/r2";
 import { checkHealthRateLimit } from "#/server/rate-limit.server";
@@ -76,9 +77,39 @@ async function checkKv(): Promise<HealthCheck> {
 async function checkEmail(): Promise<HealthCheck> {
   const time = new Date().toISOString();
 
-  // Mirrors the tier order in `server/email/resend.ts` so /health reports
-  // which provider sendEmail() would actually use right now.
-  if (env.RESEND_API_KEY) {
+  // The same `emailTier()` `sendEmail` reads, so /health reports which
+  // provider it would actually use right now.
+  const tier = emailTier(env);
+
+  if (tier.tier === "outbox") {
+    // Probes the table itself, not D1 in general: `d1:read` passes on a
+    // database where migration 0082 never ran, and then every sign-in
+    // 500s on `no such table` while /health — and the post-deploy smoke
+    // test that reads it — stays green. A read, not a write, so a
+    // /health hit never adds a row.
+    try {
+      await getDb()
+        .select({ id: schema.emailOutbox.id })
+        .from(schema.emailOutbox)
+        .limit(1);
+      return {
+        name: "email:outbox",
+        status: "pass",
+        time,
+        href: DEV_OUTBOX_PATH,
+      };
+    } catch {
+      return {
+        name: "email:outbox",
+        status: "fail",
+        time,
+        output: "outbox table unreachable",
+        href: DEV_OUTBOX_PATH,
+      };
+    }
+  }
+
+  if (tier.tier === "resend") {
     try {
       // Probe via POST /emails with an empty body. The keys we mint per
       // stack are `sending_access`-scoped and Resend returns
@@ -120,7 +151,7 @@ async function checkEmail(): Promise<HealthCheck> {
     }
   }
 
-  if (env.MAILPIT_URL) {
+  if (tier.tier === "mailpit") {
     try {
       const res = await fetch(`${env.MAILPIT_URL}/api/v1/info`, {
         method: "GET",
@@ -154,7 +185,7 @@ async function checkEmail(): Promise<HealthCheck> {
     name: "email:misconfigured",
     status: "fail",
     time,
-    output: "no email provider configured (set RESEND_API_KEY or MAILPIT_URL)",
+    output: tier.reason,
   };
 }
 

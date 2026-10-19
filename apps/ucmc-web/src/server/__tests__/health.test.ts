@@ -12,7 +12,7 @@ import type * as CloudflareEnvModule from "#/server/cloudflare-env";
  * Miniflare — so `pass` means the probes genuinely reached a binding
  * rather than that a mock agreed with them.
  *
- * Only the two email vars are controlled, and only because they would
+ * Only the email vars are controlled, and only because they would
  * otherwise make the suite environment-dependent: `.env.local` sets
  * `MAILPIT_URL` on a developer's machine and CI sets neither, so the
  * email probe reports a different name in each place. That is exactly
@@ -28,13 +28,16 @@ vi.mock("#/server/rate-limit.server", () => ({
   checkHealthRateLimit: async () => rateLimitAllowed.value,
 }));
 
-// Overrides ONLY `RESEND_API_KEY` / `MAILPIT_URL`. A wholesale mock of
+// Overrides ONLY the email-tier vars. A wholesale mock of
 // this module would take `DB`, `KV` and the buckets with it — `getDb()`
 // reads `env` from right here — and the probes would then be testing the
 // mock. The Proxy leaves every other binding untouched.
 const emailEnv = vi.hoisted(() => ({
   RESEND_API_KEY: undefined as string | undefined,
   MAILPIT_URL: undefined as string | undefined,
+  EMAIL_OUTBOX: undefined as string | undefined,
+  ACCESS_TEAM_DOMAIN: undefined as string | undefined,
+  ACCESS_OUTBOX_AUD: undefined as string | undefined,
 }));
 
 vi.mock("#/server/cloudflare-env", async (importOriginal) => {
@@ -43,8 +46,8 @@ vi.mock("#/server/cloudflare-env", async (importOriginal) => {
     ...actual,
     env: new Proxy(actual.env, {
       get(target, prop, receiver) {
-        if (prop === "RESEND_API_KEY" || prop === "MAILPIT_URL") {
-          return emailEnv[prop];
+        if (typeof prop === "string" && prop in emailEnv) {
+          return emailEnv[prop as keyof typeof emailEnv];
         }
         return Reflect.get(target, prop, receiver) as unknown;
       },
@@ -56,8 +59,9 @@ const { performHealthChecks } = await import("#/server/health.server");
 
 beforeEach(() => {
   rateLimitAllowed.value = true;
-  emailEnv.RESEND_API_KEY = undefined;
-  emailEnv.MAILPIT_URL = undefined;
+  for (const key of Object.keys(emailEnv) as Array<keyof typeof emailEnv>) {
+    emailEnv[key] = undefined;
+  }
 });
 
 describe("performHealthChecks", () => {
@@ -94,7 +98,35 @@ describe("performHealthChecks", () => {
 
     expect(email?.name).toBe("email:misconfigured");
     expect(email?.status).toBe("fail");
-    expect(email?.output).toMatch(/RESEND_API_KEY or MAILPIT_URL/);
+    expect(email?.output).toMatch(/RESEND_API_KEY, MAILPIT_URL/);
+  });
+
+  it("names the outbox tier on a dev Worker that has it", async () => {
+    // A stale Resend secret must not change the answer: the outbox wins
+    // over it, in the sender and therefore here.
+    emailEnv.EMAIL_OUTBOX = "1";
+    emailEnv.ACCESS_TEAM_DOMAIN = "team.cloudflareaccess.com";
+    emailEnv.ACCESS_OUTBOX_AUD = "outbox-aud";
+    emailEnv.RESEND_API_KEY = "re_stale";
+
+    const report = await performHealthChecks();
+    const email = report.checks.find((c) => c.name.startsWith("email:"));
+
+    expect(email).toMatchObject({
+      name: "email:outbox",
+      status: "pass",
+      href: "/dev/outbox",
+    });
+  });
+
+  it("fails an outbox with no Access settings to read it through", async () => {
+    emailEnv.EMAIL_OUTBOX = "1";
+
+    const report = await performHealthChecks();
+    const email = report.checks.find((c) => c.name.startsWith("email:"));
+
+    expect(email?.name).toBe("email:misconfigured");
+    expect(email?.output).toMatch(/ACCESS_TEAM_DOMAIN and ACCESS_OUTBOX_AUD/);
   });
 
   it("fails the whole report when a single probe fails", async () => {

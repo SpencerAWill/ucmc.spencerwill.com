@@ -17,6 +17,7 @@ import { myEmailsQueryOptions } from "#/features/auth/api/queries";
 import { useAddEmail } from "#/features/auth/api/use-add-email";
 import { useRemoveEmail } from "#/features/auth/api/use-remove-email";
 import { useSetPrimaryEmail } from "#/features/auth/api/use-set-primary-email";
+import { DevOutboxLink } from "#/features/auth/components/dev-outbox-link";
 import { useAppForm } from "#/lib/form/form";
 import { formatDate } from "#/lib/date-format";
 
@@ -196,6 +197,7 @@ function ApprovedEmailAddressesSection() {
 
 function AddEmailForm() {
   const [submittedTo, setSubmittedTo] = useState<string | null>(null);
+  const [outboxHref, setOutboxHref] = useState<string | null>(null);
   const mutation = useAddEmail();
 
   const form = useAppForm({
@@ -209,6 +211,7 @@ function AddEmailForm() {
       mutation.mutate(value.email, {
         onSuccess: (result) => {
           if (result.ok) {
+            setOutboxHref(result.devOutboxHref);
             setSubmittedTo(value.email);
             return;
           }
@@ -248,6 +251,7 @@ function AddEmailForm() {
           on this device — you must be signed in to the same account when you
           click the link.
         </p>
+        <DevOutboxLink href={outboxHref} />
         <button
           type="button"
           className="text-primary underline-offset-4 hover:underline"

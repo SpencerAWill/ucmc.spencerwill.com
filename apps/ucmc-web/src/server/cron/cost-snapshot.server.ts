@@ -40,7 +40,10 @@ import {
   fetchBillableUsage,
   costCredentials,
 } from "#/server/cost/cloudflare-client.server";
-import { rollUpResendSends } from "#/server/cost/resend-rollup.server";
+import {
+  resendConfigured,
+  rollUpResendSends,
+} from "#/server/cost/resend-rollup.server";
 import type { SnapshotRow } from "#/server/cost/snapshot-row";
 import {
   earliestSnapshotDate,
@@ -73,6 +76,13 @@ export interface CostSnapshotResult {
   to?: string;
   rowsWritten: number;
   sourcesFailed: string[];
+  /**
+   * Sources this Worker has no account with, skipped on purpose. Not a
+   * failure: nothing was asked and nothing went wrong, and keeping it
+   * out of `sourcesFailed` is what lets the backfill floor still be
+   * recorded on a stack without Resend.
+   */
+  sourcesUnconfigured: string[];
 }
 
 export async function runCostSnapshot(
@@ -90,6 +100,7 @@ export async function runCostSnapshot(
       skipReason: "unconfigured",
       rowsWritten: 0,
       sourcesFailed: [],
+      sourcesUnconfigured: [],
     };
   }
 
@@ -102,6 +113,7 @@ export async function runCostSnapshot(
   });
 
   const sourcesFailed: string[] = [];
+  const sourcesUnconfigured: string[] = [];
   const rows: SnapshotRow[] = [];
 
   const billing = await fetchBillableUsage(window);
@@ -124,11 +136,19 @@ export async function runCostSnapshot(
     rows.push(...parseAnalyticsUsage(analytics));
   }
 
-  try {
-    rows.push(...(await rollUpResendSends(window)));
-  } catch (err) {
-    sourcesFailed.push("resend");
-    log.warn("cost.resend_rollup_failed", { error: errorMessage(err) });
+  // A Worker that doesn't send through Resend (dev, whose mail goes to
+  // the outbox) writes no `resend.sends` rows at all. Its `email_sends`
+  // log still fills, but those are not Resend sends, and a gap is
+  // honest where a series of outbox writes would read as Resend usage.
+  if (!resendConfigured()) {
+    sourcesUnconfigured.push("resend");
+  } else {
+    try {
+      rows.push(...(await rollUpResendSends(window)));
+    } catch (err) {
+      sourcesFailed.push("resend");
+      log.warn("cost.resend_rollup_failed", { error: errorMessage(err) });
+    }
   }
 
   // A backfill window that yielded no rows FROM THE BACKFILLED SOURCE
@@ -160,6 +180,7 @@ export async function runCostSnapshot(
     to: window.to,
     rowsWritten,
     sourcesFailed: sourcesFailed.join(",") || "none",
+    sourcesUnconfigured: sourcesUnconfigured.join(",") || "none",
   });
 
   return {
@@ -169,5 +190,6 @@ export async function runCostSnapshot(
     to: window.to,
     rowsWritten,
     sourcesFailed,
+    sourcesUnconfigured,
   };
 }

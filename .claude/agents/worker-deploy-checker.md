@@ -27,7 +27,8 @@ You are the Cloudflare Worker deploy checker for `apps/ucmc-web`. Your job is to
    - `compatibility_date` is set (don't silently bump it — flag if stale, but let the user decide).
    - `compatibility_flags` still contains `nodejs_compat`.
    - `main` still points to `@tanstack/react-start/server-entry`.
-   - No `routes` / `route` / `workers_dev` domain declarations that would conflict with Pulumi-managed `WorkersCustomDomain` resources.
+   - No `routes` / `route` domain declarations that would conflict with Pulumi-managed `WorkersCustomDomain` resources.
+   - `workers_dev` and `preview_urls` are both `false` at top level (inherited by `env.production`). Flag either being removed or set `true`: the `workers.dev` hostname bypasses Cloudflare Access, which is what guards `/dev/outbox`.
 2. If any bindings are declared (KV, R2, D1, Durable Objects, secrets, vars):
    - Verify both `dev` and `production` envs declare the same binding shape (name + type). Missing a binding in one env is a classic prod bug.
    - Flag any secrets hardcoded in `vars` — secrets should be set via `wrangler secret put`, not committed.

@@ -53,6 +53,7 @@ import { Route as AnalyticsPlatformRouteImport } from './routes/analytics.platfo
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as CalendarIndexRouteImport } from './routes/calendar.index'
 import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicId'
+import { Route as DevOutboxRouteImport } from './routes/dev.outbox'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
 import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
@@ -314,6 +315,11 @@ const CalendarPublicIdRoute = CalendarPublicIdRouteImport.update({
   path: '/$publicId',
   getParentRoute: () => CalendarRoute,
 } as any)
+const DevOutboxRoute = DevOutboxRouteImport.update({
+  id: '/dev/outbox',
+  path: '/dev/outbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -555,6 +561,7 @@ export interface FileRoutesByFullPath {
   '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
+  '/dev/outbox': typeof DevOutboxRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -632,6 +639,7 @@ export interface FileRoutesByTo {
   '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
+  '/dev/outbox': typeof DevOutboxRoute
   '/feedback': typeof FeedbackIndexRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
@@ -714,6 +722,7 @@ export interface FileRoutesById {
   '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
+  '/dev/outbox': typeof DevOutboxRoute
   '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
@@ -802,6 +811,7 @@ export interface FileRouteTypes {
     | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
+    | '/dev/outbox'
     | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
@@ -879,6 +889,7 @@ export interface FileRouteTypes {
     | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
+    | '/dev/outbox'
     | '/feedback'
     | '/gazette/$publicId'
     | '/gear/$publicId'
@@ -960,6 +971,7 @@ export interface FileRouteTypes {
     | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
+    | '/dev/outbox'
     | '/feedback/_tabs'
     | '/gazette/$publicId'
     | '/gear/$publicId'
@@ -1041,6 +1053,7 @@ export interface RootRouteChildren {
   VolunteerRoute: typeof VolunteerRoute
   WaiverRoute: typeof WaiverRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  DevOutboxRoute: typeof DevOutboxRoute
   RegisterPendingRoute: typeof RegisterPendingRoute
   RegisterProfileRoute: typeof RegisterProfileRoute
   ApiAccountExportRoute: typeof ApiAccountExportRoute
@@ -1362,6 +1375,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/calendar/$publicId'
       preLoaderRoute: typeof CalendarPublicIdRouteImport
       parentRoute: typeof CalendarRoute
+    }
+    '/dev/outbox': {
+      id: '/dev/outbox'
+      path: '/dev/outbox'
+      fullPath: '/dev/outbox'
+      preLoaderRoute: typeof DevOutboxRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/feedback/': {
       id: '/feedback/'
@@ -1861,6 +1881,7 @@ const rootRouteChildren: RootRouteChildren = {
   VolunteerRoute: VolunteerRoute,
   WaiverRoute: WaiverRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  DevOutboxRoute: DevOutboxRoute,
   RegisterPendingRoute: RegisterPendingRoute,
   RegisterProfileRoute: RegisterProfileRoute,
   ApiAccountExportRoute: ApiAccountExportRoute,

@@ -16,6 +16,11 @@
  * Do not add it to the privacy notice; do not let its presence here
  * suggest it belongs there.
  *
+ * `email_outbox` rides it too, and is not a privacy promise either: it
+ * is written on dev alone (#297), where it holds a day of would-be mail.
+ * `/dev/outbox` already prunes on read; this sweep is what makes a dev
+ * Worker nobody visits forget as well. On prod it deletes nothing.
+ *
  * NULL-skip discipline: rows whose timestamp column is NULL are
  * deliberately ignored. `rejected_at` / `deactivated_at` were added in
  * migration 0019, so historical rejections / deactivations don't have
@@ -31,6 +36,7 @@
 import { and, eq, isNotNull, lt } from "drizzle-orm";
 
 import { getDb, inJsonArray, schema } from "#/server/db";
+import { sweepEmailOutbox } from "#/server/email/outbox.server";
 import { errorMessage, log } from "#/server/log/log.server";
 import { getPublicBucket } from "#/server/r2";
 
@@ -89,6 +95,7 @@ export interface SweepCounts {
   revokedWaivers: number;
   orphanR2Keys: number;
   emailSendLog: number;
+  emailOutbox: number;
 }
 
 /** Housekeeping, not a privacy promise — see the module doc comment. */
@@ -341,6 +348,7 @@ export async function runRetentionSweeps(
     revokedWaivers: 0,
     orphanR2Keys: 0,
     emailSendLog: 0,
+    emailOutbox: 0,
   };
 
   // Each sweep is wrapped so an error in one (e.g. R2 outage) doesn't
@@ -361,6 +369,7 @@ export async function runRetentionSweeps(
       run: () => sweepOrphanR2Keys(now, options.minOrphanAgeMs),
     },
     { name: "emailSendLog", run: () => sweepEmailSendLog(now) },
+    { name: "emailOutbox", run: () => sweepEmailOutbox(now) },
   ];
 
   for (const sweep of sweeps) {

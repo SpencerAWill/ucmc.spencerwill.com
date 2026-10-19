@@ -15,6 +15,12 @@ export interface HealthCheck {
   status: "pass" | "fail";
   time: string;
   output?: string;
+  /**
+   * Somewhere to look further. Set only on `email:outbox`, so a dev
+   * Worker's /health links to the outbox; absent on every other check,
+   * and therefore on prod.
+   */
+  href?: string;
 }
 
 export interface HealthReport {

@@ -1,6 +1,7 @@
 import * as cloudflare from "@pulumi/cloudflare";
 import * as pulumi from "@pulumi/pulumi";
 
+import { configureOutbox } from "./outbox.ts";
 import { ResendDomain } from "./resend.ts";
 
 const stack = pulumi.getStack();
@@ -186,6 +187,19 @@ export { webauthnRpName };
 // because its value depends on which stack owns the verified domain.
 export { resendFromName };
 
+// The dev email outbox (#297, docs/adr/0001-dev-email-outbox.md). On
+// with `emailOutbox: true` (dev only — `configureOutbox` throws on
+// prod); off, all three outputs are empty strings, which the Worker
+// reads as "no outbox". `deploy.yml` passes them as `--var`s.
+//
+// Declared before Resend because it decides whether this stack has
+// Resend at all: a stack with the outbox on sends nothing, so it
+// neither owns nor borrows a sending key.
+const outbox = configureOutbox(cfg, { accountId, hostname, stack });
+export const emailOutbox = outbox.emailOutbox;
+export const accessTeamDomain = outbox.accessTeamDomain;
+export const accessOutboxAud = outbox.accessOutboxAud;
+
 // Resend sending domain + DNS records + sending-scoped API key. The
 // component handles domain creation, DNS record provisioning in the
 // Cloudflare zone defined above, verification trigger, and issuance of
@@ -197,9 +211,11 @@ export { resendFromName };
 // StackReference. Behavior is selected by the `resendOwnerStack`
 // config: when unset, this stack owns the resource and provisions it;
 // when set to another stack name (e.g. "prod"), this stack reads the
-// outputs from that stack instead. The shared from-address means dev
-// emails are sent from the prod-domain envelope; that's invisible to
-// any real recipient and only matters in test inboxes.
+// outputs from that stack instead. A stack with the email outbox on
+// (dev, since #297) has no Resend at all: it sends nothing, and
+// borrowing prod's key was the dependency the outbox exists to remove.
+// (A borrowing stack sends from the owner's domain envelope, which is
+// invisible to real recipients and only matters in test inboxes.)
 //
 // `protect: true` — replacing a Resend domain re-issues DKIM keys and
 // invalidates previously-sent signatures; replacing the API key
@@ -209,13 +225,30 @@ const resendOwnerStack = cfg.get("resendOwnerStack");
 
 /** Stand-in for a Resend id on a stack that borrows rather than owns. */
 const BORROWED_FROM_OWNER = "borrowed-from-owner-stack";
+/** Stand-in for a Resend id on a stack whose email goes to the outbox. */
+const NOT_PROVISIONED_OUTBOX = "not-provisioned-email-outbox";
+
+if (outbox.emailOutbox && resendOwnerStack) {
+  throw new Error(
+    "emailOutbox and resendOwnerStack are exclusive: a stack whose email " +
+      "goes to the outbox must not hold a sending key (#297).",
+  );
+}
 
 let resendApiKeyOutput: pulumi.Output<string>;
 let resendFromEmailOutput: pulumi.Output<string>;
 let resendDomainIdOutput: pulumi.Output<string>;
 let resendApiKeyIdOutput: pulumi.Output<string>;
 
-if (resendOwnerStack) {
+if (outbox.emailOutbox) {
+  // Empty rather than undefined: an undefined output only produces a
+  // `will not show as a stack output` warning on every `up`, and
+  // `deploy.yml` reads neither on a stack like this.
+  resendApiKeyOutput = pulumi.secret("");
+  resendFromEmailOutput = pulumi.output("");
+  resendDomainIdOutput = pulumi.output(NOT_PROVISIONED_OUTBOX);
+  resendApiKeyIdOutput = pulumi.output(NOT_PROVISIONED_OUTBOX);
+} else if (resendOwnerStack) {
   const ownerRef = new pulumi.StackReference(
     `${pulumi.getOrganization()}/${pulumi.getProject()}/${resendOwnerStack}`,
   );

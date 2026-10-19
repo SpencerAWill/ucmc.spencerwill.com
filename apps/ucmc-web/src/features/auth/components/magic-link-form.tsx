@@ -8,6 +8,7 @@ import { z } from "zod";
 import { env } from "#/config/env";
 import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { useRequestMagicLink } from "#/features/auth/api/use-request-magic-link";
+import { DevOutboxLink } from "#/features/auth/components/dev-outbox-link";
 import { useAppForm } from "#/lib/form/form";
 import {
   webauthnAuthenticateBeginFn,
@@ -41,6 +42,7 @@ export function MagicLinkForm({
   redirectTo?: string;
 }) {
   const [submittedTo, setSubmittedTo] = useState<string | null>(null);
+  const [outboxHref, setOutboxHref] = useState<string | null>(null);
   const turnstileToken = useRef("");
   const turnstileSiteKey = env.VITE_TURNSTILE_SITE_KEY;
 
@@ -65,7 +67,12 @@ export function MagicLinkForm({
           turnstileToken: turnstileToken.current,
           redirect: redirectTo,
         },
-        { onSuccess: () => setSubmittedTo(value.email) },
+        {
+          onSuccess: (result) => {
+            setOutboxHref(result.devOutboxHref);
+            setSubmittedTo(value.email);
+          },
+        },
       );
     },
   });
@@ -77,6 +84,7 @@ export function MagicLinkForm({
           Check <strong>{submittedTo}</strong> for a sign-in link. It expires in
           15 minutes.
         </p>
+        <DevOutboxLink href={outboxHref} />
         <button
           type="button"
           className="text-primary underline-offset-4 hover:underline"

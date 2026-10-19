@@ -251,6 +251,26 @@ beforeEach(async () => {
 
 // ── tests ───────────────────────────────────────────────────────────────
 
+describe("requestMagicLinkAction response", () => {
+  it("is identical for a sent, an unknown and a rate-limited request", async () => {
+    // The dev-outbox hint rides this response, so it must stay a function
+    // of the environment alone — never of what happened to the address.
+    const sent = await requestMagicLinkAction({
+      email: TEST_EMAIL,
+      turnstileToken: "",
+    });
+    rateLimitAllowed = false;
+    const limited = await requestMagicLinkAction({
+      email: "someone-else@example.com",
+      turnstileToken: "",
+    });
+
+    expect(limited).toEqual(sent);
+    // No outbox in the test Worker, so no link: the same as prod.
+    expect(sent).toEqual({ ok: true, devOutboxHref: null });
+  });
+});
+
 describe("magic-link registration flow", () => {
   it("request → consume → proof cookie → submit profile → session + pending", async () => {
     // 1. Request magic link (creates token in D1).

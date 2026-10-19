@@ -4,6 +4,7 @@ import { getDb, schema } from "#/server/db";
 import { getKv } from "#/server/kv";
 import { runCostSnapshot } from "#/server/cron/cost-snapshot.server";
 import * as client from "#/server/cost/cloudflare-client.server";
+import * as resendRollup from "#/server/cost/resend-rollup.server";
 import { MAX_RANGE_DAYS } from "#/server/cost/snapshot-window";
 import billableUsage from "#/server/cost/__tests__/fixtures/billable-usage.json";
 import graphqlUsage from "#/server/cost/__tests__/fixtures/graphql-usage.json";
@@ -16,6 +17,8 @@ function configured() {
     accountId: "acct",
     token: "tok",
   });
+  // Prod's shape: the Worker sends through Resend.
+  vi.spyOn(resendRollup, "resendConfigured").mockReturnValue(true);
 }
 
 beforeEach(() => {
@@ -95,6 +98,35 @@ describe("runCostSnapshot", () => {
 
     const stored = await getDb().select().from(schema.costSnapshots);
     expect(stored.every((r) => r.source === "resend")).toBe(true);
+  });
+
+  it("skips Resend on a Worker that doesn't send through it, and says so", async () => {
+    // Dev since #297: its mail goes to the outbox, so its send log is not
+    // Resend volume. The other sources still run.
+    configured();
+    vi.spyOn(resendRollup, "resendConfigured").mockReturnValue(false);
+    await getDb()
+      .insert(schema.emailSends)
+      .values({
+        id: "snd_outbox",
+        kind: "auth.magic_link",
+        sentAt: Temporal.Instant.from("2026-10-08T16:00:00Z"),
+        ok: true,
+      });
+    vi.spyOn(client, "fetchBillableUsage").mockResolvedValue(billableUsage);
+    vi.spyOn(client, "fetchAnalyticsUsage").mockResolvedValue(graphqlUsage);
+
+    const result = await runCostSnapshot(NOW);
+
+    expect(result.sourcesUnconfigured).toEqual(["resend"]);
+    // Not a failure: a skipped source must not hold the backfill floor
+    // open forever, which is what `sourcesFailed` would do.
+    expect(result.sourcesFailed).toEqual([]);
+    const stored = await getDb().select().from(schema.costSnapshots);
+    const sources = new Set(stored.map((r) => r.source));
+    expect(sources).toEqual(
+      new Set(["cloudflare_billing", "cloudflare_analytics"]),
+    );
   });
 
   it("starts in backfill mode on an empty table", async () => {
