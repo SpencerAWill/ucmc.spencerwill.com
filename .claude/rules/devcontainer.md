@@ -7,7 +7,9 @@ paths:
 
 # Devcontainer & editors
 
-Debian-based devcontainer: Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit sidecar.
+Debian-based devcontainer: Node 24, Pulumi, gh, Claude Code, Playwright, gitleaks, Mailpit sidecar.
+
+**gitleaks is pinned in the `Dockerfile` by version and per-architecture SHA-256**, because no devcontainer feature verifies what it downloads. Dependabot can't see that pin, and CI's `secrets` job pins the same version: bump both together, with checksums from the new release's `gitleaks_<version>_checksums.txt`.
 
 - `initialize.sh` runs on the **host** from `initializeCommand` (pre-creates the `~/.config/gh` bind source so Docker can't invent it root-owned).
 - Every in-container hook routes through **`lifecycle.sh <stage>`** (`on-create` / `update-content` / `post-create` / `post-start`), which claims volume ownership and calls `configure-git.sh` (`safe.directory`, `gc.auto 0`, git identity + credential helper derived from `gh`).

@@ -62,6 +62,30 @@ RUN apt-get update \
        xvfb \
     && rm -rf /var/lib/apt/lists/*
 
+# gitleaks, for the pre-commit secret scan (`.husky/pre-commit`, #316).
+# No devcontainer feature verifies what it downloads, so the binary is
+# fetched from the pinned release and checked against the SHA-256 in that
+# release's `gitleaks_<version>_checksums.txt`. Dependabot cannot see this
+# pin: bump it by hand, together with GITLEAKS_VERSION / GITLEAKS_SHA256 in
+# ci.yml's `secrets` job, and take both checksums from the new release.
+# The architecture comes from dpkg rather than BuildKit's TARGETARCH, which
+# a legacy (non-BuildKit) build leaves empty (arm64 on Apple silicon,
+# amd64 elsewhere).
+ARG GITLEAKS_VERSION=8.30.1
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "${arch}" in \
+      amd64) asset=linux_x64; sha=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;; \
+      arm64) asset=linux_arm64; sha=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080 ;; \
+      *) echo "no pinned gitleaks checksum for ${arch}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/gitleaks.tar.gz \
+      "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_${asset}.tar.gz"; \
+    echo "${sha}  /tmp/gitleaks.tar.gz" | sha256sum --check --strict; \
+    tar xzf /tmp/gitleaks.tar.gz --no-same-owner -C /usr/local/bin gitleaks; \
+    rm /tmp/gitleaks.tar.gz; \
+    gitleaks version
+
 # Install Pulumi CLI and Claude Code CLI for vscode user
 USER vscode
 RUN curl -fsSL https://get.pulumi.com | sh
