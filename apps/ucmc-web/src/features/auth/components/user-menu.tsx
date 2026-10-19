@@ -20,7 +20,10 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { useAuth } from "#/features/auth/api/use-auth";
-import { signInReturnPath } from "#/features/auth/lib/post-sign-in";
+import {
+  returnPathSearch,
+  signInReturnPath,
+} from "#/features/auth/lib/post-sign-in";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export function UserMenu() {
@@ -50,7 +53,7 @@ export function UserMenu() {
     return (
       <Link
         to="/sign-in"
-        search={returnPath === undefined ? {} : { redirect: returnPath }}
+        search={returnPathSearch(returnPath)}
         aria-label="Sign in"
         className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   callbackHref,
   postSignInHref,
+  returnPathSearch,
   signInReturnPath,
 } from "#/features/auth/lib/post-sign-in";
 
@@ -114,7 +115,19 @@ describe("signInReturnPath", () => {
     "/auth/callback",
     "/register/pending",
     "/verify-email",
+    "/deactivated",
   ])("has nothing to return to from %s", (pathname) => {
     expect(signInReturnPath(pathname, "")).toBeUndefined();
+  });
+});
+
+describe("returnPathSearch", () => {
+  it("leaves the param off when there is no return path", () => {
+    expect(returnPathSearch(null)).toEqual({});
+    expect(returnPathSearch(undefined)).toEqual({});
+  });
+
+  it("carries one when there is", () => {
+    expect(returnPathSearch("/members")).toEqual({ redirect: "/members" });
   });
 });

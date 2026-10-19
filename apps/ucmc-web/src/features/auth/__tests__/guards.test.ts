@@ -202,6 +202,27 @@ describe("every account-status guard carries the return path", () => {
   });
 });
 
+describe("requireAuth on a sign-in-flow page", () => {
+  // /deactivated and /register/pending call requireAuth themselves; a
+  // return path to them would land the next sign-in on a stale status
+  // page, or nest ?redirect= inside itself.
+  it.each(["/deactivated", "/register/pending?redirect=%2Fmembers"])(
+    "%s carries no return path",
+    async (path) => {
+      const thrown = thrownBy(
+        await capture(() =>
+          requireAuth(argsFor(clientWithPrincipal(null), path)),
+        ),
+      );
+      expect(isRedirect(thrown)).toBe(true);
+      expect(
+        (thrown as { options: { search?: { redirect?: string } } }).options
+          .search,
+      ).toEqual({});
+    },
+  );
+});
+
 describe("requireApproved carries the return path into the funnel", () => {
   it.each([
     ["/register/profile", makePrincipal({ hasProfile: false })],

@@ -17,6 +17,11 @@ import { effectivePermissions } from "#/server/auth/emulation";
 import type { Principal } from "#/server/auth/principal.server";
 import { myWaiverStatusQueryOptions } from "#/features/waivers/api/queries";
 import type { WaiverStatus } from "#/features/waivers/api/queries";
+import {
+  postSignInHref,
+  returnPathSearch,
+  signInReturnPath,
+} from "#/features/auth/lib/post-sign-in";
 import { safeReturnPath } from "#/lib/safe-return-path";
 
 /**
@@ -37,11 +42,13 @@ export interface GuardArgs {
  * Where to send the visitor once they've signed in: the page they asked
  * for, path plus search. Not the hash — `beforeLoad` never sees it during
  * SSR, so keeping it would make a hard load and a client navigation
- * disagree. `null` when the path fails `safeReturnPath`, which a real
- * router location shouldn't, but the check costs nothing here.
+ * disagree. `null` for a page inside the sign-in flow itself
+ * (`/register/pending`, `/deactivated`, ...) — returning there would only
+ * restart the flow or show a stale status — and for a path that fails
+ * `safeReturnPath`. Same rule as the user menu's "Sign in" link.
  */
 function returnPathOf(location: GuardArgs["location"]): string | null {
-  return safeReturnPath(`${location.pathname}${location.searchStr}`);
+  return signInReturnPath(location.pathname, location.searchStr) ?? null;
 }
 
 interface CachedSession {
@@ -105,10 +112,9 @@ export async function requireAuth({
 }: GuardArgs): Promise<Principal> {
   const principal = await getPrincipal(context.queryClient);
   if (!principal) {
-    const returnPath = returnPathOf(location);
     throw redirect({
       to: "/sign-in",
-      search: returnPath === null ? undefined : { redirect: returnPath },
+      search: returnPathSearch(returnPathOf(location)),
     });
   }
   return principal;
@@ -123,8 +129,7 @@ export async function requireApproved(args: GuardArgs): Promise<Principal> {
   const principal = await requireAuth(args);
   // The funnel pages carry the return path on, so a registrant who
   // started from a gated page can still be offered it from /pending.
-  const returnPath = returnPathOf(args.location);
-  const search = returnPath === null ? {} : { redirect: returnPath };
+  const search = returnPathSearch(returnPathOf(args.location));
   if (!principal.hasProfile) {
     throw redirect({ to: "/register/profile", search });
   }
@@ -328,7 +333,8 @@ export async function requireViewPermission(
  *
  * Anyone else gets bounced:
  *   - no proof and no session  → /sign-in (start over)
- *   - signed-in user *with* a profile → /my/profile (already registered)
+ *   - signed-in user *with* a profile → their `?redirect`, via
+ *     /register/pending if unapproved, else /my/profile (already registered)
  *
  * The shared shape exposes `email` regardless of source, so the form
  * can render its read-only field and the server's submit action (which
@@ -385,14 +391,17 @@ export async function requireRegistrationContext(
   const principal = await getPrincipal(queryClient);
   if (!principal) {
     // Starting over keeps the page they were after.
-    const returnPath = safeReturnPath(returnTo);
     throw redirect({
       to: "/sign-in",
-      search: returnPath === null ? undefined : { redirect: returnPath },
+      search: returnPathSearch(safeReturnPath(returnTo)),
     });
   }
   if (principal.hasProfile) {
-    throw redirect({ to: "/my/profile" });
+    // Already registered (a stale tab, the back button): on to the page
+    // they were after, via /register/pending if still awaiting approval.
+    throw redirect({
+      href: postSignInHref(principal, returnTo, "/my/profile"),
+    });
   }
   return { source: "session", email: principal.primaryEmail };
 }

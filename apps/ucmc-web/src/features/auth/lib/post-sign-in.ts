@@ -50,13 +50,28 @@ export function callbackHref(
   );
 }
 
+/**
+ * The search object for a `?redirect=` hop — `/sign-in` and the two
+ * `/register` pages all take this shape. Empty when there is no return
+ * path, so the param is left off rather than set to nothing.
+ */
+export function returnPathSearch(returnPath: string | null | undefined): {
+  redirect?: string;
+} {
+  return returnPath === null || returnPath === undefined
+    ? {}
+    : { redirect: returnPath };
+}
+
 /** Pages a return path should never point back at: the sign-in flow
- *  itself, where returning would only restart it. */
+ *  itself, where returning would only restart it, and `/deactivated`,
+ *  whose message would be wrong for whoever signs in next. */
 const SIGN_IN_FLOW_PREFIXES = [
   "/sign-in",
   "/auth/",
   "/register/",
   "/verify-email",
+  "/deactivated",
 ];
 
 /**
