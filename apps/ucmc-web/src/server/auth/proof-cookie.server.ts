@@ -10,7 +10,8 @@
  *
  * This is explicitly NOT a session: it cannot load a `Principal`, grants
  * no RBAC, and expires in 15 minutes. Rotating SESSION_SECRET invalidates
- * all outstanding proofs immediately.
+ * all outstanding proofs immediately. Signing lives in `signing.server.ts`;
+ * this cookie signs the bare payload, without a purpose prefix — see there.
  */
 import {
   deleteCookie,
@@ -18,6 +19,12 @@ import {
   setCookie,
 } from "@tanstack/react-start/server";
 
+import {
+  base64UrlDecode,
+  base64UrlEncode,
+  hmacSign,
+  timingSafeEqual,
+} from "#/server/auth/signing.server";
 import { env } from "#/server/cloudflare-env";
 import type { schema } from "#/server/db";
 
@@ -33,69 +40,9 @@ const isSecure = () => env.APP_BASE_URL.startsWith("https://");
 
 const proofCookieName = () => (isSecure() ? "__Host-ucmc_proof" : "ucmc_proof");
 
-function requireSecret(): string {
-  const secret = env.SESSION_SECRET;
-  if (!secret || secret.length < 32) {
-    throw new Error(
-      "SESSION_SECRET must be set (>=32 chars) to issue or read proof cookies",
-    );
-  }
-  return secret;
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) {
-    bin += String.fromCharCode(b);
-  }
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function base64UrlEncode(s: string): string {
-  return bytesToBase64Url(new TextEncoder().encode(s));
-}
-
-function base64UrlDecode(s: string): string {
-  const padded = s.replace(/-/g, "+").replace(/_/g, "/");
-  const pad =
-    padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
-  return new TextDecoder().decode(
-    Uint8Array.from(atob(padded + pad), (c) => c.charCodeAt(0)),
-  );
-}
-
-async function hmac(payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(requireSecret()),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"],
-  );
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(payload),
-  );
-  return bytesToBase64Url(new Uint8Array(sig));
-}
-
-// Constant-time comparison of two equal-length base64url strings. (Short-
-// circuiting `===` leaks timing info on signature length mismatches.)
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
 export async function writeProofCookie(proof: EmailProof): Promise<void> {
   const payload = base64UrlEncode(JSON.stringify(proof));
-  const signature = await hmac(payload);
+  const signature = await hmacSign(payload);
   setCookie(proofCookieName(), `${payload}.${signature}`, {
     httpOnly: true,
     secure: isSecure(),
@@ -114,7 +61,7 @@ export async function readProofCookie(): Promise<EmailProof | null> {
   if (!payload || !signature) {
     return null;
   }
-  const expected = await hmac(payload);
+  const expected = await hmacSign(payload);
   if (!timingSafeEqual(signature, expected)) {
     return null;
   }

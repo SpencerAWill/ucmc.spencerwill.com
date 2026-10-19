@@ -81,10 +81,10 @@ export async function checkAuthRateLimitByIp(): Promise<boolean> {
  * load, before the visitor touches anything. On `AUTH_RATE_LIMITER` that
  * spent the budget the magic-link request and consume check, so on a
  * shared campus IP a visitor could be told to "check your email" for a
- * link that was never sent (#306). Begin only stores a five-minute
- * challenge row, so a looser separate budget still stops a flood from
- * amplifying into D1 writes. Finish verifies a credential and stays on
- * `checkAuthRateLimitByIp`.
+ * link that was never sent (#306). Begin writes nothing — the ceremony
+ * travels in a signed cookie — so a looser separate budget only has to
+ * stop a flood of signing work. Finish verifies a credential and writes
+ * the single-use marker, so it stays on `checkAuthRateLimitByIp`.
  *
  * Fails open on binding error, like every other limiter here.
  */

@@ -105,8 +105,10 @@ vi.mock("#/features/auth/server/webauthn.server", async () => {
   };
 });
 
-const { putChallenge } =
+const { newCeremony } =
   await import("#/features/auth/server/webauthn-challenge.server");
+const { readCeremonyCookie, writeCeremonyCookie } =
+  await import("#/features/auth/server/webauthn-ceremony.server");
 const {
   webauthnRegisterBeginAction,
   webauthnRegisterFinishAction,
@@ -152,22 +154,22 @@ async function auditRows(action: schema.AuditAction) {
   });
 }
 
-/**
- * The stored ceremony, read WITHOUT consuming it — the actions are what
- * consume, and these tests assert on what they left behind.
- */
-async function storedCeremony(ceremonyId: string) {
-  const row = await getDb().query.webauthnCeremonies.findFirst({
-    where: eq(schema.webauthnCeremonies.id, ceremonyId),
-  });
-  if (row === undefined) {
-    return null;
-  }
-  return {
-    challenge: row.challenge,
-    type: row.type,
-    ...(row.userId === null ? {} : { userId: row.userId }),
-  };
+/** Begin a ceremony the way the begin actions do: as a signed cookie. */
+async function seedCeremony(
+  fields: Parameters<typeof newCeremony>[0],
+): Promise<ReturnType<typeof newCeremony>> {
+  const ceremony = newCeremony(fields);
+  await writeCeremonyCookie(ceremony);
+  return ceremony;
+}
+
+/** Whether a finish used this ceremony up. */
+async function isConsumed(ceremonyId: string): Promise<boolean> {
+  const count = await getDb().$count(
+    schema.webauthnConsumedCeremonies,
+    eq(schema.webauthnConsumedCeremonies.id, ceremonyId),
+  );
+  return count > 0;
 }
 
 async function seedUser(args: {
@@ -224,7 +226,7 @@ beforeEach(async () => {
   await db.delete(schema.passkeyCredentials);
   await db.delete(schema.profiles);
   await db.delete(schema.magicLinks);
-  await db.delete(schema.webauthnCeremonies);
+  await db.delete(schema.webauthnConsumedCeremonies);
   // Passkey add / remove / rename all write audit rows, and storage
   // isolation in the workers pool is per FILE, not per test — without
   // this the audit assertions below would see the previous test's rows.
@@ -240,7 +242,7 @@ describe("webauthnRegisterBeginAction", () => {
     expect(result).toEqual({ ok: false, reason: "unauthorized" });
   });
 
-  it("issues options and stores the challenge for a signed-in user", async () => {
+  it("issues options and signs the ceremony into the cookie for a signed-in user", async () => {
     currentPrincipal = makePrincipal();
     const result = await webauthnRegisterBeginAction();
     expect(result.ok).toBe(true);
@@ -248,18 +250,13 @@ describe("webauthnRegisterBeginAction", () => {
       return;
     }
 
-    const ceremonyCookieKey = [...cookieJar.keys()].find((k) =>
-      k.endsWith("ucmc_webauthn"),
-    );
-    expect(ceremonyCookieKey).toBeDefined();
-    const ceremonyId = cookieJar.get(ceremonyCookieKey!)!;
-
-    const stored = await storedCeremony(ceremonyId);
-    expect(stored).toEqual({
+    expect(await readCeremonyCookie()).toMatchObject({
       challenge: "reg-challenge",
       type: "register",
       userId: currentPrincipal.userId,
     });
+    // Begin stores nothing: autofill runs it on every /sign-in load.
+    expect(await getDb().$count(schema.webauthnConsumedCeremonies)).toBe(0);
   });
 
   it("is rate-limited by IP on the ceremony budget", async () => {
@@ -288,19 +285,18 @@ describe("webauthnRegisterFinishAction", () => {
   it("rejects when the ceremony userId doesn't match the session", async () => {
     currentPrincipal = makePrincipal();
     // Seed a ceremony that belongs to a DIFFERENT user.
-    const ceremonyId = "ceremony-1";
-    await putChallenge(ceremonyId, {
+    const ceremony = await seedCeremony({
       challenge: "reg-challenge",
       type: "register",
       userId: "someone-else",
     });
-    cookieJar.set("ucmc_webauthn", ceremonyId);
 
     const result = await webauthnRegisterFinishAction({ response });
     expect(result).toEqual({ ok: false, reason: "verification_failed" });
 
-    // Cookie cleared, challenge deleted, nothing inserted.
-    expect(await storedCeremony(ceremonyId)).toBeNull();
+    // Cookie cleared, nothing inserted.
+    expect(cookieJar.has("ucmc_webauthn")).toBe(false);
+    expect(await isConsumed(ceremony.id)).toBe(false);
     const saved = await listCredentialsForUser(currentPrincipal.userId);
     expect(saved).toEqual([]);
   });
@@ -313,13 +309,11 @@ describe("webauthnRegisterFinishAction", () => {
       status: "approved",
       withProfile: true,
     });
-    const ceremonyId = "ceremony-2";
-    await putChallenge(ceremonyId, {
+    const ceremony = await seedCeremony({
       challenge: "reg-challenge",
       type: "register",
       userId: currentPrincipal.userId,
     });
-    cookieJar.set("ucmc_webauthn", ceremonyId);
 
     const result = await webauthnRegisterFinishAction({
       response,
@@ -341,7 +335,7 @@ describe("webauthnRegisterFinishAction", () => {
     expect(events[0]?.targetId).toBe(saved[0]?.id);
 
     // Ceremony is single-use.
-    expect(await storedCeremony(ceremonyId)).toBeNull();
+    expect(await isConsumed(ceremony.id)).toBe(true);
   });
 
   it("rejects when simplewebauthn verification fails", async () => {
@@ -349,13 +343,11 @@ describe("webauthnRegisterFinishAction", () => {
     verifyRegistrationResult = {
       verified: false,
     } as typeof verifyRegistrationResult;
-    const ceremonyId = "ceremony-3";
-    await putChallenge(ceremonyId, {
+    await seedCeremony({
       challenge: "reg-challenge",
       type: "register",
       userId: currentPrincipal.userId,
     });
-    cookieJar.set("ucmc_webauthn", ceremonyId);
 
     const result = await webauthnRegisterFinishAction({ response });
     expect(result).toEqual({ ok: false, reason: "verification_failed" });
@@ -373,15 +365,13 @@ describe("webauthnAuthenticateBeginAction", () => {
     }
     expect(result.options.challenge).toBe("auth-challenge");
 
-    const ceremonyCookieKey = [...cookieJar.keys()].find((k) =>
-      k.endsWith("ucmc_webauthn"),
-    );
-    expect(ceremonyCookieKey).toBeDefined();
-    const ceremonyId = cookieJar.get(ceremonyCookieKey!)!;
-    expect(await storedCeremony(ceremonyId)).toEqual({
+    const ceremony = await readCeremonyCookie();
+    expect(ceremony).toMatchObject({
       challenge: "auth-challenge",
       type: "authenticate",
     });
+    expect(ceremony).not.toHaveProperty("userId");
+    expect(await getDb().$count(schema.webauthnConsumedCeremonies)).toBe(0);
   });
 
   it("is rate-limited before storing a ceremony", async () => {
@@ -389,7 +379,6 @@ describe("webauthnAuthenticateBeginAction", () => {
     const result = await webauthnAuthenticateBeginAction();
     expect(result).toEqual({ ok: false, reason: "rate_limited" });
     expect(cookieJar.size).toBe(0);
-    expect(await getDb().$count(schema.webauthnCeremonies)).toBe(0);
   });
 
   // #306: autofill runs this on every /sign-in load. It must not spend
@@ -429,12 +418,10 @@ describe("webauthnAuthenticateFinishAction", () => {
   });
 
   it("rejects an unknown credential id with a generic 'invalid'", async () => {
-    const ceremonyId = "ceremony-auth-1";
-    await putChallenge(ceremonyId, {
+    await seedCeremony({
       challenge: "auth-challenge",
       type: "authenticate",
     });
-    cookieJar.set("ucmc_webauthn", ceremonyId);
 
     const result = await webauthnAuthenticateFinishAction({ response });
     expect(result).toEqual({ ok: false, reason: "invalid" });
@@ -461,12 +448,10 @@ describe("webauthnAuthenticateFinishAction", () => {
       authenticationInfo: { newCounter: 3 },
     };
 
-    const ceremonyId = "ceremony-auth-2";
-    await putChallenge(ceremonyId, {
+    await seedCeremony({
       challenge: "auth-challenge",
       type: "authenticate",
     });
-    cookieJar.set("ucmc_webauthn", ceremonyId);
 
     const result = await webauthnAuthenticateFinishAction({ response });
     expect(result).toEqual({ ok: false, reason: "invalid" });
@@ -488,12 +473,10 @@ describe("webauthnAuthenticateFinishAction", () => {
       counter: 0,
     });
 
-    const ceremonyId = "ceremony-auth-3";
-    await putChallenge(ceremonyId, {
+    const ceremony = await seedCeremony({
       challenge: "auth-challenge",
       type: "authenticate",
     });
-    cookieJar.set("ucmc_webauthn", ceremonyId);
 
     const result = await webauthnAuthenticateFinishAction({ response });
     expect(result).toEqual({
@@ -504,11 +487,49 @@ describe("webauthnAuthenticateFinishAction", () => {
     expect(openSessionSpy).toHaveBeenCalledWith(userId);
 
     // Ceremony cleared and consumed.
-    expect(await storedCeremony(ceremonyId)).toBeNull();
+    expect(await isConsumed(ceremony.id)).toBe(true);
     const ceremonyCookie = [...cookieJar.keys()].find((k) =>
       k.endsWith("ucmc_webauthn"),
     );
     expect(ceremonyCookie).toBeUndefined();
+  });
+
+  // The cookie is client-held, so a captured value can be sent again. The
+  // consumed marker is what refuses it. Counter 0 on purpose: synced
+  // passkeys (iCloud, Google) always report 0, which switches off the
+  // sign-counter regression check, so the marker is the only defence —
+  // with a counting authenticator this test would pass on the counter.
+  it("refuses a replayed ceremony cookie after a successful sign-in", async () => {
+    verifyAuthenticationResult = {
+      verified: true,
+      authenticationInfo: { newCounter: 0 },
+    };
+    const userId = "user_replay";
+    await seedUser({
+      id: userId,
+      email: "replay@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await insertCredential({
+      userId,
+      credentialId: "cred-id-1",
+      publicKey: new Uint8Array([1, 2, 3]),
+      counter: 0,
+    });
+    await seedCeremony({ challenge: "auth-challenge", type: "authenticate" });
+    const captured = cookieJar.get("ucmc_webauthn")!;
+
+    expect((await webauthnAuthenticateFinishAction({ response })).ok).toBe(
+      true,
+    );
+
+    cookieJar.set("ucmc_webauthn", captured);
+    expect(await webauthnAuthenticateFinishAction({ response })).toEqual({
+      ok: false,
+      reason: "invalid",
+    });
+    expect(openSessionSpy).toHaveBeenCalledTimes(1);
   });
 });
 

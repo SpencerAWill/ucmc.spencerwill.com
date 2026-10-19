@@ -1,0 +1,45 @@
+-- Single-use WebAuthn ceremonies, enforced in D1 (#314).
+--
+-- Hand-written, like every migration since 0060: `db:generate` cannot
+-- run against the stale meta snapshots (see CLAUDE.md).
+--
+-- ## Why
+--
+-- A ceremony's challenge must be usable once. It lived in KV, and finish
+-- read it with `get` then removed it with a separate `delete`. Two
+-- concurrent finishes could both read it before either deleted it, and KV
+-- is eventually consistent across locations, so a delete in one place
+-- does not stop a cached read in another. The code claimed the challenge
+-- "can never be replayed"; KV could not hold it to that.
+--
+-- ## Why only consumed ceremonies are stored
+--
+-- The ceremony itself now travels in the HMAC-signed ceremony cookie, so
+-- begin writes nothing. Passkey autofill begins a ceremony on every
+-- `/sign-in` load: a row per begin would charge page views against D1's
+-- 100k rows-written/day free quota (two rows each, counting the index,
+-- and two more to delete it), and one IP reloading the page could spend
+-- the quota for the whole site.
+--
+-- Finish inserts the ceremony's id here with `ON CONFLICT DO NOTHING
+-- RETURNING`. One statement: exactly one finish gets the row back, any
+-- later or concurrent one gets nothing. Magic links already hold the same
+-- line (`UPDATE … WHERE consumed_at IS NULL RETURNING`). Finish is on the
+-- strict AUTH_RATE_LIMITER, so writes here are bounded by it.
+--
+-- ## Lifetime
+--
+-- A marker only has to outlive the cookie it guards: past `expires_at`
+-- the cookie's own signed expiry refuses it. The daily retention tick
+-- deletes markers after that. No index on `expires_at`: the table holds at
+-- most a day of finished ceremonies, and an index would double the cost
+-- of every insert for a sweep that runs once a day.
+--
+-- Ceremonies begun against KV before this deploy fail once at finish
+-- with the normal "try again" result; nothing migrates them.
+CREATE TABLE IF NOT EXISTS webauthn_consumed_ceremonies (
+  -- `NOT NULL` is not redundant: SQLite permits NULL in a non-INTEGER
+  -- PRIMARY KEY. `schema-drift.test.ts` enforces it.
+  id         text    PRIMARY KEY NOT NULL,
+  expires_at integer NOT NULL
+);

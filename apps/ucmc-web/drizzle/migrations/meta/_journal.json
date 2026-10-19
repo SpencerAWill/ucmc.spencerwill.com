@@ -594,7 +594,7 @@
       "idx": 84,
       "version": "6",
       "when": 1779477596961,
-      "tag": "0084_webauthn_ceremonies",
+      "tag": "0084_webauthn_consumed_ceremonies",
       "breakpoints": true
     }
   ]

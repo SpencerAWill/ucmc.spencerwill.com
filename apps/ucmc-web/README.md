@@ -8,7 +8,7 @@ This file is the human-developer entry point. For the model's source of truth (e
 
 - **TanStack Start** (file-router mode) + **React 19** + **Vite 8**
 - **Cloudflare Workers** runtime, Wrangler-deployed (`wrangler.jsonc`)
-- **D1** (SQLite) for the database, **R2** for avatars + landing images, **KV** for short-lived auth state
+- **D1** (SQLite) for the database, **R2** for avatars + landing images, **KV** for short-lived caches and gear carts
 - **Drizzle ORM** + **drizzle-kit** for schema + migrations
 - **shadcn/ui** + **Tailwind CSS v4**
 - Auth: **magic link** (Resend → Cloudflare-hosted email) and **WebAuthn passkeys**, both single-use tokens consumed atomically in D1

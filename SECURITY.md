@@ -75,10 +75,10 @@ Most security-relevant invariants live in [`CLAUDE.md`](./CLAUDE.md). The ones t
 - **Email normalization** is centralized in `apps/ucmc-web/src/server/auth/email-normalize.ts`. Every read or write of an email address must go through it.
 - **`/verify-email`** must assert `session.userId === magicLink.target_user_id` before grafting a new address onto an account.
 - **Magic-link requests** pad to ≥500ms + jitter to flatten the registered/not-registered timing oracle. Do not short-circuit this.
-- **WebAuthn ceremonies** are single-use: the KV entry under `webauthn:ceremony:<id>` must be deleted (and the `__Host-ucmc_webauthn` cookie cleared) on every branch — success, failure, and timeout.
+- **WebAuthn ceremonies** live in the HMAC-signed `__Host-ucmc_webauthn` cookie, so begin writes nothing. They are single-use: finish must consume the ceremony id with one `INSERT … ON CONFLICT DO NOTHING RETURNING` into `webauthn_consumed_ceremonies` (never a read followed by a write) before verifying, and clear the cookie on every branch — success, failure, and timeout. Synced passkeys report a sign counter of 0, so for them this marker is the only replay defence.
 - **Server-fn shells** must not import from `*.server.ts` at runtime; use dynamic `import()` inside the handler. Module-scope server imports leak into the client bundle.
 - **Markdown rendering** uses `react-markdown` without `rehype-raw`. Do not re-enable raw HTML pass-through.
 - **R2 private bucket** is the default for new media. Public bucket entries must use content-hashed or opaque keys — never a guessable identifier — and must set `httpMetadata.cacheControl` at upload time (the custom domain serves stored metadata, not Worker headers).
-- **Rate limit wrappers** in `apps/ucmc-web/src/server/rate-limit.server.ts` fail _open_ — keep them that way, but pair every public endpoint with the appropriate budget (`HEALTH_RATE_LIMITER` or `AUTH_RATE_LIMITER`, the latter keyed independently on `ip:` and `email:`).
+- **Rate limit wrappers** in `apps/ucmc-web/src/server/rate-limit.server.ts` fail _open_ — keep them that way, but pair every public endpoint with the appropriate budget (`HEALTH_RATE_LIMITER`, `AUTH_RATE_LIMITER` — keyed independently on `ip:` and `email:` — `CEREMONY_RATE_LIMITER` for passkey begin, `UPLOAD_RATE_LIMITER`, or `CALENDAR_RATE_LIMITER`).
 
 Dependabot keeps dependencies patched, and `web-ci.yml` runs `pnpm audit` on every PR. If you bump a dep specifically to fix a CVE, mention the advisory ID in the commit body.

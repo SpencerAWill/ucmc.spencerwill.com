@@ -27,7 +27,7 @@ paths:
   | `UPLOAD_RATE_LIMITER`   | 5/60s per user         | avatar uploads                                                                                        |
   | `CALENDAR_RATE_LIMITER` | 60/60s per token or IP | `.ics` feeds                                                                                          |
 
-  **Passkey begin is off `AUTH_RATE_LIMITER` on purpose.** Autofill starts an authenticate ceremony on every `/sign-in` load, before the visitor does anything, and a campus NAT puts many visitors on one IP — on the shared budget, loading the page could exhaust the magic-link request, whose deliberate "check your email" reply then hides that no email was sent. Begin only stores a five-minute challenge row; finish, which verifies a credential, stays on the strict budget.
+  **Passkey begin is off `AUTH_RATE_LIMITER` on purpose.** Autofill starts an authenticate ceremony on every `/sign-in` load, before the visitor does anything, and a campus NAT puts many visitors on one IP — on the shared budget, loading the page could exhaust the magic-link request, whose deliberate "check your email" reply then hides that no email was sent. Begin writes nothing (the ceremony travels in a signed cookie); finish, which verifies a credential and writes the single-use marker, stays on the strict budget.
 
 ## SQLite pragmas do not work in a migration, so a parent table cannot be rebuilt
 

@@ -21,10 +21,10 @@
  * `/dev/outbox` already prunes on read; this sweep is what makes a dev
  * Worker nobody visits forget as well. On prod it deletes nothing.
  *
- * `webauthn_ceremonies` is housekeeping too: a ceremony is a challenge
- * that lives five minutes (#314). Finish refuses an expired one, so these
- * rows are already inert; the sweep only stops them accumulating, since
- * passkey autofill starts a ceremony on every `/sign-in` load.
+ * `webauthn_consumed_ceremonies` is housekeeping too: each row marks a
+ * passkey ceremony as used (#314), and only has to outlive the five-minute
+ * cookie it guards. Past `expires_at` the cookie's own signed expiry
+ * refuses the ceremony, so the marker is dead weight.
  *
  * NULL-skip discipline: rows whose timestamp column is NULL are
  * deliberately ignored. `rejected_at` / `deactivated_at` were added in
@@ -123,9 +123,9 @@ export async function sweepWebauthnCeremonies(
   now: Temporal.Instant,
 ): Promise<number> {
   const deleted = await getDb()
-    .delete(schema.webauthnCeremonies)
-    .where(lt(schema.webauthnCeremonies.expiresAt, now))
-    .returning({ id: schema.webauthnCeremonies.id });
+    .delete(schema.webauthnConsumedCeremonies)
+    .where(lt(schema.webauthnConsumedCeremonies.expiresAt, now))
+    .returning({ id: schema.webauthnConsumedCeremonies.id });
   return deleted.length;
 }
 

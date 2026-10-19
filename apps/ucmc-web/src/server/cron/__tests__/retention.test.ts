@@ -72,7 +72,7 @@ afterEach(async () => {
   // between tests that both delete from `users`.
   const db = getDb();
   await db.delete(schema.emailSends);
-  await db.delete(schema.webauthnCeremonies);
+  await db.delete(schema.webauthnConsumedCeremonies);
   await db.delete(schema.waiverAttestations);
   await db.delete(schema.profiles);
   await db.delete(schema.heroSlides);
@@ -445,28 +445,22 @@ describe("sweepEmailSendLog", () => {
 });
 
 describe("sweepWebauthnCeremonies", () => {
-  async function seedCeremony(expiresAt: Temporal.Instant) {
+  async function seedConsumed(expiresAt: Temporal.Instant) {
     await getDb()
-      .insert(schema.webauthnCeremonies)
-      .values({
-        id: uid("cer"),
-        challenge: "abc",
-        type: "authenticate",
-        createdAt: expiresAt.subtract({ seconds: 300 }),
-        expiresAt,
-      });
+      .insert(schema.webauthnConsumedCeremonies)
+      .values({ id: uid("cer"), expiresAt });
   }
 
-  it("drops expired ceremonies and keeps live ones", async () => {
-    await seedCeremony(NOW.subtract({ milliseconds: 1 }));
-    await seedCeremony(NOW.add({ seconds: 60 }));
+  it("drops markers for expired ceremonies and keeps live ones", async () => {
+    await seedConsumed(NOW.subtract({ milliseconds: 1 }));
+    await seedConsumed(NOW.add({ seconds: 60 }));
 
     expect(await sweepWebauthnCeremonies(NOW)).toBe(1);
-    expect(await getDb().$count(schema.webauthnCeremonies)).toBe(1);
+    expect(await getDb().$count(schema.webauthnConsumedCeremonies)).toBe(1);
   });
 
   it("is reported by the orchestrator under its own counter", async () => {
-    await seedCeremony(NOW.subtract({ milliseconds: DAY_MS }));
+    await seedConsumed(NOW.subtract({ milliseconds: DAY_MS }));
 
     const counts = await runRetentionSweeps(NOW);
 

@@ -195,9 +195,10 @@
       // Passkey autofill starts one on every `/sign-in` load, before the
       // visitor does anything, so on AUTH_RATE_LIMITER it spent the
       // budget the magic-link request and consume depend on (#306) — and
-      // a whole campus behind one NAT shares that budget. Begin only
-      // stores a five-minute challenge row, so it gets a looser budget of
-      // its own; finish, which checks a credential, stays on AUTH.
+      // a whole campus behind one NAT shares that budget. Begin writes
+      // nothing (the ceremony travels in a signed cookie), so it gets a
+      // looser budget of its own; finish, which checks a credential and
+      // writes the single-use marker, stays on AUTH.
       {
         "name": "CEREMONY_RATE_LIMITER",
         "type": "ratelimit",

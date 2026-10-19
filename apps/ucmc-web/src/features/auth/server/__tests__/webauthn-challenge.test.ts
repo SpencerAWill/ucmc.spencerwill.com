@@ -2,69 +2,63 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   CHALLENGE_TTL_SECONDS,
-  consumeChallenge,
-  putChallenge,
+  consumeCeremony,
+  newCeremony,
 } from "#/features/auth/server/webauthn-challenge.server";
 import { getDb, schema } from "#/server/db";
 
 const NOW = Temporal.Instant.from("2026-10-19T12:00:00Z");
 
 beforeEach(async () => {
-  await getDb().delete(schema.webauthnCeremonies);
+  await getDb().delete(schema.webauthnConsumedCeremonies);
 });
 
-describe("consumeChallenge", () => {
-  it("returns the stored challenge once, then nothing", async () => {
-    await putChallenge(
-      "c1",
-      { challenge: "abc", type: "register", userId: "user_1" },
-      NOW,
-    );
+describe("newCeremony", () => {
+  it("mints a fresh id and expires after the ceremony lifetime", () => {
+    const a = newCeremony({ challenge: "abc", type: "authenticate" }, NOW);
+    const b = newCeremony({ challenge: "abc", type: "authenticate" }, NOW);
 
-    expect(await consumeChallenge("c1", NOW)).toEqual({
-      challenge: "abc",
-      type: "register",
-      userId: "user_1",
-    });
-    expect(await consumeChallenge("c1", NOW)).toBeNull();
+    expect(a.id).not.toBe(b.id);
+    expect(a.expiresAt).toBe(
+      NOW.add({ seconds: CHALLENGE_TTL_SECONDS }).epochMilliseconds,
+    );
+  });
+});
+
+describe("consumeCeremony", () => {
+  it("succeeds once, then never again", async () => {
+    const ceremony = newCeremony({ challenge: "abc", type: "register" }, NOW);
+
+    expect(await consumeCeremony(ceremony)).toBe(true);
+    expect(await consumeCeremony(ceremony)).toBe(false);
   });
 
   // The bug #314 fixed: with a read and a separate delete, two finishes
-  // racing on one ceremony could both see the challenge. One DELETE …
-  // RETURNING hands the row to exactly one of them.
-  it("hands a challenge to exactly one of several concurrent consumers", async () => {
-    await putChallenge("c2", { challenge: "abc", type: "authenticate" }, NOW);
+  // racing on one ceremony could both get through. One INSERT … ON
+  // CONFLICT DO NOTHING RETURNING lets exactly one of them win.
+  it("lets exactly one of several concurrent consumers win", async () => {
+    const ceremony = newCeremony({ challenge: "abc", type: "authenticate" });
 
     const results = await Promise.all(
-      Array.from({ length: 5 }, () => consumeChallenge("c2", NOW)),
+      Array.from({ length: 5 }, () => consumeCeremony(ceremony)),
     );
 
-    expect(results.filter((r) => r !== null)).toEqual([
+    expect(results.filter(Boolean)).toHaveLength(1);
+  });
+
+  it("keeps each ceremony's marker until that ceremony expires", async () => {
+    const ceremony = newCeremony(
       { challenge: "abc", type: "authenticate" },
-    ]);
-  });
+      NOW,
+    );
 
-  it("refuses an expired ceremony and deletes it anyway", async () => {
-    await putChallenge("c3", { challenge: "abc", type: "authenticate" }, NOW);
-    const expiry = NOW.add({ seconds: CHALLENGE_TTL_SECONDS });
+    await consumeCeremony(ceremony);
 
-    expect(await consumeChallenge("c3", expiry)).toBeNull();
-    expect(await getDb().$count(schema.webauthnCeremonies)).toBe(0);
-  });
-
-  it("accepts a ceremony up to the instant before it expires", async () => {
-    await putChallenge("c4", { challenge: "abc", type: "authenticate" }, NOW);
-    const justBefore = NOW.add({ seconds: CHALLENGE_TTL_SECONDS }).subtract({
-      milliseconds: 1,
-    });
-
-    expect(await consumeChallenge("c4", justBefore)).toEqual({
-      challenge: "abc",
-      type: "authenticate",
-    });
-  });
-
-  it("returns null for a ceremony that never existed", async () => {
-    expect(await consumeChallenge("missing", NOW)).toBeNull();
+    const rows = await getDb().select().from(schema.webauthnConsumedCeremonies);
+    // Compared as epoch ms: the polyfill's Instant keeps its value in
+    // internal slots, so `toEqual` on two Instants compares nothing.
+    expect(
+      rows.map((r) => ({ id: r.id, expiresAt: r.expiresAt.epochMilliseconds })),
+    ).toEqual([{ id: ceremony.id, expiresAt: ceremony.expiresAt }]);
   });
 });

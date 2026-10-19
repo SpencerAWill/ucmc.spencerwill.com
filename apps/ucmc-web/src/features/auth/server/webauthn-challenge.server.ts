@@ -1,82 +1,67 @@
 /**
- * D1-backed challenge store for webauthn ceremonies. Each begin/finish
- * pair stores {challenge, type, userId?} under a random ceremony ID with
- * a 5-minute lifetime. finish consumes it by the ID in the ceremony
- * cookie with one `DELETE … RETURNING`, so exactly one caller ever gets a
- * given challenge back — concurrent finishes included (#314).
+ * WebAuthn ceremonies: what a ceremony is, and how one is used up.
  *
- * This was KV, read with `get` and removed with a separate `delete`. Two
- * finishes could both read the challenge before either deleted it, and
- * KV's eventual consistency let a cached read outlive the delete. See
- * `0084_webauthn_ceremonies.sql`.
+ * **Begin writes nothing.** The ceremony — challenge, type, user, expiry —
+ * travels in the HMAC-signed ceremony cookie (`webauthn-ceremony.server.ts`).
+ * Passkey autofill begins one on every `/sign-in` load, so a stored row per
+ * begin would cost D1 writes for page views, and an abusive IP could spend
+ * the daily write quota by reloading a page (#314 review).
  *
- * 300s (5 min) matches the ceremony cookie's maxAge. A row that outlives
- * it is rejected at consume and swept by the daily retention tick.
+ * **Finish consumes it in D1, in one statement.** `consumeCeremony` inserts
+ * the ceremony's id into `webauthn_consumed_ceremonies` with `ON CONFLICT
+ * DO NOTHING RETURNING`: the first finish gets a row back, any later or
+ * concurrent one gets nothing. This replaced a KV `get` then `delete`,
+ * which two concurrent finishes could both pass (#314). Magic links hold
+ * the same line with `UPDATE … WHERE consumed_at IS NULL RETURNING`.
+ *
+ * A marker only needs to outlive the cookie it guards, so it carries the
+ * ceremony's expiry and the daily retention tick sweeps it after that.
  */
-import { eq } from "drizzle-orm";
-
 import { getDb, schema } from "#/server/db";
 
+/**
+ * The one ceremony lifetime: the signed expiry and the cookie's maxAge
+ * (`webauthn-ceremony.server.ts`) both read it, so they can't drift.
+ */
 export const CHALLENGE_TTL_SECONDS = 300;
 
-export type WebAuthnCeremonyType = (typeof schema.webauthnCeremonyType)[number];
+export type WebAuthnCeremonyType = "register" | "authenticate";
 
-export interface StoredChallenge {
+export interface Ceremony {
+  id: string;
   challenge: string;
   type: WebAuthnCeremonyType;
   // Only present for register ceremonies — verified against the caller's
   // session in finish to prevent a user from registering a passkey against
   // someone else's account mid-flight.
   userId?: string;
+  /** Epoch ms. JSON-safe, since the ceremony lives in a cookie. */
+  expiresAt: number;
 }
 
-export function newCeremonyId(): string {
-  return crypto.randomUUID();
-}
-
-export async function putChallenge(
-  ceremonyId: string,
-  value: StoredChallenge,
+export function newCeremony(
+  fields: Pick<Ceremony, "challenge" | "type" | "userId">,
   now: Temporal.Instant = Temporal.Now.instant(),
-): Promise<void> {
-  await getDb()
-    .insert(schema.webauthnCeremonies)
-    .values({
-      id: ceremonyId,
-      challenge: value.challenge,
-      type: value.type,
-      userId: value.userId ?? null,
-      createdAt: now,
-      expiresAt: now.add({ seconds: CHALLENGE_TTL_SECONDS }),
-    });
+): Ceremony {
+  return {
+    id: crypto.randomUUID(),
+    ...fields,
+    expiresAt: now.add({ seconds: CHALLENGE_TTL_SECONDS }).epochMilliseconds,
+  };
 }
 
 /**
- * Take the ceremony's challenge, removing it in the same statement.
- * Returns null when there is no such ceremony, it was already consumed,
- * or it has expired. An expired row is deleted all the same.
+ * Use the ceremony up. True for exactly one caller per ceremony id, false
+ * for every other — whether it came later or at the same moment.
  */
-export async function consumeChallenge(
-  ceremonyId: string,
-  now: Temporal.Instant = Temporal.Now.instant(),
-): Promise<StoredChallenge | null> {
+export async function consumeCeremony(ceremony: Ceremony): Promise<boolean> {
   const rows = await getDb()
-    .delete(schema.webauthnCeremonies)
-    .where(eq(schema.webauthnCeremonies.id, ceremonyId))
-    .returning();
-  // A length check, not `rows[0] === undefined`: without
-  // `noUncheckedIndexedAccess` the index types as always defined and lint
-  // calls the guard dead code (#274). It is the "no such ceremony" path.
-  if (rows.length === 0) {
-    return null;
-  }
-  const row = rows[0];
-  if (Temporal.Instant.compare(row.expiresAt, now) <= 0) {
-    return null;
-  }
-  return {
-    challenge: row.challenge,
-    type: row.type,
-    ...(row.userId === null ? {} : { userId: row.userId }),
-  };
+    .insert(schema.webauthnConsumedCeremonies)
+    .values({
+      id: ceremony.id,
+      expiresAt: Temporal.Instant.fromEpochMilliseconds(ceremony.expiresAt),
+    })
+    .onConflictDoNothing()
+    .returning({ id: schema.webauthnConsumedCeremonies.id });
+  return rows.length > 0;
 }
