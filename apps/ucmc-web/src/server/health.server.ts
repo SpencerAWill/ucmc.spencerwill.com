@@ -10,7 +10,7 @@
 import { sql } from "drizzle-orm";
 
 import { env } from "#/server/cloudflare-env";
-import { getDb } from "#/server/db";
+import { getDb, schema } from "#/server/db";
 import { emailTier } from "#/server/email/email-tier";
 import { getKv } from "#/server/kv";
 import { getPrivateBucket } from "#/server/r2";
@@ -82,10 +82,25 @@ async function checkEmail(): Promise<HealthCheck> {
   const tier = emailTier(env);
 
   if (tier.tier === "outbox") {
-    // Nothing to probe beyond D1, which `d1:read` already covers. The
-    // check exists so /health names the tier: a dev Worker reporting
-    // `email:outbox` is right, and anything else reporting it is not.
-    return { name: "email:outbox", status: "pass", time };
+    // Probes the table itself, not D1 in general: `d1:read` passes on a
+    // database where migration 0082 never ran, and then every sign-in
+    // 500s on `no such table` while /health — and the post-deploy smoke
+    // test that reads it — stays green. A read, not a write, so a
+    // /health hit never adds a row.
+    try {
+      await getDb()
+        .select({ id: schema.emailOutbox.id })
+        .from(schema.emailOutbox)
+        .limit(1);
+      return { name: "email:outbox", status: "pass", time };
+    } catch {
+      return {
+        name: "email:outbox",
+        status: "fail",
+        time,
+        output: "outbox table unreachable",
+      };
+    }
   }
 
   if (tier.tier === "resend") {

@@ -22,6 +22,7 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
+import { OUTBOX_LIST_LIMIT } from "#/server/email/outbox.server";
 import type { OutboxEmail } from "#/server/email/outbox.server";
 import { log } from "#/server/log/log.server";
 
@@ -123,7 +124,12 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-const URL_IN_TEXT = /https?:\/\/[^\s<>"']+/g;
+/**
+ * A URL in running text. Captured, so `split` keeps it; the last
+ * character can't be sentence punctuation, so "…?token=abc." links to
+ * the token rather than to a broken copy of it.
+ */
+const URL_IN_TEXT = /(https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)])/;
 
 /**
  * The text, escaped, with links to `origin` made clickable. Any other
@@ -133,17 +139,16 @@ const URL_IN_TEXT = /https?:\/\/[^\s<>"']+/g;
  */
 export function linkify(text: string, origin: string): string {
   const own = new URL(origin).origin;
-  let html = "";
-  let last = 0;
-  for (const match of text.matchAll(URL_IN_TEXT)) {
-    const url = match[0];
-    html += escapeHtml(text.slice(last, match.index));
-    html += isSameOrigin(url, own)
-      ? `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`
-      : escapeHtml(url);
-    last = match.index + url.length;
-  }
-  return html + escapeHtml(text.slice(last));
+  // `split` on a capturing pattern alternates text and URL: the odd
+  // indices are the URLs.
+  return text
+    .split(URL_IN_TEXT)
+    .map((part, index) =>
+      index % 2 === 1 && isSameOrigin(part, own)
+        ? `<a href="${escapeHtml(part)}">${escapeHtml(part)}</a>`
+        : escapeHtml(part),
+    )
+    .join("");
 }
 
 function isSameOrigin(url: string, origin: string): boolean {
@@ -167,7 +172,14 @@ function formatSentAt(instant: Temporal.Instant): string {
 export function renderOutbox(
   emails: OutboxEmail[],
   appBaseUrl: string,
+  limit: number = OUTBOX_LIST_LIMIT,
 ): string {
+  // A full page may be a truncated one. Saying so is the difference
+  // between "that reminder was never sent" and "scroll limit reached".
+  const truncated =
+    emails.length >= limit
+      ? `<p class="meta">Showing the newest ${limit}; older messages from the last day are not listed.</p>`
+      : "";
   const items = emails
     .map(
       (e) => `<article>
@@ -197,6 +209,7 @@ export function renderOutbox(
 <body>
 <h1>Dev outbox</h1>
 <p>Email this dev environment would have sent, newest first. Kept for a day.</p>
+${truncated}
 ${items || "<p>Nothing yet.</p>"}
 </body>
 </html>`;

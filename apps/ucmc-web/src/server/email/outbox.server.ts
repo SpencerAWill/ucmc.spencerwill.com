@@ -15,7 +15,8 @@ import { getDb, schema } from "#/server/db";
 import type { EmailMessage } from "#/server/email/resend";
 
 const RETENTION_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_LIST_LIMIT = 50;
+/** How many messages `/dev/outbox` lists; the page says when it is full. */
+export const OUTBOX_LIST_LIMIT = 50;
 
 export interface OutboxEmail {
   id: string;
@@ -30,17 +31,17 @@ export async function storeInOutbox(
   message: EmailMessage,
   now: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> {
-  await getDb()
-    .insert(schema.emailOutbox)
-    .values({
-      id: crypto.randomUUID(),
-      kind: message.kind,
-      to: message.to,
-      subject: message.subject,
-      text: message.text,
-      html: message.html ?? null,
-      createdAt: now,
-    });
+  await getDb().insert(schema.emailOutbox).values({
+    id: crypto.randomUUID(),
+    kind: message.kind,
+    to: message.to,
+    subject: message.subject,
+    // Plain text only. No template sends HTML today, and storing a
+    // second copy of every sign-in link that nothing reads would be
+    // more credential at rest for no benefit.
+    text: message.text,
+    createdAt: now,
+  });
 }
 
 /** Deletes outbox rows older than a day; returns how many went. */
@@ -57,7 +58,7 @@ export async function sweepEmailOutbox(
 
 /** The newest emails, newest first, after pruning old ones. */
 export async function listOutbox({
-  limit = DEFAULT_LIST_LIMIT,
+  limit = OUTBOX_LIST_LIMIT,
   now = Temporal.Now.instant(),
 }: {
   limit?: number;

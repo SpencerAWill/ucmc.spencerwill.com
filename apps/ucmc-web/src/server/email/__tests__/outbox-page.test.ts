@@ -151,6 +151,19 @@ describe("rendering", () => {
     expect(html).toContain("https://evil.example/x");
   });
 
+  it("leaves sentence punctuation out of a link", () => {
+    // "…?token=abc." must link to the token, not to `abc.`, which the
+    // verifier would reject.
+    const html = linkify(
+      "Sign in: https://dev.example.com/auth/callback?token=abc. (or https://dev.example.com/x)",
+      settings.appBaseUrl,
+    );
+    expect(html).toContain(
+      '<a href="https://dev.example.com/auth/callback?token=abc">',
+    );
+    expect(html).toContain('<a href="https://dev.example.com/x">');
+  });
+
   it("escapes everything, link text included", () => {
     expect(linkify('<script>alert("x")</script>', settings.appBaseUrl)).toBe(
       "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;",
@@ -166,6 +179,19 @@ describe("rendering", () => {
   it("shows times in the club's zone, not the Worker's UTC", () => {
     expect(renderOutbox([email], settings.appBaseUrl)).toContain(
       "2026-10-18 08:00:00 -04:00",
+    );
+  });
+
+  it("says so when the list may be truncated", () => {
+    const full = Array.from({ length: 3 }, (_, i) => ({
+      ...email,
+      id: `e${i}`,
+    }));
+    expect(renderOutbox(full, settings.appBaseUrl, 3)).toContain(
+      "Showing the newest 3",
+    );
+    expect(renderOutbox(full, settings.appBaseUrl, 4)).not.toContain(
+      "Showing the newest",
     );
   });
 

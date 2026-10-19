@@ -91,10 +91,20 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
     throw new EmailNotConfiguredError(tier.reason);
   }
 
+  // Resend and Mailpit both need an envelope sender; the outbox sends
+  // nothing and doesn't. Checked before the attempt so a missing
+  // address reads as configuration, not as a failed send in the log.
+  const from = env.RESEND_FROM ?? "";
+  if (tier.tier !== "outbox" && !from) {
+    throw new EmailNotConfiguredError(
+      `RESEND_FROM is required for the ${tier.tier} tier`,
+    );
+  }
+
   const send = {
     outbox: () => sendToOutbox(message),
-    resend: () => sendViaResend(message),
-    mailpit: () => sendViaMailpit(message),
+    resend: () => sendViaResend(message, from),
+    mailpit: () => sendViaMailpit(message, from),
   }[tier.tier];
 
   try {
@@ -120,7 +130,10 @@ async function sendToOutbox(message: EmailMessage): Promise<void> {
   await storeInOutbox(message);
 }
 
-async function sendViaResend(message: EmailMessage): Promise<void> {
+async function sendViaResend(
+  message: EmailMessage,
+  fromAddress: string,
+): Promise<void> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -133,7 +146,7 @@ async function sendViaResend(message: EmailMessage): Promise<void> {
         : {}),
     },
     body: JSON.stringify({
-      from: `${env.RESEND_FROM_NAME} <${env.RESEND_FROM}>`,
+      from: `${env.RESEND_FROM_NAME} <${fromAddress}>`,
       to: message.to,
       subject: message.subject,
       text: message.text,
@@ -153,8 +166,11 @@ async function sendViaResend(message: EmailMessage): Promise<void> {
   }
 }
 
-async function sendViaMailpit(message: EmailMessage): Promise<void> {
-  const from = { Name: env.RESEND_FROM_NAME, Email: env.RESEND_FROM };
+async function sendViaMailpit(
+  message: EmailMessage,
+  fromAddress: string,
+): Promise<void> {
+  const from = { Name: env.RESEND_FROM_NAME, Email: fromAddress };
 
   const res = await fetch(`${env.MAILPIT_URL}/api/v1/send`, {
     method: "POST",

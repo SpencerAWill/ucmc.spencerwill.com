@@ -213,9 +213,9 @@ export const accessOutboxAud = outbox.accessOutboxAud;
 // when set to another stack name (e.g. "prod"), this stack reads the
 // outputs from that stack instead. A stack with the email outbox on
 // (dev, since #297) has no Resend at all: it sends nothing, and
-// borrowing prod's key was the dependency the outbox exists to remove. The shared from-address means dev
-// emails are sent from the prod-domain envelope; that's invisible to
-// any real recipient and only matters in test inboxes.
+// borrowing prod's key was the dependency the outbox exists to remove.
+// (A borrowing stack sends from the owner's domain envelope, which is
+// invisible to real recipients and only matters in test inboxes.)
 //
 // `protect: true` — replacing a Resend domain re-issues DKIM keys and
 // invalidates previously-sent signatures; replacing the API key

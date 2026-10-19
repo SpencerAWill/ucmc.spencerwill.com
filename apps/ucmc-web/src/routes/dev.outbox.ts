@@ -13,16 +13,20 @@ export const Route = createFileRoute("/dev/outbox")({
   server: {
     handlers: {
       GET: async ({ request }: { request: Request }) => {
-        const [{ env }, { handleOutbox }, { listOutbox }] = await Promise.all([
-          import("#/server/cloudflare-env"),
-          import("#/server/email/outbox-page.server"),
-          import("#/server/email/outbox.server"),
-        ]);
+        const [{ env }, { emailTier }, { handleOutbox }, { listOutbox }] =
+          await Promise.all([
+            import("#/server/cloudflare-env"),
+            import("#/server/email/email-tier"),
+            import("#/server/email/outbox-page.server"),
+            import("#/server/email/outbox.server"),
+          ]);
         return handleOutbox(
           request,
           {
-            // Truthy, as `emailTier()` reads it: the two must agree on "on".
-            enabled: Boolean(env.EMAIL_OUTBOX),
+            // The sender's own answer, not a second reading of the vars:
+            // with MAILPIT_URL also set, mail goes to Mailpit, and a page
+            // saying "Nothing yet." would be lying.
+            enabled: emailTier(env).tier === "outbox",
             teamDomain: env.ACCESS_TEAM_DOMAIN,
             aud: env.ACCESS_OUTBOX_AUD,
             appBaseUrl: env.APP_BASE_URL,

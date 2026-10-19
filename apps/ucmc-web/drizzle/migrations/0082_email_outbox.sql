@@ -34,8 +34,10 @@ CREATE TABLE IF NOT EXISTS email_outbox (
   kind       text    NOT NULL,
   "to"       text    NOT NULL,
   subject    text    NOT NULL,
+  -- Plain text only: no template sends HTML, and a second copy of
+  -- each sign-in link that nothing reads is credential at rest for
+  -- nothing. Add a column when a template needs one.
   "text"     text    NOT NULL,
-  html       text,
   created_at integer NOT NULL
 );
 --> statement-breakpoint

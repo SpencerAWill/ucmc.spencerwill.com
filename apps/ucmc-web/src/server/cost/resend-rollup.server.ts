@@ -20,16 +20,21 @@ import { getDb, schema } from "#/server/db";
 import { emailTier } from "#/server/email/email-tier";
 
 /**
- * Whether this Worker sends through Resend at all.
+ * Whether this Worker's mail could be Resend volume at all.
  *
- * Dev doesn't since #297 — its mail goes to the outbox — and a
+ * False only on a Worker whose mail goes to the dev outbox (#297): a
  * `resend.sends` series there would count outbox writes as Resend
  * volume against Resend's free-tier limit. Asked of `emailTier()`
  * rather than of `RESEND_API_KEY`, because dev can carry a stale key
  * the sender ignores.
+ *
+ * **Deliberately not `tier === "resend"`.** That would also skip the
+ * rollup on a prod Worker that has lost its key, filing the outage as
+ * "unconfigured" — a quiet gap in the series with no warning, in
+ * exactly the month a report most needs to show something went wrong.
  */
 export function resendConfigured(): boolean {
-  return emailTier(env).tier === "resend";
+  return emailTier(env).tier !== "outbox";
 }
 
 /** Civil date in the club zone for an instant. */

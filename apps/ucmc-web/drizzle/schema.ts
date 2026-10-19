@@ -2552,7 +2552,6 @@ export const emailOutbox = sqliteTable(
     to: text("to").notNull(),
     subject: text("subject").notNull(),
     text: text("text").notNull(),
-    html: text("html"),
     createdAt: timestamp("created_at").notNull(),
   },
   (table) => [index("email_outbox_created_at_idx").on(table.createdAt)],

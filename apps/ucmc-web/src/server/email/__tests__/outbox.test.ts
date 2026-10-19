@@ -12,6 +12,7 @@ const emailEnv = vi.hoisted(() => ({
   EMAIL_OUTBOX: undefined as string | undefined,
   ACCESS_TEAM_DOMAIN: undefined as string | undefined,
   ACCESS_OUTBOX_AUD: undefined as string | undefined,
+  RESEND_FROM: undefined as string | undefined,
 }));
 
 vi.mock("#/server/cloudflare-env", async (importOriginal) => {
@@ -33,6 +34,7 @@ const { listOutbox, storeInOutbox, sweepEmailOutbox } =
   await import("#/server/email/outbox.server");
 const { EmailNotConfiguredError, magicLinkEmail, sendEmail } =
   await import("#/server/email/resend");
+const { resendConfigured } = await import("#/server/cost/resend-rollup.server");
 
 const NOW = Temporal.Instant.from("2026-10-18T12:00:00Z");
 const HOUR_MS = 60 * 60 * 1000;
@@ -132,5 +134,44 @@ describe("sendEmail with the outbox on", () => {
       EmailNotConfiguredError,
     );
     expect(await getDb().select().from(schema.emailOutbox)).toHaveLength(0);
+  });
+});
+
+describe("sendEmail without a sending address", () => {
+  it("refuses Resend and Mailpit rather than sending from <undefined>", async () => {
+    // Dev no longer receives RESEND_FROM (#297); a Worker that somehow
+    // reaches a sending tier without it must fail as configuration.
+    emailEnv.MAILPIT_URL = "http://127.0.0.1:1";
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    await expect(sendEmail(message)).rejects.toThrow(/RESEND_FROM/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // Configuration, not a send attempt: nothing in the usage log.
+    expect(await getDb().select().from(schema.emailSends)).toHaveLength(0);
+  });
+
+  it("isn't needed by the outbox, which sends nothing", async () => {
+    emailEnv.EMAIL_OUTBOX = "1";
+    emailEnv.ACCESS_TEAM_DOMAIN = "team.cloudflareaccess.com";
+    emailEnv.ACCESS_OUTBOX_AUD = "outbox-aud";
+
+    await sendEmail(message);
+
+    expect(await getDb().select().from(schema.emailOutbox)).toHaveLength(1);
+  });
+});
+
+describe("resendConfigured", () => {
+  it("is false only on an outbox Worker", () => {
+    emailEnv.EMAIL_OUTBOX = "1";
+    emailEnv.ACCESS_TEAM_DOMAIN = "team.cloudflareaccess.com";
+    emailEnv.ACCESS_OUTBOX_AUD = "outbox-aud";
+    expect(resendConfigured()).toBe(false);
+  });
+
+  it("stays true on a Worker that has lost its Resend key", () => {
+    // Prod with its secret dropped: sends fail loudly, and the rollup
+    // must keep running rather than file the outage as "unconfigured".
+    expect(resendConfigured()).toBe(true);
   });
 });

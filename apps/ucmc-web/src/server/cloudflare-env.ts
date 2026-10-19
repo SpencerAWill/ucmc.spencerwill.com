@@ -31,7 +31,10 @@ export interface WorkerEnv {
   APP_BASE_URL: string;
   WEBAUTHN_RP_ID: string;
   WEBAUTHN_RP_NAME: string;
-  RESEND_FROM: string;
+  // Optional: dev has no sending address since #297 (its mail goes to
+  // the outbox). `sendEmail` refuses the Resend and Mailpit tiers
+  // without it rather than sending from `<undefined>`.
+  RESEND_FROM?: string;
   RESEND_FROM_NAME: string;
   // Cloudflare account the worker's resources live in. Every Billable
   // Usage / GraphQL Analytics path embeds it. Optional: unset simply
