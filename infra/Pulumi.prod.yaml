@@ -10,3 +10,7 @@ config:
   ucmc-infra:kvNamespaceTitle: ucmc-web-kv
   ucmc-infra:webauthnRpName: UCMC
   ucmc-infra:resendFromName: UCMC
+  # The shared stack that owns the verified `spencerwill.com` Resend
+  # domain and issues this app's sending key (`ucmcResendApiKey`) and
+  # address (`ucmcFromEmail`). Apply that stack first (#298).
+  ucmc-infra:emailStack: SpencerAWill/spencerwill-shared/prod
