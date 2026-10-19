@@ -77,7 +77,7 @@ jobs:
 
       - name: Fetch D1 UUID from Pulumi
         id: pulumi
-        working-directory: infra
+        working-directory: infra/cloudflare
         run: |
           pulumi stack select "$TARGET_ENV"
           echo "database_id=$(pulumi stack output d1DatabaseId)" >> "$GITHUB_OUTPUT"

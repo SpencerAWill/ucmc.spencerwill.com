@@ -4,7 +4,7 @@ paths:
   - ".github/workflows/**"
 ---
 
-# Infrastructure (`infra/`) and CI
+# Infrastructure (`infra/cloudflare`, `infra/github`) and CI
 
 **Pulumi**, two stacks (`dev` auto, `prod` manual + approval), state in Pulumi Cloud, `pnpm` runtime. Auth via `CLOUDFLARE_API_TOKEN`.
 
@@ -25,7 +25,7 @@ Until #298, prod owned a `ResendDomain` component for `ucmc.spencerwill.com` (vi
 
 ## `@pulumi/cloudflare` and `@pulumi/pulumi` are pinned EXACTLY, on purpose
 
-`infra/package.json` carries `6.17.0` and `3.257.0` with no caret. package.json
+`infra/cloudflare/package.json` carries `6.17.0` and `3.257.0` with no caret. package.json
 cannot hold a comment, so the reason lives here: **provider 6.21.0 plans a
 REPLACEMENT of the dev D1 database** — `+-1 to replace`, with an empty property
 diff, which is the signature of a resource whose schema changed under a stable
@@ -47,7 +47,7 @@ So a `@pulumi/cloudflare` bump is **not** a routine dependency update here:
   somebody has time to work out which property the provider now treats as
   replace-triggering and pin or `ignoreChanges` it.
 
-## The dev email outbox (`infra/outbox.ts`)
+## The dev email outbox (`infra/cloudflare/outbox.ts`)
 
 `emailOutbox: true` creates a self-hosted `ZeroTrustAccessApplication` on `<hostname>/dev/outbox` with an inline allow policy for `outboxViewers`, and exports its `aud` for the Worker to verify tokens against. **`configureOutbox` throws on the `prod` stack** — the outbox holds working sign-in links. See `docs/adr/0001-dev-email-outbox.md`.
 

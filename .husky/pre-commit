@@ -96,8 +96,8 @@ if printf '%s\n' "$staged" | grep -qE '^apps/ucmc-web/.*\.(ts|tsx)$|^apps/ucmc-w
   pnpm --filter ucmc-web typecheck
 fi
 
-if printf '%s\n' "$staged" | grep -qE '^infra/.*\.ts$|^infra/tsconfig\.json$'; then
-  pnpm --filter @ucmc/infra typecheck
+if printf '%s\n' "$staged" | grep -qE '^infra/cloudflare/.*\.ts$|^infra/cloudflare/tsconfig\.json$'; then
+  pnpm --filter @ucmc/infra-cloudflare typecheck
 fi
 
 # Second pass of the mass-deletion guard (see the top of this file).

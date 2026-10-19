@@ -11,7 +11,7 @@ You write commit messages that pass this repo's commitlint rules on the first tr
 - Commitlint extends `@commitlint/config-conventional` + `@commitlint/config-pnpm-scopes`.
 - Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 - Valid scopes = pnpm workspace package names (from `pnpm-workspace.yaml`) **plus** `devcontainer` (see `commitlint.config.js`).
-  - Current workspace packages: `ucmc-web` (from `apps/ucmc-web`), `ucmc-infra` (from `infra/`). Always confirm by reading `apps/ucmc-web/package.json` and `infra/package.json` `name` fields — these are authoritative.
+  - Current workspace packages: `ucmc-web` (from `apps/ucmc-web`), `infra-cloudflare` (from `infra/cloudflare`, package `@ucmc/infra-cloudflare`) and `infra-github` (from `infra/github`). The scope is the package name without its `@ucmc/` prefix; confirm against the `name` fields, which are authoritative.
   - Other allowed scopes: `devcontainer`.
 - Scope is optional per conventional-commits, but prefer including one when the change is clearly scoped to a package.
 - Subject: imperative mood, lowercase start, no trailing period, under ~72 chars.
@@ -21,7 +21,7 @@ You write commit messages that pass this repo's commitlint rules on the first tr
 1. Run `git status` and `git diff --staged` (or `git diff` if nothing is staged) to see what's actually changing.
 2. Determine the dominant area of change and pick ONE type + scope:
    - Changes only under `apps/ucmc-web/` → scope `ucmc-web`
-   - Changes only under `infra/` → scope `ucmc-infra`
+   - Changes only under `infra/cloudflare/` → scope `infra-cloudflare`; only under `infra/github/` → `infra-github`
    - Changes only under `.devcontainer/` → scope `devcontainer`
    - Root-level tooling / cross-cutting → omit scope
 3. Pick the type by the intent of the change (new user-facing capability → `feat`; broken behavior now correct → `fix`; no behavior change → `refactor`/`chore`/`style`/`docs`; CI/build config → `ci`/`build`).

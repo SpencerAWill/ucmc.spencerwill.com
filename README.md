@@ -9,6 +9,8 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 - `apps/` — Applications
   - `apps/ucmc-web/` — UCMC web app (TanStack Start on Cloudflare Workers)
 - `infra/` — Pulumi infrastructure-as-code
+  - `infra/cloudflare/` — Cloudflare resources (stacks `dev`, `prod`)
+  - `infra/github/` — this repo's GitHub settings and CI secrets (stack `main`, run locally by an admin)
 - `docs/adr/` — architecture decision records, for decisions that span infra, app and workflow at once
 - `.devcontainer/` — Dev container configuration (`initialize.sh` on the host, `configure-git.sh` on create; see [`.claude/rules/devcontainer.md`](.claude/rules/devcontainer.md) on git index-lock contention)
 - `.zed/`, `.vscode/` — editor settings; both committed, and their scan/watch exclusions are load-bearing for git performance. `.vscode/tasks.json` wraps the pnpm scripts as run configurations and `.vscode/launch.json` holds the debug ones (Chrome against the dev server, Vitest/Playwright/tsx on the current file)
@@ -214,17 +216,17 @@ Required per-environment secrets (repo Settings → Environments → `dev` / `pr
 
 ### Infrastructure
 
-Infrastructure is managed with [Pulumi](https://www.pulumi.com/) in the `infra/` directory, with two stacks:
+Infrastructure is managed with [Pulumi](https://www.pulumi.com/) in `infra/cloudflare/`, with two stacks:
 
-- **dev** — auto-deployed when changes to `infra/` merge to `main`
+- **dev** — auto-deployed when changes to `infra/cloudflare/` merge to `main`
 - **prod** — deployed manually via GitHub Actions with environment approval
 
-On pull requests that touch `infra/`, CI runs ESLint, TypeScript type-checking, and a Pulumi preview (posted as a PR comment).
+On pull requests that touch `infra/cloudflare/`, CI runs ESLint, TypeScript type-checking, and a Pulumi preview (posted as a PR comment).
 
 To preview or deploy locally:
 
 ```bash
-cd infra
+cd infra/cloudflare
 pulumi preview    # see planned changes
 pulumi up         # apply changes
 ```
@@ -235,8 +237,8 @@ pulumi up         # apply changes
 - **Repo-level secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Workers R2 Storage (Edit), Workers KV Storage (Edit), D1 (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
 - **Per-environment secrets**: `SESSION_SECRET` lives on the `dev` and `prod` environments (Settings > Environments > `{env}` > Environment secrets). `RESEND_API_KEY` and `TURNSTILE_SECRET_KEY` come from Pulumi stack outputs instead, and dev has no `RESEND_API_KEY` at all. `deploy.yml` uploads them to the corresponding Worker via `wrangler secret put` on every deploy. See **Worker secrets (deployed envs)** above for details.
 - **Dev email outbox** ([ADR 0001](docs/adr/0001-dev-email-outbox.md)): the dev stack creates a Cloudflare Access application on `/dev/outbox`, so `CLOUDFLARE_API_TOKEN` also needs account-level **Access: Apps and Policies Edit**. The Zero Trust organization itself, and its login methods, are configured by hand and shared with the account's other projects; a viewer who isn't a member of the Cloudflare account needs One-time PIN enabled.
-- **Stack init** (one-time): `cd infra && pulumi stack init dev && pulumi stack init prod`
-- **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/Pulumi.dev.yaml` and `infra/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
+- **Stack init** (one-time): `cd infra/cloudflare && pulumi stack init dev && pulumi stack init prod`
+- **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/cloudflare/Pulumi.dev.yaml` and `infra/cloudflare/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
 - **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. From `deploy.yml` (workflow_dispatch), bootstrap requires running the web job before the infra job — for the first dev deploy, manually dispatch with `environment=dev` after temporarily commenting out the `needs: infra-dev` line on `web-dev`; restore after the worker exists. Repeat for prod. After bootstrap the standard infra → web order applies on every push and dispatch.
 
 ### Wiki

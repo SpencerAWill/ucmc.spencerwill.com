@@ -1,6 +1,8 @@
 packages:
   - "apps/ucmc-web"
-  - "infra"
+  # Pulumi programs: infra/cloudflare (stacks dev, prod) and infra/github
+  # (stack main, run locally by an admin).
+  - "infra/*"
 
 # Keep pnpm's content-addressable store INSIDE node_modules so it shares a
 # filesystem with the packages it hardlinks into. node_modules is a

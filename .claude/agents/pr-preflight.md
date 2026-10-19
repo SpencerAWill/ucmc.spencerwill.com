@@ -8,7 +8,7 @@ You are the pre-push checklist runner. Your job is to catch everything CI would 
 
 ## Repo facts (do not re-derive)
 
-- pnpm monorepo. Web app at `apps/ucmc-web` (package name `ucmc-web`), infra at `infra/` (package name `ucmc-infra`).
+- pnpm monorepo. Web app at `apps/ucmc-web` (package name `ucmc-web`), Pulumi programs at `infra/cloudflare` (`@ucmc/infra-cloudflare`) and `infra/github` (`@ucmc/infra-github`).
 - Generated file: `apps/ucmc-web/src/routeTree.gen.ts` — produced by `@tanstack/router-plugin` during Vite build. Should be committed in sync.
 - CLAUDE.md instructs: "If you add, remove, or modify a tool, script, config file, or workflow, update docs in the same change." Enforce this.
 - Husky pre-commit runs lint-staged (ESLint + Prettier on staged). This runs automatically — your job is to catch things BEFORE you hit them.
@@ -23,9 +23,9 @@ Run these in parallel where possible. Each step: report pass/fail with a one-lin
    - `pnpm --filter ucmc-web test`
    - `pnpm --filter ucmc-web lint`
    - Check `apps/ucmc-web/src/routeTree.gen.ts` is committed and not dirty: `git diff --exit-code apps/ucmc-web/src/routeTree.gen.ts`. If dirty, tell the user to re-run dev/build and commit.
-3. **If `infra/**` touched\*\*, run:
-   - `cd infra && pnpm exec eslint .`
-   - `cd infra && pnpm exec tsc --noEmit`
+3. **If `infra/**` touched\*\*, run for each touched package:
+   - `pnpm --filter @ucmc/infra-cloudflare lint` / `pnpm --filter @ucmc/infra-github lint`
+   - `pnpm --filter <same package> typecheck`
    - Recommend invoking the `pulumi-reviewer` agent before deploy (don't run `pulumi preview` here — that's its job).
 4. **Doc drift checks**:
    - If any of these changed, `CLAUDE.md` or `README.md` likely need updates too: `package.json` scripts, `.github/workflows/*`, `.devcontainer/*`, `pnpm-workspace.yaml`, `commitlint.config.js`, `eslint.config.js`, `infra/Pulumi.yaml`, `apps/ucmc-web/wrangler.jsonc`, addition/removal of top-level directories. Flag any mismatch.
