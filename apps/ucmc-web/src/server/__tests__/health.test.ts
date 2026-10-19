@@ -112,7 +112,11 @@ describe("performHealthChecks", () => {
     const report = await performHealthChecks();
     const email = report.checks.find((c) => c.name.startsWith("email:"));
 
-    expect(email).toMatchObject({ name: "email:outbox", status: "pass" });
+    expect(email).toMatchObject({
+      name: "email:outbox",
+      status: "pass",
+      href: "/dev/outbox",
+    });
   });
 
   it("fails an outbox with no Access settings to read it through", async () => {

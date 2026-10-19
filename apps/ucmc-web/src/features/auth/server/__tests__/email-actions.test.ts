@@ -232,7 +232,8 @@ describe("requestAddEmailAction", () => {
     await signInAs(userId);
 
     const result = await requestAddEmailAction({ email: "Fresh@Example.com" });
-    expect(result).toEqual({ ok: true });
+    // No outbox in the test Worker, so no dev link — prod's answer too.
+    expect(result).toEqual({ ok: true, devOutboxHref: null });
 
     const links = await getDb().select().from(schema.magicLinks);
     expect(links).toHaveLength(1);

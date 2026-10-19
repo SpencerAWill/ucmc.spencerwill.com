@@ -77,7 +77,7 @@ describe("MagicLinkForm", () => {
 
   it("calls requestMagicLinkFn with the entered email and shows the confirmation", async () => {
     const user = userEvent.setup();
-    requestMagicLinkFn.mockResolvedValue({ ok: true });
+    requestMagicLinkFn.mockResolvedValue({ ok: true, devOutboxHref: null });
     renderForm();
 
     await user.type(screen.getByLabelText(/email/i), "alice@example.com");
@@ -97,6 +97,41 @@ describe("MagicLinkForm", () => {
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
   });
 
+  it("links to the dev outbox when the server says the email went there", async () => {
+    const user = userEvent.setup();
+    requestMagicLinkFn.mockResolvedValue({
+      ok: true,
+      devOutboxHref: "/dev/outbox",
+    });
+    renderForm();
+
+    await user.type(screen.getByLabelText(/email/i), "alice@example.com");
+    await user.click(
+      screen.getByRole("button", { name: /send sign-in link/i }),
+    );
+
+    const link = await screen.findByRole("link", {
+      name: /open the dev outbox/i,
+    });
+    expect(link).toHaveAttribute("href", "/dev/outbox");
+  });
+
+  it("shows no outbox link when the server sends none, as on prod", async () => {
+    const user = userEvent.setup();
+    requestMagicLinkFn.mockResolvedValue({ ok: true, devOutboxHref: null });
+    renderForm();
+
+    await user.type(screen.getByLabelText(/email/i), "alice@example.com");
+    await user.click(
+      screen.getByRole("button", { name: /send sign-in link/i }),
+    );
+
+    await screen.findByText(/check.*for a sign-in link/i);
+    expect(
+      screen.queryByRole("link", { name: /dev outbox/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("surfaces an inline error when the request fails", async () => {
     const user = userEvent.setup();
     requestMagicLinkFn.mockRejectedValue(new Error("network down"));
@@ -114,7 +149,7 @@ describe("MagicLinkForm", () => {
 
   it("returns to the form when the user clicks 'Use a different email'", async () => {
     const user = userEvent.setup();
-    requestMagicLinkFn.mockResolvedValue({ ok: true });
+    requestMagicLinkFn.mockResolvedValue({ ok: true, devOutboxHref: null });
     renderForm();
 
     await user.type(screen.getByLabelText(/email/i), "alice@example.com");

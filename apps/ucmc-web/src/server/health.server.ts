@@ -11,7 +11,7 @@ import { sql } from "drizzle-orm";
 
 import { env } from "#/server/cloudflare-env";
 import { getDb, schema } from "#/server/db";
-import { emailTier } from "#/server/email/email-tier";
+import { DEV_OUTBOX_PATH, emailTier } from "#/server/email/email-tier";
 import { getKv } from "#/server/kv";
 import { getPrivateBucket } from "#/server/r2";
 import { checkHealthRateLimit } from "#/server/rate-limit.server";
@@ -92,13 +92,19 @@ async function checkEmail(): Promise<HealthCheck> {
         .select({ id: schema.emailOutbox.id })
         .from(schema.emailOutbox)
         .limit(1);
-      return { name: "email:outbox", status: "pass", time };
+      return {
+        name: "email:outbox",
+        status: "pass",
+        time,
+        href: DEV_OUTBOX_PATH,
+      };
     } catch {
       return {
         name: "email:outbox",
         status: "fail",
         time,
         output: "outbox table unreachable",
+        href: DEV_OUTBOX_PATH,
       };
     }
   }

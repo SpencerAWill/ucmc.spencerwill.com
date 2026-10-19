@@ -67,3 +67,22 @@ export function emailTier(env: EmailTierEnv): EmailTier {
       "or, on dev, EMAIL_OUTBOX)",
   };
 }
+
+/** Where a dev Worker's outbox is read. Kept beside the tier it serves. */
+export const DEV_OUTBOX_PATH = "/dev/outbox";
+
+/**
+ * The outbox page's path when this Worker's mail goes there, else null.
+ *
+ * Sent to the client after a send so the "check your email" message can
+ * link straight to where the email actually is — on dev only, because
+ * it is null everywhere the tier isn't `outbox`, prod above all.
+ *
+ * **It depends on the environment and nothing else**, which is what
+ * keeps it safe to return from the enumeration-proof sign-in request:
+ * a known address, an unknown one and a rate-limited one all get the
+ * same answer.
+ */
+export function devOutboxHref(env: EmailTierEnv): string | null {
+  return emailTier(env).tier === "outbox" ? DEV_OUTBOX_PATH : null;
+}

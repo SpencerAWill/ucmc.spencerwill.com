@@ -25,6 +25,7 @@ Dev stores email in D1 instead of sending it, and lists it at `/dev/outbox` behi
 - **Kept a day.** The page prunes older rows on every read, and the daily retention tick sweeps the table too.
 - **Rendering** is a plain HTML response with no app chrome or client bundle. It escapes everything, makes only links to the app's own origin clickable, and is sent `no-store`, `noindex` and `no-referrer`.
 - **Dev holds no Resend credentials.** The dev stack drops `resendOwnerStack`, provisions no Resend resources, and `deploy.yml` no longer uploads `RESEND_API_KEY` or `RESEND_FROM` to it.
+- **Dev links to the outbox where you'd look for the email.** The sign-in and add-email confirmations show "Open the dev outbox", and `/health`'s `email:outbox` row links there. The server decides: both actions return `devOutboxHref`, which is null unless the outbox tier is active, so prod can't render the link. It depends only on the environment, so the enumeration-proof sign-in response stays identical for known, unknown and rate-limited addresses.
 - **The cost snapshot skips Resend on dev.** Outbox writes are not Resend sends, so dev records Resend as `sourcesUnconfigured` and writes no `resend.sends` rows; billing and analytics still run.
 
 ## Consequences

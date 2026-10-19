@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { emailTier } from "#/server/email/email-tier";
+import { devOutboxHref, emailTier } from "#/server/email/email-tier";
 
 const ACCESS = {
   ACCESS_TEAM_DOMAIN: "team.cloudflareaccess.com",
@@ -65,5 +65,23 @@ describe("emailTier", () => {
       "reason",
       expect.stringMatching(/RESEND_API_KEY, MAILPIT_URL/),
     );
+  });
+});
+
+describe("devOutboxHref", () => {
+  it("points at the outbox only when mail actually goes there", () => {
+    expect(devOutboxHref({ EMAIL_OUTBOX: "1", ...ACCESS })).toBe("/dev/outbox");
+  });
+
+  it.each([
+    ["prod", { RESEND_API_KEY: "re_x" }],
+    ["local Mailpit", { MAILPIT_URL: "http://mailpit:8025" }],
+    [
+      "an outbox with Mailpit winning",
+      { EMAIL_OUTBOX: "1", MAILPIT_URL: "http://mailpit:8025", ...ACCESS },
+    ],
+    ["a refused outbox", { EMAIL_OUTBOX: "1" }],
+  ])("is null on %s", (_, env) => {
+    expect(devOutboxHref(env)).toBeNull();
   });
 });
