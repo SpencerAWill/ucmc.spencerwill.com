@@ -70,7 +70,8 @@ services:
     # Pinned by version and index digest (#317), like the CI service
     # container: `latest` changes under a running devcontainer with no
     # record of what moved. Dependabot's docker-compose ecosystem bumps
-    # both together; keep ci.yml's `e2e-desktop` service on the same pin.
+    # this file only — nothing reads ci.yml's `e2e-desktop` service image,
+    # so move that pin by hand in the same change.
     image: axllent/mailpit:v1.31.5@sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea
     restart: unless-stopped
     ports:
