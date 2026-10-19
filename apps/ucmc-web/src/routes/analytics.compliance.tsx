@@ -28,10 +28,10 @@ const PAGE = ANALYTICS_PAGES.compliance;
  */
 export const Route = createFileRoute("/analytics/compliance")({
   staticData: { pageFlag: "analytics_compliance" },
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "analytics_compliance");
     await requireAnyPermissionOrNotFound(
-      context.queryClient,
+      { context, location },
       PAGE.dataPermissions,
     );
   },

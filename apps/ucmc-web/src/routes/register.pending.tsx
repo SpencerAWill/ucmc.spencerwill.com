@@ -30,8 +30,8 @@ import type { ProfileFormShape } from "#/components/profile/profile-form-shape";
  * else), and a session with no profile row hasn't registered yet.
  */
 export const Route = createFileRoute("/register/pending")({
-  beforeLoad: async ({ context }) => {
-    const principal = await requireAuth(context.queryClient);
+  beforeLoad: async ({ context, location }) => {
+    const principal = await requireAuth({ context, location });
     if (principal.status === "approved") {
       throw redirect({ to: "/my/profile" });
     }

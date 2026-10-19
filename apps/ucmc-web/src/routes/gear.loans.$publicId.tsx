@@ -16,9 +16,9 @@ import { requireEnabledPages } from "#/features/settings/api/page-guards";
 
 export const Route = createFileRoute("/gear/loans/$publicId")({
   staticData: { pageFlag: "gear_loans_detail" },
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
-    await requirePermission(context.queryClient, "gear:loan");
+    await requirePermission({ context, location }, "gear:loan");
   },
   component: LoanDetailPage,
 });

@@ -13,8 +13,8 @@ import { requireAuth } from "#/features/auth/guards";
  * won't have a session and will land on /sign-in instead.
  */
 export const Route = createFileRoute("/deactivated")({
-  beforeLoad: async ({ context }) => {
-    await requireAuth(context.queryClient);
+  beforeLoad: async ({ context, location }) => {
+    await requireAuth({ context, location });
   },
   component: DeactivatedPage,
 });

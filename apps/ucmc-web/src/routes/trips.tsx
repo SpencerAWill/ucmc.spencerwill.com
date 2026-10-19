@@ -30,9 +30,9 @@ import { TripSignupEmbed } from "#/features/trips/components/trip-signup-embed";
  * gates a real route, and the sidebar entry is a real link.
  */
 export const Route = createFileRoute("/trips")({
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "trips");
-    await requireApproved(context.queryClient, "/trips");
+    await requireApproved({ context, location });
   },
   // Waiver standing is read for the advisory banner only — deliberately
   // `getCurrentWaiverStatus` (non-blocking) rather than

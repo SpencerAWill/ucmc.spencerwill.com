@@ -20,8 +20,8 @@ import type {
 } from "#/server/settings/settings-registry";
 
 export const Route = createFileRoute("/settings")({
-  beforeLoad: async ({ context }) => {
-    await requirePermission(context.queryClient, "settings:manage");
+  beforeLoad: async ({ context, location }) => {
+    await requirePermission({ context, location }, "settings:manage");
   },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(siteSettingsQueryOptions());

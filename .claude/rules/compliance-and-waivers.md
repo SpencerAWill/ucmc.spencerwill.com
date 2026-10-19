@@ -46,7 +46,7 @@ The cycle itself comes from `currentSeason()` — see the dates rule; never comp
 - **`waivers:view`** is read-only — the `/members/waivers` queue, another member's attestation history, and the waiver card on `/members/$publicId`. Seeded to president, treasurer, and advisor, since exec who need to answer "is this member covered?" shouldn't need the attestation power to do it.
 - **`waivers:verify`** additionally attests, bulk-attests, and revokes.
 
-There is no permission-implication mechanism, so `verify` implies `view` via an OR check in exactly two places — `requireWaiverViewer` (server) and `requireAnyPermission(queryClient, [...])` on the route guard — and the seed migration grants `waivers:view` explicitly to the verify-holding roles so `/access` shows the real grant rather than an invisible implication. **`WAIVER_VIEW_PERMISSIONS`** (`features/auth/guards.ts`) names the pair once for the server helper, the route guard, the sidebar entry, and that card.
+There is no permission-implication mechanism, so `verify` implies `view` via an OR check in exactly two places — `requireWaiverViewer` (server) and `requireAnyPermission({ context, location }, [...])` on the route guard — and the seed migration grants `waivers:view` explicitly to the verify-holding roles so `/access` shows the real grant rather than an invisible implication. **`WAIVER_VIEW_PERMISSIONS`** (`features/auth/guards.ts`) names the pair once for the server helper, the route guard, the sidebar entry, and that card.
 
 Handing out the read tier broadly is deliberately low-risk: **no signed PDF is ever stored**, so an attestation row is just `(userId, cycle, version, attestedAt, attestedBy)`.
 

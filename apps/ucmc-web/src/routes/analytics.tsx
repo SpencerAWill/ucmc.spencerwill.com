@@ -17,9 +17,9 @@ import { requireEnabledPages } from "#/features/settings/api/page-guards";
  * belongs in the shallow parent and the leaves name their own flag.
  */
 export const Route = createFileRoute("/analytics")({
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
-    await requirePermission(context.queryClient, ANALYTICS_VIEW_PERMISSION);
+    await requirePermission({ context, location }, ANALYTICS_VIEW_PERMISSION);
   },
   component: AnalyticsLayout,
 });

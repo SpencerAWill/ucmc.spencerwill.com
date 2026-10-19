@@ -19,7 +19,7 @@ export const Route = createFileRoute("/my/gear/cart")({
   staticData: { pageFlag: "my_gear_cart" },
   beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "my_gear_cart");
-    await requireCurrentWaiver(context.queryClient, location.href);
+    await requireCurrentWaiver({ context, location });
   },
   component: MyCartPage,
 });

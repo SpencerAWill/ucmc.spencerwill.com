@@ -52,12 +52,12 @@ const loansSearchSchema = z.object({
 export const Route = createFileRoute("/gear/loans/")({
   staticData: { pageFlag: "gear_loans" },
   validateSearch: loansSearchSchema,
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
     // Gate on `gear:loan` so non-officers don't even see the loader
     // fire — the action layer would also reject, but the redirect
     // here keeps the URL clean.
-    await requirePermission(context.queryClient, "gear:loan");
+    await requirePermission({ context, location }, "gear:loan");
   },
   component: GearLoansPage,
 });

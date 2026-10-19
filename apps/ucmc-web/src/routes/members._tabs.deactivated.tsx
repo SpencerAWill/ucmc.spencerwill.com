@@ -13,9 +13,9 @@ const deactivatedSearchSchema = z.object({
 export const Route = createFileRoute("/members/_tabs/deactivated")({
   staticData: { pageFlag: "members_deactivated" },
   validateSearch: deactivatedSearchSchema,
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
-    await requirePermissionOrNotFound(context.queryClient, "members:manage");
+    await requirePermissionOrNotFound({ context, location }, "members:manage");
   },
   component: DeactivatedRoute,
 });

@@ -15,9 +15,9 @@ const pendingSearchSchema = z.object({
 export const Route = createFileRoute("/members/_tabs/pending")({
   staticData: { pageFlag: "members_pending" },
   validateSearch: pendingSearchSchema,
-  beforeLoad: async ({ context, matches }) => {
+  beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
-    await requirePermissionOrNotFound(context.queryClient, "members:manage");
+    await requirePermissionOrNotFound({ context, location }, "members:manage");
   },
   component: PendingRoute,
 });

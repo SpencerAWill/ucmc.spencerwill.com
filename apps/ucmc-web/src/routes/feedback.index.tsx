@@ -27,8 +27,8 @@ import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
  * to one that will: same answer, one fewer navigation.
  */
 export const Route = createFileRoute("/feedback/")({
-  beforeLoad: async ({ context }) => {
-    const principal = await requireApproved(context.queryClient);
+  beforeLoad: async ({ context, location }) => {
+    const principal = await requireApproved({ context, location });
     const flags = await context.queryClient.ensureQueryData(
       publicFlagsQueryOptions(),
     );

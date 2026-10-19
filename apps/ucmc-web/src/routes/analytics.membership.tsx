@@ -35,10 +35,10 @@ const PAGE = ANALYTICS_PAGES.membership;
  */
 export const Route = createFileRoute("/analytics/membership")({
   staticData: { pageFlag: "analytics_membership" },
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     await requirePageFlag(context.queryClient, "analytics_membership");
     await requireAnyPermissionOrNotFound(
-      context.queryClient,
+      { context, location },
       PAGE.dataPermissions,
     );
   },
