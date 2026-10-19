@@ -212,7 +212,7 @@ Required per-environment secrets (repo Settings → Environments → `dev` / `pr
 | `TURNSTILE_SECRET_KEY`          | Cloudflare Turnstile server-side verification key. Leaving it unset skips verification (local dev). Required in prod to prevent bot registrations.                                                                                                                                                                                                                                                                                                                                                                                                                                          | Cloudflare dashboard              |
 | `CLOUDFLARE_ACCOUNT_READ_TOKEN` | Account-scoped **read-only** token for the daily cost/usage snapshot (#268). Needs five scopes: Billing Read, Workers Scripts Read, D1 Read, Workers KV Storage Read, Account Analytics Read — the three product scopes are each required for their own GraphQL dataset, which Account Analytics Read does _not_ cover. Optional: unset simply skips the snapshot task. It reads telemetry for the **whole account**, so it is used only by the cron and never by a route handler.                                                                                                          | Cloudflare dashboard → API Tokens |
 
-`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `PULUMI_ACCESS_TOKEN` are also required but are covered under **Required GitHub setup** in the Infrastructure section below. The Worker additionally receives `CLOUDFLARE_ACCOUNT_ID` as a deploy-time `--var` from the Pulumi stack output `cloudflareAccountId` — it is an identifier rather than a secret, and sourcing it per stack keeps dev and prod free to live in different accounts.
+The CI credentials (the scoped Cloudflare tokens, Pulumi's OIDC login, and the `CLOUDFLARE_ACCOUNT_ID` variable) are covered under **GitHub as code** in the Infrastructure section below. The Worker additionally receives `CLOUDFLARE_ACCOUNT_ID` as a deploy-time `--var` from the Pulumi stack output `cloudflareAccountId` — it is an identifier rather than a secret, and sourcing it per stack keeps dev and prod free to live in different accounts.
 
 ### Infrastructure
 
@@ -221,7 +221,7 @@ Infrastructure is managed with [Pulumi](https://www.pulumi.com/) in `infra/cloud
 - **dev** — auto-deployed when changes to `infra/cloudflare/` merge to `main`
 - **prod** — deployed manually via GitHub Actions with environment approval
 
-On pull requests that touch `infra/cloudflare/`, CI runs ESLint, TypeScript type-checking, and a Pulumi preview (posted as a PR comment).
+On pull requests that touch `infra/cloudflare/`, CI runs ESLint, TypeScript type-checking, and a Pulumi preview of each stack (one PR comment per stack). The preview waits for a reviewer's approval, and Dependabot PRs skip it.
 
 To preview or deploy locally:
 
@@ -231,12 +231,46 @@ pulumi preview    # see planned changes
 pulumi up         # apply changes
 ```
 
-#### Required GitHub setup
+#### GitHub as code (`infra/github`)
 
-- **Environments**: Create `dev` (no protection) and `prod` (required reviewers) in repo Settings > Environments
-- **Repo-level secrets**: Add `PULUMI_ACCESS_TOKEN` and `CLOUDFLARE_API_TOKEN` in repo Settings > Secrets and variables > Actions. Also set `CLOUDFLARE_ACCOUNT_ID` (used by `deploy.yml`). The Cloudflare API token needs these scopes: Workers Scripts (Edit), Workers R2 Storage (Edit), Workers KV Storage (Edit), D1 (Edit), Account Settings (Read), Zone DNS (Edit), Workers Routes (Edit), and SSL and Certificates (Edit) for the `spencerwill.com` zone.
-- **Per-environment secrets**: `SESSION_SECRET` lives on the `dev` and `prod` environments (Settings > Environments > `{env}` > Environment secrets). `RESEND_API_KEY` and `TURNSTILE_SECRET_KEY` come from Pulumi stack outputs instead, and dev has no `RESEND_API_KEY` at all. `deploy.yml` uploads them to the corresponding Worker via `wrangler secret put` on every deploy. See **Worker secrets (deployed envs)** above for details.
-- **Dev email outbox** ([ADR 0001](docs/adr/0001-dev-email-outbox.md)): the dev stack creates a Cloudflare Access application on `/dev/outbox`, so `CLOUDFLARE_API_TOKEN` also needs account-level **Access: Apps and Policies Edit**. The Zero Trust organization itself, and its login methods, are configured by hand and shared with the account's other projects; a viewer who isn't a member of the Cloudflare account needs One-time PIN enabled.
+This repo's GitHub settings and CI credentials are the Pulumi program in `infra/github` (stack `main`, #311). **A repo admin applies it locally; CI never runs it.** The Actions `GITHUB_TOKEN` can't change repo settings or write secrets, and CI shouldn't hold a credential that can loosen its own rules.
+
+What it manages:
+
+- **The repository's settings**: squash-only merges titled from the PR, secret scanning and push protection, Dependabot alerts and security updates. It must stay public: on GitHub Free, rulesets, environment secrets and required reviewers exist for a personal account's repos only when they're public.
+- **The `Main Protection` ruleset**: changes to `main` arrive by PR, after `ci.yml`'s aggregate **`required`** job passes against the latest `main`, with linear history and no deletion. Repository admins can bypass, so a broken CI can't lock anyone out.
+- **Environments**: `dev` and `prod` deploy from `main` only, and `prod` waits for a reviewer. `preview` (PR previews) also waits for a reviewer.
+- **Least-privilege Cloudflare tokens**, minted by Pulumi and written as environment secrets:
+
+  | Secret                         | Environments | Used by                                                                   |
+  | ------------------------------ | ------------ | ------------------------------------------------------------------------- |
+  | `CLOUDFLARE_DEPLOY_API_TOKEN`  | dev, prod    | wrangler in `deploy.yml`'s web jobs and `seed-admin.yml` (no zone access) |
+  | `CLOUDFLARE_INFRA_API_TOKEN`   | dev, prod    | `pulumi up` on `infra/cloudflare`                                         |
+  | `CLOUDFLARE_PREVIEW_API_TOKEN` | preview      | `pulumi preview` on PRs (read-only)                                       |
+
+  Permissions are listed in `infra/github/src/cloudflare-tokens.ts`; add one there in the same PR as whatever needs it.
+
+- **Repository variables**: `CLOUDFLARE_ACCOUNT_ID`, plus `PULUMI_ORGANIZATION` and `PULUMI_USER_LOGIN` for the OIDC login.
+
+**Pulumi has no stored token.** Every job that runs Pulumi declares an environment and exchanges its GitHub OIDC token for a Pulumi token lasting at most an hour (`pulumi/auth-actions`). The issuer and its trust policies are in [SpencerAWill/spencerwill.com](https://github.com/SpencerAWill/spencerwill.com)'s `infra/github` (`pulumiOidcRepositories`), which lists this repo's `dev`, `prod` and `preview`. The token is personal, so it can read every stack's secrets in every repo: **approve a PR preview only for a branch whose changes you have read.**
+
+Hand-managed, deliberately: the environment secrets `SESSION_SECRET` (rotating it signs everyone out) and `CLOUDFLARE_ACCOUNT_READ_TOKEN` (the cost cron), and `FEEDBACK_GITHUB_TOKEN` / `FEEDBACK_GITHUB_REPO`. GitHub never reveals a secret's value, so adopting one into Pulumi means re-entering it.
+
+**Day to day**, from `infra/github`: `pnpm preview` then `pnpm apply` (both use `gh auth token` for GitHub). To rotate a Cloudflare token, `pnpm apply --replace <token URN>`.
+
+**First-time setup** (done once, recorded for rebuilding):
+
+1. Switch the repo to GitHub's immutable OIDC subject, which the trust policies match on: `gh api -X PUT repos/SpencerAWill/ucmc.spencerwill.com/actions/oidc/customization/sub -F use_default=true -F use_immutable_subject=true`.
+2. In spencerwill.com, add `"SpencerAWill/ucmc.spencerwill.com": ["dev", "prod", "preview"]` to `pulumiOidcRepositories` and apply its `infra/github`.
+3. Here: `cd infra/github && pulumi stack init SpencerAWill/ucmc-github/main`, then `pulumi config set --secret cloudflare:apiToken` with a token allowed to create account API tokens (**Account API Tokens Write**).
+4. `pnpm adopt` imports the existing repository, ruleset and `dev`/`prod` environments into state (`adopt.json`). `pnpm preview` must then show **no change to the repository resource**: every setting is declared to match what the repo already has. The ruleset gains the PR and `required` rules; the rest are creates.
+5. `pnpm apply`. The new secrets have new names, so `main`'s workflows keep using the old repo-level ones until the workflow change merges.
+6. Once a deploy has logged in through OIDC and used the new tokens, delete the repo-level `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `PULUMI_ACCESS_TOKEN` secrets, and revoke the old Cloudflare token and Pulumi access token.
+
+#### Bootstrapping `infra/cloudflare`
+
+- **Per-environment secrets**: `SESSION_SECRET` lives on the `dev` and `prod` environments. `RESEND_API_KEY` and `TURNSTILE_SECRET_KEY` come from Pulumi stack outputs instead, and dev has no `RESEND_API_KEY` at all. `deploy.yml` uploads them to the corresponding Worker via `wrangler secret put` on every deploy. See **Worker secrets (deployed envs)** above for details.
+- **Dev email outbox** ([ADR 0001](docs/adr/0001-dev-email-outbox.md)): the dev stack creates a Cloudflare Access application on `/dev/outbox`, which is why the infra token has account-level **Access: Apps and Policies Write**. The Zero Trust organization itself, and its login methods, are configured by hand and shared with the account's other projects; a viewer who isn't a member of the Cloudflare account needs One-time PIN enabled.
 - **Stack init** (one-time): `cd infra/cloudflare && pulumi stack init dev && pulumi stack init prod`
 - **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/cloudflare/Pulumi.dev.yaml` and `infra/cloudflare/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
 - **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. From `deploy.yml` (workflow_dispatch), bootstrap requires running the web job before the infra job — for the first dev deploy, manually dispatch with `environment=dev` after temporarily commenting out the `needs: infra-dev` line on `web-dev`; restore after the worker exists. Repeat for prod. After bootstrap the standard infra → web order applies on every push and dispatch.

@@ -11,9 +11,9 @@ You are the Pulumi reviewer for this repo's `infra/cloudflare/` stacks. Your job
 - IaC lives in `infra/cloudflare/`, TypeScript, `@pulumi/pulumi` + `@pulumi/cloudflare`.
 - Two stacks: `dev` (auto-deploys on merge to main) and `prod` (manual, gated). State in Pulumi Cloud.
 - Stack config in `infra/cloudflare/Pulumi.<stack>.yaml`. Required keys (from `infra/cloudflare/index.ts`): `accountId`, `zoneId`, `hostname`, `workerName`.
-- Only resource currently managed: `cloudflare.WorkersCustomDomain` binding a hostname to an already-deployed Worker. The `spencerwill.com` zone itself is NOT managed here — do not propose managing it.
+- Managed resources: read `infra/cloudflare/index.ts` and `outbox.ts` for the current set (D1, R2 + custom domain, KV, Turnstile, the Worker custom domain, dev's Access app). D1/R2/KV are `protect: true`. The `spencerwill.com` zone itself is NOT managed here — do not propose managing it.
 - Worker scripts are deployed by `wrangler`, not Pulumi. The custom-domain resource requires the Worker script to already exist in the target account.
-- CI auth uses `CLOUDFLARE_API_TOKEN` (env var picked up by the provider).
+- CI auth: the provider reads `CLOUDFLARE_API_TOKEN`, filled from the minted `CLOUDFLARE_INFRA_API_TOKEN` (deploy) or the read-only `CLOUDFLARE_PREVIEW_API_TOKEN` (PR preview); Pulumi logs in through OIDC. A new resource type may need a permission in `infra/github/src/cloudflare-tokens.ts` — flag that.
 
 ## What to do when invoked
 

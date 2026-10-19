@@ -38,6 +38,7 @@ jobs:
     outputs:
       web: ${{ steps.filter.outputs.web }}
       infra: ${{ steps.filter.outputs.infra }}
+      infra_cloudflare: ${{ steps.filter.outputs.infra_cloudflare }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,6 +56,14 @@ jobs:
               - '.github/workflows/ci.yml'
             infra:
               - 'infra/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.github/workflows/ci.yml'
+            # What a `pulumi preview` of infra/cloudflare can change: its
+            # program, and the provider/runtime versions in the lockfile.
+            # infra/github isn't previewed in CI (it's applied locally).
+            infra_cloudflare:
+              - 'infra/cloudflare/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - '.github/workflows/ci.yml'
@@ -228,10 +237,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: pnpm --filter @ucmc/infra-cloudflare lint
+        run: pnpm --filter "@ucmc/infra-*" lint
 
       - name: Type check
-        run: pnpm --filter @ucmc/infra-cloudflare exec tsc --noEmit
+        run: pnpm --filter "@ucmc/infra-*" typecheck
 
   # ── E2E ───────────────────────────────────────────────────────────────
   #
@@ -566,17 +575,44 @@ jobs:
       - name: zizmor
         run: ./zizmor --color always .github/workflows/
 
+  # `pulumi preview` of both infra/cloudflare stacks, one sticky comment
+  # per stack (pulumi/actions finds its comment by a heading that names the
+  # stack). prod is previewed too: its config differs from dev's (Resend
+  # through a StackReference, no outbox), so a change can replace something
+  # on prod alone, and the next deploy would be the first anyone saw of it.
+  #
+  # Runs in the `preview` environment, which infra/github gives a reviewer
+  # and a read-only Cloudflare token. The Pulumi token comes from OIDC
+  # (pulumi/auth-actions) and is personal — it can read every stack's
+  # secrets in every repo — so approve a run only for a branch whose
+  # changes you have read. One approval covers both stacks.
+  #
+  # Not part of `required`: a preview informs the review, it doesn't gate
+  # the merge, and the deploy computes its own diff anyway. Skipped for
+  # Dependabot and forks, whose runs get no environment secrets and can't
+  # exchange an OIDC token; push any commit to a Dependabot branch to
+  # preview it as yourself.
   pulumi-preview:
-    name: Pulumi Preview
-    if: github.event.pull_request.draft == false && needs.paths.outputs.infra == 'true'
+    name: Pulumi Preview (${{ matrix.stack }})
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.fork != true &&
+      github.actor != 'dependabot[bot]' &&
+      needs.paths.outputs.infra_cloudflare == 'true'
     needs: [paths, infra-lint]
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [dev, prod]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: preview
     permissions:
       contents: read
-      pull-requests: write
+      id-token: write # the OIDC exchange with Pulumi Cloud
+      pull-requests: write # the sticky comment
     concurrency:
-      group: pulumi-preview-${{ github.event.pull_request.number }}
+      group: pulumi-preview-${{ github.event.pull_request.number }}-${{ matrix.stack }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -592,12 +628,57 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Exchanges this job's GitHub OIDC token for a Pulumi token lasting at
+      # most an hour, and exports it as PULUMI_ACCESS_TOKEN. Pulumi Cloud
+      # trusts this repo's dev, prod and preview environments only; the
+      # issuer and its policies are in SpencerAWill/spencerwill.com's
+      # infra/github (`pulumiOidcRepositories`).
+      - uses: pulumi/auth-actions@141415910c3beb54e03b48e9057c204c97b956f2 # v2.1.0
+        with:
+          organization: ${{ vars.PULUMI_ORGANIZATION }}
+          requested-token-type: urn:pulumi:token-type:access_token:personal
+          scope: user:${{ vars.PULUMI_USER_LOGIN }}
+          token-expiration: 3600
+
       - uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d # v7.0.0
         with:
           command: preview
-          stack-name: dev
+          stack-name: ${{ matrix.stack }}
           work-dir: infra/cloudflare
           comment-on-pr: true
         env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Read-only; minted by infra/github.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+
+  # The one status check the main ruleset requires (infra/github), so
+  # renaming or adding a job never needs a ruleset change. It waits on every
+  # check and fails if any failed or was cancelled. A job skipped by its
+  # path filter counts as passing, which is what lets docs-only PRs merge.
+  # `pulumi-preview` is deliberately absent (see above).
+  required:
+    name: required
+    if: always()
+    needs:
+      - paths
+      - secrets
+      - audit
+      - web-lint-test
+      - infra-lint
+      - e2e-desktop
+      - e2e-mobile
+      - workflow-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Every check passed or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "::error::a required check ended with: $result"
+              exit 1
+            fi
+          done
