@@ -127,6 +127,10 @@ const workerDomain = new cloudflare.WorkersCustomDomain(
 
 export const stackName = stack;
 export const workerHostname = workerDomain.hostname;
+// The Worker the custom domain serves. `sync-env` refuses to deploy a
+// wrangler.jsonc section whose `name` differs, which is what once sent
+// prod's secrets to the dev Worker.
+export const workerNameOutput = workerName;
 
 // D1 database UUID — the value wrangler needs for `d1_databases[].database_id`.
 // Pulumi's D1Database exposes both `.id` (Pulumi URN) and `.uuid` (the
