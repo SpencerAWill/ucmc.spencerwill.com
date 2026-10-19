@@ -257,12 +257,14 @@ export function syncWranglerConfig(
       `${where}: ${what} is "${String(committed)}" but the ${stack} stack's is "${expected}". wrangler.jsonc and infra/cloudflare disagree.`,
     );
   const lookup = <T>(
-    // Partial: indexing by an untaught binding name yields undefined.
-    table: Partial<Record<string, (o: StackOutputs) => T>>,
+    table: Record<string, (o: StackOutputs) => T>,
     binding: string,
     what: string,
   ): T => {
-    const map = table[binding];
+    // `Object.hasOwn`, not a bare index: a binding named `toString` or
+    // `constructor` would otherwise find Object.prototype's function and
+    // slip past the "untaught binding" refusal.
+    const map = Object.hasOwn(table, binding) ? table[binding] : undefined;
     if (!map) {
       throw new SyncError(
         `${where}: no stack output for the ${what} binding "${binding}". Teach scripts/wrangler-env.ts.`,

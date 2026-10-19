@@ -170,6 +170,25 @@ describe("syncWranglerConfig", () => {
     );
   });
 
+  it("refuses a binding named like an Object.prototype member", () => {
+    // A bare `table[binding]` finds Object.prototype.toString here, which
+    // would write "[object Object]" as the KV id instead of refusing.
+    const top = edit(["kv_namespaces", 0, "binding"], "toString");
+    const text = applyEdits(
+      top,
+      modify(
+        top,
+        ["env", "production", "kv_namespaces", 0, "binding"],
+        "toString",
+        {},
+      ),
+    );
+
+    expect(() => syncWranglerConfig(text, "dev", DEV)).toThrow(
+      /no stack output for the KV binding "toString"/,
+    );
+  });
+
   it("refuses a top-level key it hasn't been taught", () => {
     const text = edit(["services"], []);
 
