@@ -52,7 +52,10 @@ import type {
   RemovePasskeyResult,
   RenamePasskeyResult,
 } from "#/features/auth/server/webauthn-fns";
-import { checkAuthRateLimitByIp } from "#/server/rate-limit.server";
+import {
+  checkAuthRateLimitByIp,
+  checkCeremonyRateLimitByIp,
+} from "#/server/rate-limit.server";
 
 // ── register (session-gated) ─────────────────────────────────────────────
 
@@ -61,7 +64,7 @@ export async function webauthnRegisterBeginAction(): Promise<RegisterBeginResult
   if (!principal) {
     return { ok: false, reason: "unauthorized" };
   }
-  if (!(await checkAuthRateLimitByIp())) {
+  if (!(await checkCeremonyRateLimitByIp())) {
     return { ok: false, reason: "rate_limited" };
   }
 
@@ -161,7 +164,7 @@ export async function webauthnRegisterFinishAction(args: {
 // ── authenticate (public) ────────────────────────────────────────────────
 
 export async function webauthnAuthenticateBeginAction(): Promise<AuthenticateBeginResult> {
-  if (!(await checkAuthRateLimitByIp())) {
+  if (!(await checkCeremonyRateLimitByIp())) {
     return { ok: false, reason: "rate_limited" };
   }
 

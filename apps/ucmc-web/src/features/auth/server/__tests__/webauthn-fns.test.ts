@@ -26,10 +26,23 @@ vi.mock("@tanstack/react-start/server", () => ({
   getRequestHeader: () => undefined,
 }));
 
+// Two budgets (#306): ceremony *begin* is on its own limiter, so that
+// passkey autofill on every /sign-in load doesn't spend the auth budget
+// the magic-link request and consume check. `authLimiterCalls` counts
+// what each action charged against AUTH_RATE_LIMITER.
 let rateLimitAllowed = true;
+let ceremonyRateLimitAllowed = true;
+let authLimiterCalls = 0;
 vi.mock("#/server/rate-limit.server", () => ({
-  checkAuthRateLimitByIp: async () => rateLimitAllowed,
-  checkAuthRateLimitByEmail: async () => rateLimitAllowed,
+  checkAuthRateLimitByIp: async () => {
+    authLimiterCalls += 1;
+    return rateLimitAllowed;
+  },
+  checkAuthRateLimitByEmail: async () => {
+    authLimiterCalls += 1;
+    return rateLimitAllowed;
+  },
+  checkCeremonyRateLimitByIp: async () => ceremonyRateLimitAllowed,
   checkHealthRateLimit: async () => rateLimitAllowed,
 }));
 
@@ -186,6 +199,8 @@ async function seedUser(args: {
 beforeEach(async () => {
   cookieJar.clear();
   rateLimitAllowed = true;
+  ceremonyRateLimitAllowed = true;
+  authLimiterCalls = 0;
   currentPrincipal = null;
   openSessionSpy.mockReset();
   rotateSessionSpy.mockReset();
@@ -247,9 +262,9 @@ describe("webauthnRegisterBeginAction", () => {
     });
   });
 
-  it("is rate-limited by IP", async () => {
+  it("is rate-limited by IP on the ceremony budget", async () => {
     currentPrincipal = makePrincipal();
-    rateLimitAllowed = false;
+    ceremonyRateLimitAllowed = false;
     const result = await webauthnRegisterBeginAction();
     expect(result).toEqual({ ok: false, reason: "rate_limited" });
   });
@@ -370,15 +385,36 @@ describe("webauthnAuthenticateBeginAction", () => {
   });
 
   it("is rate-limited before storing a ceremony", async () => {
-    rateLimitAllowed = false;
+    ceremonyRateLimitAllowed = false;
     const result = await webauthnAuthenticateBeginAction();
     expect(result).toEqual({ ok: false, reason: "rate_limited" });
     expect(cookieJar.size).toBe(0);
     expect(await getDb().$count(schema.webauthnCeremonies)).toBe(0);
   });
+
+  // #306: autofill runs this on every /sign-in load. It must not spend
+  // the budget the magic-link request and consume check, or a shared
+  // campus IP exhausts it by loading the page.
+  it("spends none of the auth budget, and works when that budget is gone", async () => {
+    rateLimitAllowed = false;
+
+    const result = await webauthnAuthenticateBeginAction();
+
+    expect(result.ok).toBe(true);
+    expect(authLimiterCalls).toBe(0);
+  });
 });
 
 describe("webauthnAuthenticateFinishAction", () => {
+  // Finish verifies a credential, so it stays on the strict auth budget.
+  it("is rate-limited on the auth budget", async () => {
+    rateLimitAllowed = false;
+    const result = await webauthnAuthenticateFinishAction({
+      response: {} as AuthenticationResponseJSON,
+    });
+    expect(result).toEqual({ ok: false, reason: "rate_limited" });
+  });
+
   const response = {
     id: "cred-id-1",
     rawId: "cred-id-1",

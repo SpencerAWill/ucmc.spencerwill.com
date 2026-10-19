@@ -191,6 +191,19 @@
         "namespace_id": "4001",
         "simple": { "limit": 60, "period": 60 },
       },
+      // The *begin* half of a passkey ceremony, keyed by `ip:<addr>`.
+      // Passkey autofill starts one on every `/sign-in` load, before the
+      // visitor does anything, so on AUTH_RATE_LIMITER it spent the
+      // budget the magic-link request and consume depend on (#306) — and
+      // a whole campus behind one NAT shares that budget. Begin only
+      // stores a five-minute challenge row, so it gets a looser budget of
+      // its own; finish, which checks a credential, stays on AUTH.
+      {
+        "name": "CEREMONY_RATE_LIMITER",
+        "type": "ratelimit",
+        "namespace_id": "5001",
+        "simple": { "limit": 60, "period": 60 },
+      },
     ],
   },
   "env": {
@@ -255,6 +268,12 @@
             "name": "CALENDAR_RATE_LIMITER",
             "type": "ratelimit",
             "namespace_id": "4002",
+            "simple": { "limit": 60, "period": 60 },
+          },
+          {
+            "name": "CEREMONY_RATE_LIMITER",
+            "type": "ratelimit",
+            "namespace_id": "5002",
             "simple": { "limit": 60, "period": 60 },
           },
         ],
