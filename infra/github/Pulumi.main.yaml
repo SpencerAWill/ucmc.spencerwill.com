@@ -23,6 +23,8 @@ config:
   # shared with www and flareling, so no token gets zone-wide settings.
   ucmc-github:cloudflareAccountId: d57880630b3277f59331318b53f323b6
   ucmc-github:cloudflareZoneId: 6bfb4d1d3134e6d765aef413094cd28f
-  # Plus, as a secret, set once by hand (README, "GitHub as code"):
-  #   cloudflare:apiToken — a token allowed to create account API tokens
-  #   ("Account API Tokens Write"); it mints the CI tokens.
+  # A token allowed to create account API tokens ("Account API Tokens
+  # Write"); it mints the CI tokens. Encrypted by Pulumi Cloud; set with
+  # `pulumi config set --secret cloudflare:apiToken` (README, "GitHub as code").
+  cloudflare:apiToken:
+    secure: AAABAPuQr2ClSi3+afnCju2MR0B5b1NtaxEMlLvzayXnXigIC7STL8gPLTmvHqeFDT3+EJajiM+Kg/uZilPFlXI4JL7VlzSz9BanHHaX57EtBkAT3A==
