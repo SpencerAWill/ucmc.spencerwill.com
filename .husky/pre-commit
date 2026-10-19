@@ -100,5 +100,9 @@ if printf '%s\n' "$staged" | grep -qE '^infra/cloudflare/.*\.ts$|^infra/cloudfla
   pnpm --filter @ucmc/infra-cloudflare typecheck
 fi
 
+if printf '%s\n' "$staged" | grep -qE '^infra/github/.*\.ts$|^infra/github/tsconfig\.json$'; then
+  pnpm --filter @ucmc/infra-github typecheck
+fi
+
 # Second pass of the mass-deletion guard (see the top of this file).
 check_mass_delete

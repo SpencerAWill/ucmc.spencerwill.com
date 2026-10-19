@@ -397,6 +397,28 @@ importers:
         specifier: ^8.71.0
         version: 8.71.0(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)
 
+  infra/github:
+    dependencies:
+      '@pulumi/cloudflare':
+        specifier: 6.17.0
+        version: 6.17.0(typescript@6.0.3)
+      '@pulumi/github':
+        specifier: 6.15.0
+        version: 6.15.0(typescript@6.0.3)
+      '@pulumi/pulumi':
+        specifier: 3.257.0
+        version: 3.257.0(typescript@6.0.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      typescript-eslint:
+        specifier: ^8.71.0
+        version: 8.71.0(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)
+
 packages:
 
   '@adobe/css-tools@4.4.4':
@@ -2545,6 +2567,9 @@ packages:
 
   '@pulumi/cloudflare@6.17.0':
     resolution: {integrity: sha512-sIL1rfjNavy+yZQ/OjyFHD4owe2E/TpHLFCVsogQJOC+Y6Bj7JxrhoTfsJdxVEXEFBGlNCu68T+g9im8iEZM9A==}
+
+  '@pulumi/github@6.15.0':
+    resolution: {integrity: sha512-U8ZxPQQcOrcTn8y8EZsWmXzMtbw0JnwWCVGmqxBZ/i2SpUlEGMYT9B+EFC/qTALZXkDf7cMiq6fZ3Gy1G23nyQ==}
 
   '@pulumi/pulumi@3.257.0':
     resolution: {integrity: sha512-YjI+4ClA3AwGoMR1J58GZpt81P0vTJQHi22l4JGSl8YAnPjuJPcvpuOFt8BJrY659bznBUnIS/fDTiCHcEWxCA==}
@@ -10695,6 +10720,14 @@ snapshots:
   '@poppinss/exception@1.2.3': {}
 
   '@pulumi/cloudflare@6.17.0(typescript@6.0.3)':
+    dependencies:
+      '@pulumi/pulumi': 3.257.0(typescript@6.0.3)
+    transitivePeerDependencies:
+      - supports-color
+      - ts-node
+      - typescript
+
+  '@pulumi/github@6.15.0(typescript@6.0.3)':
     dependencies:
       '@pulumi/pulumi': 3.257.0(typescript@6.0.3)
     transitivePeerDependencies:

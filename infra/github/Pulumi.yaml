@@ -1,0 +1,11 @@
+name: ucmc-github
+description: GitHub settings, safeguards and CI secrets for ucmc.spencerwill.com (#311)
+runtime:
+  name: nodejs
+  options:
+    # Node 24 strips TypeScript types natively, so Pulumi runs index.ts with
+    # no ts-node, the same as flareling's and spencerwill.com's infra/github.
+    # Code here must use erasable syntax only (no enums or namespaces);
+    # tsconfig's `erasableSyntaxOnly` enforces it.
+    typescript: false
+    packagemanager: pnpm
