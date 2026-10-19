@@ -48,6 +48,9 @@ async function getPrincipal(
  * principal, so this is fidelity, not authorization: the preview can
  * only ever narrow (see `#/server/auth/emulation`).
  *
+ * Includes the `anonymous` role's grants, so a signed-in account with no
+ * roles yet (pending approval) still reaches every public page.
+ *
  * Deliberately NOT applied to `requireAuth` / `requireApproved` /
  * `requireCurrentWaiver`: those gate on account *status*, which a role
  * preview doesn't change. Keeping them on the real principal is what
@@ -58,7 +61,11 @@ export async function effectivePermissionsFor(
   principal: Principal,
 ): Promise<string[]> {
   const session = await getSession(queryClient);
-  return effectivePermissions(principal, session.emulatedRole);
+  return effectivePermissions(
+    principal,
+    session.emulatedRole,
+    session.anonymousPermissions,
+  );
 }
 
 /** Require a signed-in session. Redirects to /sign-in otherwise. */
@@ -242,7 +249,9 @@ export async function requireAnyPermissionOrNotFound(
  *   - Anonymous + permission granted to role_anonymous → returns null,
  *     route renders for the unauthenticated viewer.
  *   - Anonymous + permission NOT granted               → notFound().
- *   - Authenticated + permission granted              → returns the principal.
+ *   - Authenticated + permission granted (by their roles, or by
+ *     role_anonymous — signing in never hides a public page) → returns
+ *     the principal.
  *   - Authenticated + permission NOT granted          → notFound().
  *
  * Returns the principal (or null for anonymous) so route loaders can
@@ -253,20 +262,15 @@ export async function requireViewPermission(
   permission: string,
 ): Promise<Principal | null> {
   const session = await getSession(queryClient);
-  if (session.principal) {
-    const granted = effectivePermissions(
-      session.principal,
-      session.emulatedRole,
-    );
-    if (granted.includes(permission)) {
-      return session.principal;
-    }
+  const granted = effectivePermissions(
+    session.principal,
+    session.emulatedRole,
+    session.anonymousPermissions,
+  );
+  if (!granted.includes(permission)) {
     throw notFound();
   }
-  if (session.anonymousPermissions.includes(permission)) {
-    return null;
-  }
-  throw notFound();
+  return session.principal;
 }
 
 /**

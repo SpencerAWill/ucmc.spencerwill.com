@@ -30,10 +30,13 @@ export function useAuth() {
 
   // What this viewer should be *shown*. Server actions still enforce
   // `principal.permissions`; a preview only narrows what's drawn and
-  // which routes the client-side guards allow.
-  const granted = principal
-    ? effectivePermissions(principal, activeEmulatedRole)
-    : anonymousPermissions;
+  // which routes the client-side guards allow. A signed-in viewer also
+  // keeps the anonymous grants, so signing in never hides a public page.
+  const granted = effectivePermissions(
+    principal,
+    activeEmulatedRole,
+    anonymousPermissions,
+  );
 
   return {
     principal,

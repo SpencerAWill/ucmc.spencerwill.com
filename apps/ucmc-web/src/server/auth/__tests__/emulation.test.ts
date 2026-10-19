@@ -82,7 +82,7 @@ describe("prototype keys", () => {
   });
 
   it.each(protoKeys)("keeps %s from yielding a non-array", (key) => {
-    const granted = effectivePermissions(sysAdmin, key);
+    const granted = effectivePermissions(sysAdmin, key, []);
     expect(Array.isArray(granted)).toBe(true);
     expect(granted).toEqual(sysAdmin.permissions);
   });
@@ -90,11 +90,13 @@ describe("prototype keys", () => {
 
 describe("effectivePermissions", () => {
   it("returns the real set when nothing is being previewed", () => {
-    expect(effectivePermissions(sysAdmin, null)).toEqual(sysAdmin.permissions);
+    expect(effectivePermissions(sysAdmin, null, [])).toEqual(
+      sysAdmin.permissions,
+    );
   });
 
   it("returns the previewed role's grants, dropping the rest", () => {
-    const granted = effectivePermissions(sysAdmin, "member");
+    const granted = effectivePermissions(sysAdmin, "member", []);
     expect(granted).toEqual(["gear:read"]);
     expect(granted).not.toContain("settings:manage");
   });
@@ -103,15 +105,64 @@ describe("effectivePermissions", () => {
     const member = principal();
     // Asking to "preview" a role that would grant more falls back to the
     // member's own permissions rather than granting anything.
-    expect(effectivePermissions(member, "system_admin")).toEqual(["gear:read"]);
+    expect(effectivePermissions(member, "system_admin", [])).toEqual([
+      "gear:read",
+    ]);
   });
 
   it("is a subset of the real permissions for every previewable role", () => {
-    const real = new Set(sysAdmin.permissions);
+    const anonymous = ["public_calendar:view"];
+    const real = new Set(effectivePermissions(sysAdmin, null, anonymous));
     for (const role of Object.keys(sysAdmin.rolePermissionMap)) {
-      for (const perm of effectivePermissions(sysAdmin, role)) {
+      for (const perm of effectivePermissions(sysAdmin, role, anonymous)) {
         expect(real.has(perm)).toBe(true);
       }
     }
+  });
+});
+
+/**
+ * #300: an account waiting on approval holds no roles (`role_member` is
+ * added on approval), so before the anonymous floor it saw *less* than a
+ * signed-out visitor — the public calendar vanished on sign-in.
+ */
+describe("the anonymous floor", () => {
+  const anonymous = ["public_calendar:view", "public_policies:view"];
+
+  it("gives a principal with no roles every anonymous grant", () => {
+    const pending = principal({
+      status: "pending",
+      roles: [],
+      permissions: [],
+      rolePermissionMap: {},
+    });
+    expect(effectivePermissions(pending, null, anonymous)).toEqual(anonymous);
+  });
+
+  it("unions with the principal's own grants without duplicating", () => {
+    const member = principal({
+      permissions: ["gear:read", "public_calendar:view"],
+    });
+    const granted = effectivePermissions(member, null, anonymous);
+    expect([...granted].sort()).toEqual(
+      ["gear:read", "public_calendar:view", "public_policies:view"].sort(),
+    );
+  });
+
+  it("keeps a preview from narrowing below what anonymous visitors see", () => {
+    // `treasurer` holds none of the public grants, but previewing it must
+    // still show the pages a signed-out visitor can reach.
+    const granted = effectivePermissions(sysAdmin, "treasurer", anonymous);
+    expect(granted).toContain("waivers:verify");
+    expect(granted).toContain("public_calendar:view");
+    expect(granted).not.toContain("settings:manage");
+  });
+
+  it("never writes the floor back onto the principal", () => {
+    // Server actions enforce `principal.permissions`; the floor shapes
+    // what is shown, not what a signed-in account is authorized to do.
+    const member = principal();
+    effectivePermissions(member, null, anonymous);
+    expect(member.permissions).toEqual(["gear:read"]);
   });
 });

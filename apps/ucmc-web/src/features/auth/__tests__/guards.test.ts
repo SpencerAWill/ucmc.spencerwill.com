@@ -18,6 +18,7 @@ import {
   requireApproved,
   requirePermission,
   requirePermissionOrNotFound,
+  requireViewPermission,
 } from "#/features/auth/guards";
 import type { Principal } from "#/server/auth/principal.server";
 
@@ -42,6 +43,7 @@ function makePrincipal(overrides: Partial<Principal> = {}): Principal {
 function clientWithPrincipal(
   principal: Principal | null,
   emulatedRole: string | null = null,
+  anonymousPermissions: string[] = [],
 ): QueryClient {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -53,7 +55,7 @@ function clientWithPrincipal(
   // time a guard reads it.
   client.setQueryData(SESSION_QUERY_KEY, {
     principal,
-    anonymousPermissions: [],
+    anonymousPermissions,
     emulatedRole,
   });
   return client;
@@ -335,5 +337,65 @@ describe("effectivePermissionsFor", () => {
     expect(SITE_FEEDBACK_PERMISSIONS.some((x) => granted.includes(x))).toBe(
       false,
     );
+  });
+});
+
+/**
+ * #300: an account waiting on approval holds no roles until
+ * `role_member` is added on approval, so it used to resolve to an empty
+ * permission set and 404 on every public page a signed-out visitor could
+ * open. Signing in must never hide a public page.
+ */
+describe("requireViewPermission", () => {
+  const ANONYMOUS = ["public_calendar:view"];
+  const pending = makePrincipal({
+    status: "pending",
+    roles: [],
+    permissions: [],
+    rolePermissionMap: {},
+  });
+
+  it("lets an anonymous visitor through on an anonymous grant", async () => {
+    const client = clientWithPrincipal(null, null, ANONYMOUS);
+    await expect(
+      requireViewPermission(client, "public_calendar:view"),
+    ).resolves.toBeNull();
+  });
+
+  it("lets a principal with no roles through on an anonymous grant", async () => {
+    const client = clientWithPrincipal(pending, null, ANONYMOUS);
+    await expect(
+      requireViewPermission(client, "public_calendar:view"),
+    ).resolves.toBe(pending);
+  });
+
+  it("still 404s a principal on a permission neither they nor anonymous hold", async () => {
+    const client = clientWithPrincipal(pending, null, ANONYMOUS);
+    const result = await capture(() =>
+      requireViewPermission(client, "history:view"),
+    );
+    expect(isNotFound(thrownBy(result))).toBe(true);
+  });
+
+  it("keeps the anonymous floor under a role preview", async () => {
+    const admin = makePrincipal({
+      isSystemAdmin: true,
+      permissions: ["public_calendar:view", "waivers:verify"],
+      rolePermissionMap: { treasurer: ["waivers:verify"] },
+    });
+    const client = clientWithPrincipal(admin, "treasurer", ANONYMOUS);
+    await expect(
+      requireViewPermission(client, "public_calendar:view"),
+    ).resolves.toBe(admin);
+  });
+});
+
+describe("effectivePermissionsFor and the anonymous floor", () => {
+  it("includes the anonymous grants for a principal with no roles", async () => {
+    const pending = makePrincipal({ status: "pending", roles: [] });
+    const client = clientWithPrincipal(pending, null, ["public_calendar:view"]);
+    await expect(effectivePermissionsFor(client, pending)).resolves.toEqual([
+      "public_calendar:view",
+    ]);
   });
 });

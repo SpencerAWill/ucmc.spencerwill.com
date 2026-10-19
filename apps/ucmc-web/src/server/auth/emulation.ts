@@ -63,7 +63,19 @@ export function resolveEmulatedRole(
 
 /**
  * The permission set a viewer should be *shown* — the emulated role's
- * grants while previewing, the real set otherwise.
+ * grants while previewing, the real set otherwise — always unioned with
+ * the `anonymous` pseudo-role's grants. A signed-out viewer (`null`
+ * principal) gets exactly the anonymous grants.
+ *
+ * The union is the floor: signing in must never hide a page a signed-out
+ * visitor can see (#300). Without it, an account waiting on approval —
+ * which holds no roles until `role_member` is added on approval — lost
+ * even the public calendar. It applies under a preview too, so "View as"
+ * still only narrows down to what anonymous visitors see, never below.
+ *
+ * This shapes what is *shown* and which routes the client-side guards
+ * allow; it never reaches `principal.permissions`, so a grant an exec
+ * hands `anonymous` doesn't become authority in server actions.
  *
  * Every client-side permission question routes through here (both
  * `useAuth` predicates and the route guards) so the chrome and the
@@ -71,9 +83,14 @@ export function resolveEmulatedRole(
  * callers have no principal and no preview; they keep their own list.
  */
 export function effectivePermissions(
-  principal: Principal,
+  principal: Principal | null,
   requested: string | null | undefined,
+  anonymousPermissions: readonly string[],
 ): string[] {
+  if (!principal) {
+    return [...anonymousPermissions];
+  }
   const role = resolveEmulatedRole(principal, requested);
-  return role ? principal.rolePermissionMap[role] : principal.permissions;
+  const own = role ? principal.rolePermissionMap[role] : principal.permissions;
+  return Array.from(new Set([...own, ...anonymousPermissions]));
 }
