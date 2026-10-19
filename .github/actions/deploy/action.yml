@@ -1,0 +1,313 @@
+# Deploys one environment, a Pulumi stack and its Worker, at the
+# checked-out commit (#312). Used by cicd.yml's `deploy-dev` and
+# `deploy-prod` jobs, which name their GitHub environment and pass its
+# secrets in as inputs: a composite action sees no `secrets` context of
+# its own. The calling job needs `id-token: write` (the Pulumi OIDC
+# exchange) and must check the repo out first.
+#
+# One action for both environments, because the four copy-pasted jobs it
+# replaces drifted apart: prod once lacked wrangler-action's
+# `environment: production`, and every prod deploy uploaded prod's secrets
+# into the dev Worker. Here the stack is the only input that differs, and
+# `sync-env` refuses a wrangler.jsonc section whose Worker isn't the
+# stack's.
+#
+# Order:
+#   1. pulumi up        long-lived resources (D1, KV, R2, the domain)
+#   2. sync-env         point wrangler.jsonc at this stack, BEFORE the
+#                       build: @cloudflare/vite-plugin snapshots it into
+#                       dist/server/wrangler.json, which is what every
+#                       later `wrangler` command here reads
+#   3. build            with this stack's public config baked in
+#   4. D1 restore point the way back, since migrations have no "down"
+#   5. migrate          before any code that needs the new schema
+#   6. deploy           code, vars and secrets as ONE Worker version
+#   7. smoke            Playwright against the deployed URL
+#   8. rollback (prod)  the Worker's code, if smoke failed; never D1
+name: Deploy
+description: Deploys one environment's infrastructure and Worker.
+
+inputs:
+  stack:
+    description: dev or prod (the Pulumi stack; prod deploys env.production)
+    required: true
+  pulumi-organization:
+    required: true
+  pulumi-user-login:
+    required: true
+  cloudflare-account-id:
+    required: true
+  cloudflare-api-token:
+    description: Wrangler's token (the environment's CLOUDFLARE_DEPLOY_API_TOKEN)
+    required: true
+  cloudflare-infra-api-token:
+    description: pulumi up's token (the environment's CLOUDFLARE_INFRA_API_TOKEN)
+    required: true
+  session-secret:
+    required: true
+  cloudflare-account-read-token:
+    description: The daily cost snapshot's token (#268). Optional.
+    default: ""
+  feedback-github-token:
+    description: Optional; unset leaves the feedback mirror off.
+    default: ""
+  feedback-github-repo:
+    default: ""
+
+outputs:
+  url:
+    description: The environment's URL.
+    value: ${{ steps.stack.outputs.app_base_url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the stack
+      shell: bash
+      env:
+        STACK: ${{ inputs.stack }}
+      run: |
+        case "$STACK" in
+          dev) ;;
+          # Wrangler reads CLOUDFLARE_ENV like --env, and the Vite plugin
+          # reads it at build time. Set for every later step of the job,
+          # so the build and each wrangler command target one section,
+          # and wrangler refuses a command whose env differs from the
+          # build's. Dev is wrangler.jsonc's top level: no env at all.
+          prod) echo "CLOUDFLARE_ENV=production" >> "$GITHUB_ENV" ;;
+          *) echo "::error::stack must be dev or prod, got '$STACK'"; exit 1 ;;
+        esac
+
+    - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+
+    - uses: pulumi/setup-pulumi@b374ceb6168550de27c6eba92e01c1a774040e11 # v2.0.0
+
+    # Exchanges the job's GitHub OIDC token for a Pulumi token lasting at
+    # most an hour, exported as PULUMI_ACCESS_TOKEN (#311). Pulumi Cloud
+    # trusts this repo's dev, prod and preview environments only; the
+    # issuer lives in SpencerAWill/spencerwill.com's infra/github.
+    - uses: pulumi/auth-actions@141415910c3beb54e03b48e9057c204c97b956f2 # v2.1.0
+      with:
+        organization: ${{ inputs.pulumi-organization }}
+        requested-token-type: urn:pulumi:token-type:access_token:personal
+        scope: user:${{ inputs.pulumi-user-login }}
+        token-expiration: 3600
+
+    - name: Infra (pulumi up)
+      shell: bash
+      working-directory: infra/cloudflare
+      env:
+        STACK: ${{ inputs.stack }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-infra-api-token }}
+      run: pulumi up --stack "$STACK" --yes --diff --non-interactive
+
+    # Once, as JSON. Secret outputs print as "[secret]" here; the secrets
+    # step reads the two it needs on their own, and masks them.
+    - name: Read the stack's outputs
+      id: stack
+      shell: bash
+      working-directory: infra/cloudflare
+      env:
+        STACK: ${{ inputs.stack }}
+      run: |
+        pulumi stack output --stack "$STACK" --json > "$RUNNER_TEMP/outputs.json"
+        out() { jq -er ".$1" "$RUNNER_TEMP/outputs.json"; }
+        {
+          echo "app_base_url=$(out appBaseUrl)"
+          echo "turnstile_site_key=$(out turnstileSiteKey)"
+          echo "r2_public_host=$(out r2PublicHost)"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Point wrangler.jsonc at the stack
+      shell: bash
+      env:
+        STACK: ${{ inputs.stack }}
+      run: pnpm --filter ucmc-web sync-env --stack "$STACK" --outputs "$RUNNER_TEMP/outputs.json"
+
+    - name: Build
+      shell: bash
+      env:
+        # Public, baked into the client bundle: the Turnstile widget's
+        # site key, and the public bucket's CDN hostname, so avatar and
+        # landing image URLs bypass the Worker.
+        VITE_TURNSTILE_SITE_KEY: ${{ steps.stack.outputs.turnstile_site_key }}
+        VITE_R2_PUBLIC_HOST: ${{ steps.stack.outputs.r2_public_host }}
+      run: pnpm --filter ucmc-web build
+
+    # The bookmark to `wrangler d1 time-travel restore` to if a migration
+    # goes wrong (#192). Recorded before every migrate, whether or not
+    # there's anything to apply: it's one API call, and the summary then
+    # always has it. Workers Free keeps 7 days of Time Travel history, so
+    # this is a short-term way back, not a backup.
+    - name: Record a D1 restore point
+      shell: bash
+      working-directory: apps/ucmc-web
+      env:
+        STACK: ${{ inputs.stack }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        WRANGLER_SEND_METRICS: "false"
+        # Keeps stdout pure JSON for jq.
+        WRANGLER_HIDE_BANNER: "true"
+      run: |
+        pnpm exec wrangler d1 time-travel info DB --json > "$RUNNER_TEMP/restore-point.json"
+        bookmark=$(jq -er .bookmark "$RUNNER_TEMP/restore-point.json")
+        database=$(jq -er .d1DatabaseNameOutput "$RUNNER_TEMP/outputs.json")
+        version=$(pnpm exec wrangler --version | tail -n 1)
+        echo "D1 $database restore point: $bookmark"
+        # Restoring by NAME from a directory with no wrangler config, so
+        # wrangler looks the database up by API: run inside apps/ucmc-web,
+        # the committed placeholder id would win.
+        {
+          echo "### D1 restore point before migrating ($STACK)"
+          echo
+          echo '```sh'
+          echo "cd \"\$(mktemp -d)\" && npx wrangler@$version d1 time-travel restore $database --bookmark=$bookmark"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Migrate D1
+      shell: bash
+      working-directory: apps/ucmc-web
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        WRANGLER_SEND_METRICS: "false"
+      run: pnpm exec wrangler d1 migrations apply DB --remote
+
+    # Uploaded WITH the Worker version (`--secrets-file`), so code and
+    # secrets change together in one version. `wrangler-action`'s
+    # `secrets:` ran `secret put` once per name before deploying: each
+    # created a version of its own, and a failure halfway left the old
+    # code running with half the new secrets.
+    #
+    # Additive: a secret left out keeps its deployed value, so an unset
+    # optional one (the feedback mirror's) is omitted rather than blanked.
+    # TURNSTILE_SECRET_KEY is the stack's widget; RESEND_API_KEY is empty
+    # on a stack using the dev outbox. Both are masked as soon as read.
+    - name: Write the secrets file
+      shell: bash
+      working-directory: infra/cloudflare
+      env:
+        STACK: ${{ inputs.stack }}
+        SESSION_SECRET: ${{ inputs.session-secret }}
+        CLOUDFLARE_ACCOUNT_READ_TOKEN: ${{ inputs.cloudflare-account-read-token }}
+        FEEDBACK_GITHUB_TOKEN: ${{ inputs.feedback-github-token }}
+        FEEDBACK_GITHUB_REPO: ${{ inputs.feedback-github-repo }}
+      run: |
+        umask 077
+        TURNSTILE_SECRET_KEY="$(pulumi stack output turnstileSecretKey --show-secrets --stack "$STACK")"
+        echo "::add-mask::$TURNSTILE_SECRET_KEY"
+        RESEND_API_KEY="$(pulumi stack output resendApiKey --show-secrets --stack "$STACK")"
+        if [ -n "$RESEND_API_KEY" ]; then echo "::add-mask::$RESEND_API_KEY"; fi
+        export TURNSTILE_SECRET_KEY RESEND_API_KEY
+        if [ -z "$SESSION_SECRET" ] || [ -z "$TURNSTILE_SECRET_KEY" ]; then
+          echo "::error::SESSION_SECRET or TURNSTILE_SECRET_KEY is empty"
+          exit 1
+        fi
+        jq -n 'env
+          | {SESSION_SECRET, TURNSTILE_SECRET_KEY, RESEND_API_KEY,
+             CLOUDFLARE_ACCOUNT_READ_TOKEN, FEEDBACK_GITHUB_TOKEN, FEEDBACK_GITHUB_REPO}
+          | with_entries(select(.value != null and .value != ""))' \
+          > "$RUNNER_TEMP/secrets.json"
+        echo "Uploading: $(jq -r 'keys | join(", ")' "$RUNNER_TEMP/secrets.json")"
+
+    # No --env: CLOUDFLARE_ENV (set above for prod) selects it, and the
+    # build already flattened wrangler.jsonc to that section.
+    - name: Deploy the Worker
+      shell: bash
+      working-directory: apps/ucmc-web
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        WRANGLER_SEND_METRICS: "false"
+      run: |
+        pnpm exec wrangler deploy \
+          --secrets-file "$RUNNER_TEMP/secrets.json" \
+          --message "$GITHUB_SHA (run $GITHUB_RUN_ID)"
+
+    - name: Remove the secrets file
+      if: always()
+      shell: bash
+      run: rm -f "$RUNNER_TEMP/secrets.json"
+
+    # ── Post-deploy verification ────────────────────────────────────────
+    #
+    # **The Playwright smoke test is the whole check — do not add a `curl`
+    # precursor in front of it.** There was one, and it never passed once:
+    # Cloudflare 403s a bare `curl` from a datacenter ASN at the edge,
+    # before the Worker is reached, and GitHub runners sit on Microsoft
+    # ranges. Browser headers don't fix it — bot scoring fingerprints the
+    # TLS handshake. Playwright drives real Chromium, so it is on the
+    # right side of that score, and it asserts hydration and `/health`
+    # rather than just a status code.
+    #
+    # Browsers are cached by resolved Playwright version, the same key as
+    # the e2e jobs. Chromium only — the smoke project is Desktop Chrome.
+    - name: Resolve Playwright version
+      id: pw
+      shell: bash
+      run: |
+        version=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright browsers
+      id: pw-cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+
+    - name: Install Playwright browsers
+      if: steps.pw-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: pnpm --filter ucmc-web exec playwright install --with-deps chromium
+
+    - name: Install Playwright system deps (cache hit)
+      if: steps.pw-cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: pnpm --filter ucmc-web exec playwright install-deps chromium
+
+    # `PLAYWRIGHT_BASE_URL` both points the run at the deployed Worker and
+    # suppresses playwright.config.ts's `webServer`. The `smoke` project
+    # is read-only and unauthenticated (e2e/smoke.spec.ts), and must stay
+    # that way: these are real environments.
+    - name: Smoke test
+      id: smoke
+      shell: bash
+      env:
+        PLAYWRIGHT_BASE_URL: ${{ steps.stack.outputs.app_base_url }}
+      run: pnpm --filter ucmc-web e2e --project=smoke
+
+    # Code only: back to the version before this deploy, with ITS vars and
+    # secrets. D1 stays as migrated (restore it from the bookmark above if
+    # the migration is the problem), which is why migrations must only add.
+    # Prod only: dev stays on the failing version so it can be inspected,
+    # and prod never starts after a red dev.
+    - name: Roll back prod
+      if: failure() && steps.smoke.outcome == 'failure' && inputs.stack == 'prod'
+      shell: bash
+      working-directory: apps/ucmc-web
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        WRANGLER_SEND_METRICS: "false"
+      run: |
+        pnpm exec wrangler rollback --yes --message "Smoke test failed for $GITHUB_SHA (run $GITHUB_RUN_ID)"
+        echo "::error::Smoke test failed on prod; rolled the Worker back to the previous version. D1 was not rolled back."
+
+    - name: Upload the smoke report
+      if: failure() && steps.smoke.outcome == 'failure'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: playwright-report-smoke-${{ inputs.stack }}
+        path: apps/ucmc-web/playwright-report/
+        retention-days: 7

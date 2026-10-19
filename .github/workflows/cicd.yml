@@ -1,22 +1,45 @@
-name: CI
+# One pipeline from check to prod (#312, docs/adr/0002-one-pipeline-from-check-to-prod.md).
+#
+#   pull_request   the checks, and a `pulumi preview` of both stacks
+#   push to main   the same checks, unfiltered, then `required`, then
+#                  deploy-dev, then deploy-prod once a reviewer approves
+#                  the `prod` environment IN THIS RUN
+#
+# So prod only ever gets a commit that passed every check and deployed
+# and smoke-tested on dev first. It used to be a `workflow_dispatch` of a
+# separate deploy.yml on any ref, which tied what reached prod to nothing.
+#
+# The ruleset requires one status check, `required`, which waits on every
+# other check. Rename or add jobs freely; a new CHECK goes in its `needs:`.
+# The deploy steps live in .github/actions/deploy, used once per
+# environment.
+name: CI/CD
 
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  # Break-glass: re-run the whole pipeline for main's head (checks, dev,
+  # then prod behind its reviewer), e.g. after a failed deploy whose cause
+  # was outside the repo. The deploy jobs run only on main, and the
+  # environments' branch policies refuse any other ref anyway.
+  workflow_dispatch:
 
-# One in-flight run per PR. Pushing a fixup used to start a second full
-# run alongside the first — the history shows three complete runs of the
-# same PR inside eight minutes, every one of them superseded before it
-# finished. Nothing downstream consumes a cancelled run, so this is pure
-# recovered capacity, and it matters more now that the E2E jobs run the
-# whole Playwright suite rather than three specs.
+# One in-flight run per PR: pushing a fixup cancels the superseded run.
+# The history once showed three complete runs of the same PR inside eight
+# minutes, every one superseded before it finished.
+#
+# Runs on main are keyed by commit and never cancelled, so every merge
+# gets a complete result and a deploy is never cut off halfway. Each
+# deploy job also queues per environment (see deploy-dev).
 #
 # `pulumi-preview` keeps its own narrower group: it comments on the PR, so
 # it wants to be cancellable independently of the rest of the run.
 concurrency:
-  group: ci-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: cicd-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Nothing by default: every job declares the scopes it needs, so a job
 # added without a `permissions:` block gets none rather than the
@@ -24,28 +47,35 @@ concurrency:
 permissions: {}
 
 jobs:
-  # Computes once per run which side of the monorepo changed; downstream
-  # jobs use these outputs as their `if:` gate. Replaces the workflow-level
-  # `paths:` filters from the prior split `web-ci.yml` / `infra-ci.yml`.
+  # Computes once per PR which side of the monorepo changed; downstream
+  # jobs use these outputs as their `if:` gate.
+  #
+  # Off a PR, every output is `true`: a push or a dispatch runs every
+  # check, because what it deploys is the merged tree, which no PR run
+  # tested exactly, and a skipped check must never be what lets a deploy
+  # through. (paths-filter on a push diffs against the previous commit
+  # only, which isn't "everything since the last deploy" either.)
   paths:
     name: Detect changed paths
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      web: ${{ steps.filter.outputs.web }}
-      infra: ${{ steps.filter.outputs.infra }}
-      infra_cloudflare: ${{ steps.filter.outputs.infra_cloudflare }}
-      workflows: ${{ steps.filter.outputs.workflows }}
+      web: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web == 'true' }}
+      infra: ${{ github.event_name != 'pull_request' || steps.filter.outputs.infra == 'true' }}
+      infra_cloudflare: ${{ github.event_name != 'pull_request' || steps.filter.outputs.infra_cloudflare == 'true' }}
+      workflows: ${{ github.event_name != 'pull_request' || steps.filter.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
         with:
           persist-credentials: false
 
       - id: filter
+        if: github.event_name == 'pull_request'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
@@ -53,12 +83,12 @@ jobs:
               - 'apps/ucmc-web/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - '.github/workflows/ci.yml'
+              - '.github/workflows/cicd.yml'
             infra:
               - 'infra/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - '.github/workflows/ci.yml'
+              - '.github/workflows/cicd.yml'
             # What a `pulumi preview` of infra/cloudflare can change: its
             # program, and the provider/runtime versions in the lockfile.
             # infra/github isn't previewed in CI (it's applied locally).
@@ -66,9 +96,10 @@ jobs:
               - 'infra/cloudflare/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - '.github/workflows/ci.yml'
+              - '.github/workflows/cicd.yml'
             workflows:
               - '.github/workflows/**'
+              - '.github/actions/**'
               - '.github/zizmor.yml'
 
   # Secret scan of the full history (#316). Not path-filtered and cheap
@@ -88,7 +119,7 @@ jobs:
   # No `needs: paths` — it reads none of its outputs.
   secrets:
     name: Secrets — gitleaks
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -128,7 +159,7 @@ jobs:
   # upstream published something new — unlike a from-scratch resolve.
   audit:
     name: Audit — advisories, provenance, image pins
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft != true
     needs: paths
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -167,20 +198,20 @@ jobs:
         run: |
           # Anchored on `image:` so this step's own source can't match.
           pin() { sed -nE 's/^[[:space:]]*image:[[:space:]]*(axllent\/mailpit:[^[:space:]]+).*/\1/p' "$1"; }
-          ci=$(pin .github/workflows/ci.yml)
+          ci=$(pin .github/workflows/cicd.yml)
           compose=$(pin .devcontainer/docker-compose.yml)
           if [ -z "$ci" ] || [ -z "$compose" ]; then
-            echo "::error::Mailpit image line not found — ci.yml: '$ci', docker-compose.yml: '$compose'"
+            echo "::error::Mailpit image line not found — cicd.yml: '$ci', docker-compose.yml: '$compose'"
             exit 1
           fi
           if [ "$ci" != "$compose" ]; then
-            echo "::error::Mailpit pins differ — ci.yml: $ci, docker-compose.yml: $compose"
+            echo "::error::Mailpit pins differ — cicd.yml: $ci, docker-compose.yml: $compose"
             exit 1
           fi
 
   web-lint-test:
     name: Web — lint, typecheck, knip, test
-    if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
+    if: github.event.pull_request.draft != true && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -216,7 +247,7 @@ jobs:
 
   infra-lint:
     name: Infra — lint, typecheck
-    if: github.event.pull_request.draft == false && needs.paths.outputs.infra == 'true'
+    if: github.event.pull_request.draft != true && needs.paths.outputs.infra == 'true'
     needs: paths
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -263,7 +294,7 @@ jobs:
   # how 10 specs stayed uncovered.
   e2e-desktop:
     name: E2E — desktop Chromium (full suite)
-    if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
+    if: github.event.pull_request.draft != true && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
     # The whole chromium project, serially: `workers: 1`, because the
@@ -414,7 +445,7 @@ jobs:
       # (the dev server's does — verified both ways), so the email probe
       # would fail for a reason that says nothing about the build, and
       # D1/R2/KV there are Miniflare rather than the real bindings.
-      # `deploy.yml` runs the full smoke, tag included, after each
+      # The deploy jobs run the full smoke, tag included, after each
       # deploy.
       - name: Smoke-test the production build
         env:
@@ -431,7 +462,7 @@ jobs:
 
   e2e-mobile:
     name: E2E — mobile Safari + Chrome
-    if: github.event.pull_request.draft == false && needs.paths.outputs.web == 'true'
+    if: github.event.pull_request.draft != true && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
     # Two specs in two engines, plus a WebKit download.
@@ -520,8 +551,8 @@ jobs:
 
   # Static analysis for the workflows themselves. Nothing else looks at
   # them: ESLint, tsc and knip all stop at the repo's source, and a
-  # workflow defect only shows up when the workflow runs — which for
-  # `deploy.yml` means in production.
+  # workflow defect only shows up when the workflow runs — which for the
+  # deploy jobs and .github/actions/deploy means on main, in production.
   #
   # Two tools, because they see different things. `actionlint` checks the
   # schema, the `${{ }}` expression types, and (via shellcheck) the `run:`
@@ -534,7 +565,7 @@ jobs:
   # supply-chain problems would be an odd way to start.
   workflow-lint:
     name: Workflows — actionlint, zizmor
-    if: github.event.pull_request.draft == false && needs.paths.outputs.workflows == 'true'
+    if: github.event.pull_request.draft != true && needs.paths.outputs.workflows == 'true'
     needs: paths
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -572,8 +603,9 @@ jobs:
         run: ./actionlint -color
 
       # Config and the reason for every ignore live in .github/zizmor.yml.
+      # The local actions too: the deploy steps live in one.
       - name: zizmor
-        run: ./zizmor --color always .github/workflows/
+        run: ./zizmor --color always .github/workflows/ .github/actions/
 
   # `pulumi preview` of both infra/cloudflare stacks, one sticky comment
   # per stack (pulumi/actions finds its comment by a heading that names the
@@ -595,7 +627,8 @@ jobs:
   pulumi-preview:
     name: Pulumi Preview (${{ matrix.stack }})
     if: >-
-      github.event.pull_request.draft == false &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft != true &&
       github.event.pull_request.head.repo.fork != true &&
       github.actor != 'dependabot[bot]' &&
       needs.paths.outputs.infra_cloudflare == 'true'
@@ -656,6 +689,10 @@ jobs:
   # path filter counts as passing, which is what lets docs-only PRs merge.
   # `pulumi-preview` is deliberately absent (see above).
   #
+  # It is also the deploy jobs' gate, and off a PR nothing is filtered, so
+  # there a skipped check means something went wrong rather than "not
+  # relevant": a push or dispatch run fails on a skip too.
+  #
   # That only holds while every job listed here depends on `paths` alone.
   # If one ever `needs:` another check, a failure upstream SKIPS it, and a
   # skip passes here: make such a job's result fail `required` explicitly,
@@ -676,9 +713,10 @@ jobs:
     timeout-minutes: 2
     permissions: {}
     steps:
-      - name: Every check passed or was skipped
+      - name: Every check passed (or, on a PR, was skipped)
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
+          EVENT: ${{ github.event_name }}
         run: |
           echo "results: $RESULTS"
           for result in $RESULTS; do
@@ -686,4 +724,101 @@ jobs:
               echo "::error::a required check ended with: $result"
               exit 1
             fi
+            if [ "$result" = "skipped" ] && [ "$EVENT" != "pull_request" ]; then
+              echo "::error::a required check was skipped on a $EVENT run, which deploys"
+              exit 1
+            fi
           done
+
+  # ── Deploy ──────────────────────────────────────────────────────────────
+  #
+  # main only, after `required`: dev on every push, then prod in the same
+  # run once a reviewer approves the `prod` environment. Both jobs are the
+  # local action .github/actions/deploy; only the stack and the
+  # environment's secrets differ. One job per environment, because each job
+  # naming a protected environment asks for its own approval.
+  #
+  # Each environment deploys one run at a time and is never cancelled
+  # halfway (`cancel-in-progress: false`). GitHub keeps one PENDING run per
+  # concurrency group and a newer one replaces it, so of several merges
+  # waiting on dev, only the newest deploys next; it contains the others.
+  # Whether a prod job waiting for its reviewer counts as pending (so a
+  # newer approval request replaces it) is unverified until real runs show
+  # it; either way, approve the newest.
+  #
+  # Migrations run before the new code on each environment, and prod
+  # migrates hours or days after dev in the same run, so a migration must
+  # only add: expand now, contract in a later release (see the
+  # rename-permission-or-setting skill).
+  deploy-dev:
+    name: Deploy — dev
+    needs: required
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # the OIDC exchange with Pulumi Cloud
+    environment:
+      name: dev
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: deploy
+        uses: ./.github/actions/deploy
+        with:
+          stack: dev
+          pulumi-organization: ${{ vars.PULUMI_ORGANIZATION }}
+          pulumi-user-login: ${{ vars.PULUMI_USER_LOGIN }}
+          cloudflare-account-id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
+          cloudflare-infra-api-token: ${{ secrets.CLOUDFLARE_INFRA_API_TOKEN }}
+          session-secret: ${{ secrets.SESSION_SECRET }}
+          cloudflare-account-read-token: ${{ secrets.CLOUDFLARE_ACCOUNT_READ_TOKEN }}
+          feedback-github-token: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
+          feedback-github-repo: ${{ vars.FEEDBACK_GITHUB_REPO }}
+
+  # The same commit, once dev deployed it and passed its smoke test. Waits
+  # for the `prod` environment's reviewer (infra/github); a waiting job
+  # uses no runner time, and an approval request expires after 30 days.
+  # A failed prod smoke test rolls the Worker's code back.
+  deploy-prod:
+    name: Deploy — prod
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # the OIDC exchange with Pulumi Cloud
+    environment:
+      name: prod
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: deploy
+        uses: ./.github/actions/deploy
+        with:
+          stack: prod
+          pulumi-organization: ${{ vars.PULUMI_ORGANIZATION }}
+          pulumi-user-login: ${{ vars.PULUMI_USER_LOGIN }}
+          cloudflare-account-id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
+          cloudflare-infra-api-token: ${{ secrets.CLOUDFLARE_INFRA_API_TOKEN }}
+          session-secret: ${{ secrets.SESSION_SECRET }}
+          cloudflare-account-read-token: ${{ secrets.CLOUDFLARE_ACCOUNT_READ_TOKEN }}
+          feedback-github-token: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
+          feedback-github-repo: ${{ vars.FEEDBACK_GITHUB_REPO }}

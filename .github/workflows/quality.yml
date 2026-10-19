@@ -4,7 +4,7 @@ name: Quality
 # informs what to write next, not a gate that blocks a merge — and each
 # job costs several times what it would save by running on every push.
 #
-# `ci.yml` stays the fast per-PR gate; this is where the slow, advisory
+# `cicd.yml` stays the fast per-PR gate; this is where the slow, advisory
 # checks live.
 on:
   schedule:
@@ -68,7 +68,7 @@ jobs:
     name: Mutation testing
     runs-on: ubuntu-latest
     # Re-runs the test suite once per mutant. Scoped to three pure
-    # modules it takes seconds; it is here rather than in ci.yml because
+    # modules it takes seconds; it is here rather than in cicd.yml because
     # that property stops holding the moment the scope widens, and
     # because nothing is blocked on the answer.
     timeout-minutes: 20
