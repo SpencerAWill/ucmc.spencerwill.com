@@ -6,7 +6,7 @@ const steps = [
   {
     number: "1",
     title: "Create an account",
-    body: "Sign up with your email — we&apos;ll send you a magic link.",
+    body: "Sign up with your email — we’ll send you a magic link.",
   },
   {
     number: "2",
