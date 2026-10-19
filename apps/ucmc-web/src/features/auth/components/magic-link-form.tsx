@@ -10,6 +10,7 @@ import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { useRequestMagicLink } from "#/features/auth/api/use-request-magic-link";
 import { DevOutboxLink } from "#/features/auth/components/dev-outbox-link";
 import { useAppForm } from "#/lib/form/form";
+import { safeReturnPath } from "#/lib/safe-return-path";
 import {
   webauthnAuthenticateBeginFn,
   webauthnAuthenticateFinishFn,
@@ -212,9 +213,7 @@ function usePasskeyAutofill({ redirectTo }: { redirectTo?: string }): void {
           await navigate({ to: "/register/pending" });
           return;
         }
-        const target =
-          redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
-        await navigate({ to: target });
+        await navigate({ href: safeReturnPath(redirectTo) ?? "/" });
       } catch {
         // User cancelled, browser timed out, or the ceremony was aborted
         // by a newer call. Silent fallback to magic-link is fine —

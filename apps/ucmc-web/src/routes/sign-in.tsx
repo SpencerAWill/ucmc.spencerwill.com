@@ -5,6 +5,7 @@ import { PageContainer } from "#/components/layouts/page-container";
 import { Alert, AlertDescription } from "#/components/ui/alert";
 import { MagicLinkForm } from "#/features/auth/components/magic-link-form";
 import { SignInWithPasskeyButton } from "#/features/auth/components/sign-in-with-passkey-button";
+import { safeReturnPath } from "#/lib/safe-return-path";
 
 // URL search params arrive as strings; coerce so `?invalid=true` parses
 // correctly whether the user landed here via a TanStack Router redirect
@@ -33,11 +34,10 @@ export const Route = createFileRoute("/sign-in")({
 
 function SignInPage() {
   const { invalid, rate_limited, redirect } = Route.useSearch();
-  // Only honor relative-path redirects — anything else (external URL,
-  // protocol-relative, missing leading slash) is dropped to prevent
+  // Only honor root-relative paths — anything else (external URL,
+  // protocol-relative, control characters) is dropped to prevent
   // open-redirect via crafted /sign-in?redirect=... links.
-  const safeRedirect =
-    redirect && redirect.startsWith("/") ? redirect : undefined;
+  const safeRedirect = safeReturnPath(redirect) ?? undefined;
 
   return (
     <PageContainer width="focused" className="flex flex-col gap-6">

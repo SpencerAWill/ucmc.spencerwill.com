@@ -32,13 +32,13 @@ vi.mock("#/features/auth/server/server-fns", () => ({
   signOutFn: vi.fn(),
 }));
 
-function renderButton() {
+function renderButton(redirectTo?: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <SignInWithPasskeyButton />
+      <SignInWithPasskeyButton redirectTo={redirectTo} />
     </QueryClientProvider>,
   );
 }
@@ -98,11 +98,41 @@ describe("SignInWithPasskeyButton", () => {
     );
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+      expect(navigateMock).toHaveBeenCalledWith({ href: "/" });
     });
     expect(startAuthentication).toHaveBeenCalledWith({
       optionsJSON: { challenge: "abc" },
       useBrowserAutofill: false,
+    });
+  });
+
+  it.each([
+    [
+      "the return path, search included",
+      "/gear/abc?tab=loans",
+      "/gear/abc?tab=loans",
+    ],
+    ["home for a protocol-relative return path", "//evil.example", "/"],
+  ])("sends an approved user to %s", async (_label, redirectTo, expected) => {
+    const user = userEvent.setup();
+    webauthnAuthenticateBeginFn.mockResolvedValue({
+      ok: true,
+      options: { challenge: "abc" },
+    });
+    startAuthentication.mockResolvedValue({ id: "cred-1" });
+    webauthnAuthenticateFinishFn.mockResolvedValue({
+      ok: true,
+      hasProfile: true,
+      status: "approved",
+    });
+
+    renderButton(redirectTo);
+    await user.click(
+      await screen.findByRole("button", { name: /sign in with a passkey/i }),
+    );
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({ href: expected });
     });
   });
 

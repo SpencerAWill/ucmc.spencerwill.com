@@ -5,6 +5,7 @@ import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { useConsumeMagicLink } from "#/features/auth/api/use-consume-magic-link";
 import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
+import { safeReturnPath } from "#/lib/safe-return-path";
 
 const callbackSearchSchema = z.object({
   token: z.string().min(1),
@@ -69,9 +70,7 @@ function CallbackPage() {
             await navigate({ to: "/register/pending" });
             return;
           }
-          const target =
-            redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
-          await navigate({ to: target });
+          await navigate({ href: safeReturnPath(redirectTo) ?? "/" });
           return;
         }
 

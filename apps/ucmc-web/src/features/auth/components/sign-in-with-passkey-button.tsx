@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Alert, AlertDescription } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { usePasskeyAuthenticate } from "#/features/auth/api/use-passkey-authenticate";
+import { safeReturnPath } from "#/lib/safe-return-path";
 
 /**
  * Explicit "Sign in with a passkey" trigger for the sign-in page. Runs
@@ -58,9 +59,7 @@ export function SignInWithPasskeyButton({
             await navigate({ to: "/register/pending" });
             return;
           }
-          const target =
-            redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
-          await navigate({ to: target });
+          await navigate({ href: safeReturnPath(redirectTo) ?? "/" });
         },
         onError: (e: unknown) => {
           // User cancellation throws a DOMException with name

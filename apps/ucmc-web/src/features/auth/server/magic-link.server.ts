@@ -14,6 +14,7 @@
  */
 import { and, eq, isNull } from "drizzle-orm";
 
+import { safeReturnPath } from "#/lib/safe-return-path";
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import { getDb, schema } from "#/server/db";
 import { magicLinkEmail, sendEmail } from "#/server/email/resend";
@@ -107,12 +108,11 @@ export async function requestMagicLink(
     });
 
   const params = new URLSearchParams({ token });
-  if (
-    args.intent !== "add_email" &&
-    args.redirect &&
-    args.redirect.startsWith("/")
-  ) {
-    params.set("redirect", args.redirect);
+  if (args.intent !== "add_email") {
+    const returnPath = safeReturnPath(args.redirect);
+    if (returnPath !== null) {
+      params.set("redirect", returnPath);
+    }
   }
   const callbackPath =
     args.intent === "add_email" ? "/verify-email" : "/auth/callback";

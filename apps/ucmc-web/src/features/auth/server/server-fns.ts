@@ -27,6 +27,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { safeReturnPath } from "#/lib/safe-return-path";
 import {
   detailsInputSchema,
   profileFacetsInputSchema,
@@ -68,14 +69,13 @@ export const requestMagicLinkFn = createServerFn({ method: "POST" })
       turnstileToken: z.string().default(""),
       // Optional post-sign-in redirect target captured from
       // /sign-in?redirect=... and round-tripped through the emailed
-      // callback URL. Must start with "/" — anything else is silently
-      // dropped so a malicious caller can't smuggle an external URL into
-      // the magic-link email. The /auth/callback route also re-validates
-      // before navigating, so this is defense in depth.
+      // callback URL. Must pass `safeReturnPath` so a malicious caller
+      // can't smuggle an external URL into the magic-link email. The
+      // /auth/callback route also re-validates before navigating, so
+      // this is defense in depth.
       redirect: z
         .string()
-        .max(2048)
-        .refine((v) => v.startsWith("/"), "must be a relative path")
+        .refine((v) => safeReturnPath(v) !== null, "must be a relative path")
         .optional(),
     }),
   )

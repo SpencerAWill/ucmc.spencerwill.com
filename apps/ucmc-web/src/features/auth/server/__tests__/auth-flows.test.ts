@@ -72,6 +72,7 @@ const {
   listPendingRegistrationsAction,
 } = await import("#/features/members/server/member-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const { sendEmail } = await import("#/server/email/resend");
 
 // ── helpers ─────────────────────────────────────────────────────────────
 
@@ -268,6 +269,40 @@ describe("requestMagicLinkAction response", () => {
     expect(limited).toEqual(sent);
     // No outbox in the test Worker, so no link: the same as prod.
     expect(sent).toEqual({ ok: true, devOutboxHref: null });
+  });
+});
+
+describe("requestMagicLinkAction return path", () => {
+  /** The `/auth/callback` URL in the most recent magic-link email. */
+  function lastEmailedCallback(): URL {
+    const message = vi.mocked(sendEmail).mock.lastCall?.[0];
+    const href = message?.text.match(/https?:\/\/\S+\/auth\/callback\S*/)?.[0];
+    if (!href) {
+      throw new Error("no magic-link email was sent");
+    }
+    return new URL(href);
+  }
+
+  it("embeds a safe return path, search included, in the emailed link", async () => {
+    vi.mocked(sendEmail).mockClear();
+    await requestMagicLinkAction({
+      email: TEST_EMAIL,
+      turnstileToken: "",
+      redirect: "/gear/abc?tab=loans",
+    });
+    expect(lastEmailedCallback().searchParams.get("redirect")).toBe(
+      "/gear/abc?tab=loans",
+    );
+  });
+
+  it("drops a protocol-relative return path from the emailed link", async () => {
+    vi.mocked(sendEmail).mockClear();
+    await requestMagicLinkAction({
+      email: TEST_EMAIL,
+      turnstileToken: "",
+      redirect: "/\\evil.example",
+    });
+    expect(lastEmailedCallback().searchParams.has("redirect")).toBe(false);
   });
 });
 
