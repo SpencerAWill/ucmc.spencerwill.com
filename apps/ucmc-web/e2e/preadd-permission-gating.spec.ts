@@ -34,8 +34,8 @@ test("non-officer cannot reach members management tabs", async ({
   await page.goto("/sign-in");
   await waitForHydration(page);
   await page.getByRole("textbox", { name: /email/i }).fill(memberEmail);
-  await page.getByRole("button", { name: /send sign-in link/i }).click();
-  await expect(page.getByText(/check.*for a sign-in link/i)).toBeVisible();
+  await page.getByRole("button", { name: /email me a link/i }).click();
+  await expect(page.getByText(/check.*for a link/i)).toBeVisible();
   const link = await mailpit.extractFirstLink(memberEmail);
   const url = new URL(link);
   await page.goto(url.pathname + url.search);

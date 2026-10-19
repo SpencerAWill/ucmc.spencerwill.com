@@ -34,9 +34,7 @@ export function Hero() {
       ) : null}
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button asChild size="lg">
-          <Link to="/sign-in" search={{ register: true }}>
-            Join the club
-          </Link>
+          <Link to="/sign-in">Join the club</Link>
         </Button>
         <Button asChild size="lg" variant={hasSlides ? "secondary" : "outline"}>
           <Link to="/sign-in">Sign in</Link>
