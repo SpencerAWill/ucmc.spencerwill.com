@@ -18,6 +18,11 @@ concurrency:
   group: ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Nothing by default: every job declares the scopes it needs, so a job
+# added without a `permissions:` block gets none rather than the
+# repository's default token permissions (#317).
+permissions: {}
+
 jobs:
   # Computes once per run which side of the monorepo changed; downstream
   # jobs use these outputs as their `if:` gate. Replaces the workflow-level
@@ -99,11 +104,21 @@ jobs:
       - name: gitleaks
         run: ./gitleaks git --log-opts="--full-history HEAD" --redact --no-banner --verbose .
 
-  # Workspace-level supply-chain audit. Runs once regardless of which
-  # side changed — pnpm audit walks the whole lockfile, so splitting it
-  # by path gave no additional coverage.
+  # Workspace-level supply-chain checks. Runs once regardless of which
+  # side changed — each walks the whole lockfile, so splitting by path
+  # gave no additional coverage.
+  #
+  # Besides `pnpm audit`, it enforces `trustPolicy` over the LOCKED tree.
+  # Every other install in CI is `--frozen-lockfile`, which resolves nothing
+  # and so never runs the provenance check; a Dependabot bump or a `pnpm
+  # add` that slipped a downgraded version into the lockfile would merge
+  # green. `--fix-lockfile` makes pnpm re-validate every locked version
+  # (~4 s, metadata only, no node_modules); a healthy lockfile comes back
+  # byte-identical, so `git diff --exit-code` fails on anything else
+  # (#317). It only goes red when the lockfile is wrong, never because
+  # upstream published something new — unlike a from-scratch resolve.
   audit:
-    name: Audit
+    name: Audit — advisories, provenance, image pins
     if: github.event.pull_request.draft == false
     needs: paths
     runs-on: ubuntu-latest
@@ -125,6 +140,34 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm audit --audit-level high --prod
+
+      # The state file is pnpm's "nothing changed since the last install"
+      # marker, and the frozen install above just wrote it: with it present
+      # this command prints "Already up to date" and checks NOTHING, so it
+      # could never fail. Removing it is what makes the step a real check.
+      - name: Provenance (trustPolicy) over the locked tree
+        run: |
+          rm -f node_modules/.pnpm-workspace-state-v1.json
+          pnpm install --lockfile-only --fix-lockfile --ignore-scripts
+          git diff --exit-code pnpm-lock.yaml
+
+      # Mailpit runs as this file's `e2e-desktop` service and in the
+      # devcontainer. Dependabot bumps only the compose file, so this is
+      # what notices the two drifting apart.
+      - name: Mailpit pins agree
+        run: |
+          # Anchored on `image:` so this step's own source can't match.
+          pin() { sed -nE 's/^[[:space:]]*image:[[:space:]]*(axllent\/mailpit:[^[:space:]]+).*/\1/p' "$1"; }
+          ci=$(pin .github/workflows/ci.yml)
+          compose=$(pin .devcontainer/docker-compose.yml)
+          if [ -z "$ci" ] || [ -z "$compose" ]; then
+            echo "::error::Mailpit image line not found — ci.yml: '$ci', docker-compose.yml: '$compose'"
+            exit 1
+          fi
+          if [ "$ci" != "$compose" ]; then
+            echo "::error::Mailpit pins differ — ci.yml: $ci, docker-compose.yml: $compose"
+            exit 1
+          fi
 
   web-lint-test:
     name: Web — lint, typecheck, knip, test
@@ -233,7 +276,11 @@ jobs:
     # also publishes SMTP on 1025, which nothing here speaks.
     services:
       mailpit:
-        image: axllent/mailpit:v1.28
+        # Version AND index digest (#317): a tag can be re-pointed, a digest
+        # can't. Same pin as `.devcontainer/docker-compose.yml`. Dependabot's
+        # github-actions ecosystem doesn't read service images, so bump this
+        # by hand alongside the compose file when Dependabot moves that one.
+        image: axllent/mailpit:v1.31.5@sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea
         ports:
           - 8025:8025
 

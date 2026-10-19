@@ -23,16 +23,37 @@ updates:
       prefix: "chore"
       prefix-development: "chore"
       include: "scope"
+    ignore:
+      # Node's types follow the Node we run (`.nvmrc`, CI, the devcontainer
+      # feature), not the newest Node. A major here types APIs the runtime
+      # doesn't have, and drifted once to ^26 against Node 24 (#317). Raise
+      # it by hand in the change that moves `.nvmrc`.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       # Framework families — keep majors visible by batching per-family.
       tanstack:
         patterns: ["@tanstack/*"]
       tailwind:
         patterns: ["tailwindcss", "@tailwindcss/*"]
+      # Vitest rides with the Cloudflare family: `@cloudflare/vitest-plugin`
+      # peers on a Vitest range, and the `@vitest/*` companions peer on the
+      # exact Vitest version, so bumping any of them alone fails install.
       cloudflare:
-        patterns: ["@cloudflare/*", "wrangler", "miniflare", "workerd"]
+        patterns:
+          - "@cloudflare/*"
+          - "wrangler"
+          - "miniflare"
+          - "workerd"
+          - "vitest"
+          - "@vitest/*"
+      # `@pulumi/cloudflare` is excluded here AND from both catch-alls below,
+      # so it always gets a PR of its own. `.claude/rules/infra.md`: 6.21.0
+      # planned a replacement of the dev D1 database, so a provider bump is
+      # reviewed alone against its `pulumi preview`, never inside a group.
       pulumi:
         patterns: ["@pulumi/*", "pulumi"]
+        exclude-patterns: ["@pulumi/cloudflare"]
       linting:
         patterns:
           - "eslint"
@@ -51,9 +72,11 @@ updates:
       production-minor:
         dependency-type: "production"
         update-types: ["minor", "patch"]
+        exclude-patterns: ["@pulumi/cloudflare"]
       dev-dependencies:
         dependency-type: "development"
         update-types: ["minor", "patch"]
+        exclude-patterns: ["@pulumi/cloudflare"]
 
   # ── GitHub Actions (guards against action tag-hijack; same cooldown)
   - package-ecosystem: "github-actions"
@@ -69,6 +92,36 @@ updates:
       include: "scope"
     groups:
       github-actions:
+        patterns: ["*"]
+
+  # ── Devcontainer features (node, github-cli) and their lockfile,
+  #    `.devcontainer/devcontainer-lock.json`
+  - package-ecosystem: "devcontainers"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    groups:
+      devcontainers:
+        patterns: ["*"]
+
+  # ── Compose sidecars (Mailpit). Its pin is duplicated as the CI service
+  #    image in ci.yml, which no ecosystem reads — update both together.
+  - package-ecosystem: "docker-compose"
+    directory: "/.devcontainer"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    groups:
+      docker-compose:
         patterns: ["*"]
 
   # ── Devcontainer base image
