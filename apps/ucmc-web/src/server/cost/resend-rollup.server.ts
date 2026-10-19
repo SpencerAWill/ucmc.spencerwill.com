@@ -14,8 +14,23 @@
 import { and, asc, gte, lt } from "drizzle-orm";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
+import { env } from "#/server/cloudflare-env";
 import type { SnapshotRow } from "#/server/cost/snapshot-row";
 import { getDb, schema } from "#/server/db";
+import { emailTier } from "#/server/email/email-tier";
+
+/**
+ * Whether this Worker sends through Resend at all.
+ *
+ * Dev doesn't since #297 — its mail goes to the outbox — and a
+ * `resend.sends` series there would count outbox writes as Resend
+ * volume against Resend's free-tier limit. Asked of `emailTier()`
+ * rather than of `RESEND_API_KEY`, because dev can carry a stale key
+ * the sender ignores.
+ */
+export function resendConfigured(): boolean {
+  return emailTier(env).tier === "resend";
+}
 
 /** Civil date in the club zone for an instant. */
 function clubDate(instant: Temporal.Instant): string {
