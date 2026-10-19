@@ -2537,6 +2537,28 @@ export const emailSends = sqliteTable(
 );
 
 /**
+ * Email a deployed dev Worker stored instead of sending — see
+ * `0082_email_outbox.sql`.
+ *
+ * **Correspondence, unlike `email_sends`**: recipient, subject and the
+ * full body, which for a magic link is a working credential. Written
+ * on dev only and kept one day; see `src/server/email/outbox.server.ts`.
+ */
+export const emailOutbox = sqliteTable(
+  "email_outbox",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    to: text("to").notNull(),
+    subject: text("subject").notNull(),
+    text: text("text").notNull(),
+    html: text("html"),
+    createdAt: timestamp("created_at").notNull(),
+  },
+  (table) => [index("email_outbox_created_at_idx").on(table.createdAt)],
+);
+
+/**
  * Daily cost and usage per service — see `0079_cost_snapshots.sql`.
  *
  * **Never swept.** Operational spend, not member data, and the reports

@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 
 import { env } from "#/server/cloudflare-env";
 import { getDb } from "#/server/db";
+import { emailTier } from "#/server/email/email-tier";
 import { getKv } from "#/server/kv";
 import { getPrivateBucket } from "#/server/r2";
 import { checkHealthRateLimit } from "#/server/rate-limit.server";
@@ -76,9 +77,18 @@ async function checkKv(): Promise<HealthCheck> {
 async function checkEmail(): Promise<HealthCheck> {
   const time = new Date().toISOString();
 
-  // Mirrors the tier order in `server/email/resend.ts` so /health reports
-  // which provider sendEmail() would actually use right now.
-  if (env.RESEND_API_KEY) {
+  // The same `emailTier()` `sendEmail` reads, so /health reports which
+  // provider it would actually use right now.
+  const tier = emailTier(env);
+
+  if (tier.tier === "outbox") {
+    // Nothing to probe beyond D1, which `d1:read` already covers. The
+    // check exists so /health names the tier: a dev Worker reporting
+    // `email:outbox` is right, and anything else reporting it is not.
+    return { name: "email:outbox", status: "pass", time };
+  }
+
+  if (tier.tier === "resend") {
     try {
       // Probe via POST /emails with an empty body. The keys we mint per
       // stack are `sending_access`-scoped and Resend returns
@@ -120,7 +130,7 @@ async function checkEmail(): Promise<HealthCheck> {
     }
   }
 
-  if (env.MAILPIT_URL) {
+  if (tier.tier === "mailpit") {
     try {
       const res = await fetch(`${env.MAILPIT_URL}/api/v1/info`, {
         method: "GET",
@@ -154,7 +164,7 @@ async function checkEmail(): Promise<HealthCheck> {
     name: "email:misconfigured",
     status: "fail",
     time,
-    output: "no email provider configured (set RESEND_API_KEY or MAILPIT_URL)",
+    output: tier.reason,
   };
 }
 

@@ -383,6 +383,7 @@ describe("runRetentionSweeps", () => {
       // Seeded nothing for it; the key must still be reported, because
       // the orchestrator's contract is that every sweep answers.
       emailSendLog: 0,
+      emailOutbox: 0,
     });
 
     // Verify side effects landed.

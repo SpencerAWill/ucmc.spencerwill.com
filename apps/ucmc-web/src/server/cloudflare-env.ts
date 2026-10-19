@@ -40,8 +40,8 @@ export interface WorkerEnv {
   CLOUDFLARE_ACCOUNT_ID?: string;
 
   // Secrets — set via `wrangler secret put` in deployed envs, or .env.local
-  // locally. RESEND_API_KEY is optional because the email adapter falls
-  // back to console-log when unset. SESSION_SECRET is required wherever
+  // locally. RESEND_API_KEY is optional because the email adapter uses
+  // Mailpit or the outbox instead, or throws (see `email/email-tier.ts`). SESSION_SECRET is required wherever
   // the proof cookie is issued — the module that reads it throws at first
   // use, not here at module scope. TURNSTILE_SECRET_KEY is optional —
   // when unset, the sign-in form skips the challenge and Turnstile
@@ -80,9 +80,23 @@ export interface WorkerEnv {
 
   // Dev-only — base URL of the Mailpit sidecar (e.g.
   // "http://mailpit:8025"). When set AND RESEND_API_KEY is absent, the
-  // email adapter POSTs to Mailpit's HTTP send API instead of writing to
-  // the Worker console. See docker-compose.yml for the sidecar config.
+  // email adapter POSTs to Mailpit's HTTP send API. See
+  // docker-compose.yml for the sidecar config.
   MAILPIT_URL?: string;
+
+  // Dev-only — the email outbox (#297, docs/adr/0001-dev-email-outbox.md).
+  // When EMAIL_OUTBOX is "1", `sendEmail` stores each message in D1
+  // instead of sending it, and `/dev/outbox` lists them. Passed as vars
+  // by `deploy.yml` from the dev stack's Pulumi outputs; prod's outputs
+  // are empty strings, and infra refuses `emailOutbox` on prod.
+  //
+  // The page verifies Cloudflare Access's token itself: issuer
+  // `https://${ACCESS_TEAM_DOMAIN}`, audience ACCESS_OUTBOX_AUD (the
+  // Access application's tag). Without both, the sender refuses
+  // EMAIL_OUTBOX rather than fill a table nobody can read.
+  EMAIL_OUTBOX?: string;
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_OUTBOX_AUD?: string;
 
   // Logging threshold for `server/log/log.server.ts` — "debug" |
   // "info" | "warn" | "error". Unset everywhere today, which is the

@@ -85,7 +85,9 @@ Found the hard way twice: #259 (a 500 once a table crossed ~100 rows in the wind
 
 Local dev loads from `apps/ucmc-web/.env.local` per wrangler v4 `.env` precedence (`.dev.vars` is no longer used). The devcontainer sets `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` so host shell env wins over `.env.local`. Deployed envs get vars from Pulumi `--var` flags + `wrangler secret put` via `deploy.yml`.
 
-Email has **two** tiers (`src/server/email/resend.ts`): Resend API if `RESEND_API_KEY`, else Mailpit at `MAILPIT_URL`, **else it throws `EmailNotConfiguredError`**. The console-log "fallback" this used to describe was removed deliberately — it either dumped magic-link URLs into dashboard-readable Workers Logs or left users staring at a never-arriving email. See `notifications.md`.
+Email picks a tier through `emailTier()` (`src/server/email/email-tier.ts`): the D1 outbox if `EMAIL_OUTBOX` (dev only, behind Cloudflare Access), else the Resend API if `RESEND_API_KEY`, else Mailpit at `MAILPIT_URL`, **else it throws `EmailNotConfiguredError`**. The console-log "fallback" this used to describe was removed deliberately — it either dumped magic-link URLs into dashboard-readable Workers Logs or left users staring at a never-arriving email. See `notifications.md`.
+
+**`email_outbox` is the one table holding correspondence** — recipient, subject and body, which for a magic link is a working credential. It is written on dev only, pruned on read and swept daily at one day. Turning it on for prod is a compliance change, not a config flag.
 
 ## Cost and usage snapshots
 

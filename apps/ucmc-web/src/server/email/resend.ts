@@ -1,15 +1,18 @@
 /**
- * Email sender with two configurable providers and a hard-fail
- * fallback:
+ * Email sender. Which provider it uses is `emailTier()`
+ * (`./email-tier.ts`), shared with `/health` so the two cannot disagree:
  *
- * 1. **Resend** (`RESEND_API_KEY` set) — production path. Posts to the
+ * 1. **Outbox** (`EMAIL_OUTBOX` set, dev only) — stores the message in
+ *    D1 for `/dev/outbox`, behind Cloudflare Access, instead of sending
+ *    it (#297, docs/adr/0001-dev-email-outbox.md).
+ * 2. **Resend** (`RESEND_API_KEY` set) — production path. Posts to the
  *    Resend transactional-email API.
- * 2. **Mailpit** (`MAILPIT_URL` set, `RESEND_API_KEY` absent) — dev
- *    sidecar path. Posts to the Mailpit HTTP send API so emails land in
- *    a real inbox UI at http://localhost:8025. Playwright e2e tests poll
- *    the same API to retrieve magic-link tokens.
+ * 3. **Mailpit** (`MAILPIT_URL` set) — local dev sidecar. Posts to the
+ *    Mailpit HTTP send API so emails land in a real inbox UI at
+ *    http://localhost:8025. Playwright e2e tests poll the same API to
+ *    retrieve magic-link tokens.
  *
- * If neither is configured, `sendEmail` THROWS rather than silently
+ * If none is configured, `sendEmail` THROWS rather than silently
  * succeeding. An earlier revision logged the email to the Worker
  * console as a "fallback", but that approach has two failure modes
  * — it either dumps magic-link URLs (auth material) into Workers
@@ -17,18 +20,21 @@
  * the 15-minute TTL, or it suppresses the body and leaves users
  * staring at a never-arriving email. The right behavior is to fail
  * loudly so an operator notices the misconfiguration and the user
- * sees an error rather than a phantom success.
+ * sees an error rather than a phantom success. The outbox is not that
+ * fallback: it is opted into explicitly, readable only through
+ * Cloudflare Access, and refused on prod.
  */
 import { env } from "#/server/cloudflare-env";
 import type { EmailKind } from "#/server/email/email-kinds";
+import { emailTier } from "#/server/email/email-tier";
 import { recordEmailSend } from "#/server/email/email-send-log.server";
 import { redactString } from "#/server/log/redact.server";
 
 export class EmailNotConfiguredError extends Error {
-  constructor() {
+  constructor(reason: string) {
     super(
-      "Email provider not configured. Set RESEND_API_KEY (production) " +
-        "or MAILPIT_URL (development) so magic-link emails actually go out.",
+      `Email provider not configured: ${reason}. Magic-link emails ` +
+        "cannot go out until it is.",
     );
     this.name = "EmailNotConfiguredError";
   }
@@ -71,39 +77,47 @@ export interface EmailMessage {
 }
 
 export async function sendEmail(message: EmailMessage): Promise<void> {
-  // Tier 1 — Resend (production). Tier 2 — Mailpit (dev sidecar).
-  const send = env.RESEND_API_KEY
-    ? () => sendViaResend(message)
-    : env.MAILPIT_URL
-      ? () => sendViaMailpit(message)
-      : null;
-
-  if (send) {
-    try {
-      await send();
-    } catch (err) {
-      // A rejected send is still a send attempt and still tells us about
-      // volume; recording only successes would make our figures
-      // disagree with the provider's own count in exactly the months
-      // something was wrong.
-      await recordEmailSend({ kind: message.kind, ok: false });
-      throw err;
-    }
-    await recordEmailSend({ kind: message.kind, ok: true });
-    return;
+  const tier = emailTier(env);
+  if (tier.tier === "none") {
+    // Deliberately NOT recorded: no provider is configured, so nothing
+    // was attempted. A misconfiguration is not email volume.
+    //
+    // Fail loudly. An earlier revision logged a structured-warning
+    // placeholder here, but the rest of the system would still mark
+    // the magic-link request as successful, leaving the user with a
+    // token they can never see. Throwing instead surfaces a 500 to the
+    // user and a clear stack trace to the operator. The reason names
+    // the env vars so the fix is discoverable from the log line.
+    throw new EmailNotConfiguredError(tier.reason);
   }
 
-  // Deliberately NOT recorded: no provider is configured, so nothing was
-  // attempted. A misconfiguration is not email volume.
+  const send = {
+    outbox: () => sendToOutbox(message),
+    resend: () => sendViaResend(message),
+    mailpit: () => sendViaMailpit(message),
+  }[tier.tier];
 
-  // No provider — fail loudly. An earlier revision logged a
-  // structured-warning placeholder here, but the rest of the system
-  // would still mark the magic-link request as successful, leaving
-  // the user with a token they can never see. Throwing instead
-  // surfaces a 500 to the user and a clear stack trace to the
-  // operator. The error message names the env vars so the fix is
-  // discoverable from the log line.
-  throw new EmailNotConfiguredError();
+  try {
+    await send();
+  } catch (err) {
+    // A rejected send is still a send attempt and still tells us about
+    // volume; recording only successes would make our figures
+    // disagree with the provider's own count in exactly the months
+    // something was wrong.
+    await recordEmailSend({ kind: message.kind, ok: false });
+    throw err;
+  }
+  // The outbox is counted like Mailpit is: the usage log is about what
+  // the app tried to send, and dev's figures never reach a report that
+  // compares them with Resend's.
+  await recordEmailSend({ kind: message.kind, ok: true });
+}
+
+async function sendToOutbox(message: EmailMessage): Promise<void> {
+  // Dynamic, like `recordEmailSend`'s D1 import: every sender module
+  // imports this file, and only a dev Worker ever takes this branch.
+  const { storeInOutbox } = await import("#/server/email/outbox.server");
+  await storeInOutbox(message);
 }
 
 async function sendViaResend(message: EmailMessage): Promise<void> {
