@@ -231,16 +231,50 @@ if (!outbox.emailOutbox && !emailStack) {
 
 const emailRef = emailStack ? new pulumi.StackReference(emailStack) : null;
 
+/**
+ * Reads one string output from the shared stack and fails the `up` if
+ * it is missing, empty or malformed. `requireOutput` only rejects
+ * `undefined`, so without this an empty string or an object would be
+ * uploaded to the Worker and surface as a failed sign-in email in prod
+ * rather than as a failed deploy.
+ */
+function sharedString(
+  ref: pulumi.StackReference,
+  name: string,
+  isValid: (value: string) => boolean,
+): pulumi.Output<string> {
+  return ref.requireOutput(name).apply((value: unknown) => {
+    if (typeof value !== "string" || !isValid(value)) {
+      throw new Error(
+        `${emailStack} output \`${name}\` is missing or malformed (#298).`,
+      );
+    }
+    return value;
+  });
+}
+
 // Sending-scoped API key. Consumed by `deploy.yml` as the Worker's
-// RESEND_API_KEY secret via `pulumi stack output --show-secrets`; the
-// shared stack exports it as a secret, and reading it keeps it one.
+// RESEND_API_KEY secret via `pulumi stack output --show-secrets`.
+// Wrapped in `pulumi.secret` HERE rather than trusted to arrive as one:
+// if the shared stack ever exported it plainly, the live key would sit
+// unencrypted in this stack's state and print from a bare
+// `pulumi stack output`.
 export const resendApiKey = emailRef
-  ? (emailRef.requireOutput("ucmcResendApiKey") as pulumi.Output<string>)
+  ? pulumi.secret(
+      sharedString(emailRef, "ucmcResendApiKey", (key) => key.length > 0),
+    )
   : pulumi.secret("");
 // The envelope address, `ucmc@spencerwill.com` on prod. `deploy.yml`
-// passes it as RESEND_FROM; the display name is `resendFromName` above.
+// reads it WITHOUT `--show-secrets` and passes it as RESEND_FROM, so it
+// is explicitly unsecreted: an address isn't a secret, and a secret
+// output would reach the Worker as the literal `[secret]` and fail
+// every send with a 422. The display name is `resendFromName` above.
 export const resendFromEmail = emailRef
-  ? (emailRef.requireOutput("ucmcFromEmail") as pulumi.Output<string>)
+  ? pulumi.unsecret(
+      sharedString(emailRef, "ucmcFromEmail", (email) =>
+        /^[^\s@]+@[^\s@]+$/.test(email),
+      ),
+    )
   : pulumi.output("");
 
 // Cloudflare Turnstile widget — anti-bot challenge on the sign-in form.
