@@ -29,9 +29,10 @@ vi.mock("#/features/members/server/rbac-fns", async (importOriginal) => ({
   listPermissionsFn: vi.fn(),
 }));
 
+const setRolePermissionsMutate = vi.fn();
 vi.mock("#/features/members/api/use-set-role-permissions", () => ({
   useSetRolePermissions: () => ({
-    mutate: vi.fn(),
+    mutate: setRolePermissionsMutate,
     isPending: false,
     isError: false,
     error: null,
@@ -189,12 +190,34 @@ describe("RoleEditorSheet — Details tab", () => {
 
 beforeEach(() => {
   setRoleMembersMutate.mockClear();
+  setRolePermissionsMutate.mockClear();
 });
 
 const PERMS: PermissionSummary[] = [
-  { id: "perm_gear_read", name: "gear:read", description: "Browse gear" },
-  { id: "perm_gear_manage", name: "gear:manage", description: "Edit gear" },
-  { id: "perm_waivers_view", name: "waivers:view", description: null },
+  {
+    id: "perm_gear_read",
+    name: "gear:read",
+    description: "Browse gear",
+    anonymousGrantable: false,
+  },
+  {
+    id: "perm_gear_manage",
+    name: "gear:manage",
+    description: "Edit gear",
+    anonymousGrantable: false,
+  },
+  {
+    id: "perm_waivers_view",
+    name: "waivers:view",
+    description: null,
+    anonymousGrantable: false,
+  },
+  {
+    id: "perm_public_calendar_view",
+    name: "public_calendar:view",
+    description: null,
+    anonymousGrantable: true,
+  },
 ];
 
 describe("RoleEditorSheet — Permissions tab", () => {
@@ -243,6 +266,56 @@ describe("RoleEditorSheet — Permissions tab", () => {
 
     expect(screen.getByRole("button", { name: /gear/i })).toHaveTextContent(
       "2 / 2",
+    );
+  });
+
+  it("offers the anonymous role only the permissions declared public", () => {
+    // Every signed-in viewer inherits the anonymous role's grants (#300),
+    // so offering it `waivers:view` would put a Waivers entry in front of
+    // the whole site that the server then refuses.
+    renderWithRole(makeRole({ id: "role_anonymous", name: "anonymous" }), {
+      permissions: PERMS,
+      initialTab: "permissions",
+    });
+
+    expect(
+      screen.getByRole("button", { name: /public_calendar/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /gear/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /waivers/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/0 of 1 permissions/i)).toBeInTheDocument();
+  });
+
+  it("drops a hidden stray grant on save rather than getting refused", async () => {
+    // A row written around the server check (seed script, raw SQL) is
+    // hidden here and can't be unticked. Sending it back would get the
+    // whole save refused and leave the role uneditable from /access.
+    renderWithRole(
+      makeRole({
+        id: "role_anonymous",
+        name: "anonymous",
+        permissionIds: ["perm_waivers_view"],
+      }),
+      { permissions: PERMS, initialTab: "permissions" },
+    );
+    expect(screen.getByText(/0 of 1 permissions/i)).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /public_calendar/i }),
+    );
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(setRolePermissionsMutate).toHaveBeenCalledWith(
+      {
+        roleId: "role_anonymous",
+        permissionIds: ["perm_public_calendar_view"],
+      },
+      expect.anything(),
     );
   });
 });

@@ -172,13 +172,20 @@ export function RoleEditorSheet({
   });
 
   const {
-    data: permissions = [],
+    data: catalog = [],
     isError: permsError,
     error: permsErrorValue,
   } = useQuery({
     ...permissionsQueryOptions(),
     enabled: open,
   });
+  // Every signed-in viewer inherits the anonymous role's grants (#300),
+  // so that role is only offered what migration 0083 declares public.
+  // The server refuses the rest; this keeps the choice off the screen.
+  const permissions = useMemo(
+    () => (isAnonymous ? catalog.filter((p) => p.anonymousGrantable) : catalog),
+    [catalog, isAnonymous],
+  );
 
   // Don't auto-close on query error: if a user has typed into the
   // Details tab and the role goes missing, they should keep their
@@ -205,6 +212,11 @@ export function RoleEditorSheet({
     () => new Set(),
   );
   const grouped = useMemo(() => groupPermissions(permissions), [permissions]);
+  // Counted against the listed set, so a hidden grant on `anonymous`
+  // can't read as "3 of 2".
+  const grantedVisibleCount = permissions.filter((p) =>
+    pendingGrants.has(p.id),
+  ).length;
   const setPermissions = useSetRolePermissions();
 
   // ── members tab state ─────────────────────────────────────────────────
@@ -333,7 +345,14 @@ export function RoleEditorSheet({
   }
 
   function handleSavePermissions() {
-    const savedGrants = new Set(pendingGrants);
+    // For `anonymous`, a grant outside the listed set (a row written
+    // around the server check) is hidden and can't be unchecked; sending
+    // it back would get the whole save refused, so it is dropped here.
+    const savedGrants = isAnonymous
+      ? new Set(
+          permissions.map((p) => p.id).filter((id) => pendingGrants.has(id)),
+        )
+      : new Set(pendingGrants);
     setPermissions.mutate(
       { roleId, permissionIds: Array.from(savedGrants) },
       {
@@ -445,7 +464,7 @@ export function RoleEditorSheet({
           <SheetTitle>{role?.displayName ?? roleName}</SheetTitle>
           <SheetDescription>
             {isAnonymous
-              ? "Manage the permissions granted to signed-out visitors."
+              ? "Manage what signed-out visitors can see. Signed-in members see it too, so only public pages are listed."
               : "Manage members, permissions, and details for this role."}
           </SheetDescription>
         </SheetHeader>
@@ -631,7 +650,7 @@ export function RoleEditorSheet({
             ) : (
               <>
                 <p className="text-xs text-muted-foreground">
-                  {pendingGrants.size} of {permissions.length} permissions
+                  {grantedVisibleCount} of {permissions.length} permissions
                   granted. Expand a group to change it.
                 </p>
                 {/* Collapsed by default with the granted count on every
