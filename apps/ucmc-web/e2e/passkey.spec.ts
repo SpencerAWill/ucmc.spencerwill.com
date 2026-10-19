@@ -60,10 +60,10 @@ test("register a passkey and sign back in with it", async ({
   await waitForHydration(page);
 
   await page.getByRole("textbox", { name: /email/i }).fill(PASSKEY_USER_EMAIL);
-  const sendButton = page.getByRole("button", { name: /send sign-in link/i });
+  const sendButton = page.getByRole("button", { name: /email me a link/i });
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
-  await expect(page.getByText(/check.*for a sign-in link/i)).toBeVisible();
+  await expect(page.getByText(/check.*for a link/i)).toBeVisible();
 
   const link = await mailpit.extractFirstLink(PASSKEY_USER_EMAIL);
   const url = new URL(link);

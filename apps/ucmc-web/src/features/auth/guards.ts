@@ -279,7 +279,7 @@ export async function requireViewPermission(
  *   user row exists, no profile  → consume opens a session    → here
  *
  * Anyone else gets bounced:
- *   - no proof and no session  → /sign-in?register=true (start over)
+ *   - no proof and no session  → /sign-in (start over)
  *   - signed-in user *with* a profile → /my/profile (already registered)
  *
  * The shared shape exposes `email` regardless of source, so the form
@@ -336,7 +336,7 @@ export async function requireRegistrationContext(
   }
   const principal = await getPrincipal(queryClient);
   if (!principal) {
-    throw redirect({ to: "/sign-in", search: { register: true } });
+    throw redirect({ to: "/sign-in" });
   }
   if (principal.hasProfile) {
     throw redirect({ to: "/my/profile" });

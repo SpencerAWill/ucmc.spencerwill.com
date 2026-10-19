@@ -6,7 +6,7 @@ const steps = [
   {
     number: "1",
     title: "Create an account",
-    body: "Sign up with your email — we&apos;ll send you a magic link.",
+    body: "Sign up with your email — we’ll send you a magic link.",
   },
   {
     number: "2",
@@ -49,9 +49,7 @@ export function HowToJoin() {
         </ol>
         <div className="mt-10 flex justify-center">
           <Button asChild size="lg">
-            <Link to="/sign-in" search={{ register: true }}>
-              Get started
-            </Link>
+            <Link to="/sign-in">Get started</Link>
           </Button>
         </div>
       </div>

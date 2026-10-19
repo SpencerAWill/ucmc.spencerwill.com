@@ -23,13 +23,13 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
 }));
 
-function renderForm(mode: "sign-in" | "register" = "sign-in") {
+function renderForm() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MagicLinkForm defaultMode={mode} />
+      <MagicLinkForm />
     </QueryClientProvider>,
   );
 }
@@ -43,26 +43,27 @@ describe("MagicLinkForm", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the email field and the submit button with the sign-in label", () => {
-    renderForm("sign-in");
+  it("renders the email field and the submit button", () => {
+    renderForm();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /send sign-in link/i }),
+      screen.getByRole("button", { name: /email me a link/i }),
     ).toBeInTheDocument();
   });
 
-  it("renders the registration label when defaultMode is 'register'", () => {
-    renderForm("register");
-    expect(
-      screen.getByRole("button", { name: /send registration link/i }),
-    ).toBeInTheDocument();
+  it("always offers passkey autofill on the email field", () => {
+    renderForm();
+    expect(screen.getByLabelText(/email/i)).toHaveAttribute(
+      "autocomplete",
+      "username webauthn",
+    );
   });
 
   it("disables the submit button until a valid email is entered", async () => {
     const user = userEvent.setup();
     renderForm();
 
-    const button = screen.getByRole("button", { name: /send sign-in link/i });
+    const button = screen.getByRole("button", { name: /email me a link/i });
     expect(button).toBeDisabled();
 
     await user.type(screen.getByLabelText(/email/i), "not-an-email");
@@ -81,9 +82,7 @@ describe("MagicLinkForm", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/email/i), "alice@example.com");
-    await user.click(
-      screen.getByRole("button", { name: /send sign-in link/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /email me a link/i }));
 
     await waitFor(() => {
       expect(requestMagicLinkFn).toHaveBeenCalledWith({
@@ -91,9 +90,7 @@ describe("MagicLinkForm", () => {
       });
     });
 
-    expect(
-      await screen.findByText(/check.*for a sign-in link/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/check.*for a link/i)).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
   });
 
@@ -106,9 +103,7 @@ describe("MagicLinkForm", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/email/i), "alice@example.com");
-    await user.click(
-      screen.getByRole("button", { name: /send sign-in link/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /email me a link/i }));
 
     const link = await screen.findByRole("link", {
       name: /open the dev outbox/i,
@@ -122,11 +117,9 @@ describe("MagicLinkForm", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/email/i), "alice@example.com");
-    await user.click(
-      screen.getByRole("button", { name: /send sign-in link/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /email me a link/i }));
 
-    await screen.findByText(/check.*for a sign-in link/i);
+    await screen.findByText(/check.*for a link/i);
     expect(
       screen.queryByRole("link", { name: /dev outbox/i }),
     ).not.toBeInTheDocument();
@@ -138,9 +131,7 @@ describe("MagicLinkForm", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/email/i), "alice@example.com");
-    await user.click(
-      screen.getByRole("button", { name: /send sign-in link/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /email me a link/i }));
 
     expect(
       await screen.findByText(/couldn[’']?t send the email/i),
@@ -153,9 +144,7 @@ describe("MagicLinkForm", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/email/i), "alice@example.com");
-    await user.click(
-      screen.getByRole("button", { name: /send sign-in link/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /email me a link/i }));
 
     const reset = await screen.findByRole("button", {
       name: /use a different email/i,
@@ -164,7 +153,7 @@ describe("MagicLinkForm", () => {
 
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /send sign-in link/i }),
+      screen.getByRole("button", { name: /email me a link/i }),
     ).toBeInTheDocument();
   });
 });

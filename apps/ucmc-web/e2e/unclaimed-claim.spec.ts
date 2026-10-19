@@ -37,10 +37,10 @@ test("officer-pre-added unclaimed member can claim their account", async ({
   // Disambiguate from the footer's "Email UCMC" mailto link by scoping
   // to the textbox role.
   await page.getByRole("textbox", { name: /email/i }).fill(email);
-  const submit = page.getByRole("button", { name: /send sign-in link/i });
+  const submit = page.getByRole("button", { name: /email me a link/i });
   await expect(submit).toBeEnabled();
   await submit.click();
-  await expect(page.getByText(/check.*for a sign-in link/i)).toBeVisible();
+  await expect(page.getByText(/check.*for a link/i)).toBeVisible();
 
   const link = await mailpit.extractFirstLink(email);
   const url = new URL(link);

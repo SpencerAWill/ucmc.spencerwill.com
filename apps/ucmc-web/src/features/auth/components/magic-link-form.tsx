@@ -25,16 +25,17 @@ const magicLinkSchema = z.object({
  * registered, rate-limited, or newly-seen — the server deliberately
  * returns the same shape in each case.
  *
- * On sign-in, we also kick off a WebAuthn conditional-UI ceremony: the
- * browser silently watches for a passkey pick inline with the email
- * field's autofill menu. If the user selects a passkey, they skip the
- * email step entirely and land signed in.
+ * There is one mode: the same link signs a member in or starts a new
+ * visitor's registration, decided server-side by whether the email exists.
+ *
+ * We also kick off a WebAuthn conditional-UI ceremony: the browser
+ * silently watches for a passkey pick inline with the email field's
+ * autofill menu. If the user selects a passkey, they skip the email step
+ * entirely and land signed in. A new visitor simply has none to pick.
  */
 export function MagicLinkForm({
-  defaultMode = "sign-in",
   redirectTo,
 }: {
-  defaultMode?: "sign-in" | "register";
   // Optional post-sign-in destination passed through to the emailed
   // callback URL (and used by the inline passkey-autofill ceremony).
   // Caller is expected to have already validated leading-"/"; the
@@ -46,10 +47,10 @@ export function MagicLinkForm({
   const turnstileToken = useRef("");
   const turnstileSiteKey = env.VITE_TURNSTILE_SITE_KEY;
 
-  // Passkey autofill runs in the background on sign-in. If it succeeds
+  // Passkey autofill runs in the background. If it succeeds
   // the whole component navigates away before the magic-link mutation
   // ever fires, so nothing special is needed to "cancel" it.
-  usePasskeyAutofill({ enabled: defaultMode === "sign-in", redirectTo });
+  usePasskeyAutofill({ redirectTo });
 
   const mutation = useRequestMagicLink();
 
@@ -81,8 +82,8 @@ export function MagicLinkForm({
     return (
       <div className="space-y-2 text-sm">
         <p className="text-foreground">
-          Check <strong>{submittedTo}</strong> for a sign-in link. It expires in
-          15 minutes.
+          Check <strong>{submittedTo}</strong> for a link. It expires in 15
+          minutes.
         </p>
         <DevOutboxLink href={outboxHref} />
         <button
@@ -99,9 +100,6 @@ export function MagicLinkForm({
     );
   }
 
-  const buttonLabel =
-    defaultMode === "register" ? "Send registration link" : "Send sign-in link";
-
   return (
     <form
       className="space-y-4"
@@ -117,9 +115,7 @@ export function MagicLinkForm({
             label="Email"
             type="email"
             placeholder="you@example.com"
-            autoComplete={
-              defaultMode === "sign-in" ? "username webauthn" : "email"
-            }
+            autoComplete="username webauthn"
           />
         )}
       </form.AppField>
@@ -144,7 +140,7 @@ export function MagicLinkForm({
       ) : null}
 
       <form.AppForm>
-        <form.SubscribeButton label={buttonLabel} />
+        <form.SubscribeButton label="Email me a link" />
       </form.AppForm>
     </form>
   );
@@ -161,20 +157,11 @@ export function MagicLinkForm({
 // effect's cleanup runs. Disable no-unnecessary-condition for the hook
 // body so the between-await abort checks stay readable.
 /* eslint-disable @typescript-eslint/no-unnecessary-condition */
-function usePasskeyAutofill({
-  enabled,
-  redirectTo,
-}: {
-  enabled: boolean;
-  redirectTo?: string;
-}): void {
+function usePasskeyAutofill({ redirectTo }: { redirectTo?: string }): void {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!enabled) {
-      return;
-    }
     if (
       typeof window === "undefined" ||
       typeof window.PublicKeyCredential === "undefined"
@@ -239,6 +226,6 @@ function usePasskeyAutofill({
     return () => {
       controller.abort();
     };
-  }, [enabled, navigate, queryClient, redirectTo]);
+  }, [navigate, queryClient, redirectTo]);
 }
 /* eslint-enable @typescript-eslint/no-unnecessary-condition */

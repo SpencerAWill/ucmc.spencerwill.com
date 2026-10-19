@@ -51,8 +51,8 @@ async function signInAsOfficer(
   await page.goto("/sign-in");
   await waitForHydration(page);
   await page.getByRole("textbox", { name: /email/i }).fill(email);
-  await page.getByRole("button", { name: /send sign-in link/i }).click();
-  await expect(page.getByText(/check.*for a sign-in link/i)).toBeVisible();
+  await page.getByRole("button", { name: /email me a link/i }).click();
+  await expect(page.getByText(/check.*for a link/i)).toBeVisible();
   const link = await mailpit.extractFirstLink(email, 30_000);
   const url = new URL(link);
   await page.goto(url.pathname + url.search);

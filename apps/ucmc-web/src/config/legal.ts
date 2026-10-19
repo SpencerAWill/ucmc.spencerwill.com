@@ -445,7 +445,7 @@ export const MEMBERSHIP_BODY: readonly LegalSection[] = [
       "The waiver is a paper form. We do not collect or store signed waivers, medical information, or insurance information digitally — those live with the Treasurer off-platform per Bylaw 1.3.",
     ],
     references: [
-      { label: "Sign up", href: "/sign-in?register=true" },
+      { label: "Sign up", href: "/sign-in" },
       { label: "Waiver of liability (reference copy)", href: "/waiver" },
     ],
   },

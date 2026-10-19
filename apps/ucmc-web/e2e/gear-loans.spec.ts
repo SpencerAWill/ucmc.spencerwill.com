@@ -53,8 +53,8 @@ VALUES ('${g2Id}', '${g2PublicId}', '${modelId}', '${code2}', 'active', 'service
   await page.goto("/sign-in");
   await waitForHydration(page);
   await page.getByRole("textbox", { name: /email/i }).fill(officerEmail);
-  await page.getByRole("button", { name: /send sign-in link/i }).click();
-  await expect(page.getByText(/check.*for a sign-in link/i)).toBeVisible();
+  await page.getByRole("button", { name: /email me a link/i }).click();
+  await expect(page.getByText(/check.*for a link/i)).toBeVisible();
   const officerLink = await mailpit.extractFirstLink(officerEmail);
   await page.goto(new URL(officerLink).pathname + new URL(officerLink).search);
   await waitForHydration(page);
@@ -121,7 +121,7 @@ VALUES ('${g2Id}', '${g2PublicId}', '${modelId}', '${code2}', 'active', 'service
   await page.goto("/sign-in");
   await waitForHydration(page);
   await page.getByRole("textbox", { name: /email/i }).fill(memberEmail);
-  await page.getByRole("button", { name: /send sign-in link/i }).click();
+  await page.getByRole("button", { name: /email me a link/i }).click();
   const memberLink = await mailpit.extractFirstLink(memberEmail);
   await page.goto(new URL(memberLink).pathname + new URL(memberLink).search);
   await waitForHydration(page);

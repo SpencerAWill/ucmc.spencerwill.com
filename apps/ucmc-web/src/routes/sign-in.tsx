@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { PageContainer } from "#/components/layouts/page-container";
@@ -6,11 +6,15 @@ import { Alert, AlertDescription } from "#/components/ui/alert";
 import { MagicLinkForm } from "#/features/auth/components/magic-link-form";
 import { SignInWithPasskeyButton } from "#/features/auth/components/sign-in-with-passkey-button";
 
-// URL search params arrive as strings; coerce so `?register=true` /
-// `?invalid=true` parse correctly whether the user landed here via a
-// TanStack Router redirect (actual boolean) or a hand-typed URL (string).
+// URL search params arrive as strings; coerce so `?invalid=true` parses
+// correctly whether the user landed here via a TanStack Router redirect
+// (actual boolean) or a hand-typed URL (string).
+//
+// There is no `register` param: the server decides register vs. log in
+// from whether the email already exists, so one page serves both. Old
+// `?register=true` links still land here — the object schema strips
+// unknown keys rather than rejecting them.
 const signInSearchSchema = z.object({
-  register: z.coerce.boolean().optional(),
   redirect: z.string().optional(),
   // Set by /auth/callback when a magic-link token is already consumed,
   // expired, or otherwise invalid — the /sign-in page renders a small
@@ -28,23 +32,21 @@ export const Route = createFileRoute("/sign-in")({
 });
 
 function SignInPage() {
-  const { register, invalid, rate_limited, redirect } = Route.useSearch();
+  const { invalid, rate_limited, redirect } = Route.useSearch();
   // Only honor relative-path redirects — anything else (external URL,
   // protocol-relative, missing leading slash) is dropped to prevent
   // open-redirect via crafted /sign-in?redirect=... links.
   const safeRedirect =
     redirect && redirect.startsWith("/") ? redirect : undefined;
-  const mode = register ? "register" : "sign-in";
-  const heading = register ? "Create your UCMC account" : "Sign in to UCMC";
-  const subheading = register
-    ? "We’ll email you a link to finish setting up."
-    : "We’ll email you a one-time sign-in link.";
 
   return (
     <PageContainer width="focused" className="flex flex-col gap-6">
       <header className="space-y-2 text-center">
-        <h1 className="text-2xl font-semibold">{heading}</h1>
-        <p className="text-sm text-muted-foreground">{subheading}</p>
+        <h1 className="text-2xl font-semibold">Sign in or join UCMC</h1>
+        <p className="text-sm text-muted-foreground">
+          Enter your email and we’ll send you a link. New here? The same link
+          starts your registration.
+        </p>
       </header>
       {invalid ? (
         <Alert variant="destructive">
@@ -61,45 +63,16 @@ function SignInPage() {
           </AlertDescription>
         </Alert>
       ) : null}
-      <MagicLinkForm defaultMode={mode} redirectTo={safeRedirect} />
-      {register ? null : (
-        <>
-          {/* Passkey users skip the email round-trip. The button hides itself
-              when the browser doesn't support WebAuthn, so we don't need a
-              conditional gate here. */}
-          <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            or
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <SignInWithPasskeyButton redirectTo={safeRedirect} />
-        </>
-      )}
-      <p className="text-center text-sm text-muted-foreground">
-        {register ? (
-          <>
-            Already have an account?{" "}
-            <Link
-              to="/sign-in"
-              search={{ register: false }}
-              className="text-primary underline underline-offset-4"
-            >
-              Sign in
-            </Link>
-          </>
-        ) : (
-          <>
-            New here?{" "}
-            <Link
-              to="/sign-in"
-              search={{ register: true }}
-              className="text-primary underline underline-offset-4"
-            >
-              Create an account
-            </Link>
-          </>
-        )}
-      </p>
+      <MagicLinkForm redirectTo={safeRedirect} />
+      {/* Passkey users skip the email round-trip. The button hides itself
+          when the browser doesn't support WebAuthn, so we don't need a
+          conditional gate here. A new visitor simply has no passkey to pick. */}
+      <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <SignInWithPasskeyButton redirectTo={safeRedirect} />
     </PageContainer>
   );
 }

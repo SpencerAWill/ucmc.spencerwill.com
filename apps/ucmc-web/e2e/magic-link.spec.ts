@@ -22,11 +22,11 @@ test("magic-link sign-in sends an email and the consume link signs the user in",
   await waitForHydration(page);
 
   await page.getByRole("textbox", { name: /email/i }).fill(email);
-  const submit = page.getByRole("button", { name: /send sign-in link/i });
+  const submit = page.getByRole("button", { name: /email me a link/i });
   await expect(submit).toBeEnabled();
   await submit.click();
 
-  await expect(page.getByText(/check.*for a sign-in link/i)).toBeVisible();
+  await expect(page.getByText(/check.*for a link/i)).toBeVisible();
   await expect(page.getByText(email)).toBeVisible();
 
   const link = await mailpit.extractFirstLink(email);
@@ -47,4 +47,26 @@ test("magic-link sign-in sends an email and the consume link signs the user in",
   // For a brand-new email the post-consume decision is /register/profile.
   await page.waitForURL(/\/register\/profile/, { timeout: 15_000 });
   await expect(page).toHaveURL(/\/register\/profile/);
+});
+
+/**
+ * Sign-in and registration are one page (#304). Links from before the merge
+ * carry `?register=true`; the search schema drops the unknown key, so they
+ * still land on the page, with the passkey option offered like any visit.
+ */
+test("an old ?register=true link still renders the sign-in page", async ({
+  page,
+}) => {
+  await page.goto("/sign-in?register=true");
+  await waitForHydration(page);
+
+  await expect(
+    page.getByRole("heading", { name: /sign in or join ucmc/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /email me a link/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /sign in with a passkey/i }),
+  ).toBeVisible();
 });
