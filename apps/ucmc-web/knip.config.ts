@@ -59,10 +59,12 @@ const config: KnipConfig = {
     // only from tests, and living under `src/` on purpose) off the report.
     "src/**/*.stories.tsx",
     "src/**/__tests__/**/*.test.{ts,tsx}",
+    "scripts/**/__tests__/**/*.test.ts",
     "test/*.ts",
     "e2e/**/*.ts",
 
-    // Run by `pnpm generate:sitemap` (a `dev`/`build` prestep), not imported.
+    // Run by package scripts (`generate:sitemap`, `sync:wasm`, `sync-env`),
+    // not imported.
     "scripts/*.ts",
 
     ".storybook/*.ts",
@@ -84,7 +86,7 @@ const config: KnipConfig = {
     "test/**/*.ts",
     "e2e/**/*.ts",
     "drizzle/*.ts",
-    "scripts/*.ts",
+    "scripts/**/*.ts",
     ".storybook/*.ts",
     "*.{ts,js}",
   ],

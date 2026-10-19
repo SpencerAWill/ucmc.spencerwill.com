@@ -57,7 +57,12 @@ export default defineConfig({
   ],
   test: {
     name: "workers",
-    include: ["src/**/__tests__/**/*.test.ts"],
+    // `scripts/` too: `sync-env`'s logic (wrangler-env.ts) is pure, and
+    // its test reads the committed wrangler.jsonc, which is the point.
+    include: [
+      "src/**/__tests__/**/*.test.ts",
+      "scripts/**/__tests__/**/*.test.ts",
+    ],
     setupFiles: ["./test/apply-migrations.ts"],
   },
   resolve: {
