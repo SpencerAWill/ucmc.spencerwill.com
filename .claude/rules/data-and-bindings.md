@@ -17,7 +17,17 @@ paths:
 - **D1** (Drizzle ORM) — schema `drizzle/schema.ts`, generated migrations committed in `drizzle/migrations/`. `wrangler.jsonc`'s `database_id` is a placeholder; `deploy.yml` rewrites it from the Pulumi `d1DatabaseId` output.
 - **KV** — same UUID-injection pattern (`kvNamespaceId` Pulumi output).
 - **R2** — name-based bindings (no UUID injection). Two buckets per env: `BUCKET_PRIVATE` (worker-mediated reads, the default for new media) and `BUCKET_PUBLIC` (bound to `cdn.{dev.,}ucmc.spencerwill.com` via `R2CustomDomain`, reads bypass the worker). **Use `getPrivateBucket()` for any new media unless the URL shape is unguessable AND the content is intended public.** Avatars and landing images use content-hashed keys + opaque public IDs in the public bucket. **Public uploads MUST set `httpMetadata.cacheControl` at upload time** — custom domains pass through stored metadata, not worker headers.
-- **Rate limiting** — two `unsafe.bindings`: `HEALTH_RATE_LIMITER` (20/60s per IP) and `AUTH_RATE_LIMITER` (10/60s per key, with `ip:` and `email:` keys for independent budgets). Wrappers in `src/server/rate-limit.server.ts` fail _open_. `E2E_BYPASS_RATE_LIMIT=1` short-circuits for Playwright.
+- **Rate limiting** — five `unsafe.bindings`, each its own budget. Wrappers in `src/server/rate-limit.server.ts` fail _open_. `E2E_BYPASS_RATE_LIMIT=1` short-circuits for Playwright.
+
+  | Binding                 | Budget                 | Covers                                                                                                |
+  | ----------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------- |
+  | `HEALTH_RATE_LIMITER`   | 20/60s per IP          | `/health`                                                                                             |
+  | `AUTH_RATE_LIMITER`     | 10/60s per key         | magic-link request + consume, passkey **finish** (`ip:` / `email:` keys); feedback under its own keys |
+  | `CEREMONY_RATE_LIMITER` | 60/60s per IP          | passkey **begin**, register and authenticate (#306)                                                   |
+  | `UPLOAD_RATE_LIMITER`   | 5/60s per user         | avatar uploads                                                                                        |
+  | `CALENDAR_RATE_LIMITER` | 60/60s per token or IP | `.ics` feeds                                                                                          |
+
+  **Passkey begin is off `AUTH_RATE_LIMITER` on purpose.** Autofill starts an authenticate ceremony on every `/sign-in` load, before the visitor does anything, and a campus NAT puts many visitors on one IP — on the shared budget, loading the page could exhaust the magic-link request, whose deliberate "check your email" reply then hides that no email was sent. Begin writes nothing (the ceremony travels in a signed cookie); finish, which verifies a credential and writes the single-use marker, stays on the strict budget.
 
 ## SQLite pragmas do not work in a migration, so a parent table cannot be rebuilt
 

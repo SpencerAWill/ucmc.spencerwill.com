@@ -1,8 +1,10 @@
 /**
  * KV-backed store for member gear carts plus their short-lived
- * checkout-desk scan tokens. Mirrors the WebAuthn challenge helpers in
- * `features/auth/server/webauthn-challenge.server.ts` — namespaced
- * keys, JSON store/parse, TTL on every write.
+ * checkout-desk scan tokens — namespaced keys, JSON store/parse, TTL on
+ * every write. (WebAuthn challenges used to share this shape; #314 moved
+ * them out because they must be single-use, which a KV read-then-delete
+ * can't guarantee. A cart token is deliberately reusable within its
+ * window, so KV still fits here.)
  *
  * Two surfaces:
  *   - `gear-cart:user:<userId>` — the member's live cart, 24 h TTL,

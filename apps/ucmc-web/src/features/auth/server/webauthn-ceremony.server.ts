@@ -1,19 +1,22 @@
 /**
  * Ceremony cookie for paired webauthn begin/finish server calls.
  *
- * `begin` endpoints mint a random ceremony ID, stash the challenge + user
- * context in KV keyed by that ID, and set this cookie so the matching
- * `finish` call can look the row back up. The cookie is ephemeral (5 min
- * maxAge, cleared on finish success OR failure) — a stolen cookie can't be
- * replayed because the challenge gets deleted on the first finish attempt.
+ * `begin` mints a ceremony (`newCeremony`) and writes the whole thing —
+ * id, challenge, type, user, expiry — into this cookie, HMAC-signed with
+ * `SESSION_SECRET` under the `webauthn-ceremony` purpose. `finish` reads
+ * it back and trusts it only if the signature verifies and it hasn't
+ * expired, then consumes the ceremony id in D1 so it can't be used twice
+ * (`webauthn-challenge.server.ts`). Nothing is stored at begin.
  *
- * Unlike the proof cookie, the value is not HMAC-signed: the KV value is
- * the trust anchor (an attacker who forges a ceremony cookie would still
- * need the real challenge blob, which they can't retrieve without the ID).
+ * The signature is what makes this safe to keep client-side: a forged or
+ * edited cookie fails verification, and swapping in a challenge of the
+ * attacker's choosing would need the secret. The purpose prefix stops a
+ * proof cookie's signed value from being replayed here.
  *
- * SameSite=Strict because webauthn ceremonies are always first-party —
- * unlike the session cookie, no navigation between sites needs to carry
- * this cookie.
+ * The cookie is ephemeral (5 min maxAge, cleared on finish success OR
+ * failure). SameSite=Strict because webauthn ceremonies are always
+ * first-party — unlike the session cookie, no navigation between sites
+ * needs to carry this cookie.
  */
 import {
   deleteCookie,
@@ -21,9 +24,12 @@ import {
   setCookie,
 } from "@tanstack/react-start/server";
 
+import { CHALLENGE_TTL_SECONDS } from "#/features/auth/server/webauthn-challenge.server";
+import type { Ceremony } from "#/features/auth/server/webauthn-challenge.server";
+import { signJson, verifySignedJson } from "#/server/auth/signing.server";
 import { env } from "#/server/cloudflare-env";
 
-export const CEREMONY_TTL_MS = 1000 * 60 * 5; // 5 minutes
+const PURPOSE = "webauthn-ceremony";
 
 const isSecure = () => env.APP_BASE_URL.startsWith("https://");
 
@@ -33,17 +39,45 @@ const isSecure = () => env.APP_BASE_URL.startsWith("https://");
 const cookieName = () =>
   isSecure() ? "__Host-ucmc_webauthn" : "ucmc_webauthn";
 
-export function readCeremonyCookie(): string | undefined {
-  return getCookie(cookieName());
+function isCeremony(value: unknown): value is Ceremony {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === "string" &&
+    typeof v.challenge === "string" &&
+    (v.type === "register" || v.type === "authenticate") &&
+    (v.userId === undefined || typeof v.userId === "string") &&
+    typeof v.expiresAt === "number"
+  );
 }
 
-export function writeCeremonyCookie(ceremonyId: string): void {
-  setCookie(cookieName(), ceremonyId, {
+/**
+ * `undefined` when there is no ceremony cookie at all; `null` when there is
+ * one but it is forged, malformed or expired; otherwise the ceremony.
+ */
+export async function readCeremonyCookie(
+  now: Temporal.Instant = Temporal.Now.instant(),
+): Promise<Ceremony | null | undefined> {
+  const raw = getCookie(cookieName());
+  if (!raw) {
+    return undefined;
+  }
+  const value = await verifySignedJson(PURPOSE, raw);
+  if (!isCeremony(value) || value.expiresAt <= now.epochMilliseconds) {
+    return null;
+  }
+  return value;
+}
+
+export async function writeCeremonyCookie(ceremony: Ceremony): Promise<void> {
+  setCookie(cookieName(), await signJson(PURPOSE, ceremony), {
     httpOnly: true,
     secure: isSecure(),
     sameSite: "strict",
     path: "/",
-    maxAge: Math.floor(CEREMONY_TTL_MS / 1000),
+    maxAge: CHALLENGE_TTL_SECONDS,
   });
 }
 

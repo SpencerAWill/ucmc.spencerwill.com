@@ -439,6 +439,21 @@ export const passkeyCredentials = sqliteTable(
   (t) => [uniqueIndex("passkey_credential_id_unique").on(t.credentialId)],
 );
 
+/**
+ * WebAuthn ceremonies that have been used — see
+ * `0084_webauthn_consumed_ceremonies.sql`. The ceremony itself lives in
+ * the signed ceremony cookie; this table only makes it single-use
+ * (`features/auth/server/webauthn-challenge.server.ts`). Swept daily once
+ * `expires_at` passes.
+ */
+export const webauthnConsumedCeremonies = sqliteTable(
+  "webauthn_consumed_ceremonies",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+);
+
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id")

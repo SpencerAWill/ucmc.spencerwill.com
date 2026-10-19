@@ -52,8 +52,9 @@ function clientIp(): string {
 
 /**
  * Gate an auth operation by IP. Call at the TOP of magic-link request,
- * magic-link consume, and passkey authentication handlers — before any
- * D1/KV work — so a flood can't amplify into storage calls.
+ * magic-link consume, and passkey finish handlers — before any D1/KV
+ * work — so a flood can't amplify into storage calls. Passkey *begin*
+ * uses `checkCeremonyRateLimitByIp` instead (#306).
  *
  * Returns true to allow the request; false to refuse it. Fails open on
  * binding error (same reasoning as `checkHealthRateLimit`).
@@ -64,6 +65,35 @@ export async function checkAuthRateLimitByIp(): Promise<boolean> {
   }
   try {
     const { success } = await env.AUTH_RATE_LIMITER.limit({
+      key: `ip:${clientIp()}`,
+    });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Gate the begin half of a passkey ceremony (register or authenticate)
+ * by IP, on its own budget.
+ *
+ * Passkey autofill starts an authenticate ceremony on every `/sign-in`
+ * load, before the visitor touches anything. On `AUTH_RATE_LIMITER` that
+ * spent the budget the magic-link request and consume check, so on a
+ * shared campus IP a visitor could be told to "check your email" for a
+ * link that was never sent (#306). Begin writes nothing — the ceremony
+ * travels in a signed cookie — so a looser separate budget only has to
+ * stop a flood of signing work. Finish verifies a credential and writes
+ * the single-use marker, so it stays on `checkAuthRateLimitByIp`.
+ *
+ * Fails open on binding error, like every other limiter here.
+ */
+export async function checkCeremonyRateLimitByIp(): Promise<boolean> {
+  if (isBypassed()) {
+    return true;
+  }
+  try {
+    const { success } = await env.CEREMONY_RATE_LIMITER.limit({
       key: `ip:${clientIp()}`,
     });
     return success;

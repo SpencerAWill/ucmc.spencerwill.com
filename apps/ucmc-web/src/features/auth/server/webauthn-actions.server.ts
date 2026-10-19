@@ -39,10 +39,8 @@ import {
   writeCeremonyCookie,
 } from "#/features/auth/server/webauthn-ceremony.server";
 import {
-  deleteChallenge,
-  getChallenge,
-  newCeremonyId,
-  putChallenge,
+  consumeCeremony,
+  newCeremony,
 } from "#/features/auth/server/webauthn-challenge.server";
 import type {
   AuthenticateBeginResult,
@@ -53,7 +51,10 @@ import type {
   RemovePasskeyResult,
   RenamePasskeyResult,
 } from "#/features/auth/server/webauthn-fns";
-import { checkAuthRateLimitByIp } from "#/server/rate-limit.server";
+import {
+  checkAuthRateLimitByIp,
+  checkCeremonyRateLimitByIp,
+} from "#/server/rate-limit.server";
 
 // ── register (session-gated) ─────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ export async function webauthnRegisterBeginAction(): Promise<RegisterBeginResult
   if (!principal) {
     return { ok: false, reason: "unauthorized" };
   }
-  if (!(await checkAuthRateLimitByIp())) {
+  if (!(await checkCeremonyRateLimitByIp())) {
     return { ok: false, reason: "rate_limited" };
   }
 
@@ -72,13 +73,13 @@ export async function webauthnRegisterBeginAction(): Promise<RegisterBeginResult
     existing.map((c) => c.credentialId),
   );
 
-  const ceremonyId = newCeremonyId();
-  await putChallenge(ceremonyId, {
-    challenge: options.challenge,
-    type: "register",
-    userId: principal.userId,
-  });
-  writeCeremonyCookie(ceremonyId);
+  await writeCeremonyCookie(
+    newCeremony({
+      challenge: options.challenge,
+      type: "register",
+      userId: principal.userId,
+    }),
+  );
 
   return { ok: true, options };
 }
@@ -95,20 +96,19 @@ export async function webauthnRegisterFinishAction(args: {
     return { ok: false, reason: "rate_limited" };
   }
 
-  const ceremonyId = readCeremonyCookie();
-  if (!ceremonyId) {
+  const ceremony = await readCeremonyCookie();
+  if (ceremony === undefined) {
     return { ok: false, reason: "no_ceremony" };
   }
-  const stored = await getChallenge(ceremonyId);
-  // Single-use challenge: delete before any further work so even a crash
-  // path can't let the same challenge be retried.
-  await deleteChallenge(ceremonyId);
   clearCeremonyCookie();
 
+  // Single-use: consumed before any further work, so neither a concurrent
+  // finish nor a failed attempt can let the same challenge be retried.
   if (
-    !stored ||
-    stored.type !== "register" ||
-    stored.userId !== principal.userId
+    ceremony === null ||
+    ceremony.type !== "register" ||
+    ceremony.userId !== principal.userId ||
+    !(await consumeCeremony(ceremony))
   ) {
     return { ok: false, reason: "verification_failed" };
   }
@@ -117,7 +117,7 @@ export async function webauthnRegisterFinishAction(args: {
   try {
     verification = await verifyRegistration({
       response: args.response,
-      expectedChallenge: stored.challenge,
+      expectedChallenge: ceremony.challenge,
     });
   } catch {
     return { ok: false, reason: "verification_failed" };
@@ -162,17 +162,14 @@ export async function webauthnRegisterFinishAction(args: {
 // ── authenticate (public) ────────────────────────────────────────────────
 
 export async function webauthnAuthenticateBeginAction(): Promise<AuthenticateBeginResult> {
-  if (!(await checkAuthRateLimitByIp())) {
+  if (!(await checkCeremonyRateLimitByIp())) {
     return { ok: false, reason: "rate_limited" };
   }
 
   const options = await buildAuthenticationOptions();
-  const ceremonyId = newCeremonyId();
-  await putChallenge(ceremonyId, {
-    challenge: options.challenge,
-    type: "authenticate",
-  });
-  writeCeremonyCookie(ceremonyId);
+  await writeCeremonyCookie(
+    newCeremony({ challenge: options.challenge, type: "authenticate" }),
+  );
 
   return { ok: true, options };
 }
@@ -184,15 +181,17 @@ export async function webauthnAuthenticateFinishAction(args: {
     return { ok: false, reason: "rate_limited" };
   }
 
-  const ceremonyId = readCeremonyCookie();
-  if (!ceremonyId) {
+  const ceremony = await readCeremonyCookie();
+  if (ceremony === undefined) {
     return { ok: false, reason: "no_ceremony" };
   }
-  const stored = await getChallenge(ceremonyId);
-  await deleteChallenge(ceremonyId);
   clearCeremonyCookie();
 
-  if (!stored || stored.type !== "authenticate") {
+  if (
+    ceremony === null ||
+    ceremony.type !== "authenticate" ||
+    !(await consumeCeremony(ceremony))
+  ) {
     return { ok: false, reason: "invalid" };
   }
 
@@ -205,7 +204,7 @@ export async function webauthnAuthenticateFinishAction(args: {
   try {
     verification = await verifyAuthentication({
       response: args.response,
-      expectedChallenge: stored.challenge,
+      expectedChallenge: ceremony.challenge,
       credentialPublicKey: credential.publicKey,
       credentialID: credential.credentialId,
       counter: credential.counter,

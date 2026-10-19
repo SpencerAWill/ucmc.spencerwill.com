@@ -25,6 +25,7 @@ export interface WorkerEnv {
   AUTH_RATE_LIMITER: RateLimit;
   UPLOAD_RATE_LIMITER: RateLimit;
   CALENDAR_RATE_LIMITER: RateLimit;
+  CEREMONY_RATE_LIMITER: RateLimit;
 
   // Vars — injected at deploy time from Pulumi stack outputs for dev/prod,
   // supplied via .env.local locally. See .env.example for documentation.
