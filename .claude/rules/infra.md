@@ -4,9 +4,12 @@ paths:
   - ".github/workflows/**"
 ---
 
-# Infrastructure (`infra/`) and CI
+# Infrastructure (`infra/cloudflare`, `infra/github`) and CI
 
-**Pulumi**, two stacks (`dev` auto, `prod` manual + approval), state in Pulumi Cloud, `pnpm` runtime. Auth via `CLOUDFLARE_API_TOKEN`.
+**Pulumi**, two programs, state in Pulumi Cloud, `pnpm` runtime:
+
+- **`infra/cloudflare`** — stacks `dev` (auto) and `prod` (manual + approval). The provider authenticates from the `CLOUDFLARE_API_TOKEN` env var, which CI fills from the least-privilege `CLOUDFLARE_INFRA_API_TOKEN` (deploy) or `CLOUDFLARE_PREVIEW_API_TOKEN` (PR preview).
+- **`infra/github`** — stack `main`: this repo's settings, ruleset, environments and CI credentials (#311). See the section below.
 
 The **Cloudflare provider** manages Worker custom domains, D1 databases, R2 buckets (private + public, with `R2CustomDomain` `minTls: "1.2"`), KV namespaces, and on dev the outbox's Access application. The `spencerwill.com` zone itself is NOT Pulumi-managed. D1/R2/KV are `protect: true`.
 
@@ -25,7 +28,7 @@ Until #298, prod owned a `ResendDomain` component for `ucmc.spencerwill.com` (vi
 
 ## `@pulumi/cloudflare` and `@pulumi/pulumi` are pinned EXACTLY, on purpose
 
-`infra/package.json` carries `6.17.0` and `3.257.0` with no caret. package.json
+`infra/cloudflare/package.json` carries `6.17.0` and `3.257.0` with no caret. package.json
 cannot hold a comment, so the reason lives here: **provider 6.21.0 plans a
 REPLACEMENT of the dev D1 database** — `+-1 to replace`, with an empty property
 diff, which is the signature of a resource whose schema changed under a stable
@@ -47,17 +50,29 @@ So a `@pulumi/cloudflare` bump is **not** a routine dependency update here:
   somebody has time to work out which property the provider now treats as
   replace-triggering and pin or `ignoreChanges` it.
 
-## The dev email outbox (`infra/outbox.ts`)
+## The dev email outbox (`infra/cloudflare/outbox.ts`)
 
 `emailOutbox: true` creates a self-hosted `ZeroTrustAccessApplication` on `<hostname>/dev/outbox` with an inline allow policy for `outboxViewers`, and exports its `aud` for the Worker to verify tokens against. **`configureOutbox` throws on the `prod` stack** — the outbox holds working sign-in links. See `docs/adr/0001-dev-email-outbox.md`.
 
 - **The Zero Trust organization is not Pulumi-managed.** It is account-wide and shared with flareling; `accessTeamDomain` is config. Its login methods are set by hand in the dashboard. Organizations created since June 2026 default to the Cloudflare identity provider restricted to account members, so a viewer who isn't an account member needs One-time PIN added (Zero Trust → Integrations → Identity providers).
-- **`CLOUDFLARE_API_TOKEN` needs account-level `Access: Apps and Policies Edit`** for dev's preview and `up`. Without it the dev preview fails on the Access application.
+- **The infra token needs account-level `Access: Apps and Policies Write`** (and the preview token its `Read` form) for dev's `up` and preview. Without it the dev preview fails on the Access application.
 - **The application covers the custom domain only, so the Workers serve nothing else.** `wrangler.jsonc` sets `workers_dev: false` and `preview_urls: false` (both inherited by `env.production`). `workers_dev` defaults to `true` when there are no `routes`, and ours live in Pulumi, so removing the key quietly reopens a `workers.dev` hostname that bypasses Access, WAF and bot rules. The page's own JWT check is the backstop if it ever is.
+
+## `infra/github`: the repo's settings and CI credentials (#311)
+
+**Applied locally by a repo admin (`pnpm preview` / `pnpm apply` in `infra/github`), never from CI.** The Actions `GITHUB_TOKEN` can't change repo settings or write secrets, and CI must not hold a credential that can loosen its own rules. README → "GitHub as code" has the first-time setup and the rotation command.
+
+- **The ruleset requires one check: `ci.yml`'s `required` job**, which waits on every other check. Add or rename jobs freely; **a new check job must be added to `required`'s `needs:`**, or it can fail without blocking a merge. `pulumi-preview` is deliberately outside it.
+- **Cloudflare tokens are minted, least-privilege, per job type** (`src/cloudflare-tokens.ts`): deploy (wrangler: no zone access at all, since `wrangler.jsonc` has no `routes`), infra (`pulumi up`) and preview (the infra token's reach, read-only, derived). **Add a permission in the same PR as the resource or command that needs it.** `pulumi up` with no diff makes no write calls, so a missing permission surfaces the next time that resource _changes_, not on the next deploy. `R2CustomDomain` is the one resource type not yet proven against the infra token's list (flareling's token runs all the others). **The old hand-made token also had `SSL and Certificates Edit`; it was left out on purpose**, because on the shared zone it reaches every site's certificates. If a custom-domain change 403s on a certificate call, add `SSL and Certificates Write` to the infra token's `zone` list (the preview token gets the read form automatically).
+- **Pulumi has no stored token.** Every Pulumi job declares an environment, has `id-token: write`, and logs in with `pulumi/auth-actions`. The OIDC issuer and its trust policies live in **SpencerAWill/spencerwill.com's `infra/github`** (`pulumiOidcRepositories`), not here: Pulumi Cloud allows one GitHub issuer per org. A **new environment that runs Pulumi must be added there first**, and policies match GitHub's _immutable_ subject, which this repo was switched to. The token is personal (every stack, every repo), which is why `preview` needs a reviewer.
+- **`dev` has no reviewer, deliberately**, though spencerwill.com's README asks for one on every OIDC environment: every push to `main` deploys dev, so a reviewer means approving every merge twice. What gates it instead is the branch policy (`main` only) plus the ruleset (`main` only changes by a PR that passed CI).
+- **Every repository setting is declared, matching what the repo had at adoption.** The provider treats an omitted optional field as "clear it". Change a setting by changing it here; a change made in the GitHub UI is reverted on the next apply.
+- **Hand-managed, deliberately**: `SESSION_SECRET`, `CLOUDFLARE_ACCOUNT_READ_TOKEN`, `FEEDBACK_GITHUB_TOKEN` and the `FEEDBACK_GITHUB_REPO` variable. Environments are `retainOnDelete` because they hold those secrets.
+- **It must stay public**: on GitHub Free, rulesets, environment secrets and required reviewers exist for a personal account's repos only when public.
 
 ## Workflows
 
-- `ci.yml` — per-PR, and the only gate. A paths-filter gates web lint/typecheck/knip/vitest, two parallel E2E jobs (`e2e-desktop` with a Mailpit service container, `e2e-mobile` for WebKit + Pixel), `workflow-lint`, and infra lint/typecheck + `pulumi preview`; the `audit` job (`pnpm audit`, `trustPolicy` over the locked tree via `--fix-lockfile`, and a check that the two Mailpit pins agree) and the `secrets` job (gitleaks over the full history, #316) always run. A workflow-level `concurrency` group cancels superseded runs.
+- `ci.yml` — per-PR, and the only gate; the ruleset requires its aggregate `required` job. A paths-filter gates web lint/typecheck/knip/vitest, two parallel E2E jobs (`e2e-desktop` with a Mailpit service container, `e2e-mobile` for WebKit + Pixel), `workflow-lint`, infra lint/typecheck (both programs), and `pulumi preview` of both `infra/cloudflare` stacks in the reviewer-gated `preview` environment (skipped for Dependabot); the `audit` job (`pnpm audit`, `trustPolicy` over the locked tree via `--fix-lockfile`, and a check that the two Mailpit pins agree) and the `secrets` job (gitleaks over the full history, #316) always run. A workflow-level `concurrency` group cancels superseded runs.
 - `deploy.yml` — push-to-main auto-deploys dev with infra-dev → web-dev chaining; prod via `workflow_dispatch` with environment approval. It rewrites `wrangler.jsonc`'s placeholder `database_id` / KV id from Pulumi outputs, and supplies vars via `--var` flags plus `wrangler secret put`. **Each deploy ends in a post-deploy smoke test** against the deployed URL (`--project=smoke`); a failure turns the deploy job red.
 - `quality.yml` — weekly (`schedule:`) + `workflow_dispatch`. **Reports, not gates**: coverage today, and the home for anything else too slow to justify per-PR. Putting an advisory check in `ci.yml` is how it becomes a merge blocker nobody chose.
 - `seed-admin.yml` — manual sysadmin promotion. Remote sysadmin seeding is this Action, **not** a script.

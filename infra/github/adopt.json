@@ -1,0 +1,24 @@
+{
+  "resources": [
+    {
+      "type": "github:index/repository:Repository",
+      "name": "repository",
+      "id": "ucmc.spencerwill.com"
+    },
+    {
+      "type": "github:index/repositoryRuleset:RepositoryRuleset",
+      "name": "main-protection",
+      "id": "ucmc.spencerwill.com:14958322"
+    },
+    {
+      "type": "github:index/repositoryEnvironment:RepositoryEnvironment",
+      "name": "dev",
+      "id": "ucmc.spencerwill.com:dev"
+    },
+    {
+      "type": "github:index/repositoryEnvironment:RepositoryEnvironment",
+      "name": "prod",
+      "id": "ucmc.spencerwill.com:prod"
+    }
+  ]
+}

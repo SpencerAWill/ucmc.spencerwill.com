@@ -1,0 +1,25 @@
+{
+  "name": "@ucmc/infra-github",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Pulumi program for this repo's GitHub settings and CI secrets (stack main, applied locally by an admin)",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "adopt": "GITHUB_TOKEN=$(gh auth token) pulumi import --file adopt.json --protect=false --generate-code=false --yes",
+    "preview": "GITHUB_TOKEN=$(gh auth token) pulumi preview --diff",
+    "apply": "GITHUB_TOKEN=$(gh auth token) pulumi up --diff"
+  },
+  "dependencies": {
+    "@pulumi/cloudflare": "6.17.0",
+    "@pulumi/github": "6.15.0",
+    "@pulumi/pulumi": "3.257.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0"
+  }
+}

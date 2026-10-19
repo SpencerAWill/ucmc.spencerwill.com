@@ -101,9 +101,9 @@ When you fix a bug, add a regression test in the same PR.
 
 ## Infrastructure changes
 
-Any change under `infra/`:
+Any change under `infra/cloudflare/`:
 
-1. `cd infra && pulumi preview` locally first to read the diff.
+1. `cd infra/cloudflare && pulumi preview` locally first to read the diff.
 2. Flag resource replacements or deletions in the PR description. D1, R2, and KV resources are `protect: true` — replacing them requires removing the protection by hand and is almost always wrong.
 3. Dev auto-deploys on merge; prod requires manual dispatch with environment approval. **For Resend specifically, prod must `pulumi up` before dev** (dev reads `resendApiKey` via a `StackReference` to prod).
 

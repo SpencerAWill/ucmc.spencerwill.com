@@ -27,7 +27,7 @@
   // inheritable, so this covers env.production too.
   //
   // `workers_dev` defaults to true when the config has no `routes`, and
-  // ours has none (custom domains live in infra/index.ts), so without
+  // ours has none (custom domains live in infra/cloudflare/index.ts), so without
   // this each Worker also answered on `<name>.<subdomain>.workers.dev`.
   // That hostname skips everything attached to the zone: Cloudflare
   // Access (the dev outbox's Access app covers the custom domain only,

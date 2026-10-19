@@ -1,0 +1,30 @@
+# One stack, `main`, applied locally by a repo admin; never from CI. The
+# Actions GITHUB_TOKEN can't change repo settings or write secrets, and CI
+# shouldn't hold a credential that can loosen its own rules.
+config:
+  github:owner: SpencerAWill
+  ucmc-github:repository: ucmc.spencerwill.com
+  ucmc-github:description: The University of Cincinnati Mountaineering Club's software system
+  ucmc-github:homepage: https://ucmc.spencerwill.com
+  # The aggregate job in ci.yml. It waits on every other check, so renaming
+  # one of those never breaks the ruleset.
+  ucmc-github:requiredChecks: '["required"]'
+  # Who approves `prod` deploys and every PR preview run (GitHub user ids:
+  # gh api users/<login> -q .id).
+  ucmc-github:reviewerIds: "[43732866]"
+  # The Pulumi Cloud org and user ci.yml / deploy.yml log in as through
+  # OIDC. The issuer and its trust policies live in SpencerAWill/
+  # spencerwill.com's infra/github (`pulumiOidcRepositories`), which must
+  # list this repo's dev, prod and preview environments.
+  ucmc-github:pulumiOrganization: SpencerAWill
+  ucmc-github:pulumiUserLogin: SpencerAWill
+  # Where the CI tokens are minted, and the zone their zone permissions are
+  # scoped to: infra/cloudflare's accountId and zoneId. spencerwill.com is
+  # shared with www and flareling, so no token gets zone-wide settings.
+  ucmc-github:cloudflareAccountId: d57880630b3277f59331318b53f323b6
+  ucmc-github:cloudflareZoneId: 6bfb4d1d3134e6d765aef413094cd28f
+  # A token allowed to create account API tokens ("Account API Tokens
+  # Write"); it mints the CI tokens. Encrypted by Pulumi Cloud; set with
+  # `pulumi config set --secret cloudflare:apiToken` (README, "GitHub as code").
+  cloudflare:apiToken:
+    secure: AAABAPuQr2ClSi3+afnCju2MR0B5b1NtaxEMlLvzayXnXigIC7STL8gPLTmvHqeFDT3+EJajiM+Kg/uZilPFlXI4JL7VlzSz9BanHHaX57EtBkAT3A==

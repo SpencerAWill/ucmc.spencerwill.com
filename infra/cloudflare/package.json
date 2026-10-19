@@ -1,8 +1,8 @@
 {
-  "name": "@ucmc/infra",
+  "name": "@ucmc/infra-cloudflare",
   "version": "0.0.1",
   "private": true,
-  "description": "Pulumi infrastructure for UCMC",
+  "description": "Pulumi program for UCMC's Cloudflare resources (stacks dev and prod)",
   "type": "module",
   "main": "index.ts",
   "scripts": {
