@@ -69,8 +69,9 @@ export function configureOutbox(
       name: `ucmc-web-${stack} outbox`,
       type: "self_hosted",
       // The path and everything under it, on this stack's hostname only.
-      // The Worker's `workers.dev` hostname is NOT covered, which is one
-      // reason the page verifies the token itself.
+      // No other hostname is covered; wrangler.jsonc turns `workers_dev`
+      // and `preview_urls` off so there isn't one, and the page verifies
+      // the token itself in case that changes.
       domain: `${hostname}/dev/outbox`,
       sessionDuration: "24h",
       appLauncherVisible: false,

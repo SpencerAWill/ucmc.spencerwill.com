@@ -8,8 +8,9 @@
  * its signature against the team's published keys, its issuer, its
  * audience (that application's tag) and its expiry. So a deleted or
  * loosened Access policy, or a request that reaches the Worker another
- * way — its `workers.dev` hostname, which no Access application covers —
- * still gets a 403.
+ * way — a `workers.dev` hostname, which no Access application covers, if
+ * `workers_dev` were ever switched back on in wrangler.jsonc — still
+ * gets a 403.
  *
  * The header, not the `CF_Authorization` cookie: Cloudflare documents
  * the cookie as not guaranteed to be passed to the origin.

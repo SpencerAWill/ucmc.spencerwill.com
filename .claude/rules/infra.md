@@ -50,7 +50,7 @@ Prereq: `RESEND_MANAGEMENT_API_KEY` (full-access) as a GitHub env secret on both
 
 - **The Zero Trust organization is not Pulumi-managed.** It is account-wide and shared with flareling; `accessTeamDomain` is config. Its login methods are set by hand in the dashboard. Organizations created since June 2026 default to the Cloudflare identity provider restricted to account members, so a viewer who isn't an account member needs One-time PIN added (Zero Trust → Integrations → Identity providers).
 - **`CLOUDFLARE_API_TOKEN` needs account-level `Access: Apps and Policies Edit`** for dev's preview and `up`. Without it the dev preview fails on the Access application.
-- **The application covers the custom domain only.** The Worker's `workers.dev` hostname reaches `/dev/outbox` without passing through Access, which is one reason the page verifies the JWT itself.
+- **The application covers the custom domain only, so the Workers serve nothing else.** `wrangler.jsonc` sets `workers_dev: false` and `preview_urls: false` (both inherited by `env.production`). `workers_dev` defaults to `true` when there are no `routes`, and ours live in Pulumi, so removing the key quietly reopens a `workers.dev` hostname that bypasses Access, WAF and bot rules. The page's own JWT check is the backstop if it ever is.
 
 ## Workflows
 
