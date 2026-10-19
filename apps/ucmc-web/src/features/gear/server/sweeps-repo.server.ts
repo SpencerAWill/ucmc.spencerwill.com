@@ -9,7 +9,6 @@
  * `whereabouts_as_of` date that goes with it.
  */
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
-import { Temporal } from "temporal-polyfill";
 
 import { getDb, inJsonArray, schema } from "#/server/db";
 import { gearItemName } from "#/features/gear/lib/labels";

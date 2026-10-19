@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 // `currentSeason()` reads `Temporal.Now`, which the app installs in
 // its own entrypoints (`src/router.tsx`, `src/server-entry.ts`). Nothing
 // installs it in the Playwright process, so the fixture does.
-import "temporal-polyfill/global";
+import "#/lib/temporal-install";
 
 import { WAIVER_VERSION } from "#/config/legal";
 import { currentSeason } from "#/config/club-season";

@@ -11,8 +11,6 @@
  * `whereabouts: "cave"` reads as "In the cave", and every terminal
  * status reads as its own word rather than a shared "Inactive".
  */
-import type { Temporal } from "temporal-polyfill";
-
 import {
   AVAILABILITY_LABEL,
   AVAILABILITY_VARIANT,
