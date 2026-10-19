@@ -28,7 +28,6 @@ minimumReleaseAge: 10080
 # package.json looks scriptless, but pnpm 11.1.2 still flags it on
 # `pnpm install` as needing approval — leave it in.
 allowBuilds:
-  "@pulumi/command": true
   esbuild: true
   lightningcss: true
   protobufjs: true
@@ -102,8 +101,8 @@ allowBuilds:
 # The @opentelemetry/* set (GHSA-8988-4f7v-96qf core, GHSA-45rx-2jwx-cxfr propagator-jaeger) is fixed
 # only on the OTel 2.x line — the whole graph must move majors in lockstep. Rather than force a
 # mismatched OTel major onto old Pulumi, we bump @pulumi/pulumi itself: 3.252.0+ migrated its entire
-# OTel dependency set to 2.9.x, so pinning every Pulumi copy (ours + the ones @pulumi/cloudflare and
-# @pulumi/command nest) to >=3.252.0 pulls the patched OTel 2.x graph and drops the vulnerable 0.57.x
+# OTel dependency set to 2.9.x, so pinning every Pulumi copy (ours + the one @pulumi/cloudflare
+# nests) to >=3.252.0 pulls the patched OTel 2.x graph and drops the vulnerable 0.57.x
 # exporter set. Providers declare @pulumi/pulumi ^3.142.0, so any 3.x runtime is supported. The
 # resolver lands on the newest 3.x that has cleared the 7-day quarantine.
 # NOT a security override: `prosemirror-model` is deduplicated, not patched.

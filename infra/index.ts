@@ -2,7 +2,6 @@ import * as cloudflare from "@pulumi/cloudflare";
 import * as pulumi from "@pulumi/pulumi";
 
 import { configureOutbox } from "./outbox.ts";
-import { ResendDomain } from "./resend.ts";
 
 const stack = pulumi.getStack();
 
@@ -19,12 +18,6 @@ const cdnHostname = cfg.require("cdnHostname");
 const kvNamespaceTitle = cfg.require("kvNamespaceTitle");
 const webauthnRpName = cfg.require("webauthnRpName");
 const resendFromName = cfg.require("resendFromName");
-// Provider credential — authenticates against the Resend API during
-// `pulumi up`. Supplied via env var (from GitHub environment secrets in
-// CI, or `export` locally), matching how CLOUDFLARE_API_TOKEN works.
-const resendManagementApiKey = pulumi.secret(
-  process.env.RESEND_MANAGEMENT_API_KEY ?? "",
-);
 
 // D1 database for the web app. Wrangler binds to it by UUID
 // (see `apps/ucmc-web/wrangler.jsonc`); the UUID is exported below and
@@ -183,8 +176,8 @@ export { webauthnRpName };
 // reaches the Worker — Resend then 422s because the `from` field isn't
 // a valid address. Composition happens in `apps/ucmc-web/src/server/email/resend.ts`.
 //
-// `resendFromEmail` is exported below alongside the Resend resources,
-// because its value depends on which stack owns the verified domain.
+// `resendFromEmail` is exported below, read from the shared stack that
+// owns the verified domain (#298).
 export { resendFromName };
 
 // The dev email outbox (#297, docs/adr/0001-dev-email-outbox.md). On
@@ -200,95 +193,55 @@ export const emailOutbox = outbox.emailOutbox;
 export const accessTeamDomain = outbox.accessTeamDomain;
 export const accessOutboxAud = outbox.accessOutboxAud;
 
-// Resend sending domain + DNS records + sending-scoped API key. The
-// component handles domain creation, DNS record provisioning in the
-// Cloudflare zone defined above, verification trigger, and issuance of
-// a token with `sending_access` permission scoped to this domain.
+// Resend sending key + from-address (#298). This stack owns no Resend
+// resources: the verified sending domain, `spencerwill.com`, belongs to
+// the shared infrastructure repo (SpencerAWill/spencerwill.com), which
+// issues one sending-scoped key per app. Resend's free plan allows one
+// verified domain per account, so it can only live in one place, and
+// the place it serves several apps from is the shared one.
 //
-// Resend's free tier allows only one verified domain per account, so
-// we provision the resource on a single "owner" stack (prod) and have
-// other stacks borrow the sending key + from-address via a
-// StackReference. Behavior is selected by the `resendOwnerStack`
-// config: when unset, this stack owns the resource and provisions it;
-// when set to another stack name (e.g. "prod"), this stack reads the
-// outputs from that stack instead. A stack with the email outbox on
-// (dev, since #297) has no Resend at all: it sends nothing, and
-// borrowing prod's key was the dependency the outbox exists to remove.
-// (A borrowing stack sends from the owner's domain envelope, which is
-// invisible to real recipients and only matters in test inboxes.)
+// - **A stack with the email outbox on** (dev, since #297) has no
+//   Resend at all: it sends nothing. Its outputs are empty strings
+//   rather than undefined, which would only produce a `will not show
+//   as a stack output` warning on every `up`; `deploy.yml` reads
+//   neither on a stack like this.
+// - **Any other stack** must name the shared stack in `emailStack`
+//   (`<org>/<project>/<stack>`) and reads `ucmcResendApiKey` and
+//   `ucmcFromEmail` from it. The key is scoped to the domain, not to
+//   the address, so nothing here could send as another app's address
+//   that it can't already.
 //
-// `protect: true` — replacing a Resend domain re-issues DKIM keys and
-// invalidates previously-sent signatures; replacing the API key
-// invalidates any reference to the prior token. Remove protection
-// deliberately via `pulumi state` if a real rotation is needed.
-const resendOwnerStack = cfg.get("resendOwnerStack");
+// **Apply order:** the shared stack before this one. A StackReference
+// to a stack that hasn't exported these outputs fails the `up`.
+const emailStack = cfg.get("emailStack");
 
-/** Stand-in for a Resend id on a stack that borrows rather than owns. */
-const BORROWED_FROM_OWNER = "borrowed-from-owner-stack";
-/** Stand-in for a Resend id on a stack whose email goes to the outbox. */
-const NOT_PROVISIONED_OUTBOX = "not-provisioned-email-outbox";
-
-if (outbox.emailOutbox && resendOwnerStack) {
+if (outbox.emailOutbox && emailStack) {
   throw new Error(
-    "emailOutbox and resendOwnerStack are exclusive: a stack whose email " +
-      "goes to the outbox must not hold a sending key (#297).",
+    "emailOutbox and emailStack are exclusive: a stack whose email goes " +
+      "to the outbox must not hold a sending key (#297).",
+  );
+}
+if (!outbox.emailOutbox && !emailStack) {
+  throw new Error(
+    "Set emailStack (the shared stack issuing this app's Resend key, " +
+      "e.g. SpencerAWill/spencerwill-shared/prod) or emailOutbox (dev " +
+      "only). With neither, the Worker would have no way to send.",
   );
 }
 
-let resendApiKeyOutput: pulumi.Output<string>;
-let resendFromEmailOutput: pulumi.Output<string>;
-let resendDomainIdOutput: pulumi.Output<string>;
-let resendApiKeyIdOutput: pulumi.Output<string>;
+const emailRef = emailStack ? new pulumi.StackReference(emailStack) : null;
 
-if (outbox.emailOutbox) {
-  // Empty rather than undefined: an undefined output only produces a
-  // `will not show as a stack output` warning on every `up`, and
-  // `deploy.yml` reads neither on a stack like this.
-  resendApiKeyOutput = pulumi.secret("");
-  resendFromEmailOutput = pulumi.output("");
-  resendDomainIdOutput = pulumi.output(NOT_PROVISIONED_OUTBOX);
-  resendApiKeyIdOutput = pulumi.output(NOT_PROVISIONED_OUTBOX);
-} else if (resendOwnerStack) {
-  const ownerRef = new pulumi.StackReference(
-    `${pulumi.getOrganization()}/${pulumi.getProject()}/${resendOwnerStack}`,
-  );
-  resendApiKeyOutput = ownerRef.requireOutput(
-    "resendApiKey",
-  ) as pulumi.Output<string>;
-  resendFromEmailOutput = ownerRef.requireOutput(
-    "resendFromEmail",
-  ) as pulumi.Output<string>;
-  // A borrowing stack owns no Resend resources, so it has no ids to
-  // report. These were left `undefined`, which made every `pulumi up`
-  // on dev emit two `Undefined value (resendDomainId) will not show as
-  // a stack output` warnings. Nothing consumes either output — they
-  // are a record of what the owning stack provisioned — so the fix is
-  // to say so rather than to say nothing.
-  resendDomainIdOutput = pulumi.output(BORROWED_FROM_OWNER);
-  resendApiKeyIdOutput = pulumi.output(BORROWED_FROM_OWNER);
-} else {
-  const resend = new ResendDomain(
-    `ucmc-web-${stack}-resend`,
-    {
-      domainName: hostname,
-      resendApiKey: resendManagementApiKey,
-      cloudflareZoneId: zoneId,
-      apiKeyName: `ucmc-web-${stack}-sending`,
-    },
-    { protect: true },
-  );
-  resendApiKeyOutput = resend.apiKeyToken;
-  resendFromEmailOutput = pulumi.output(`noreply@${hostname}`);
-  resendDomainIdOutput = resend.domainId;
-  resendApiKeyIdOutput = resend.apiKeyId;
-}
-
-export const resendDomainId = resendDomainIdOutput;
-export const resendApiKeyId = resendApiKeyIdOutput;
-// Sending-scoped API key. Consumed by `web-deploy.yml` as the Worker's
-// RESEND_API_KEY secret via `pulumi stack output --show-secrets`.
-export const resendApiKey = resendApiKeyOutput;
-export const resendFromEmail = resendFromEmailOutput;
+// Sending-scoped API key. Consumed by `deploy.yml` as the Worker's
+// RESEND_API_KEY secret via `pulumi stack output --show-secrets`; the
+// shared stack exports it as a secret, and reading it keeps it one.
+export const resendApiKey = emailRef
+  ? (emailRef.requireOutput("ucmcResendApiKey") as pulumi.Output<string>)
+  : pulumi.secret("");
+// The envelope address, `ucmc@spencerwill.com` on prod. `deploy.yml`
+// passes it as RESEND_FROM; the display name is `resendFromName` above.
+export const resendFromEmail = emailRef
+  ? (emailRef.requireOutput("ucmcFromEmail") as pulumi.Output<string>)
+  : pulumi.output("");
 
 // Cloudflare Turnstile widget — anti-bot challenge on the sign-in form.
 // Pulumi creates the widget and exports both keys; the deploy workflow

@@ -12,12 +12,10 @@
   },
   "dependencies": {
     "@pulumi/cloudflare": "6.17.0",
-    "@pulumi/command": "^1.2.1",
     "@pulumi/pulumi": "3.257.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
-    "globals": "^17.13.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.0"
   }

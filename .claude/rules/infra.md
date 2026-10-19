@@ -8,13 +8,20 @@ paths:
 
 **Pulumi**, two stacks (`dev` auto, `prod` manual + approval), state in Pulumi Cloud, `pnpm` runtime. Auth via `CLOUDFLARE_API_TOKEN`.
 
-The **Cloudflare provider** manages Worker custom domains, D1 databases, R2 buckets (private + public, with `R2CustomDomain` `minTls: "1.2"`), KV namespaces, Resend DNS records (SPF, DKIM, MX), and on dev the outbox's Access application. The `spencerwill.com` zone itself is NOT Pulumi-managed. D1/R2/KV are `protect: true`.
+The **Cloudflare provider** manages Worker custom domains, D1 databases, R2 buckets (private + public, with `R2CustomDomain` `minTls: "1.2"`), KV namespaces, and on dev the outbox's Access application. The `spencerwill.com` zone itself is NOT Pulumi-managed. D1/R2/KV are `protect: true`.
 
-**Stack outputs consumed by `deploy.yml`:** `d1DatabaseId`, `kvNamespaceId`, `r2PublicHost` (→ `VITE_R2_PUBLIC_HOST`), `resendApiKey` and `resendFromEmail` (prod only), and `emailOutbox` / `accessTeamDomain` / `accessOutboxAud` (dev only). Bucket names are exported for drift detection only — wrangler binds buckets by name.
+**Stack outputs consumed by `deploy.yml`:** `d1DatabaseId`, `kvNamespaceId`, `r2PublicHost` (→ `VITE_R2_PUBLIC_HOST`), `resendApiKey` and `resendFromEmail` (prod only, re-exported from the shared stack), and `emailOutbox` / `accessTeamDomain` / `accessOutboxAud` (dev only). Bucket names are exported for drift detection only — wrangler binds buckets by name.
 
-## Resend (`infra/resend.ts`)
+## Resend comes from the shared stack (#298)
 
-A custom `ResendDomain` component shells out to `infra/scripts/resend.mjs` via `@pulumi/command` — **no dynamic provider, because pnpm and Pulumi dynamic providers don't mix** (pulumi/pulumi#9085).
+**This repo owns no Resend resources.** The verified sending domain, `spencerwill.com`, lives in [SpencerAWill/spencerwill.com](https://github.com/SpencerAWill/spencerwill.com) (stack `SpencerAWill/spencerwill-shared/prod`), which issues one sending-scoped key per app. Resend's free plan allows one verified domain per account, so the domain can only live in one place, and the shared repo is the place that serves several apps from it.
+
+- **Prod** sets `emailStack: SpencerAWill/spencerwill-shared/prod` and reads `ucmcResendApiKey` and `ucmcFromEmail` (`ucmc@spencerwill.com`) through a `pulumi.StackReference`. They are re-exported as `resendApiKey` / `resendFromEmail`, so `deploy.yml` didn't change.
+- **Dev** has `emailOutbox` and no Resend. The two are exclusive, and a stack with neither is refused at preview: it would have no way to send.
+- **Apply the shared stack before this one.** A StackReference to an output that doesn't exist yet fails the `up`. Removing or renaming one of those outputs is the reverse: stop reading it here first.
+- The key is scoped to the domain, not the address, so either app's key could send as any `@spencerwill.com` address. That's Resend's limit, not ours.
+
+Until #298, prod owned a `ResendDomain` component for `ucmc.spencerwill.com` (via `@pulumi/command`, because pnpm and Pulumi dynamic providers don't mix: pulumi/pulumi#9085), and dev borrowed its key through `resendOwnerStack: prod`. Both are gone; the component now lives in the shared repo.
 
 ## `@pulumi/cloudflare` and `@pulumi/pulumi` are pinned EXACTLY, on purpose
 
@@ -39,10 +46,6 @@ So a `@pulumi/cloudflare` bump is **not** a routine dependency update here:
 - Dependabot will keep proposing the bump. Closing it is a valid answer until
   somebody has time to work out which property the provider now treats as
   replace-triggering and pin or `ignoreChanges` it.
-
-Prereq: `RESEND_MANAGEMENT_API_KEY` (full-access) as a GitHub env secret on both environments, and exported locally for `pulumi up`.
-
-**Only prod has Resend.** Prod owns the `ResendDomain`; it is `protect: true` — destroying it re-issues DKIM and invalidates the sending token. Dev used to borrow prod's key through `resendOwnerStack: prod` and a `pulumi.StackReference`; since #297 it has no Resend at all and its mail goes to the outbox. `resendOwnerStack` still works for a future stack that should send, and is refused alongside `emailOutbox`.
 
 ## The dev email outbox (`infra/outbox.ts`)
 

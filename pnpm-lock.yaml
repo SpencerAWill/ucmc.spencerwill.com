@@ -383,9 +383,6 @@ importers:
       '@pulumi/cloudflare':
         specifier: 6.17.0
         version: 6.17.0(typescript@6.0.3)
-      '@pulumi/command':
-        specifier: ^1.2.1
-        version: 1.2.1(typescript@6.0.3)
       '@pulumi/pulumi':
         specifier: 3.257.0
         version: 3.257.0(typescript@6.0.3)
@@ -393,9 +390,6 @@ importers:
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.4
-      globals:
-        specifier: ^17.13.0
-        version: 17.13.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2551,9 +2545,6 @@ packages:
 
   '@pulumi/cloudflare@6.17.0':
     resolution: {integrity: sha512-sIL1rfjNavy+yZQ/OjyFHD4owe2E/TpHLFCVsogQJOC+Y6Bj7JxrhoTfsJdxVEXEFBGlNCu68T+g9im8iEZM9A==}
-
-  '@pulumi/command@1.2.1':
-    resolution: {integrity: sha512-mutNDIUYP67yCBYOVIidQyxuTwZDY9v/sx9EGbgIv4PXfyfolOKGgGLeoHEbI1lxRwaw2wbTZ3VNIynDnA5VKA==}
 
   '@pulumi/pulumi@3.257.0':
     resolution: {integrity: sha512-YjI+4ClA3AwGoMR1J58GZpt81P0vTJQHi22l4JGSl8YAnPjuJPcvpuOFt8BJrY659bznBUnIS/fDTiCHcEWxCA==}
@@ -6071,10 +6062,6 @@ packages:
 
   globals@15.15.0:
     resolution: {integrity: sha512-7ACyT3wmyp3I61S4fG682L0VA2RGD9otkqGJIwNUMF1SWUombIIk+af1unuDYgMm082aHYwD+mzJvv9Iu8dsgg==}
-    engines: {node: '>=18'}
-
-  globals@17.13.0:
-    resolution: {integrity: sha512-RwMTC61u7hrG3ZJMkZQOK4JLJrKS8QtoTii63EmWvFXHqycY9FObBJQCbsLxSO8kjKhWE5kV1GC+Vb1g3RI0Zg==}
     engines: {node: '>=18'}
 
   globals@17.7.0:
@@ -10733,14 +10720,6 @@ snapshots:
       - ts-node
       - typescript
 
-  '@pulumi/command@1.2.1(typescript@6.0.3)':
-    dependencies:
-      '@pulumi/pulumi': 3.267.0(typescript@6.0.3)
-    transitivePeerDependencies:
-      - supports-color
-      - ts-node
-      - typescript
-
   '@pulumi/pulumi@3.257.0(typescript@6.0.3)':
     dependencies:
       '@grpc/grpc-js': 1.14.5
@@ -14517,8 +14496,6 @@ snapshots:
       ini: 6.0.0
 
   globals@15.15.0: {}
-
-  globals@17.13.0: {}
 
   globals@17.7.0: {}
 
