@@ -19,23 +19,34 @@ storeDir: node_modules/.store
 # pinned to specific versions (no `latest`) so this is reachable.
 minimumReleaseAge: 10080
 
-# Fails install when a newly resolved version has weaker publish provenance
-# than a version of the same package published before it — the signature
-# of a hijacked maintainer token publishing outside the project's trusted
-# CI (#315). It complements the quarantine above: that catches a bad
-# release by its age, this one by how it was published.
+# Fails install when a version has weaker publish provenance than a
+# version of the same package published before it — the signature of a
+# hijacked maintainer token publishing outside the project's trusted CI
+# (#315). It complements the quarantine above: that catches a bad release
+# by its age, this one by how it was published.
 #
-# It judges only versions being RESOLVED — a Dependabot bump, `pnpm add`,
-# anything that re-resolves the lockfile. Versions already locked are not
-# re-checked, even under `--force`. CI installs with `--frozen-lockfile`,
-# which resolves nothing, so CI never runs this check: it fires only where
-# the lockfile is re-resolved — locally, or in Dependabot's updater (where
-# a downgrade means the update PR is never opened, not that it goes red,
-# and only if Dependabot's pnpm honors this setting at all).
+# WHEN it runs: on every install that has to resolve — any change to a
+# package.json, `pnpm add` / `pnpm update`, a Dependabot bump — and then it
+# checks the WHOLE locked tree, not just what changed (#317 found this the
+# hard way: bumping @types/node failed on react-redux@9.2.0 via recharts).
+# An install with nothing to resolve checks nothing: `--frozen-lockfile`
+# (every CI job) and a plain install of an up-to-date lockfile, even with
+# `--force`.
+#
+# To check the locked tree on demand, run in a scratch copy of the
+# manifests, this file and pnpm-lock.yaml:
+#   pnpm install --lockfile-only --fix-lockfile --ignore-scripts
+# It re-validates every locked version (~4 s) and leaves a healthy
+# lockfile byte-for-byte unchanged. Resolving from scratch WITHOUT the
+# lockfile is not a substitute: it picks the newest versions, so it misses
+# an old locked one — which is how react-redux@9.2.0 slipped past #315.
+#
+# Prefer moving a failing transitive dep to a version that HAS provenance
+# (react-redux 9.2.0 → 9.3.0, inside recharts' `9.x.x` range) over adding
+# an exclusion; exclude only when no such version exists.
 trustPolicy: no-downgrade
 # Exact versions only, each with its reason, so a NEW downgrade on the same
-# package still fails. Found by resolving the whole workspace from scratch
-# with no lockfile; this was the only one.
+# package still fails.
 trustPolicyExclude:
   # A 6.x maintenance release published in July 2023 without provenance,
   # after 7.5.4 had it. pnpm judges trust by publish date, not semver, so
