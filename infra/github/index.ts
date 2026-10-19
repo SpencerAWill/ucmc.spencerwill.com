@@ -68,7 +68,7 @@ const deployEnvironments = (["dev", "prod"] as const).map((name) => {
 });
 
 /**
- * PR previews of infra/cloudflare (ci.yml's `pulumi-preview` jobs). No
+ * PR previews of infra/cloudflare (cicd.yml's `pulumi-preview` jobs). No
  * branch policy, because every PR branch needs it. Its Cloudflare token can
  * only read, but the Pulumi token a job here gets through OIDC is personal
  * and can read every stack's secrets, in every repo, so each run waits for

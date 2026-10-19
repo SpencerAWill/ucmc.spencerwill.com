@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // An externally-supplied base URL means we are pointed at a DEPLOYED
-// worker (the post-deploy smoke jobs in deploy.yml), not at a dev server
+// worker (the post-deploy smoke step in .github/actions/deploy), not at a dev server
 // this config is responsible for. It therefore does double duty: it sets
 // `baseURL`, and it suppresses `webServer` below — booting `pnpm dev`
 // against a remote target would waste two minutes and then test the
@@ -105,7 +105,7 @@ export default defineConfig({
     },
     /*
      * Post-deploy smoke. Selected explicitly (`--project=smoke`) by the
-     * `smoke-dev` / `smoke-prod` jobs in deploy.yml, against a real
+     * deploy action's smoke step (.github/actions/deploy), against a real
      * worker via PLAYWRIGHT_BASE_URL; `chromium` carries the matching
      * `testIgnore` so `pnpm e2e` and the PR jobs never pick it up.
      *

@@ -121,7 +121,7 @@ Playwright drives a freshly-spawned dev server. Four projects: `chromium` (Deskt
 - `e2e/fixtures/fake-camera.ts` writes a single-frame Y4M of a QR for Chromium's `--use-file-for-fake-video-capture`. Hand-rolled (text header + planar YUV) because `qrcode` hands over the module matrix and an ffmpeg dependency for three loops is a poor trade.
 - The webServer config sets `E2E_BYPASS_RATE_LIMIT=1` and clears Turnstile keys: the 10/60s budget can't cover a suite from one IP, and Turnstile blocks `networkidle` and steals focus.
 
-**The whole suite runs in CI.** Two parallel jobs in `ci.yml`, split by browser matrix: `e2e-desktop` runs `--project=chromium` with an `axllent/mailpit` service container, and `e2e-mobile` runs the two mobile projects without one. They are parallel, so the suite costs one job's wall-clock.
+**The whole suite runs in CI.** Two parallel jobs in `cicd.yml`, split by browser matrix: `e2e-desktop` runs `--project=chromium` with an `axllent/mailpit` service container, and `e2e-mobile` runs the two mobile projects without one. They are parallel, so the suite costs one job's wall-clock.
 
 **Each job selects by Playwright _project_, never by file name, and that is load-bearing.** The projects' `testMatch`/`testIgnore` already partition the suite, so a spec added tomorrow is covered by construction. The arrangement this replaced named spec files in the workflow, and that is exactly how 10 of 14 specs — every sign-in, gear-desk and member-management flow — ended up running only on a developer's laptop. **If you add a spec, do not add a workflow step for it; if you find yourself wanting to, the project config is what needs changing.**
 
@@ -177,9 +177,9 @@ Four things about the sweep are load-bearing:
 
 ### `smoke.spec.ts` — the only spec that runs against a real deployment
 
-`deploy.yml` used to apply D1 migrations and push a worker to production with nothing checking the result. A deploy that 500s on every request, or one whose client bundle throws on hydration, was indistinguishable from a good one until a human loaded the site.
+The deploy workflow used to apply D1 migrations and push a worker to production with nothing checking the result. A deploy that 500s on every request, or one whose client bundle throws on hydration, was indistinguishable from a good one until a human loaded the site.
 
-The smoke steps live **inside** the `web-dev` / `web-prod` jobs, not in jobs of their own: a separate job would re-run checkout, setup-node and `pnpm install` to learn something the deploy job can check directly, and would need `app_base_url` plumbed through as a job output. Inside, a smoke failure also turns the deploy red, which is what "fail loudly" has to mean.
+The smoke steps live **inside** the deploy action (`.github/actions/deploy`), run by `Deploy — dev` and `Deploy — prod`, not in jobs of their own: a separate job would re-run checkout, setup-node and `pnpm install` to learn something the deploy job can check directly, and would need `app_base_url` plumbed through as a job output. Inside, a smoke failure also turns the deploy red, which is what "fail loudly" has to mean — and on prod it triggers `wrangler rollback`, so prod returns to the previous Worker version.
 
 - **`PLAYWRIGHT_BASE_URL` does double duty.** It sets `baseURL` _and_ suppresses the `webServer` block — booting `pnpm dev` against a remote target would waste two minutes and then test the wrong thing. Anything that reads `BASE_URL` must keep that coupling in mind.
 - **The spec must stay read-only and unauthenticated.** It runs against production. No sign-in, no seeding, no mutation.

@@ -81,4 +81,4 @@ Most security-relevant invariants live in [`CLAUDE.md`](./CLAUDE.md). The ones t
 - **R2 private bucket** is the default for new media. Public bucket entries must use content-hashed or opaque keys — never a guessable identifier — and must set `httpMetadata.cacheControl` at upload time (the custom domain serves stored metadata, not Worker headers).
 - **Rate limit wrappers** in `apps/ucmc-web/src/server/rate-limit.server.ts` fail _open_ — keep them that way, but pair every public endpoint with the appropriate budget (`HEALTH_RATE_LIMITER`, `AUTH_RATE_LIMITER` — keyed independently on `ip:` and `email:` — `CEREMONY_RATE_LIMITER` for passkey begin, `UPLOAD_RATE_LIMITER`, or `CALENDAR_RATE_LIMITER`).
 
-Dependabot keeps dependencies patched, and `web-ci.yml` runs `pnpm audit` on every PR. If you bump a dep specifically to fix a CVE, mention the advisory ID in the commit body.
+Dependabot keeps dependencies patched, and `cicd.yml`'s `audit` job runs `pnpm audit` on every PR. If you bump a dep specifically to fix a CVE, mention the advisory ID in the commit body.

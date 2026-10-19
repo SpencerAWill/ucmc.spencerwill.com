@@ -76,7 +76,7 @@ new github.RepositoryDependabotSecurityUpdates("dependabot-security-updates", {
 });
 
 /**
- * Safeguards on main: changes arrive by PR, after ci.yml's `required` job
+ * Safeguards on main: changes arrive by PR, after cicd.yml's `required` job
  * passes, and history stays linear (squash-only).
  *
  * Repository admins bypass, so nobody can be locked out by a bad rule or a

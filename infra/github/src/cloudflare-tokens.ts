@@ -21,15 +21,16 @@ import * as pulumi from "@pulumi/pulumi";
  * with no diff makes no write calls.
  */
 const tokenPermissions = {
-  // Wrangler, in deploy.yml's web-* jobs and seed-admin.yml: upload the
-  // Worker and its secrets, apply D1 migrations, run D1 SQL. No zone
+  // Wrangler, in the deploy action (.github/actions/deploy) and
+  // seed-admin.yml: upload the Worker and its secrets, apply D1 migrations,
+  // read a D1 Time Travel bookmark, roll back a version, run D1 SQL. No zone
   // permissions at all: wrangler.jsonc declares no `routes` (the custom
   // domain is infra/cloudflare's), so a deploy never touches the zone.
   deploy: {
     account: ["Workers Scripts Write", "D1 Write", "Account Settings Read"],
     zone: [],
   },
-  // `pulumi up` on infra/cloudflare (deploy.yml's infra-* jobs). One entry
+  // `pulumi up` on infra/cloudflare (the deploy action's first step). One entry
   // per resource type there: D1Database; R2Bucket and R2CustomDomain;
   // WorkersKvNamespace; TurnstileWidget; WorkersCustomDomain (Workers
   // Scripts + zone Workers Routes + DNS); ZeroTrustAccessApplication (dev).
@@ -51,7 +52,7 @@ const tokenPermissions = {
 } as const;
 
 /**
- * `pulumi preview` on PRs (ci.yml's `pulumi-preview` jobs, in the `preview`
+ * `pulumi preview` on PRs (cicd.yml's `pulumi-preview` jobs, in the `preview`
  * environment): the infra token's reach, read-only. Derived rather than
  * listed, so a permission added to the infra token reaches previews too.
  */

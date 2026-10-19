@@ -147,7 +147,7 @@ Three-layer pattern (server-only module boundary requires this; see `/CLAUDE.md`
 
 ## Deployment
 
-Auto-deploys to dev on merge to main; prod is manual via `workflow_dispatch` on `web-deploy.yml` with a GitHub environment approval gate. Custom domain bindings, D1 / R2 / KV resources, the Resend sending domain, and DNS records are provisioned by Pulumi (`infra/`). Don't `wrangler deploy` from a developer machine — it bypasses CI's secret + env handling.
+`.github/workflows/cicd.yml` deploys every merge to main: dev first, then prod in the same run once a reviewer approves the `prod` environment. Both go through `.github/actions/deploy`, which points `wrangler.jsonc` at the stack with `pnpm sync-env` (`scripts/sync-env.ts`), records a D1 restore point, migrates, deploys code and secrets as one version, smoke-tests, and on prod rolls the code back if the smoke test fails. Custom domain bindings, D1 / R2 / KV resources and DNS records are provisioned by Pulumi (`infra/cloudflare`). Don't `wrangler deploy` from a developer machine — it bypasses CI's secret + env handling.
 
 ## Where to read more
 

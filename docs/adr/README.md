@@ -4,9 +4,10 @@ One file per decision that is hard to reverse or easy to second-guess later: wha
 
 Most of this repo's reasoning lives next to the code it explains, in comments and in `.claude/rules/`. An ADR is for the decisions that span several of those places at once — infra, app and workflow — where no single file is the right home.
 
-| ADR                              | Decision                                    | Status   |
-| -------------------------------- | ------------------------------------------- | -------- |
-| [0001](0001-dev-email-outbox.md) | A dev email outbox behind Cloudflare Access | Accepted |
+| ADR                                             | Decision                                    | Status   |
+| ----------------------------------------------- | ------------------------------------------- | -------- |
+| [0001](0001-dev-email-outbox.md)                | A dev email outbox behind Cloudflare Access | Accepted |
+| [0002](0002-one-pipeline-from-check-to-prod.md) | One pipeline from check to prod             | Accepted |
 
 ## Format
 

@@ -24,7 +24,7 @@ export const env = createEnv({
     // When unset (local dev / Miniflare), the helpers fall back to the
     // worker-mediated /api/* paths. Hostname only — no scheme, no
     // trailing slash. Sourced from the Pulumi `r2PublicHost` stack
-    // output via web-deploy.yml at build time (Vite bakes it in).
+    // output by the deploy action at build time (Vite bakes it in).
     VITE_R2_PUBLIC_HOST: z.string().min(1).optional(),
   },
 
