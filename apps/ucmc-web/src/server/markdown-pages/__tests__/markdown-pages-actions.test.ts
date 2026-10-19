@@ -145,6 +145,20 @@ describe("getMarkdownPageAction", () => {
     ).rejects.toThrow(/history:view/);
   });
 
+  it("lets a signed-in user with no roles read a slug granted to role_anonymous", async () => {
+    // #300: an account pending approval holds no roles until approval
+    // adds `role_member`. Signing in must not hide what a signed-out
+    // visitor can read.
+    const userId = await seedUser("pending@example.com");
+    await getDb()
+      .update(schema.users)
+      .set({ status: "pending" })
+      .where(eq(schema.users.id, userId));
+    await signInAs(userId);
+    const { slug } = await getMarkdownPageAction({ slug: "policies" });
+    expect(slug).toBe("policies");
+  });
+
   it("lets a history:view holder read history.narrative", async () => {
     // system_admin auto-grants every permission (principal bypass).
     await signInAsAdmin();

@@ -99,4 +99,25 @@ describe("useAuth().hasAnyPermission", () => {
     renderProbe();
     expect(screen.getByText("any:false")).toBeInTheDocument();
   });
+
+  it("keeps the anonymous grants for a signed-in principal with no roles", () => {
+    // #300: an account pending approval holds no roles, and used to see
+    // less than a signed-out visitor — the public sidebar entries vanished
+    // the moment they signed in.
+    sessionMock.mockReturnValue({
+      principal: {
+        status: "pending",
+        hasProfile: true,
+        isSystemAdmin: false,
+        roles: [],
+        permissions: [],
+        rolePermissionMap: {},
+      },
+      anonymousPermissions: ["waivers:view"],
+      emulatedRole: null,
+    });
+    renderProbe();
+    expect(screen.getByText("view:true")).toBeInTheDocument();
+    expect(screen.getByText("any:true")).toBeInTheDocument();
+  });
 });
