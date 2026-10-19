@@ -320,7 +320,12 @@ export function syncWranglerConfig(
   );
 }
 
-/** Validates `pulumi stack output --json`, naming every missing or bad key. */
+const SECRET_PLACEHOLDER = "[secret]";
+
+/**
+ * Validates `pulumi stack output --json`, naming every missing, empty
+ * (where required) or secret output.
+ */
 export function parseStackOutputs(json: unknown): StackOutputs {
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     throw new SyncError(
@@ -334,12 +339,18 @@ export function parseStackOutputs(json: unknown): StackOutputs {
       if (typeof value !== "string") {
         return true;
       }
+      // `pulumi stack output --json` prints a secret output as this
+      // literal. Deployed as a var it would reach the Worker as the
+      // string "[secret]" (a RESEND_FROM that 422s every send, #298).
+      if (value === SECRET_PLACEHOLDER) {
+        return true;
+      }
       return type === "string" && value === "";
     })
     .map(([key, type]) => `${key} (${type})`);
   if (problems.length > 0) {
     throw new SyncError(
-      `Stack outputs are missing or malformed: ${problems.join(", ")}`,
+      `Stack outputs are missing, malformed or secret: ${problems.join(", ")}`,
     );
   }
   return record as unknown as StackOutputs;

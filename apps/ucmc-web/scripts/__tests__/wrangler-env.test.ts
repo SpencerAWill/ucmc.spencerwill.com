@@ -225,6 +225,14 @@ describe("parseStackOutputs", () => {
     );
   });
 
+  // A secret output prints as "[secret]" without --show-secrets, and
+  // would otherwise be deployed as that literal string.
+  it("rejects an output Pulumi printed as a secret", () => {
+    expect(() =>
+      parseStackOutputs({ ...PROD, resendFromEmail: "[secret]" }),
+    ).toThrow(/resendFromEmail \(string\?\)/);
+  });
+
   it("rejects an optional output that isn't a string", () => {
     expect(() => parseStackOutputs({ ...DEV, emailOutbox: true })).toThrow(
       /emailOutbox \(string\?\)/,
