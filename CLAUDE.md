@@ -4,12 +4,12 @@
 
 **UCMC** (University of Cincinnati Mountaineering Club) — a pnpm monorepo (pnpm@11.1.2 pinned via corepack, **ESM-only**).
 
-| Path             | What it is                                                                       |
-| ---------------- | -------------------------------------------------------------------------------- |
-| `apps/ucmc-web/` | TanStack Start + React 19 + Vite 8 + Tailwind v4 + shadcn, on Cloudflare Workers |
-| `infra/`         | Pulumi (TypeScript, stacks `dev` and `prod`)                                     |
-| `docs/adr/`      | Architecture decision records                                                    |
-| `.devcontainer/` | Debian devcontainer: Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit       |
+| Path             | What it is                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `apps/ucmc-web/` | TanStack Start + React 19 + Vite 8 + Tailwind v4 + shadcn, on Cloudflare Workers     |
+| `infra/`         | Pulumi (TypeScript, stacks `dev` and `prod`)                                         |
+| `docs/adr/`      | Architecture decision records                                                        |
+| `.devcontainer/` | Debian devcontainer: Node 24, Pulumi, gh, Claude Code, Playwright, gitleaks, Mailpit |
 
 Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** and loads when you open a matching file. Start there rather than asking for a tour: `web-architecture`, `data-and-bindings`, `auth-and-rbac`, `site-settings`, `notifications`, `compliance-and-waivers`, `dates-and-formats`, `testing`, `app-chrome`, `feature-*`, `infra`, `dependencies`, `devcontainer`.
 
@@ -38,7 +38,7 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 ## Commits & PRs
 
 - **Conventional Commits**, enforced by commitlint (Husky `commit-msg`). Scopes are validated against pnpm workspace names plus `devcontainer`; use `global` for repo-wide changes. `pnpm commit` walks you through it.
-- Husky `pre-commit` runs lint-staged, then `typecheck` for each package whose TypeScript changed (`apps/ucmc-web`, `infra`). Typecheck can't live inside lint-staged: `tsc` given explicit filenames ignores `tsconfig.json` entirely, so it has to run once per project, and lint-staged runs different globs concurrently — it would read files the formatters are still rewriting.
+- Husky `pre-commit` refuses a commit deleting more than 20 files, checked first and again last (a truncated index; recover with `git reset`, override with `ALLOW_MASS_DELETE=1`) and runs a gitleaks scan of the staged changes (skipped with a warning where gitleaks isn't installed; CI's `secrets` job is the gate). Then it runs lint-staged, then `typecheck` for each package whose TypeScript changed (`apps/ucmc-web`, `infra`). Typecheck can't live inside lint-staged: `tsc` given explicit filenames ignores `tsconfig.json` entirely, so it has to run once per project, and lint-staged runs different globs concurrently — it would read files the formatters are still rewriting.
 - **Split multi-part work into sequenced commits that are each green and independently revertable.** Stage deliberately — `git add -A` sweeps up unrelated work in progress.
 - CI: `ci.yml` per-PR (paths-filtered), `deploy.yml` on push to main (dev auto, prod via `workflow_dispatch` + approval), `quality.yml` weekly. **Third-party actions are pinned to commit SHAs, and `${{ }}` never appears inside a `run:` body** — `workflow-lint` runs `actionlint` + `zizmor` and will fail on either. See `.claude/rules/infra.md`. **`quality.yml` is for reports, not gates** — coverage and anything else too slow to justify per-PR. Putting an advisory check in `ci.yml` is how a report becomes a merge blocker nobody chose.
 

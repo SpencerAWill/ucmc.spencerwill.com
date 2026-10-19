@@ -94,7 +94,12 @@ pnpm commit
 
 ### Linting and Formatting
 
-On every commit, the following runs automatically via lint-staged:
+On every commit, the `pre-commit` hook first runs two guards (#316):
+
+- **A mass-deletion guard** refuses a commit that deletes more than 20 files, checked again after lint-staged since that is where the index has been truncated before. That is what a truncated git index looks like (it once produced an 827-file deletion here). Recover with `git reset` (mixed, never `--hard`); for a deletion that really is that large, commit with `ALLOW_MASS_DELETE=1`.
+- **gitleaks** scans the staged changes for secrets. The devcontainer image installs it; on a host without it the hook warns and continues (`brew install gitleaks` on a Mac), and the `Secrets — gitleaks` CI job scans the full history on every PR regardless.
+
+Then the following runs via lint-staged:
 
 - **ESLint** — lints and fixes `*.js`, `*.ts`, `*.tsx` files
 - **Prettier** — formats all supported file types

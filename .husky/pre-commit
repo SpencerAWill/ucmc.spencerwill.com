@@ -2,6 +2,55 @@
 # failing check would be masked by the exit status of the next one.
 set -e
 
+# Refuse a commit that deletes an implausible number of files (#316).
+#
+# That is what a truncated index looks like: the index ends up listing
+# only some files, so every other tracked file shows as staged for
+# deletion. It reached a commit here once, removing 827 files (see the
+# `--no-stash` note below). `--no-stash` cut lint-staged's index writes,
+# but a plain `git add` that loses the same race truncates the index
+# just as well, and nothing else stops the commit that follows.
+#
+# The files are still on disk when this fires, so `git reset` (mixed —
+# never `--hard`) restores the index. It runs twice: first, before
+# lint-staged, so the formatters never run against a broken index; and
+# again last, because git commits whatever index the hook leaves behind,
+# and lint-staged's own index writes are where the 827-file truncation
+# happened.
+#
+# For a deletion that really is this large: ALLOW_MASS_DELETE=1 git commit
+check_mass_delete() {
+  max_deletions=20
+  deletions=$(git diff --cached --diff-filter=D --name-only | wc -l | tr -d ' ')
+  if [ "$deletions" -gt "$max_deletions" ] && [ "${ALLOW_MASS_DELETE:-}" != "1" ]; then
+    echo "pre-commit: this commit deletes $deletions files (limit $max_deletions)." >&2
+    echo "  If you didn't mean to delete them, the index is probably truncated:" >&2
+    echo "  run 'git reset' (keeps your files, never --hard), then stage again." >&2
+    echo "  If you did, commit with ALLOW_MASS_DELETE=1." >&2
+    exit 1
+  fi
+}
+check_mass_delete
+
+# Secret scan of the staged changes (#316), before anything leaves the
+# machine. GitHub push protection only knows recognised provider token
+# formats and only looks at push time; gitleaks also knows generic
+# high-entropy keys and private-key blocks.
+#
+# gitleaks is a standalone binary the devcontainer image installs (pinned
+# and checksum-verified in `.devcontainer/Dockerfile`). A commit from a
+# host without it warns and continues rather than failing: the `secrets`
+# job in ci.yml scans the full history on every PR regardless, so the
+# hook is the early warning and CI is the gate. `brew install gitleaks`
+# adds it on a Mac. `--verbose` is what names the file, line and rule of a
+# finding (without it the refusal is just "leaks found: 1"); `--redact`
+# keeps the secret itself out of the terminal.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner --verbose
+else
+  echo "pre-commit: gitleaks not found, skipping the secret scan (CI still runs it)." >&2
+fi
+
 # `--no-stash` is deliberate, not a convenience.
 #
 # lint-staged's default backup stash performs a sequence of index writes
@@ -50,3 +99,6 @@ fi
 if printf '%s\n' "$staged" | grep -qE '^infra/.*\.ts$|^infra/tsconfig\.json$'; then
   pnpm --filter @ucmc/infra typecheck
 fi
+
+# Second pass of the mass-deletion guard (see the top of this file).
+check_mass_delete
