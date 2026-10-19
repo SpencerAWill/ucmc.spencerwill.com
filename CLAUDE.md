@@ -8,6 +8,7 @@
 | ---------------- | -------------------------------------------------------------------------------- |
 | `apps/ucmc-web/` | TanStack Start + React 19 + Vite 8 + Tailwind v4 + shadcn, on Cloudflare Workers |
 | `infra/`         | Pulumi (TypeScript, stacks `dev` and `prod`)                                     |
+| `docs/adr/`      | Architecture decision records                                                    |
 | `.devcontainer/` | Debian devcontainer: Node 24, Pulumi, gh, Claude Code, Playwright, Mailpit       |
 
 Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** and loads when you open a matching file. Start there rather than asking for a tour: `web-architecture`, `data-and-bindings`, `auth-and-rbac`, `site-settings`, `notifications`, `compliance-and-waivers`, `dates-and-formats`, `testing`, `app-chrome`, `feature-*`, `infra`, `dependencies`, `devcontainer`.
@@ -77,11 +78,12 @@ The hook **inspects each command segment's head, not the whole command string**,
 
 ## Where things live
 
-| Kind of knowledge                                  | Goes in                            |
-| -------------------------------------------------- | ---------------------------------- |
-| Always true, everywhere                            | this file                          |
-| Only matters for one area of the codebase          | `.claude/rules/*.md` (`paths:`)    |
-| A multi-step procedure you'd otherwise re-explain  | `.claude/skills/*/SKILL.md`        |
-| A library's own guidance, version-locked           | a symlink in `.claude/skills/`     |
-| A focused review or check with its own tool budget | `.claude/agents/*.md`              |
-| Must happen regardless of what Claude decides      | `.claude/hooks/` + `settings.json` |
+| Kind of knowledge                                   | Goes in                            |
+| --------------------------------------------------- | ---------------------------------- |
+| Always true, everywhere                             | this file                          |
+| Only matters for one area of the codebase           | `.claude/rules/*.md` (`paths:`)    |
+| A multi-step procedure you'd otherwise re-explain   | `.claude/skills/*/SKILL.md`        |
+| A library's own guidance, version-locked            | a symlink in `.claude/skills/`     |
+| A focused review or check with its own tool budget  | `.claude/agents/*.md`              |
+| Must happen regardless of what Claude decides       | `.claude/hooks/` + `settings.json` |
+| A decision spanning infra, app and workflow at once | `docs/adr/NNNN-*.md`               |
