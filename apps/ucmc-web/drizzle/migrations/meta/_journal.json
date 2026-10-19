@@ -589,6 +589,13 @@
       "when": 1779477596960,
       "tag": "0083_anonymous_grantable_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "6",
+      "when": 1779477596961,
+      "tag": "0084_webauthn_ceremonies",
+      "breakpoints": true
     }
   ]
 }

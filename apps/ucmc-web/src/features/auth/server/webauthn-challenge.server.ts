@@ -1,18 +1,25 @@
 /**
- * KV-backed challenge store for webauthn ceremonies. Each begin/finish
- * pair stashes {challenge, userId?, type} under a random ceremony ID with
- * a 5-minute TTL. finish looks it up by the ID in the ceremony cookie,
- * verifies, and deletes — so the same challenge can never be replayed.
+ * D1-backed challenge store for webauthn ceremonies. Each begin/finish
+ * pair stores {challenge, type, userId?} under a random ceremony ID with
+ * a 5-minute lifetime. finish consumes it by the ID in the ceremony
+ * cookie with one `DELETE … RETURNING`, so exactly one caller ever gets a
+ * given challenge back — concurrent finishes included (#314).
  *
- * KV's minimum expirationTtl is 60 seconds; 300s (5 min) matches the
- * ceremony cookie's maxAge so entries disappear naturally even if finish
- * never runs.
+ * This was KV, read with `get` and removed with a separate `delete`. Two
+ * finishes could both read the challenge before either deleted it, and
+ * KV's eventual consistency let a cached read outlive the delete. See
+ * `0084_webauthn_ceremonies.sql`.
+ *
+ * 300s (5 min) matches the ceremony cookie's maxAge. A row that outlives
+ * it is rejected at consume and swept by the daily retention tick.
  */
-import { getKv } from "#/server/kv";
+import { eq } from "drizzle-orm";
+
+import { getDb, schema } from "#/server/db";
 
 export const CHALLENGE_TTL_SECONDS = 300;
 
-export type WebAuthnCeremonyType = "register" | "authenticate";
+export type WebAuthnCeremonyType = (typeof schema.webauthnCeremonyType)[number];
 
 export interface StoredChallenge {
   challenge: string;
@@ -23,10 +30,6 @@ export interface StoredChallenge {
   userId?: string;
 }
 
-function key(ceremonyId: string): string {
-  return `webauthn:ceremony:${ceremonyId}`;
-}
-
 export function newCeremonyId(): string {
   return crypto.randomUUID();
 }
@@ -34,26 +37,46 @@ export function newCeremonyId(): string {
 export async function putChallenge(
   ceremonyId: string,
   value: StoredChallenge,
+  now: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> {
-  await getKv().put(key(ceremonyId), JSON.stringify(value), {
-    expirationTtl: CHALLENGE_TTL_SECONDS,
-  });
+  await getDb()
+    .insert(schema.webauthnCeremonies)
+    .values({
+      id: ceremonyId,
+      challenge: value.challenge,
+      type: value.type,
+      userId: value.userId ?? null,
+      createdAt: now,
+      expiresAt: now.add({ seconds: CHALLENGE_TTL_SECONDS }),
+    });
 }
 
-export async function getChallenge(
+/**
+ * Take the ceremony's challenge, removing it in the same statement.
+ * Returns null when there is no such ceremony, it was already consumed,
+ * or it has expired. An expired row is deleted all the same.
+ */
+export async function consumeChallenge(
   ceremonyId: string,
+  now: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<StoredChallenge | null> {
-  const raw = await getKv().get(key(ceremonyId));
-  if (!raw) {
+  const rows = await getDb()
+    .delete(schema.webauthnCeremonies)
+    .where(eq(schema.webauthnCeremonies.id, ceremonyId))
+    .returning();
+  // A length check, not `rows[0] === undefined`: without
+  // `noUncheckedIndexedAccess` the index types as always defined and lint
+  // calls the guard dead code (#274). It is the "no such ceremony" path.
+  if (rows.length === 0) {
     return null;
   }
-  try {
-    return JSON.parse(raw) as StoredChallenge;
-  } catch {
+  const row = rows[0];
+  if (Temporal.Instant.compare(row.expiresAt, now) <= 0) {
     return null;
   }
-}
-
-export async function deleteChallenge(ceremonyId: string): Promise<void> {
-  await getKv().delete(key(ceremonyId));
+  return {
+    challenge: row.challenge,
+    type: row.type,
+    ...(row.userId === null ? {} : { userId: row.userId }),
+  };
 }

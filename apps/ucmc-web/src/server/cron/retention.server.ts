@@ -21,6 +21,11 @@
  * `/dev/outbox` already prunes on read; this sweep is what makes a dev
  * Worker nobody visits forget as well. On prod it deletes nothing.
  *
+ * `webauthn_ceremonies` is housekeeping too: a ceremony is a challenge
+ * that lives five minutes (#314). Finish refuses an expired one, so these
+ * rows are already inert; the sweep only stops them accumulating, since
+ * passkey autofill starts a ceremony on every `/sign-in` load.
+ *
  * NULL-skip discipline: rows whose timestamp column is NULL are
  * deliberately ignored. `rejected_at` / `deactivated_at` were added in
  * migration 0019, so historical rejections / deactivations don't have
@@ -96,6 +101,7 @@ export interface SweepCounts {
   orphanR2Keys: number;
   emailSendLog: number;
   emailOutbox: number;
+  webauthnCeremonies: number;
 }
 
 /** Housekeeping, not a privacy promise — see the module doc comment. */
@@ -109,6 +115,17 @@ export async function sweepEmailSendLog(
     .delete(schema.emailSends)
     .where(lt(schema.emailSends.sentAt, cutoff))
     .returning({ id: schema.emailSends.id });
+  return deleted.length;
+}
+
+/** Housekeeping, not a privacy promise — see the module doc comment. */
+export async function sweepWebauthnCeremonies(
+  now: Temporal.Instant,
+): Promise<number> {
+  const deleted = await getDb()
+    .delete(schema.webauthnCeremonies)
+    .where(lt(schema.webauthnCeremonies.expiresAt, now))
+    .returning({ id: schema.webauthnCeremonies.id });
   return deleted.length;
 }
 
@@ -349,6 +366,7 @@ export async function runRetentionSweeps(
     orphanR2Keys: 0,
     emailSendLog: 0,
     emailOutbox: 0,
+    webauthnCeremonies: 0,
   };
 
   // Each sweep is wrapped so an error in one (e.g. R2 outage) doesn't
@@ -370,6 +388,7 @@ export async function runRetentionSweeps(
     },
     { name: "emailSendLog", run: () => sweepEmailSendLog(now) },
     { name: "emailOutbox", run: () => sweepEmailOutbox(now) },
+    { name: "webauthnCeremonies", run: () => sweepWebauthnCeremonies(now) },
   ];
 
   for (const sweep of sweeps) {

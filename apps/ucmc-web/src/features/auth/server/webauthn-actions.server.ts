@@ -39,8 +39,7 @@ import {
   writeCeremonyCookie,
 } from "#/features/auth/server/webauthn-ceremony.server";
 import {
-  deleteChallenge,
-  getChallenge,
+  consumeChallenge,
   newCeremonyId,
   putChallenge,
 } from "#/features/auth/server/webauthn-challenge.server";
@@ -99,10 +98,10 @@ export async function webauthnRegisterFinishAction(args: {
   if (!ceremonyId) {
     return { ok: false, reason: "no_ceremony" };
   }
-  const stored = await getChallenge(ceremonyId);
-  // Single-use challenge: delete before any further work so even a crash
-  // path can't let the same challenge be retried.
-  await deleteChallenge(ceremonyId);
+  // Single-use challenge: consumed (read and deleted in one statement)
+  // before any further work, so neither a concurrent finish nor a crash
+  // path can let the same challenge be retried.
+  const stored = await consumeChallenge(ceremonyId);
   clearCeremonyCookie();
 
   if (
@@ -188,8 +187,7 @@ export async function webauthnAuthenticateFinishAction(args: {
   if (!ceremonyId) {
     return { ok: false, reason: "no_ceremony" };
   }
-  const stored = await getChallenge(ceremonyId);
-  await deleteChallenge(ceremonyId);
+  const stored = await consumeChallenge(ceremonyId);
   clearCeremonyCookie();
 
   if (!stored || stored.type !== "authenticate") {

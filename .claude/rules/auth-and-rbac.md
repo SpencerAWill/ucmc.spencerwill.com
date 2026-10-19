@@ -34,7 +34,7 @@ paths:
 
 ## Passkeys (WebAuthn)
 
-`@simplewebauthn/server` + `browser`. The RP is pinned to `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `APP_BASE_URL` (per-env from Pulumi). Each ceremony stashes its challenge in KV at `webauthn:ceremony:<id>` (5-min TTL) and sets a `__Host-ucmc_webauthn` cookie. Finish deletes the KV entry (single-use) and clears the cookie on every branch. Sign-in runs a background conditional-UI ceremony for autofill.
+`@simplewebauthn/server` + `browser`. The RP is pinned to `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `APP_BASE_URL` (per-env from Pulumi). Each ceremony stores its challenge as a `webauthn_ceremonies` row (5-minute expiry) and sets a `__Host-ucmc_webauthn` cookie. Finish consumes the row with one `DELETE … RETURNING` and clears the cookie on every branch. **Single use is one statement, never a read followed by a delete** — it was KV `get` then `delete` until #314, which two concurrent finishes could both pass. Magic links hold the same line with `UPDATE … WHERE consumed_at IS NULL RETURNING`. Expired rows are inert (finish refuses them) and the daily retention tick sweeps them. Sign-in runs a background conditional-UI ceremony for autofill.
 
 **Three surfaces offer enrollment, and only one of them manages credentials.** `PasskeySection` (`/my/security`) owns the full list / add / rename / remove UI. The other two exist because `/my/security` is behind `requireApproved`, which is strictly later than the moment a member is actually at the device they want to enroll:
 

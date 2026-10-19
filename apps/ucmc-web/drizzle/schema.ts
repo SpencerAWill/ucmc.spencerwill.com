@@ -439,6 +439,28 @@ export const passkeyCredentials = sqliteTable(
   (t) => [uniqueIndex("passkey_credential_id_unique").on(t.credentialId)],
 );
 
+export const webauthnCeremonyType = ["register", "authenticate"] as const;
+
+/**
+ * One in-flight WebAuthn ceremony — see `0084_webauthn_ceremonies.sql`.
+ * Consumed with `DELETE … RETURNING` so a challenge is usable once
+ * (`features/auth/server/webauthn-challenge.server.ts`); expired rows are
+ * swept by the daily retention tick.
+ */
+export const webauthnCeremonies = sqliteTable(
+  "webauthn_ceremonies",
+  {
+    id: text("id").primaryKey(),
+    challenge: text("challenge").notNull(),
+    type: text("type", { enum: webauthnCeremonyType }).notNull(),
+    // Register ceremonies only. Not a foreign key — see the migration.
+    userId: text("user_id"),
+    createdAt: timestamp("created_at").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+  (t) => [index("webauthn_ceremonies_expires_at_idx").on(t.expiresAt)],
+);
+
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id")

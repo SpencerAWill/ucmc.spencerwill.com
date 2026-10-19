@@ -92,7 +92,7 @@ vi.mock("#/features/auth/server/webauthn.server", async () => {
   };
 });
 
-const { putChallenge, getChallenge } =
+const { putChallenge } =
   await import("#/features/auth/server/webauthn-challenge.server");
 const {
   webauthnRegisterBeginAction,
@@ -137,6 +137,24 @@ async function auditRows(action: schema.AuditAction) {
     where: eq(schema.auditLog.action, action),
     orderBy: asc(schema.auditLog.id),
   });
+}
+
+/**
+ * The stored ceremony, read WITHOUT consuming it — the actions are what
+ * consume, and these tests assert on what they left behind.
+ */
+async function storedCeremony(ceremonyId: string) {
+  const row = await getDb().query.webauthnCeremonies.findFirst({
+    where: eq(schema.webauthnCeremonies.id, ceremonyId),
+  });
+  if (row === undefined) {
+    return null;
+  }
+  return {
+    challenge: row.challenge,
+    type: row.type,
+    ...(row.userId === null ? {} : { userId: row.userId }),
+  };
 }
 
 async function seedUser(args: {
@@ -191,6 +209,7 @@ beforeEach(async () => {
   await db.delete(schema.passkeyCredentials);
   await db.delete(schema.profiles);
   await db.delete(schema.magicLinks);
+  await db.delete(schema.webauthnCeremonies);
   // Passkey add / remove / rename all write audit rows, and storage
   // isolation in the workers pool is per FILE, not per test — without
   // this the audit assertions below would see the previous test's rows.
@@ -206,7 +225,7 @@ describe("webauthnRegisterBeginAction", () => {
     expect(result).toEqual({ ok: false, reason: "unauthorized" });
   });
 
-  it("issues options and stashes the challenge in KV for a signed-in user", async () => {
+  it("issues options and stores the challenge for a signed-in user", async () => {
     currentPrincipal = makePrincipal();
     const result = await webauthnRegisterBeginAction();
     expect(result.ok).toBe(true);
@@ -220,7 +239,7 @@ describe("webauthnRegisterBeginAction", () => {
     expect(ceremonyCookieKey).toBeDefined();
     const ceremonyId = cookieJar.get(ceremonyCookieKey!)!;
 
-    const stored = await getChallenge(ceremonyId);
+    const stored = await storedCeremony(ceremonyId);
     expect(stored).toEqual({
       challenge: "reg-challenge",
       type: "register",
@@ -266,7 +285,7 @@ describe("webauthnRegisterFinishAction", () => {
     expect(result).toEqual({ ok: false, reason: "verification_failed" });
 
     // Cookie cleared, challenge deleted, nothing inserted.
-    expect(await getChallenge(ceremonyId)).toBeNull();
+    expect(await storedCeremony(ceremonyId)).toBeNull();
     const saved = await listCredentialsForUser(currentPrincipal.userId);
     expect(saved).toEqual([]);
   });
@@ -307,7 +326,7 @@ describe("webauthnRegisterFinishAction", () => {
     expect(events[0]?.targetId).toBe(saved[0]?.id);
 
     // Ceremony is single-use.
-    expect(await getChallenge(ceremonyId)).toBeNull();
+    expect(await storedCeremony(ceremonyId)).toBeNull();
   });
 
   it("rejects when simplewebauthn verification fails", async () => {
@@ -344,17 +363,18 @@ describe("webauthnAuthenticateBeginAction", () => {
     );
     expect(ceremonyCookieKey).toBeDefined();
     const ceremonyId = cookieJar.get(ceremonyCookieKey!)!;
-    expect(await getChallenge(ceremonyId)).toEqual({
+    expect(await storedCeremony(ceremonyId)).toEqual({
       challenge: "auth-challenge",
       type: "authenticate",
     });
   });
 
-  it("is rate-limited before touching KV", async () => {
+  it("is rate-limited before storing a ceremony", async () => {
     rateLimitAllowed = false;
     const result = await webauthnAuthenticateBeginAction();
     expect(result).toEqual({ ok: false, reason: "rate_limited" });
     expect(cookieJar.size).toBe(0);
+    expect(await getDb().$count(schema.webauthnCeremonies)).toBe(0);
   });
 });
 
@@ -448,7 +468,7 @@ describe("webauthnAuthenticateFinishAction", () => {
     expect(openSessionSpy).toHaveBeenCalledWith(userId);
 
     // Ceremony cleared and consumed.
-    expect(await getChallenge(ceremonyId)).toBeNull();
+    expect(await storedCeremony(ceremonyId)).toBeNull();
     const ceremonyCookie = [...cookieJar.keys()].find((k) =>
       k.endsWith("ucmc_webauthn"),
     );

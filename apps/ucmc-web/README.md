@@ -11,7 +11,7 @@ This file is the human-developer entry point. For the model's source of truth (e
 - **D1** (SQLite) for the database, **R2** for avatars + landing images, **KV** for short-lived auth state
 - **Drizzle ORM** + **drizzle-kit** for schema + migrations
 - **shadcn/ui** + **Tailwind CSS v4**
-- Auth: **magic link** (Resend → Cloudflare-hosted email) and **WebAuthn passkeys**, both backed by KV-stored ceremonies
+- Auth: **magic link** (Resend → Cloudflare-hosted email) and **WebAuthn passkeys**, both single-use tokens consumed atomically in D1
 - Tests: **Vitest** (workers + jsdom pools) for units, **Playwright + axe-core** for e2e accessibility
 
 ## Running it
