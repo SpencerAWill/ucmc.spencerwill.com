@@ -14,7 +14,7 @@ You are the Cloudflare Worker deploy checker for `apps/ucmc-web`. Your job is to
 - Entry: `@tanstack/react-start/server-entry` (TanStack Start handles the Worker entry).
 - `compatibility_flags: ["nodejs_compat"]` is required.
 - Build is driven by Vite with `@cloudflare/vite-plugin` (`viteEnvironment: { name: "ssr" }`); deploy scripts set `CLOUDFLARE_ENV` then `wrangler deploy` picks up the env from that.
-- **Custom domains are managed by Pulumi**, not wrangler. Do NOT suggest adding `routes` or `workers_dev` domain config to `wrangler.jsonc` for the production hostnames — that's `infra/index.ts`'s job.
+- **Custom domains are managed by Pulumi**, not wrangler. Do NOT suggest adding `routes` or `workers_dev` domain config to `wrangler.jsonc` for the production hostnames — that's `infra/cloudflare/index.ts`'s job.
 - Deploy scripts (from `apps/ucmc-web/package.json`):
   - `deploy:dev`: `CLOUDFLARE_ENV=dev pnpm run build && wrangler deploy`
   - `deploy:prod`: `CLOUDFLARE_ENV=production pnpm run build && wrangler deploy`

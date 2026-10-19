@@ -6,6 +6,9 @@ import {
   requiredChecks,
 } from "./config.ts";
 
+/** `gh api apps/github-actions --jq .id` */
+const GITHUB_ACTIONS_APP_ID = 15368;
+
 /**
  * The repository itself. It already exists, so it is adopted with `pnpm
  * adopt` (a `pulumi import`, see adopt.json) rather than created.
@@ -112,7 +115,13 @@ new github.RepositoryRuleset(
       },
       requiredStatusChecks: {
         strictRequiredStatusChecksPolicy: true,
-        requiredChecks: requiredChecks.map((context) => ({ context })),
+        // Only the GitHub Actions app (id 15368) may satisfy it. Without
+        // `integrationId`, a commit status of the same name posted by anyone
+        // with write access, or any app, would count.
+        requiredChecks: requiredChecks.map((context) => ({
+          context,
+          integrationId: GITHUB_ACTIONS_APP_ID,
+        })),
       },
     },
   },

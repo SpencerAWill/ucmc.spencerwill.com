@@ -64,7 +64,7 @@ const deployEnvironments = (["dev", "prod"] as const).map((name) => {
     branchPattern: "main",
   });
 
-  return environment;
+  return { name, environment };
 });
 
 /**
@@ -92,13 +92,16 @@ const tokens = createCiTokens({
 // its branch policy and reviewers) can read them. New names rather than the
 // old repo-level CLOUDFLARE_API_TOKEN, so applying this before the workflow
 // change merges doesn't change what main's workflows read.
-for (const environment of deployEnvironments) {
+// The resource name uses the plain `name`: `environment.environment` is an
+// Output, and interpolating one yields Pulumi's "toString on an Output"
+// warning text, so both environments would collide on the same URN.
+for (const { name, environment } of deployEnvironments) {
   for (const [secretName, value] of Object.entries({
     CLOUDFLARE_DEPLOY_API_TOKEN: tokens.deploy,
     CLOUDFLARE_INFRA_API_TOKEN: tokens.infra,
   })) {
     new github.ActionsEnvironmentSecret(
-      `${environment.environment}-${secretName}`.toLowerCase(),
+      `${name}-${secretName}`.toLowerCase(),
       {
         repository: repository.name,
         environment: environment.environment,

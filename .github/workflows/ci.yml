@@ -655,6 +655,11 @@ jobs:
   # check and fails if any failed or was cancelled. A job skipped by its
   # path filter counts as passing, which is what lets docs-only PRs merge.
   # `pulumi-preview` is deliberately absent (see above).
+  #
+  # That only holds while every job listed here depends on `paths` alone.
+  # If one ever `needs:` another check, a failure upstream SKIPS it, and a
+  # skip passes here: make such a job's result fail `required` explicitly,
+  # or list the upstream job too (its failure is then caught directly).
   required:
     name: required
     if: always()

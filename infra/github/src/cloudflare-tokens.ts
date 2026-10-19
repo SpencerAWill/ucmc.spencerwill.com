@@ -3,7 +3,8 @@ import * as pulumi from "@pulumi/pulumi";
 
 /**
  * Least-privilege Cloudflare permissions for each CI token, by the names
- * Cloudflare shows in the dashboard. Names are resolved to ids at apply time,
+ * Cloudflare's permission-groups API returns ("Write" where the dashboard
+ * says "Edit"). Names are resolved to ids at apply time,
  * and an unknown name fails the run rather than silently granting less.
  *
  * These replace one hand-made token with every permission, which was a
