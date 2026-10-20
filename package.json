@@ -9,9 +9,10 @@
     "typecheck": "pnpm -r typecheck",
     "knip": "pnpm -r --if-present run knip",
     "test": "pnpm -r --if-present run test",
+    "db:drift": "pnpm -r --if-present run db:drift",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run test"
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run knip && pnpm run db:drift && pnpm run test"
   },
   "keywords": [],
   "author": "Spencer Will",

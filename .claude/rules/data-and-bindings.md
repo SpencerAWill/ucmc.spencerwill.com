@@ -29,6 +29,15 @@ paths:
 
   **Passkey begin is off `AUTH_RATE_LIMITER` on purpose.** Autofill starts an authenticate ceremony on every `/sign-in` load, before the visitor does anything, and a campus NAT puts many visitors on one IP — on the shared budget, loading the page could exhaust the magic-link request, whose deliberate "check your email" reply then hides that no email was sent. Begin writes nothing (the ceremony travels in a signed cookie); finish, which verifies a credential and writes the single-use marker, stays on the strict budget.
 
+## Writing a migration: always through `generate` (#318)
+
+`db:generate --name <what_it_does>` for DDL Drizzle can derive from `schema.ts`; `db:generate --custom --name <what_it_does>` for an empty file to write SQL into. Both write the journal entry **and** `meta/NNNN_snapshot.json`, a snapshot of `schema.ts` that the next `generate` diffs against. Give a `--custom` file the explanatory header the hand-written ones carry.
+
+- **No migration file or journal entry by hand.** `0060`–`0083` were, so they have no snapshots; `generate` read that gap as table renames and blocked on a TTY prompt. `0084_snapshot.json` restarted the chain from `schema.ts`.
+- **`db:drift`** (`scripts/check-migration-drift.ts`, in `pnpm verify` and CI's web job) runs `generate` on a temp copy and fails if it would write anything, or if it wanted to ask about a rename: drizzle-kit 0.31 swallows that error and exits 0, so the script treats any stderr as failure. Answer a rename prompt by running `db:generate` in a terminal.
+- **The snapshot follows `schema.ts`, not the database, where they knowingly differ**: `users.public_id` (nullable in D1, trigger-enforced; see `KNOWN_NULLABILITY_DRIFT`), `roles.display_name` (`DEFAULT ''` in D1 only), and the FTS5 tables and triggers. Recording the database's version would make the next `generate` emit a rebuild. `schema-drift.test.ts` remains the check against the database itself.
+- **Generated DDL gets the same review as hand-written.** A nullability or constraint change comes out as create-copy-drop-rename, which is exactly the trap below.
+
 ## SQLite pragmas do not work in a migration, so a parent table cannot be rebuilt
 
 **`PRAGMA foreign_keys`, `defer_foreign_keys` and `legacy_alter_table` are accepted by D1 and silently ignored inside a migration.** SQLite makes them no-ops within a transaction, and every migration file is applied as one implicitly transactional batch — `applyD1Migrations` does `db.batch(queries)`, and `wrangler d1 migrations apply` does the same. Accepted is not honoured, and nothing reports the difference.

@@ -16,13 +16,13 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 ## Commands
 
 - `pnpm install` · `pnpm commit` · `pnpm format` (`format:check`)
-- `pnpm verify` — lint + typecheck + knip + test across every package, ~70s. `pnpm {lint,typecheck,knip,test}` run the pieces individually.
+- `pnpm verify` — lint + typecheck + knip + migration drift + test across every package, ~70s. `pnpm {lint,typecheck,knip,db:drift,test}` run the pieces individually.
 - `pnpm --filter ucmc-web {dev,build,test,test:coverage,test:mutation,typecheck,lint,knip,storybook,e2e,e2e:ui}`
 - `pnpm --filter ucmc-web {deploy:dev,deploy:prod}`
 - `pnpm --filter ucmc-web sync-env --stack <dev|prod> --outputs <pulumi stack output --json file> [--dry-run]` — points `wrangler.jsonc` at a stack; CI runs it before every deploy build. **A new binding must be taught to `scripts/wrangler-env.ts`** or it refuses the file.
-- `pnpm --filter ucmc-web {db:migrate:local,db:seed:local}` — remote sysadmin seeding is the `seed-admin.yml` GitHub Action, not a script
+- `pnpm --filter ucmc-web {db:generate,db:drift,db:migrate:local,db:seed:local}` — remote sysadmin seeding is the `seed-admin.yml` GitHub Action, not a script
 
-**Migrations are hand-written, not generated.** `db:generate` exists but does not currently run: the drizzle meta snapshots have been stale since `0059`, so `drizzle-kit generate` diffs against a snapshot eight migrations behind, tries to resolve the gap as a set of table renames, and blocks on an interactive prompt that fails outright without a TTY. Migrations `0060`+ are all hand-written SQL with an explanatory header, and the `meta/_journal.json` entry is added by hand alongside. Follow that pattern; regenerating the snapshots is its own piece of work.
+**Every migration goes through `drizzle-kit generate`, even a hand-written one** (#318). Edit `drizzle/schema.ts`, then `pnpm --filter ucmc-web db:generate --name <what_it_does>`, or `db:generate --custom --name <what_it_does>` for an empty file to write SQL into (backfills, triggers, FTS, anything Drizzle can't express). Either way generate writes the `_journal.json` entry **and** a snapshot of `schema.ts`, which is the chain the next `generate` diffs against. **Never write a migration file or a journal entry by hand**: that is how the snapshots stopped at `0059` while the migrations ran on, and `0060`–`0083` exist only as hand-written SQL (`0084_snapshot.json` restarted the chain). `db:drift` runs in `pnpm verify` and CI and fails when `schema.ts` and the newest snapshot disagree. Review generated DDL like hand-written: it must only add, and a table rebuild is the trap in `data-and-bindings.md`.
 
 - `cd infra/cloudflare && pulumi {preview,up}`; `infra/github` is applied locally by an admin (`pnpm --filter @ucmc/infra-github {preview,apply}`)
 
