@@ -124,10 +124,11 @@ Drop a file in `src/routes/`. TanStack Router's file-router conventions apply: `
 ### A new database column / table
 
 1. Edit `drizzle/schema.ts`.
-2. `pnpm --filter ucmc-web db:generate` — produces `drizzle/migrations/NNNN_<auto-name>.sql`.
-3. **Rename the file** to something descriptive and update `meta/_journal.json` to match — auto-generated names rot fast.
-4. Apply locally with `pnpm --filter ucmc-web db:migrate:local`.
-5. CI applies it on the next deploy.
+2. `pnpm --filter ucmc-web db:generate --name <what_it_does>` — writes `drizzle/migrations/NNNN_<what_it_does>.sql`, its `meta/_journal.json` entry and a snapshot. For SQL Drizzle can't express (backfills, triggers, FTS), add `--custom` and write the SQL into the empty file it creates. Never write a migration or journal entry by hand: the next `generate` diffs against the snapshot.
+3. Review the SQL: it must only add (prod migrates later than dev, and rollback is code-only).
+4. `pnpm --filter ucmc-web db:drift` (also in `pnpm verify` and CI) confirms `schema.ts` and the snapshots agree.
+5. Apply locally with `pnpm --filter ucmc-web db:migrate:local`.
+6. CI applies it on the next deploy.
 
 ### A new shadcn/ui component
 

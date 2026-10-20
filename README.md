@@ -116,12 +116,13 @@ breaks whatever imported it.
 To run manually, from the repo root:
 
 ```bash
-pnpm verify        # lint + typecheck + knip + test, every package (~70s)
+pnpm verify        # lint + typecheck + knip + migration drift + test, every package (~70s)
 
 # or individually
 pnpm lint
 pnpm typecheck
 pnpm knip
+pnpm db:drift      # schema.ts vs the newest migration snapshot
 pnpm test
 pnpm format        # prettier --write . (pnpm format:check to check only)
 ```
@@ -170,6 +171,7 @@ pnpm --filter ucmc-web test:coverage     # same, with an Istanbul coverage repor
 pnpm --filter ucmc-web test:mutation     # Stryker mutation testing (pure modules only)
 pnpm --filter ucmc-web typecheck    # tsc --noEmit
 pnpm --filter ucmc-web knip         # unused files, exports and dependencies
+pnpm --filter ucmc-web db:drift     # fails if schema.ts has changes no migration covers
 pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006
 pnpm --filter ucmc-web deploy:dev   # build and deploy to dev (dev.ucmc.spencerwill.com)
 pnpm --filter ucmc-web deploy:prod  # build and deploy to prod (ucmc.spencerwill.com)

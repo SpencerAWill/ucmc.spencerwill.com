@@ -210,7 +210,7 @@ jobs:
           fi
 
   web-lint-test:
-    name: Web — lint, typecheck, knip, test
+    name: Web — lint, typecheck, knip, drift, test
     if: github.event.pull_request.draft != true && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
@@ -241,6 +241,12 @@ jobs:
       # rationale for every suppression live in apps/ucmc-web/knip.config.ts.
       - name: Knip
         run: pnpm --filter ucmc-web knip
+
+      # schema.ts vs the newest migration snapshot (#318): fails when a
+      # schema change has no migration, or a migration skipped `generate`.
+      # Runs on a temp copy of the migrations, so it writes nothing here.
+      - name: Migration drift
+        run: pnpm --filter ucmc-web db:drift
 
       - name: Test
         run: pnpm --filter ucmc-web test

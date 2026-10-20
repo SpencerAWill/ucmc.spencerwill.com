@@ -26,6 +26,7 @@
     "deploy:dev": "pnpm run build && wrangler deploy",
     "deploy:prod": "CLOUDFLARE_ENV=production pnpm run build && wrangler deploy --env production",
     "db:generate": "drizzle-kit generate",
+    "db:drift": "tsx scripts/check-migration-drift.ts",
     "db:migrate:local": "wrangler d1 migrations apply ucmc-web-dev --local",
     "db:seed:local": "tsx drizzle/seed.ts",
     "storybook": "storybook dev -p 6006 --host 0.0.0.0",
