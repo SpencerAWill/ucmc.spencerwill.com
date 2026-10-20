@@ -6,15 +6,19 @@
   //
   // env.production overrides for prod via `wrangler deploy --env production`.
   //
-  // ---- D1 database_id / KV id ----
-  // Both the D1 `database_id` and KV `kv_namespaces[].id` values below are
-  // placeholders. web-deploy.yml fetches the real UUIDs from the Pulumi
-  // `d1DatabaseId` and `kvNamespaceId` stack outputs and rewrites this file
-  // via `sed` before running migrations/deploy. Each environment uses a
-  // distinct placeholder so the per-env `sed` replacement only rewrites its
-  // own value (dev: 00000000/22222222; prod: 11111111/33333333). Miniflare
-  // ignores these IDs locally (keys on binding name), so the placeholders
+  // ---- Per-stack values: `pnpm sync-env` (#312) ----
+  // The D1 `database_id` and KV `id` values below are placeholders, and
+  // there are no `vars`. Before each deploy builds, `scripts/sync-env.ts`
+  // writes the real ids and the vars from the Pulumi stack's outputs into
+  // that stack's section (top level for dev, env.production for prod), and
+  // checks the Worker, D1 and R2 names here against the stack's. Miniflare
+  // ignores the ids locally (it keys on binding name), so the placeholders
   // are fine for `pnpm dev`.
+  //
+  // It refuses a binding or key it hasn't been taught, and a binding the
+  // top level declares but env.production doesn't repeat (bindings don't
+  // inherit). Adding one means teaching `scripts/wrangler-env.ts`; its
+  // test runs against this file.
   "name": "ucmc-web-dev",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],

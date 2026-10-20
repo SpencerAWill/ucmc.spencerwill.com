@@ -33,7 +33,7 @@ pnpm exec prettier --write .
 
 - Branch from `main`. Keep branches narrowly scoped — one logical change per PR.
 - Open the PR against `main`. The PR template will prompt you for context, screenshots (if UI), and a test plan.
-- CI must be green before merge: `web-ci.yml` runs lint, typecheck, vitest, and an axe a11y pass; `infra-ci.yml` runs `pulumi preview` on dev for any `infra/` change and posts the diff as a comment.
+- CI must be green before merge: `cicd.yml`'s `required` job aggregates lint, typecheck, knip, vitest, the full Playwright suite (with its axe a11y pass), workflow lint, the dependency audit and the secret scan. A change to `infra/cloudflare` also gets a `pulumi preview` of each stack as a PR comment. Merging deploys it to dev, then to prod once a reviewer approves.
 - Squash-merge is preferred. The merge commit subject must itself be a valid Conventional Commit (it lands on `main`).
 
 ## Commits

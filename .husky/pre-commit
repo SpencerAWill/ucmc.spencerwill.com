@@ -40,7 +40,7 @@ check_mass_delete
 # gitleaks is a standalone binary the devcontainer image installs (pinned
 # and checksum-verified in `.devcontainer/Dockerfile`). A commit from a
 # host without it warns and continues rather than failing: the `secrets`
-# job in ci.yml scans the full history on every PR regardless, so the
+# job in cicd.yml scans the full history on every PR regardless, so the
 # hook is the early warning and CI is the gate. `brew install gitleaks`
 # adds it on a Mac. `--verbose` is what names the file, line and rule of a
 # finding (without it the refusal is just "leaks found: 1"); `--redact`

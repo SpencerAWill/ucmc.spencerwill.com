@@ -146,7 +146,7 @@ than by an import.
 
 ### Web App
 
-The web app lives in `apps/ucmc-web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Custom domains are provisioned by Pulumi (see Infrastructure below); dev auto-deploys on merge to main, prod is a manual dispatch with environment approval.
+The web app lives in `apps/ucmc-web/` and is built with [TanStack Start](https://tanstack.com/start) (React 19, Vite, Tailwind v4, shadcn). It is deployed to Cloudflare Workers via Wrangler, with two environments: **dev** at `dev.ucmc.spencerwill.com` (worker `ucmc-web-dev`) and **prod** at `ucmc.spencerwill.com` (worker `ucmc-web`). Custom domains are provisioned by Pulumi (see Infrastructure below); every merge to main deploys dev, then prod in the same pipeline run once a reviewer approves (see **Pipeline** below).
 
 Dates and times use the TC39 [Temporal](https://tc39.es/proposal-temporal/docs/) API (via `temporal-polyfill`, since workerd and Safari < 17 lack it natively) rather than `Date`. Calendar-shaped rules (waiver cycle, gear due dates) reason in the club's `America/New_York` zone; see [`.claude/rules/dates-and-formats.md`](.claude/rules/dates-and-formats.md) for the invariants.
 
@@ -173,6 +173,7 @@ pnpm --filter ucmc-web knip         # unused files, exports and dependencies
 pnpm --filter ucmc-web storybook    # Storybook on http://localhost:6006
 pnpm --filter ucmc-web deploy:dev   # build and deploy to dev (dev.ucmc.spencerwill.com)
 pnpm --filter ucmc-web deploy:prod  # build and deploy to prod (ucmc.spencerwill.com)
+pnpm --filter ucmc-web sync-env --stack dev --outputs <file> [--dry-run]  # point wrangler.jsonc at a Pulumi stack
 pnpm --filter ucmc-web db:migrate:local  # apply migrations to the local Miniflare D1
 pnpm --filter ucmc-web db:seed:local     # promote SEED_ADMIN_EMAIL to system_admin (local only)
 ```
@@ -195,13 +196,13 @@ Copy `apps/ucmc-web/.env.example` to `apps/ucmc-web/.env.local` and fill in the 
 
 The full precedence chain (most → least specific, merged) is `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env`. The devcontainer also sets `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` in `docker-compose.yml`, so exporting a var in your host shell (e.g. `export SESSION_SECRET=…`) overrides whatever is in `.env.local` — useful for keeping per-developer secrets out of the workspace entirely.
 
-`.env.local` is the local analog of what Pulumi-injected `--var` flags and Cloudflare secrets do in deployed envs. Missing any required value will crash the Worker on first request that touches it.
+`.env.local` is the local analog of the Worker vars and secrets a deploy sets from Pulumi and the GitHub environments. Missing any required value will crash the Worker on first request that touches it.
 
 Notable vars: `VITE_TURNSTILE_SITE_KEY` (client-side — leave unset to skip the Turnstile widget in local dev, or use Cloudflare's [always-pass test key](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) for integration testing).
 
 #### Worker secrets (deployed envs)
 
-Non-secret runtime vars are injected at deploy time from Pulumi stack outputs. Secrets can't ride along in `--var` — they're uploaded separately via `wrangler secret put`, automated per deploy by the `deploy.yml` workflow through `cloudflare/wrangler-action`'s `secrets:` field. That means **secrets live in GitHub Actions environment secrets**, not in Cloudflare directly: set them once under the `dev` and `prod` GitHub environments and every deploy re-applies them to the Worker.
+Non-secret runtime vars come from Pulumi stack outputs: `sync-env` writes them into the stack's section of `wrangler.jsonc` before the build. Secrets ride along with the same Worker version through `wrangler deploy --secrets-file`, written by the deploy action (`.github/actions/deploy`) from the GitHub environment and Pulumi's secret outputs, so code and secrets change together. That means **secrets live in GitHub Actions environment secrets**, not in Cloudflare directly: set them once under the `dev` and `prod` GitHub environments and every deploy re-applies them to the Worker. An optional secret left unset keeps whatever value the Worker already has, so to turn one off (the feedback mirror, the cost snapshot), also `wrangler secret delete <NAME> [--env production]` once by hand.
 
 Required per-environment secrets (repo Settings → Environments → `dev` / `prod` → Environment secrets):
 
@@ -212,14 +213,14 @@ Required per-environment secrets (repo Settings → Environments → `dev` / `pr
 | `TURNSTILE_SECRET_KEY`          | Cloudflare Turnstile server-side verification key. Leaving it unset skips verification (local dev). Required in prod to prevent bot registrations.                                                                                                                                                                                                                                                                                                                                                                                                                                          | Cloudflare dashboard              |
 | `CLOUDFLARE_ACCOUNT_READ_TOKEN` | Account-scoped **read-only** token for the daily cost/usage snapshot (#268). Needs five scopes: Billing Read, Workers Scripts Read, D1 Read, Workers KV Storage Read, Account Analytics Read — the three product scopes are each required for their own GraphQL dataset, which Account Analytics Read does _not_ cover. Optional: unset simply skips the snapshot task. It reads telemetry for the **whole account**, so it is used only by the cron and never by a route handler.                                                                                                          | Cloudflare dashboard → API Tokens |
 
-The CI credentials (the scoped Cloudflare tokens, Pulumi's OIDC login, and the `CLOUDFLARE_ACCOUNT_ID` variable) are covered under **GitHub as code** in the Infrastructure section below. The Worker additionally receives `CLOUDFLARE_ACCOUNT_ID` as a deploy-time `--var` from the Pulumi stack output `cloudflareAccountId` — it is an identifier rather than a secret, and sourcing it per stack keeps dev and prod free to live in different accounts.
+The CI credentials (the scoped Cloudflare tokens, Pulumi's OIDC login, and the `CLOUDFLARE_ACCOUNT_ID` variable) are covered under **GitHub as code** in the Infrastructure section below. The Worker additionally receives `CLOUDFLARE_ACCOUNT_ID` as a var from the Pulumi stack output `cloudflareAccountId` — it is an identifier rather than a secret, and sourcing it per stack keeps dev and prod free to live in different accounts.
 
 ### Infrastructure
 
 Infrastructure is managed with [Pulumi](https://www.pulumi.com/) in `infra/cloudflare/`, with two stacks:
 
-- **dev** — auto-deployed when changes to `infra/cloudflare/` merge to `main`
-- **prod** — deployed manually via GitHub Actions with environment approval
+- **dev** — `pulumi up` on every merge to `main`, as the first step of the dev deploy
+- **prod** — the same, in the same pipeline run, once a reviewer approves
 
 On pull requests that touch `infra/cloudflare/`, CI runs ESLint, TypeScript type-checking, and a Pulumi preview of each stack (one PR comment per stack). The preview waits for a reviewer's approval, and Dependabot PRs skip it.
 
@@ -231,6 +232,18 @@ pulumi preview    # see planned changes
 pulumi up         # apply changes
 ```
 
+#### Pipeline (`cicd.yml`)
+
+One workflow, `CI/CD`, checks every change and deploys `main` ([ADR 0002](docs/adr/0002-one-pipeline-from-check-to-prod.md), #312):
+
+1. **Checks.** On a PR they're path-filtered; on a push to `main` every check runs, since the merged tree is what deploys. The `required` job aggregates them, and it is the only status check the ruleset names.
+2. **`Deploy — dev`** after `required` passes, on every push to `main`.
+3. **`Deploy — prod`** after dev deployed and passed its smoke test, waiting in the same run for a reviewer on the `prod` environment. Approve the newest waiting run; it contains everything before it.
+
+Both deploy jobs run the composite action `.github/actions/deploy`: `pulumi up`, `sync-env`, build, the secrets file, a **D1 restore point** (a Time Travel bookmark, with the restore command, in the job summary), `d1 migrations apply`, `wrangler deploy --secrets-file`, and the Playwright smoke test. **On prod, a smoke test that fails (or never runs) after the deploy runs `wrangler rollback`**: the Worker's code, vars and secrets go back one version; D1 does not, which is why migrations must only add. To undo a migration, restore D1 from the bookmark in the run's summary.
+
+`workflow_dispatch` re-runs the whole pipeline for `main`'s head, as a break-glass redeploy. `sync-env` (`pnpm --filter ucmc-web sync-env --stack <dev|prod> --outputs <file>`) can be run locally with `--dry-run` against `pulumi stack output --json`.
+
 #### GitHub as code (`infra/github`)
 
 This repo's GitHub settings and CI credentials are the Pulumi program in `infra/github` (stack `main`, #311). **A repo admin applies it locally; CI never runs it.** The Actions `GITHUB_TOKEN` can't change repo settings or write secrets, and CI shouldn't hold a credential that can loosen its own rules.
@@ -238,15 +251,15 @@ This repo's GitHub settings and CI credentials are the Pulumi program in `infra/
 What it manages:
 
 - **The repository's settings**: squash-only merges titled from the PR, secret scanning and push protection, Dependabot alerts and security updates. It must stay public: on GitHub Free, rulesets, environment secrets and required reviewers exist for a personal account's repos only when they're public.
-- **The `Main Protection` ruleset**: changes to `main` arrive by PR, after `ci.yml`'s aggregate **`required`** job passes against the latest `main`, with linear history and no deletion. Repository admins can bypass, so a broken CI can't lock anyone out.
+- **The `Main Protection` ruleset**: changes to `main` arrive by PR, after `cicd.yml`'s aggregate **`required`** job passes against the latest `main`, with linear history and no deletion. Repository admins can bypass, so a broken CI can't lock anyone out.
 - **Environments**: `dev` and `prod` deploy from `main` only, and `prod` waits for a reviewer. `preview` (PR previews) also waits for a reviewer.
 - **Least-privilege Cloudflare tokens**, minted by Pulumi and written as environment secrets:
 
-  | Secret                         | Environments | Used by                                                                   |
-  | ------------------------------ | ------------ | ------------------------------------------------------------------------- |
-  | `CLOUDFLARE_DEPLOY_API_TOKEN`  | dev, prod    | wrangler in `deploy.yml`'s web jobs and `seed-admin.yml` (no zone access) |
-  | `CLOUDFLARE_INFRA_API_TOKEN`   | dev, prod    | `pulumi up` on `infra/cloudflare`                                         |
-  | `CLOUDFLARE_PREVIEW_API_TOKEN` | preview      | `pulumi preview` on PRs (read-only)                                       |
+  | Secret                         | Environments | Used by                                                             |
+  | ------------------------------ | ------------ | ------------------------------------------------------------------- |
+  | `CLOUDFLARE_DEPLOY_API_TOKEN`  | dev, prod    | wrangler in the deploy action and `seed-admin.yml` (no zone access) |
+  | `CLOUDFLARE_INFRA_API_TOKEN`   | dev, prod    | `pulumi up` on `infra/cloudflare`                                   |
+  | `CLOUDFLARE_PREVIEW_API_TOKEN` | preview      | `pulumi preview` on PRs (read-only)                                 |
 
   Permissions are listed in `infra/github/src/cloudflare-tokens.ts`; add one there in the same PR as whatever needs it.
 
@@ -269,11 +282,11 @@ Hand-managed, deliberately: the environment secrets `SESSION_SECRET` (rotating i
 
 #### Bootstrapping `infra/cloudflare`
 
-- **Per-environment secrets**: `SESSION_SECRET` lives on the `dev` and `prod` environments. `RESEND_API_KEY` and `TURNSTILE_SECRET_KEY` come from Pulumi stack outputs instead, and dev has no `RESEND_API_KEY` at all. `deploy.yml` uploads them to the corresponding Worker via `wrangler secret put` on every deploy. See **Worker secrets (deployed envs)** above for details.
+- **Per-environment secrets**: `SESSION_SECRET` lives on the `dev` and `prod` environments. `RESEND_API_KEY` and `TURNSTILE_SECRET_KEY` come from Pulumi stack outputs instead, and dev has no `RESEND_API_KEY` at all. The deploy action uploads them with the Worker version (`--secrets-file`) on every deploy. See **Worker secrets (deployed envs)** above for details.
 - **Dev email outbox** ([ADR 0001](docs/adr/0001-dev-email-outbox.md)): the dev stack creates a Cloudflare Access application on `/dev/outbox`, which is why the infra token has account-level **Access: Apps and Policies Write**. The Zero Trust organization itself, and its login methods, are configured by hand and shared with the account's other projects; a viewer who isn't a member of the Cloudflare account needs One-time PIN enabled.
 - **Stack init** (one-time): `cd infra/cloudflare && pulumi stack init dev && pulumi stack init prod`
 - **Stack config** (one-time): fill in `REPLACE_WITH_…` placeholders in `infra/cloudflare/Pulumi.dev.yaml` and `infra/cloudflare/Pulumi.prod.yaml` with the Cloudflare Account ID and `spencerwill.com` Zone ID (both visible in the Cloudflare dashboard).
-- **Bootstrap order** (first deploy only): `wrangler deploy` must run before `pulumi up` for a given stack, because the custom-domain binding references a worker script that must already exist. From `deploy.yml` (workflow_dispatch), bootstrap requires running the web job before the infra job — for the first dev deploy, manually dispatch with `environment=dev` after temporarily commenting out the `needs: infra-dev` line on `web-dev`; restore after the worker exists. Repeat for prod. After bootstrap the standard infra → web order applies on every push and dispatch.
+- **Bootstrap order** (a brand-new stack only): the Worker must exist before `pulumi up`, because the custom-domain binding references the script. The deploy action runs `pulumi up` first, so deploy a new stack's Worker once by hand first: `pulumi up --target` its D1 database and KV namespace, `sync-env` against that stack's outputs, then `pnpm --filter ucmc-web deploy:dev` (or `deploy:prod`). After that the pipeline's infra → Worker order applies on every run.
 
 ### Wiki
 

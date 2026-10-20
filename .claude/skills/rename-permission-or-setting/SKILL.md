@@ -17,7 +17,7 @@ Leaving a slightly stale id (`perm_feedback_submit` for `site_feedback:submit`) 
 
 ### The deploy window
 
-`deploy.yml` runs `d1 migrations apply` **before** `wrangler deploy`. Between those steps the previous Worker is checking names the table no longer has. It fails closed, so the effect is a brief loss of access, never a grant — but **code shipped in the same release cannot cover that gap.**
+The deploy (`.github/actions/deploy`) runs `d1 migrations apply` **before** `wrangler deploy`, and prod runs it hours or days after dev, in the same pipeline run, behind its reviewer. Between those steps the previous Worker is checking names the table no longer has. It fails closed, so the effect is a brief loss of access, never a grant — but **code shipped in the same release cannot cover that gap.**
 
 **The shim has to land one release ahead of the rename.** That is the sequence to follow.
 

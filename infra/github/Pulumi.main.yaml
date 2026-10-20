@@ -6,13 +6,13 @@ config:
   ucmc-github:repository: ucmc.spencerwill.com
   ucmc-github:description: The University of Cincinnati Mountaineering Club's software system
   ucmc-github:homepage: https://ucmc.spencerwill.com
-  # The aggregate job in ci.yml. It waits on every other check, so renaming
+  # The aggregate job in cicd.yml. It waits on every other check, so renaming
   # one of those never breaks the ruleset.
   ucmc-github:requiredChecks: '["required"]'
   # Who approves `prod` deploys and every PR preview run (GitHub user ids:
   # gh api users/<login> -q .id).
   ucmc-github:reviewerIds: "[43732866]"
-  # The Pulumi Cloud org and user ci.yml / deploy.yml log in as through
+  # The Pulumi Cloud org and user cicd.yml's jobs log in as through
   # OIDC. The issuer and its trust policies live in SpencerAWill/
   # spencerwill.com's infra/github (`pulumiOidcRepositories`), which must
   # list this repo's dev, prod and preview environments.

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as CloudflareEnvModule from "#/server/cloudflare-env";
 
 /**
- * `/health` is the post-deploy gate: `deploy.yml` runs a smoke spec that
+ * `/health` is the post-deploy gate: the deploy action runs a smoke spec that
  * fails the deploy when this reports anything but `pass`. It had no
  * tests, which meant the check guarding every production deploy was
  * itself unverified.

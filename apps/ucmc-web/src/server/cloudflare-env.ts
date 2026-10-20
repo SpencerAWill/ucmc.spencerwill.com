@@ -43,7 +43,8 @@ export interface WorkerEnv {
   // below degrades.
   CLOUDFLARE_ACCOUNT_ID?: string;
 
-  // Secrets — set via `wrangler secret put` in deployed envs, or .env.local
+  // Secrets — uploaded with each deploy (`wrangler deploy --secrets-file`
+  // in .github/actions/deploy) in deployed envs, or .env.local
   // locally. RESEND_API_KEY is optional because the email adapter uses
   // Mailpit or the outbox instead, or throws (see `email/email-tier.ts`). SESSION_SECRET is required wherever
   // the proof cookie is issued — the module that reads it throws at first
@@ -90,8 +91,8 @@ export interface WorkerEnv {
 
   // Dev-only — the email outbox (#297, docs/adr/0001-dev-email-outbox.md).
   // When EMAIL_OUTBOX is "1", `sendEmail` stores each message in D1
-  // instead of sending it, and `/dev/outbox` lists them. Passed as vars
-  // by `deploy.yml` from the dev stack's Pulumi outputs; prod's outputs
+  // instead of sending it, and `/dev/outbox` lists them. Written as vars
+  // by `sync-env` from the dev stack's Pulumi outputs; prod's outputs
   // are empty strings, and infra refuses `emailOutbox` on prod.
   //
   // The page verifies Cloudflare Access's token itself: issuer

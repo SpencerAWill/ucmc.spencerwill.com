@@ -80,7 +80,9 @@ updates:
 
   # ── GitHub Actions (guards against action tag-hijack; same cooldown)
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # "/" covers .github/workflows only; the local deploy action pins its
+    # own actions (#312), and Dependabot finds them only if told where.
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: "weekly"
     # semver-*-days are only valid for semver ecosystems (npm); actions
@@ -110,7 +112,7 @@ updates:
         patterns: ["*"]
 
   # ── Compose sidecars (Mailpit). Its pin is duplicated as the CI service
-  #    image in ci.yml, which no ecosystem reads — update both together.
+  #    image in cicd.yml, which no ecosystem reads — update both together.
   - package-ecosystem: "docker-compose"
     directory: "/.devcontainer"
     schedule:

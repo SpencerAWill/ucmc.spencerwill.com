@@ -67,7 +67,7 @@ RUN apt-get update \
 # fetched from the pinned release and checked against the SHA-256 in that
 # release's `gitleaks_<version>_checksums.txt`. Dependabot cannot see this
 # pin: bump it by hand, together with GITLEAKS_VERSION / GITLEAKS_SHA256 in
-# ci.yml's `secrets` job, and take both checksums from the new release.
+# cicd.yml's `secrets` job, and take both checksums from the new release.
 # The architecture comes from dpkg rather than BuildKit's TARGETARCH, which
 # a legacy (non-BuildKit) build leaves empty (arm64 on Apple silicon,
 # amd64 elsewhere).

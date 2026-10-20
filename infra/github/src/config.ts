@@ -10,7 +10,7 @@ export const repositoryName = config.require("repository");
 export const description = config.require("description");
 export const homepage = config.require("homepage");
 
-/** Status checks required on main. ci.yml's aggregate `required` job. */
+/** Status checks required on main. cicd.yml's aggregate `required` job. */
 export const requiredChecks = config.requireObject<string[]>("requiredChecks");
 
 /**

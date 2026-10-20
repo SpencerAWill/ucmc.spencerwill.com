@@ -21,7 +21,7 @@ const resendFromName = cfg.require("resendFromName");
 
 // D1 database for the web app. Wrangler binds to it by UUID
 // (see `apps/ucmc-web/wrangler.jsonc`); the UUID is exported below and
-// injected into the wrangler config by the web-deploy workflow.
+// written into the wrangler config by the deploy's `sync-env`.
 //
 // `protect: true` — replacing a D1 database wipes all data. To
 // recreate, remove the protection deliberately via `pulumi state`
@@ -94,8 +94,8 @@ const publicBucketDomain = new cloudflare.R2CustomDomain(
 );
 
 // Workers KV namespace for the web app. Wrangler binds by namespace UUID
-// (see `apps/ucmc-web/wrangler.jsonc`); the UUID is exported below and injected
-// into the wrangler config by the web-deploy workflow, mirroring D1.
+// (see `apps/ucmc-web/wrangler.jsonc`); the UUID is exported below and written
+// into the wrangler config by the deploy's `sync-env`, mirroring D1.
 //
 // KV is globally replicated — no regional placement hint.
 //
@@ -127,6 +127,10 @@ const workerDomain = new cloudflare.WorkersCustomDomain(
 
 export const stackName = stack;
 export const workerHostname = workerDomain.hostname;
+// The Worker the custom domain serves. `sync-env` refuses to deploy a
+// wrangler.jsonc section whose `name` differs, which is what once sent
+// prod's secrets to the dev Worker.
+export const workerNameOutput = workerName;
 
 // D1 database UUID — the value wrangler needs for `d1_databases[].database_id`.
 // Pulumi's D1Database exposes both `.id` (Pulumi URN) and `.uuid` (the
@@ -135,34 +139,34 @@ export const d1DatabaseId = database.uuid;
 export const d1DatabaseNameOutput = database.name;
 
 // R2 bucket name — wrangler binds by name (not UUID), and the value is
-// already static in `apps/ucmc-web/wrangler.jsonc`, so this export is for drift
-// detection / reference rather than being consumed by any workflow today.
+// already static in `apps/ucmc-web/wrangler.jsonc`. `sync-env` checks the
+// two agree before every deploy, and refuses to deploy if they don't.
 export const r2BucketNameOutput = bucket.name;
 
-// Public R2 bucket name — same drift-detection role as the private
-// bucket above. Wrangler will bind to it by name once the public binding
-// lands in `apps/ucmc-web/wrangler.jsonc`.
+// Public R2 bucket name — checked by `sync-env` like the private bucket
+// above.
 export const r2PublicBucketNameOutput = publicBucket.name;
 
-// CDN hostname for the public bucket. Consumed by `web-deploy.yml` and
-// passed to the worker as `R2_PUBLIC_HOST` so the app can construct
-// `https://${R2_PUBLIC_HOST}/<key>` URLs that bypass the worker.
+// CDN hostname for the public bucket. The deploy bakes it into the client
+// bundle as `VITE_R2_PUBLIC_HOST` so the app can construct
+// `https://${VITE_R2_PUBLIC_HOST}/<key>` URLs that bypass the worker.
 export const r2PublicHost = publicBucketDomain.domain;
 
 // KV namespace UUID — wrangler needs this for `kv_namespaces[].id`. The
-// web-deploy workflow injects it into `apps/ucmc-web/wrangler.jsonc` before
-// build, mirroring the D1 UUID flow.
+// deploy's `sync-env` writes it into `apps/ucmc-web/wrangler.jsonc` before
+// the build, mirroring the D1 UUID flow.
 export const kvNamespaceId = kvNamespace.id;
 export const kvNamespaceTitleOutput = kvNamespace.title;
 
 // Worker `vars` values. Single source of truth for per-env runtime config;
-// `web-deploy.yml` reads them via `pulumi stack output` and passes them to
-// `wrangler deploy --var`. Kept out of `wrangler.jsonc` to avoid drift
-// between the hostname Pulumi binds and the hostname the app advertises
-// to browsers / WebAuthn.
+// the deploy's `sync-env` writes them into the stack's section of
+// `wrangler.jsonc` (never committed there), so the hostname Pulumi binds
+// and the hostname the app advertises to browsers / WebAuthn can't drift.
+// **Plain outputs only**: `pulumi stack output --json` prints a secret as
+// `[secret]`, and `sync-env` refuses that rather than deploying it.
 export const appBaseUrl = `https://${hostname}`;
 // The account the worker's own resources live in. Passed to the worker
-// as a `--var` so the daily cost snapshot (#268) can build Cloudflare
+// as a var so the daily cost snapshot (#268) can build Cloudflare
 // API paths, which all embed it. **Not a secret** — it is an identifier,
 // it appears in every dashboard URL, and it grants nothing on its own;
 // the token that does is a worker secret.
@@ -170,11 +174,12 @@ export const cloudflareAccountId = accountId;
 export const webauthnRpId = hostname;
 export { webauthnRpName };
 // Split into two vars (address + display name) rather than a composed
-// `Name <email>` string. wrangler-action tokenizes the `command:` input
-// on whitespace before wrangler sees it, so a value containing spaces
-// or `<>` gets chopped into separate argv entries and only the prefix
-// reaches the Worker — Resend then 422s because the `from` field isn't
-// a valid address. Composition happens in `apps/ucmc-web/src/server/email/resend.ts`.
+// `Name <email>` string. Originally because wrangler-action tokenized its
+// `command:` input on whitespace, chopping `Name <email>` into separate
+// argv entries (Resend then 422'd on the truncated `from`). Vars now go
+// through `sync-env` as JSON, which has no such problem; the split stays
+// because it's the shape the Worker reads. Composition happens in
+// `apps/ucmc-web/src/server/email/resend.ts`.
 //
 // `resendFromEmail` is exported below, read from the shared stack that
 // owns the verified domain (#298).
@@ -183,7 +188,7 @@ export { resendFromName };
 // The dev email outbox (#297, docs/adr/0001-dev-email-outbox.md). On
 // with `emailOutbox: true` (dev only — `configureOutbox` throws on
 // prod); off, all three outputs are empty strings, which the Worker
-// reads as "no outbox". `deploy.yml` passes them as `--var`s.
+// reads as "no outbox". `sync-env` writes the non-empty ones as vars.
 //
 // Declared before Resend because it decides whether this stack has
 // Resend at all: a stack with the outbox on sends nothing, so it
@@ -203,7 +208,7 @@ export const accessOutboxAud = outbox.accessOutboxAud;
 // - **A stack with the email outbox on** (dev, since #297) has no
 //   Resend at all: it sends nothing. Its outputs are empty strings
 //   rather than undefined, which would only produce a `will not show
-//   as a stack output` warning on every `up`; `deploy.yml` reads
+//   as a stack output` warning on every `up`; the deploy uploads
 //   neither on a stack like this.
 // - **Any other stack** must name the shared stack in `emailStack`
 //   (`<org>/<project>/<stack>`) and reads `ucmcResendApiKey` and
@@ -253,7 +258,7 @@ function sharedString(
   });
 }
 
-// Sending-scoped API key. Consumed by `deploy.yml` as the Worker's
+// Sending-scoped API key. Read by the deploy action as the Worker's
 // RESEND_API_KEY secret via `pulumi stack output --show-secrets`.
 // Wrapped in `pulumi.secret` HERE rather than trusted to arrive as one:
 // if the shared stack ever exported it plainly, the live key would sit
@@ -264,8 +269,8 @@ export const resendApiKey = emailRef
       sharedString(emailRef, "ucmcResendApiKey", (key) => key.length > 0),
     )
   : pulumi.secret("");
-// The envelope address, `ucmc@spencerwill.com` on prod. `deploy.yml`
-// reads it WITHOUT `--show-secrets` and passes it as RESEND_FROM, so it
+// The envelope address, `ucmc@spencerwill.com` on prod. The deploy
+// reads it WITHOUT `--show-secrets` and sets it as RESEND_FROM, so it
 // is explicitly unsecreted: an address isn't a secret, and a secret
 // output would reach the Worker as the literal `[secret]` and fail
 // every send with a 422. The display name is `resendFromName` above.
@@ -278,10 +283,10 @@ export const resendFromEmail = emailRef
   : pulumi.output("");
 
 // Cloudflare Turnstile widget — anti-bot challenge on the sign-in form.
-// Pulumi creates the widget and exports both keys; the deploy workflow
+// Pulumi creates the widget and exports both keys; the deploy action
 // reads them via `pulumi stack output`. The site key is public (baked
 // into the client bundle at build time as VITE_TURNSTILE_SITE_KEY); the
-// secret is a Worker secret (uploaded via `wrangler secret put`).
+// secret is a Worker secret (uploaded with the deploy's `--secrets-file`).
 //
 // `managed` mode shows an interactive challenge only when Cloudflare's
 // risk score is high; most humans pass invisibly.

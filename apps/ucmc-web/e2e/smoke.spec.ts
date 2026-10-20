@@ -4,11 +4,11 @@ import { waitForHydration } from "./fixtures/hydration";
 
 /**
  * Post-deploy smoke test. Runs against a DEPLOYED worker via
- * `PLAYWRIGHT_BASE_URL`, from `deploy.yml`, after migrations have been
- * applied and the worker is live — see the `smoke-dev` / `smoke-prod`
- * jobs there.
+ * `PLAYWRIGHT_BASE_URL`, from the deploy action (.github/actions/deploy),
+ * after migrations have been applied and the worker is live. On prod a
+ * failure here rolls the Worker back to its previous version.
  *
- * It exists because `deploy.yml` previously applied D1 migrations and
+ * It exists because the deploy workflow once applied D1 migrations and
  * pushed a worker to production with nothing checking the result. A
  * deploy that 500s on every request, or one whose client bundle throws
  * on hydration, was indistinguishable from a good one until a human

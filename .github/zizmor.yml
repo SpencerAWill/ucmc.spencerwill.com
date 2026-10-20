@@ -1,7 +1,7 @@
 # zizmor — static analysis for GitHub Actions workflows.
 # https://docs.zizmor.sh
 #
-# Run in CI by the `workflow-lint` job in ci.yml, and locally with
+# Run in CI by the `workflow-lint` job in cicd.yml, and locally with
 # `zizmor .github/workflows/`.
 #
 # Everything zizmor reported was either FIXED or is ignored below with a
@@ -45,5 +45,17 @@ rules:
   # deploy job to defend against a path that scoping already closes.
   cache-poisoning:
     ignore:
-      - deploy.yml
       - seed-admin.yml
+
+  # cicd.yml calls the local deploy action as `./.github/actions/deploy`.
+  # zizmor prefers GitHub's July 2026 self-repository form, `$/...`, which
+  # pins the action to the running commit rather than to whatever is on
+  # disk. Not adopted yet because actionlint, the other half of
+  # `workflow-lint`, rejects it as a malformed ref (rhysd/actionlint#760,
+  # open as of 1.7.12). Low risk meanwhile: each deploy job's only step
+  # before the `uses:` is the checkout of the running commit.
+  #
+  # Switch to `$/` and drop this when actionlint supports it.
+  self-repository:
+    ignore:
+      - cicd.yml
