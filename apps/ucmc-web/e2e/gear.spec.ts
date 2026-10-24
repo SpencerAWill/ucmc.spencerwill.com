@@ -88,7 +88,7 @@ test("officer creates a type, adds gear, retires it, and cannot reissue the code
   // with no model, and the form rejects it — leaving the dialog open and
   // the failure pointing at the missing success toast rather than at the
   // race. Premature interaction is the source of every flake here
-  // (.claude/rules/testing.md).
+  // (.claude/rules/testing-e2e.md).
   await expect(page.getByRole("combobox", { name: /^model$/i })).toContainText(
     `E2E Model ${runTag}`,
     { timeout: 10_000 },
