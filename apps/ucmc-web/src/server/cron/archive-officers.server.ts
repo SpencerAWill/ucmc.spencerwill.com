@@ -3,11 +3,14 @@
  * `users` ⋈ `profiles` join) and write them into the `historical_officers`
  * archive under the school year of the just-completed term.
  *
- * Scheduled to run March 1 each year — second semester of the executive
- * term per Constitution Bylaw §5.4. A March-1 fire in calendar year Y
- * corresponds to a term that began in Fall (Y-1) and ends in Summer Y,
- * so the school year is encoded as `${Y-1}-${(Y % 100).padStart(2, "0")}`
- * — matching the legacy seed format (1973-74, 1999-00, 2026-27).
+ * Scheduled to run March 1 each year. Bylaws §2.1 and §2.4 govern the
+ * executive term: officers are elected at the tenth meeting of Spring
+ * Semester and take office "during the first week of the Summer
+ * Semester following their election", for a one-year term. So a March-1
+ * fire in calendar year Y sits inside a term that began in Summer (Y-1)
+ * and ends in Summer Y, and the school year is encoded as
+ * `${Y-1}-${(Y % 100).padStart(2, "0")}` — matching the legacy seed
+ * format (1973-74, 1999-00, 2026-27).
  *
  * Why March 1 (not end-of-year):
  *   - It's mid-term: any Fall officer-transition ("/" mid-year) has
@@ -15,6 +18,12 @@
  *     snapshot reflects the term as it actually played out.
  *   - It avoids racing with elections in late Spring + the summer
  *     handover.
+ *
+ * **`school_year` here is NOT the club season**, despite sharing its
+ * `"YYYY-YY"` label format. The season (`#/config/club-season`) runs
+ * Aug 1 → Jul 31; an executive term runs roughly May → May. The two
+ * windows are offset by about three months and must not be joined on
+ * as if they were the same period.
  *
  * Multi-holder roles are flattened to ONE row per (school_year, role)
  * with co-holders joined by ", " — matches the legacy convention where

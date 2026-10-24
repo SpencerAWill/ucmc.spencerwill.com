@@ -4,7 +4,11 @@
  *
  * A season runs **Aug 1 → Jul 31** Cincinnati-local (see
  * {@link CLUB_TIME_ZONE}) and is labelled `"YYYY-YY"` — the same format
- * `historical_officers.school_year` already stores.
+ * `historical_officers.school_year` already stores, though **only the
+ * format is shared**. That column denotes an executive term, which
+ * Bylaws §2.1 and §2.4 run from the first week of Summer Semester for
+ * one year — roughly May → May, offset about three months from a
+ * season. Don't join the two as if they were the same window.
  *
  * **The waiver term is the season.** An attestation is stamped
  * `cycle = currentSeason()` at attest time, which covers the member
