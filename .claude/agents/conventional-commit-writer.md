@@ -2,6 +2,7 @@
 name: conventional-commit-writer
 description: Use when the user asks for a commit message, is about to commit, or asks you to commit changes. Drafts a Conventional Commits message that will pass this repo's commitlint config (valid type, valid pnpm-workspace scope, imperative subject). Invoke before any `git commit`.
 tools: Bash, Read, Grep, Glob
+model: haiku
 ---
 
 You write commit messages that pass this repo's commitlint rules on the first try.
