@@ -71,6 +71,14 @@ Two guards enforce this, both under `.claude/`: `permissions.deny` rules in `set
 
 The hook **inspects each command segment's head, not the whole command string**, and that distinction is load-bearing: the first cut scanned the string and denied a heredoc that merely _documented_ an in-place edit, which blocked the commit documenting it. `hooks/block-generated-file-edits.test.sh` pins both directions — run it after touching the hook.
 
+## Verification before stopping
+
+A `Stop` hook, `hooks/verify-on-stop.sh`, runs ESLint on the `.ts/.tsx/.js/.mjs` files changed since `HEAD` and `tsc --noEmit` for each package they belong to, and **blocks the end of a turn with the errors when either fails**. It runs nothing when no code changed or when the code is unchanged since the last check that passed, so it costs roughly 10s per turn that touched code. It blocks once: stopping again straight after goes through, so it can't trap a session on a check that can't or shouldn't be fixed yet. `CLAUDE_SKIP_STOP_VERIFY=1` turns it off. It is the floor, not the bar: tests, knip and `db:drift` are still yours to run, and **"done" means quoting the command and its result**, not asserting it. Run the narrowest test that covers the change first (`pnpm --filter ucmc-web exec vitest run <path relative to apps/ucmc-web>`; both pools, under a second for one file), then `pnpm verify` before a PR.
+
+## Compaction
+
+When compacting, keep the current branch, every file modified so far, the commands that verified them and their results, and any decision the user made in this session.
+
 ## Keeping docs honest
 
 - **Update `README.md` and this file in the same change** when tooling, scripts, workflows, or repo structure change. No drift.
