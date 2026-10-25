@@ -12,6 +12,11 @@ import { authStub } from "#/test-support/auth-stub";
 
 const useAuthMock = vi.hoisted(() => vi.fn());
 const flagsMock = vi.hoisted(() => vi.fn());
+const launcher = vi.hoisted(() => ({ canSend: false, open: vi.fn() }));
+
+vi.mock("#/components/feedback/feedback-launcher", () => ({
+  useFeedbackLauncher: () => launcher,
+}));
 
 vi.mock("#/features/auth/api/use-auth", () => ({ useAuth: useAuthMock }));
 
@@ -74,6 +79,8 @@ describe("UserMenu feedback row", () => {
   beforeEach(() => {
     useAuthMock.mockReset();
     flagsMock.mockReset();
+    launcher.canSend = false;
+    launcher.open.mockReset();
   });
 
   it("shows My feedback when pages.my_feedback is on and the member holds site_feedback:submit", async () => {
@@ -108,5 +115,55 @@ describe("UserMenu feedback row", () => {
     expect(
       screen.queryByRole("menuitem", { name: "My feedback" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("Send feedback… renders when canSend and opens the launcher", async () => {
+    launcher.canSend = true;
+    setup(["site_feedback:submit"]);
+    await openMenu();
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: "Send feedback…" }),
+    );
+    expect(launcher.open).toHaveBeenCalledTimes(1);
+  });
+
+  it("row shows only My feedback when canSend is false", async () => {
+    setup(["site_feedback:submit"]);
+    await openMenu();
+    expect(
+      screen.queryByRole("menuitem", { name: "Send feedback…" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "My feedback" }),
+    ).toBeInTheDocument();
+  });
+
+  it("row shows only Send feedback… when My feedback is off", async () => {
+    launcher.canSend = true;
+    setup(["site_feedback:submit"], { my_feedback: false });
+    await openMenu();
+    expect(
+      screen.getByRole("menuitem", { name: "Send feedback…" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "My feedback" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("row is absent when both halves are off", async () => {
+    setup([], { my_feedback: true });
+    await openMenu();
+    expect(screen.queryByTestId("feedback-menu-row")).not.toBeInTheDocument();
+  });
+
+  it("both halves are separate menuitems in one row, send first", async () => {
+    launcher.canSend = true;
+    setup(["site_feedback:submit"]);
+    await openMenu();
+    const row = screen.getByTestId("feedback-menu-row");
+    const items = Array.from(row.querySelectorAll("[role=menuitem]")).map(
+      (el) => el.textContent,
+    );
+    expect(items).toEqual(["Send feedback…", "My feedback"]);
   });
 });

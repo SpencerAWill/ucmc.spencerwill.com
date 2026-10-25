@@ -39,6 +39,11 @@ import { UserMenu } from "#/features/auth/components/user-menu";
 import { ViewAsMenu } from "#/features/auth/components/view-as-menu";
 import { ANALYTICS_PAGE_ICONS } from "#/components/analytics-page-icons";
 import { GitHubIcon } from "#/components/brand-icons";
+import { FeedbackLauncherProvider } from "#/components/feedback/feedback-launcher";
+import {
+  FeedbackDialog,
+  useFeedbackSurfaces,
+} from "#/components/layouts/feedback-dialog";
 import { HeaderMasthead } from "#/components/layouts/header-masthead";
 import { ModeToggle } from "#/components/mode-toggle";
 import { SocialIconLinks } from "#/components/social-icon-links";
@@ -113,7 +118,28 @@ function SidebarTriggerWithTooltip() {
   );
 }
 
+/** Screenshots switch on with capture support; until then, none. */
+async function noScreenshot() {
+  return null;
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  // The launcher wraps the whole shell so the user menu can open the
+  // feedback dialog from any page; the dialog is mounted once, here.
+  const surfaces = useFeedbackSurfaces();
+  return (
+    <FeedbackLauncherProvider
+      canSend={surfaces.site || surfaces.club}
+      captureScreenshot={false}
+      capture={noScreenshot}
+    >
+      <AppShell>{children}</AppShell>
+      <FeedbackDialog surfaces={surfaces} />
+    </FeedbackLauncherProvider>
+  );
+}
+
+function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider
       className="flex-col"

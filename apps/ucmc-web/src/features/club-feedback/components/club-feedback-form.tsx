@@ -64,7 +64,12 @@ function validateClubFeedback({
  * `anonymous: true` so manager-side projections strip the submitter
  * from the wire payload entirely.
  */
-export function ClubFeedbackForm() {
+export function ClubFeedbackForm({
+  onSubmitted,
+}: {
+  /** When set, the caller owns the success message. */
+  onSubmitted?: () => void;
+} = {}) {
   const submitMutation = useSubmitClubFeedback();
 
   const form = useAppForm({
@@ -77,8 +82,12 @@ export function ClubFeedbackForm() {
     onSubmit: ({ value, formApi }) => {
       submitMutation.mutate(value, {
         onSuccess: () => {
-          toast.success("Thanks — your feedback was sent to the exec board.");
           formApi.reset();
+          if (onSubmitted) {
+            onSubmitted();
+          } else {
+            toast.success("Thanks — your feedback was sent to the exec board.");
+          }
         },
         onError: (err) => {
           toast.error(
@@ -93,7 +102,7 @@ export function ClubFeedbackForm() {
 
   return (
     <form
-      className="space-y-4 rounded-md border p-4"
+      className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -185,7 +194,7 @@ export function ClubFeedbackForm() {
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   Your name won&apos;t be shown to officers in the triage view.
-                  You&apos;ll still see this submission in your own list below.
+                  You&apos;ll still see this submission in My feedback.
                 </p>
               </div>
             </div>

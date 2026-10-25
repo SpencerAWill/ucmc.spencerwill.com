@@ -65,7 +65,9 @@ function ClubFeedbackPage() {
         </p>
       </header>
       {canSubmit && submissionsEnabled ? (
-        <ClubFeedbackForm />
+        <div className="rounded-md border p-4">
+          <ClubFeedbackForm />
+        </div>
       ) : !submissionsEnabled && canSubmit ? (
         <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
           Club feedback submissions are paused right now. Check back later, or

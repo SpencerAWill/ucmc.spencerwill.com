@@ -6,10 +6,12 @@ import {
   LogOut,
   Map,
   MessageSquare,
+  MessageSquarePlus,
   ShoppingCart,
   User as UserIcon,
 } from "lucide-react";
 
+import { useFeedbackLauncher } from "#/components/feedback/feedback-launcher";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { UserAvatar } from "#/components/user-avatar";
 import {
@@ -173,22 +175,32 @@ export function UserMenu() {
 }
 
 /**
- * One row, up to two actions side by side: "My feedback" links to the
- * member's own submissions. Each half has its own gate; with neither
- * the row isn't rendered at all.
+ * One row, up to two actions side by side: "Send feedback…" opens the
+ * dialog (the launcher records the page first, so the menu closes before
+ * any screenshot), "My feedback" links to the member's own submissions.
+ * Each half has its own gate; with neither the row isn't rendered.
  */
 function FeedbackMenuRow({ showMine }: { showMine: boolean }) {
-  if (!showMine) {
+  const launcher = useFeedbackLauncher();
+  if (!launcher.canSend && !showMine) {
     return null;
   }
   return (
     <div data-testid="feedback-menu-row" className="flex">
-      <DropdownMenuItem asChild className="flex-1">
-        <Link to="/my/feedback">
-          <MessageSquare className="mr-2 size-4" />
-          My feedback
-        </Link>
-      </DropdownMenuItem>
+      {launcher.canSend ? (
+        <DropdownMenuItem className="flex-1" onSelect={() => launcher.open()}>
+          <MessageSquarePlus className="mr-2 size-4" />
+          Send feedback…
+        </DropdownMenuItem>
+      ) : null}
+      {showMine ? (
+        <DropdownMenuItem asChild className="flex-1">
+          <Link to="/my/feedback">
+            <MessageSquare className="mr-2 size-4" />
+            My feedback
+          </Link>
+        </DropdownMenuItem>
+      ) : null}
     </div>
   );
 }

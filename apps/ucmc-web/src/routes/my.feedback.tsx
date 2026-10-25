@@ -1,8 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
+import { useFeedbackLauncher } from "#/components/feedback/feedback-launcher";
 import { PageContainer } from "#/components/layouts/page-container";
-import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
+import { Button } from "#/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyHeader,
+  EmptyTitle,
+} from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
 import {
   canReachMyFeedback,
@@ -47,11 +54,14 @@ function MyFeedbackPage() {
 
   return (
     <PageContainer width="app" className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">My feedback</h1>
-        <p className="text-sm text-muted-foreground">
-          What you&apos;ve sent to the site maintainers and the exec board.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">My feedback</h1>
+          <p className="text-sm text-muted-foreground">
+            What you&apos;ve sent to the site maintainers and the exec board.
+          </p>
+        </div>
+        <SendFeedbackButton />
       </header>
       {canSite ? <MySiteFeedback /> : null}
       {canClub ? <MyClubFeedback /> : null}
@@ -114,12 +124,27 @@ function MyClubFeedback() {
   );
 }
 
+function SendFeedbackButton() {
+  const { canSend, open } = useFeedbackLauncher();
+  if (!canSend) {
+    return null;
+  }
+  return (
+    <Button type="button" variant="outline" onClick={open}>
+      Send feedback…
+    </Button>
+  );
+}
+
 function NothingYet() {
   return (
     <Empty className="border">
       <EmptyHeader>
         <EmptyTitle>Nothing yet</EmptyTitle>
       </EmptyHeader>
+      <EmptyContent>
+        <SendFeedbackButton />
+      </EmptyContent>
     </Empty>
   );
 }

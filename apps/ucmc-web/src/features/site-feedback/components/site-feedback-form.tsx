@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 
+import type { FeedbackPageContext } from "#/components/feedback/feedback-launcher";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { useSubmitSiteFeedback } from "#/features/site-feedback/api/use-submit-site-feedback";
 import {
@@ -121,13 +122,23 @@ function projectToVariant(values: FormValues): SiteFeedbackInput {
 }
 
 /**
- * Inline feedback form. Bug + feature submissions follow the same
+ * Site-feedback form. Bug + feature submissions follow the same
  * structure as `.github/ISSUE_TEMPLATE/bug_report.md` and
  * `feature_request.md` so submitters give us actionable info upfront;
- * general feedback stays a free-form note. Captures the current page
- * URL + UA at submit time so admins have context when triaging.
+ * general feedback stays a free-form note. The page URL and user agent
+ * come from `pageContext`, recorded when the member opened the dialog,
+ * so the report names the page they were on rather than wherever the
+ * dialog happens to be.
+ *
+ * With `onSubmitted`, the caller owns the success message.
  */
-export function SiteFeedbackForm() {
+export function SiteFeedbackForm({
+  pageContext,
+  onSubmitted,
+}: {
+  pageContext: FeedbackPageContext;
+  onSubmitted?: () => void;
+}) {
   const submitMutation = useSubmitSiteFeedback();
 
   const form = useAppForm({
@@ -140,16 +151,20 @@ export function SiteFeedbackForm() {
     onSubmit: ({ value, formApi }) => {
       const enriched: FormValues = {
         ...value,
-        pageUrl: typeof window === "undefined" ? "" : window.location.href,
-        userAgent:
-          typeof navigator === "undefined"
-            ? ""
-            : navigator.userAgent.slice(0, SITE_FEEDBACK_LIMITS.userAgent.max),
+        pageUrl: pageContext.pageUrl,
+        userAgent: pageContext.userAgent.slice(
+          0,
+          SITE_FEEDBACK_LIMITS.userAgent.max,
+        ),
       };
       submitMutation.mutate(projectToVariant(enriched), {
         onSuccess: () => {
-          toast.success("Thanks — your feedback was sent.");
           formApi.reset();
+          if (onSubmitted) {
+            onSubmitted();
+          } else {
+            toast.success("Thanks — your feedback was sent.");
+          }
         },
         onError: (err) => {
           toast.error(
@@ -164,7 +179,7 @@ export function SiteFeedbackForm() {
 
   return (
     <form
-      className="space-y-4 rounded-md border p-4"
+      className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();

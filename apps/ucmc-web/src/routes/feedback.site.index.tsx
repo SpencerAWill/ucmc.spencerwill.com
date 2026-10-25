@@ -74,7 +74,17 @@ function SiteFeedbackPage() {
         ) : null}
       </header>
       {canSubmit && submissionsEnabled ? (
-        <SiteFeedbackForm />
+        <div className="rounded-md border p-4">
+          <SiteFeedbackForm
+            pageContext={{
+              pageUrl:
+                typeof window === "undefined" ? "" : window.location.href,
+              userAgent:
+                typeof navigator === "undefined" ? "" : navigator.userAgent,
+              screenshot: null,
+            }}
+          />
+        </div>
       ) : !submissionsEnabled && canSubmit ? (
         <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
           Site feedback submissions are paused right now. Check back later, or
