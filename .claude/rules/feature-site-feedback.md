@@ -6,19 +6,21 @@ paths:
 
 # Site feedback (`/feedback/site`)
 
-Bug / feature / general submissions aimed at the site maintainers. `site_feedback:submit` (auto-granted to `role_member`) lets a member send and see their own; `site_feedback:manage` unlocks triage. Gated by `pages.feedback_site`; the `site_feedback.submissions_enabled` feature setting pauses new submissions only (default ON, managers keep triage). The index page and the shared permission pairs are in `feedback-index.md`.
+Bug / feature / general submissions aimed at the site maintainers. `site_feedback:submit` (auto-granted to `role_member`) lets a member send from the user-menu dialog and see their own on `/my/feedback`; `site_feedback:manage` unlocks triage. Gated by `pages.feedback_site`; the `site_feedback.submissions_enabled` feature setting pauses new submissions only (default ON, managers keep triage). The managers' index, the dialog and `/my/feedback` are in `feedback-index.md`.
 
 **A submission writes to D1 and nothing else.** `submitSiteFeedbackAction` only inserts: there is no submit-time GitHub mirror. Maintainers gather submissions into issue drafts and file them deliberately.
 
 ## Routes
 
-| File                                       | URL                                |
-| ------------------------------------------ | ---------------------------------- |
-| `feedback.site.index.tsx`                  | `/feedback/site`: form + own list  |
-| `feedback.site.triage.index.tsx`           | `/feedback/site/triage`: the inbox |
-| `feedback.site.triage.issues.$issueId.tsx` | the composer, for drafts and filed |
+| File                                       | URL                                   |
+| ------------------------------------------ | ------------------------------------- |
+| `feedback.site.index.tsx`                  | `/feedback/site`: redirects to triage |
+| `feedback.site.triage.index.tsx`           | `/feedback/site/triage`: the inbox    |
+| `feedback.site.triage.issues.$issueId.tsx` | the composer, for drafts and filed    |
 
-Triage and the composer require `site_feedback:manage` through `requirePermission` (role emulation honoured). The page heading shows a "Triage (N)" link to managers, where N comes from `siteFeedbackOverviewQueryOptions`.
+Triage and the composer require `site_feedback:manage` through `requirePermission` (role emulation honoured). The `/feedback` index card shows the untriaged count from `siteFeedbackOverviewQueryOptions`.
+
+`SiteFeedbackForm` takes the `pageContext` the launcher recorded at open and submits its `pageUrl` / `userAgent`, never `window` at submit time.
 
 ## Data: submissions and issues are many-to-many
 
@@ -34,7 +36,7 @@ Triage and the composer require `site_feedback:manage` through `requirePermissio
 
 `siteFeedbackStateSql()` in `triage-repo.server.ts` computes a submission's `SiteFeedbackState` on read: linked to a non-draft issue, all closed is `resolved`, otherwise `tracked`; linked only to drafts is `in_draft`; unlinked falls back to the submission's own disposition (`status`: `open` reads as `new`, plus `wont_fix`, `duplicate`, `resolved`). Legacy `acknowledged` displays as New and legacy `closed` as Won't fix; they are **not rewritten**, because a backfill `UPDATE` would break rollback. Nothing stores the derived value, so a link change can never leave it stale.
 
-**Submitters never see `in_draft`**: `toSummary` maps it to `new` and `trackedIn` lists filed issues only. The submitter card (`SiteFeedbackCard`) shows the state badge plus one "Tracked in #N" link per filed issue. There is no notification.
+**Submitters never see `in_draft`**: `toSummary` maps it to `new` and `trackedIn` lists filed issues only. The submitter card (`SiteFeedbackCard`, on `/my/feedback`) shows the state badge plus one "Tracked in #N" link per filed issue. There is no notification.
 
 ## Server
 

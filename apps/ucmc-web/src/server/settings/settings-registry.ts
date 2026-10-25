@@ -656,7 +656,7 @@ export const SETTINGS = {
   "pages.feedback": z.boolean().default(true).register(registry, {
     label: "Feedback section enabled",
     description:
-      "Master switch for the whole /feedback area. When off, the sidebar entry disappears and both the site and club surfaces return notFound.",
+      "Master switch for the managers' /feedback area. When off, the sidebar entry disappears and both surfaces return notFound. Members still send feedback from the user menu.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
@@ -667,7 +667,7 @@ export const SETTINGS = {
   "pages.feedback_site": z.boolean().default(true).register(registry, {
     label: "Feedback · Site tab reachable",
     description:
-      "When off, the Site tab is hidden and /feedback/site returns notFound. To stop new submissions while leaving the page open for managers to triage, use “Accept site feedback submissions” under Features instead.",
+      "When off, site-feedback triage is hidden and /feedback/site returns notFound. To stop new submissions, use “Accept site feedback submissions” under Features instead.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
@@ -677,7 +677,7 @@ export const SETTINGS = {
   "pages.feedback_club": z.boolean().default(true).register(registry, {
     label: "Club feedback page reachable",
     description:
-      "When off, the club-feedback tab is hidden and /feedback/club returns notFound. To stop new submissions while leaving the page open for managers to triage, use “Accept club feedback submissions” under Features instead.",
+      "When off, club-feedback review is hidden and /feedback/club returns notFound. To stop new submissions, use “Accept club feedback submissions” under Features instead.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",
@@ -812,15 +812,15 @@ export const SETTINGS = {
   // access to the triage view of existing rows (gated separately by
   // `site_feedback:manage` / `club_feedback:manage`). Defaults are ON so a
   // fresh DB / new deploy keeps both forms open. Exposed publicly via
-  // `getPublicFlagsFn` so the route guards and tab bar can decide
-  // synchronously whether to render the submit UI for non-managers.
+  // `getPublicFlagsFn` so the Send feedback dialog can decide
+  // synchronously which surfaces to offer.
   "site_feedback.submissions_enabled": z
     .boolean()
     .default(true)
     .register(registry, {
       label: "Accept site feedback submissions",
       description:
-        "Pauses NEW site-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Site tab page switch under Pages, which 404s the page for everyone.",
+        "Pauses NEW site-feedback submissions: the option disappears from the Send feedback dialog and the endpoint refuses. Managers keep reviewing the backlog.",
       category: "features",
       flagKind: "ops",
       owner: "system_admin",
@@ -967,7 +967,7 @@ export const SETTINGS = {
     .register(registry, {
       label: "Accept club feedback submissions",
       description:
-        "Pauses NEW club-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Club feedback page switch under Pages, which 404s the page for everyone.",
+        "Pauses NEW club-feedback submissions: the option disappears from the Send feedback dialog and the endpoint refuses. Managers keep reviewing the backlog.",
       category: "features",
       flagKind: "ops",
       owner: "system_admin",

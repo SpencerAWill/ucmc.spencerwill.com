@@ -183,25 +183,34 @@ export const WAIVER_VIEW_PERMISSIONS = [
 ] as const;
 
 /**
- * The submit/manage pairs that grant access to each feedback surface.
- *
- * Same rationale as `WAIVER_VIEW_PERMISSIONS`: `*:manage` implies `*:submit`
- * for the purpose of *reaching* the surface (a manager triages a backlog
- * they may never post to), there's no implication mechanism in the RBAC
- * tables, and five places ask the question — the sidebar entry, the tab
- * bar, and all three `/feedback` routes. Spelled out at each one, they
- * drift; the club/site pair splitting out of a single `feedback:*` in
- * migration 0064 is exactly the kind of change that does it.
+ * The permissions that open the managers' `/feedback` area: site
+ * maintainers triage site feedback, the exec board reviews club feedback.
+ * Members send feedback from the user menu and follow it up on
+ * `/my/feedback`, so submit alone no longer reaches `/feedback`. Named
+ * once because the sidebar entry, the layout guard and the index all ask.
  */
-export const CLUB_FEEDBACK_PERMISSIONS = [
-  "club_feedback:submit",
+export const FEEDBACK_MANAGE_PERMISSIONS = [
+  "site_feedback:manage",
   "club_feedback:manage",
 ] as const;
 
-export const SITE_FEEDBACK_PERMISSIONS = [
-  "site_feedback:submit",
-  "site_feedback:manage",
-] as const;
+/**
+ * What the `/feedback` layout does with a viewer, given their effective
+ * permissions: a manager of either surface is let in; anyone else is sent
+ * to `/my/feedback`, the page that replaced the member half of this area,
+ * or gets the 404 when that page is switched off. Fed effective
+ * permissions, so a manager previewing a member role lands where a member
+ * would.
+ */
+export function feedbackAreaDecision(
+  granted: readonly string[],
+  myFeedbackEnabled: boolean,
+): "allow" | "redirect_my_feedback" | "not_found" {
+  if (FEEDBACK_MANAGE_PERMISSIONS.some((p) => granted.includes(p))) {
+    return "allow";
+  }
+  return myFeedbackEnabled ? "redirect_my_feedback" : "not_found";
+}
 
 /**
  * Who may open `/my/feedback`: anyone who can send feedback to either
@@ -272,8 +281,9 @@ export async function requirePermissionOrNotFound(
  * `requirePermissionOrNotFound`, standing in the same relation to
  * `requireAnyPermission` as that one does to `requirePermission`.
  *
- * The three existing permission *pairs* (`WAIVER_VIEW_PERMISSIONS` and
- * the two feedback pairs) all want the redirect, which is why this
+ * The existing permission sets (`WAIVER_VIEW_PERMISSIONS` and, before
+ * `/feedback` went managers-only, the two feedback pairs) wanted the
+ * redirect, which is why this
  * didn't exist until `/analytics`. Those pages differ in that a viewer
  * without the data permission should not learn the page is there: each
  * analytics drill-down is hidden from the nav when its permissions

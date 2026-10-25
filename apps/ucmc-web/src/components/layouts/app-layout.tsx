@@ -89,11 +89,7 @@ import {
   TooltipTrigger,
 } from "#/components/ui/tooltip";
 import { useAuth } from "#/features/auth/api/use-auth";
-import {
-  CLUB_FEEDBACK_PERMISSIONS,
-  SITE_FEEDBACK_PERMISSIONS,
-  WAIVER_VIEW_PERMISSIONS,
-} from "#/features/auth/guards";
+import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
 
 const HEADER_HEIGHT = "3.5rem";
 
@@ -657,24 +653,25 @@ export function SidebarNav() {
   );
 }
 
-function SidebarUtilityNav() {
-  const { isApproved, hasPermission, hasAnyPermission } = useAuth();
+export function SidebarUtilityNav() {
+  const { isApproved, hasPermission } = useAuth();
   // Page kill switches for entries in this group. `placeholderData` is the
   // schema default (on) until the query resolves.
   const flagsOptions = publicFlagsQueryOptions();
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
   const pages = flags.pages;
-  // One sidebar link to the `/feedback` index, which shows a card per
-  // reachable surface. Gate it on the index's own condition: the master
-  // `pages.feedback` switch AND at least one surface the viewer can submit to
-  // or manage whose own page is enabled (system_admin auto-grants both via
-  // the principal bypass), so the link never lands on a 404.
-  const canSiteFeedback =
-    hasAnyPermission(SITE_FEEDBACK_PERMISSIONS) && pages.feedback_site;
-  const canClubFeedback =
-    hasAnyPermission(CLUB_FEEDBACK_PERMISSIONS) && pages.feedback_club;
-  const canSubmitFeedback =
-    isApproved && pages.feedback && (canSiteFeedback || canClubFeedback);
+  // One sidebar link to the managers' `/feedback` index. Gate it on the
+  // index's own condition: the master `pages.feedback` switch AND at least
+  // one surface the viewer manages whose own page is enabled, so the link
+  // never lands on a 404. Members send feedback from the user menu instead.
+  const canManageSiteFeedback =
+    hasPermission("site_feedback:manage") && pages.feedback_site;
+  const canManageClubFeedback =
+    hasPermission("club_feedback:manage") && pages.feedback_club;
+  const canManageFeedback =
+    isApproved &&
+    pages.feedback &&
+    (canManageSiteFeedback || canManageClubFeedback);
   // `analytics:view` opens the area; each drill-down additionally needs
   // the permission for the data it shows, which is what
   // `visibleAnalyticsPages` resolves for the sub-menu below. The root
@@ -724,7 +721,7 @@ function SidebarUtilityNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : null}
-        {canSubmitFeedback ? (
+        {canManageFeedback ? (
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Feedback">
               <Link to="/feedback">

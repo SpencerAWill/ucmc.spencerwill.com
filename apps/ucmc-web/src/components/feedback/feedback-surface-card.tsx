@@ -21,13 +21,9 @@ export interface FeedbackSurfaceCardProps {
   icon: LucideIcon;
   title: string;
   description: string;
-  to: "/feedback/club" | "/feedback/site";
+  to: "/feedback/club" | "/feedback/site/triage";
   cta: string;
   badges: string[];
-  manageLink?: {
-    to: "/feedback/club" | "/feedback/site" | "/feedback/site/triage";
-    label: string;
-  };
 }
 
 export function FeedbackSurfaceCard({
@@ -37,7 +33,6 @@ export function FeedbackSurfaceCard({
   to,
   cta,
   badges,
-  manageLink,
 }: FeedbackSurfaceCardProps) {
   return (
     <Card>
@@ -57,15 +52,10 @@ export function FeedbackSurfaceCard({
           ))}
         </CardContent>
       ) : null}
-      <CardFooter className="flex flex-wrap items-center gap-3">
+      <CardFooter>
         <Button asChild>
           <Link to={to}>{cta}</Link>
         </Button>
-        {manageLink ? (
-          <Button asChild variant="outline">
-            <Link to={manageLink.to}>{manageLink.label}</Link>
-          </Button>
-        ) : null}
       </CardFooter>
     </Card>
   );
