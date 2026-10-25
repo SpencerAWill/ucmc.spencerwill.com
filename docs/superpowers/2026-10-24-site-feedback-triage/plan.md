@@ -8,7 +8,7 @@
 
 **Tech Stack:** TanStack Start/Router/Query, React 19, Drizzle + D1, Zod, shadcn, Vitest (workers + jsdom pools), Playwright.
 
-**Spec:** `docs/superpowers/specs/2026-10-24-site-feedback-triage-design.md`. Read it first; this plan argues from it and does not repeat its rationale.
+**Spec:** `docs/superpowers/2026-10-24-site-feedback-triage/design.md` (same folder). Read it first; this plan argues from it and does not repeat its rationale.
 
 ## Global Constraints
 
