@@ -174,20 +174,20 @@ The pathless `_tabs` layout is removed. `/feedback/club` and `/feedback/site` ke
 
 ## Rollout
 
-Three PRs, each commit green and independently revertable.
+One PR (branch `feat/site-feedback-triage`), sequenced as commits that are each green and independently revertable, in three phases.
 
-**PR 1 — rename**
+**Phase 1: rename**
 
 1. Remove the submit-time GitHub mirror and its tests.
 2. Rename the feature directory and its identifiers.
 3. Run the settings-key rename migration via the skill.
-4. Rename the env vars across `cloudflare-env.ts`, `.github/actions/deploy`, `cicd.yml`, the `infra/github` comment, README and `CLAUDE.md`. The maintainer re-enters the secret and variable under the new names before PR 3. Until then nothing reads them.
+4. Rename the env vars across `cloudflare-env.ts`, `.github/actions/deploy`, `cicd.yml`, the `infra/github` comment, README and `CLAUDE.md`. The maintainer enters the secret and variable under the new names before merging. Filing degrades to "not configured" until they do.
 
-**PR 2 — index**
+**Phase 2: index**
 
 Cards page, `_tabs` removal, breadcrumb, sidebar target, overview queries, regenerated `routeTree.gen.ts`.
 
-**PR 3 — triage**
+**Phase 3: triage**
 
 1. Schema, migrations, FTS, backfill.
 2. GitHub client and actions.
