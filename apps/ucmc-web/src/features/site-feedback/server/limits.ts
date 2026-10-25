@@ -20,10 +20,43 @@ export const SITE_FEEDBACK_STATUS_VALUES = [
   "acknowledged",
   "resolved",
   "closed",
+  "wont_fix",
+  "duplicate",
+] as const;
+
+// The submission's own disposition. Legacy `acknowledged` displays as
+// New and legacy `closed` as Won't fix; they are not rewritten.
+export const SITE_FEEDBACK_DISPOSITION_VALUES = [
+  "open",
+  "wont_fix",
+  "duplicate",
+  "resolved",
+] as const;
+
+// Derived on read from the disposition plus the linked issues.
+export const SITE_FEEDBACK_STATE_VALUES = [
+  "new",
+  "in_draft",
+  "tracked",
+  "resolved",
+  "wont_fix",
+  "duplicate",
+] as const;
+
+export const SITE_FEEDBACK_ISSUE_STATE_VALUES = [
+  "draft",
+  "filing",
+  "open",
+  "closed",
 ] as const;
 
 export type SiteFeedbackKind = (typeof SITE_FEEDBACK_KIND_VALUES)[number];
 export type SiteFeedbackStatus = (typeof SITE_FEEDBACK_STATUS_VALUES)[number];
+export type SiteFeedbackDisposition =
+  (typeof SITE_FEEDBACK_DISPOSITION_VALUES)[number];
+export type SiteFeedbackState = (typeof SITE_FEEDBACK_STATE_VALUES)[number];
+export type SiteFeedbackIssueState =
+  (typeof SITE_FEEDBACK_ISSUE_STATE_VALUES)[number];
 
 export const SITE_FEEDBACK_KIND_LABELS: Record<SiteFeedbackKind, string> = {
   bug: "Bug report",
@@ -36,6 +69,8 @@ export const SITE_FEEDBACK_STATUS_LABELS: Record<SiteFeedbackStatus, string> = {
   acknowledged: "Acknowledged",
   resolved: "Resolved",
   closed: "Closed",
+  wont_fix: "Won't fix",
+  duplicate: "Duplicate",
 };
 
 const titleField = z

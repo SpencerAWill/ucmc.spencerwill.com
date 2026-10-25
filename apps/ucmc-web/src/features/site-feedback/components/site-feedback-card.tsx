@@ -30,6 +30,8 @@ const STATUS_VARIANTS: Record<
   acknowledged: "warning",
   resolved: "success",
   closed: "secondary",
+  wont_fix: "secondary",
+  duplicate: "secondary",
 };
 
 export function SiteFeedbackCard({

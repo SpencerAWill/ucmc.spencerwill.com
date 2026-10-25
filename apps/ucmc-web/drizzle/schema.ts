@@ -978,11 +978,16 @@ export const auditLog = sqliteTable(
 export const siteFeedbackKind = ["bug", "feature", "general"] as const;
 export type SiteFeedbackKind = (typeof siteFeedbackKind)[number];
 
+// The submission's own disposition. `acknowledged` and `closed` are
+// legacy values, kept readable (Acknowledged displays as New, Closed as
+// Won't fix) and never rewritten, so rollback stays code-only.
 export const siteFeedbackStatus = [
   "open",
   "acknowledged",
   "resolved",
   "closed",
+  "wont_fix",
+  "duplicate",
 ] as const;
 export type SiteFeedbackStatus = (typeof siteFeedbackStatus)[number];
 
@@ -1019,6 +1024,81 @@ export const siteFeedback = sqliteTable(
   ],
 );
 
+export const siteFeedbackIssueState = [
+  "draft",
+  "filing",
+  "open",
+  "closed",
+] as const;
+export type SiteFeedbackIssueState = (typeof siteFeedbackIssueState)[number];
+
+// One row per draft or tracked GitHub issue. `github_number` is null
+// while a draft and unique once set. `updated_at` is the
+// optimistic-concurrency token for edits.
+export const siteFeedbackIssues = sqliteTable(
+  "site_feedback_issues",
+  {
+    id: text("id").primaryKey(),
+    state: text("state", { enum: siteFeedbackIssueState })
+      .notNull()
+      .default("draft"),
+    title: text("title").notNull(),
+    // Null for an attached hand-made issue.
+    summaryMd: text("summary_md"),
+    labels: text("labels", { mode: "json" })
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'`),
+    githubNumber: integer("github_number"),
+    githubUrl: text("github_url"),
+    githubSyncedAt: timestamp("github_synced_at"),
+    filingStartedAt: timestamp("filing_started_at"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    filedBy: text("filed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    filedAt: timestamp("filed_at"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("site_feedback_issues_github_number_idx").on(t.githubNumber),
+    index("site_feedback_issues_state_updated_at_idx").on(t.state, t.updatedAt),
+  ],
+);
+
+export const siteFeedbackIssueLinks = sqliteTable(
+  "site_feedback_issue_links",
+  {
+    issueId: text("issue_id")
+      .notNull()
+      .references(() => siteFeedbackIssues.id, { onDelete: "cascade" }),
+    feedbackId: text("feedback_id")
+      .notNull()
+      .references(() => siteFeedback.id, { onDelete: "cascade" }),
+    // The editable report text, prefilled from the submission.
+    quotedMd: text("quoted_md").notNull(),
+    // Null until the report has reached GitHub (issue body or comment).
+    postedAt: timestamp("posted_at"),
+    addedBy: text("added_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    addedAt: timestamp("added_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.issueId, t.feedbackId] }),
+    index("site_feedback_issue_links_feedback_idx").on(t.feedbackId),
+  ],
+);
+
 // ── Club feedback ───────────────────────────────────────────────────────
 //
 // Parallel surface to `feedback` aimed at exec-board governance instead
@@ -1047,10 +1127,16 @@ export const clubFeedbackKind = [
 ] as const;
 export type ClubFeedbackKind = (typeof clubFeedbackKind)[number];
 
-// Reuse the same status taxonomy as website feedback — the triage
-// workflow is identical even if the audiences differ.
-export const clubFeedbackStatus = siteFeedbackStatus;
-export type ClubFeedbackStatus = SiteFeedbackStatus;
+// Same four statuses website feedback started with.
+// Club feedback keeps its original four statuses: the site-feedback
+// enum grew triage dispositions that do not apply here.
+export const clubFeedbackStatus = [
+  "open",
+  "acknowledged",
+  "resolved",
+  "closed",
+] as const;
+export type ClubFeedbackStatus = (typeof clubFeedbackStatus)[number];
 
 export const clubFeedback = sqliteTable(
   "club_feedback",

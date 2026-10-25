@@ -553,6 +553,71 @@ describe("rename_feedback_submission_settings carries the switches and their his
   );
 });
 
+describe("site_feedback_issue_backfill turns legacy GitHub mirrors into issues and links", () => {
+  // The auto-mirror stamped `github_issue_number` / `github_issue_url` on
+  // each submission. The triage model reads issues and links instead, so
+  // those stamps reach it only through this INSERT...SELECT.
+  const BEFORE = "0085_rename_feedback_submission_settings.sql";
+
+  beforeEach(async () => {
+    await applyThrough(BEFORE);
+
+    const seed = [
+      `INSERT INTO feedback (id, kind, title, body, github_issue_number, github_issue_url, created_at, updated_at)
+       VALUES ('fb_late', 'bug', 'Later report', 'second body', 7, 'https://github.com/o/r/issues/7', 2000, 2000)`,
+      `INSERT INTO feedback (id, kind, title, body, github_issue_number, github_issue_url, created_at, updated_at)
+       VALUES ('fb_early', 'bug', 'Earliest report', 'first body', 7, 'https://github.com/o/r/issues/7', 1000, 1000)`,
+      `INSERT INTO feedback (id, kind, title, body, created_at, updated_at)
+       VALUES ('fb_none', 'general', 'Never mirrored', 'third body', 3000, 3000)`,
+    ];
+    for (const statement of seed) {
+      await env.MIGRATIONS_DB.prepare(statement).run();
+    }
+
+    await applyRest();
+  });
+
+  it("creates exactly one open issue per distinct legacy number", async () => {
+    const { results } = await env.MIGRATIONS_DB.prepare(
+      `SELECT id, state, title, github_number, github_url, summary_md, created_at, updated_at
+       FROM site_feedback_issues`,
+    ).all();
+    expect(results).toEqual([
+      {
+        id: "sfi_legacy_7",
+        state: "open",
+        title: "Earliest report",
+        github_number: 7,
+        github_url: "https://github.com/o/r/issues/7",
+        summary_md: null,
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
+  });
+
+  it("links both mirrored submissions as already posted, and not the third", async () => {
+    const { results } = await env.MIGRATIONS_DB.prepare(
+      `SELECT feedback_id, issue_id, quoted_md, posted_at
+       FROM site_feedback_issue_links ORDER BY feedback_id`,
+    ).all();
+    expect(results).toEqual([
+      {
+        feedback_id: "fb_early",
+        issue_id: "sfi_legacy_7",
+        quoted_md: "first body",
+        posted_at: 1000,
+      },
+      {
+        feedback_id: "fb_late",
+        issue_id: "sfi_legacy_7",
+        quoted_md: "second body",
+        posted_at: 2000,
+      },
+    ]);
+  });
+});
+
 describe("a populated database upgrades across the most recent migration", () => {
   // Deliberately expressed as "the last one", not as a file name: the
   // newest migration is the one nobody has run against real data yet, so
