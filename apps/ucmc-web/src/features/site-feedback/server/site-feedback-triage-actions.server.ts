@@ -118,6 +118,8 @@ export type SiteFeedbackIssueDetail = SiteFeedbackIssueSummary & {
   summaryMd: string | null;
   labels: string[];
   githubConfigured: boolean;
+  /** Non-secret `owner/name`; null when GitHub is unconfigured. */
+  githubRepo: string | null;
   links: {
     feedbackId: string;
     kind: SiteFeedbackKind;
@@ -293,6 +295,7 @@ export async function getSiteFeedbackIssueAction(
     summaryMd: issue.summaryMd,
     labels: issue.labels,
     githubConfigured: getGithubConfig() !== null,
+    githubRepo: getGithubConfig()?.repo ?? null,
     links: links.map((l) => ({
       feedbackId: l.feedbackId,
       kind: l.kind,

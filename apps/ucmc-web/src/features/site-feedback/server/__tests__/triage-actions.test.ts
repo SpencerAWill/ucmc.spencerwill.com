@@ -367,6 +367,7 @@ describe("drafts", () => {
     expect(detail.reportCount).toBe(2);
     expect(detail.unpostedCount).toBe(2);
     expect(detail.githubConfigured).toBe(false);
+    expect(detail.githubRepo).toBeNull();
     expect(detail.links.map((l) => l.feedbackId)).toEqual([earliest, later]);
     expect(detail.links[0]?.quotedMd).toContain("Earliest");
   });
