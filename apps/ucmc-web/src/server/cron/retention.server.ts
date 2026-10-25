@@ -7,6 +7,9 @@
  *   - revoked waiver attestations dropped 90 days after revocation
  *   - R2 objects (avatars + landing images) not referenced by any DB
  *     row are deleted from the bucket
+ *   - site-feedback screenshots deleted 30 days after their report
+ *     resolves (the rule is `screenshot-retention.ts`), plus an orphan
+ *     pass over the private bucket's screenshot prefix
  *
  * It also sweeps `email_sends`, which is **not** a privacy promise and
  * is deliberately absent from the list above. That table carries no
@@ -33,17 +36,23 @@
  * An admin can clean those up manually, or future re-rejections will
  * stamp the column and the next sweep will pick them up.
  *
- * All four sweeps are independent — failure of one (e.g. R2 down)
+ * All sweeps are independent — failure of one (e.g. R2 down)
  * doesn't prevent the others from running. The orchestrator
  * `runRetentionSweeps()` runs them sequentially and aggregates a
  * structured result that the scheduled handler logs.
  */
 import { and, eq, isNotNull, lt } from "drizzle-orm";
 
-import { getDb, inJsonArray, schema } from "#/server/db";
+import { screenshotPurgeDue } from "#/server/cron/screenshot-retention";
+import type { ScreenshotRetentionInput } from "#/server/cron/screenshot-retention";
+import { getDb, inJsonArray, inSubquery, schema } from "#/server/db";
 import { sweepEmailOutbox } from "#/server/email/outbox.server";
 import { errorMessage, log } from "#/server/log/log.server";
-import { getPublicBucket } from "#/server/r2";
+import { getPrivateBucket, getPublicBucket } from "#/server/r2";
+import {
+  SITE_FEEDBACK_SCREENSHOT_PREFIX,
+  deleteSiteFeedbackScreenshots,
+} from "#/server/r2/site-feedback-screenshots.server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -99,6 +108,8 @@ export interface SweepCounts {
   deactivatedAccounts: number;
   revokedWaivers: number;
   orphanR2Keys: number;
+  resolvedScreenshots: number;
+  orphanPrivateR2Keys: number;
   emailSendLog: number;
   emailOutbox: number;
   webauthnCeremonies: number;
@@ -214,11 +225,44 @@ export async function sweepOrphanR2Keys(
   now: Temporal.Instant = Temporal.Now.instant(),
   minOrphanAgeMs: number = DEFAULT_MIN_ORPHAN_AGE_MS,
 ): Promise<number> {
-  const bucket = getPublicBucket();
+  return sweepOrphansIn(
+    getPublicBucket(),
+    GC_PREFIXES,
+    loadReferencedR2Keys,
+    now,
+    minOrphanAgeMs,
+  );
+}
 
+/**
+ * The same sweep over the private bucket. Its only prefix so far holds
+ * site-feedback screenshots, which are PUT before their row is inserted
+ * (and deleted again if the insert fails), so the race guard applies
+ * exactly as it does to avatars.
+ */
+export async function sweepOrphanPrivateR2Keys(
+  now: Temporal.Instant = Temporal.Now.instant(),
+  minOrphanAgeMs: number = DEFAULT_MIN_ORPHAN_AGE_MS,
+): Promise<number> {
+  return sweepOrphansIn(
+    getPrivateBucket(),
+    [SITE_FEEDBACK_SCREENSHOT_PREFIX],
+    loadReferencedPrivateR2Keys,
+    now,
+    minOrphanAgeMs,
+  );
+}
+
+async function sweepOrphansIn(
+  bucket: R2Bucket,
+  prefixes: readonly string[],
+  loadLiveKeys: () => Promise<Set<string>>,
+  now: Temporal.Instant,
+  minOrphanAgeMs: number,
+): Promise<number> {
   // 1. List every key under the GC prefixes BEFORE reading the DB.
   const r2Objects: R2Object[] = [];
-  for (const prefix of GC_PREFIXES) {
+  for (const prefix of prefixes) {
     let cursor: string | undefined;
     let truncated = true;
     while (truncated) {
@@ -236,7 +280,7 @@ export async function sweepOrphanR2Keys(
   // 2. Read the DB live set after R2 listing, so any key visible in
   //    R2 has either also landed in DB (no-op) or is too new for the
   //    age guard (skipped).
-  const liveKeys = await loadReferencedR2Keys();
+  const liveKeys = await loadLiveKeys();
   // R2 `object.uploaded` is a native Date (R2 API), so the age guard stays
   // in epoch-ms space rather than mixing Instant comparisons.
   const ageCutoffMs = now.epochMilliseconds - minOrphanAgeMs;
@@ -262,6 +306,93 @@ export async function sweepOrphanR2Keys(
     deleted += batch.length;
   }
   return deleted;
+}
+
+async function loadReferencedPrivateR2Keys(): Promise<Set<string>> {
+  const rows = await getDb()
+    .select({ key: schema.siteFeedback.screenshotKey })
+    .from(schema.siteFeedback)
+    .where(isNotNull(schema.siteFeedback.screenshotKey));
+  return new Set(rows.flatMap((row) => (row.key === null ? [] : [row.key])));
+}
+
+/**
+ * Deletes each site-feedback screenshot whose report resolved 30 or more
+ * days ago (`screenshotPurgeDue`), then nulls its key and stamps
+ * `screenshot_purged_at`, so the report says "Screenshot deleted 30 days
+ * after resolution." instead of showing a broken image. Objects go first:
+ * if the UPDATE then fails, the next run deletes nothing new and retries
+ * it, and the image route already answers 404 for a missing object.
+ */
+export async function sweepResolvedSiteFeedbackScreenshots(
+  now: Temporal.Instant,
+): Promise<number> {
+  const db = getDb();
+  const withScreenshot = db
+    .select({ id: schema.siteFeedback.id })
+    .from(schema.siteFeedback)
+    .where(isNotNull(schema.siteFeedback.screenshotKey));
+  // Two reads in one round trip; the links' report ids come from the
+  // database as a subquery, never as a bound list.
+  const [reports, links] = await db.batch([
+    db
+      .select({
+        id: schema.siteFeedback.id,
+        key: schema.siteFeedback.screenshotKey,
+        status: schema.siteFeedback.status,
+        statusChangedAt: schema.siteFeedback.statusChangedAt,
+      })
+      .from(schema.siteFeedback)
+      .where(isNotNull(schema.siteFeedback.screenshotKey)),
+    db
+      .select({
+        feedbackId: schema.siteFeedbackIssueLinks.feedbackId,
+        state: schema.siteFeedbackIssues.state,
+        closedAt: schema.siteFeedbackIssues.closedAt,
+      })
+      .from(schema.siteFeedbackIssueLinks)
+      .innerJoin(
+        schema.siteFeedbackIssues,
+        eq(schema.siteFeedbackIssues.id, schema.siteFeedbackIssueLinks.issueId),
+      )
+      .where(
+        inSubquery(schema.siteFeedbackIssueLinks.feedbackId, withScreenshot),
+      ),
+  ]);
+
+  const linksByReport = new Map<string, ScreenshotRetentionInput["links"]>();
+  for (const link of links) {
+    const list = linksByReport.get(link.feedbackId) ?? [];
+    list.push({ state: link.state, closedAt: link.closedAt });
+    linksByReport.set(link.feedbackId, list);
+  }
+  const due = reports.filter((report) =>
+    screenshotPurgeDue(
+      {
+        status: report.status,
+        statusChangedAt: report.statusChangedAt,
+        links: linksByReport.get(report.id) ?? [],
+      },
+      now,
+    ),
+  );
+  if (due.length === 0) {
+    return 0;
+  }
+
+  await deleteSiteFeedbackScreenshots(
+    due.flatMap((report) => (report.key === null ? [] : [report.key])),
+  );
+  await db
+    .update(schema.siteFeedback)
+    .set({ screenshotKey: null, screenshotPurgedAt: now })
+    .where(
+      inJsonArray(
+        schema.siteFeedback.id,
+        due.map((report) => report.id),
+      ),
+    );
+  return due.length;
 }
 
 async function loadReferencedR2Keys(): Promise<Set<string>> {
@@ -364,6 +495,8 @@ export async function runRetentionSweeps(
     deactivatedAccounts: 0,
     revokedWaivers: 0,
     orphanR2Keys: 0,
+    resolvedScreenshots: 0,
+    orphanPrivateR2Keys: 0,
     emailSendLog: 0,
     emailOutbox: 0,
     webauthnCeremonies: 0,
@@ -385,6 +518,14 @@ export async function runRetentionSweeps(
     {
       name: "orphanR2Keys",
       run: () => sweepOrphanR2Keys(now, options.minOrphanAgeMs),
+    },
+    {
+      name: "resolvedScreenshots",
+      run: () => sweepResolvedSiteFeedbackScreenshots(now),
+    },
+    {
+      name: "orphanPrivateR2Keys",
+      run: () => sweepOrphanPrivateR2Keys(now, options.minOrphanAgeMs),
     },
     { name: "emailSendLog", run: () => sweepEmailSendLog(now) },
     { name: "emailOutbox", run: () => sweepEmailOutbox(now) },
