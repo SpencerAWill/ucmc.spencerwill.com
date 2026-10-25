@@ -72,6 +72,11 @@ export function FeedbackIndexCards({
             ...badge(site?.mineTracked, "of yours tracked"),
             ...(canManageSite ? badge(site?.untriaged, "untriaged") : []),
           ]}
+          manageLink={
+            canManageSite
+              ? { to: "/feedback/site/triage", label: "Triage" }
+              : undefined
+          }
         />
       ) : null}
     </div>

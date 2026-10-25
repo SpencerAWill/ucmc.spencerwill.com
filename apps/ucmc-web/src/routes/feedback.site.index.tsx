@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
@@ -11,6 +11,7 @@ import {
 import {
   allSiteFeedbackQueryOptions,
   mySiteFeedbackQueryOptions,
+  siteFeedbackOverviewQueryOptions,
 } from "#/features/site-feedback/api/queries";
 import { SiteFeedbackCard } from "#/features/site-feedback/components/site-feedback-card";
 import { SiteFeedbackForm } from "#/features/site-feedback/components/site-feedback-form";
@@ -49,17 +50,33 @@ function SiteFeedbackPage() {
     allSiteFeedbackQueryOptions({ enabled: canManage }),
   );
 
+  const overviewQuery = useQuery({
+    ...siteFeedbackOverviewQueryOptions(),
+    enabled: canManage,
+  });
+  const untriaged = overviewQuery.data?.untriaged ?? null;
+
   const mySubmissions = myQuery.data ?? [];
   const allSubmissions = adminQuery.data ?? [];
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Site feedback</h1>
-        <p className="text-sm text-muted-foreground">
-          Reaches the site maintainers. Bugs, feature ideas, anything about this
-          website.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">Site feedback</h1>
+          <p className="text-sm text-muted-foreground">
+            Reaches the site maintainers. Bugs, feature ideas, anything about
+            this website.
+          </p>
+        </div>
+        {canManage ? (
+          <Link
+            to="/feedback/site/triage"
+            className="text-sm font-medium underline-offset-4 hover:underline"
+          >
+            {untriaged === null ? "Triage" : `Triage (${untriaged})`} →
+          </Link>
+        ) : null}
       </header>
       {canSubmit && submissionsEnabled ? (
         <SiteFeedbackForm />

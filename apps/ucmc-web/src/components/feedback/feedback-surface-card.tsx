@@ -24,7 +24,10 @@ export interface FeedbackSurfaceCardProps {
   to: "/feedback/club" | "/feedback/site";
   cta: string;
   badges: string[];
-  manageLink?: { to: "/feedback/club" | "/feedback/site"; label: string };
+  manageLink?: {
+    to: "/feedback/club" | "/feedback/site" | "/feedback/site/triage";
+    label: string;
+  };
 }
 
 export function FeedbackSurfaceCard({

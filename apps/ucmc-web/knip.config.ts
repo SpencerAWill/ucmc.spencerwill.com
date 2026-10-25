@@ -39,9 +39,16 @@ const config: KnipConfig = {
     // compiled into `routeTree.gen.ts`; nothing imports them by hand.
     "src/routes/**/*.{ts,tsx}",
 
-    // Site-feedback triage shells, ahead of the hooks that call them
-    // (Task 13 of the triage plan). Remove this entry once they are imported.
-    "src/features/site-feedback/server/site-feedback-triage-fns.ts",
+    // Triage hooks and query options the composer page (Task 14 of the
+    // site-feedback triage plan) is the first to import. Remove these entries
+    // once it does.
+    "src/features/site-feedback/api/queries.ts",
+    "src/features/site-feedback/api/use-delete-site-feedback-issue-draft.ts",
+    "src/features/site-feedback/api/use-file-site-feedback-issue.ts",
+    "src/features/site-feedback/api/use-post-pending-site-feedback-reports.ts",
+    "src/features/site-feedback/api/use-unlink-site-feedback.ts",
+    "src/features/site-feedback/api/use-update-site-feedback-issue-draft.ts",
+    "src/features/site-feedback/api/use-update-site-feedback-quote.ts",
 
     // The Tailwind v4 stylesheet is the only importer of `tailwindcss`,
     // `tw-animate-css`, `@tailwindcss/typography` and `@fontsource/manrope`.

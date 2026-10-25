@@ -94,6 +94,8 @@ import { Route as MyTabsSecurityRouteImport } from './routes/my._tabs.security'
 import { Route as MyTabsWaiverRouteImport } from './routes/my._tabs.waiver'
 import { Route as MyGearIndexRouteImport } from './routes/my.gear.index'
 import { Route as MyGearCartRouteImport } from './routes/my.gear.cart'
+import { Route as FeedbackSiteTriageIndexRouteImport } from './routes/feedback.site.triage.index'
+import { Route as FeedbackSiteTriageIssuesIssueIdRouteImport } from './routes/feedback.site.triage.issues.$issueId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -518,6 +520,17 @@ const MyGearCartRoute = MyGearCartRouteImport.update({
   path: '/cart',
   getParentRoute: () => MyGearRoute,
 } as any)
+const FeedbackSiteTriageIndexRoute = FeedbackSiteTriageIndexRouteImport.update({
+  id: '/triage/',
+  path: '/triage/',
+  getParentRoute: () => FeedbackSiteRoute,
+} as any)
+const FeedbackSiteTriageIssuesIssueIdRoute =
+  FeedbackSiteTriageIssuesIssueIdRouteImport.update({
+    id: '/triage/issues/$issueId',
+    path: '/triage/issues/$issueId',
+    getParentRoute: () => FeedbackSiteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -603,6 +616,8 @@ export interface FileRoutesByFullPath {
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/': typeof MembersTabsIndexRoute
   '/my/gear/': typeof MyGearIndexRoute
+  '/feedback/site/triage/': typeof FeedbackSiteTriageIndexRoute
+  '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -679,6 +694,8 @@ export interface FileRoutesByTo {
   '/feedback/site': typeof FeedbackSiteIndexRoute
   '/gear/loans': typeof GearLoansIndexRoute
   '/my/gear': typeof MyGearIndexRoute
+  '/feedback/site/triage': typeof FeedbackSiteTriageIndexRoute
+  '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -767,6 +784,8 @@ export interface FileRoutesById {
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/_tabs/': typeof MembersTabsIndexRoute
   '/my/gear/': typeof MyGearIndexRoute
+  '/feedback/site/triage/': typeof FeedbackSiteTriageIndexRoute
+  '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -854,6 +873,8 @@ export interface FileRouteTypes {
     | '/gear/loans/'
     | '/members/'
     | '/my/gear/'
+    | '/feedback/site/triage/'
+    | '/feedback/site/triage/issues/$issueId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -930,6 +951,8 @@ export interface FileRouteTypes {
     | '/feedback/site'
     | '/gear/loans'
     | '/my/gear'
+    | '/feedback/site/triage'
+    | '/feedback/site/triage/issues/$issueId'
   id:
     | '__root__'
     | '/'
@@ -1017,6 +1040,8 @@ export interface FileRouteTypes {
     | '/gear/loans/'
     | '/members/_tabs/'
     | '/my/gear/'
+    | '/feedback/site/triage/'
+    | '/feedback/site/triage/issues/$issueId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1666,6 +1691,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyGearCartRouteImport
       parentRoute: typeof MyGearRoute
     }
+    '/feedback/site/triage/': {
+      id: '/feedback/site/triage/'
+      path: '/triage'
+      fullPath: '/feedback/site/triage/'
+      preLoaderRoute: typeof FeedbackSiteTriageIndexRouteImport
+      parentRoute: typeof FeedbackSiteRoute
+    }
+    '/feedback/site/triage/issues/$issueId': {
+      id: '/feedback/site/triage/issues/$issueId'
+      path: '/triage/issues/$issueId'
+      fullPath: '/feedback/site/triage/issues/$issueId'
+      preLoaderRoute: typeof FeedbackSiteTriageIssuesIssueIdRouteImport
+      parentRoute: typeof FeedbackSiteRoute
+    }
   }
 }
 
@@ -1707,10 +1746,14 @@ const CalendarRouteWithChildren = CalendarRoute._addFileChildren(
 
 interface FeedbackSiteRouteChildren {
   FeedbackSiteIndexRoute: typeof FeedbackSiteIndexRoute
+  FeedbackSiteTriageIndexRoute: typeof FeedbackSiteTriageIndexRoute
+  FeedbackSiteTriageIssuesIssueIdRoute: typeof FeedbackSiteTriageIssuesIssueIdRoute
 }
 
 const FeedbackSiteRouteChildren: FeedbackSiteRouteChildren = {
   FeedbackSiteIndexRoute: FeedbackSiteIndexRoute,
+  FeedbackSiteTriageIndexRoute: FeedbackSiteTriageIndexRoute,
+  FeedbackSiteTriageIssuesIssueIdRoute: FeedbackSiteTriageIssuesIssueIdRoute,
 }
 
 const FeedbackSiteRouteWithChildren = FeedbackSiteRoute._addFileChildren(
