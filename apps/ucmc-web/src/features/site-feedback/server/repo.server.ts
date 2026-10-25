@@ -82,6 +82,8 @@ export async function insertSiteFeedback(input: {
   pageUrl: string | null;
   userAgent: string | null;
   createdBy: string;
+  screenshotKey?: string | null;
+  screenshotBytes?: number | null;
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
@@ -94,6 +96,8 @@ export async function insertSiteFeedback(input: {
     pageUrl: input.pageUrl,
     userAgent: input.userAgent,
     createdBy: input.createdBy,
+    screenshotKey: input.screenshotKey ?? null,
+    screenshotBytes: input.screenshotBytes ?? null,
     createdAt: now,
     updatedAt: now,
   });
