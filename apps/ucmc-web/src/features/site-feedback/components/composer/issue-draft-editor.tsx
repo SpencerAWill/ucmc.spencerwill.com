@@ -131,9 +131,22 @@ export function IssueDraftEditor({
       </div>
 
       {conflict ? (
-        <p role="alert" className="text-sm text-destructive">
-          {CONFLICT_COPY[autosave.conflictReason ?? "conflict"]}
-        </p>
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 text-sm text-destructive"
+        >
+          <p>{CONFLICT_COPY[autosave.conflictReason ?? "conflict"]}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              window.location.reload();
+            }}
+          >
+            Reload
+          </Button>
+        </div>
       ) : autosave.status === "error" ? (
         <p role="alert" className="text-sm text-destructive">
           {ERROR_COPY}
@@ -246,16 +259,17 @@ export function IssueDraftEditor({
             reportCount={issue.links.length}
             repo={issue.githubRepo ?? ""}
             disabled={
-              !issue.githubConfigured || conflict || issue.links.length === 0
+              !issue.githubConfigured ||
+              conflict ||
+              issue.links.length === 0 ||
+              title.trim() === ""
             }
             beforeFile={async () => {
               const result = await autosave.flush();
               if (result === "saved") {
                 return null;
               }
-              return result === "conflict"
-                ? CONFLICT_COPY[autosave.conflictReason ?? "conflict"]
-                : ERROR_COPY;
+              return result === "error" ? ERROR_COPY : CONFLICT_COPY[result];
             }}
             onFiled={() => undefined}
           />

@@ -1,7 +1,6 @@
 import { ExternalLink } from "lucide-react";
 
 import { MarkdownContent } from "#/components/markdown/markdown-content";
-import { UserAvatar } from "#/components/user-avatar";
 import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
 import type { SiteFeedbackSummary } from "#/features/site-feedback/server/site-feedback-fns";
@@ -24,15 +23,8 @@ const STATE_VARIANTS: Record<
   duplicate: "secondary",
 };
 
-export function SiteFeedbackCard({
-  entry,
-  showSubmitter,
-}: {
-  entry: SiteFeedbackSummary;
-  showSubmitter: boolean;
-}) {
-  const author = entry.authorDisplayName ?? "Unknown";
-
+/** The submitter's own view of one submission (`/feedback/site`). */
+export function SiteFeedbackCard({ entry }: { entry: SiteFeedbackSummary }) {
   return (
     <Card className="gap-2 py-3">
       <CardContent className="space-y-2 px-4">
@@ -61,19 +53,7 @@ export function SiteFeedbackCard({
             <h3 className="text-base font-semibold leading-tight">
               {entry.title}
             </h3>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              {showSubmitter ? (
-                <>
-                  <UserAvatar
-                    avatarKey={entry.authorAvatarKey}
-                    name={author}
-                    className="size-5"
-                    fallbackClassName="text-[10px]"
-                  />
-                  <span>{author}</span>
-                  <span aria-hidden>·</span>
-                </>
-              ) : null}
+            <div className="text-xs text-muted-foreground">
               <time dateTime={entry.createdAt.toString()}>
                 {formatRelative(entry.createdAt)}
               </time>

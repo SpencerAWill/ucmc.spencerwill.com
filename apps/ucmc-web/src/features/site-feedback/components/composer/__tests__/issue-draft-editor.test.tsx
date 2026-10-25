@@ -146,6 +146,45 @@ describe("IssueDraftEditor", () => {
     expect(screen.queryByText(/Couldn't save/)).toBeNull();
   });
 
+  it("disables filing while the title is blank", () => {
+    render(<IssueDraftEditor issue={issue} />);
+    typeTitle("   ");
+    expect(
+      screen.getByRole("button", { name: "File on GitHub" }),
+    ).toHaveProperty("disabled", true);
+  });
+
+  it("offers a reload on the conflict message", async () => {
+    updateDraft.mockResolvedValue({ ok: false, reason: "conflict" });
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({
+      ...window.location,
+      reload,
+    });
+    render(<IssueDraftEditor issue={issue} />);
+    typeTitle("Old title!");
+    await elapse(1000);
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it("shows the not_draft copy when the flush before filing finds it filed", async () => {
+    updateDraft.mockResolvedValue({ ok: false, reason: "not_draft" });
+    render(<IssueDraftEditor issue={issue} />);
+    typeTitle("Edited");
+    fireEvent.click(screen.getByRole("button", { name: "File on GitHub" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Post to GitHub" }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fileIssue).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.textContent).toContain(
+      "This draft was filed or deleted. Reload.",
+    );
+    expect(dialog.textContent).not.toContain("Someone else edited");
+  });
+
   it("does not file when the flush before filing hits a conflict", async () => {
     updateDraft.mockResolvedValue({ ok: false, reason: "conflict" });
     render(<IssueDraftEditor issue={issue} />);

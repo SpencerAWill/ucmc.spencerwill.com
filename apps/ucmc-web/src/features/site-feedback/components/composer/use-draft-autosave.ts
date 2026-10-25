@@ -6,6 +6,11 @@ export const AUTOSAVE_DEBOUNCE_MS = 1000;
 
 export type AutosaveStatus = "saved" | "saving" | "conflict" | "error";
 
+export type ConflictReason = "conflict" | "not_draft";
+
+/** What `flush()` found: saved, a failure to retry, or why saving stopped. */
+export type FlushResult = "saved" | "error" | ConflictReason;
+
 export interface DraftFields {
   title: string;
   summaryMd: string;
@@ -39,11 +44,14 @@ export function useDraftAutosave(args: {
   const pending = useRef<DraftFields | null>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
   const stopped = useRef(false);
+  // Mirrors `conflictReason` for `flush()`, whose caller holds a closure
+  // from before the save that set it.
+  const stoppedReason = useRef<ConflictReason | null>(null);
 
   const [status, setStatus] = useState<AutosaveStatus>("saved");
-  const [conflictReason, setConflictReason] = useState<
-    "conflict" | "not_draft" | null
-  >(null);
+  const [conflictReason, setConflictReason] = useState<ConflictReason | null>(
+    null,
+  );
 
   const run = useCallback(() => {
     timer.current = null;
@@ -70,6 +78,7 @@ export function useDraftAutosave(args: {
           }
         } else {
           stopped.current = true;
+          stoppedReason.current = result.reason;
           setConflictReason(result.reason);
           setStatus("conflict");
         }
@@ -102,25 +111,29 @@ export function useDraftAutosave(args: {
 
   /**
    * Save now and wait for it; call before an action that reads the draft.
-   * Resolves with the resulting status: only `saved` means the server has it.
+   * Resolves with the result: only `saved` means the server has it, and a
+   * stopped autosave resolves with its reason.
    */
-  const flush = useCallback(async (): Promise<AutosaveStatus> => {
+  const flush = useCallback(async (): Promise<FlushResult> => {
     if (timer.current !== null) {
       clearTimeout(timer.current);
     }
     await run();
     await chain.current;
     if (stopped.current) {
-      return "conflict";
+      return stoppedReason.current ?? "conflict";
     }
     return pending.current === null ? "saved" : "error";
   }, [run]);
 
   useEffect(
     () => () => {
-      // Leaving the page with an edit still waiting: send it now.
+      // Leaving the page with an edit still waiting, whether on the debounce
+      // timer or restored after a failed save: send it now.
       if (timer.current !== null) {
         clearTimeout(timer.current);
+      }
+      if (pending.current !== null) {
         void run();
       }
     },

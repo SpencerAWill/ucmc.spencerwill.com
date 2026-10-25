@@ -5,9 +5,10 @@ import { submitSiteFeedbackFn } from "#/features/site-feedback/server/site-feedb
 import type { SiteFeedbackInput } from "#/features/site-feedback/server/limits";
 
 /**
- * Submit a feedback entry. On success invalidates the submitter's own
- * list. Caller wires its own onSuccess/onError for toast
- * messaging — the hook returns the bare mutation.
+ * Submit a feedback entry. Caller wires its own onSuccess/onError for toast
+ * messaging; the hook returns the bare mutation.
+ * Invalidates: the submitter's own `mine` list and the `overview` counts (the
+ * /feedback card and the managers' "Triage (N)" link).
  */
 export function useSubmitSiteFeedback() {
   const queryClient = useQueryClient();
@@ -16,6 +17,7 @@ export function useSubmitSiteFeedback() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: siteFeedbackKeys.mine }),
+        queryClient.invalidateQueries({ queryKey: siteFeedbackKeys.overview }),
       ]);
     },
   });

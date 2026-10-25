@@ -98,7 +98,7 @@ function SiteFeedbackPage() {
           <ul className="space-y-3">
             {mySubmissions.map((entry) => (
               <li key={entry.id}>
-                <SiteFeedbackCard entry={entry} showSubmitter={false} />
+                <SiteFeedbackCard entry={entry} />
               </li>
             ))}
           </ul>

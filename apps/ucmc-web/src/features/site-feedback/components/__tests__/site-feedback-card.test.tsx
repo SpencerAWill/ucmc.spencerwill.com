@@ -30,7 +30,6 @@ describe("SiteFeedbackCard", () => {
   it("shows the tracked state and one link per tracking issue", () => {
     render(
       <SiteFeedbackCard
-        showSubmitter={false}
         entry={baseRow({
           state: "tracked",
           trackedIn: [
@@ -50,7 +49,7 @@ describe("SiteFeedbackCard", () => {
   });
 
   it("shows New and no link for an untriaged submission", () => {
-    render(<SiteFeedbackCard showSubmitter={false} entry={baseRow()} />);
+    render(<SiteFeedbackCard entry={baseRow()} />);
     expect(screen.getByText("New")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
   });

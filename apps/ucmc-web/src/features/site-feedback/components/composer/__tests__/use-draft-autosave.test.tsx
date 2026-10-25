@@ -123,4 +123,44 @@ describe("useDraftAutosave", () => {
       expect.objectContaining({ title: "a", expectedUpdatedAtMs: 1000 }),
     );
   });
+
+  it("flush resolves with the conflict reason itself", async () => {
+    mutateAsync.mockResolvedValue({ ok: false, reason: "not_draft" });
+    const { result } = renderHook(() =>
+      useDraftAutosave({ issueId: "sfi_1", expectedUpdatedAtMs: 1000 }),
+    );
+    act(() => {
+      result.current.schedule(draft("a"));
+    });
+    let flushed = "";
+    await act(async () => {
+      flushed = await result.current.flush();
+    });
+    // Read from the call, not from a re-render: the caller's closure holds
+    // the reason from before the save.
+    expect(flushed).toBe("not_draft");
+  });
+
+  it("sends fields restored after an error when unmounted", async () => {
+    mutateAsync.mockRejectedValueOnce(new Error("offline"));
+    mutateAsync.mockResolvedValue({ ok: true, updatedAtMs: 2000 });
+    const { result, unmount } = renderHook(() =>
+      useDraftAutosave({ issueId: "sfi_1", expectedUpdatedAtMs: 1000 }),
+    );
+    act(() => {
+      result.current.schedule(draft("a"));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.status).toBe("error");
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mutateAsync).toHaveBeenCalledTimes(2);
+    expect(mutateAsync).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: "a" }),
+    );
+  });
 });

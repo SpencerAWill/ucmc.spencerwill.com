@@ -1,5 +1,9 @@
 import { applyD1Migrations, env } from "cloudflare:test";
+import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it } from "vitest";
+
+import { schema } from "#/server/db";
+import { SITE_FEEDBACK_SEARCH, searchMatches } from "#/server/db/search";
 
 /**
  * Migration UPGRADE tests: do the migrations survive contact with data?
@@ -615,6 +619,30 @@ describe("site_feedback_issue_backfill turns legacy GitHub mirrors into issues a
         posted_at: 2000,
       },
     ]);
+  });
+
+  it("makes the rows seeded before 0087 searchable", async () => {
+    // 0087 creates the FTS table and backfills it from existing rows; the
+    // triggers only cover rows written afterwards.
+    const db = drizzle(env.MIGRATIONS_DB, { schema });
+    const ids = async (q: string) =>
+      (
+        await db
+          .select({ id: schema.siteFeedback.id })
+          .from(schema.siteFeedback)
+          .where(
+            searchMatches(
+              schema.siteFeedback.id,
+              SITE_FEEDBACK_SEARCH,
+              "feedback_id",
+              q,
+            ),
+          )
+          .orderBy(schema.siteFeedback.id)
+      ).map((r) => r.id);
+    expect(await ids("earliest")).toEqual(["fb_early"]);
+    expect(await ids("third body")).toEqual(["fb_none"]);
+    expect(await ids("report")).toEqual(["fb_early", "fb_late"]);
   });
 });
 
