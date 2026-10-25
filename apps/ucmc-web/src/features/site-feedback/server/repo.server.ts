@@ -3,13 +3,15 @@
  * layer is responsible for authorization. Joins users + profiles to project
  * the submitter's display name and avatar key alongside each row.
  */
-import { and, count, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import type {
   SiteFeedbackKind,
+  SiteFeedbackState,
   SiteFeedbackStatus,
 } from "#/features/site-feedback/server/limits";
+import { siteFeedbackStateSql } from "#/features/site-feedback/server/triage-repo.server";
 
 export interface SiteFeedbackRow {
   id: string;
@@ -21,8 +23,7 @@ export interface SiteFeedbackRow {
   userAgent: string | null;
   createdBy: string | null;
   createdByPublicId: string | null;
-  githubIssueNumber: number | null;
-  githubIssueUrl: string | null;
+  state: SiteFeedbackState;
   createdAt: Temporal.Instant;
   updatedAt: Temporal.Instant;
   authorEmail: string | null;
@@ -41,8 +42,7 @@ const baseSelect = {
   userAgent: schema.siteFeedback.userAgent,
   createdBy: schema.siteFeedback.createdBy,
   createdByPublicId: schema.users.publicId,
-  githubIssueNumber: schema.siteFeedback.githubIssueNumber,
-  githubIssueUrl: schema.siteFeedback.githubIssueUrl,
+  state: siteFeedbackStateSql(),
   createdAt: schema.siteFeedback.createdAt,
   updatedAt: schema.siteFeedback.updatedAt,
   authorEmail: schema.userEmails.email,
@@ -128,38 +128,4 @@ export async function updateSiteFeedbackStatus(input: {
     .update(schema.siteFeedback)
     .set({ status: input.status, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.siteFeedback.id, input.id));
-}
-
-/** `count(*)` of one member's open rows, and how many of them have a GitHub issue. */
-export async function countMySiteFeedback(
-  userId: string,
-): Promise<{ open: number; tracked: number }> {
-  const [open] = await getDb()
-    .select({ n: count() })
-    .from(schema.siteFeedback)
-    .where(
-      and(
-        eq(schema.siteFeedback.createdBy, userId),
-        eq(schema.siteFeedback.status, "open"),
-      ),
-    );
-  const [tracked] = await getDb()
-    .select({ n: count() })
-    .from(schema.siteFeedback)
-    .where(
-      and(
-        eq(schema.siteFeedback.createdBy, userId),
-        isNotNull(schema.siteFeedback.githubIssueNumber),
-      ),
-    );
-  return { open: open.n, tracked: tracked.n };
-}
-
-/** `count(*)` of every member's open rows. */
-export async function countOpenSiteFeedback(): Promise<number> {
-  const [row] = await getDb()
-    .select({ n: count() })
-    .from(schema.siteFeedback)
-    .where(eq(schema.siteFeedback.status, "open"));
-  return row.n;
 }

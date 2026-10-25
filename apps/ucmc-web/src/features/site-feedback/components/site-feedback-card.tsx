@@ -94,17 +94,18 @@ export function SiteFeedbackCard({
                   {SITE_FEEDBACK_STATUS_LABELS[entry.status]}
                 </Badge>
               )}
-              {entry.githubIssueUrl ? (
+              {entry.trackedIn.map((issue) => (
                 <a
-                  href={entry.githubIssueUrl}
+                  key={issue.number}
+                  href={issue.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
                 >
-                  #{entry.githubIssueNumber}
+                  Tracked in #{issue.number}
                   <ExternalLink className="size-3" />
                 </a>
-              ) : null}
+              ))}
             </div>
             <h3 className="text-base font-semibold leading-tight">
               {entry.title}

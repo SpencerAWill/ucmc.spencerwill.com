@@ -9,17 +9,21 @@ import { composeSiteFeedbackBody } from "#/features/site-feedback/server/format"
 import type {
   SiteFeedbackInput,
   SiteFeedbackKind,
+  SiteFeedbackState,
   SiteFeedbackStatus,
   SiteFeedbackStatusUpdateInput,
 } from "#/features/site-feedback/server/limits";
 import {
-  countMySiteFeedback,
-  countOpenSiteFeedback,
   insertSiteFeedback,
   listAllSiteFeedback,
   listSiteFeedbackByUser,
   updateSiteFeedbackStatus,
 } from "#/features/site-feedback/server/repo.server";
+import {
+  countFeedbackInStates,
+  countMyFeedbackInStates,
+  listIssuesForFeedback,
+} from "#/features/site-feedback/server/triage-repo.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { checkSiteFeedbackRateLimit } from "#/server/rate-limit.server";
@@ -60,7 +64,7 @@ async function requireSiteFeedbackSubmitter(): Promise<Principal> {
   return principal;
 }
 
-async function requireSiteFeedbackManager(): Promise<Principal> {
+export async function requireSiteFeedbackManager(): Promise<Principal> {
   const principal = await loadCurrentPrincipal();
   if (!principal) {
     throw new Error("Not signed in");
@@ -99,8 +103,10 @@ export interface SiteFeedbackSummary {
   createdByPublicId: string | null;
   authorDisplayName: string | null;
   authorAvatarKey: string | null;
-  githubIssueNumber: number | null;
-  githubIssueUrl: string | null;
+  /** Derived on read. Submitters never see `in_draft`; it reads as `new`. */
+  state: SiteFeedbackState;
+  /** Filed GitHub issues only, never drafts. */
+  trackedIn: { number: number; url: string }[];
   createdAt: Temporal.Instant;
   updatedAt: Temporal.Instant;
 }
@@ -112,24 +118,29 @@ export interface SiteFeedbackOverview {
   untriaged: number | null;
 }
 
-function toSummary(row: {
-  id: string;
-  kind: SiteFeedbackKind;
-  title: string;
-  body: string;
-  status: SiteFeedbackStatus;
-  pageUrl: string | null;
-  createdBy: string | null;
-  createdByPublicId: string | null;
-  authorEmail: string | null;
-  authorFullName: string | null;
-  authorPreferredName: string | null;
-  authorAvatarKey: string | null;
-  githubIssueNumber: number | null;
-  githubIssueUrl: string | null;
-  createdAt: Temporal.Instant;
-  updatedAt: Temporal.Instant;
-}): SiteFeedbackSummary {
+function toSummary(
+  row: {
+    id: string;
+    kind: SiteFeedbackKind;
+    title: string;
+    body: string;
+    status: SiteFeedbackStatus;
+    pageUrl: string | null;
+    createdBy: string | null;
+    createdByPublicId: string | null;
+    authorEmail: string | null;
+    authorFullName: string | null;
+    authorPreferredName: string | null;
+    authorAvatarKey: string | null;
+    state: SiteFeedbackState;
+    createdAt: Temporal.Instant;
+    updatedAt: Temporal.Instant;
+  },
+  options: {
+    hideDrafts: boolean;
+    trackedIn: { number: number; url: string }[];
+  },
+): SiteFeedbackSummary {
   return {
     id: row.id,
     kind: row.kind,
@@ -142,11 +153,35 @@ function toSummary(row: {
     authorDisplayName:
       row.authorPreferredName ?? row.authorFullName ?? row.authorEmail ?? null,
     authorAvatarKey: row.authorAvatarKey,
-    githubIssueNumber: row.githubIssueNumber,
-    githubIssueUrl: row.githubIssueUrl,
+    state: options.hideDrafts && row.state === "in_draft" ? "new" : row.state,
+    trackedIn: options.trackedIn,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/** Summaries with their filed issues attached (one query for the page). */
+async function toSummaries(
+  rows: Parameters<typeof toSummary>[0][],
+  hideDrafts: boolean,
+): Promise<SiteFeedbackSummary[]> {
+  const links = await listIssuesForFeedback(rows.map((r) => r.id));
+  const byFeedback = new Map<string, { number: number; url: string }[]>();
+  for (const link of links) {
+    if (
+      link.state === "draft" ||
+      link.githubNumber === null ||
+      link.githubUrl === null
+    ) {
+      continue;
+    }
+    const list = byFeedback.get(link.feedbackId) ?? [];
+    list.push({ number: link.githubNumber, url: link.githubUrl });
+    byFeedback.set(link.feedbackId, list);
+  }
+  return rows.map((row) =>
+    toSummary(row, { hideDrafts, trackedIn: byFeedback.get(row.id) ?? [] }),
+  );
 }
 
 // ── actions ─────────────────────────────────────────────────────────────
@@ -156,7 +191,7 @@ export async function listMySiteFeedbackAction(): Promise<
 > {
   const principal = await requireSiteFeedbackSubmitter();
   const rows = await listSiteFeedbackByUser(principal.userId);
-  return rows.map(toSummary);
+  return toSummaries(rows, true);
 }
 
 export async function listAllSiteFeedbackAction(): Promise<
@@ -164,7 +199,7 @@ export async function listAllSiteFeedbackAction(): Promise<
 > {
   await requireSiteFeedbackManager();
   const rows = await listAllSiteFeedback();
-  return rows.map(toSummary);
+  return toSummaries(rows, false);
 }
 
 export async function submitSiteFeedbackAction(
@@ -213,10 +248,11 @@ export async function updateSiteFeedbackStatusAction(
 
 export async function getSiteFeedbackOverviewAction(): Promise<SiteFeedbackOverview> {
   const { principal, canManage } = await requireSiteFeedbackViewer();
-  const mine = await countMySiteFeedback(principal.userId);
-  return {
-    mineOpen: mine.open,
-    mineTracked: mine.tracked,
-    untriaged: canManage ? await countOpenSiteFeedback() : null,
-  };
+  // A submitter's in-draft rows read as New to them, so they count as open.
+  const [mineOpen, mineTracked, untriaged] = await Promise.all([
+    countMyFeedbackInStates(principal.userId, ["new", "in_draft"]),
+    countMyFeedbackInStates(principal.userId, ["tracked"]),
+    canManage ? countFeedbackInStates(["new"]) : Promise.resolve(null),
+  ]);
+  return { mineOpen, mineTracked, untriaged };
 }
