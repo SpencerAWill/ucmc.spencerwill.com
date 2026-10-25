@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
-import { getPublicBucket } from "#/server/r2";
+import { getPrivateBucket, getPublicBucket } from "#/server/r2";
 import {
   runRetentionSweeps,
+  sweepOrphanPrivateR2Keys,
+  sweepResolvedSiteFeedbackScreenshots,
   sweepDeactivatedAccounts,
   sweepOrphanR2Keys,
   sweepRejectedRegistrations,
@@ -71,6 +73,8 @@ afterEach(async () => {
   // Each suite seeds its own rows; clean slate avoids interactions
   // between tests that both delete from `users`.
   const db = getDb();
+  await db.delete(schema.siteFeedbackIssues);
+  await db.delete(schema.siteFeedback);
   await db.delete(schema.emailSends);
   await db.delete(schema.webauthnConsumedCeremonies);
   await db.delete(schema.waiverAttestations);
@@ -94,6 +98,10 @@ afterEach(async () => {
       truncated = page.truncated;
       cursor = page.truncated ? page.cursor : undefined;
     }
+  }
+  const privateObjects = await getPrivateBucket().list();
+  if (privateObjects.objects.length > 0) {
+    await getPrivateBucket().delete(privateObjects.objects.map((o) => o.key));
   }
 });
 
@@ -382,6 +390,8 @@ describe("runRetentionSweeps", () => {
       deactivatedAccounts: 1,
       revokedWaivers: 1,
       orphanR2Keys: 1,
+      resolvedScreenshots: 0,
+      orphanPrivateR2Keys: 0,
       // Seeded nothing for it; the key must still be reported, because
       // the orchestrator's contract is that every sweep answers.
       emailSendLog: 0,
@@ -465,5 +475,151 @@ describe("sweepWebauthnCeremonies", () => {
     const counts = await runRetentionSweeps(NOW);
 
     expect(counts.webauthnCeremonies).toBe(1);
+  });
+});
+
+// ── site-feedback screenshots ─────────────────────────────────────────
+
+async function seedReportWithScreenshot(opts: {
+  status?: schema.SiteFeedbackStatus;
+  statusChangedAt?: Temporal.Instant | null;
+}): Promise<{ id: string; key: string }> {
+  const id = uid("sfb");
+  const key = `site-feedback/screenshots/${id}.webp`;
+  await getPrivateBucket().put(key, new Uint8Array([1, 2, 3]));
+  await getDb()
+    .insert(schema.siteFeedback)
+    .values({
+      id,
+      kind: "bug",
+      title: "t",
+      body: "b",
+      status: opts.status ?? "open",
+      statusChangedAt: opts.statusChangedAt ?? null,
+      screenshotKey: key,
+      screenshotBytes: 3,
+    });
+  return { id, key };
+}
+
+async function linkToIssue(
+  feedbackId: string,
+  state: "draft" | "open" | "closed",
+  closedAt: Temporal.Instant | null,
+): Promise<void> {
+  const issueId = uid("sfi");
+  await getDb()
+    .insert(schema.siteFeedbackIssues)
+    .values({ id: issueId, state, title: "i", closedAt });
+  await getDb()
+    .insert(schema.siteFeedbackIssueLinks)
+    .values({ issueId, feedbackId, quotedMd: "q" });
+}
+
+async function reportRow(id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(schema.siteFeedback)
+    .where(eq(schema.siteFeedback.id, id));
+  return row;
+}
+
+describe("sweepResolvedSiteFeedbackScreenshots", () => {
+  it("deletes due screenshots in one batch, nulls screenshot_key and stamps screenshot_purged_at", async () => {
+    const disposed = await seedReportWithScreenshot({
+      status: "wont_fix",
+      statusChangedAt: NOW.subtract({ milliseconds: 31 * DAY_MS }),
+    });
+    const filed = await seedReportWithScreenshot({});
+    await linkToIssue(
+      filed.id,
+      "closed",
+      NOW.subtract({ milliseconds: 40 * DAY_MS }),
+    );
+
+    expect(await sweepResolvedSiteFeedbackScreenshots(NOW)).toBe(2);
+
+    for (const report of [disposed, filed]) {
+      expect(await getPrivateBucket().head(report.key)).toBeNull();
+      const row = await reportRow(report.id);
+      expect(row.screenshotKey).toBeNull();
+      expect(row.screenshotPurgedAt?.epochMilliseconds).toBe(
+        NOW.epochMilliseconds,
+      );
+    }
+  });
+
+  it("leaves not-yet-due rows and objects alone", async () => {
+    const recent = await seedReportWithScreenshot({
+      status: "duplicate",
+      statusChangedAt: NOW.subtract({ milliseconds: 29 * DAY_MS }),
+    });
+    const open = await seedReportWithScreenshot({
+      status: "open",
+      statusChangedAt: NOW.subtract({ milliseconds: 90 * DAY_MS }),
+    });
+    const stillTracked = await seedReportWithScreenshot({});
+    await linkToIssue(
+      stillTracked.id,
+      "closed",
+      NOW.subtract({ milliseconds: 90 * DAY_MS }),
+    );
+    await linkToIssue(stillTracked.id, "open", null);
+    const drafted = await seedReportWithScreenshot({
+      status: "wont_fix",
+      statusChangedAt: NOW.subtract({ milliseconds: 90 * DAY_MS }),
+    });
+    await linkToIssue(drafted.id, "draft", null);
+
+    expect(await sweepResolvedSiteFeedbackScreenshots(NOW)).toBe(0);
+    for (const report of [recent, open, stillTracked, drafted]) {
+      expect(await getPrivateBucket().head(report.key)).not.toBeNull();
+      expect((await reportRow(report.id)).screenshotKey).toBe(report.key);
+    }
+  });
+});
+
+describe("sweepOrphanPrivateR2Keys", () => {
+  it("orphan sweep deletes an unreferenced site-feedback/screenshots/ object older than the age guard", async () => {
+    const key = "site-feedback/screenshots/sfb_gone.webp";
+    await getPrivateBucket().put(key, new Uint8Array([1]));
+    expect(await sweepOrphanPrivateR2Keys(NOW, 0)).toBe(1);
+    expect(await getPrivateBucket().head(key)).toBeNull();
+  });
+
+  it("orphan sweep keeps a referenced screenshot and a fresh unreferenced one", async () => {
+    const live = await seedReportWithScreenshot({});
+    const fresh = "site-feedback/screenshots/sfb_inflight.webp";
+    await getPrivateBucket().put(fresh, new Uint8Array([1]));
+    expect(
+      await sweepOrphanPrivateR2Keys(Temporal.Now.instant(), 5 * 60 * 1000),
+    ).toBe(0);
+    expect(await sweepOrphanPrivateR2Keys(NOW, 5 * 60 * 1000)).toBe(1);
+    expect(await getPrivateBucket().head(live.key)).not.toBeNull();
+    expect(await getPrivateBucket().head(fresh)).toBeNull();
+  });
+
+  it("never touches objects outside the screenshot prefix", async () => {
+    await getPrivateBucket().put("waivers/x.pdf", new Uint8Array([1]));
+    expect(await sweepOrphanPrivateR2Keys(NOW, 0)).toBe(0);
+    expect(await getPrivateBucket().head("waivers/x.pdf")).not.toBeNull();
+  });
+});
+
+describe("runRetentionSweeps screenshots", () => {
+  it("runRetentionSweeps reports resolvedScreenshots and orphanPrivateR2Keys", async () => {
+    await seedReportWithScreenshot({
+      status: "resolved",
+      statusChangedAt: NOW.subtract({ milliseconds: 31 * DAY_MS }),
+    });
+    await getPrivateBucket().put(
+      "site-feedback/screenshots/sfb_orphan.webp",
+      new Uint8Array([1]),
+    );
+    const counts = await runRetentionSweeps(NOW, { minOrphanAgeMs: 0 });
+    expect(counts).toMatchObject({
+      resolvedScreenshots: 1,
+      orphanPrivateR2Keys: 1,
+    });
   });
 });

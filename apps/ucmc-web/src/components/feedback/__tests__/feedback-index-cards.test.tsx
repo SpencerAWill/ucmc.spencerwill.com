@@ -22,26 +22,30 @@ vi.mock("@tanstack/react-router", () => ({
 const base: FeedbackIndexCardsProps = {
   clubReachable: true,
   siteReachable: true,
-  canManageClub: false,
-  canManageSite: false,
-  club: { mineOpen: 1, newForOfficers: null },
-  site: { mineOpen: 2, mineTracked: 1, untriaged: null },
+  club: { newForOfficers: null },
+  site: { untriaged: null },
 };
 
 function headings(): string[] {
   return screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
 }
 
+/**
+ * `/feedback` is the managers' area: each card is a way into a backlog,
+ * so "reachable" already means manage plus the surface's page flag.
+ */
 describe("FeedbackIndexCards", () => {
-  it("renders club then site for a viewer who can reach both", () => {
+  it("renders club then site for a manager of both", () => {
     render(<FeedbackIndexCards {...base} />);
     expect(headings()).toEqual(["Club feedback", "Site feedback"]);
-    expect(
-      screen.getByRole("link", { name: "Give club feedback" }),
-    ).toHaveAttribute("href", "/feedback/club");
-    expect(
-      screen.getByRole("link", { name: "Report a site issue" }),
-    ).toHaveAttribute("href", "/feedback/site");
+    expect(screen.getByRole("link", { name: "Review" })).toHaveAttribute(
+      "href",
+      "/feedback/club",
+    );
+    expect(screen.getByRole("link", { name: "Triage" })).toHaveAttribute(
+      "href",
+      "/feedback/site/triage",
+    );
   });
 
   it("renders only the site card when club is unreachable", () => {
@@ -49,48 +53,27 @@ describe("FeedbackIndexCards", () => {
     expect(headings()).toEqual(["Site feedback"]);
   });
 
-  it("shows member badges and omits zero counts", () => {
+  it("shows the manager counts and omits zero", () => {
     render(
       <FeedbackIndexCards
         {...base}
-        club={{ mineOpen: 0, newForOfficers: null }}
+        club={{ newForOfficers: 0 }}
+        site={{ untriaged: 4 }}
       />,
     );
-    expect(screen.getByText("2 of yours open")).toBeInTheDocument();
-    expect(screen.getByText("1 of yours tracked")).toBeInTheDocument();
-    expect(screen.queryByText("0 of yours open")).toBeNull();
+    expect(screen.getByText("4 untriaged")).toBeInTheDocument();
+    expect(screen.queryByText("0 new for officers")).toBeNull();
   });
 
-  it("shows manager badges and the Review link when manage is granted", () => {
+  it('shows no "of yours" badges', () => {
     render(
       <FeedbackIndexCards
         {...base}
-        canManageClub
-        canManageSite
-        club={{ mineOpen: 0, newForOfficers: 3 }}
-        site={{ mineOpen: 0, mineTracked: 0, untriaged: 4 }}
+        club={{ newForOfficers: 3 }}
+        site={{ untriaged: 4 }}
       />,
     );
     expect(screen.getByText("3 new for officers")).toBeInTheDocument();
-    expect(screen.getByText("4 untriaged")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Review" })).toHaveAttribute(
-      "href",
-      "/feedback/club",
-    );
-  });
-
-  it("hides manager affordances when manage is false even though the payload carries counts (role emulation)", () => {
-    render(
-      <FeedbackIndexCards
-        {...base}
-        canManageClub={false}
-        canManageSite={false}
-        club={{ mineOpen: 0, newForOfficers: 3 }}
-        site={{ mineOpen: 0, mineTracked: 0, untriaged: 4 }}
-      />,
-    );
-    expect(screen.queryByText("3 new for officers")).toBeNull();
-    expect(screen.queryByText("4 untriaged")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Review" })).toBeNull();
+    expect(screen.queryByText(/of yours/)).toBeNull();
   });
 });

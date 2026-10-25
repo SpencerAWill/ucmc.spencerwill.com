@@ -79,4 +79,19 @@ describe("securityHeadersForPath / Permissions-Policy", () => {
     expect(csp).toMatch(/img-src [^;]*\bblob:/);
     expect(csp).toMatch(/worker-src [^;]*\bblob:/);
   });
+
+  it("lets fetch() reach both CDN hosts (feedback screenshots inline page images)", () => {
+    // modern-screenshot re-fetches every image to inline it, and fetch is
+    // governed by connect-src, not img-src. Without these the bucket's
+    // CORS rule is moot and images render blank in the capture.
+    const csp = securityHeadersForPath("/gear").find(
+      ([n]) => n === "Content-Security-Policy",
+    )?.[1];
+    expect(csp).toMatch(
+      /connect-src [^;]*https:\/\/cdn\.ucmc\.spencerwill\.com/,
+    );
+    expect(csp).toMatch(
+      /connect-src [^;]*https:\/\/cdn\.dev\.ucmc\.spencerwill\.com/,
+    );
+  });
 });

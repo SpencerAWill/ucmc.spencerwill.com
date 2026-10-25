@@ -2,6 +2,8 @@ import {
   Link,
   Outlet,
   createFileRoute,
+  notFound,
+  redirect,
   useLocation,
 } from "@tanstack/react-router";
 
@@ -14,14 +16,20 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "#/components/ui/breadcrumb";
-import { requireApproved } from "#/features/auth/guards";
+import {
+  effectivePermissionsFor,
+  feedbackAreaDecision,
+  requireApproved,
+} from "#/features/auth/guards";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
+import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 /**
- * Layout for `/feedback/*`: page chrome plus a breadcrumb. `/feedback` is an
- * index of cards, so the trail is hidden there. Each surface route stacks its
- * own permission and `pages.*` checks; this layout only enforces the master
- * `pages.feedback` switch and sign-in.
+ * Layout for `/feedback/*`, the managers' area: page chrome plus a
+ * breadcrumb (hidden on the index of cards). It enforces the master
+ * `pages.feedback` switch, sign-in, and that the viewer manages at least
+ * one surface; anyone else goes to `/my/feedback` (or 404s when that page
+ * is off). Each surface route stacks its own manage and `pages.*` checks.
  */
 export const Route = createFileRoute("/feedback")({
   staticData: { pageFlag: "feedback" },
@@ -29,7 +37,18 @@ export const Route = createFileRoute("/feedback")({
     // Flag first so a switched-off area 404s uniformly instead of sending an
     // anonymous visitor to sign-in.
     await requireEnabledPages(context.queryClient, matches);
-    await requireApproved({ context, location });
+    const principal = await requireApproved({ context, location });
+    const [granted, flags] = await Promise.all([
+      effectivePermissionsFor(context.queryClient, principal),
+      context.queryClient.ensureQueryData(publicFlagsQueryOptions()),
+    ]);
+    const decision = feedbackAreaDecision(granted, flags.pages.my_feedback);
+    if (decision === "redirect_my_feedback") {
+      throw redirect({ to: "/my/feedback" });
+    }
+    if (decision === "not_found") {
+      throw notFound();
+    }
   },
   component: FeedbackLayout,
 });
@@ -47,7 +66,9 @@ function surfaceLabel(pathname: string): string | null {
 function FeedbackLayout() {
   const pathname = useLocation({ select: (l) => l.pathname });
   const surface = surfaceLabel(pathname);
-  const isTriage = pathname.startsWith("/feedback/site/triage");
+  // `/feedback/site` itself is the triage inbox now, so the only page
+  // deeper than a surface is an issue in the composer.
+  const isIssue = pathname.startsWith("/feedback/site/triage/issues/");
 
   return (
     <PageContainer width="app" className="flex flex-col gap-6">
@@ -61,19 +82,19 @@ function FeedbackLayout() {
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              {isTriage ? (
+              {isIssue ? (
                 <BreadcrumbLink asChild>
-                  <Link to="/feedback/site">Site</Link>
+                  <Link to="/feedback/site/triage">Site</Link>
                 </BreadcrumbLink>
               ) : (
                 <BreadcrumbPage>{surface}</BreadcrumbPage>
               )}
             </BreadcrumbItem>
-            {isTriage ? (
+            {isIssue ? (
               <>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Triage</BreadcrumbPage>
+                  <BreadcrumbPage>Issue</BreadcrumbPage>
                 </BreadcrumbItem>
               </>
             ) : null}

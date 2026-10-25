@@ -12,9 +12,10 @@ import { describe, expect, it } from "vitest";
 
 import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
 import {
-  CLUB_FEEDBACK_PERMISSIONS,
-  SITE_FEEDBACK_PERMISSIONS,
+  FEEDBACK_MANAGE_PERMISSIONS,
+  canReachMyFeedback,
   effectivePermissionsFor,
+  feedbackAreaDecision,
   requireAnyPermission,
   requireAnyPermissionOrNotFound,
   requireApproved,
@@ -422,13 +423,10 @@ describe("effectivePermissionsFor", () => {
     const client = clientWithPrincipal(admin, "member");
     const granted = await effectivePermissionsFor(client, admin);
     expect(granted).toEqual(["club_feedback:submit"]);
-    // The consequence the /feedback routes depend on: previewing `member`
-    // keeps club (submit) but drops site, so `/feedback` redirects to the
-    // surface the chrome is also showing.
-    expect(CLUB_FEEDBACK_PERMISSIONS.some((x) => granted.includes(x))).toBe(
-      true,
-    );
-    expect(SITE_FEEDBACK_PERMISSIONS.some((x) => granted.includes(x))).toBe(
+    // The consequence the /feedback area depends on: previewing `member`
+    // drops both manage permissions, so the area sends the admin to
+    // /my/feedback, matching the sidebar entry disappearing.
+    expect(FEEDBACK_MANAGE_PERMISSIONS.some((x) => granted.includes(x))).toBe(
       false,
     );
   });
@@ -491,5 +489,51 @@ describe("effectivePermissionsFor and the anonymous floor", () => {
     await expect(effectivePermissionsFor(client, pending)).resolves.toEqual([
       "public_calendar:view",
     ]);
+  });
+});
+
+describe("canReachMyFeedback", () => {
+  it("is true for site_feedback:submit alone", () => {
+    expect(canReachMyFeedback(["site_feedback:submit"])).toBe(true);
+  });
+
+  it("is true for club_feedback:submit alone", () => {
+    expect(canReachMyFeedback(["club_feedback:submit"])).toBe(true);
+  });
+
+  it("is false for neither, even holding both manage permissions", () => {
+    expect(canReachMyFeedback([])).toBe(false);
+    expect(
+      canReachMyFeedback(["site_feedback:manage", "club_feedback:manage"]),
+    ).toBe(false);
+  });
+});
+
+describe("feedbackAreaDecision", () => {
+  it("allow for site manage alone", () => {
+    expect(feedbackAreaDecision(["site_feedback:manage"], true)).toBe("allow");
+  });
+
+  it("allow for club manage alone", () => {
+    expect(feedbackAreaDecision(["club_feedback:manage"], false)).toBe("allow");
+  });
+
+  it("redirect_my_feedback for submit-only when enabled", () => {
+    expect(
+      feedbackAreaDecision(
+        ["site_feedback:submit", "club_feedback:submit"],
+        true,
+      ),
+    ).toBe("redirect_my_feedback");
+  });
+
+  it("not_found for submit-only when pages.my_feedback is off", () => {
+    expect(feedbackAreaDecision(["site_feedback:submit"], false)).toBe(
+      "not_found",
+    );
+  });
+
+  it("redirect_my_feedback for no permissions at all when enabled", () => {
+    expect(feedbackAreaDecision([], true)).toBe("redirect_my_feedback");
   });
 });

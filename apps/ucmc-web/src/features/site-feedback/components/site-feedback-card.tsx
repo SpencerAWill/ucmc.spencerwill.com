@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { MarkdownContent } from "#/components/markdown/markdown-content";
 import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
+import { SiteFeedbackScreenshot } from "#/features/site-feedback/components/site-feedback-screenshot";
 import type { SiteFeedbackSummary } from "#/features/site-feedback/server/site-feedback-fns";
 import {
   SITE_FEEDBACK_KIND_LABELS,
@@ -23,7 +24,7 @@ const STATE_VARIANTS: Record<
   duplicate: "secondary",
 };
 
-/** The submitter's own view of one submission (`/feedback/site`). */
+/** The submitter's own view of one submission (`/my/feedback`). */
 export function SiteFeedbackCard({ entry }: { entry: SiteFeedbackSummary }) {
   return (
     <Card className="gap-2 py-3">
@@ -61,6 +62,10 @@ export function SiteFeedbackCard({ entry }: { entry: SiteFeedbackSummary }) {
           </div>
         </div>
         <MarkdownContent>{entry.body}</MarkdownContent>
+        <SiteFeedbackScreenshot
+          feedbackId={entry.id}
+          state={entry.screenshot}
+        />
       </CardContent>
     </Card>
   );

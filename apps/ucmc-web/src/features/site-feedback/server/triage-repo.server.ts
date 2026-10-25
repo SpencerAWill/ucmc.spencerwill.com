@@ -124,6 +124,8 @@ export interface TriageFeedbackRow {
   createdAt: Temporal.Instant;
   createdByPublicId: string | null;
   state: SiteFeedbackState;
+  screenshotKey: string | null;
+  screenshotPurgedAt: Temporal.Instant | null;
 }
 
 const triageSelect = {
@@ -136,6 +138,8 @@ const triageSelect = {
   createdAt: schema.siteFeedback.createdAt,
   createdByPublicId: schema.users.publicId,
   state: siteFeedbackStateSql(),
+  screenshotKey: schema.siteFeedback.screenshotKey,
+  screenshotPurgedAt: schema.siteFeedback.screenshotPurgedAt,
 };
 
 export async function listTriageFeedback(
@@ -288,6 +292,20 @@ export interface IssueRow {
   filingStartedAt: Temporal.Instant | null;
 }
 
+/** The fields a screenshot read needs: who owns the report, and the key. */
+export async function getSiteFeedbackScreenshotRow(
+  id: string,
+): Promise<{ createdBy: string | null; screenshotKey: string | null } | null> {
+  const rows = await getDb()
+    .select({
+      createdBy: schema.siteFeedback.createdBy,
+      screenshotKey: schema.siteFeedback.screenshotKey,
+    })
+    .from(schema.siteFeedback)
+    .where(eq(schema.siteFeedback.id, id));
+  return rows.at(0) ?? null;
+}
+
 export async function getIssue(id: string): Promise<IssueRow | null> {
   const rows = await getDb()
     .select({
@@ -311,6 +329,8 @@ export interface IssueLinkRow {
   pageUrl: string | null;
   quotedMd: string;
   postedAt: Temporal.Instant | null;
+  screenshotKey: string | null;
+  screenshotPurgedAt: Temporal.Instant | null;
 }
 
 export async function listIssueLinks(issueId: string): Promise<IssueLinkRow[]> {
@@ -322,6 +342,8 @@ export async function listIssueLinks(issueId: string): Promise<IssueLinkRow[]> {
       pageUrl: schema.siteFeedback.pageUrl,
       quotedMd: schema.siteFeedbackIssueLinks.quotedMd,
       postedAt: schema.siteFeedbackIssueLinks.postedAt,
+      screenshotKey: schema.siteFeedback.screenshotKey,
+      screenshotPurgedAt: schema.siteFeedback.screenshotPurgedAt,
     })
     .from(schema.siteFeedbackIssueLinks)
     .innerJoin(
@@ -343,9 +365,10 @@ export async function setDisposition(
   ids: readonly string[],
   disposition: SiteFeedbackDisposition,
 ): Promise<number> {
+  const now = Temporal.Now.instant();
   const rows = await getDb()
     .update(schema.siteFeedback)
-    .set({ status: disposition, updatedAt: Temporal.Now.instant() })
+    .set({ status: disposition, updatedAt: now, statusChangedAt: now })
     .where(
       and(
         inJsonArray(schema.siteFeedback.id, ids),
@@ -660,13 +683,23 @@ export async function upsertAttachedIssue(input: {
       githubNumber: input.number,
       githubUrl: input.url,
       githubSyncedAt: input.now,
+      closedAt: input.state === "closed" ? input.now : null,
       createdBy: input.createdBy,
       createdAt: input.now,
       updatedAt: input.now,
     })
     .onConflictDoUpdate({
       target: schema.siteFeedbackIssues.githubNumber,
-      set: { state: input.state, githubSyncedAt: input.now },
+      set: {
+        state: input.state,
+        githubSyncedAt: input.now,
+        // Keep the first time it was seen closed; an open answer means it
+        // was reopened, which un-resolves its reports.
+        closedAt:
+          input.state === "closed"
+            ? sql`coalesce(${schema.siteFeedbackIssues.closedAt}, ${input.now.epochMilliseconds})`
+            : null,
+      },
     });
   const row = await findIssueByGithubNumber(input.number);
   if (!row) {

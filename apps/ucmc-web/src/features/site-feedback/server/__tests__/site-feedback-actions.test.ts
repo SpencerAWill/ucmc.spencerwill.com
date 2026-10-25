@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 
+import type * as RepoModule from "#/features/site-feedback/server/repo.server";
 import { env } from "#/server/cloudflare-env";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
@@ -19,19 +20,32 @@ vi.mock("@tanstack/react-start/server", () => ({
   getRequestHeader: () => undefined,
 }));
 
+const limits = vi.hoisted(() => ({ siteFeedback: true, upload: true }));
 vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByIp: async () => true,
   checkAuthRateLimitByEmail: async () => true,
-  checkSiteFeedbackRateLimit: async () => true,
+  checkSiteFeedbackRateLimit: async () => limits.siteFeedback,
+  checkUploadRateLimit: async () => limits.upload,
 }));
+
+// Pass-through, so one test can make the insert fail after the upload.
+vi.mock(
+  "#/features/site-feedback/server/repo.server",
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof RepoModule>();
+    return { ...actual, insertSiteFeedback: vi.fn(actual.insertSiteFeedback) };
+  },
+);
 
 const {
   listMySiteFeedbackAction,
   submitSiteFeedbackAction,
   getSiteFeedbackOverviewAction,
+  getSiteFeedbackScreenshotAction,
 } =
   await import("#/features/site-feedback/server/site-feedback-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const repo = await import("#/features/site-feedback/server/repo.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -91,6 +105,12 @@ async function signInAsBareUser(email = "bare@example.com"): Promise<string> {
 
 beforeEach(async () => {
   cookieJar.clear();
+  limits.siteFeedback = true;
+  limits.upload = true;
+  const listed = await env.BUCKET_PRIVATE.list();
+  if (listed.objects.length > 0) {
+    await env.BUCKET_PRIVATE.delete(listed.objects.map((o) => o.key));
+  }
   const db = getDb();
   await db.delete(schema.siteFeedback);
   await db.delete(schema.siteSettings);
@@ -305,5 +325,251 @@ describe("getSiteFeedbackOverviewAction", () => {
   it("rejects a caller with neither permission", async () => {
     await signInAsBareUser();
     await expect(getSiteFeedbackOverviewAction()).rejects.toThrow("Forbidden");
+  });
+});
+
+// ── screenshots ───────────────────────────────────────────────────────
+
+function dataUrl(type: string, bytes: number[]): string {
+  return `data:${type};base64,${btoa(String.fromCharCode(...bytes))}`;
+}
+
+const WEBP = [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 7];
+const JPEG = [0xff, 0xd8, 0xff, 0xe0, 7];
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7];
+
+function bugReport(screenshotDataUrl?: string) {
+  return {
+    kind: "bug" as const,
+    title: "Broken",
+    bugDescription: "It broke",
+    stepsToReproduce: "Click",
+    expectedBehavior: "Not broken",
+    pageUrl: "https://ucmc.example/gear",
+    screenshotDataUrl,
+  };
+}
+
+async function privateKeys(): Promise<string[]> {
+  const listed = await env.BUCKET_PRIVATE.list();
+  return listed.objects.map((o) => o.key);
+}
+
+async function storedRow() {
+  const [row] = await getDb().select().from(schema.siteFeedback);
+  return row;
+}
+
+describe("submitSiteFeedbackAction screenshots", () => {
+  it("stores a webp screenshot under site-feedback/screenshots/<id>.webp and records key and bytes", async () => {
+    await signInAsMember();
+    const { id } = await submitSiteFeedbackAction(
+      bugReport(dataUrl("image/webp", WEBP)),
+    );
+    const key = `site-feedback/screenshots/${id}.webp`;
+    expect(await privateKeys()).toEqual([key]);
+    const object = await env.BUCKET_PRIVATE.get(key);
+    expect(object?.httpMetadata?.contentType).toBe("image/webp");
+    expect(new Uint8Array(await object!.arrayBuffer())).toEqual(
+      new Uint8Array(WEBP),
+    );
+    const row = await storedRow();
+    expect(row.screenshotKey).toBe(key);
+    expect(row.screenshotBytes).toBe(WEBP.length);
+  });
+
+  it("accepts jpeg", async () => {
+    await signInAsMember();
+    const { id } = await submitSiteFeedbackAction(
+      bugReport(dataUrl("image/jpeg", JPEG)),
+    );
+    expect(await privateKeys()).toEqual([
+      `site-feedback/screenshots/${id}.jpg`,
+    ]);
+  });
+
+  it("rejects png", async () => {
+    await signInAsMember();
+    await expect(
+      submitSiteFeedbackAction(bugReport(dataUrl("image/png", PNG))),
+    ).rejects.toThrow("not an allowed image type");
+    expect(await privateKeys()).toEqual([]);
+    expect(await getDb().select().from(schema.siteFeedback)).toHaveLength(0);
+  });
+
+  it("rejects bytes that don't match the declared type", async () => {
+    await signInAsMember();
+    await expect(
+      submitSiteFeedbackAction(bugReport(dataUrl("image/webp", JPEG))),
+    ).rejects.toThrow("do not match");
+    expect(await privateKeys()).toEqual([]);
+  });
+
+  it("rejects more than 1 048 576 decoded bytes", async () => {
+    await signInAsMember();
+    const big = [...JPEG, ...Array<number>(1_048_577 - JPEG.length).fill(0)];
+    // Built in chunks: spreading a million arguments overflows the stack.
+    let binary = "";
+    for (let i = 0; i < big.length; i += 8192) {
+      binary += String.fromCharCode(...big.slice(i, i + 8192));
+    }
+    await expect(
+      submitSiteFeedbackAction(
+        bugReport(`data:image/jpeg;base64,${btoa(binary)}`),
+      ),
+    ).rejects.toThrow("exceeds 1048576 bytes");
+    expect(await privateKeys()).toEqual([]);
+  });
+
+  it("writes nothing to R2 when submissions are disabled", async () => {
+    await signInAsMember();
+    await getDb().insert(schema.siteSettings).values({
+      key: "site_feedback.submissions_enabled",
+      valueJson: "false",
+      updatedBy: null,
+    });
+    await expect(
+      submitSiteFeedbackAction(bugReport(dataUrl("image/webp", WEBP))),
+    ).rejects.toThrow("disabled");
+    expect(await privateKeys()).toEqual([]);
+  });
+
+  it("writes nothing to R2 when rate-limited", async () => {
+    await signInAsMember();
+    limits.siteFeedback = false;
+    await expect(
+      submitSiteFeedbackAction(bugReport(dataUrl("image/webp", WEBP))),
+    ).rejects.toThrow("Rate limit");
+    expect(await privateKeys()).toEqual([]);
+  });
+
+  it("refuses when checkUploadRateLimit says no", async () => {
+    await signInAsMember();
+    limits.upload = false;
+    await expect(
+      submitSiteFeedbackAction(bugReport(dataUrl("image/webp", WEBP))),
+    ).rejects.toThrow("Too many screenshot uploads");
+    expect(await privateKeys()).toEqual([]);
+    expect(await getDb().select().from(schema.siteFeedback)).toHaveLength(0);
+  });
+
+  it("does not consult the upload budget without a screenshot", async () => {
+    await signInAsMember();
+    limits.upload = false;
+    await expect(submitSiteFeedbackAction(bugReport())).resolves.toHaveProperty(
+      "id",
+    );
+  });
+
+  it("deletes the object when the insert fails", async () => {
+    await signInAsMember();
+    vi.mocked(repo.insertSiteFeedback).mockRejectedValueOnce(
+      new Error("D1 down"),
+    );
+    await expect(
+      submitSiteFeedbackAction(bugReport(dataUrl("image/webp", WEBP))),
+    ).rejects.toThrow("D1 down");
+    expect(await privateKeys()).toEqual([]);
+  });
+
+  it("submits without a screenshot exactly as before", async () => {
+    await signInAsMember();
+    await submitSiteFeedbackAction(bugReport());
+    expect(await privateKeys()).toEqual([]);
+    const row = await storedRow();
+    expect(row.screenshotKey).toBeNull();
+    expect(row.screenshotBytes).toBeNull();
+  });
+});
+
+describe("getSiteFeedbackScreenshotAction", () => {
+  async function submittedWithScreenshot(): Promise<{
+    id: string;
+    owner: string;
+  }> {
+    const owner = await signInAsMember("owner@example.com");
+    const { id } = await submitSiteFeedbackAction(
+      bugReport(dataUrl("image/webp", WEBP)),
+    );
+    return { id, owner };
+  }
+
+  async function bodyBytes(
+    res: { body: ReadableStream; contentType: string } | null,
+  ): Promise<Uint8Array> {
+    expect(res).not.toBeNull();
+    return new Uint8Array(await new Response(res!.body).arrayBuffer());
+  }
+
+  it("returns the image to its submitter", async () => {
+    const { id } = await submittedWithScreenshot();
+    const res = await getSiteFeedbackScreenshotAction(id);
+    expect(res?.contentType).toBe("image/webp");
+    expect(await bodyBytes(res)).toEqual(new Uint8Array(WEBP));
+  });
+
+  it("to a site_feedback:manage holder", async () => {
+    const { id } = await submittedWithScreenshot();
+    await signInAsAdmin();
+    expect(await bodyBytes(await getSiteFeedbackScreenshotAction(id))).toEqual(
+      new Uint8Array(WEBP),
+    );
+  });
+
+  it("null for another member", async () => {
+    const { id } = await submittedWithScreenshot();
+    await signInAsMember("other@example.com");
+    expect(await getSiteFeedbackScreenshotAction(id)).toBeNull();
+  });
+
+  it("null for a manager previewing a member role", async () => {
+    const { id } = await submittedWithScreenshot();
+    await signInAsAdmin();
+    cookieJar.set("ucmc_view_as", "member");
+    expect(await getSiteFeedbackScreenshotAction(id)).toBeNull();
+  });
+
+  it("null when signed out", async () => {
+    const { id } = await submittedWithScreenshot();
+    cookieJar.clear();
+    expect(await getSiteFeedbackScreenshotAction(id)).toBeNull();
+  });
+
+  it("null once purged", async () => {
+    const { id } = await submittedWithScreenshot();
+    await getDb()
+      .update(schema.siteFeedback)
+      .set({ screenshotKey: null, screenshotPurgedAt: Temporal.Now.instant() })
+      .where(eq(schema.siteFeedback.id, id));
+    expect(await getSiteFeedbackScreenshotAction(id)).toBeNull();
+  });
+
+  it("null for an unknown id", async () => {
+    await signInAsAdmin();
+    expect(await getSiteFeedbackScreenshotAction("sfb_nope")).toBeNull();
+  });
+});
+
+describe("summary screenshot state", () => {
+  it('is "present" / "purged" / null and never includes the key', async () => {
+    await signInAsMember();
+    const { id: present } = await submitSiteFeedbackAction(
+      bugReport(dataUrl("image/webp", WEBP)),
+    );
+    const { id: purged } = await submitSiteFeedbackAction(
+      bugReport(dataUrl("image/jpeg", JPEG)),
+    );
+    const { id: none } = await submitSiteFeedbackAction(bugReport());
+    await getDb()
+      .update(schema.siteFeedback)
+      .set({ screenshotKey: null, screenshotPurgedAt: Temporal.Now.instant() })
+      .where(eq(schema.siteFeedback.id, purged));
+
+    const mine = await listMySiteFeedbackAction();
+    const state = new Map(mine.map((s) => [s.id, s.screenshot]));
+    expect(state.get(present)).toBe("present");
+    expect(state.get(purged)).toBe("purged");
+    expect(state.get(none)).toBeNull();
+    expect(JSON.stringify(mine)).not.toContain("site-feedback/screenshots/");
   });
 });

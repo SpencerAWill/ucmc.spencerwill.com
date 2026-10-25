@@ -5,10 +5,13 @@ import {
   LayoutDashboard,
   LogOut,
   Map,
+  MessageSquare,
+  MessageSquarePlus,
   ShoppingCart,
   User as UserIcon,
 } from "lucide-react";
 
+import { useFeedbackLauncher } from "#/components/feedback/feedback-launcher";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { UserAvatar } from "#/components/user-avatar";
 import {
@@ -20,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { MY_FEEDBACK_PERMISSIONS } from "#/features/auth/guards";
 import {
   returnPathSearch,
   signInReturnPath,
@@ -27,7 +31,8 @@ import {
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export function UserMenu() {
-  const { principal, isLoading, emulatedRole, signOut } = useAuth();
+  const { principal, isLoading, emulatedRole, signOut, hasAnyPermission } =
+    useAuth();
   const navigate = useNavigate();
   // Signing in from a public page lands back on it. Path + search only,
   // like the guards, so the SSR and hydrated hrefs agree.
@@ -143,6 +148,11 @@ export function UserMenu() {
                 </Link>
               </DropdownMenuItem>
             ) : null}
+            <FeedbackMenuRow
+              showMine={
+                pages.my_feedback && hasAnyPermission(MY_FEEDBACK_PERMISSIONS)
+              }
+            />
           </>
         )}
         <DropdownMenuSeparator />
@@ -158,5 +168,36 @@ export function UserMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * One row, up to two actions side by side: "Send feedback…" opens the
+ * dialog (the launcher records the page first, so the menu closes before
+ * any screenshot), "My feedback" links to the member's own submissions.
+ * Each half has its own gate; with neither the row isn't rendered.
+ */
+function FeedbackMenuRow({ showMine }: { showMine: boolean }) {
+  const launcher = useFeedbackLauncher();
+  if (!launcher.canSend && !showMine) {
+    return null;
+  }
+  return (
+    <div data-testid="feedback-menu-row" className="flex">
+      {launcher.canSend ? (
+        <DropdownMenuItem className="flex-1" onSelect={() => launcher.open()}>
+          <MessageSquarePlus className="mr-2 size-4" />
+          Send feedback…
+        </DropdownMenuItem>
+      ) : null}
+      {showMine ? (
+        <DropdownMenuItem asChild className="flex-1">
+          <Link to="/my/feedback">
+            <MessageSquare className="mr-2 size-4" />
+            My feedback
+          </Link>
+        </DropdownMenuItem>
+      ) : null}
+    </div>
   );
 }

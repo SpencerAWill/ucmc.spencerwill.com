@@ -66,6 +66,7 @@ import { Route as MembersTabsRouteImport } from './routes/members._tabs'
 import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
 import { Route as MyIndexRouteImport } from './routes/my.index'
 import { Route as MyTabsRouteImport } from './routes/my._tabs'
+import { Route as MyFeedbackRouteImport } from './routes/my.feedback'
 import { Route as MyGearRouteImport } from './routes/my.gear'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
@@ -94,6 +95,7 @@ import { Route as MyTabsSecurityRouteImport } from './routes/my._tabs.security'
 import { Route as MyTabsWaiverRouteImport } from './routes/my._tabs.waiver'
 import { Route as MyGearIndexRouteImport } from './routes/my.gear.index'
 import { Route as MyGearCartRouteImport } from './routes/my.gear.cart'
+import { Route as ApiSiteFeedbackIdScreenshotRouteImport } from './routes/api/site-feedback.$id.screenshot'
 import { Route as FeedbackSiteTriageIndexRouteImport } from './routes/feedback.site.triage.index'
 import { Route as FeedbackSiteTriageIssuesIssueIdRouteImport } from './routes/feedback.site.triage.issues.$issueId'
 
@@ -380,6 +382,11 @@ const MyTabsRoute = MyTabsRouteImport.update({
   id: '/_tabs',
   getParentRoute: () => MyRoute,
 } as any)
+const MyFeedbackRoute = MyFeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => MyRoute,
+} as any)
 const MyGearRoute = MyGearRouteImport.update({
   id: '/gear',
   path: '/gear',
@@ -520,6 +527,12 @@ const MyGearCartRoute = MyGearCartRouteImport.update({
   path: '/cart',
   getParentRoute: () => MyGearRoute,
 } as any)
+const ApiSiteFeedbackIdScreenshotRoute =
+  ApiSiteFeedbackIdScreenshotRouteImport.update({
+    id: '/api/site-feedback/$id/screenshot',
+    path: '/api/site-feedback/$id/screenshot',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const FeedbackSiteTriageIndexRoute = FeedbackSiteTriageIndexRouteImport.update({
   id: '/triage/',
   path: '/triage/',
@@ -582,6 +595,7 @@ export interface FileRoutesByFullPath {
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/waivers': typeof MembersWaiversRoute
+  '/my/feedback': typeof MyFeedbackRoute
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
@@ -616,6 +630,7 @@ export interface FileRoutesByFullPath {
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/': typeof MembersTabsIndexRoute
   '/my/gear/': typeof MyGearIndexRoute
+  '/api/site-feedback/$id/screenshot': typeof ApiSiteFeedbackIdScreenshotRoute
   '/feedback/site/triage/': typeof FeedbackSiteTriageIndexRoute
   '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
 }
@@ -663,6 +678,7 @@ export interface FileRoutesByTo {
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my': typeof MyIndexRoute
+  '/my/feedback': typeof MyFeedbackRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/analytics': typeof AnalyticsIndexRoute
@@ -694,6 +710,7 @@ export interface FileRoutesByTo {
   '/feedback/site': typeof FeedbackSiteIndexRoute
   '/gear/loans': typeof GearLoansIndexRoute
   '/my/gear': typeof MyGearIndexRoute
+  '/api/site-feedback/$id/screenshot': typeof ApiSiteFeedbackIdScreenshotRoute
   '/feedback/site/triage': typeof FeedbackSiteTriageIndexRoute
   '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
 }
@@ -750,6 +767,7 @@ export interface FileRoutesById {
   '/members/_tabs': typeof MembersTabsRouteWithChildren
   '/members/waivers': typeof MembersWaiversRoute
   '/my/_tabs': typeof MyTabsRouteWithChildren
+  '/my/feedback': typeof MyFeedbackRoute
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
@@ -784,6 +802,7 @@ export interface FileRoutesById {
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/_tabs/': typeof MembersTabsIndexRoute
   '/my/gear/': typeof MyGearIndexRoute
+  '/api/site-feedback/$id/screenshot': typeof ApiSiteFeedbackIdScreenshotRoute
   '/feedback/site/triage/': typeof FeedbackSiteTriageIndexRoute
   '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
 }
@@ -839,6 +858,7 @@ export interface FileRouteTypes {
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/waivers'
+    | '/my/feedback'
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
@@ -873,6 +893,7 @@ export interface FileRouteTypes {
     | '/gear/loans/'
     | '/members/'
     | '/my/gear/'
+    | '/api/site-feedback/$id/screenshot'
     | '/feedback/site/triage/'
     | '/feedback/site/triage/issues/$issueId'
   fileRoutesByTo: FileRoutesByTo
@@ -920,6 +941,7 @@ export interface FileRouteTypes {
     | '/members/$publicId'
     | '/members/waivers'
     | '/my'
+    | '/my/feedback'
     | '/register/pending'
     | '/register/profile'
     | '/analytics'
@@ -951,6 +973,7 @@ export interface FileRouteTypes {
     | '/feedback/site'
     | '/gear/loans'
     | '/my/gear'
+    | '/api/site-feedback/$id/screenshot'
     | '/feedback/site/triage'
     | '/feedback/site/triage/issues/$issueId'
   id:
@@ -1006,6 +1029,7 @@ export interface FileRouteTypes {
     | '/members/_tabs'
     | '/members/waivers'
     | '/my/_tabs'
+    | '/my/feedback'
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
@@ -1040,6 +1064,7 @@ export interface FileRouteTypes {
     | '/gear/loans/'
     | '/members/_tabs/'
     | '/my/gear/'
+    | '/api/site-feedback/$id/screenshot'
     | '/feedback/site/triage/'
     | '/feedback/site/triage/issues/$issueId'
   fileRoutesById: FileRoutesById
@@ -1092,6 +1117,7 @@ export interface RootRouteChildren {
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
   ApiSponsorLogoSplatRoute: typeof ApiSponsorLogoSplatRoute
+  ApiSiteFeedbackIdScreenshotRoute: typeof ApiSiteFeedbackIdScreenshotRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1495,6 +1521,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyTabsRouteImport
       parentRoute: typeof MyRoute
     }
+    '/my/feedback': {
+      id: '/my/feedback'
+      path: '/feedback'
+      fullPath: '/my/feedback'
+      preLoaderRoute: typeof MyFeedbackRouteImport
+      parentRoute: typeof MyRoute
+    }
     '/my/gear': {
       id: '/my/gear'
       path: '/gear'
@@ -1691,6 +1724,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyGearCartRouteImport
       parentRoute: typeof MyGearRoute
     }
+    '/api/site-feedback/$id/screenshot': {
+      id: '/api/site-feedback/$id/screenshot'
+      path: '/api/site-feedback/$id/screenshot'
+      fullPath: '/api/site-feedback/$id/screenshot'
+      preLoaderRoute: typeof ApiSiteFeedbackIdScreenshotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/feedback/site/triage/': {
       id: '/feedback/site/triage/'
       path: '/triage'
@@ -1878,12 +1918,14 @@ const MyGearRouteWithChildren =
 
 interface MyRouteChildren {
   MyTabsRoute: typeof MyTabsRouteWithChildren
+  MyFeedbackRoute: typeof MyFeedbackRoute
   MyGearRoute: typeof MyGearRouteWithChildren
   MyIndexRoute: typeof MyIndexRoute
 }
 
 const MyRouteChildren: MyRouteChildren = {
   MyTabsRoute: MyTabsRouteWithChildren,
+  MyFeedbackRoute: MyFeedbackRoute,
   MyGearRoute: MyGearRouteWithChildren,
   MyIndexRoute: MyIndexRoute,
 }
@@ -1938,6 +1980,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,
   ApiSponsorLogoSplatRoute: ApiSponsorLogoSplatRoute,
+  ApiSiteFeedbackIdScreenshotRoute: ApiSiteFeedbackIdScreenshotRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

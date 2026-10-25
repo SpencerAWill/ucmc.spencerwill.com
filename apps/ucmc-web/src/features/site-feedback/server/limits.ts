@@ -130,10 +130,40 @@ const userAgentField = z
   .optional()
   .or(z.literal(""));
 
-// Bug report — mirrors `.github/ISSUE_TEMPLATE/bug_report.md`. Skipped:
-// "Screenshots" (file uploads not supported here — submitters can paste
-// links into "Additional context"), and the OS/Browser/Version block,
-// which we capture automatically from `userAgent`.
+/**
+ * Largest screenshot the server stores, in decoded bytes. The client
+ * captures at most 1600 px wide and steps JPEG quality down to fit.
+ */
+export const SITE_FEEDBACK_SCREENSHOT_MAX_BYTES = 1_048_576;
+
+/**
+ * What a payload says about a report's screenshot. The R2 key itself
+ * never leaves the server: the image is read by id, through a route that
+ * checks the viewer.
+ */
+export type SiteFeedbackScreenshotState = "present" | "purged" | null;
+
+export function siteFeedbackScreenshotState(row: {
+  screenshotKey: string | null;
+  screenshotPurgedAt: Temporal.Instant | null;
+}): SiteFeedbackScreenshotState {
+  if (row.screenshotKey !== null) {
+    return "present";
+  }
+  return row.screenshotPurgedAt !== null ? "purged" : null;
+}
+
+export function siteFeedbackScreenshotUrl(id: string): string {
+  return `/api/site-feedback/${encodeURIComponent(id)}/screenshot`;
+}
+
+// A `data:` URL: the 1 MB cap in base64 (×4/3) plus the prefix. The
+// decoded size is checked exactly on the server.
+const screenshotDataUrlField = z.string().max(1_400_000).optional();
+
+// Bug report — mirrors `.github/ISSUE_TEMPLATE/bug_report.md`. The
+// screenshot is captured automatically when the dialog opens, and the
+// OS/Browser/Version block comes from `userAgent`.
 export const bugFeedbackSchema = z.object({
   kind: z.literal("bug"),
   title: titleField,
@@ -143,6 +173,7 @@ export const bugFeedbackSchema = z.object({
   additionalContext: optionalSectionField,
   pageUrl: pageUrlField,
   userAgent: userAgentField,
+  screenshotDataUrl: screenshotDataUrlField,
 });
 
 // Feature request — mirrors `.github/ISSUE_TEMPLATE/feature_request.md`.
@@ -155,6 +186,7 @@ export const featureFeedbackSchema = z.object({
   additionalContext: optionalSectionField,
   pageUrl: pageUrlField,
   userAgent: userAgentField,
+  screenshotDataUrl: screenshotDataUrlField,
 });
 
 // General feedback — free-form catch-all.
@@ -164,6 +196,7 @@ export const generalFeedbackSchema = z.object({
   body: generalBodyField,
   pageUrl: pageUrlField,
   userAgent: userAgentField,
+  screenshotDataUrl: screenshotDataUrlField,
 });
 
 export const siteFeedbackInputSchema = z.discriminatedUnion("kind", [

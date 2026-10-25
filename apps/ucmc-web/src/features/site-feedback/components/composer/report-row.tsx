@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Textarea } from "#/components/ui/textarea";
+import { SiteFeedbackScreenshot } from "#/features/site-feedback/components/site-feedback-screenshot";
 import { useUnlinkSiteFeedback } from "#/features/site-feedback/api/use-unlink-site-feedback";
 import { useUpdateSiteFeedbackQuote } from "#/features/site-feedback/api/use-update-site-feedback-quote";
 import { SITE_FEEDBACK_KIND_LABELS } from "#/features/site-feedback/server/limits";
@@ -99,6 +100,10 @@ export function ReportRow({
           {link.quotedMd}
         </p>
       )}
+      <SiteFeedbackScreenshot
+        feedbackId={link.feedbackId}
+        state={link.screenshot}
+      />
       {editable && !editing ? (
         <div className="flex gap-2">
           <Button

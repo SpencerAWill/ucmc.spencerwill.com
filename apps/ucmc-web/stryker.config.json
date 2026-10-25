@@ -16,7 +16,8 @@
     "src/lib/sanitize-filename.ts",
     "src/server/member-profile/badge-rules.ts",
     "src/server/member-profile/season-progress.ts",
-    "src/server/log/redact.server.ts"
+    "src/server/log/redact.server.ts",
+    "src/server/cron/screenshot-retention.ts"
   ],
   "reporters": ["html", "clear-text", "progress"],
   "htmlReporter": {

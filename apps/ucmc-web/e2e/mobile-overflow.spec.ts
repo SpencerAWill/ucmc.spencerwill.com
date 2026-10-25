@@ -125,6 +125,7 @@ const SIGNED_IN_ROUTES = [
   "/my/calendar",
   "/my/gear",
   "/my/gear/cart",
+  "/my/feedback",
   "/members",
   "/members/pending",
   "/members/unclaimed",

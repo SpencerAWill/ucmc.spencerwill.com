@@ -45,6 +45,7 @@ function link(id: string, posted: boolean) {
     title: `Report ${id}`,
     quotedMd: "quote",
     postedAt: posted ? Temporal.Instant.from("2026-10-01T00:00:00Z") : null,
+    screenshot: null,
   };
 }
 

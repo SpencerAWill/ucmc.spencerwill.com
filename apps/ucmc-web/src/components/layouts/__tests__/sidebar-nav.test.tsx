@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SidebarNav } from "#/components/layouts/app-layout";
+import { SidebarNav, SidebarUtilityNav } from "#/components/layouts/app-layout";
 import { SidebarProvider } from "#/components/ui/sidebar";
 import { authStub } from "#/test-support/auth-stub";
 
@@ -244,4 +244,48 @@ describe("SidebarNav page-flag gates", () => {
       expect(screen.queryByText(label)).toBeNull();
     },
   );
+});
+
+describe("SidebarUtilityNav Feedback entry", () => {
+  const FEEDBACK_ON = {
+    feedback: true,
+    feedback_site: true,
+    feedback_club: true,
+  };
+
+  function renderUtility() {
+    return render(
+      <SidebarProvider>
+        <SidebarUtilityNav />
+      </SidebarProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    useAuthMock.mockReset();
+    flagsMock.mockReset();
+    setFlags({ ...FEEDBACK_ON });
+  });
+
+  it("shows Feedback only to a manager of a reachable surface", () => {
+    setAuth(["site_feedback:manage"]);
+    renderUtility();
+    expect(screen.getByRole("link", { name: "Feedback" })).toHaveAttribute(
+      "href",
+      "/feedback",
+    );
+  });
+
+  it("hides Feedback from a member who can only submit", () => {
+    setAuth(["site_feedback:submit", "club_feedback:submit"]);
+    renderUtility();
+    expect(screen.queryByRole("link", { name: "Feedback" })).toBeNull();
+  });
+
+  it("hides Feedback when the managed surface's page is off", () => {
+    setFlags({ ...FEEDBACK_ON, feedback_site: false });
+    setAuth(["site_feedback:manage"]);
+    renderUtility();
+    expect(screen.queryByRole("link", { name: "Feedback" })).toBeNull();
+  });
 });

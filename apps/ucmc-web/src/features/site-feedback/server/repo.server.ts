@@ -30,6 +30,8 @@ export interface SiteFeedbackRow {
   authorFullName: string | null;
   authorPreferredName: string | null;
   authorAvatarKey: string | null;
+  screenshotKey: string | null;
+  screenshotPurgedAt: Temporal.Instant | null;
 }
 
 const baseSelect = {
@@ -49,6 +51,8 @@ const baseSelect = {
   authorFullName: schema.profiles.fullName,
   authorPreferredName: schema.profiles.preferredName,
   authorAvatarKey: schema.profiles.avatarKey,
+  screenshotKey: schema.siteFeedback.screenshotKey,
+  screenshotPurgedAt: schema.siteFeedback.screenshotPurgedAt,
 };
 
 export async function listSiteFeedbackByUser(
@@ -82,6 +86,8 @@ export async function insertSiteFeedback(input: {
   pageUrl: string | null;
   userAgent: string | null;
   createdBy: string;
+  screenshotKey?: string | null;
+  screenshotBytes?: number | null;
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
@@ -94,6 +100,8 @@ export async function insertSiteFeedback(input: {
     pageUrl: input.pageUrl,
     userAgent: input.userAgent,
     createdBy: input.createdBy,
+    screenshotKey: input.screenshotKey ?? null,
+    screenshotBytes: input.screenshotBytes ?? null,
     createdAt: now,
     updatedAt: now,
   });

@@ -20,6 +20,7 @@ function baseRow(
     authorAvatarKey: null,
     state: "new",
     trackedIn: [],
+    screenshot: null,
     createdAt: Temporal.Instant.from("2026-05-01T12:00:00Z"),
     updatedAt: Temporal.Instant.from("2026-05-01T12:00:00Z"),
     ...overrides,
@@ -52,5 +53,30 @@ describe("SiteFeedbackCard", () => {
     render(<SiteFeedbackCard entry={baseRow()} />);
     expect(screen.getByText("New")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("renders a thumbnail linking to the full image when present", () => {
+    render(<SiteFeedbackCard entry={baseRow({ screenshot: "present" })} />);
+    const link = screen.getByRole("link", { name: /screenshot/i });
+    expect(link.getAttribute("href")).toBe(
+      "/api/site-feedback/sfb_1/screenshot",
+    );
+    expect(link.getAttribute("target")).toBe("_blank");
+    const img = screen.getByRole("img", { name: /screenshot/i });
+    expect(img.getAttribute("src")).toBe("/api/site-feedback/sfb_1/screenshot");
+    expect(img.getAttribute("loading")).toBe("lazy");
+  });
+
+  it('renders "Screenshot deleted 30 days after resolution." when purged', () => {
+    render(<SiteFeedbackCard entry={baseRow({ screenshot: "purged" })} />);
+    expect(
+      screen.getByText("Screenshot deleted 30 days after resolution."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("renders nothing about a screenshot when there never was one", () => {
+    render(<SiteFeedbackCard entry={baseRow()} />);
+    expect(screen.queryByText(/screenshot/i)).toBeNull();
   });
 });

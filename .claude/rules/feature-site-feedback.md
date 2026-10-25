@@ -6,19 +6,21 @@ paths:
 
 # Site feedback (`/feedback/site`)
 
-Bug / feature / general submissions aimed at the site maintainers. `site_feedback:submit` (auto-granted to `role_member`) lets a member send and see their own; `site_feedback:manage` unlocks triage. Gated by `pages.feedback_site`; the `site_feedback.submissions_enabled` feature setting pauses new submissions only (default ON, managers keep triage). The index page and the shared permission pairs are in `feedback-index.md`.
+Bug / feature / general submissions aimed at the site maintainers. `site_feedback:submit` (auto-granted to `role_member`) lets a member send from the user-menu dialog and see their own on `/my/feedback`; `site_feedback:manage` unlocks triage. Gated by `pages.feedback_site`; the `site_feedback.submissions_enabled` feature setting pauses new submissions only (default ON, managers keep triage). The managers' index, the dialog and `/my/feedback` are in `feedback-index.md`.
 
 **A submission writes to D1 and nothing else.** `submitSiteFeedbackAction` only inserts: there is no submit-time GitHub mirror. Maintainers gather submissions into issue drafts and file them deliberately.
 
 ## Routes
 
-| File                                       | URL                                |
-| ------------------------------------------ | ---------------------------------- |
-| `feedback.site.index.tsx`                  | `/feedback/site`: form + own list  |
-| `feedback.site.triage.index.tsx`           | `/feedback/site/triage`: the inbox |
-| `feedback.site.triage.issues.$issueId.tsx` | the composer, for drafts and filed |
+| File                                       | URL                                   |
+| ------------------------------------------ | ------------------------------------- |
+| `feedback.site.index.tsx`                  | `/feedback/site`: redirects to triage |
+| `feedback.site.triage.index.tsx`           | `/feedback/site/triage`: the inbox    |
+| `feedback.site.triage.issues.$issueId.tsx` | the composer, for drafts and filed    |
 
-Triage and the composer require `site_feedback:manage` through `requirePermission` (role emulation honoured). The page heading shows a "Triage (N)" link to managers, where N comes from `siteFeedbackOverviewQueryOptions`.
+Triage and the composer require `site_feedback:manage` through `requirePermission` (role emulation honoured). The `/feedback` index card shows the untriaged count from `siteFeedbackOverviewQueryOptions`.
+
+`SiteFeedbackForm` takes the `pageContext` the launcher recorded at open and submits its `pageUrl` / `userAgent`, never `window` at submit time.
 
 ## Data: submissions and issues are many-to-many
 
@@ -34,7 +36,7 @@ Triage and the composer require `site_feedback:manage` through `requirePermissio
 
 `siteFeedbackStateSql()` in `triage-repo.server.ts` computes a submission's `SiteFeedbackState` on read: linked to a non-draft issue, all closed is `resolved`, otherwise `tracked`; linked only to drafts is `in_draft`; unlinked falls back to the submission's own disposition (`status`: `open` reads as `new`, plus `wont_fix`, `duplicate`, `resolved`). Legacy `acknowledged` displays as New and legacy `closed` as Won't fix; they are **not rewritten**, because a backfill `UPDATE` would break rollback. Nothing stores the derived value, so a link change can never leave it stale.
 
-**Submitters never see `in_draft`**: `toSummary` maps it to `new` and `trackedIn` lists filed issues only. The submitter card (`SiteFeedbackCard`) shows the state badge plus one "Tracked in #N" link per filed issue. There is no notification.
+**Submitters never see `in_draft`**: `toSummary` maps it to `new` and `trackedIn` lists filed issues only. The submitter card (`SiteFeedbackCard`, on `/my/feedback`) shows the state badge plus one "Tracked in #N" link per filed issue. There is no notification.
 
 ## Server
 
@@ -59,6 +61,7 @@ Triage and the composer require `site_feedback:manage` through `requirePermissio
 - The page path was already stripped of query and fragment by `normalizePageUrl` at submit time, so tokens in a submitter's URL never reach triage or GitHub.
 - **Prefilled quotes are defused.** `quotedReportFor` replaces email addresses with `[email removed]`, puts a zero-width space after `@` before a word character and after `#` before a digit (no mentions, no cross-links), and escapes `<` as `&lt;` so a body can't close the `<details>` block. It applies to the title, body and user agent; the maintainer can edit any of it back.
 - **Maintainers can edit any quote before it is posted**, and both filing and "Post N new reports" confirm "This posts N reports publicly to `<repo>`". Nothing reaches GitHub without that confirmation.
+- **A screenshot never reaches GitHub.** A bug report's screenshot (`feedback.screenshot_key`, private bucket) is read only through `GET /api/site-feedback/:id/screenshot`, which `getSiteFeedbackScreenshotAction` lets through for the submitter or a viewer whose **effective** permissions (the "View as" preview narrows it) hold `site_feedback:manage`; everyone else, and a missing or purged image, gets the same 404, with `private, no-store` and `nosniff`. Payloads carry `screenshot: "present" | "purged" | null` from `siteFeedbackScreenshotState`, never the key, and the quote says only "Screenshot attached (visible in triage)." Tests assert neither the key prefix nor the route path appears in a GitHub payload.
 - **Posted text is not re-synced.** Once a link has `posted_at`, its quote is read-only (`updateUnpostedQuote` / `deleteUnpostedLink` refuse it), and editing in the app never changes GitHub. The UI says so. Do not add a path that rewrites a posted comment.
 
 ## Sync and the cron budget

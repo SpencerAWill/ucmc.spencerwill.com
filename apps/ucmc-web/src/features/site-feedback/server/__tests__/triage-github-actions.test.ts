@@ -165,6 +165,30 @@ beforeEach(async () => {
 // ── filing ─────────────────────────────────────────────────────────────
 
 describe("fileSiteFeedbackIssueAction", () => {
+  it("a report's screenshot reaches GitHub as one line, never as a key or URL", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    await getDb()
+      .update(schema.siteFeedback)
+      .set({
+        screenshotKey: `site-feedback/screenshots/${a}.webp`,
+        screenshotBytes: 10,
+      })
+      .where(eq(schema.siteFeedback.id, a));
+    const draft = await triage.createSiteFeedbackIssueDraftAction({
+      feedbackIds: [a],
+    });
+    mocked.createIssue.mockResolvedValue({
+      number: 77,
+      url: "https://github.com/o/r/issues/77",
+    });
+    await triage.fileSiteFeedbackIssueAction({ id: draft.id });
+    const payload = JSON.stringify(mocked.createIssue.mock.calls[0]);
+    expect(payload).toContain("Screenshot attached (visible in triage).");
+    expect(payload).not.toContain("site-feedback/screenshots/");
+    expect(payload).not.toContain("/api/site-feedback/");
+  });
+
   it("stores the number and URL, opens the issue and posts every link", async () => {
     const admin = await seedAdmin();
     const a = await seedFeedback();
@@ -464,6 +488,92 @@ describe("attachSiteFeedbackToGithubIssueAction", () => {
     const links = await linkRows(issueId);
     expect(links).toHaveLength(1);
     expect(links[0].postedAt).toBeNull();
+  });
+
+  it("attaching a closed issue stamps closed_at", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    mocked.getIssue.mockResolvedValue({
+      number: 13,
+      url: "https://github.com/o/r/issues/13",
+      title: "Done",
+      state: "closed",
+      isPullRequest: false,
+    });
+    const res = await triage.attachSiteFeedbackToGithubIssueAction({
+      number: 13,
+      feedbackIds: [a],
+    });
+    const row = await issueRow(res.ok ? res.issueId : "");
+    expect(row.closedAt).not.toBeNull();
+  });
+
+  it("attaching an open issue leaves closed_at null", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    mocked.getIssue.mockResolvedValue({
+      number: 14,
+      url: "https://github.com/o/r/issues/14",
+      title: "Open",
+      state: "open",
+      isPullRequest: false,
+    });
+    const res = await triage.attachSiteFeedbackToGithubIssueAction({
+      number: 14,
+      feedbackIds: [a],
+    });
+    const row = await issueRow(res.ok ? res.issueId : "");
+    expect(row.closedAt).toBeNull();
+  });
+
+  it("re-attaching an already-closed issue keeps its first closed_at", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    const b = await seedFeedback();
+    const firstClosed = Temporal.Instant.from("2026-01-01T00:00:00Z");
+    const existing = await seedIssue("closed", [a], {
+      githubNumber: 15,
+      githubUrl: "https://github.com/o/r/issues/15",
+      closedAt: firstClosed,
+    });
+    mocked.getIssue.mockResolvedValue({
+      number: 15,
+      url: "https://github.com/o/r/issues/15",
+      title: "Done",
+      state: "closed",
+      isPullRequest: false,
+    });
+    await triage.attachSiteFeedbackToGithubIssueAction({
+      number: 15,
+      feedbackIds: [b],
+    });
+    const row = await issueRow(existing);
+    expect(row.closedAt?.epochMilliseconds).toBe(firstClosed.epochMilliseconds);
+  });
+
+  it("re-attaching a reopened issue clears closed_at", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    const b = await seedFeedback();
+    const existing = await seedIssue("closed", [a], {
+      githubNumber: 16,
+      githubUrl: "https://github.com/o/r/issues/16",
+      closedAt: Temporal.Instant.from("2026-01-01T00:00:00Z"),
+    });
+    mocked.getIssue.mockResolvedValue({
+      number: 16,
+      url: "https://github.com/o/r/issues/16",
+      title: "Back",
+      state: "open",
+      isPullRequest: false,
+    });
+    await triage.attachSiteFeedbackToGithubIssueAction({
+      number: 16,
+      feedbackIds: [b],
+    });
+    const row = await issueRow(existing);
+    expect(row.state).toBe("open");
+    expect(row.closedAt).toBeNull();
   });
 
   it("returns pull_request and creates no row for a PR", async () => {

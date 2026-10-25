@@ -278,7 +278,43 @@ describe("derived state", () => {
 
 // ── list ──────────────────────────────────────────────────────────────
 
+describe("getSiteFeedbackIssueAction screenshots", () => {
+  it("each link carries its report's screenshot state, not the key", async () => {
+    const owner = await seedUser("o@example.com");
+    const shot = await seedFeedback(owner, {
+      screenshotKey: "site-feedback/screenshots/sfb_y.webp",
+    });
+    const plain = await seedFeedback(owner);
+    const id = await seedIssue("draft", [shot, plain]);
+    await signInAsAdmin();
+    const detail = await triage.getSiteFeedbackIssueAction({ id });
+    expect(
+      Object.fromEntries(detail.links.map((l) => [l.feedbackId, l.screenshot])),
+    ).toEqual({ [shot]: "present", [plain]: null });
+    expect(JSON.stringify(detail)).not.toContain("site-feedback/screenshots/");
+  });
+});
+
 describe("listSiteFeedbackTriageAction", () => {
+  it("reports each row's screenshot state without its key", async () => {
+    const owner = await signInAsMember("o@example.com");
+    const shot = await seedFeedback(owner, {
+      screenshotKey: "site-feedback/screenshots/sfb_x.webp",
+      screenshotBytes: 10,
+    });
+    const gone = await seedFeedback(owner, {
+      screenshotPurgedAt: Temporal.Now.instant(),
+    });
+    const plain = await seedFeedback(owner);
+    await signInAsAdmin();
+    const res = await triage.listSiteFeedbackTriageAction({ view: "new" });
+    const state = new Map(res.rows.map((r) => [r.id, r.screenshot]));
+    expect(state.get(shot)).toBe("present");
+    expect(state.get(gone)).toBe("purged");
+    expect(state.get(plain)).toBeNull();
+    expect(JSON.stringify(res)).not.toContain("site-feedback/screenshots/");
+  });
+
   it("narrows by q and reports counts, drafts and config", async () => {
     const owner = await signInAsMember("o@example.com");
     const a = await seedFeedback(owner, { title: "Broken on iPhone" });
@@ -366,6 +402,35 @@ describe("setSiteFeedbackDispositionAction", () => {
     expect(status.get(free)).toBe("duplicate");
     expect(status.get(drafted)).toBe("open");
     expect(status.get(tracked)).toBe("open");
+  });
+
+  it("a disposition stamps status_changed_at", async () => {
+    const owner = await seedUser("o@example.com");
+    const id = await seedFeedback(owner);
+    await signInAsAdmin();
+    const before = Temporal.Now.instant();
+    await triage.setSiteFeedbackDispositionAction({
+      ids: [id],
+      disposition: "wont_fix",
+    });
+    const [row] = await getDb().select().from(schema.siteFeedback);
+    expect(row.statusChangedAt).not.toBeNull();
+    expect(
+      Temporal.Instant.compare(row.statusChangedAt!, before),
+    ).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a disposition skipped for a linked report leaves status_changed_at null", async () => {
+    const owner = await seedUser("o@example.com");
+    const tracked = await seedFeedback(owner);
+    await seedIssue("open", [tracked]);
+    await signInAsAdmin();
+    await triage.setSiteFeedbackDispositionAction({
+      ids: [tracked],
+      disposition: "duplicate",
+    });
+    const [row] = await getDb().select().from(schema.siteFeedback);
+    expect(row.statusChangedAt).toBeNull();
   });
 });
 

@@ -6,8 +6,13 @@
 import { uuidv7 } from "uuidv7";
 
 import { composeSiteFeedbackBody } from "#/features/site-feedback/server/format";
+import {
+  SITE_FEEDBACK_SCREENSHOT_MAX_BYTES,
+  siteFeedbackScreenshotState,
+} from "#/features/site-feedback/server/limits";
 import type {
   SiteFeedbackInput,
+  SiteFeedbackScreenshotState,
   SiteFeedbackKind,
   SiteFeedbackState,
   SiteFeedbackStatus,
@@ -19,11 +24,23 @@ import {
 import {
   countFeedbackInStates,
   countMyFeedbackInStates,
+  getSiteFeedbackScreenshotRow,
   listIssuesForFeedback,
 } from "#/features/site-feedback/server/triage-repo.server";
+import { effectivePermissions } from "#/server/auth/emulation";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { checkSiteFeedbackRateLimit } from "#/server/rate-limit.server";
+import { decodeImageDataUrl } from "#/server/r2/image-data-url.server";
+import {
+  deleteSiteFeedbackScreenshots,
+  getSiteFeedbackScreenshot,
+  putSiteFeedbackScreenshot,
+  siteFeedbackScreenshotKey,
+} from "#/server/r2/site-feedback-screenshots.server";
+import {
+  checkSiteFeedbackRateLimit,
+  checkUploadRateLimit,
+} from "#/server/rate-limit.server";
 import { readSetting } from "#/server/settings/settings-repo.server";
 
 // Strip query + fragment from a submitter-provided URL before it
@@ -104,6 +121,7 @@ export interface SiteFeedbackSummary {
   state: SiteFeedbackState;
   /** Filed GitHub issues only, never drafts. */
   trackedIn: { number: number; url: string }[];
+  screenshot: SiteFeedbackScreenshotState;
   createdAt: Temporal.Instant;
   updatedAt: Temporal.Instant;
 }
@@ -130,6 +148,8 @@ function toSummary(
     authorPreferredName: string | null;
     authorAvatarKey: string | null;
     state: SiteFeedbackState;
+    screenshotKey: string | null;
+    screenshotPurgedAt: Temporal.Instant | null;
     createdAt: Temporal.Instant;
     updatedAt: Temporal.Instant;
   },
@@ -152,6 +172,7 @@ function toSummary(
     authorAvatarKey: row.authorAvatarKey,
     state: options.hideDrafts && row.state === "in_draft" ? "new" : row.state,
     trackedIn: options.trackedIn,
+    screenshot: siteFeedbackScreenshotState(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -210,21 +231,113 @@ export async function submitSiteFeedbackAction(
   }
 
   const id = `sfb_${uuidv7()}`;
+  // Every refusal happens before the upload, so a refused submission
+  // never leaves an object behind.
+  const screenshot = input.screenshotDataUrl
+    ? await prepareScreenshot(principal.userId, id, input.screenshotDataUrl)
+    : null;
   const pageUrl = normalizePageUrl(input.pageUrl);
   const userAgent = input.userAgent?.trim() ? input.userAgent.trim() : null;
   const body = composeSiteFeedbackBody(input);
 
-  await insertSiteFeedback({
-    id,
-    kind: input.kind,
-    title: input.title,
-    body,
-    pageUrl,
-    userAgent,
-    createdBy: principal.userId,
-  });
+  if (screenshot) {
+    await putSiteFeedbackScreenshot(
+      screenshot.key,
+      screenshot.bytes,
+      screenshot.contentType,
+    );
+  }
+  try {
+    await insertSiteFeedback({
+      id,
+      kind: input.kind,
+      title: input.title,
+      body,
+      pageUrl,
+      userAgent,
+      createdBy: principal.userId,
+      screenshotKey: screenshot?.key ?? null,
+      screenshotBytes: screenshot?.bytes.byteLength ?? null,
+    });
+  } catch (err) {
+    // The orphan sweep would catch it too, but not for a day.
+    if (screenshot) {
+      await deleteSiteFeedbackScreenshots([screenshot.key]);
+    }
+    throw err;
+  }
 
   return { id };
+}
+
+/**
+ * Checks a screenshot against the upload budget and decodes it (webp or
+ * jpeg, magic bytes, the 1 MB cap). Throws on any refusal; writes nothing.
+ */
+async function prepareScreenshot(
+  userId: string,
+  feedbackId: string,
+  dataUrl: string,
+): Promise<{
+  key: string;
+  bytes: ArrayBuffer;
+  contentType: "image/webp" | "image/jpeg";
+}> {
+  if (!(await checkUploadRateLimit(userId))) {
+    throw new Error("Too many screenshot uploads, try again in a minute.");
+  }
+  const decoded = decodeImageDataUrl(dataUrl, {
+    allowed: ["image/webp", "image/jpeg"],
+    maxBytes: SITE_FEEDBACK_SCREENSHOT_MAX_BYTES,
+  });
+  // `allowed` admits only these two.
+  const contentType = decoded.contentType as "image/webp" | "image/jpeg";
+  return {
+    key: siteFeedbackScreenshotKey(feedbackId, contentType),
+    bytes: decoded.bytes,
+    contentType,
+  };
+}
+
+/**
+ * A report's screenshot, for its submitter or a site maintainer; `null`
+ * for anyone else, a missing report or a purged image, so the route
+ * answers all of them with the same 404.
+ *
+ * Unlike other actions this honours a "View as" preview: a maintainer
+ * previewing a member role sees what that member would, which only ever
+ * narrows. Ownership is not a permission and survives the preview.
+ */
+export async function getSiteFeedbackScreenshotAction(
+  id: string,
+): Promise<{ body: ReadableStream; contentType: string } | null> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    return null;
+  }
+  const row = await getSiteFeedbackScreenshotRow(id);
+  if (!row || row.screenshotKey === null) {
+    return null;
+  }
+  const isOwner = row.createdBy === principal.userId;
+  if (!isOwner) {
+    const { readViewAsCookie } =
+      await import("#/server/auth/emulation-cookie.server");
+    const granted = effectivePermissions(principal, readViewAsCookie(), []);
+    if (!granted.includes("site_feedback:manage")) {
+      return null;
+    }
+  }
+  const object = await getSiteFeedbackScreenshot(row.screenshotKey);
+  if (!object) {
+    return null;
+  }
+  return {
+    body: object.body,
+    contentType:
+      object.httpMetadata?.contentType ??
+      (row.screenshotKey.endsWith(".jpg") ? "image/jpeg" : "image/webp"),
+  };
 }
 
 export async function getSiteFeedbackOverviewAction(): Promise<SiteFeedbackOverview> {
