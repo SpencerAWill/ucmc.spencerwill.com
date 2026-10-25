@@ -663,3 +663,22 @@ export async function postPendingSiteFeedbackReportsAction(
   }
   return postPending(cfg, input.issueId, row.githubNumber);
 }
+
+export type SyncSiteFeedbackIssuesResult =
+  | { ok: true; checked: number; closed: number }
+  | { ok: false; reason: "not_configured" };
+
+/**
+ * "Sync now" for managers. Unlike the cron entry point this lets a GitHub
+ * failure propagate, so the button can show it.
+ */
+export async function syncSiteFeedbackIssuesAction(): Promise<SyncSiteFeedbackIssuesResult> {
+  await requireSiteFeedbackManager();
+  const cfg = getGithubConfig();
+  if (cfg === null) {
+    return { ok: false, reason: "not_configured" };
+  }
+  const { syncSiteFeedbackIssues } =
+    await import("#/features/site-feedback/server/sync.server");
+  return { ok: true, ...(await syncSiteFeedbackIssues(cfg)) };
+}

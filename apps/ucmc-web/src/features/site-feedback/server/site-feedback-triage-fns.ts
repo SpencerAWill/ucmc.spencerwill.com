@@ -11,6 +11,7 @@ import type {
   SiteFeedbackIssueSummary,
   SiteFeedbackTriage,
   SiteFeedbackTriageRow,
+  SyncSiteFeedbackIssuesResult,
 } from "#/features/site-feedback/server/site-feedback-triage-actions.server";
 import {
   siteFeedbackAttachSchema,
@@ -156,3 +157,11 @@ export const postPendingSiteFeedbackReportsFn = createServerFn({
       return postPendingSiteFeedbackReportsAction(data);
     },
   );
+
+export const syncSiteFeedbackIssuesFn = createServerFn({
+  method: "POST",
+}).handler(async (): Promise<SyncSiteFeedbackIssuesResult> => {
+  const { syncSiteFeedbackIssuesAction } =
+    await import("#/features/site-feedback/server/site-feedback-triage-actions.server");
+  return syncSiteFeedbackIssuesAction();
+});

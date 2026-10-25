@@ -46,8 +46,9 @@
   // Cron schedules (must stay in sync with the dispatcher in
   // src/server-entry.ts):
   //
-  // "0 12 * * *"  — Daily tick: retention sweeps AND gear loan
-  //                 reminders. 08:00 EDT / 07:00 EST in Cincinnati.
+  // "0 12 * * *"  — Daily tick: retention sweeps, gear loan
+  //                 reminders, the cost snapshot AND the site-feedback
+  //                 GitHub issue-state sync. 08:00 EDT / 07:00 EST in Cincinnati.
   //
   //                 The hour is chosen for the EMAILS. This was 08:00
   //                 UTC when only the sweeps rode it — 03:00/04:00
