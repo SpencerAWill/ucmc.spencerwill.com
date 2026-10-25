@@ -35,11 +35,11 @@
     "@commitlint/config-pnpm-scopes": "^21.2.2",
     "@eslint/js": "^10.0.1",
     "czg": "^1.14.0",
-    "eslint": "^10.11.0",
+    "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
-    "prettier": "^3.9.9",
+    "prettier": "^3.9.10",
     "typescript": "^6.0.3",
     "typescript-language-server": "^6.0.2"
   },
