@@ -105,6 +105,19 @@ describe("captureViewport", () => {
     expect(opts.filter(document.createTextNode("hi"))).toBe(true);
   });
 
+  it("fetches page images past every cache, and gives up on them within the timeout", async () => {
+    // A cached response from a plain <img> carries no CORS header, and
+    // the edge ignores Vary: Origin; a fresh URL per fetch avoids both.
+    ms.domToWebp.mockResolvedValue(fakeDataUrl("image/webp", 10));
+    await captureViewport({ timeoutMs: 3000 });
+    const opts = ms.domToWebp.mock.calls[0]?.[1] as {
+      timeout: number;
+      fetch: { bypassingCache: boolean };
+    };
+    expect(opts.fetch.bypassingCache).toBe(true);
+    expect(opts.timeout).toBeLessThanOrEqual(3000);
+  });
+
   it("caps the output at 1600 px wide", async () => {
     ms.domToWebp.mockResolvedValue(fakeDataUrl("image/webp", 10));
     Object.defineProperty(window, "innerWidth", {
@@ -169,6 +182,45 @@ describe("captureViewport", () => {
       // along and get no shift of their own.
       expect(shifted).toBe("translate(0px, 400px)");
       expect(innerShifted).toBe("");
+      expect(header.hasAttribute("data-feedback-capture-shift")).toBe(false);
+    });
+
+    it("takes its marks off as soon as it times out", async () => {
+      setScroll(0, 400);
+      const header = document.createElement("header");
+      header.style.position = "fixed";
+      document.body.appendChild(header);
+      ms.domToWebp.mockReturnValue(new Promise(() => {}));
+      expect(await captureViewport({ timeoutMs: 20 })).toBeNull();
+      expect(header.hasAttribute("data-feedback-capture-shift")).toBe(false);
+    });
+
+    it("an abandoned run finishing late doesn't strip a newer run's marks", async () => {
+      setScroll(0, 400);
+      const header = document.createElement("header");
+      header.style.position = "fixed";
+      document.body.appendChild(header);
+
+      let finishFirst: (url: string) => void = () => {};
+      ms.domToWebp.mockReturnValueOnce(
+        new Promise<string>((resolve) => {
+          finishFirst = resolve;
+        }),
+      );
+      expect(await captureViewport({ timeoutMs: 20 })).toBeNull();
+
+      let shifted = "";
+      ms.domToWebp.mockImplementationOnce(async (_root, opts) => {
+        // The first run's encode settles while this one is cloning.
+        finishFirst(fakeDataUrl("image/webp", 10));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const clone = header.cloneNode(true) as HTMLElement;
+        (opts as { onCloneEachNode: (n: Node) => void }).onCloneEachNode(clone);
+        shifted = clone.style.transform;
+        return fakeDataUrl("image/webp", 10);
+      });
+      expect(await captureViewport()).not.toBeNull();
+      expect(shifted).toBe("translate(0px, 400px)");
       expect(header.hasAttribute("data-feedback-capture-shift")).toBe(false);
     });
 

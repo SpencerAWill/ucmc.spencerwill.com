@@ -29,15 +29,24 @@ function keep(node: Node): boolean {
 const SHIFT_ATTR = "data-feedback-capture-shift";
 
 /**
+ * Each capture tags its marks with its own id. A capture abandoned at the
+ * timeout keeps rasterising in the background, and when it finally
+ * settles its cleanup must not strip the marks a newer capture (the
+ * member closed and reopened the dialog) is relying on.
+ */
+const runs = { next: 0 };
+
+/**
  * When the page is scrolled, the clone is shifted up by the scroll so the
  * capture shows the viewport. Fixed and sticky chrome (the header, the
  * sidebar) would move with it, so each outermost one is marked with the
  * offset that puts it back where the member sees it: the scroll for a
  * fixed element (the shifted root becomes its containing block), and
  * stuck-minus-in-flow position for a sticky one, measured by un-sticking
- * it for one synchronous read. Returns the cleanup.
+ * it for one synchronous read. Returns the cleanup, which removes only
+ * this run's marks and is safe to call twice.
  */
-function markChrome(): () => void {
+function markChrome(runId: string): () => void {
   const marked: HTMLElement[] = [];
   for (const el of document.body.querySelectorAll<HTMLElement>("*")) {
     const position = getComputedStyle(el).position;
@@ -51,29 +60,36 @@ function markChrome(): () => void {
     let dy = window.scrollY;
     if (position === "sticky") {
       const stuck = el.getBoundingClientRect();
-      const inline = el.style.position;
-      el.style.position = "static";
+      const inline = el.style.getPropertyValue("position");
+      const priority = el.style.getPropertyPriority("position");
+      el.style.setProperty("position", "static", "important");
       const inFlow = el.getBoundingClientRect();
-      el.style.position = inline;
+      el.style.setProperty("position", inline, priority);
       dx = stuck.left - inFlow.left;
       dy = stuck.top - inFlow.top;
     }
-    el.setAttribute(SHIFT_ATTR, `${dx},${dy}`);
+    el.setAttribute(SHIFT_ATTR, `${runId}|${dx},${dy}`);
     marked.push(el);
   }
   return () => {
     for (const el of marked) {
-      el.removeAttribute(SHIFT_ATTR);
+      if (el.getAttribute(SHIFT_ATTR)?.startsWith(`${runId}|`)) {
+        el.removeAttribute(SHIFT_ATTR);
+      }
     }
   };
 }
 
-function shiftClone(node: Node): void {
+function shiftClone(node: Node, runId: string): void {
   if (!(node instanceof HTMLElement) || !node.hasAttribute(SHIFT_ATTR)) {
     return;
   }
-  const [dx, dy] = (node.getAttribute(SHIFT_ATTR) ?? "0,0").split(",");
+  const [owner, offset = ""] = (node.getAttribute(SHIFT_ATTR) ?? "").split("|");
   node.removeAttribute(SHIFT_ATTR);
+  if (owner !== runId) {
+    return;
+  }
+  const [dx, dy] = offset.split(",");
   const own = node.style.transform;
   const rest = own && own !== "none" ? ` ${own}` : "";
   node.style.transform = `translate(${dx}px, ${dy}px)${rest}`;
@@ -86,7 +102,18 @@ function decodedBytes(dataUrl: string): number {
   return (base64.length * 3) / 4 - padding;
 }
 
-async function encode(maxBytes: number, maxWidth: number) {
+interface CaptureRun {
+  id: string;
+  /** Replaced once the chrome is marked; removes this run's marks. */
+  unmark: () => void;
+}
+
+async function encode(
+  run: CaptureRun,
+  maxBytes: number,
+  maxWidth: number,
+  timeoutMs: number,
+) {
   const { domToJpeg, domToWebp } = await import("modern-screenshot");
   const width = window.innerWidth;
   const height = window.innerHeight;
@@ -96,6 +123,13 @@ async function encode(maxBytes: number, maxWidth: number) {
     height,
     scale: Math.min(window.devicePixelRatio || 1, maxWidth / width),
     filter: keep,
+    // Image fetches give up with the capture rather than running on.
+    timeout: timeoutMs,
+    // A fresh URL per image fetch. A copy cached from a plain <img> (no
+    // Origin, so no CORS header) would otherwise be reused for this
+    // cross-origin read and render blank, and Cloudflare's edge ignores
+    // `Vary: Origin`, so the public bucket's CORS rule alone can't help.
+    fetch: { bypassingCache: true },
     // Shift the page so the clone starts at the scroll position: the
     // capture is the viewport, not the top of the document.
     ...(scrolled
@@ -103,12 +137,14 @@ async function encode(maxBytes: number, maxWidth: number) {
           style: {
             transform: `translate(${-window.scrollX}px, ${-window.scrollY}px)`,
           },
-          onCloneEachNode: shiftClone,
+          onCloneEachNode: (node: Node) => shiftClone(node, run.id),
         }
       : {}),
   };
   const root = document.documentElement;
-  const unmark = scrolled ? markChrome() : () => {};
+  if (scrolled) {
+    run.unmark = markChrome(run.id);
+  }
   try {
     const webp = await domToWebp(root, { ...options, quality: 0.8 });
     if (webp.startsWith("data:image/webp") && decodedBytes(webp) <= maxBytes) {
@@ -122,7 +158,7 @@ async function encode(maxBytes: number, maxWidth: number) {
     }
     return null;
   } finally {
-    unmark();
+    run.unmark();
   }
 }
 
@@ -132,15 +168,24 @@ export async function captureViewport(
   const timeoutMs = opts.timeoutMs ?? 3000;
   const maxWidth = opts.maxWidth ?? 1600;
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+  runs.next += 1;
+  const run: CaptureRun = { id: String(runs.next), unmark: () => {} };
   const timeout = new Promise<null>((resolve) => {
     setTimeout(() => resolve(null), timeoutMs);
   });
   try {
-    const result = await Promise.race([encode(maxBytes, maxWidth), timeout]);
+    const result = await Promise.race([
+      encode(run, maxBytes, maxWidth, timeoutMs),
+      timeout,
+    ]);
     return result === null
       ? null
       : { ...result, bytes: decodedBytes(result.dataUrl) };
   } catch {
     return null;
+  } finally {
+    // On a timeout the abandoned encode may run on for a while; take the
+    // marks off the live page now rather than when it settles.
+    run.unmark();
   }
 }
