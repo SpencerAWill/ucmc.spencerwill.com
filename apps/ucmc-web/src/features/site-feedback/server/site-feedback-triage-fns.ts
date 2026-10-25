@@ -6,17 +6,20 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import type {
+  GithubActionResult,
   SiteFeedbackIssueDetail,
   SiteFeedbackIssueSummary,
   SiteFeedbackTriage,
   SiteFeedbackTriageRow,
 } from "#/features/site-feedback/server/site-feedback-triage-actions.server";
 import {
+  siteFeedbackAttachSchema,
   siteFeedbackDispositionSchema,
   siteFeedbackIssueDraftCreateSchema,
   siteFeedbackIssueDraftUpdateSchema,
   siteFeedbackIssueIdSchema,
   siteFeedbackLinkSchema,
+  siteFeedbackPostPendingSchema,
   siteFeedbackQuoteUpdateSchema,
   siteFeedbackRelatedSchema,
   siteFeedbackTriageListSchema,
@@ -24,6 +27,7 @@ import {
 } from "#/features/site-feedback/server/limits";
 
 export type {
+  GithubActionResult,
   SiteFeedbackIssueDetail,
   SiteFeedbackIssueSummary,
   SiteFeedbackTriage,
@@ -116,3 +120,39 @@ export const updateSiteFeedbackQuoteFn = createServerFn({ method: "POST" })
       await import("#/features/site-feedback/server/site-feedback-triage-actions.server");
     return updateSiteFeedbackQuoteAction(data);
   });
+
+export const fileSiteFeedbackIssueFn = createServerFn({ method: "POST" })
+  .validator(siteFeedbackIssueIdSchema)
+  .handler(
+    async ({
+      data,
+    }): Promise<GithubActionResult<{ number: number; url: string }>> => {
+      const { fileSiteFeedbackIssueAction } =
+        await import("#/features/site-feedback/server/site-feedback-triage-actions.server");
+      return fileSiteFeedbackIssueAction(data);
+    },
+  );
+
+export const attachSiteFeedbackToGithubIssueFn = createServerFn({
+  method: "POST",
+})
+  .validator(siteFeedbackAttachSchema)
+  .handler(
+    async ({ data }): Promise<GithubActionResult<{ issueId: string }>> => {
+      const { attachSiteFeedbackToGithubIssueAction } =
+        await import("#/features/site-feedback/server/site-feedback-triage-actions.server");
+      return attachSiteFeedbackToGithubIssueAction(data);
+    },
+  );
+
+export const postPendingSiteFeedbackReportsFn = createServerFn({
+  method: "POST",
+})
+  .validator(siteFeedbackPostPendingSchema)
+  .handler(
+    async ({ data }): Promise<GithubActionResult<{ posted: number }>> => {
+      const { postPendingSiteFeedbackReportsAction } =
+        await import("#/features/site-feedback/server/site-feedback-triage-actions.server");
+      return postPendingSiteFeedbackReportsAction(data);
+    },
+  );

@@ -263,3 +263,14 @@ export const siteFeedbackRelatedSchema = z.object({ issueId: idField });
 export type SiteFeedbackRelatedInput = z.infer<
   typeof siteFeedbackRelatedSchema
 >;
+
+export const siteFeedbackAttachSchema = z.object({
+  number: z.number().int().positive(),
+  feedbackIds: idsField,
+});
+export type SiteFeedbackAttachInput = z.infer<typeof siteFeedbackAttachSchema>;
+
+export const siteFeedbackPostPendingSchema = z.object({ issueId: idField });
+export type SiteFeedbackPostPendingInput = z.infer<
+  typeof siteFeedbackPostPendingSchema
+>;

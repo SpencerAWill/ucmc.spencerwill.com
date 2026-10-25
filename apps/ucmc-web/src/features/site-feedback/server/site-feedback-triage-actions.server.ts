@@ -6,12 +6,25 @@
  */
 import { uuidv7 } from "uuidv7";
 
-import { getGithubConfig } from "#/features/site-feedback/server/github.server";
 import {
+  GithubError,
+  createComment,
+  createIssue,
+  findIssueByMarker,
+  getGithubConfig,
+  getIssue as getGithubIssue,
+} from "#/features/site-feedback/server/github.server";
+import type { GithubConfig } from "#/features/site-feedback/server/github.server";
+import {
+  GITHUB_BODY_LIMIT,
+  composeIssueBody,
+  composeReportsComment,
   defaultLabelsFor,
+  issueMarker,
   quotedReportFor,
 } from "#/features/site-feedback/server/issue-format";
 import type {
+  SiteFeedbackAttachInput,
   SiteFeedbackDispositionInput,
   SiteFeedbackIssueDraftCreateInput,
   SiteFeedbackIssueDraftUpdateInput,
@@ -19,6 +32,7 @@ import type {
   SiteFeedbackIssueState,
   SiteFeedbackKind,
   SiteFeedbackLinkInput,
+  SiteFeedbackPostPendingInput,
   SiteFeedbackQuoteUpdateInput,
   SiteFeedbackRelatedInput,
   SiteFeedbackState,
@@ -28,6 +42,7 @@ import type {
 } from "#/features/site-feedback/server/limits";
 import { requireSiteFeedbackManager } from "#/features/site-feedback/server/site-feedback-actions.server";
 import {
+  claimIssueForFiling,
   countFeedbackByState,
   deleteDraft,
   deleteUnpostedLink,
@@ -45,10 +60,14 @@ import {
   listOpenIssueSummaries,
   listRelatedCandidates,
   listTriageFeedback,
+  markIssueFiled,
+  markLinksPosted,
   rankedFtsMatches,
+  releaseFilingClaim,
   setDisposition,
   updateDraftIfCurrent,
   updateUnpostedQuote,
+  upsertAttachedIssue,
 } from "#/features/site-feedback/server/triage-repo.server";
 import type {
   IssueSummaryRow,
@@ -406,4 +425,241 @@ export async function listRelatedSiteFeedbackAction(
       (rank.get(b.id) ?? Number.POSITIVE_INFINITY),
   );
   return withIssues(ordered.slice(0, RELATED_LIMIT));
+}
+
+// ── GitHub: file, attach, post ──────────────────────────────────────────
+
+export type GithubActionResult<T> =
+  | ({ ok: true } & T)
+  | {
+      ok: false;
+      reason:
+        | "not_configured"
+        | "already_filing"
+        | "too_long"
+        | "no_reports"
+        | "not_found"
+        | "pull_request"
+        | "github_error";
+      message: string;
+    };
+
+type GithubFailure = Extract<GithubActionResult<object>, { ok: false }>;
+
+const FILING_STALE_MS = 5 * 60 * 1000;
+
+const NOT_CONFIGURED: GithubFailure = {
+  ok: false,
+  reason: "not_configured",
+  message: "GitHub isn't configured for this site.",
+};
+
+function githubError(err: GithubError, what: string): GithubFailure {
+  return {
+    ok: false,
+    reason: "github_error",
+    message: `GitHub refused the ${what} (${err.status}). Nothing was ${what === "comment" ? "posted" : "filed"}.`,
+  };
+}
+
+export async function fileSiteFeedbackIssueAction(
+  input: SiteFeedbackIssueIdInput,
+): Promise<GithubActionResult<{ number: number; url: string }>> {
+  const principal = await requireSiteFeedbackManager();
+  const cfg = getGithubConfig();
+  if (cfg === null) {
+    return NOT_CONFIGURED;
+  }
+  const issue = await getIssue(input.id);
+  if (issue === null) {
+    return { ok: false, reason: "not_found", message: "Issue not found" };
+  }
+  if (issue.state !== "draft" && issue.state !== "filing") {
+    return {
+      ok: false,
+      reason: "already_filing",
+      message: "This issue has already been filed",
+    };
+  }
+  const links = await listIssueLinks(input.id);
+  if (links.length === 0) {
+    return {
+      ok: false,
+      reason: "no_reports",
+      message: "Add at least one report before filing",
+    };
+  }
+  const body = composeIssueBody({
+    issueId: issue.id,
+    summaryMd: issue.summaryMd ?? "",
+    reports: links.map((l) => l.quotedMd),
+  });
+  if (body.length > GITHUB_BODY_LIMIT) {
+    return {
+      ok: false,
+      reason: "too_long",
+      message: `Too long for one GitHub issue: unlink reports or trim their text (${body.length.toLocaleString("en-US")} / ${GITHUB_BODY_LIMIT.toLocaleString("en-US")} characters)`,
+    };
+  }
+
+  const now = Temporal.Now.instant();
+  const claim = await claimIssueForFiling(
+    input.id,
+    now,
+    now.subtract({ milliseconds: FILING_STALE_MS }),
+  );
+  if (claim === null) {
+    return {
+      ok: false,
+      reason: "already_filing",
+      message: "This issue is already being filed",
+    };
+  }
+
+  try {
+    // A stale claim may have reached GitHub before the worker died: adopt
+    // that issue rather than filing a duplicate.
+    const adopted =
+      claim === "stale"
+        ? await findIssueByMarker(cfg, issueMarker(issue.id))
+        : null;
+    const filed =
+      adopted ??
+      (await createIssue(cfg, {
+        title: issue.title,
+        body,
+        labels: issue.labels,
+      }));
+    await markIssueFiled({
+      id: issue.id,
+      number: filed.number,
+      url: filed.url,
+      filedBy: principal.userId,
+      now: Temporal.Now.instant(),
+    });
+    return { ok: true, number: filed.number, url: filed.url };
+  } catch (err) {
+    if (err instanceof GithubError) {
+      await releaseFilingClaim(issue.id);
+      return githubError(err, "issue");
+    }
+    throw err;
+  }
+}
+
+async function postPending(
+  cfg: GithubConfig,
+  issueId: string,
+  githubNumber: number,
+): Promise<GithubActionResult<{ posted: number }>> {
+  const pending = (await listIssueLinks(issueId)).filter(
+    (l) => l.postedAt === null,
+  );
+  if (pending.length === 0) {
+    return { ok: true, posted: 0 };
+  }
+  try {
+    await createComment(
+      cfg,
+      githubNumber,
+      composeReportsComment(pending.map((l) => l.quotedMd)),
+    );
+  } catch (err) {
+    if (err instanceof GithubError) {
+      return githubError(err, "comment");
+    }
+    throw err;
+  }
+  await markLinksPosted(
+    issueId,
+    pending.map((l) => l.feedbackId),
+    Temporal.Now.instant(),
+  );
+  return { ok: true, posted: pending.length };
+}
+
+export async function attachSiteFeedbackToGithubIssueAction(
+  input: SiteFeedbackAttachInput,
+): Promise<GithubActionResult<{ issueId: string }>> {
+  const principal = await requireSiteFeedbackManager();
+  const cfg = getGithubConfig();
+  if (cfg === null) {
+    return NOT_CONFIGURED;
+  }
+  let remote;
+  try {
+    remote = await getGithubIssue(cfg, input.number);
+  } catch (err) {
+    if (err instanceof GithubError) {
+      return {
+        ok: false,
+        reason: "github_error",
+        message: `GitHub refused the lookup (${err.status}). Nothing was attached.`,
+      };
+    }
+    throw err;
+  }
+  if (remote === null) {
+    return {
+      ok: false,
+      reason: "not_found",
+      message: `No issue #${input.number} in ${cfg.repo}`,
+    };
+  }
+  if (remote.isPullRequest) {
+    return {
+      ok: false,
+      reason: "pull_request",
+      message: `#${input.number} is a pull request, not an issue`,
+    };
+  }
+
+  const rows = await loadSubmissions(input.feedbackIds);
+  const issueId = await upsertAttachedIssue({
+    id: `sfi_${uuidv7()}`,
+    number: remote.number,
+    url: remote.url,
+    title: remote.title,
+    state: remote.state,
+    createdBy: principal.userId,
+    now: Temporal.Now.instant(),
+  });
+  const existing = new Set(
+    await listLinkedFeedbackIds(
+      issueId,
+      rows.map((r) => r.id),
+    ),
+  );
+  await insertLinks(
+    issueId,
+    rows
+      .filter((row) => !existing.has(row.id))
+      .map((row) => ({ feedbackId: row.id, quotedMd: quotedFor(row) })),
+    principal.userId,
+  );
+
+  const posted = await postPending(cfg, issueId, remote.number);
+  return posted.ok ? { ok: true, issueId } : posted;
+}
+
+export async function postPendingSiteFeedbackReportsAction(
+  input: SiteFeedbackPostPendingInput,
+): Promise<GithubActionResult<{ posted: number }>> {
+  await requireSiteFeedbackManager();
+  const cfg = getGithubConfig();
+  if (cfg === null) {
+    return NOT_CONFIGURED;
+  }
+  const row = await getIssueSummary(input.issueId);
+  if (row === null) {
+    return { ok: false, reason: "not_found", message: "Issue not found" };
+  }
+  if (row.githubNumber === null) {
+    return {
+      ok: false,
+      reason: "not_found",
+      message: "This issue hasn't been filed on GitHub yet",
+    };
+  }
+  return postPending(cfg, input.issueId, row.githubNumber);
 }

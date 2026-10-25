@@ -8,7 +8,7 @@
  * references, because Drizzle drops the table qualifier in a single-table
  * select and a correlated subquery needs it.
  */
-import { and, asc, count, desc, eq, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, lt, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type {
@@ -520,6 +520,157 @@ export async function updateUnpostedQuote(
     )
     .returning({ feedbackId: schema.siteFeedbackIssueLinks.feedbackId });
   return rows.length > 0;
+}
+
+// ── filing and attaching ────────────────────────────────────────────────
+
+/**
+ * Claim a draft for filing. Returns `"fresh"` for a draft, `"stale"` for a
+ * `filing` row abandoned before `staleBefore`, or null when neither matched
+ * (someone else holds it). Two single-statement UPDATEs, each atomic, so
+ * exactly one concurrent caller wins.
+ */
+export async function claimIssueForFiling(
+  id: string,
+  now: Temporal.Instant,
+  staleBefore: Temporal.Instant,
+): Promise<"fresh" | "stale" | null> {
+  const claim = async (condition: SQL | undefined): Promise<boolean> => {
+    const rows = await getDb()
+      .update(schema.siteFeedbackIssues)
+      .set({ state: "filing", filingStartedAt: now })
+      .where(and(eq(schema.siteFeedbackIssues.id, id), condition))
+      .returning({ id: schema.siteFeedbackIssues.id });
+    return rows.length > 0;
+  };
+  if (await claim(eq(schema.siteFeedbackIssues.state, "draft"))) {
+    return "fresh";
+  }
+  const stale = await claim(
+    and(
+      eq(schema.siteFeedbackIssues.state, "filing"),
+      lt(schema.siteFeedbackIssues.filingStartedAt, staleBefore),
+    ),
+  );
+  return stale ? "stale" : null;
+}
+
+/** Give a claimed issue back to `draft` after a failed filing. */
+export async function releaseFilingClaim(id: string): Promise<void> {
+  await getDb()
+    .update(schema.siteFeedbackIssues)
+    .set({ state: "draft", filingStartedAt: null })
+    .where(
+      and(
+        eq(schema.siteFeedbackIssues.id, id),
+        eq(schema.siteFeedbackIssues.state, "filing"),
+      ),
+    );
+}
+
+/** Record a successful filing and mark every link posted, atomically. */
+export async function markIssueFiled(input: {
+  id: string;
+  number: number;
+  url: string;
+  filedBy: string;
+  now: Temporal.Instant;
+}): Promise<void> {
+  await runBatch([
+    getDb()
+      .update(schema.siteFeedbackIssues)
+      .set({
+        state: "open",
+        githubNumber: input.number,
+        githubUrl: input.url,
+        filedBy: input.filedBy,
+        filedAt: input.now,
+        githubSyncedAt: input.now,
+        filingStartedAt: null,
+        updatedAt: input.now,
+      })
+      .where(eq(schema.siteFeedbackIssues.id, input.id)),
+    getDb()
+      .update(schema.siteFeedbackIssueLinks)
+      .set({ postedAt: input.now })
+      .where(
+        and(
+          eq(schema.siteFeedbackIssueLinks.issueId, input.id),
+          sql`${schema.siteFeedbackIssueLinks.postedAt} IS NULL`,
+        ),
+      ),
+  ]);
+}
+
+export interface GithubTrackedIssueRow {
+  id: string;
+  state: SiteFeedbackIssueState;
+}
+
+export async function findIssueByGithubNumber(
+  number: number,
+): Promise<GithubTrackedIssueRow | null> {
+  const rows = await getDb()
+    .select({
+      id: schema.siteFeedbackIssues.id,
+      state: schema.siteFeedbackIssues.state,
+    })
+    .from(schema.siteFeedbackIssues)
+    .where(eq(schema.siteFeedbackIssues.githubNumber, number));
+  return rows.at(0) ?? null;
+}
+
+/** Insert a row for a hand-made GitHub issue, or refresh the existing one. */
+export async function upsertAttachedIssue(input: {
+  id: string;
+  number: number;
+  url: string;
+  title: string;
+  state: "open" | "closed";
+  createdBy: string;
+  now: Temporal.Instant;
+}): Promise<string> {
+  await getDb()
+    .insert(schema.siteFeedbackIssues)
+    .values({
+      id: input.id,
+      state: input.state,
+      title: input.title,
+      summaryMd: null,
+      githubNumber: input.number,
+      githubUrl: input.url,
+      githubSyncedAt: input.now,
+      createdBy: input.createdBy,
+      createdAt: input.now,
+      updatedAt: input.now,
+    })
+    .onConflictDoUpdate({
+      target: schema.siteFeedbackIssues.githubNumber,
+      set: { state: input.state, githubSyncedAt: input.now },
+    });
+  const row = await findIssueByGithubNumber(input.number);
+  if (!row) {
+    throw new Error("Attached issue row vanished");
+  }
+  return row.id;
+}
+
+/** Mark exactly these links posted (only those still unposted). */
+export async function markLinksPosted(
+  issueId: string,
+  feedbackIds: readonly string[],
+  now: Temporal.Instant,
+): Promise<void> {
+  await getDb()
+    .update(schema.siteFeedbackIssueLinks)
+    .set({ postedAt: now })
+    .where(
+      and(
+        eq(schema.siteFeedbackIssueLinks.issueId, issueId),
+        inJsonArray(schema.siteFeedbackIssueLinks.feedbackId, feedbackIds),
+        sql`${schema.siteFeedbackIssueLinks.postedAt} IS NULL`,
+      ),
+    );
 }
 
 // ── related ─────────────────────────────────────────────────────────────
