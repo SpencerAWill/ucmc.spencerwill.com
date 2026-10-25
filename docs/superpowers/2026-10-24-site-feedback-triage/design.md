@@ -94,19 +94,19 @@ Computed in SQL on read:
 - Lists from the caller go through `inJsonArray`; multi-row writes go through `insertMany`.
 - `submitSiteFeedbackAction` only inserts.
 
-| Action                                                                              | Behaviour                                                                                        |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `listSiteFeedbackTriage({ view, q })`                                               | `view`: `new` \| `in_draft` \| `tracked` \| `closed`; `q` searches via FTS                       |
-| `setSiteFeedbackDisposition({ ids, disposition })`                                  | bulk                                                                                             |
-| `createSiteFeedbackIssueDraft({ feedbackIds })`                                     | title defaults to the first submission's; each `quoted_md` is generated                          |
-| `updateSiteFeedbackIssueDraft({ id, title, summaryMd, labels, expectedUpdatedAt })` | returns `conflict` when `updated_at` has moved                                                   |
-| `linkSiteFeedback` / `unlinkSiteFeedback` / `updateSiteFeedbackQuote`               | on a filed issue, new links get `posted_at = null`; quotes that are already posted are read-only |
-| `attachSiteFeedbackToGithubIssue({ number, feedbackIds })`                          | `getIssue` validates the number; creates or reuses the issue row, links, then posts              |
-| `postPendingSiteFeedbackReports({ issueId })`                                       | one "Reports (N)" comment covering unposted links, then sets `posted_at`                         |
-| `fileSiteFeedbackIssue({ id })`                                                     | see Filing                                                                                       |
-| `listRelatedSiteFeedback({ issueId })`                                              | up to 10 unlinked, undisposed submissions: FTS on title + summary, union same `page_url` path    |
-| `syncSiteFeedbackIssues()`                                                          | also called from the daily tick                                                                  |
-| `getSiteFeedbackOverview()`                                                         | `{ mineTracked, mineOpen, untriaged? }`; `untriaged` only computed for managers                  |
+| Action                                                                              | Behaviour                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `listSiteFeedbackTriage({ view, q })`                                               | `view`: `new` \| `in_draft` \| `tracked` \| `closed`; `q` searches via FTS                                                                 |
+| `setSiteFeedbackDisposition({ ids, disposition })`                                  | bulk                                                                                                                                       |
+| `createSiteFeedbackIssueDraft({ feedbackIds })`                                     | title defaults to the first submission's; each `quoted_md` is generated                                                                    |
+| `updateSiteFeedbackIssueDraft({ id, title, summaryMd, labels, expectedUpdatedAt })` | returns `conflict` when `updated_at` has moved                                                                                             |
+| `linkSiteFeedback` / `unlinkSiteFeedback` / `updateSiteFeedbackQuote`               | on a filed issue, new links get `posted_at = null`; quotes that are already posted are read-only                                           |
+| `attachSiteFeedbackToGithubIssue({ number, feedbackIds })`                          | `getIssue` validates the number; creates or reuses the issue row and links. **It doesn't post**: the UI opens the composer to review first |
+| `postPendingSiteFeedbackReports({ issueId })`                                       | after a confirm naming the repo, one "More reports (N)" comment covering unposted links, then sets `posted_at`                             |
+| `fileSiteFeedbackIssue({ id })`                                                     | see Filing                                                                                                                                 |
+| `listRelatedSiteFeedback({ issueId })`                                              | up to 10 unlinked, undisposed submissions: FTS on title + summary, union same `page_url` path                                              |
+| `syncSiteFeedbackIssues()`                                                          | also called from the daily tick                                                                                                            |
+| `getSiteFeedbackOverview()`                                                         | `{ mineTracked, mineOpen, untriaged? }`; `untriaged` only computed for managers                                                            |
 
 `features/club-feedback` gains `getClubFeedbackOverview()` → `{ mineOpen, newForOfficers? }`, counts only.
 
@@ -115,8 +115,9 @@ Computed in SQL on read:
 1. Claim the draft: `UPDATE … SET state='filing', filing_started_at=now WHERE id=? AND state='draft'`. If no row changed, return "already being filed".
 2. The body is the summary, then "Reports (N)", then a footer and a hidden `<!-- ucmc:sfi_… -->` marker. Labels come from the draft; the defaults are derived from the linked kinds (`bug` / `enhancement`, plus `feedback`).
 3. On success: store the number and URL, set `state='open'`, `filed_*`, and `posted_at` on every link.
-4. On a GitHub error: return the draft to `draft` and **surface the error** to the maintainer.
-5. A row stuck in `filing` for more than 5 minutes can be retried. The retry searches the repo for the marker first and adopts any issue it finds, rather than filing a duplicate.
+4. On a definite GitHub rejection (4xx): return the draft to `draft` and **surface the error** to the maintainer. On an unknown outcome (network failure, 5xx, unparseable response) the row stays in `filing`, because the issue may exist, and the maintainer is told so.
+5. A row stuck in `filing` for more than 5 minutes can be retried from the composer ("Filing didn't finish. Retry filing"). The retry searches the repo for the marker first and adopts any issue it finds, rather than filing a duplicate.
+6. Only the links composed into the body are marked posted. Link, unlink and quote edits are refused while a row is `filing`.
 
 ### Sync
 
@@ -133,8 +134,8 @@ Computed in SQL on read:
 ### Privacy
 
 - The generated `quoted_md` carries kind, title, body, page path (already query- and fragment-stripped by `normalizePageUrl`), the user agent and `publicId`. Never a name or email.
-- The maintainer can edit any quote before it's posted.
-- Filing confirms "This posts N reports publicly to `<repo>`".
+- The prefilled quote is defused: a zero-width space after `@` and `#` so GitHub doesn't send mentions or cross-references, `<` escaped, and email addresses replaced with `[email removed]`.
+- The maintainer can edit any quote before it's posted. Every public path (filing, and posting new reports) goes through a confirm that says "This posts N reports publicly to `<repo>`".
 - Posted text isn't re-synced: editing in the app after posting doesn't change GitHub, and the UI says so.
 
 ## Routes and UI
