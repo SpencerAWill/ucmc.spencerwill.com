@@ -9,9 +9,10 @@
  * spread it into the same `db.batch` as the UPSERT, so a partial failure
  * can't leave a row written without a trail.
  *
- * Audit-metadata policy: for boolean values the metadata captures
- * `{ key, value }` (booleans are non-PII and the value carries forensic
- * weight); for any other shape it captures `{ key }` only (URLs, emails,
+ * Audit-metadata policy: for boolean and enum values the metadata
+ * captures `{ key, value }` (both are picked from a fixed list, so they
+ * are non-PII, and the value carries forensic weight); for any other
+ * shape it captures `{ key }` only (URLs, emails,
  * and freeform JSON blobs are too easy to leak into the log). This is
  * the only branch the action layer needs — the audit-action enum stays
  * collapsed to `settings_updated`.
@@ -22,7 +23,11 @@ import {
   requireAnySettingPermission,
   requireSettingPermission,
 } from "./permissions.server";
-import { isSettingKey, SETTINGS } from "#/server/settings/settings-registry";
+import {
+  isEnumSetting,
+  isSettingKey,
+  SETTINGS,
+} from "#/server/settings/settings-registry";
 import type {
   SettingKey,
   UpdateSettingInput,
@@ -53,7 +58,8 @@ export async function updateSettingAction(
   }
   const value = parsed.data;
 
-  const auditMetadata = typeof value === "boolean" ? { key, value } : { key };
+  const auditMetadata =
+    typeof value === "boolean" || isEnumSetting(key) ? { key, value } : { key };
   const audit = buildAuditEventStatement({
     actorUserId: principal.userId,
     action: "settings_updated",

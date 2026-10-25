@@ -5,7 +5,8 @@
  * audit row stored one. Lazy: query fires only while the dialog is open.
  *
  * Value rendering matches the audit metadata policy — booleans are
- * shown (on/off badge); other shapes display only the timestamp/actor
+ * shown (on/off badge), enums by their option label; other shapes
+ * display only the timestamp/actor
  * because the audit row never stored the value (emails, URLs, freeform
  * JSON would leak through the log otherwise).
  */
@@ -21,6 +22,7 @@ import {
   DialogTitle,
 } from "#/components/ui/dialog";
 import { settingHistoryQueryOptions } from "#/features/settings/api/queries";
+import { getMeta } from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
 
 export function SettingHistoryDialog({
@@ -38,6 +40,7 @@ export function SettingHistoryDialog({
     settingHistoryQueryOptions(settingKey, { enabled: open }),
   );
   const entries = data ?? [];
+  const { optionLabels } = getMeta(settingKey);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -46,9 +49,9 @@ export function SettingHistoryDialog({
           <DialogTitle>Edit history — {label}</DialogTitle>
           <DialogDescription>
             Most recent changes recorded in the audit log for this setting.
-            Boolean values are shown; other value types are recorded by key only
-            (the audit row never stores the value to avoid leaking emails, URLs,
-            or freeform JSON).
+            On/off and pick-list values are shown; other value types are
+            recorded by key only (the audit row never stores the value to avoid
+            leaking emails, URLs, or freeform JSON).
           </DialogDescription>
         </DialogHeader>
 
@@ -91,6 +94,11 @@ export function SettingHistoryDialog({
                       variant={entry.booleanValue ? "default" : "secondary"}
                     >
                       {entry.booleanValue ? "On" : "Off"}
+                    </Badge>
+                  )}
+                  {entry.enumValue === null ? null : (
+                    <Badge variant="secondary">
+                      {optionLabels?.[entry.enumValue] ?? entry.enumValue}
                     </Badge>
                   )}
                 </li>

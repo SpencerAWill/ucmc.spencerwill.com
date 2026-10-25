@@ -128,15 +128,16 @@ export const getPublicFlagsFn = createServerFn({
 /**
  * Per-setting change history. Officer-gated. Returns the most recent
  * `settings_updated` audit rows for a given key, with the actor's
- * display name resolved. `booleanValue` is non-null only when the audit
- * row recorded a boolean (matches the metadata policy in
- * settings-actions.server.ts).
+ * display name resolved. `booleanValue` / `enumValue` are non-null only
+ * when the audit row recorded a boolean / an enum value (matches the
+ * metadata policy in settings-actions.server.ts).
  */
 export type SettingHistoryEntry = {
   id: string;
   atMs: number;
   actorName: string | null;
   booleanValue: boolean | null;
+  enumValue: string | null;
 };
 
 const listSettingHistoryInputSchema = z.object({

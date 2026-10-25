@@ -166,11 +166,72 @@ describe("per-key permissions", () => {
     ).rejects.toThrow("Forbidden: missing settings:manage");
   });
 
-  it("rejects the list for a permission that edits no setting", async () => {
+  it("lists only the settings a notice:manage-only principal can edit", async () => {
     await signInWithPermissionOnly("notice:manage");
-    await expect(listSiteSettingsAction()).rejects.toThrow(
-      "Forbidden: missing settings:manage",
-    );
+    const snapshot = await listSiteSettingsAction();
+    expect(Object.keys(snapshot).sort()).toEqual([
+      "notice.audience",
+      "notice.enabled",
+      "notice.text",
+      "notice.tone",
+    ]);
+  });
+
+  it("lets a notice:manage-only principal write each notice setting", async () => {
+    await signInWithPermissionOnly("notice:manage");
+    await expect(
+      updateSettingAction({ key: "notice.enabled", value: true }),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      updateSettingAction({ key: "notice.text", value: "Gear due Friday" }),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      updateSettingAction({ key: "notice.audience", value: "public" }),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      updateSettingAction({ key: "notice.tone", value: "warning" }),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("refuses a notice:manage-only principal another key's history", async () => {
+    await signInWithPermissionOnly("notice:manage");
+    await expect(
+      listSettingHistoryAction({ key: "contact.clubEmail" }),
+    ).rejects.toThrow("Forbidden: missing settings:manage");
+  });
+});
+
+describe("enum settings in the audit trail", () => {
+  async function lastAuditMetadata(): Promise<unknown> {
+    const row = await getDb()
+      .select({ metadataJson: schema.auditLog.metadataJson })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "settings_updated"))
+      .get();
+    return row?.metadataJson ? JSON.parse(row.metadataJson) : null;
+  }
+
+  it("records an enum's value, like a boolean's", async () => {
+    await signInWithPermissionOnly("notice:manage");
+    await updateSettingAction({ key: "notice.audience", value: "public" });
+    expect(await lastAuditMetadata()).toEqual({
+      key: "notice.audience",
+      value: "public",
+    });
+  });
+
+  it("still records only the key for free text", async () => {
+    await signInWithPermissionOnly("notice:manage");
+    await updateSettingAction({ key: "notice.text", value: "Gear due" });
+    expect(await lastAuditMetadata()).toEqual({ key: "notice.text" });
+  });
+
+  it("returns the enum value in the history", async () => {
+    await signInWithPermissionOnly("notice:manage");
+    await updateSettingAction({ key: "notice.audience", value: "public" });
+    const [latest] = await listSettingHistoryAction({ key: "notice.audience" });
+    expect(latest.enumValue).toBe("public");
+    expect(latest.booleanValue).toBeNull();
   });
 });
 

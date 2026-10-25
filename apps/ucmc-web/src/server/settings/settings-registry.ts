@@ -23,6 +23,8 @@ import { z } from "zod";
 
 import { parseWeekdayList } from "#/lib/weekdays";
 
+import { NOTICE_AUDIENCES, NOTICE_TONES } from "./site-notice";
+
 // ── Categories: groups rendered as sections on /settings ────────────────
 // Categories double as section headings on /settings, and each one answers
 // a different question:
@@ -42,12 +44,18 @@ import { parseWeekdayList } from "#/lib/weekdays";
 //              Site identity rather than a way to reach anyone, which is
 //              what separates it from `contact`.
 //
+//   notice   — the one-line banner at the top of every page. Its own
+//              category because it has its own permission (`notice:manage`)
+//              and its own renderer with a live preview. First on the page
+//              because it is the setting most often changed.
+//
 // `integrations` / `legal` are reserved for cross-cutting concerns that
 // don't belong to a single feature.
 //
 // Keep the meanings honest: a boolean that does more than hide-and-404 a
 // page does not belong in `pages`, however page-shaped it looks.
 export const SETTING_CATEGORIES = [
+  "notice",
   "contact",
   "pages",
   "features",
@@ -58,6 +66,7 @@ export const SETTING_CATEGORIES = [
 export type SettingCategory = (typeof SETTING_CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<SettingCategory, string> = {
+  notice: "Notice",
   contact: "Contact",
   pages: "Pages",
   features: "Features",
@@ -139,6 +148,12 @@ export type SettingMeta = {
    * answers per key from this.
    */
   permission?: string;
+  /**
+   * Display text for each option of an enum setting, keyed by value. The
+   * stored value stays the enum member; this is only what the picker and
+   * the history show. A value missing here falls back to itself.
+   */
+  optionLabels?: Record<string, string>;
 };
 
 const registry = z.registry<SettingMeta>();
@@ -205,6 +220,64 @@ export const SETTINGS = {
       label: "Header tagline",
       description: `Text right of the logo in the site header. "${CURRENT_YEAR_TOKEN}" is replaced with the current year in the club's time zone, so a range like "Est. 1971\u2013${CURRENT_YEAR_TOKEN}" stays current on its own. Hidden below the lg breakpoint. Leave blank to show no tagline.`,
       category: "appearance",
+    }),
+
+  // ── Site notice ─────────────────────────────────────────────────────
+  //
+  // Four keys rather than one object: every setting is a scalar (see
+  // `auto-form-type.test.ts`), and four rows reuse the row's write path,
+  // confirm gate, reset and history. Who sees the notice is decided on the
+  // server by `resolveSiteNotice`, so a members-only notice never reaches
+  // a signed-out browser.
+  "notice.enabled": z.boolean().default(false).register(registry, {
+    label: "Show notice",
+    description:
+      "Turns the banner on or off. Turning it off keeps the text, so it can be switched back on later.",
+    category: "notice",
+    permission: "notice:manage",
+  }),
+
+  "notice.text": z
+    .string()
+    .trim()
+    .max(200, "At most 200 characters")
+    .default("")
+    .register(registry, {
+      label: "Notice text",
+      description:
+        "One line, up to 200 characters. On narrow screens a long notice scrolls sideways.",
+      category: "notice",
+      permission: "notice:manage",
+    }),
+
+  "notice.audience": z
+    .enum(NOTICE_AUDIENCES)
+    .default("members")
+    .register(registry, {
+      label: "Audience",
+      description:
+        "Who sees the notice. Members means approved members; people still mid-registration don't see it.",
+      category: "notice",
+      permission: "notice:manage",
+      optionLabels: { public: "Everyone", members: "Approved members" },
+    }),
+
+  "notice.tone": z
+    .enum(NOTICE_TONES)
+    .default("info")
+    .register(registry, {
+      label: "Tone",
+      description:
+        "The banner's colour. Every tone meets WCAG AA contrast in light and dark mode.",
+      category: "notice",
+      permission: "notice:manage",
+      optionLabels: {
+        info: "Info",
+        success: "Success",
+        warning: "Warning",
+        danger: "Danger",
+        neutral: "Neutral",
+      },
     }),
 
   "contact.clubEmail": z
@@ -1141,9 +1214,29 @@ export function pageAncestorsOf(key: PageFlagKey): PageFlagKey[] {
   return chain;
 }
 
+/**
+ * Whether `key`'s schema is a `z.enum`. Enum values are picked from a
+ * fixed list, so — like booleans — they carry no free text and the audit
+ * row records them. Reads Zod's `_def` the way the auto-form's
+ * `unwrapDefault` does, kept here so the server needn't import UI code.
+ */
+type ZodDef = { type?: string; innerType?: { _def: ZodDef } };
+
+function unwrappedType(def: ZodDef): string | undefined {
+  return def.type === "default" && def.innerType
+    ? unwrappedType(def.innerType._def)
+    : def.type;
+}
+
+export function isEnumSetting(key: SettingKey): boolean {
+  const schema = SETTINGS[key] as unknown as { _def: ZodDef };
+  return unwrappedType(schema._def) === "enum";
+}
+
 // ── Group keys by category for UI iteration ────────────────────────────
 export function keysByCategory(): Record<SettingCategory, SettingKey[]> {
   const out: Record<SettingCategory, SettingKey[]> = {
+    notice: [],
     contact: [],
     pages: [],
     features: [],

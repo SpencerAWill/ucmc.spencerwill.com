@@ -211,3 +211,65 @@ describe("SettingRow (text setting)", () => {
     expect(saveButton()).toBeDisabled();
   });
 });
+
+describe("SettingRow (enum setting)", () => {
+  beforeEach(() => {
+    mutateAsync.mockReset();
+  });
+
+  function renderEnumRow<TKey extends "notice.tone" | "notice.audience">(
+    settingKey: TKey,
+    value: SiteSettingEntry<TKey>["value"],
+  ) {
+    return render(
+      <TooltipProvider>
+        <SettingRow
+          settingKey={settingKey}
+          entry={{ value, updatedAtMs: null, updatedByName: null }}
+        />
+      </TooltipProvider>,
+    );
+  }
+
+  it("renders a picker rather than a pencil", () => {
+    renderEnumRow("notice.tone", "info");
+
+    expect(screen.getByRole("combobox", { name: "Tone" })).toHaveTextContent(
+      "Info",
+    );
+    expect(screen.queryByRole("button", { name: /Edit Tone/ })).toBeNull();
+  });
+
+  it("applies a choice immediately, with no tick to confirm", async () => {
+    mutateAsync.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    renderEnumRow("notice.tone", "warning");
+
+    expect(
+      screen.getByRole("button", { name: "Reset to default" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("combobox", { name: "Tone" }));
+    await user.click(screen.getByRole("option", { name: "Danger" }));
+
+    expect(mutateAsync).toHaveBeenCalledWith({
+      key: "notice.tone",
+      value: "danger",
+    });
+    expect(screen.queryByRole("button", { name: /Save Tone/ })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Reset to default" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Edit history" })).toBeVisible();
+  });
+
+  it("labels options from the registry, not the raw value", async () => {
+    const user = userEvent.setup();
+    renderEnumRow("notice.audience", "members");
+
+    expect(
+      screen.getByRole("combobox", { name: "Audience" }),
+    ).toHaveTextContent("Approved members");
+    await user.click(screen.getByRole("combobox", { name: "Audience" }));
+    expect(screen.getByRole("option", { name: "Everyone" })).toBeVisible();
+  });
+});

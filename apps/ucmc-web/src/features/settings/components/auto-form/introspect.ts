@@ -14,7 +14,11 @@
  */
 import type { z } from "zod";
 
-type ZodInternals = { type?: string; innerType?: ZodLike };
+type ZodInternals = {
+  type?: string;
+  innerType?: ZodLike;
+  entries?: Record<string, string>;
+};
 type ZodLike = z.ZodTypeAny & { _def: ZodInternals };
 
 export function unwrapDefault<TSchema extends z.ZodTypeAny>(
@@ -27,7 +31,7 @@ export function unwrapDefault<TSchema extends z.ZodTypeAny>(
   return schema;
 }
 
-export type AutoFormType = "string" | "boolean" | "number" | "unknown";
+export type AutoFormType = "string" | "boolean" | "number" | "enum" | "unknown";
 
 export function autoFormType(schema: z.ZodTypeAny): AutoFormType {
   const inner = unwrapDefault(schema) as ZodLike;
@@ -35,5 +39,16 @@ export function autoFormType(schema: z.ZodTypeAny): AutoFormType {
   if (t === "string") return "string";
   if (t === "boolean") return "boolean";
   if (t === "number") return "number";
+  if (t === "enum") return "enum";
   return "unknown";
+}
+
+/**
+ * The options of an enum schema, in declared order; `[]` for anything
+ * else. Zod 4 keeps them as `_def.entries` (value → value for a string
+ * enum), which is also what the public `.options` getter reads.
+ */
+export function enumOptions(schema: z.ZodTypeAny): readonly string[] {
+  const def = (unwrapDefault(schema) as ZodLike)._def;
+  return def.type === "enum" && def.entries ? Object.values(def.entries) : [];
 }

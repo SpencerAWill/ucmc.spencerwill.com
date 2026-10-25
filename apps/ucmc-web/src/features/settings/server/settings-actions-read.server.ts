@@ -115,8 +115,8 @@ export async function getPublicFlagsAction(): Promise<PublicFlags> {
  * Gated by the key's own permission — the same one that edits it.
  *
  * Value rendering uses the same policy as the audit recorder: boolean
- * values come back populated, every other shape returns `null` (the
- * audit row never stored a value for those — see settings-actions
+ * and enum values come back populated, every other shape returns `null`
+ * (the audit row never stored a value for those — see settings-actions
  * for the metadata policy).
  */
 const HISTORY_LIMIT = 50;
@@ -158,24 +158,29 @@ export async function listSettingHistoryAction(input: {
     .all();
 
   return rows.map((r) => {
-    let parsedValue: boolean | null = null;
-    if (r.metadataJson) {
-      try {
-        const parsed = JSON.parse(r.metadataJson) as {
-          key?: unknown;
-          value?: unknown;
-        };
-        if (typeof parsed.value === "boolean") parsedValue = parsed.value;
-      } catch {
-        // Audit metadata is officer-trusted but if anything ever writes
-        // malformed JSON we shouldn't crash the history view.
-      }
-    }
+    const parsedValue = auditValueOf(r.metadataJson);
     return {
       id: r.id,
       atMs: r.createdAt.epochMilliseconds,
       actorName: r.actorName,
-      booleanValue: parsedValue,
+      booleanValue: typeof parsedValue === "boolean" ? parsedValue : null,
+      // Only enums record a string value; free text is logged key-only.
+      enumValue: typeof parsedValue === "string" ? parsedValue : null,
     };
   });
+}
+
+/** The `value` an audit row recorded, or `null` for none / unreadable. */
+function auditValueOf(metadataJson: string | null): unknown {
+  if (!metadataJson) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(metadataJson) as { value?: unknown };
+    return parsed.value ?? null;
+  } catch {
+    // Audit metadata is officer-trusted but if anything ever writes
+    // malformed JSON we shouldn't crash the history view.
+    return null;
+  }
 }

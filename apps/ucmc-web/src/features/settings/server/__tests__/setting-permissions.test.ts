@@ -20,9 +20,23 @@ describe("settingPermissionOf", () => {
   });
 });
 
+describe("settingPermissionOf, notice", () => {
+  it.each([
+    "notice.enabled",
+    "notice.text",
+    "notice.audience",
+    "notice.tone",
+  ] as const)("%s is edited with notice:manage", (key) => {
+    expect(settingPermissionOf(key)).toBe("notice:manage");
+  });
+});
+
 describe("SETTINGS_PAGE_PERMISSIONS", () => {
   it("lists each distinct permission once, settings:manage first", () => {
-    expect(SETTINGS_PAGE_PERMISSIONS).toEqual(["settings:manage"]);
+    expect(SETTINGS_PAGE_PERMISSIONS).toEqual([
+      "settings:manage",
+      "notice:manage",
+    ]);
   });
 });
 
@@ -31,5 +45,11 @@ describe("canEditSetting", () => {
     expect(canEditSetting(["settings:manage"], "contact.clubEmail")).toBe(true);
     expect(canEditSetting([], "contact.clubEmail")).toBe(false);
     expect(canEditSetting(["members:manage"], "contact.clubEmail")).toBe(false);
+  });
+
+  it("does not let notice:manage edit anything outside the notice", () => {
+    expect(canEditSetting(["notice:manage"], "notice.text")).toBe(true);
+    expect(canEditSetting(["notice:manage"], "contact.clubEmail")).toBe(false);
+    expect(canEditSetting(["settings:manage"], "notice.text")).toBe(false);
   });
 });
