@@ -17,6 +17,7 @@ const base = {
   userAgent: "Mozilla/5.0" as string | null,
   createdByPublicId: "usr_abc123" as string | null,
   createdAt: Temporal.Instant.from("2026-10-25T02:30:00Z"),
+  hasScreenshot: false,
 };
 
 describe("quotedReportFor", () => {
@@ -28,6 +29,22 @@ describe("quotedReportFor", () => {
         "Sign-in is offscreen.",
         "",
         "**Page:** `/trips/abc` · **Browser:** Mozilla/5.0",
+        "",
+        "</details>",
+      ].join("\n"),
+    );
+  });
+
+  it('adds "Screenshot attached (visible in triage)." when hasScreenshot', () => {
+    expect(quotedReportFor({ ...base, hasScreenshot: true })).toBe(
+      [
+        "<details><summary>🐞 Login broken: member usr_abc123, 2026-10-24</summary>",
+        "",
+        "Sign-in is offscreen.",
+        "",
+        "**Page:** `/trips/abc` · **Browser:** Mozilla/5.0",
+        "",
+        "Screenshot attached (visible in triage).",
         "",
         "</details>",
       ].join("\n"),

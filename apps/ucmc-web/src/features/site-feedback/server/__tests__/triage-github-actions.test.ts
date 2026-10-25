@@ -165,6 +165,30 @@ beforeEach(async () => {
 // ── filing ─────────────────────────────────────────────────────────────
 
 describe("fileSiteFeedbackIssueAction", () => {
+  it("a report's screenshot reaches GitHub as one line, never as a key or URL", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    await getDb()
+      .update(schema.siteFeedback)
+      .set({
+        screenshotKey: `site-feedback/screenshots/${a}.webp`,
+        screenshotBytes: 10,
+      })
+      .where(eq(schema.siteFeedback.id, a));
+    const draft = await triage.createSiteFeedbackIssueDraftAction({
+      feedbackIds: [a],
+    });
+    mocked.createIssue.mockResolvedValue({
+      number: 77,
+      url: "https://github.com/o/r/issues/77",
+    });
+    await triage.fileSiteFeedbackIssueAction({ id: draft.id });
+    const payload = JSON.stringify(mocked.createIssue.mock.calls[0]);
+    expect(payload).toContain("Screenshot attached (visible in triage).");
+    expect(payload).not.toContain("site-feedback/screenshots/");
+    expect(payload).not.toContain("/api/site-feedback/");
+  });
+
   it("stores the number and URL, opens the issue and posts every link", async () => {
     const admin = await seedAdmin();
     const a = await seedFeedback();

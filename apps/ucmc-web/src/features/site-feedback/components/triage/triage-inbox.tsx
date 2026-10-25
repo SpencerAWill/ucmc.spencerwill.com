@@ -6,6 +6,7 @@ import { Checkbox } from "#/components/ui/checkbox";
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import { SiteFeedbackScreenshot } from "#/features/site-feedback/components/site-feedback-screenshot";
 import { TriageSelectionToolbar } from "#/features/site-feedback/components/triage/triage-selection-toolbar";
 import {
   SITE_FEEDBACK_KIND_LABELS,
@@ -196,6 +197,10 @@ export function TriageInbox({
                     <p className="line-clamp-2 text-sm text-muted-foreground">
                       {row.body}
                     </p>
+                    <SiteFeedbackScreenshot
+                      feedbackId={row.id}
+                      state={row.screenshot}
+                    />
                     <p className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
                       {path === null ? null : <span>{path}</span>}
                       {browser === null ? null : <span>{browser}</span>}

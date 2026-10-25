@@ -124,6 +124,8 @@ export interface TriageFeedbackRow {
   createdAt: Temporal.Instant;
   createdByPublicId: string | null;
   state: SiteFeedbackState;
+  screenshotKey: string | null;
+  screenshotPurgedAt: Temporal.Instant | null;
 }
 
 const triageSelect = {
@@ -136,6 +138,8 @@ const triageSelect = {
   createdAt: schema.siteFeedback.createdAt,
   createdByPublicId: schema.users.publicId,
   state: siteFeedbackStateSql(),
+  screenshotKey: schema.siteFeedback.screenshotKey,
+  screenshotPurgedAt: schema.siteFeedback.screenshotPurgedAt,
 };
 
 export async function listTriageFeedback(
@@ -288,6 +292,20 @@ export interface IssueRow {
   filingStartedAt: Temporal.Instant | null;
 }
 
+/** The fields a screenshot read needs: who owns the report, and the key. */
+export async function getSiteFeedbackScreenshotRow(
+  id: string,
+): Promise<{ createdBy: string | null; screenshotKey: string | null } | null> {
+  const rows = await getDb()
+    .select({
+      createdBy: schema.siteFeedback.createdBy,
+      screenshotKey: schema.siteFeedback.screenshotKey,
+    })
+    .from(schema.siteFeedback)
+    .where(eq(schema.siteFeedback.id, id));
+  return rows.at(0) ?? null;
+}
+
 export async function getIssue(id: string): Promise<IssueRow | null> {
   const rows = await getDb()
     .select({
@@ -311,6 +329,8 @@ export interface IssueLinkRow {
   pageUrl: string | null;
   quotedMd: string;
   postedAt: Temporal.Instant | null;
+  screenshotKey: string | null;
+  screenshotPurgedAt: Temporal.Instant | null;
 }
 
 export async function listIssueLinks(issueId: string): Promise<IssueLinkRow[]> {
@@ -322,6 +342,8 @@ export async function listIssueLinks(issueId: string): Promise<IssueLinkRow[]> {
       pageUrl: schema.siteFeedback.pageUrl,
       quotedMd: schema.siteFeedbackIssueLinks.quotedMd,
       postedAt: schema.siteFeedbackIssueLinks.postedAt,
+      screenshotKey: schema.siteFeedback.screenshotKey,
+      screenshotPurgedAt: schema.siteFeedback.screenshotPurgedAt,
     })
     .from(schema.siteFeedbackIssueLinks)
     .innerJoin(

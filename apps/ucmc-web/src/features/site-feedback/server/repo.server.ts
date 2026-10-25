@@ -30,6 +30,8 @@ export interface SiteFeedbackRow {
   authorFullName: string | null;
   authorPreferredName: string | null;
   authorAvatarKey: string | null;
+  screenshotKey: string | null;
+  screenshotPurgedAt: Temporal.Instant | null;
 }
 
 const baseSelect = {
@@ -49,6 +51,8 @@ const baseSelect = {
   authorFullName: schema.profiles.fullName,
   authorPreferredName: schema.profiles.preferredName,
   authorAvatarKey: schema.profiles.avatarKey,
+  screenshotKey: schema.siteFeedback.screenshotKey,
+  screenshotPurgedAt: schema.siteFeedback.screenshotPurgedAt,
 };
 
 export async function listSiteFeedbackByUser(

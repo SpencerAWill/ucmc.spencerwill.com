@@ -41,6 +41,7 @@ const {
   listMySiteFeedbackAction,
   submitSiteFeedbackAction,
   getSiteFeedbackOverviewAction,
+  getSiteFeedbackScreenshotAction,
 } =
   await import("#/features/site-feedback/server/site-feedback-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
@@ -478,5 +479,97 @@ describe("submitSiteFeedbackAction screenshots", () => {
     const row = await storedRow();
     expect(row.screenshotKey).toBeNull();
     expect(row.screenshotBytes).toBeNull();
+  });
+});
+
+describe("getSiteFeedbackScreenshotAction", () => {
+  async function submittedWithScreenshot(): Promise<{
+    id: string;
+    owner: string;
+  }> {
+    const owner = await signInAsMember("owner@example.com");
+    const { id } = await submitSiteFeedbackAction(
+      bugReport(dataUrl("image/webp", WEBP)),
+    );
+    return { id, owner };
+  }
+
+  async function bodyBytes(
+    res: { body: ReadableStream; contentType: string } | null,
+  ): Promise<Uint8Array> {
+    expect(res).not.toBeNull();
+    return new Uint8Array(await new Response(res!.body).arrayBuffer());
+  }
+
+  it("returns the image to its submitter", async () => {
+    const { id } = await submittedWithScreenshot();
+    const res = await getSiteFeedbackScreenshotAction(id);
+    expect(res?.contentType).toBe("image/webp");
+    expect(await bodyBytes(res)).toEqual(new Uint8Array(WEBP));
+  });
+
+  it("to a site_feedback:manage holder", async () => {
+    const { id } = await submittedWithScreenshot();
+    await signInAsAdmin();
+    expect(await bodyBytes(await getSiteFeedbackScreenshotAction(id))).toEqual(
+      new Uint8Array(WEBP),
+    );
+  });
+
+  it("null for another member", async () => {
+    const { id } = await submittedWithScreenshot();
+    await signInAsMember("other@example.com");
+    expect(await getSiteFeedbackScreenshotAction(id)).toBeNull();
+  });
+
+  it("null for a manager previewing a member role", async () => {
+    const { id } = await submittedWithScreenshot();
+    await signInAsAdmin();
+    cookieJar.set("ucmc_view_as", "member");
+    expect(await getSiteFeedbackScreenshotAction(id)).toBeNull();
+  });
+
+  it("null when signed out", async () => {
+    const { id } = await submittedWithScreenshot();
+    cookieJar.clear();
+    expect(await getSiteFeedbackScreenshotAction(id)).toBeNull();
+  });
+
+  it("null once purged", async () => {
+    const { id } = await submittedWithScreenshot();
+    await getDb()
+      .update(schema.siteFeedback)
+      .set({ screenshotKey: null, screenshotPurgedAt: Temporal.Now.instant() })
+      .where(eq(schema.siteFeedback.id, id));
+    expect(await getSiteFeedbackScreenshotAction(id)).toBeNull();
+  });
+
+  it("null for an unknown id", async () => {
+    await signInAsAdmin();
+    expect(await getSiteFeedbackScreenshotAction("sfb_nope")).toBeNull();
+  });
+});
+
+describe("summary screenshot state", () => {
+  it('is "present" / "purged" / null and never includes the key', async () => {
+    await signInAsMember();
+    const { id: present } = await submitSiteFeedbackAction(
+      bugReport(dataUrl("image/webp", WEBP)),
+    );
+    const { id: purged } = await submitSiteFeedbackAction(
+      bugReport(dataUrl("image/jpeg", JPEG)),
+    );
+    const { id: none } = await submitSiteFeedbackAction(bugReport());
+    await getDb()
+      .update(schema.siteFeedback)
+      .set({ screenshotKey: null, screenshotPurgedAt: Temporal.Now.instant() })
+      .where(eq(schema.siteFeedback.id, purged));
+
+    const mine = await listMySiteFeedbackAction();
+    const state = new Map(mine.map((s) => [s.id, s.screenshot]));
+    expect(state.get(present)).toBe("present");
+    expect(state.get(purged)).toBe("purged");
+    expect(state.get(none)).toBeNull();
+    expect(JSON.stringify(mine)).not.toContain("site-feedback/screenshots/");
   });
 });

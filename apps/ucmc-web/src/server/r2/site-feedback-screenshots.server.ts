@@ -34,6 +34,12 @@ export async function putSiteFeedbackScreenshot(
   });
 }
 
+export async function getSiteFeedbackScreenshot(
+  key: string,
+): Promise<R2ObjectBody | null> {
+  return getPrivateBucket().get(key);
+}
+
 export async function deleteSiteFeedbackScreenshots(
   keys: readonly string[],
 ): Promise<void> {

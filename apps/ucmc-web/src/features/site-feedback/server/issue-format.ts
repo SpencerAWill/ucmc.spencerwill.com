@@ -57,6 +57,7 @@ export function quotedReportFor(s: {
   userAgent: string | null;
   createdByPublicId: string | null;
   createdAt: Temporal.Instant;
+  hasScreenshot: boolean;
 }): string {
   const date = s.createdAt
     .toZonedDateTimeISO(CLUB_TIME_ZONE)
@@ -84,6 +85,11 @@ export function quotedReportFor(s: {
   }
   if (parts.length > 0) {
     lines.push(parts.join(" · "), "");
+  }
+  // The image itself never goes to GitHub: it can show anything on the
+  // member's screen, and a public issue is no place for it.
+  if (s.hasScreenshot) {
+    lines.push("Screenshot attached (visible in triage).", "");
   }
   lines.push("</details>");
   return lines.join("\n");

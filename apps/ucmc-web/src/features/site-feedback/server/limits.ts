@@ -136,6 +136,27 @@ const userAgentField = z
  */
 export const SITE_FEEDBACK_SCREENSHOT_MAX_BYTES = 1_048_576;
 
+/**
+ * What a payload says about a report's screenshot. The R2 key itself
+ * never leaves the server: the image is read by id, through a route that
+ * checks the viewer.
+ */
+export type SiteFeedbackScreenshotState = "present" | "purged" | null;
+
+export function siteFeedbackScreenshotState(row: {
+  screenshotKey: string | null;
+  screenshotPurgedAt: Temporal.Instant | null;
+}): SiteFeedbackScreenshotState {
+  if (row.screenshotKey !== null) {
+    return "present";
+  }
+  return row.screenshotPurgedAt !== null ? "purged" : null;
+}
+
+export function siteFeedbackScreenshotUrl(id: string): string {
+  return `/api/site-feedback/${encodeURIComponent(id)}/screenshot`;
+}
+
 // A `data:` URL: the 1 MB cap in base64 (×4/3) plus the prefix. The
 // decoded size is checked exactly on the server.
 const screenshotDataUrlField = z.string().max(1_400_000).optional();

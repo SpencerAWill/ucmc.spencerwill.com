@@ -23,8 +23,12 @@ import {
   issueMarker,
   quotedReportFor,
 } from "#/features/site-feedback/server/issue-format";
-import { SITE_FEEDBACK_FILING_STALE_MS } from "#/features/site-feedback/server/limits";
+import {
+  SITE_FEEDBACK_FILING_STALE_MS,
+  siteFeedbackScreenshotState,
+} from "#/features/site-feedback/server/limits";
 import type {
+  SiteFeedbackScreenshotState,
   SiteFeedbackAttachInput,
   SiteFeedbackDispositionInput,
   SiteFeedbackIssueDraftCreateInput,
@@ -87,6 +91,7 @@ export interface SiteFeedbackTriageRow {
   createdAt: Temporal.Instant;
   createdByPublicId: string | null;
   state: SiteFeedbackState;
+  screenshot: SiteFeedbackScreenshotState;
   issues: {
     id: string;
     title: string;
@@ -129,6 +134,7 @@ export type SiteFeedbackIssueDetail = SiteFeedbackIssueSummary & {
     title: string;
     quotedMd: string;
     postedAt: Temporal.Instant | null;
+    screenshot: SiteFeedbackScreenshotState;
   }[];
 };
 
@@ -156,6 +162,7 @@ async function withIssues(
     createdAt: row.createdAt,
     createdByPublicId: row.createdByPublicId,
     state: row.state,
+    screenshot: siteFeedbackScreenshotState(row),
     issues: links
       .filter((l) => l.feedbackId === row.id)
       .map((l) => ({
@@ -189,6 +196,7 @@ function quotedFor(row: TriageFeedbackRow): string {
     userAgent: row.userAgent,
     createdByPublicId: row.createdByPublicId,
     createdAt: row.createdAt,
+    hasScreenshot: row.screenshotKey !== null,
   });
 }
 
@@ -307,6 +315,7 @@ export async function getSiteFeedbackIssueAction(
       title: l.title,
       quotedMd: l.quotedMd,
       postedAt: l.postedAt,
+      screenshot: siteFeedbackScreenshotState(l),
     })),
   };
 }

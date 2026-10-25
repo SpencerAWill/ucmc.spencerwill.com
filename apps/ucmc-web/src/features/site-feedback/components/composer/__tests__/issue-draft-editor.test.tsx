@@ -60,6 +60,7 @@ const issue: SiteFeedbackIssueDetail = {
       title: "Broken",
       quotedMd: "It broke",
       postedAt: null,
+      screenshot: null,
     },
   ],
 };
