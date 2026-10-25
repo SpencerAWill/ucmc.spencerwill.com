@@ -68,6 +68,24 @@
    */
   --header: oklch(0.508 0.118 165.612);
   --header-foreground: oklch(0.979 0.021 166.113);
+  /*
+   * Site notice tones (`site-notice-banner.tsx`). Presets, not a colour
+   * picker, so each pair can be held to WCAG AA — `notice-contrast.test.tsx`
+   * reads this file and fails under 4.5:1. Deep fills with a near-white
+   * foreground, except warning: amber only reads as amber when it is light,
+   * so it takes a near-black foreground instead. Measured:
+   * info 6.06, success 6.25, warning 9.90, danger 6.29, neutral 10.02.
+   */
+  --notice-info: oklch(0.49 0.14 255);
+  --notice-info-foreground: oklch(0.985 0.006 255);
+  --notice-success: oklch(0.47 0.105 155);
+  --notice-success-foreground: oklch(0.985 0.02 155);
+  --notice-warning: oklch(0.86 0.15 85);
+  --notice-warning-foreground: oklch(0.27 0.06 60);
+  --notice-danger: oklch(0.5 0.18 27);
+  --notice-danger-foreground: oklch(0.985 0.004 27);
+  --notice-neutral: oklch(0.37 0.012 286);
+  --notice-neutral-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.933 0.014 85);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.933 0.014 85);
@@ -222,6 +240,20 @@
    * a mint bar would shout across every page. */
   --header: oklch(0.432 0.095 166.913);
   --header-foreground: oklch(0.979 0.021 166.113);
+  /* Notice tones, re-stepped against the dark page rather than flipped:
+   * quieter fills so a banner doesn't glare across every page, with the
+   * warning amber dimmed but still light. Measured:
+   * info 7.78, success 7.88, warning 7.80, danger 7.83, neutral 11.39. */
+  --notice-info: oklch(0.4 0.11 255);
+  --notice-info-foreground: oklch(0.94 0.025 255);
+  --notice-success: oklch(0.39 0.08 155);
+  --notice-success-foreground: oklch(0.94 0.045 155);
+  --notice-warning: oklch(0.74 0.13 80);
+  --notice-warning-foreground: oklch(0.2 0.045 60);
+  --notice-danger: oklch(0.41 0.13 25);
+  --notice-danger-foreground: oklch(0.94 0.03 25);
+  --notice-neutral: oklch(0.31 0.008 286);
+  --notice-neutral-foreground: oklch(0.95 0 0);
   --secondary: oklch(0.288 0.006 286);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.288 0.006 286);
@@ -296,6 +328,16 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-header: var(--header);
   --color-header-foreground: var(--header-foreground);
+  --color-notice-info: var(--notice-info);
+  --color-notice-info-foreground: var(--notice-info-foreground);
+  --color-notice-success: var(--notice-success);
+  --color-notice-success-foreground: var(--notice-success-foreground);
+  --color-notice-warning: var(--notice-warning);
+  --color-notice-warning-foreground: var(--notice-warning-foreground);
+  --color-notice-danger: var(--notice-danger);
+  --color-notice-danger-foreground: var(--notice-danger-foreground);
+  --color-notice-neutral: var(--notice-neutral);
+  --color-notice-neutral-foreground: var(--notice-neutral-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -345,6 +387,19 @@ body,
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+/* The site notice's ticker (`site-notice-banner.tsx`). The strip holds two
+ * copies of the text back to back, so sliding it by exactly half its width
+ * lands the second copy where the first began and the loop is seamless.
+ * Duration and play state are set inline from the strip's measured width. */
+@keyframes site-notice-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
   }
 }
 

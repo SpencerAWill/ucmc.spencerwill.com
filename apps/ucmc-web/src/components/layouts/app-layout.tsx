@@ -45,6 +45,7 @@ import {
   useFeedbackSurfaces,
 } from "#/components/layouts/feedback-dialog";
 import { HeaderMasthead } from "#/components/layouts/header-masthead";
+import { SiteNoticeBanner } from "#/components/layouts/site-notice-banner";
 import { ModeToggle } from "#/components/mode-toggle";
 import { SocialIconLinks } from "#/components/social-icon-links";
 import {
@@ -196,6 +197,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarRail />
         </Sidebar>
         <SidebarInset>
+          {/*
+           * Inside the inset, not above the sidebar row: the notice is
+           * about the page, so it spans the page column and sticks under
+           * the header (z-20 against the header's z-30), never between
+           * the header and the sidebar.
+           */}
+          <SiteNoticeBanner />
           {/*
            * `tabIndex={-1}` makes the landmark programmatically
            * focusable so the skip-link target receives focus on
