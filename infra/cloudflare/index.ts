@@ -93,6 +93,23 @@ const publicBucketDomain = new cloudflare.R2CustomDomain(
   },
 );
 
+// Lets the app's own pages read the public bucket's images cross-origin.
+// The feedback screenshot (`modern-screenshot`) re-fetches every image on
+// the page to inline it into the capture, and a response from the CDN
+// without CORS headers comes back blank. GET/HEAD from the app origin
+// only; local dev serves images same-origin through `/api/*`, so it needs
+// no entry here.
+new cloudflare.R2BucketCors(`ucmc-web-${stack}-public-bucket-cors`, {
+  accountId,
+  bucketName: publicBucket.name,
+  rules: [
+    {
+      allowed: { methods: ["GET", "HEAD"], origins: [`https://${hostname}`] },
+      maxAgeSeconds: 86400,
+    },
+  ],
+});
+
 // Workers KV namespace for the web app. Wrangler binds by namespace UUID
 // (see `apps/ucmc-web/wrangler.jsonc`); the UUID is exported below and written
 // into the wrangler config by the deploy's `sync-env`, mirroring D1.
