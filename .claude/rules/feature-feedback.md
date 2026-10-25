@@ -26,7 +26,7 @@ Suggestion / concern / praise / general submissions aimed at the exec board for 
 
 ## Shared
 
-Each surface is independently gated by the `feedback.site_enabled` / `feedback.club_enabled` **feature** settings (both default ON). **Toggling off blocks new submissions only**; managers retain triage access via the separate `*:manage` permission. That's why these are `features.*` and not page flags — see the settings rule.
+Each surface is independently gated by the `site_feedback.submissions_enabled` / `club_feedback.submissions_enabled` **feature** settings (both default ON). **Toggling off blocks new submissions only**; managers retain triage access via the separate `*:manage` permission. That's why these are `features.*` and not page flags — see the settings rule.
 
 The surface switcher is a compact segmented control of real `<Link>`s sitting right-aligned on the `<h1>`'s row rather than as a full-width bar, which leaves the subtitle the full column to describe the active surface. The shared `FeedbackTabsBar` lives in `src/components/layouts/` so neither feature has to cross-import the other.
 

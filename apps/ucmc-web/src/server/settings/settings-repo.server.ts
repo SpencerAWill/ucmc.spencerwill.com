@@ -25,20 +25,24 @@ import { SETTINGS } from "./settings-registry";
 import type { SettingKey, SettingValue } from "./settings-registry";
 
 /**
- * Keys renamed by migration `0064`, mapped current → pre-`0064`. The
+ * Keys renamed by migration `0085`, mapped current → pre-`0085`. The
  * fail-open contract makes a rename dangerous in exactly the skew this
- * covers: against a database that hasn't run `0064`, the new key finds no
+ * covers: against a database that hasn't run `0085`, the new key finds no
  * row and falls back to the registry default (`true` for the feedback
- * gate), silently *reopening* an intake an admin had paused. Reading
+ * gates), silently *reopening* an intake an admin had paused. Reading
  * through to the old key keeps the stored value authoritative until the
  * migration lands.
  *
+ * The earlier `feedback.site_enabled` → `feedback.website_enabled` pair
+ * (migration `0064`) is gone: `0064` has long been applied to dev and prod.
+ *
  * Same reasoning and the same lifetime as
- * `src/server/auth/permission-aliases.ts` — **delete both once `0064` is
+ * `src/server/auth/permission-aliases.ts` — **delete both once `0085` is
  * applied to dev and prod.**
  */
 const LEGACY_SETTING_KEYS: Partial<Record<SettingKey, string>> = {
-  "feedback.site_enabled": "feedback.website_enabled",
+  "site_feedback.submissions_enabled": "feedback.site_enabled",
+  "club_feedback.submissions_enabled": "feedback.club_enabled",
 };
 
 /**

@@ -497,6 +497,62 @@ describe("0081_search_fts backfills every searchable row", () => {
   });
 });
 
+describe("rename_feedback_submission_settings carries the switches and their history", () => {
+  // The submission switches were renamed per surface. A bare key rename
+  // would reset a paused intake to the registry default (ON) and strand
+  // the /settings history panel, which keys on the setting name.
+  const BEFORE = "0084_webauthn_consumed_ceremonies.sql";
+
+  beforeEach(async () => {
+    await applyThrough(BEFORE);
+
+    const seed = [
+      `INSERT INTO site_settings (key, value_json) VALUES ('feedback.site_enabled', 'false')`,
+      `INSERT INTO site_settings (key, value_json) VALUES ('feedback.club_enabled', 'false')`,
+      `INSERT INTO audit_log (id, action, target_type, target_id)
+       VALUES ('aud_site', 'settings_updated', 'site_setting', 'feedback.site_enabled')`,
+      `INSERT INTO audit_log (id, action, target_type, target_id)
+       VALUES ('aud_club', 'settings_updated', 'site_setting', 'feedback.club_enabled')`,
+    ];
+    for (const statement of seed) {
+      await env.MIGRATIONS_DB.prepare(statement).run();
+    }
+
+    await applyRest();
+  });
+
+  it.each([
+    ["feedback.site_enabled", "site_feedback.submissions_enabled", "aud_site"],
+    ["feedback.club_enabled", "club_feedback.submissions_enabled", "aud_club"],
+  ])(
+    "%s becomes %s with its value and audit row",
+    async (oldKey, newKey, auditId) => {
+      const renamed = await env.MIGRATIONS_DB.prepare(
+        `SELECT value_json FROM site_settings WHERE key = ?`,
+      )
+        .bind(newKey)
+        .first<{ value_json: string }>();
+      expect(renamed?.value_json, `${newKey} lost its stored value`).toBe(
+        "false",
+      );
+
+      const leftover = await env.MIGRATIONS_DB.prepare(
+        `SELECT key FROM site_settings WHERE key = ?`,
+      )
+        .bind(oldKey)
+        .first();
+      expect(leftover, `${oldKey} row survived the rename`).toBeNull();
+
+      const audit = await env.MIGRATIONS_DB.prepare(
+        `SELECT target_id FROM audit_log WHERE id = ?`,
+      )
+        .bind(auditId)
+        .first<{ target_id: string }>();
+      expect(audit?.target_id).toBe(newKey);
+    },
+  );
+});
+
 describe("a populated database upgrades across the most recent migration", () => {
   // Deliberately expressed as "the last one", not as a file name: the
   // newest migration is the one nobody has run against real data yet, so

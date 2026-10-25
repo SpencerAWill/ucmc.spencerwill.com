@@ -91,8 +91,10 @@ export function publicFlagsQueryOptions() {
     ) as PublicFlags["pages"],
   );
   const fallback: PublicFlags = {
-    siteFeedback: SETTINGS["feedback.site_enabled"].parse(undefined),
-    clubFeedback: SETTINGS["feedback.club_enabled"].parse(undefined),
+    siteFeedback:
+      SETTINGS["site_feedback.submissions_enabled"].parse(undefined),
+    clubFeedback:
+      SETTINGS["club_feedback.submissions_enabled"].parse(undefined),
     pages,
   };
   return {

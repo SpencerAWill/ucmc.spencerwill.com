@@ -144,13 +144,13 @@ describe("feedback authorization", () => {
     ).rejects.toThrow("Forbidden: missing site_feedback:manage");
   });
 
-  it("submitSiteFeedbackAction rejects when feedback.site_enabled is off", async () => {
+  it("submitSiteFeedbackAction rejects when site_feedback.submissions_enabled is off", async () => {
     await signInAsMember();
     // Set the kill switch to false. `readSetting` falls back to the
     // schema default (true) when the row is absent, so we have to
     // write an explicit false row here.
     await getDb().insert(schema.siteSettings).values({
-      key: "feedback.site_enabled",
+      key: "site_feedback.submissions_enabled",
       valueJson: "false",
       updatedBy: null,
     });

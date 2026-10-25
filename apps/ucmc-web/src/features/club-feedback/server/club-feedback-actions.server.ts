@@ -13,7 +13,7 @@
  *     redaction is applied here when projecting summaries for managers,
  *     so the FK never reaches the client. Owners always see their own
  *     rows un-redacted in the "Your submissions" list.
- *   - Submission gate. `feedback.club_enabled` controls whether new
+ *   - Submission gate. `club_feedback.submissions_enabled` controls whether new
  *     submissions are accepted; managers retain full triage access
  *     regardless (separate `club_feedback:manage` permission).
  */
@@ -154,7 +154,7 @@ export async function submitClubFeedbackAction(
   input: ClubFeedbackInput,
 ): Promise<{ id: string }> {
   const principal = await requireClubFeedbackSubmitter();
-  const enabled = await readSetting("feedback.club_enabled");
+  const enabled = await readSetting("club_feedback.submissions_enabled");
   if (!enabled) {
     throw new Error("Club feedback submissions are currently disabled.");
   }

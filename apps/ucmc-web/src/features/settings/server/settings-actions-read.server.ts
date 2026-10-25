@@ -76,8 +76,8 @@ export async function getPublicBrandingAction(): Promise<PublicBranding> {
  */
 export async function getPublicFlagsAction(): Promise<PublicFlags> {
   const [siteFeedback, clubFeedback, pageValues] = await Promise.all([
-    readSetting("feedback.site_enabled"),
-    readSetting("feedback.club_enabled"),
+    readSetting("site_feedback.submissions_enabled"),
+    readSetting("club_feedback.submissions_enabled"),
     Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
   ]);
   const raw = Object.fromEntries(

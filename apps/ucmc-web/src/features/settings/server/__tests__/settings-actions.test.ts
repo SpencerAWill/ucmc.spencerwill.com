@@ -160,8 +160,8 @@ describe("readSetting fail-open", () => {
 
 // ── legacy key fallback (temporary, see settings-repo.server.ts) ───────
 
-describe("pre-0064 setting keys", () => {
-  it("reads feedback.site_enabled through to the old key when only it exists", async () => {
+describe("pre-rename feedback submission setting keys", () => {
+  it("reads site_feedback.submissions_enabled through to the old key when only it exists", async () => {
     // The skew this covers: a build that asks for the new key against a
     // database that hasn't run 0064. Without the fallback the read would
     // miss and fail open to the registry default (true), silently
@@ -169,11 +169,22 @@ describe("pre-0064 setting keys", () => {
     await getDb()
       .insert(schema.siteSettings)
       .values({
-        key: "feedback.website_enabled",
+        key: "feedback.site_enabled",
         valueJson: JSON.stringify(false),
       });
 
-    expect(await readSetting("feedback.site_enabled")).toBe(false);
+    expect(await readSetting("site_feedback.submissions_enabled")).toBe(false);
+  });
+
+  it("reads club_feedback.submissions_enabled through to the old key when only it exists", async () => {
+    await getDb()
+      .insert(schema.siteSettings)
+      .values({
+        key: "feedback.club_enabled",
+        valueJson: JSON.stringify(false),
+      });
+
+    expect(await readSetting("club_feedback.submissions_enabled")).toBe(false);
   });
 
   it("prefers the current key when both rows exist", async () => {
@@ -181,13 +192,16 @@ describe("pre-0064 setting keys", () => {
       .insert(schema.siteSettings)
       .values([
         {
-          key: "feedback.website_enabled",
+          key: "feedback.site_enabled",
           valueJson: JSON.stringify(false),
         },
-        { key: "feedback.site_enabled", valueJson: JSON.stringify(true) },
+        {
+          key: "site_feedback.submissions_enabled",
+          valueJson: JSON.stringify(true),
+        },
       ]);
 
-    expect(await readSetting("feedback.site_enabled")).toBe(true);
+    expect(await readSetting("site_feedback.submissions_enabled")).toBe(true);
   });
 
   it("surfaces the old key's value in the /settings snapshot too", async () => {
@@ -197,13 +211,13 @@ describe("pre-0064 setting keys", () => {
     await getDb()
       .insert(schema.siteSettings)
       .values({
-        key: "feedback.website_enabled",
+        key: "feedback.site_enabled",
         valueJson: JSON.stringify(false),
       });
 
     const entries = await listSiteSettingsAction();
 
-    expect(entries["feedback.site_enabled"].value).toBe(false);
+    expect(entries["site_feedback.submissions_enabled"].value).toBe(false);
   });
 });
 

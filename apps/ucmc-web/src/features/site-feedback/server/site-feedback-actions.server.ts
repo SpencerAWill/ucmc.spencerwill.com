@@ -152,7 +152,7 @@ export async function submitSiteFeedbackAction(
   // also revoking everyone's permission.
   // The `*:manage` permission keeps managers' access to the triage view
   // intact regardless — this gate is on **submissions**, not reads.
-  const enabled = await readSetting("feedback.site_enabled");
+  const enabled = await readSetting("site_feedback.submissions_enabled");
   if (!enabled) {
     throw new Error("Site feedback submissions are currently disabled.");
   }

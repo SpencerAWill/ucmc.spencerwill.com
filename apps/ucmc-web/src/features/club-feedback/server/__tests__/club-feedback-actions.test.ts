@@ -148,10 +148,10 @@ describe("club feedback authorization", () => {
     ).rejects.toThrow("Forbidden: missing club_feedback:manage");
   });
 
-  it("submitClubFeedbackAction rejects when feedback.club_enabled is off", async () => {
+  it("submitClubFeedbackAction rejects when club_feedback.submissions_enabled is off", async () => {
     await signInAsMember();
     await getDb().insert(schema.siteSettings).values({
-      key: "feedback.club_enabled",
+      key: "club_feedback.submissions_enabled",
       valueJson: "false",
       updatedBy: null,
     });
