@@ -45,6 +45,7 @@ export function UserMenu() {
   const flagsOptions = publicFlagsQueryOptions();
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
   const pages = flags.pages;
+  const launcher = useFeedbackLauncher();
 
   if (isLoading) {
     return (
@@ -148,11 +149,26 @@ export function UserMenu() {
                 </Link>
               </DropdownMenuItem>
             ) : null}
-            <FeedbackMenuRow
-              showMine={
-                pages.my_feedback && hasAnyPermission(MY_FEEDBACK_PERMISSIONS)
-              }
-            />
+            {pages.my_feedback && hasAnyPermission(MY_FEEDBACK_PERMISSIONS) ? (
+              <DropdownMenuItem asChild>
+                <Link to="/my/feedback">
+                  <MessageSquare className="mr-2 size-4" />
+                  My feedback
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
+            {/* Its own section: an action, not a page of the member's.
+                The launcher records the page first, so the menu closes
+                before any screenshot. */}
+            {launcher.canSend ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => launcher.open()}>
+                  <MessageSquarePlus className="mr-2 size-4" />
+                  Send feedback…
+                </DropdownMenuItem>
+              </>
+            ) : null}
           </>
         )}
         <DropdownMenuSeparator />
@@ -168,36 +184,5 @@ export function UserMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/**
- * One row, up to two actions side by side: "Send feedback…" opens the
- * dialog (the launcher records the page first, so the menu closes before
- * any screenshot), "My feedback" links to the member's own submissions.
- * Each half has its own gate; with neither the row isn't rendered.
- */
-function FeedbackMenuRow({ showMine }: { showMine: boolean }) {
-  const launcher = useFeedbackLauncher();
-  if (!launcher.canSend && !showMine) {
-    return null;
-  }
-  return (
-    <div data-testid="feedback-menu-row" className="flex">
-      {launcher.canSend ? (
-        <DropdownMenuItem className="flex-1" onSelect={() => launcher.open()}>
-          <MessageSquarePlus className="mr-2 size-4" />
-          Send feedback…
-        </DropdownMenuItem>
-      ) : null}
-      {showMine ? (
-        <DropdownMenuItem asChild className="flex-1">
-          <Link to="/my/feedback">
-            <MessageSquare className="mr-2 size-4" />
-            My feedback
-          </Link>
-        </DropdownMenuItem>
-      ) : null}
-    </div>
   );
 }

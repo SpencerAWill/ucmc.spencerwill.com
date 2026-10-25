@@ -1,7 +1,7 @@
 /**
- * The account menu's feedback row: one row holding up to two actions,
- * "My feedback" (a link) and later "Send feedback…" (opens the dialog).
- * Each half has its own gate and the row disappears when neither holds.
+ * The account menu's two feedback entries, each on its own gate: "My
+ * feedback" (a link) sits with the other "My" pages, and "Send feedback…"
+ * (opens the dialog) is a section of its own above Sign out.
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -75,7 +75,7 @@ async function openMenu() {
   await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
 }
 
-describe("UserMenu feedback row", () => {
+describe("UserMenu feedback entries", () => {
   beforeEach(() => {
     useAuthMock.mockReset();
     flagsMock.mockReset();
@@ -89,7 +89,6 @@ describe("UserMenu feedback row", () => {
     expect(
       screen.getByRole("menuitem", { name: "My feedback" }),
     ).toHaveAttribute("href", "/my/feedback");
-    expect(screen.getByTestId("feedback-menu-row")).toBeInTheDocument();
   });
 
   it("shows My feedback for club_feedback:submit alone", async () => {
@@ -106,7 +105,6 @@ describe("UserMenu feedback row", () => {
     expect(
       screen.queryByRole("menuitem", { name: "My feedback" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByTestId("feedback-menu-row")).not.toBeInTheDocument();
   });
 
   it("hides My feedback when the member holds neither submit permission", async () => {
@@ -127,7 +125,7 @@ describe("UserMenu feedback row", () => {
     expect(launcher.open).toHaveBeenCalledTimes(1);
   });
 
-  it("row shows only My feedback when canSend is false", async () => {
+  it("shows only My feedback when canSend is false", async () => {
     setup(["site_feedback:submit"]);
     await openMenu();
     expect(
@@ -138,7 +136,7 @@ describe("UserMenu feedback row", () => {
     ).toBeInTheDocument();
   });
 
-  it("row shows only Send feedback… when My feedback is off", async () => {
+  it("shows only Send feedback… when My feedback is off", async () => {
     launcher.canSend = true;
     setup(["site_feedback:submit"], { my_feedback: false });
     await openMenu();
@@ -150,20 +148,32 @@ describe("UserMenu feedback row", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("row is absent when both halves are off", async () => {
+  it("shows neither entry when both gates are off", async () => {
     setup([], { my_feedback: true });
     await openMenu();
-    expect(screen.queryByTestId("feedback-menu-row")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: /feedback/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole("separator")).toHaveLength(2);
   });
 
-  it("both halves are separate menuitems in one row, send first", async () => {
+  it("My feedback follows the My pages; Send feedback… is its own section before Sign out", async () => {
     launcher.canSend = true;
-    setup(["site_feedback:submit"]);
+    setup(["site_feedback:submit"], { my_feedback: true, my_gear_cart: true });
     await openMenu();
-    const row = screen.getByTestId("feedback-menu-row");
-    const items = Array.from(row.querySelectorAll("[role=menuitem]")).map(
-      (el) => el.textContent,
+    const menu = screen.getByRole("menu");
+    const sequence = Array.from(
+      menu.querySelectorAll("[role=menuitem], [role=separator]"),
+    ).map((el) =>
+      el.getAttribute("role") === "separator" ? "---" : el.textContent,
     );
-    expect(items).toEqual(["Send feedback…", "My feedback"]);
+    const mine = sequence.indexOf("My feedback");
+    expect(sequence[mine - 1]).toBe("My Cart");
+    expect(sequence.slice(mine + 1)).toEqual([
+      "---",
+      "Send feedback…",
+      "---",
+      "Sign out",
+    ]);
   });
 });
