@@ -24,3 +24,46 @@ export type NoticeTone = (typeof NOTICE_TONES)[number];
 /** Who sees the notice. `members` means approved members only. */
 export const NOTICE_AUDIENCES = ["public", "members"] as const;
 export type NoticeAudience = (typeof NOTICE_AUDIENCES)[number];
+
+/** What a viewer is shown: the trimmed text and its tone. */
+export type SiteNotice = { text: string; tone: NoticeTone };
+
+/**
+ * The three kinds of viewer the audience policy distinguishes. Every
+ * signed-in status other than `approved` — pending, rejected, deactivated —
+ * is `pending`: signed in, but not a member.
+ */
+export type NoticeViewer = "anonymous" | "pending" | "approved";
+
+export function noticeViewerOf(
+  principal: { status: string } | null,
+): NoticeViewer {
+  if (principal === null) {
+    return "anonymous";
+  }
+  return principal.status === "approved" ? "approved" : "pending";
+}
+
+/**
+ * The notice `viewer` should see, or `null` for none: off, blank (or only
+ * whitespace — an empty coloured bar is worse than no bar), or a
+ * members-only notice for someone who isn't an approved member.
+ */
+export function resolveSiteNotice(
+  settings: {
+    enabled: boolean;
+    text: string;
+    audience: NoticeAudience;
+    tone: NoticeTone;
+  },
+  viewer: NoticeViewer,
+): SiteNotice | null {
+  const text = settings.text.trim();
+  if (!settings.enabled || text.length === 0) {
+    return null;
+  }
+  if (settings.audience === "members" && viewer !== "approved") {
+    return null;
+  }
+  return { text, tone: settings.tone };
+}

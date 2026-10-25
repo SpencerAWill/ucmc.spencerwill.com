@@ -30,6 +30,7 @@ const {
   getPublicSiteContactAction,
   getPublicFlagsAction,
   listSettingHistoryAction,
+  getSiteNoticeAction,
 } = await import("#/features/settings/server/settings-actions-read.server");
 const { readSetting } = await import("#/server/settings/settings-repo.server");
 const { SETTINGS } = await import("#/server/settings/settings-registry");
@@ -232,6 +233,60 @@ describe("enum settings in the audit trail", () => {
     const [latest] = await listSettingHistoryAction({ key: "notice.audience" });
     expect(latest.enumValue).toBe("public");
     expect(latest.booleanValue).toBeNull();
+  });
+});
+
+describe("getSiteNoticeAction", () => {
+  async function postNotice(audience: "public" | "members"): Promise<void> {
+    await signInAsManager();
+    await updateSettingAction({ key: "notice.enabled", value: true });
+    await updateSettingAction({ key: "notice.text", value: "Gear due Friday" });
+    await updateSettingAction({ key: "notice.tone", value: "warning" });
+    await updateSettingAction({ key: "notice.audience", value: audience });
+    cookieJar.clear();
+  }
+
+  async function signInWithStatus(
+    status: "pending" | "approved",
+  ): Promise<void> {
+    const userId = await seedUser(`${status}@example.com`);
+    await getDb()
+      .update(schema.users)
+      .set({ status })
+      .where(eq(schema.users.id, userId));
+    await signInAs(userId);
+  }
+
+  it("shows nothing on a fresh database", async () => {
+    await expect(getSiteNoticeAction()).resolves.toBeNull();
+  });
+
+  it("keeps a members notice from a signed-out visitor", async () => {
+    await postNotice("members");
+    await expect(getSiteNoticeAction()).resolves.toBeNull();
+  });
+
+  it("keeps a members notice from someone still pending approval", async () => {
+    await postNotice("members");
+    await signInWithStatus("pending");
+    await expect(getSiteNoticeAction()).resolves.toBeNull();
+  });
+
+  it("shows a members notice to an approved member", async () => {
+    await postNotice("members");
+    await signInWithStatus("approved");
+    await expect(getSiteNoticeAction()).resolves.toEqual({
+      text: "Gear due Friday",
+      tone: "warning",
+    });
+  });
+
+  it("shows a public notice to a signed-out visitor", async () => {
+    await postNotice("public");
+    await expect(getSiteNoticeAction()).resolves.toEqual({
+      text: "Gear due Friday",
+      tone: "warning",
+    });
   });
 });
 

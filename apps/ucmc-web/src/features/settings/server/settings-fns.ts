@@ -20,6 +20,7 @@ import type {
   SettingValue,
   UpdateSettingInput,
 } from "#/server/settings/settings-registry";
+import type { SiteNotice } from "#/server/settings/site-notice";
 import type { UpdateSettingResult } from "./settings-actions.server";
 import type {
   SiteSettingEntry,
@@ -95,6 +96,22 @@ export const getPublicBrandingFn = createServerFn({
   const { getPublicBrandingAction } =
     await import("./settings-actions-read.server");
   return getPublicBrandingAction();
+});
+
+/**
+ * The site notice for whoever is asking, or `null` for none. No auth gate;
+ * the audience policy is applied in the action, so a members-only notice
+ * is never in a signed-out response. Query it per viewer
+ * (`siteNoticeQueryOptions`) so signing in or out re-keys the banner.
+ */
+export type { SiteNotice };
+
+export const getSiteNoticeFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<SiteNotice | null> => {
+  const { getSiteNoticeAction } =
+    await import("./settings-actions-read.server");
+  return getSiteNoticeAction();
 });
 
 /**

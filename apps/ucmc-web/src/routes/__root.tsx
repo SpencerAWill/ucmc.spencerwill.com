@@ -18,6 +18,8 @@ import { ThemeProvider } from "#/components/theme-provider";
 import { Toaster } from "#/components/ui/sonner";
 import { sessionQueryOptions } from "#/features/auth/api/use-auth";
 import { ViewModeProvider } from "#/features/auth/api/view-mode";
+import { siteNoticeQueryOptions } from "#/features/settings/api/queries";
+import { noticeViewerOf } from "#/server/settings/site-notice";
 
 interface RouterContext {
   queryClient: QueryClient;
@@ -28,9 +30,17 @@ const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getIte
 export const Route = createRootRouteWithContext<RouterContext>()({
   // Prefetch the session on every SSR render so `useAuth()` hydrates with
   // the correct state (UserMenu renders signed-in immediately instead of
-  // flashing the anonymous fallback).
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(sessionQueryOptions()),
+  // flashing the anonymous fallback). The site notice follows, keyed by
+  // the viewer the session names, so the banner is in the SSR HTML rather
+  // than pushing the page down after hydration.
+  loader: async ({ context }) => {
+    const session = await context.queryClient.ensureQueryData(
+      sessionQueryOptions(),
+    );
+    await context.queryClient.ensureQueryData(
+      siteNoticeQueryOptions(noticeViewerOf(session.principal)),
+    );
+  },
   errorComponent: RouteErrorFallback,
   head: () => ({
     meta: [

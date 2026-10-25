@@ -11,6 +11,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import * as schema from "../../../../drizzle/schema";
 import { getDb } from "#/server/db";
+import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import {
   requireAnySettingPermission,
   requireSettingPermission,
@@ -27,6 +28,11 @@ import {
   PAGE_SETTING_KEYS,
 } from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
+import {
+  noticeViewerOf,
+  resolveSiteNotice,
+} from "#/server/settings/site-notice";
+import type { SiteNotice } from "#/server/settings/site-notice";
 import type {
   PublicBranding,
   PublicFlags,
@@ -78,6 +84,28 @@ export async function getPublicBrandingAction(): Promise<PublicBranding> {
     readSetting("appearance.headerTagline"),
   ]);
   return { headerTitle, headerTagline };
+}
+
+/**
+ * The site notice this caller should see, or `null`. No auth gate, but
+ * unlike the other public reads the answer depends on who is asking: a
+ * members-only notice is decided away here, on the server, so its text
+ * never ships to a signed-out browser — not in the SSR HTML and not in
+ * the dehydrated query cache. Its own allowlisted payload, like the
+ * contact and branding reads; `resolveSiteNotice` holds the policy.
+ */
+export async function getSiteNoticeAction(): Promise<SiteNotice | null> {
+  const [enabled, text, audience, tone, principal] = await Promise.all([
+    readSetting("notice.enabled"),
+    readSetting("notice.text"),
+    readSetting("notice.audience"),
+    readSetting("notice.tone"),
+    loadCurrentPrincipal(),
+  ]);
+  return resolveSiteNotice(
+    { enabled, text, audience, tone },
+    noticeViewerOf(principal),
+  );
 }
 
 /**

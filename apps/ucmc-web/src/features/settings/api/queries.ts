@@ -7,11 +7,13 @@ import {
   PUBLIC_SITE_CONTACT_QUERY_KEY,
   settingHistoryQueryKey,
   SITE_SETTINGS_QUERY_KEY,
+  siteNoticeQueryKey,
 } from "./query-keys";
 import {
   getPublicBrandingFn,
   getPublicFlagsFn,
   getPublicSiteContactFn,
+  getSiteNoticeFn,
   listSettingHistoryFn,
   listSiteSettingsFn,
 } from "#/features/settings/server/settings-fns";
@@ -27,11 +29,24 @@ import {
   SETTINGS,
 } from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
+import type { NoticeViewer } from "#/server/settings/site-notice";
 
 export function siteSettingsQueryOptions() {
   return {
     queryKey: SITE_SETTINGS_QUERY_KEY,
     queryFn: () => listSiteSettingsFn(),
+  } as const;
+}
+
+/**
+ * The site notice for `viewer`. No `placeholderData`: the default notice
+ * is "none", and the root loader prefetches it during SSR so the banner
+ * is in the first HTML instead of pushing the page down after hydration.
+ */
+export function siteNoticeQueryOptions(viewer: NoticeViewer) {
+  return {
+    queryKey: siteNoticeQueryKey(viewer),
+    queryFn: () => getSiteNoticeFn(),
   } as const;
 }
 
