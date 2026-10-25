@@ -26,13 +26,23 @@
 # through `pnpm exec`: pnpm may install first when the manifest changed, and
 # the checks run in parallel, so two of them would install at once.
 #
-# It blocks once per stop. When Claude stops again straight after being
-# blocked (`stop_hook_active`), the stop goes through, so a check Claude
-# can't fix -- or one the user said to leave -- never traps the session.
+# After a block, Claude's next stop arrives with `stop_hook_active` set:
+#   - code unchanged since the check that failed: the stop goes through.
+#     Claude stopped on purpose (to say why the errors should stay, or
+#     because the user said to leave them), and re-running would only
+#     repeat the same errors;
+#   - code changed: that was a fix attempt, so it is checked again. A
+#     wrong fix is caught here rather than ending the turn unchecked.
+# Re-checks are capped: after MAX_BLOCKS consecutive blocks the stop goes
+# through with a warning to the user, so a fix loop can't run unbounded.
+# (Claude Code's own cap counts only blocks with no tool call in between,
+# and a fix attempt is a tool call, so it would never trip.)
 # Set CLAUDE_SKIP_STOP_VERIFY=1 in the environment to switch it off.
 # File lists are word-split on purpose throughout (paths here have no spaces).
 # shellcheck disable=SC2086
 set -uo pipefail
+
+MAX_BLOCKS=3
 
 payload=$(cat)
 
@@ -40,12 +50,10 @@ payload=$(cat)
 if ! command -v jq >/dev/null; then
   exit 0
 fi
-if [[ $(jq -r '.stop_hook_active // false' <<<"$payload") == "true" ]]; then
-  exit 0
-fi
 if [[ ${CLAUDE_SKIP_STOP_VERIFY:-} == "1" ]]; then
   exit 0
 fi
+retry=$(jq -r '.stop_hook_active // false' <<<"$payload")
 
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 git rev-parse --verify -q HEAD >/dev/null || exit 0
@@ -57,12 +65,22 @@ changed=$(
     git ls-files --others --exclude-standard
   } | grep -E '\.(ts|tsx|mts|cts|js|mjs|cjs)$|(^|/)tsconfig[^/]*\.json$' | sort -u
 )
+
+# Per-session state in $TMPDIR: the fingerprint that last passed, and the
+# fingerprint that last failed with the count of consecutive blocks.
+session=$(jq -r '.session_id // "default"' <<<"$payload")
+stamp="${TMPDIR:-/tmp}/ucmc-verify-on-stop-${session//[^A-Za-z0-9_-]/_}"
+failed_stamp="$stamp.failed"
+blocks_stamp="$stamp.blocks"
+clear_failure() {
+  rm -f "$failed_stamp" "$blocks_stamp"
+}
+
 if [[ -z $changed ]]; then
+  clear_failure
   exit 0
 fi
 
-session=$(jq -r '.session_id // "default"' <<<"$payload")
-stamp="${TMPDIR:-/tmp}/ucmc-verify-on-stop-${session//[^A-Za-z0-9_-]/_}"
 fingerprint=$(
   {
     git diff HEAD -- $changed
@@ -70,7 +88,20 @@ fingerprint=$(
   } | git hash-object --stdin
 )
 if [[ -f $stamp && $(cat "$stamp") == "$fingerprint" ]]; then
+  clear_failure
   exit 0
+fi
+
+if [[ $retry == "true" ]]; then
+  # Stopped again without touching the code that failed: let it through.
+  if [[ -f $failed_stamp && $(cat "$failed_stamp") == "$fingerprint" ]]; then
+    clear_failure
+    exit 0
+  fi
+  blocks=$(cat "$blocks_stamp" 2>/dev/null || echo 0)
+else
+  # A fresh stop starts a new streak.
+  blocks=0
 fi
 
 logs=$(mktemp -d)
@@ -116,12 +147,24 @@ done
 
 if [[ -z $failed ]]; then
   echo "$fingerprint" >"$stamp"
+  clear_failure
   exit 0
 fi
 
+blocks=$((blocks + 1))
+if ((blocks > MAX_BLOCKS)); then
+  # Out of re-checks: end the turn, but tell the user it ended red.
+  clear_failure
+  jq -n --arg msg "verify-on-stop: lint/typecheck still failing (${failed# }) after $MAX_BLOCKS blocked stops; letting the turn end." \
+    '{systemMessage: $msg}'
+  exit 0
+fi
+echo "$fingerprint" >"$failed_stamp"
+echo "$blocks" >"$blocks_stamp"
+
 {
-  echo "Stop blocked by .claude/hooks/verify-on-stop.sh: checks failed on the files changed since HEAD."
-  echo "Fix them before finishing, or say why they should stay failing (stopping again goes through)."
+  echo "Stop blocked by .claude/hooks/verify-on-stop.sh (block $blocks of $MAX_BLOCKS): checks failed on the files changed since HEAD."
+  echo "Fix them before finishing. To leave them failing, say why and stop again without changing code; that stop goes through."
   for name in $failed; do
     echo
     echo "== $name"
