@@ -11,7 +11,7 @@
 | `docs/adr/`      | Architecture decision records                                                          |
 | `.devcontainer/` | Debian devcontainer: Node 24, Pulumi, gh, Claude Code, Playwright, gitleaks, Mailpit   |
 
-Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** and loads when you open a matching file. Start there rather than asking for a tour: `web-architecture`, `data/*`, `auth/*`, `site-settings`, `notifications`, `compliance-and-waivers`, `dates-and-formats`, `testing`, `app-chrome`, `feature-*`, `gear/*`, `infra`, `dependencies`, `devcontainer`. **Keep each rule's `paths` as narrow as the guidance it carries**: a matching read loads the whole file and it stays in context for the session, so a rule that grows past one area is split by area (as `gear/` is) rather than widened.
+Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** and loads when you open a matching file. Start there rather than asking for a tour: `web-architecture`, `data/*`, `auth/*`, `site-settings`, `notifications`, `compliance-and-waivers`, `dates-and-formats`, `testing`, `app-chrome`, `feedback-index`, `feature-*`, `gear/*`, `infra`, `dependencies`, `devcontainer`. **Keep each rule's `paths` as narrow as the guidance it carries**: a matching read loads the whole file and it stays in context for the session, so a rule that grows past one area is split by area (as `gear/` is) rather than widened.
 
 ## Commands
 
