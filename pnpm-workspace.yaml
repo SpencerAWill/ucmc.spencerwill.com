@@ -198,6 +198,11 @@ peerDependencyRules:
   allowedVersions:
     "eslint-plugin-jsx-a11y>eslint": "10"
     "tiptap-markdown>@tiptap/core": "3"
+    # Not a version mismatch: typography 0.5.20 (the latest release) declares
+    # `>=3.0.0 || >=4.0.0 || insiders`, and `insiders` is a dist-tag, not a
+    # range, so semver rejects the whole expression and nothing satisfies it.
+    # Drop this once a release declares a valid range.
+    "@tailwindcss/typography>tailwindcss": "4"
 
 # `pnpm audit --audit-level high --prod` runs in CI (the `Audit` job). The
 # entries below are TIME-BOXED: each advisory has a real fix that is simply
