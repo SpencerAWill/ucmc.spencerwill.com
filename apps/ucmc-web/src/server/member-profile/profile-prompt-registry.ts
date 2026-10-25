@@ -92,7 +92,7 @@ export const PROMPT_ANSWER_MAX_LENGTH = 180;
 
 /**
  * `Object.hasOwn`, never `in` — the prototype-chain hazard is a
- * repo-wide rule (see `rolePermissionMap` in auth-and-rbac).
+ * repo-wide rule (see `rolePermissionMap` in .claude/rules/auth/emulation.md).
  */
 export function isProfilePromptKey(value: string): value is ProfilePromptKey {
   return Object.hasOwn(PROFILE_PROMPTS, value);

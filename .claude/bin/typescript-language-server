@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# PATH entry for the typescript-lsp Claude Code plugin, which launches
+# `typescript-language-server --stdio` by name.
+#
+# The server is a root devDependency, so it installs through pnpm with the
+# repo's quarantine, trust policy and lockfile, and Dependabot sees it; a
+# global `npm install -g` would get none of that. This wrapper execs the copy
+# in the checkout Claude is running in. It can't be a plain symlink to the
+# pnpm shim, because that shim locates its package from its own path ($0).
+#
+# Linked onto PATH as ~/.local/bin/typescript-language-server: by
+# .devcontainer/lifecycle.sh in the container, and once by hand on a host
+# (see CLAUDE.md).
+root=$(git rev-parse --show-toplevel 2>/dev/null) || root=
+bin="$root/node_modules/.bin/typescript-language-server"
+if [ -z "$root" ] || [ ! -x "$bin" ]; then
+  echo "typescript-language-server: not found under ${root:-$(pwd)} (run pnpm install)" >&2
+  exit 1
+fi
+exec "$bin" "$@"

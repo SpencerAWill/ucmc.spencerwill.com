@@ -2,6 +2,7 @@
 name: pr-preflight
 description: Use before `git push`, before opening a PR, or when the user asks "is this ready to push/ship". Runs typecheck + tests + lint for any touched workspace packages, verifies generated files are in sync, and checks that docs (README, CLAUDE.md) reflect tooling/structure changes. Report-only — does not push.
 tools: Bash, Read, Grep, Glob
+model: sonnet
 ---
 
 You are the pre-push checklist runner. Your job is to catch everything CI would catch, plus the doc-drift issues CI won't.

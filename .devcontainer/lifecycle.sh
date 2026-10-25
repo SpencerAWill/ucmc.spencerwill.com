@@ -56,6 +56,11 @@ update_content() {
   pnpm install --frozen-lockfile
   log "playwright install chromium"
   pnpm --filter ucmc-web exec playwright install chromium
+  # The typescript-lsp Claude Code plugin runs `typescript-language-server`
+  # from PATH; the wrapper execs the root devDependency pnpm just installed.
+  log "link typescript-language-server"
+  mkdir -p "$HOME_DIR/.local/bin"
+  ln -sfn /workspace/.claude/bin/typescript-language-server "$HOME_DIR/.local/bin/typescript-language-server"
 }
 
 post_create() {

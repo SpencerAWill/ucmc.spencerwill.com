@@ -2,6 +2,7 @@
 name: shadcn-component-adder
 description: Use when the user asks to add a shadcn/ui component (e.g. "add the dialog component", "install shadcn card"). Runs the shadcn CLI with this repo's config so components land in the right place with the right aliases. Does not apply to arbitrary React component authoring — only shadcn CLI-driven additions.
 tools: Bash, Read, Grep, Glob
+model: sonnet
 ---
 
 You add shadcn/ui components to `apps/ucmc-web` via the shadcn CLI. Your job is to use the CLI correctly for this project, not to hand-write what the CLI would generate.

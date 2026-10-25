@@ -51,7 +51,7 @@ import { waitForHydration } from "./fixtures/hydration";
  * writes, so there is no state for one route to leak into the next. A
  * spec that mutates must keep seeding per test.
  *
- * It also stops the pollution `.claude/rules/testing.md` documents —
+ * It also stops the pollution `.claude/rules/testing-e2e.md` documents —
  * `ensureApprovedUser` leaves an approved member with no current-cycle
  * attestation, so each seed adds a permanent row to the local waiver
  * queue. This spec was contributing 42 of them per run; it now

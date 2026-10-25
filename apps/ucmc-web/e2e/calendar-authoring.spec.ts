@@ -117,7 +117,13 @@ test("an every-other-week repeat on chosen days round-trips", async ({
   await page.getByRole("button", { name: "WE", exact: true }).click();
 
   await page.getByRole("button", { name: /create event/i }).click();
-  await expect(page.getByText(title).first()).toBeVisible();
+  // Wait on the row, not the agenda. The series anchors on today, and WKST=MO
+  // puts the first fortnight's Monday and Wednesday on or before the anchor's
+  // own week: from a Thursday–Sunday they are already past, so the first
+  // occurrence lands two weeks out, and late in a month that is next month,
+  // off the visible agenda. That is correct recurrence (feature-calendar.md),
+  // and it failed this test on 2026-10-24, whose first occurrence is Nov 2.
+  await expect.poll(() => readEvent(title).length).toBe(1);
 
   const [row] = readEvent(title);
   // Days in calendar order regardless of click order; INTERVAL kept.

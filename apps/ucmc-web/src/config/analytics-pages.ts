@@ -132,7 +132,7 @@ export const ANALYTICS_PAGE_ORDER = [
  * `useAuth`, route guards pass a closure over
  * `effectivePermissionsFor(...)`. Both already respect role emulation;
  * `principal.permissions.includes()` does not, and must never be the
- * thing passed in here (see `.claude/rules/auth-and-rbac.md`).
+ * thing passed in here (see `.claude/rules/auth/emulation.md`).
  */
 export function canSeeAnalyticsPage(
   has: (permission: string) => boolean,

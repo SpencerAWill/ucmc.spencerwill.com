@@ -10,11 +10,14 @@ FROM mcr.microsoft.com/devcontainers/base:debian
 # pnpmVersion:"none", so corepack fetches pnpm on first use — meaning
 # update-content's `pnpm install` triggers that prompt and hangs an
 # unattended rebuild. 0 makes it download without asking.
+# ~/.local/bin is on PATH here rather than left to shell rc files, because
+# Claude Code launches the typescript-language-server linked there by
+# lifecycle.sh, and a process started outside a login shell wouldn't see it.
 ENV CLAUDE_CONFIG_DIR=/home/vscode/.claude \
     NODE_OPTIONS=--max-old-space-size=4096 \
     DEVCONTAINER=true \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-    PATH=/home/vscode/.pulumi/bin:${PATH}
+    PATH=/home/vscode/.local/bin:/home/vscode/.pulumi/bin:${PATH}
 
 # Pre-create volume mount points with correct ownership so Docker
 # initializes named volumes as vscode instead of root, plus PNPM_HOME.

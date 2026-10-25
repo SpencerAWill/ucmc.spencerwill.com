@@ -1,5 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true
+  },
   "permissions": {
     "deny": [
       "Edit(apps/ucmc-web/src/routeTree.gen.ts)",
@@ -17,6 +20,18 @@
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-generated-file-edits.sh",
             "timeout": 10,
             "statusMessage": "Checking for generated-file edits"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/verify-on-stop.sh",
+            "timeout": 300,
+            "statusMessage": "Linting and typechecking changed files"
           }
         ]
       }

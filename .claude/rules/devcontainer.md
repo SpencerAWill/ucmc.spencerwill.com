@@ -14,6 +14,7 @@ Debian-based devcontainer: Node 24, Pulumi, gh, Claude Code, Playwright, gitleak
 - `initialize.sh` runs on the **host** from `initializeCommand` (pre-creates the `~/.config/gh` bind source so Docker can't invent it root-owned).
 - Every in-container hook routes through **`lifecycle.sh <stage>`** (`on-create` / `update-content` / `post-create` / `post-start`), which claims volume ownership and calls `configure-git.sh` (`safe.directory`, `gc.auto 0`, git identity + credential helper derived from `gh`).
 - **Dependency install lives in `updateContentCommand`, not `postCreateCommand`** — that hook also fires when prebuilt content refreshes, so a lockfile change is picked up without a full rebuild.
+- `update-content` also links **`~/.local/bin/typescript-language-server` → `.claude/bin/typescript-language-server`**, the wrapper the project's `typescript-lsp` Claude Code plugin launches by name. The server itself is a root devDependency installed by pnpm (quarantine, trust policy, Dependabot) rather than a global `npm install -g`, which couldn't run in the Dockerfile anyway: Node arrives with the `node` feature, after the image builds. **`~/.local/bin` is on `PATH` in the Dockerfile's `ENV`**, not left to shell rc files, because Claude Code launches the server outside a login shell.
 
 ## `node_modules` is a named volume, and the pnpm store lives inside it
 
@@ -41,7 +42,7 @@ Publishing is the choice here because forwarding is a devcontainer **client** fe
 
 **Never list a published port in `forwardPorts` as well.** VS Code finds the host port taken and silently remaps to a random one ([vscode-remote-release#3025](https://github.com/microsoft/vscode-remote-release/issues/3025)) — which presents as "port forwarding is broken" and sends you looking in the wrong place. Adding a new long-running server means adding it to `ports:`, and to `portsAttributes` only for its label.
 
-**An address is relative to where you are standing, and both sides are correct.** Mailpit is `http://localhost:8025` from a host browser and `http://mailpit:8025` from inside the container, where compose DNS resolves service names; neither is the "real" one. Anything running in the container — the worker's `MAILPIT_URL`, the Playwright fixtures — wants the service name. The same split is why CI sets `MAILPIT_URL=http://localhost:8025`: GitHub service containers publish to the runner's loopback and there is no compose network. See `testing.md`.
+**An address is relative to where you are standing, and both sides are correct.** Mailpit is `http://localhost:8025` from a host browser and `http://mailpit:8025` from inside the container, where compose DNS resolves service names; neither is the "real" one. Anything running in the container — the worker's `MAILPIT_URL`, the Playwright fixtures — wants the service name. The same split is why CI sets `MAILPIT_URL=http://localhost:8025`: GitHub service containers publish to the runner's loopback and there is no compose network. See `testing-e2e.md`.
 
 ## Nothing visual runs in here — there is no X server
 

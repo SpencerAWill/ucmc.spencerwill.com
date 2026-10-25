@@ -48,7 +48,7 @@ Unlike settings writes, which batch with an audit event. The audit log records *
 
 `user_notification_preferences`, composite PK `(user_id, category, channel)`, plus an index on `(category, channel, enabled)`. The index leads with `category` on purpose — the PK already answers "this member's preferences", and the query that needs an index is the cron's "everyone who turned one category off", which is one read per run rather than one per recipient.
 
-`channel` carries one value (`email`) today. It is in early because it is part of the primary key and SQLite has no `ALTER COLUMN`; see `data-and-bindings.md` for why a key rebuild is not available on D1.
+`channel` carries one value (`email`) today. It is in early because it is part of the primary key and SQLite has no `ALTER COLUMN`; see `data/migrations.md` for why a key rebuild is not available on D1.
 
 **A row is written even when the value matches the default.** The contract is "absent means default", not "present means changed" — keeping an explicit `true` means a later change to a registry default leaves members who already made a choice where they put themselves.
 
