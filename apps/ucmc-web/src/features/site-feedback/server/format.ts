@@ -2,9 +2,9 @@
  * Compose the persisted feedback `body` from a structured submission.
  *
  * The DB schema keeps a single `body TEXT` column; structured bug /
- * feature inputs are flattened into a Markdown string here so both D1
- * and the optional GitHub mirror end up with a single, identical,
- * human-readable record. Section headings use `**Foo**` so they render
+ * feature inputs are flattened into a Markdown string here so D1 holds a
+ * single human-readable record, which triage later quotes into GitHub
+ * issue drafts. Section headings use `**Foo**` so they render
  * as bold on GitHub and as preserved-whitespace plain text in the
  * admin triage card (`whitespace-pre-wrap`).
  */

@@ -39,8 +39,8 @@ export interface WorkerEnv {
   RESEND_FROM_NAME: string;
   // Cloudflare account the worker's resources live in. Every Billable
   // Usage / GraphQL Analytics path embeds it. Optional: unset simply
-  // disables the daily cost snapshot, the same way the GitHub mirror
-  // below degrades.
+  // disables the daily cost snapshot, the same way site-feedback filing
+  // degrades without its GitHub vars below.
   CLOUDFLARE_ACCOUNT_ID?: string;
 
   // Secrets — uploaded with each deploy (`wrangler deploy --secrets-file`

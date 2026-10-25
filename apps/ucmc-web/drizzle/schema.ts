@@ -1127,7 +1127,6 @@ export const clubFeedbackKind = [
 ] as const;
 export type ClubFeedbackKind = (typeof clubFeedbackKind)[number];
 
-// Same four statuses website feedback started with.
 // Club feedback keeps its original four statuses: the site-feedback
 // enum grew triage dispositions that do not apply here.
 export const clubFeedbackStatus = [
