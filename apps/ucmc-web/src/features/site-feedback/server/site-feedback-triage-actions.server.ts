@@ -23,6 +23,7 @@ import {
   issueMarker,
   quotedReportFor,
 } from "#/features/site-feedback/server/issue-format";
+import { SITE_FEEDBACK_FILING_STALE_MS } from "#/features/site-feedback/server/limits";
 import type {
   SiteFeedbackAttachInput,
   SiteFeedbackDispositionInput,
@@ -120,6 +121,8 @@ export type SiteFeedbackIssueDetail = SiteFeedbackIssueSummary & {
   githubConfigured: boolean;
   /** Non-secret `owner/name`; null when GitHub is unconfigured. */
   githubRepo: string | null;
+  /** When the current `filing` claim was taken; null unless filing. */
+  filingStartedAt: Temporal.Instant | null;
   links: {
     feedbackId: string;
     kind: SiteFeedbackKind;
@@ -132,6 +135,7 @@ export type SiteFeedbackIssueDetail = SiteFeedbackIssueSummary & {
 // ── helpers ─────────────────────────────────────────────────────────────
 
 const ALREADY_POSTED = "Already posted to GitHub";
+const FILING = "This issue is being filed. Try again in a moment.";
 
 const RELATED_MAX_TERMS = 12;
 const RELATED_MIN_TERM_LENGTH = 4;
@@ -296,6 +300,7 @@ export async function getSiteFeedbackIssueAction(
     labels: issue.labels,
     githubConfigured: getGithubConfig() !== null,
     githubRepo: getGithubConfig()?.repo ?? null,
+    filingStartedAt: issue.filingStartedAt,
     links: links.map((l) => ({
       feedbackId: l.feedbackId,
       kind: l.kind,
@@ -340,8 +345,12 @@ export async function linkSiteFeedbackAction(
   input: SiteFeedbackLinkInput,
 ): Promise<{ added: number }> {
   const principal = await requireSiteFeedbackManager();
-  if ((await getIssue(input.issueId)) === null) {
+  const issue = await getIssue(input.issueId);
+  if (issue === null) {
     throw new Error("Issue not found");
+  }
+  if (issue.state === "filing") {
+    throw new Error(FILING);
   }
   const ids = [...new Set(input.feedbackIds)];
   const existing = new Set(await listLinkedFeedbackIds(input.issueId, ids));
@@ -362,6 +371,9 @@ export async function unlinkSiteFeedbackAction(
   input: SiteFeedbackUnlinkInput,
 ): Promise<{ ok: true }> {
   await requireSiteFeedbackManager();
+  if ((await getIssue(input.issueId))?.state === "filing") {
+    throw new Error(FILING);
+  }
   const link = await getLink(input.issueId, input.feedbackId);
   if (link?.postedAt) {
     throw new Error(ALREADY_POSTED);
@@ -374,6 +386,9 @@ export async function updateSiteFeedbackQuoteAction(
   input: SiteFeedbackQuoteUpdateInput,
 ): Promise<{ ok: true }> {
   await requireSiteFeedbackManager();
+  if ((await getIssue(input.issueId))?.state === "filing") {
+    throw new Error(FILING);
+  }
   const link = await getLink(input.issueId, input.feedbackId);
   if (!link) {
     throw new Error("Submission is not linked to this issue");
@@ -381,7 +396,17 @@ export async function updateSiteFeedbackQuoteAction(
   if (link.postedAt) {
     throw new Error(ALREADY_POSTED);
   }
-  await updateUnpostedQuote(input.issueId, input.feedbackId, input.quotedMd);
+  // The conditional UPDATE is the real guard: it refuses a link that was
+  // posted between the read above and now.
+  if (
+    !(await updateUnpostedQuote(
+      input.issueId,
+      input.feedbackId,
+      input.quotedMd,
+    ))
+  ) {
+    throw new Error(ALREADY_POSTED);
+  }
   return { ok: true };
 }
 
@@ -449,13 +474,19 @@ export type GithubActionResult<T> =
 
 type GithubFailure = Extract<GithubActionResult<object>, { ok: false }>;
 
-const FILING_STALE_MS = 5 * 60 * 1000;
-
 const NOT_CONFIGURED: GithubFailure = {
   ok: false,
   reason: "not_configured",
   message: "GitHub isn't configured for this site.",
 };
+
+function tooLong(what: "issue" | "comment", length: number): GithubFailure {
+  return {
+    ok: false,
+    reason: "too_long",
+    message: `Too long for one GitHub ${what}: unlink reports or trim their text (${length.toLocaleString("en-US")} / ${GITHUB_BODY_LIMIT.toLocaleString("en-US")} characters)`,
+  };
+}
 
 function githubError(err: GithubError, what: string): GithubFailure {
   return {
@@ -498,18 +529,14 @@ export async function fileSiteFeedbackIssueAction(
     reports: links.map((l) => l.quotedMd),
   });
   if (body.length > GITHUB_BODY_LIMIT) {
-    return {
-      ok: false,
-      reason: "too_long",
-      message: `Too long for one GitHub issue: unlink reports or trim their text (${body.length.toLocaleString("en-US")} / ${GITHUB_BODY_LIMIT.toLocaleString("en-US")} characters)`,
-    };
+    return tooLong("issue", body.length);
   }
 
   const now = Temporal.Now.instant();
   const claim = await claimIssueForFiling(
     input.id,
     now,
-    now.subtract({ milliseconds: FILING_STALE_MS }),
+    now.subtract({ milliseconds: SITE_FEEDBACK_FILING_STALE_MS }),
   );
   if (claim === null) {
     return {
@@ -519,13 +546,16 @@ export async function fileSiteFeedbackIssueAction(
     };
   }
 
+  // A stale claim may have reached GitHub before the worker died: adopt that
+  // issue rather than filing a duplicate. If the search itself fails the
+  // outcome is still unknown, so the claim stays (see `unconfirmed`).
+  const adopted =
+    claim === "stale" ? await findByMarkerOrFailure(cfg, issue.id) : null;
+  if (adopted !== null && "ok" in adopted) {
+    return adopted;
+  }
+
   try {
-    // A stale claim may have reached GitHub before the worker died: adopt
-    // that issue rather than filing a duplicate.
-    const adopted =
-      claim === "stale"
-        ? await findIssueByMarker(cfg, issueMarker(issue.id))
-        : null;
     const filed =
       adopted ??
       (await createIssue(cfg, {
@@ -538,13 +568,43 @@ export async function fileSiteFeedbackIssueAction(
       number: filed.number,
       url: filed.url,
       filedBy: principal.userId,
+      feedbackIds: links.map((l) => l.feedbackId),
       now: Temporal.Now.instant(),
     });
     return { ok: true, number: filed.number, url: filed.url };
   } catch (err) {
     if (err instanceof GithubError) {
-      await releaseFilingClaim(issue.id);
-      return githubError(err, "issue");
+      // Only a definite 4xx proves nothing was filed. A network failure
+      // (status 0), a 5xx or an unparseable reply may follow a created
+      // issue, so the claim is left to go stale and the retry searches for
+      // the marker instead of filing a duplicate.
+      if (err.status >= 400 && err.status < 500) {
+        await releaseFilingClaim(issue.id);
+        return githubError(err, "issue");
+      }
+      return unconfirmed(err);
+    }
+    throw err;
+  }
+}
+
+function unconfirmed(err: GithubError): GithubFailure {
+  return {
+    ok: false,
+    reason: "github_error",
+    message: `GitHub didn't confirm the issue (${err.status}). It may have been filed. Retry after 5 minutes to check.`,
+  };
+}
+
+async function findByMarkerOrFailure(
+  cfg: GithubConfig,
+  issueId: string,
+): Promise<{ number: number; url: string } | GithubFailure | null> {
+  try {
+    return await findIssueByMarker(cfg, issueMarker(issueId));
+  } catch (err) {
+    if (err instanceof GithubError) {
+      return unconfirmed(err);
     }
     throw err;
   }
@@ -561,12 +621,12 @@ async function postPending(
   if (pending.length === 0) {
     return { ok: true, posted: 0 };
   }
+  const comment = composeReportsComment(pending.map((l) => l.quotedMd));
+  if (comment.length > GITHUB_BODY_LIMIT) {
+    return tooLong("comment", comment.length);
+  }
   try {
-    await createComment(
-      cfg,
-      githubNumber,
-      composeReportsComment(pending.map((l) => l.quotedMd)),
-    );
+    await createComment(cfg, githubNumber, comment);
   } catch (err) {
     if (err instanceof GithubError) {
       return githubError(err, "comment");
@@ -581,6 +641,11 @@ async function postPending(
   return { ok: true, posted: pending.length };
 }
 
+/**
+ * Link reports to a hand-made GitHub issue by number. Link-only: nothing is
+ * posted here. The new links stay unposted, and the maintainer reviews their
+ * quotes in the composer and posts them with "Post N new reports".
+ */
 export async function attachSiteFeedbackToGithubIssueAction(
   input: SiteFeedbackAttachInput,
 ): Promise<GithubActionResult<{ issueId: string }>> {
@@ -640,9 +705,7 @@ export async function attachSiteFeedbackToGithubIssueAction(
       .map((row) => ({ feedbackId: row.id, quotedMd: quotedFor(row) })),
     principal.userId,
   );
-
-  const posted = await postPending(cfg, issueId, remote.number);
-  return posted.ok ? { ok: true, issueId } : posted;
+  return { ok: true, issueId };
 }
 
 export async function postPendingSiteFeedbackReportsAction(

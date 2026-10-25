@@ -43,6 +43,12 @@ export const SITE_FEEDBACK_STATE_VALUES = [
   "duplicate",
 ] as const;
 
+/**
+ * How long a `filing` claim is trusted before it may be retried. The retry
+ * searches GitHub for the issue's marker first, so it never files twice.
+ */
+export const SITE_FEEDBACK_FILING_STALE_MS = 5 * 60 * 1000;
+
 export const SITE_FEEDBACK_ISSUE_STATE_VALUES = [
   "draft",
   "filing",

@@ -67,7 +67,7 @@ async function request(
     const text = await res.text().catch(() => "");
     log.error("site_feedback.github_rejected", {
       status: res.status,
-      body: redactString(text.slice(0, 500)),
+      body: redactString(text).slice(0, 500),
     });
     throw new GithubError(res.status, `GitHub responded ${res.status}`);
   }
@@ -78,7 +78,10 @@ async function parse<T extends z.ZodType>(
   res: Response,
   schema: T,
 ): Promise<z.infer<T>> {
-  const parsed = schema.safeParse(await res.json());
+  const json: unknown = await res.json().catch(() => {
+    throw new GithubError(res.status, "Unparseable GitHub response");
+  });
+  const parsed = schema.safeParse(json);
   if (!parsed.success) {
     throw new GithubError(res.status, "Unexpected GitHub response shape");
   }

@@ -343,6 +343,30 @@ describe("setSiteFeedbackDispositionAction", () => {
     const rows = await getDb().select().from(schema.siteFeedback);
     expect(rows.every((r) => r.status === "wont_fix")).toBe(true);
   });
+
+  it("skips reports linked to an issue and counts only real changes", async () => {
+    const owner = await seedUser("o@example.com");
+    const free = await seedFeedback(owner);
+    const drafted = await seedFeedback(owner);
+    const tracked = await seedFeedback(owner);
+    await seedIssue("draft", [drafted]);
+    await seedIssue("open", [tracked]);
+    await signInAsAdmin();
+    const res = await triage.setSiteFeedbackDispositionAction({
+      ids: [free, drafted, tracked],
+      disposition: "duplicate",
+    });
+    expect(res).toEqual({ updated: 1 });
+    const status = new Map(
+      (await getDb().select().from(schema.siteFeedback)).map((r) => [
+        r.id,
+        r.status,
+      ]),
+    );
+    expect(status.get(free)).toBe("duplicate");
+    expect(status.get(drafted)).toBe("open");
+    expect(status.get(tracked)).toBe("open");
+  });
 });
 
 // ── drafts and links ──────────────────────────────────────────────────

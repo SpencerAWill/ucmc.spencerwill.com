@@ -285,6 +285,7 @@ export interface IssueRow {
   summaryMd: string | null;
   labels: string[];
   updatedAt: Temporal.Instant;
+  filingStartedAt: Temporal.Instant | null;
 }
 
 export async function getIssue(id: string): Promise<IssueRow | null> {
@@ -296,6 +297,7 @@ export async function getIssue(id: string): Promise<IssueRow | null> {
       summaryMd: schema.siteFeedbackIssues.summaryMd,
       labels: schema.siteFeedbackIssues.labels,
       updatedAt: schema.siteFeedbackIssues.updatedAt,
+      filingStartedAt: schema.siteFeedbackIssues.filingStartedAt,
     })
     .from(schema.siteFeedbackIssues)
     .where(eq(schema.siteFeedbackIssues.id, id));
@@ -332,7 +334,11 @@ export async function listIssueLinks(issueId: string): Promise<IssueLinkRow[]> {
 
 // ── writes ──────────────────────────────────────────────────────────────
 
-/** Set the disposition of every id; returns how many rows changed. */
+/**
+ * Set the disposition of every id that isn't linked to an issue; returns how
+ * many rows changed. A linked report's state comes from its issues, so a
+ * disposition on it would be invisible and is skipped rather than stored.
+ */
 export async function setDisposition(
   ids: readonly string[],
   disposition: SiteFeedbackDisposition,
@@ -340,7 +346,12 @@ export async function setDisposition(
   const rows = await getDb()
     .update(schema.siteFeedback)
     .set({ status: disposition, updatedAt: Temporal.Now.instant() })
-    .where(inJsonArray(schema.siteFeedback.id, ids))
+    .where(
+      and(
+        inJsonArray(schema.siteFeedback.id, ids),
+        sql`NOT EXISTS (SELECT 1 FROM "site_feedback_issue_links" AS l WHERE l."feedback_id" = "feedback"."id")`,
+      ),
+    )
     .returning({ id: schema.siteFeedback.id });
   return rows.length;
 }
@@ -568,12 +579,17 @@ export async function releaseFilingClaim(id: string): Promise<void> {
     );
 }
 
-/** Record a successful filing and mark every link posted, atomically. */
+/**
+ * Record a successful filing and mark posted exactly the links whose quotes
+ * were composed into the body (`feedbackIds`), atomically. A link added
+ * after the body was composed stays unposted for "Post N new reports".
+ */
 export async function markIssueFiled(input: {
   id: string;
   number: number;
   url: string;
   filedBy: string;
+  feedbackIds: readonly string[];
   now: Temporal.Instant;
 }): Promise<void> {
   await runBatch([
@@ -596,6 +612,10 @@ export async function markIssueFiled(input: {
       .where(
         and(
           eq(schema.siteFeedbackIssueLinks.issueId, input.id),
+          inJsonArray(
+            schema.siteFeedbackIssueLinks.feedbackId,
+            input.feedbackIds,
+          ),
           sql`${schema.siteFeedbackIssueLinks.postedAt} IS NULL`,
         ),
       ),

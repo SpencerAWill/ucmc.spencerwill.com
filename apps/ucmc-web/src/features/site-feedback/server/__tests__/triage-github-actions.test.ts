@@ -195,6 +195,55 @@ describe("fileSiteFeedbackIssueAction", () => {
     expect(body).toContain(`<!-- ucmc:${id} -->`);
   });
 
+  it("marks posted only the reports composed into the body", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    const late = await seedFeedback();
+    const id = await seedIssue("draft", [a]);
+    mocked.createIssue.mockImplementation(async () => {
+      // A link that lands while GitHub is creating the issue.
+      await getDb().insert(schema.siteFeedbackIssueLinks).values({
+        issueId: id,
+        feedbackId: late,
+        quotedMd: "late",
+        addedAt: Temporal.Now.instant(),
+      });
+      return { number: 43, url: "u" };
+    });
+
+    await triage.fileSiteFeedbackIssueAction({ id });
+
+    const links = await linkRows(id);
+    expect(links.find((l) => l.feedbackId === a)?.postedAt).not.toBeNull();
+    expect(links.find((l) => l.feedbackId === late)?.postedAt).toBeNull();
+  });
+
+  it("refuses link, unlink and quote edits while the issue is filing", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    const b = await seedFeedback();
+    const id = await seedIssue("filing", [a], {
+      filingStartedAt: Temporal.Now.instant(),
+    });
+    const message = "This issue is being filed. Try again in a moment.";
+    await expect(
+      triage.linkSiteFeedbackAction({ issueId: id, feedbackIds: [b] }),
+    ).rejects.toThrow(message);
+    await expect(
+      triage.unlinkSiteFeedbackAction({ issueId: id, feedbackId: a }),
+    ).rejects.toThrow(message);
+    await expect(
+      triage.updateSiteFeedbackQuoteAction({
+        issueId: id,
+        feedbackId: a,
+        quotedMd: "edited",
+      }),
+    ).rejects.toThrow(message);
+    const links = await linkRows(id);
+    expect(links).toHaveLength(1);
+    expect(links[0].quotedMd).toBe("quoted");
+  });
+
   it("passes a null summary as an empty string", async () => {
     await seedAdmin();
     const a = await seedFeedback();
@@ -223,12 +272,12 @@ describe("fileSiteFeedbackIssueAction", () => {
     expect(lost).toMatchObject({ ok: false, reason: "already_filing" });
   });
 
-  it("returns the draft to draft with the message on a GithubError", async () => {
+  it("returns the draft to draft with the message on a definite 4xx", async () => {
     await seedAdmin();
     const a = await seedFeedback();
     const id = await seedIssue("draft", [a]);
     mocked.createIssue.mockRejectedValue(
-      new github.GithubError(500, "GitHub responded 500"),
+      new github.GithubError(422, "GitHub responded 422"),
     );
 
     const res = await triage.fileSiteFeedbackIssueAction({ id });
@@ -236,12 +285,55 @@ describe("fileSiteFeedbackIssueAction", () => {
     expect(res).toEqual({
       ok: false,
       reason: "github_error",
-      message: "GitHub refused the issue (500). Nothing was filed.",
+      message: "GitHub refused the issue (422). Nothing was filed.",
     });
     const row = await issueRow(id);
     expect(row.state).toBe("draft");
     expect(row.filingStartedAt).toBeNull();
     expect((await linkRows(id))[0].postedAt).toBeNull();
+  });
+
+  it.each([
+    ["a network failure", 0],
+    ["a 5xx", 502],
+    ["an unparseable 2xx", 201],
+  ])(
+    "keeps the claim on %s, since the issue may exist",
+    async (_name, status) => {
+      await seedAdmin();
+      const a = await seedFeedback();
+      const id = await seedIssue("draft", [a]);
+      mocked.createIssue.mockRejectedValue(
+        new github.GithubError(status, "unconfirmed"),
+      );
+
+      const res = await triage.fileSiteFeedbackIssueAction({ id });
+
+      expect(res).toEqual({
+        ok: false,
+        reason: "github_error",
+        message: `GitHub didn't confirm the issue (${status}). It may have been filed. Retry after 5 minutes to check.`,
+      });
+      const row = await issueRow(id);
+      expect(row.state).toBe("filing");
+      expect(row.filingStartedAt).not.toBeNull();
+      expect((await linkRows(id))[0].postedAt).toBeNull();
+    },
+  );
+
+  it("keeps a stale claim when the marker search itself fails with a 4xx", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    const id = await seedIssue("filing", [a], {
+      filingStartedAt: Temporal.Now.instant().subtract({ minutes: 6 }),
+    });
+    mocked.findByMarker.mockRejectedValue(new github.GithubError(403, "no"));
+    const res = await triage.fileSiteFeedbackIssueAction({ id });
+    expect(res).toMatchObject({ ok: false, reason: "github_error" });
+    expect(mocked.createIssue).not.toHaveBeenCalled();
+    // Releasing to draft would make the next attempt "fresh" and skip the
+    // marker search the earlier attempt may still need.
+    expect((await issueRow(id)).state).toBe("filing");
   });
 
   it("rethrows anything that is not a GithubError", async () => {
@@ -340,7 +432,7 @@ describe("fileSiteFeedbackIssueAction", () => {
 // ── attaching ──────────────────────────────────────────────────────────
 
 describe("attachSiteFeedbackToGithubIssueAction", () => {
-  it("creates a row from GitHub and posts the new reports once", async () => {
+  it("creates a row from GitHub and links the reports without posting", async () => {
     await seedAdmin();
     const a = await seedFeedback();
     mocked.getIssue.mockResolvedValue({
@@ -367,9 +459,11 @@ describe("attachSiteFeedbackToGithubIssueAction", () => {
       githubNumber: 12,
     });
     expect(row.githubSyncedAt).not.toBeNull();
-    expect(mocked.createComment).toHaveBeenCalledTimes(1);
-    expect(mocked.createComment.mock.calls[0][1]).toBe(12);
-    expect((await linkRows(issueId))[0].postedAt).not.toBeNull();
+    // Link-only: the maintainer reviews and posts from the composer.
+    expect(mocked.createComment).not.toHaveBeenCalled();
+    const links = await linkRows(issueId);
+    expect(links).toHaveLength(1);
+    expect(links[0].postedAt).toBeNull();
   });
 
   it("returns pull_request and creates no row for a PR", async () => {
@@ -425,9 +519,12 @@ describe("attachSiteFeedbackToGithubIssueAction", () => {
     expect(await getDb().select().from(schema.siteFeedbackIssues)).toHaveLength(
       1,
     );
-    expect(await linkRows(existing)).toHaveLength(2);
-    // Only the newly linked report goes into the comment.
-    expect(mocked.createComment).toHaveBeenCalledTimes(1);
+    const links = await linkRows(existing);
+    expect(links).toHaveLength(2);
+    // The new link waits, unposted, for "Post N new reports".
+    expect(links.find((l) => l.feedbackId === b)?.postedAt).toBeNull();
+    expect(links.find((l) => l.feedbackId === a)?.postedAt).not.toBeNull();
+    expect(mocked.createComment).not.toHaveBeenCalled();
   });
 
   it("returns not_found for an unknown number", async () => {
@@ -468,6 +565,29 @@ describe("postPendingSiteFeedbackReportsAction", () => {
     expect(first).toEqual({ ok: true, posted: 2 });
     expect(second).toEqual({ ok: true, posted: 0 });
     expect(mocked.createComment).toHaveBeenCalledTimes(1);
+  });
+
+  it("is too_long when the comment would exceed GitHub's limit", async () => {
+    await seedAdmin();
+    const ids = [];
+    for (let i = 0; i < 14; i += 1) {
+      ids.push(await seedFeedback());
+    }
+    const issueId = await seedIssue(
+      "open",
+      ids,
+      { githubNumber: 32, githubUrl: "u" },
+      "x".repeat(5000),
+    );
+    const res = await triage.postPendingSiteFeedbackReportsAction({ issueId });
+    expect(res).toMatchObject({ ok: false, reason: "too_long" });
+    expect(res.ok ? "" : res.message).toMatch(
+      /^Too long for one GitHub comment: unlink reports or trim their text \(\d{2},\d{3} \/ 65,000 characters\)$/,
+    );
+    expect(mocked.createComment).not.toHaveBeenCalled();
+    expect((await linkRows(issueId)).every((l) => l.postedAt === null)).toBe(
+      true,
+    );
   });
 
   it("leaves links unposted when the comment is refused", async () => {

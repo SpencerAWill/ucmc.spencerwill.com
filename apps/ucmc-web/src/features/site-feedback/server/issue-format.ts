@@ -12,6 +12,25 @@ export const GITHUB_BODY_LIMIT = 65_000;
 
 const USER_AGENT_MAX = 120;
 
+// Same shape as `redact.server`'s pattern, which isn't exported (and this
+// module stays free of server-only imports).
+const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const ZWSP = "\u200B";
+
+/**
+ * Make member free text inert before it is prefilled into GitHub text:
+ * emails are removed, `@name` and `#123` get a zero-width space so GitHub
+ * neither mentions nor cross-links, and `<` is escaped so a body can't close
+ * the `<details>` block. The maintainer can still edit any of it back.
+ */
+function defuse(text: string): string {
+  return text
+    .replace(EMAIL, "[email removed]")
+    .replaceAll("<", "&lt;")
+    .replace(/@(?=\w)/g, `@${ZWSP}`)
+    .replace(/#(?=\d)/g, `#${ZWSP}`);
+}
+
 const KIND_EMOJI: Record<SiteFeedbackKind, string> = {
   bug: "🐞",
   feature: "✨",
@@ -45,9 +64,9 @@ export function quotedReportFor(s: {
     .toString();
   const member = s.createdByPublicId ?? "(deleted)";
   const lines = [
-    `<details><summary>${KIND_EMOJI[s.kind]} ${s.title}: member ${member}, ${date}</summary>`,
+    `<details><summary>${KIND_EMOJI[s.kind]} ${defuse(s.title)}: member ${member}, ${date}</summary>`,
     "",
-    s.body,
+    defuse(s.body),
     "",
   ];
 
@@ -61,7 +80,7 @@ export function quotedReportFor(s: {
       s.userAgent.length > USER_AGENT_MAX
         ? `${s.userAgent.slice(0, USER_AGENT_MAX)}…`
         : s.userAgent;
-    parts.push(`**Browser:** ${ua}`);
+    parts.push(`**Browser:** ${defuse(ua)}`);
   }
   if (parts.length > 0) {
     lines.push(parts.join(" · "), "");

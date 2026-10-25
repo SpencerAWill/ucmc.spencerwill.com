@@ -5,8 +5,10 @@ import type { SiteFeedbackAttachInput } from "#/features/site-feedback/server/li
 import { attachSiteFeedbackToGithubIssueFn } from "#/features/site-feedback/server/site-feedback-triage-fns";
 
 /**
- * Manager: attach reports to an existing GitHub issue by number. Resolves
- * with a `GithubActionResult`; `ok: false` carries a `message` to show.
+ * Manager: attach reports to an existing GitHub issue by number. Link-only:
+ * nothing is posted; the caller opens the composer, where "Post N new
+ * reports" posts them after review. Resolves with a `GithubActionResult`;
+ * `ok: false` carries a `message` to show.
  * Invalidates: every triage view, the overview, the submitter's `mine` list
  * (their report now reads "Tracked in #N"), and on success the attached
  * issue's `issue(id)` and `related(id)`.

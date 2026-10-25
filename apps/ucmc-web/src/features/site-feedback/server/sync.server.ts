@@ -14,7 +14,7 @@ import {
   getIssueStates,
 } from "#/features/site-feedback/server/github.server";
 import type { GithubConfig } from "#/features/site-feedback/server/github.server";
-import { getDb, runBatch, schema } from "#/server/db";
+import { getDb, inJsonArray, runBatch, schema } from "#/server/db";
 import { errorMessage, log } from "#/server/log/log.server";
 
 export interface SiteFeedbackSyncResult {
@@ -51,20 +51,24 @@ export async function syncSiteFeedbackIssues(
     tracked.map((t) => t.number),
   );
   const now = Temporal.Now.instant();
-  let closed = 0;
-  // One statement per row, each binding a constant number of parameters.
-  const statements = tracked.map((t) => {
-    const next = states.get(t.number) ?? "closed";
-    if (next === "closed") {
-      closed += 1;
-    }
-    return db
+  const closedIds = tracked
+    .filter((t) => (states.get(t.number) ?? "closed") === "closed")
+    .map((t) => t.id);
+  const openIds = tracked
+    .filter((t) => (states.get(t.number) ?? "closed") === "open")
+    .map((t) => t.id);
+  // Two set-based statements, each binding a constant number of parameters
+  // (the id list is one JSON parameter), in one atomic batch.
+  const write = (state: "open" | "closed", ids: readonly string[]) =>
+    db
       .update(schema.siteFeedbackIssues)
-      .set({ state: next, githubSyncedAt: now })
-      .where(eq(schema.siteFeedbackIssues.id, t.id));
-  });
-  await runBatch(statements);
-  return { checked: tracked.length, closed };
+      .set({ state, githubSyncedAt: now })
+      .where(inJsonArray(schema.siteFeedbackIssues.id, ids));
+  await runBatch([
+    ...(closedIds.length > 0 ? [write("closed", closedIds)] : []),
+    ...(openIds.length > 0 ? [write("open", openIds)] : []),
+  ]);
+  return { checked: tracked.length, closed: closedIds.length };
 }
 
 /**

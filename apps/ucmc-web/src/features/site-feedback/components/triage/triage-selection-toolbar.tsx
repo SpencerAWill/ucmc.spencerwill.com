@@ -21,9 +21,15 @@ import { useAttachSiteFeedbackToGithubIssue } from "#/features/site-feedback/api
 import { useCreateSiteFeedbackIssueDraft } from "#/features/site-feedback/api/use-create-site-feedback-issue-draft";
 import { useLinkSiteFeedback } from "#/features/site-feedback/api/use-link-site-feedback";
 import { useSetSiteFeedbackDisposition } from "#/features/site-feedback/api/use-set-site-feedback-disposition";
+import type {
+  SiteFeedbackDisposition,
+  SiteFeedbackTriageView,
+} from "#/features/site-feedback/server/limits";
 import type { SiteFeedbackIssueSummary } from "#/features/site-feedback/server/site-feedback-triage-fns";
 
 export interface TriageSelectionToolbarProps {
+  /** The inbox view; "Reopen" is offered only in Closed. */
+  view: SiteFeedbackTriageView;
   selectedIds: string[];
   drafts: SiteFeedbackIssueSummary[];
   openIssues: SiteFeedbackIssueSummary[];
@@ -38,8 +44,19 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
+const reports = (n: number) => `${n} ${n === 1 ? "report" : "reports"}`;
+
+const DISPOSITION_DONE: Record<SiteFeedbackDisposition, (n: number) => string> =
+  {
+    open: (n) => `Reopened ${reports(n)}`,
+    wont_fix: (n) => `Marked ${reports(n)} won't fix`,
+    duplicate: (n) => `Marked ${reports(n)} duplicate`,
+    resolved: (n) => `Marked ${reports(n)} resolved`,
+  };
+
 /** Sticky bar over the inbox; renders nothing until something is selected. */
 export function TriageSelectionToolbar({
+  view,
   selectedIds,
   drafts,
   openIssues,
@@ -80,14 +97,19 @@ export function TriageSelectionToolbar({
     }
   };
 
-  const onDisposition = async (disposition: "wont_fix" | "duplicate") => {
+  const onDisposition = async (disposition: SiteFeedbackDisposition) => {
     try {
       const { updated } = await setDisposition.mutateAsync({
         ids: selectedIds,
         disposition,
       });
+      // The server skips reports linked to an issue (their state comes from
+      // the issue), so `updated` can be smaller than the selection.
+      const skipped = selectedIds.length - updated;
       toast.success(
-        `Marked ${updated} ${updated === 1 ? "report" : "reports"} ${disposition === "wont_fix" ? "won't fix" : "duplicate"}`,
+        skipped > 0
+          ? `${DISPOSITION_DONE[disposition](updated)}. ${skipped} linked to an issue ${skipped === 1 ? "was" : "were"} left as ${skipped === 1 ? "it is" : "they are"}.`
+          : DISPOSITION_DONE[disposition](updated),
       );
       onDone();
     } catch (error) {
@@ -119,8 +141,13 @@ export function TriageSelectionToolbar({
         feedbackIds: selectedIds,
       });
       if (result.ok) {
-        toast.success(`Attached to GitHub issue #${number}`);
+        // Attaching only links. The composer is where the maintainer reviews
+        // the quotes and posts them.
         onDone();
+        await navigate({
+          to: "/feedback/site/triage/issues/$issueId",
+          params: { issueId: result.issueId },
+        });
       } else {
         toast.error(result.message);
       }
@@ -166,18 +193,24 @@ export function TriageSelectionToolbar({
               placeholder="Find an issue, or type a GitHub #"
             />
             <CommandList>
-              {typedNumber !== undefined && githubConfigured ? (
+              {typedNumber === undefined ? null : (
                 <CommandGroup heading="GitHub">
                   <CommandItem
                     value={`github-issue-${typedNumber}`}
+                    disabled={!githubConfigured}
                     onSelect={() => {
                       void onAttach(Number(typedNumber));
                     }}
                   >
                     GitHub issue #{typedNumber}
+                    {githubConfigured ? null : (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        GitHub isn&apos;t configured
+                      </span>
+                    )}
                   </CommandItem>
                 </CommandGroup>
-              ) : null}
+              )}
               {shownDrafts.length > 0 ? (
                 <CommandGroup heading="Drafts">
                   {shownDrafts.map((issue) => (
@@ -212,13 +245,26 @@ export function TriageSelectionToolbar({
               ) : null}
               {shownDrafts.length === 0 &&
               shownOpen.length === 0 &&
-              !(typedNumber !== undefined && githubConfigured) ? (
+              typedNumber === undefined ? (
                 <CommandEmpty>No matching issue.</CommandEmpty>
               ) : null}
             </CommandList>
           </Command>
         </PopoverContent>
       </Popover>
+      {view === "closed" ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => {
+            void onDisposition("open");
+          }}
+        >
+          Reopen
+        </Button>
+      ) : null}
       <Button
         type="button"
         size="sm"

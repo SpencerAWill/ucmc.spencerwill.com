@@ -201,3 +201,29 @@ describe("getIssueStates", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("response parsing", () => {
+  it("turns unparseable JSON on a 2xx into a GithubError with its status", async () => {
+    fetchSpy.mockResolvedValue(
+      new Response("<html>not json</html>", { status: 201 }),
+    );
+    const err = await createIssue(cfg, {
+      title: "T",
+      body: "B",
+      labels: [],
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(GithubError);
+    expect((err as GithubError).status).toBe(201);
+  });
+
+  it("turns a rejected fetch into GithubError(0)", async () => {
+    fetchSpy.mockRejectedValue(new TypeError("network down"));
+    const err = await createIssue(cfg, {
+      title: "T",
+      body: "B",
+      labels: [],
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(GithubError);
+    expect((err as GithubError).status).toBe(0);
+  });
+});

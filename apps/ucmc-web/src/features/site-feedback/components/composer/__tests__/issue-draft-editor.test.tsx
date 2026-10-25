@@ -52,6 +52,7 @@ const issue: SiteFeedbackIssueDetail = {
   labels: ["bug"],
   githubConfigured: true,
   githubRepo: "example/repo",
+  filingStartedAt: null,
   links: [
     {
       feedbackId: "fb_1",

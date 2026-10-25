@@ -85,6 +85,71 @@ describe("quotedReportFor", () => {
   });
 });
 
+describe("quotedReportFor defuses member text", () => {
+  const ZWSP = "​";
+  const quoted = (over: Partial<typeof base>) =>
+    quotedReportFor({ ...base, pageUrl: null, userAgent: null, ...over });
+
+  it("breaks an @mention in the title and body", () => {
+    expect(quoted({ title: "Ping @octocat", body: "cc @team-a now" })).toBe(
+      [
+        `<details><summary>🐞 Ping @${ZWSP}octocat: member usr_abc123, 2026-10-24</summary>`,
+        "",
+        `cc @${ZWSP}team-a now`,
+        "",
+        "</details>",
+      ].join("\n"),
+    );
+  });
+
+  it("breaks a #123 issue reference", () => {
+    expect(quoted({ title: "Like #12", body: "see #3, not # 4 or #x" })).toBe(
+      [
+        `<details><summary>🐞 Like #${ZWSP}12: member usr_abc123, 2026-10-24</summary>`,
+        "",
+        `see #${ZWSP}3, not # 4 or #x`,
+        "",
+        "</details>",
+      ].join("\n"),
+    );
+  });
+
+  it("escapes < so a body cannot close the details block", () => {
+    expect(quoted({ title: "<b>x</b>", body: "</details> <img src=x>" })).toBe(
+      [
+        "<details><summary>🐞 &lt;b>x&lt;/b>: member usr_abc123, 2026-10-24</summary>",
+        "",
+        "&lt;/details> &lt;img src=x>",
+        "",
+        "</details>",
+      ].join("\n"),
+    );
+  });
+
+  it("replaces email addresses", () => {
+    expect(
+      quoted({
+        title: "From alice@example.com",
+        body: "Mail bob.smith+x@mail.uc.edu or @ nobody",
+      }),
+    ).toBe(
+      [
+        "<details><summary>🐞 From [email removed]: member usr_abc123, 2026-10-24</summary>",
+        "",
+        "Mail [email removed] or @ nobody",
+        "",
+        "</details>",
+      ].join("\n"),
+    );
+  });
+
+  it("defuses the user agent too", () => {
+    expect(quoted({ userAgent: "Bot/1.0 (@ops; #7; <x>)" })).toContain(
+      `**Browser:** Bot/1.0 (@${ZWSP}ops; #${ZWSP}7; &lt;x>)\n`,
+    );
+  });
+});
+
 describe("issueMarker", () => {
   it("wraps the id in an HTML comment", () => {
     expect(issueMarker("sfi_1")).toBe("<!-- ucmc:sfi_1 -->");

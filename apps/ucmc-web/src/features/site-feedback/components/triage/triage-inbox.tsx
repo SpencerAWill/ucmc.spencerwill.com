@@ -137,6 +137,7 @@ export function TriageInbox({
         aria-label="Search reports"
       />
       <TriageSelectionToolbar
+        view={view}
         selectedIds={selectedIds}
         drafts={data.drafts}
         openIssues={data.openIssues}
