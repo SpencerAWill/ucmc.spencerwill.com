@@ -21,7 +21,7 @@ import { repository } from "./src/repository.ts";
  * Not managed here, deliberately: the hand-set environment secrets
  * SESSION_SECRET (rotating it signs every member out) and
  * CLOUDFLARE_ACCOUNT_READ_TOKEN (the cost cron's token), and the
- * FEEDBACK_GITHUB_TOKEN secret / FEEDBACK_GITHUB_REPO variable. GitHub never
+ * SITE_FEEDBACK_GITHUB_TOKEN secret / SITE_FEEDBACK_GITHUB_REPO variable. GitHub never
  * reveals a secret's value, so adopting one means re-entering it; they stay
  * hand-managed until there's a reason to do that.
  */

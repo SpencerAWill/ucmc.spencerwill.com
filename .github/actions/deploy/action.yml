@@ -50,10 +50,10 @@ inputs:
   cloudflare-account-read-token:
     description: The daily cost snapshot's token (#268). Optional.
     default: ""
-  feedback-github-token:
-    description: Optional; unset leaves the feedback mirror off.
+  site-feedback-github-token:
+    description: Optional; unset leaves site-feedback GitHub triage off.
     default: ""
-  feedback-github-repo:
+  site-feedback-github-repo:
     default: ""
 
 outputs:
@@ -165,8 +165,8 @@ runs:
         STACK: ${{ inputs.stack }}
         SESSION_SECRET: ${{ inputs.session-secret }}
         CLOUDFLARE_ACCOUNT_READ_TOKEN: ${{ inputs.cloudflare-account-read-token }}
-        FEEDBACK_GITHUB_TOKEN: ${{ inputs.feedback-github-token }}
-        FEEDBACK_GITHUB_REPO: ${{ inputs.feedback-github-repo }}
+        SITE_FEEDBACK_GITHUB_TOKEN: ${{ inputs.site-feedback-github-token }}
+        SITE_FEEDBACK_GITHUB_REPO: ${{ inputs.site-feedback-github-repo }}
       run: |
         umask 077
         TURNSTILE_SECRET_KEY="$(pulumi stack output turnstileSecretKey --show-secrets --stack "$STACK")"
@@ -180,7 +180,7 @@ runs:
         fi
         jq -n 'env
           | {SESSION_SECRET, TURNSTILE_SECRET_KEY, RESEND_API_KEY,
-             CLOUDFLARE_ACCOUNT_READ_TOKEN, FEEDBACK_GITHUB_TOKEN, FEEDBACK_GITHUB_REPO}
+             CLOUDFLARE_ACCOUNT_READ_TOKEN, SITE_FEEDBACK_GITHUB_TOKEN, SITE_FEEDBACK_GITHUB_REPO}
           | with_entries(select(.value != null and .value != ""))' \
           > "$RUNNER_TEMP/secrets.json"
         echo "Uploading: $(jq -r 'keys | join(", ")' "$RUNNER_TEMP/secrets.json")"

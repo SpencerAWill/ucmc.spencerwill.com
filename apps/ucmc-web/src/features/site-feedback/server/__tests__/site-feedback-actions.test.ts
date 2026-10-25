@@ -248,8 +248,10 @@ describe("feedback lifecycle", () => {
     await signInAsMember();
     // Configure the (retired) mirror's env so a reinstated mirror would
     // actually fire; with it unset the old code was a silent no-op.
-    env.FEEDBACK_GITHUB_TOKEN = "test-token";
-    env.FEEDBACK_GITHUB_REPO = "example/repo";
+    const priorToken = env.SITE_FEEDBACK_GITHUB_TOKEN;
+    const priorRepo = env.SITE_FEEDBACK_GITHUB_REPO;
+    env.SITE_FEEDBACK_GITHUB_TOKEN = "test-token";
+    env.SITE_FEEDBACK_GITHUB_REPO = "example/repo";
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -270,8 +272,16 @@ describe("feedback lifecycle", () => {
       expect(rows[0]?.githubIssueNumber).toBeNull();
     } finally {
       fetchSpy.mockRestore();
-      delete env.FEEDBACK_GITHUB_TOKEN;
-      delete env.FEEDBACK_GITHUB_REPO;
+      if (priorToken === undefined) {
+        delete env.SITE_FEEDBACK_GITHUB_TOKEN;
+      } else {
+        env.SITE_FEEDBACK_GITHUB_TOKEN = priorToken;
+      }
+      if (priorRepo === undefined) {
+        delete env.SITE_FEEDBACK_GITHUB_REPO;
+      } else {
+        env.SITE_FEEDBACK_GITHUB_REPO = priorRepo;
+      }
     }
   });
 

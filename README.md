@@ -269,7 +269,7 @@ What it manages:
 
 **Pulumi has no stored token.** Every job that runs Pulumi declares an environment and exchanges its GitHub OIDC token for a Pulumi token lasting at most an hour (`pulumi/auth-actions`). The issuer and its trust policies are in [SpencerAWill/spencerwill.com](https://github.com/SpencerAWill/spencerwill.com)'s `infra/github` (`pulumiOidcRepositories`), which lists this repo's `dev`, `prod` and `preview`. The token is personal, so it can read every stack's secrets in every repo: **approve a PR preview only for a branch whose changes you have read.**
 
-Hand-managed, deliberately: the environment secrets `SESSION_SECRET` (rotating it signs everyone out) and `CLOUDFLARE_ACCOUNT_READ_TOKEN` (the cost cron), and `FEEDBACK_GITHUB_TOKEN` / `FEEDBACK_GITHUB_REPO`. GitHub never reveals a secret's value, so adopting one into Pulumi means re-entering it.
+Hand-managed, deliberately: the environment secrets `SESSION_SECRET` (rotating it signs everyone out) and `CLOUDFLARE_ACCOUNT_READ_TOKEN` (the cost cron), and `SITE_FEEDBACK_GITHUB_TOKEN` / `SITE_FEEDBACK_GITHUB_REPO`. GitHub never reveals a secret's value, so adopting one into Pulumi means re-entering it.
 
 **Day to day**, from `infra/github`: `pnpm preview` then `pnpm apply` (both use `gh auth token` for GitHub). To rotate a Cloudflare token, `pnpm apply --replace <token URN>`.
 

@@ -55,14 +55,14 @@ export interface WorkerEnv {
   SESSION_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
 
-  // GitHub feedback mirror — when both are set, submitFeedback opens a
-  // GitHub issue against FEEDBACK_GITHUB_REPO ("owner/name") authenticated
-  // with FEEDBACK_GITHUB_TOKEN (a fine-grained PAT scoped to issues:write).
-  // Both optional: if unset, the mirror call is skipped silently and the
-  // submission stays in D1 only. Failures during the mirror call never
-  // propagate to the user — best-effort only.
-  FEEDBACK_GITHUB_TOKEN?: string;
-  FEEDBACK_GITHUB_REPO?: string;
+  // Site-feedback triage — where maintainers draft and publish GitHub
+  // issues from site-feedback submissions. SITE_FEEDBACK_GITHUB_REPO is
+  // "owner/name"; SITE_FEEDBACK_GITHUB_TOKEN is a fine-grained PAT, Issues
+  // read/write. Used only by maintainer actions in site-feedback triage;
+  // never on submit. Both optional: when unset, GitHub actions are off and
+  // everything else works.
+  SITE_FEEDBACK_GITHUB_TOKEN?: string;
+  SITE_FEEDBACK_GITHUB_REPO?: string;
 
   // Cost/usage snapshots (#268) — read ONLY by the daily cron, never by
   // a route handler. Optional: when unset (or when CLOUDFLARE_ACCOUNT_ID
