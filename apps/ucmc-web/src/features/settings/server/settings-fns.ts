@@ -30,13 +30,14 @@ export type { UpdateSettingResult, UpdateSettingInput };
 
 // Public alias kept for route + UI imports. The per-key shape now includes
 // edit metadata (updatedAtMs + updatedByName) alongside the value.
-export type SiteSettingsSnapshot = SiteSettingsEntries;
+// Partial because the list is filtered to the keys the caller can edit —
+// a `notice:manage`-only officer gets the `notice.*` entries alone.
+export type SiteSettingsSnapshot = Partial<SiteSettingsEntries>;
 export type { SiteSettingEntry };
 
 /**
- * Read every site setting. Officer-gated server-side (the action checks
- * `settings:manage`) — non-officers never need this; the page lives
- * behind the same gate.
+ * Read every site setting the caller can edit. Gated server-side per key
+ * (`settingPermissionOf`) — the page lives behind the same gate.
  *
  * Returned as a single map keyed by `SettingKey` so the admin page can
  * hydrate every form in one query.

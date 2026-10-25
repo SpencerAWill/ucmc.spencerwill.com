@@ -76,6 +76,35 @@ async function signInAsRegularMember(): Promise<string> {
   return userId;
 }
 
+/**
+ * Signs in as a user whose only role grants exactly one permission,
+ * looked up by name. Sees nothing a plain member wouldn't beyond it.
+ */
+async function signInWithPermissionOnly(name: string): Promise<string> {
+  const db = getDb();
+  const permission = await db
+    .select({ id: schema.permissions.id })
+    .from(schema.permissions)
+    .where(eq(schema.permissions.name, name))
+    .get();
+  if (!permission) {
+    throw new Error(`No such permission: ${name}`);
+  }
+  const roleId = `role_test_${name.replace(/\W/g, "_")}`;
+  await db
+    .insert(schema.roles)
+    .values({ id: roleId, name: roleId, displayName: name })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.rolePermissions)
+    .values({ roleId, permissionId: permission.id })
+    .onConflictDoNothing();
+  const userId = await seedUser(`${roleId}@example.com`);
+  await assignRole(userId, roleId);
+  await signInAs(userId);
+  return userId;
+}
+
 beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
@@ -113,6 +142,32 @@ describe("authorization", () => {
 
   it("rejects listSiteSettingsAction without settings:manage", async () => {
     await signInAsRegularMember();
+    await expect(listSiteSettingsAction()).rejects.toThrow(
+      "Forbidden: missing settings:manage",
+    );
+  });
+});
+
+describe("per-key permissions", () => {
+  it("rejects a notice:manage-only write to a pages.* setting", async () => {
+    await signInWithPermissionOnly("notice:manage");
+    await expect(
+      updateSettingAction({ key: "pages.calendar", value: false }),
+    ).rejects.toThrow("Forbidden: missing settings:manage");
+  });
+
+  it("rejects a notice:manage-only write to a contact.* setting", async () => {
+    await signInWithPermissionOnly("notice:manage");
+    await expect(
+      updateSettingAction({
+        key: "contact.clubEmail",
+        value: "x@example.com",
+      }),
+    ).rejects.toThrow("Forbidden: missing settings:manage");
+  });
+
+  it("rejects the list for a permission that edits no setting", async () => {
+    await signInWithPermissionOnly("notice:manage");
     await expect(listSiteSettingsAction()).rejects.toThrow(
       "Forbidden: missing settings:manage",
     );
@@ -217,7 +272,7 @@ describe("pre-rename feedback submission setting keys", () => {
 
     const entries = await listSiteSettingsAction();
 
-    expect(entries["site_feedback.submissions_enabled"].value).toBe(false);
+    expect(entries["site_feedback.submissions_enabled"]?.value).toBe(false);
   });
 });
 
@@ -252,9 +307,9 @@ describe("listSiteSettingsAction snapshot shape", () => {
     expect(result.ok).toBe(true);
 
     const snapshot = await listSiteSettingsAction();
-    expect(snapshot["contact.clubEmail"].value).toBe("new@example.com");
-    expect(snapshot["contact.clubEmail"].updatedByName).toBe("Test Officer");
-    expect(typeof snapshot["contact.clubEmail"].updatedAtMs).toBe("number");
+    expect(snapshot["contact.clubEmail"]?.value).toBe("new@example.com");
+    expect(snapshot["contact.clubEmail"]?.updatedByName).toBe("Test Officer");
+    expect(typeof snapshot["contact.clubEmail"]?.updatedAtMs).toBe("number");
   });
 });
 

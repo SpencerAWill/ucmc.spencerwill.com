@@ -92,6 +92,7 @@ import {
 } from "#/components/ui/tooltip";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
+import { SETTINGS_PAGE_PERMISSIONS } from "#/server/settings/settings-registry";
 
 const HEADER_HEIGHT = "3.5rem";
 
@@ -658,7 +659,7 @@ export function SidebarNav() {
 }
 
 export function SidebarUtilityNav() {
-  const { isApproved, hasPermission } = useAuth();
+  const { isApproved, hasPermission, hasAnyPermission } = useAuth();
   // Page kill switches for entries in this group. `placeholderData` is the
   // schema default (on) until the query resolves.
   const flagsOptions = publicFlagsQueryOptions();
@@ -684,7 +685,9 @@ export function SidebarUtilityNav() {
     hasPermission(ANALYTICS_VIEW_PERMISSION) && pages.analytics;
   const analyticsPages = visibleAnalyticsPages(hasPermission, pages);
   const canViewAudit = hasPermission("audit:view");
-  const canManageSettings = hasPermission("settings:manage");
+  // Any permission that edits some setting opens /settings — the page
+  // then shows each viewer only the categories they can edit.
+  const canManageSettings = hasAnyPermission(SETTINGS_PAGE_PERMISSIONS);
   // The permission is still `roles:manage` — the page is named for the
   // umbrella concern (access), the permission for the object it edits.
   const canManageAccess = hasPermission("roles:manage") && pages.access;

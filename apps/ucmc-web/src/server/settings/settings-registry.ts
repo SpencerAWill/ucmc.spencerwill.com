@@ -130,6 +130,15 @@ export type SettingMeta = {
    * Cancel/Confirm buttons.
    */
   confirm?: string;
+  /**
+   * The permission that edits this setting. Defaults to `settings:manage`
+   * (see `settingPermissionOf`). Set it to hand one category to people
+   * who must not hold the rest of the site's configuration — the
+   * `notice.*` keys carry `notice:manage`. `/settings` admits anyone
+   * holding any of `SETTINGS_PAGE_PERMISSIONS`, and every read and write
+   * answers per key from this.
+   */
+  permission?: string;
 };
 
 const registry = z.registry<SettingMeta>();
@@ -993,6 +1002,44 @@ export function getMeta<TKey extends SettingKey>(key: TKey): SettingMeta {
 }
 
 export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
+
+// ── Per-key permissions ─────────────────────────────────────────────────
+//
+// `/settings` used to be one permission wide. A key's `permission` meta now
+// says who may edit it, with `settings:manage` as the default, so a role
+// can be handed one category (the site notice) without the page kill
+// switches and contact details that `settings:manage` also holds.
+
+const DEFAULT_SETTING_PERMISSION = "settings:manage";
+
+/** The permission that edits `key` — its `permission` meta, or the default. */
+export function settingPermissionOf(key: SettingKey): string {
+  return getMeta(key).permission ?? DEFAULT_SETTING_PERMISSION;
+}
+
+/**
+ * Every permission that edits at least one setting, `settings:manage`
+ * first. The `/settings` route guard and its sidebar entry admit any of
+ * them; the page then shows each viewer only what they can edit.
+ */
+export const SETTINGS_PAGE_PERMISSIONS: readonly string[] = [
+  ...new Set([
+    DEFAULT_SETTING_PERMISSION,
+    ...SETTING_KEYS.map(settingPermissionOf),
+  ]),
+];
+
+/**
+ * Whether a holder of `permissions` may edit `key`. Pure, so the server
+ * actions and the page share the one answer. Client callers pass the
+ * *effective* set (`hasPermission`), never `principal.permissions`.
+ */
+export function canEditSetting(
+  permissions: readonly string[],
+  key: SettingKey,
+): boolean {
+  return permissions.includes(settingPermissionOf(key));
+}
 
 // ── Page flags ──────────────────────────────────────────────────────────
 //

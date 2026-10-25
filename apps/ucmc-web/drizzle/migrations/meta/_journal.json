@@ -631,6 +631,13 @@
       "when": 1792942955517,
       "tag": "0089_feedback_screenshots",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1792969797194,
+      "tag": "0090_add_notice_manage_permission",
+      "breakpoints": true
     }
   ]
 }

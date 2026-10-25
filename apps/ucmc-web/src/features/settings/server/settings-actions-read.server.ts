@@ -4,24 +4,27 @@
  * member-side "public settings" reader can share the same repo without
  * inheriting the `settings:manage` gate.
  *
- * Today the admin UI is the only caller, so this still gates on
- * `settings:manage`.
+ * The admin reads are gated per key: the list returns only the settings
+ * the caller can edit, and history checks the key asked about.
  */
 import { and, desc, eq } from "drizzle-orm";
 
 import * as schema from "../../../../drizzle/schema";
 import { getDb } from "#/server/db";
-import { requireSettingsManager } from "./permissions.server";
+import {
+  requireAnySettingPermission,
+  requireSettingPermission,
+} from "./permissions.server";
 import {
   readAllSettings,
   readSetting,
 } from "#/server/settings/settings-repo.server";
 import {
+  canEditSetting,
   effectivePageFlags,
   isSettingKey,
   pageFlagKeyOf,
   PAGE_SETTING_KEYS,
-  SETTINGS,
 } from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
 import type {
@@ -32,9 +35,19 @@ import type {
   SiteSettingsSnapshot,
 } from "./settings-fns";
 
+/**
+ * Every setting the caller can edit, with its edit metadata. Filtered per
+ * key, so a `notice:manage`-only officer gets the four `notice.*` entries
+ * and never sees the values of settings they can't change.
+ */
 export async function listSiteSettingsAction(): Promise<SiteSettingsSnapshot> {
-  await requireSettingsManager();
-  return readAllSettings();
+  const principal = await requireAnySettingPermission();
+  const all = await readAllSettings();
+  return Object.fromEntries(
+    Object.entries(all).filter(([key]) =>
+      canEditSetting(principal.permissions, key as SettingKey),
+    ),
+  );
 }
 
 /**
@@ -99,8 +112,7 @@ export async function getPublicFlagsAction(): Promise<PublicFlags> {
 /**
  * Per-setting audit history. Returns the last N `settings_updated` rows
  * for a given key, joined to `profiles.full_name` for actor display.
- * Gated by `settings:manage` — same surface as the rest of the admin
- * read API.
+ * Gated by the key's own permission — the same one that edits it.
  *
  * Value rendering uses the same policy as the audit recorder: boolean
  * values come back populated, every other shape returns `null` (the
@@ -112,12 +124,11 @@ const HISTORY_LIMIT = 50;
 export async function listSettingHistoryAction(input: {
   key: SettingKey;
 }): Promise<SettingHistoryEntry[]> {
-  await requireSettingsManager();
-  if (!isSettingKey(input.key)) return [];
-  // Defense in depth — the gate above is the real boundary, but
-  // referencing SETTINGS[key] here makes the loop below total over
-  // every registered key.
-  if (!Object.prototype.hasOwnProperty.call(SETTINGS, input.key)) return [];
+  if (!isSettingKey(input.key)) {
+    await requireAnySettingPermission();
+    return [];
+  }
+  await requireSettingPermission(input.key);
 
   const rows = await getDb()
     .select({

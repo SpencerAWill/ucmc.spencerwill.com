@@ -3,8 +3,8 @@
  * `./settings-fns.ts` so server-only deps (audit, repo, DB) never reach
  * the client bundle.
  *
- * Authorization happens here: every action calls `requireSettingsManager`
- * before touching state. The audit row is written atomically with the
+ * Authorization happens here: every write checks the permission of the
+ * key it touches (`requireSettingPermission`) before touching state. The audit row is written atomically with the
  * setting write — `buildAuditEventStatement` returns the INSERT and we
  * spread it into the same `db.batch` as the UPSERT, so a partial failure
  * can't leave a row written without a trail.
@@ -18,7 +18,10 @@
  */
 import { getDb } from "#/server/db";
 import { buildAuditEventStatement } from "#/server/audit/audit-log.server";
-import { requireSettingsManager } from "./permissions.server";
+import {
+  requireAnySettingPermission,
+  requireSettingPermission,
+} from "./permissions.server";
 import { isSettingKey, SETTINGS } from "#/server/settings/settings-registry";
 import type {
   SettingKey,
@@ -32,16 +35,18 @@ export type UpdateSettingResult =
 export async function updateSettingAction(
   input: UpdateSettingInput,
 ): Promise<UpdateSettingResult> {
-  const principal = await requireSettingsManager();
-
   // Defense in depth — the server-fn validator already enforces this,
   // but the action layer is also called directly from tests and from
   // any future server-side caller. A bad key here would otherwise
-  // index into `SETTINGS` with `undefined`.
+  // index into `SETTINGS` with `undefined`. An unknown key has no
+  // permission of its own, so it still authenticates first: an
+  // anonymous caller learns nothing about which keys exist.
   if (!isSettingKey(input.key)) {
+    await requireAnySettingPermission();
     return { ok: false, reason: "unknown_key" };
   }
   const key = input.key satisfies SettingKey;
+  const principal = await requireSettingPermission(key);
   const parsed = SETTINGS[key].safeParse(input.value);
   if (!parsed.success) {
     return { ok: false, reason: "invalid_value" };

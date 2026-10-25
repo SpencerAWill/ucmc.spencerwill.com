@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { PageContainer } from "#/components/layouts/page-container";
-import { requirePermission } from "#/features/auth/guards";
+import { requireAnyPermission } from "#/features/auth/guards";
 import { siteSettingsQueryOptions } from "#/features/settings/api/queries";
 import { PageFlagsPanel } from "#/features/settings/components/page-flags-panel";
 import { SettingRow } from "#/features/settings/components/setting-row";
@@ -13,6 +13,7 @@ import {
   isStale,
   keysByCategory,
   SETTING_CATEGORIES,
+  SETTINGS_PAGE_PERMISSIONS,
 } from "#/server/settings/settings-registry";
 import type {
   SettingCategory,
@@ -21,7 +22,12 @@ import type {
 
 export const Route = createFileRoute("/settings")({
   beforeLoad: async ({ context, location }) => {
-    await requirePermission({ context, location }, "settings:manage");
+    // Per-key gating: anyone who can edit at least one setting gets in,
+    // and the page renders only what they can edit.
+    await requireAnyPermission(
+      { context, location },
+      SETTINGS_PAGE_PERMISSIONS,
+    );
   },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(siteSettingsQueryOptions());
@@ -81,13 +87,16 @@ function CategorySection({
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">{CATEGORY_LABELS[category]}</h2>
       <div className="space-y-3">
-        {keys.map((key) =>
-          entries === undefined ? (
-            <SettingRowSkeleton key={key} />
-          ) : (
-            <SettingRow key={key} settingKey={key} entry={entries[key]} />
-          ),
-        )}
+        {keys.map((key) => {
+          if (entries === undefined) {
+            return <SettingRowSkeleton key={key} />;
+          }
+          // The snapshot holds only the keys this viewer can edit.
+          const entry = entries[key];
+          return entry === undefined ? null : (
+            <SettingRow key={key} settingKey={key} entry={entry} />
+          );
+        })}
       </div>
     </section>
   );

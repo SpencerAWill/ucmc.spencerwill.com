@@ -112,6 +112,27 @@ describe("permission catalog", () => {
   });
 });
 
+describe("notice:manage", () => {
+  it("is registered under its id, and not anonymous-grantable", async () => {
+    const rows = await getDb()
+      .select({
+        name: schema.permissions.name,
+        grantable: schema.permissions.anonymousGrantable,
+      })
+      .from(schema.permissions)
+      .where(eq(schema.permissions.id, "perm_notice_manage"));
+    expect(rows).toEqual([{ name: "notice:manage", grantable: false }]);
+  });
+
+  it("seeds no grants — system_admin holds it via the bypass", async () => {
+    const rows = await getDb()
+      .select({ roleId: schema.rolePermissions.roleId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.permissionId, "perm_notice_manage"));
+    expect(rows).toEqual([]);
+  });
+});
+
 /**
  * Pins migration 0083's list of permissions the `anonymous` role may
  * hold. Every signed-in viewer inherits those grants (#300), so growing

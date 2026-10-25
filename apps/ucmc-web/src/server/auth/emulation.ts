@@ -7,7 +7,7 @@
  * which permission set a preview therefore implies.
  *
  * **This is a preview, not a privilege drop.** Server actions always
- * enforce the real principal — `requireSettingsManager` and friends read
+ * enforce the real principal — `requireSettingPermission` and friends read
  * `principal.permissions`, which this never touches. What emulation
  * changes is what the *client* draws and which routes the *client-side*
  * guards let you reach, so an admin can see the member's experience

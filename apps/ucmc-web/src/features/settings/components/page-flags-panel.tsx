@@ -70,10 +70,11 @@ import type {
  * treatment carries "off anyway" instead.
  */
 export function PageFlagsPanel({
-  entries,
+  entries: snapshot,
 }: {
   entries: SiteSettingsSnapshot | undefined;
 }) {
+  const entries = snapshot === undefined ? undefined : pageEntriesOf(snapshot);
   const [filter, setFilter] = useState("");
   const tree = usePageFlagTree();
 
@@ -213,7 +214,24 @@ function matchesNeedle(key: PageFlagKey, needle: string): boolean {
   );
 }
 
-function countInheritedOff(entries: SiteSettingsSnapshot): number {
+/** Every page flag's entry — the snapshot narrowed to the `pages` category. */
+type PageEntries = { [TKey in PageSettingKey]: SiteSettingEntry<TKey> };
+
+/**
+ * The snapshot is filtered to the keys the viewer can edit, so it is typed
+ * partial. Every page flag shares one permission, so a viewer who can see
+ * any of them sees all of them; anything less is treated as still loading
+ * rather than rendered as a tree with holes in it.
+ */
+function pageEntriesOf(
+  snapshot: SiteSettingsSnapshot,
+): PageEntries | undefined {
+  return PAGE_SETTING_KEYS.every((key) => snapshot[key] !== undefined)
+    ? (snapshot as PageEntries)
+    : undefined;
+}
+
+function countInheritedOff(entries: PageEntries): number {
   return PAGE_SETTING_KEYS.filter((settingKey) => {
     if (entries[settingKey].value === false) {
       return false;
@@ -237,7 +255,7 @@ function PageNodeRow({
   forceOpen,
 }: {
   node: PageNode;
-  entries: SiteSettingsSnapshot;
+  entries: PageEntries;
   depth: number;
   ancestorOff: boolean;
   forceOpen: boolean;
@@ -312,7 +330,7 @@ function SubtreeSummary({
   entries,
 }: {
   node: PageNode;
-  entries: SiteSettingsSnapshot;
+  entries: PageEntries;
 }) {
   const descendants: PageFlagKey[] = [];
   const walk = (current: PageNode) => {
@@ -347,7 +365,7 @@ function FlagRow({
   trailing,
 }: {
   flagKey: PageFlagKey;
-  entries: SiteSettingsSnapshot;
+  entries: PageEntries;
   depth: number;
   isSection: boolean;
   offAnyway: boolean;
