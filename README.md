@@ -27,7 +27,7 @@ The container provides:
 - pnpm (via corepack)
 - Pulumi CLI
 - GitHub CLI
-- Claude Code CLI
+- Claude Code CLI, with `typescript-language-server` on `PATH` for the project's `typescript-lsp` plugin (outside the container, see CLAUDE.md for the one-time link)
 - VS Code extensions: Prettier, ESLint, EditorConfig
 
 Named Docker volumes persist the pnpm store, Pulumi config, and Claude data across container rebuilds. GitHub CLI auth is bind-mounted from the host's `~/.config/gh`, so a one-time `gh auth login` on the host carries into every container (macOS users: run it with `--insecure-storage` so the token lands in `hosts.yml` rather than Keychain).
