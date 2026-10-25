@@ -9,10 +9,7 @@ import type {
   SiteFeedbackOverview,
   SiteFeedbackSummary,
 } from "#/features/site-feedback/server/site-feedback-actions.server";
-import {
-  siteFeedbackInputSchema,
-  siteFeedbackStatusUpdateSchema,
-} from "#/features/site-feedback/server/limits";
+import { siteFeedbackInputSchema } from "#/features/site-feedback/server/limits";
 
 export type { SiteFeedbackOverview, SiteFeedbackSummary };
 
@@ -32,26 +29,10 @@ export const listMySiteFeedbackFn = createServerFn({ method: "GET" }).handler(
   },
 );
 
-export const listAllSiteFeedbackFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SiteFeedbackSummary[]> => {
-    const { listAllSiteFeedbackAction } =
-      await import("#/features/site-feedback/server/site-feedback-actions.server");
-    return listAllSiteFeedbackAction();
-  },
-);
-
 export const submitSiteFeedbackFn = createServerFn({ method: "POST" })
   .validator(siteFeedbackInputSchema)
   .handler(async ({ data }): Promise<{ id: string }> => {
     const { submitSiteFeedbackAction } =
       await import("#/features/site-feedback/server/site-feedback-actions.server");
     return submitSiteFeedbackAction(data);
-  });
-
-export const updateSiteFeedbackStatusFn = createServerFn({ method: "POST" })
-  .validator(siteFeedbackStatusUpdateSchema)
-  .handler(async ({ data }): Promise<{ ok: true }> => {
-    const { updateSiteFeedbackStatusAction } =
-      await import("#/features/site-feedback/server/site-feedback-actions.server");
-    return updateSiteFeedbackStatusAction(data);
   });

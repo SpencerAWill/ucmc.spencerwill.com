@@ -27,9 +27,7 @@ vi.mock("#/server/rate-limit.server", () => ({
 
 const {
   listMySiteFeedbackAction,
-  listAllSiteFeedbackAction,
   submitSiteFeedbackAction,
-  updateSiteFeedbackStatusAction,
   getSiteFeedbackOverviewAction,
 } =
   await import("#/features/site-feedback/server/site-feedback-actions.server");
@@ -129,20 +127,6 @@ describe("feedback authorization", () => {
         expectedBehavior: "w",
       }),
     ).rejects.toThrow("Forbidden: missing site_feedback:submit");
-  });
-
-  it("listAllSiteFeedbackAction rejects users without site_feedback:manage", async () => {
-    await signInAsMember();
-    await expect(listAllSiteFeedbackAction()).rejects.toThrow(
-      "Forbidden: missing site_feedback:manage",
-    );
-  });
-
-  it("updateSiteFeedbackStatusAction rejects users without site_feedback:manage", async () => {
-    await signInAsMember();
-    await expect(
-      updateSiteFeedbackStatusAction({ id: "sfb_x", status: "resolved" }),
-    ).rejects.toThrow("Forbidden: missing site_feedback:manage");
   });
 
   it("submitSiteFeedbackAction rejects when site_feedback.submissions_enabled is off", async () => {
@@ -284,33 +268,6 @@ describe("feedback lifecycle", () => {
         env.SITE_FEEDBACK_GITHUB_REPO = priorRepo;
       }
     }
-  });
-
-  it("admin lists all feedback across users and can update status", async () => {
-    await signInAsMember("a@example.com");
-    const a = await submitSiteFeedbackAction({
-      kind: "bug",
-      title: "From A",
-      bugDescription: "Something",
-      stepsToReproduce: "Steps",
-      expectedBehavior: "Expected",
-    });
-    await signInAsMember("b@example.com");
-    await submitSiteFeedbackAction({
-      kind: "feature",
-      title: "From B",
-      problem: "Annoying thing",
-      proposedSolution: "Less annoying thing",
-    });
-
-    await signInAsAdmin();
-    const all = await listAllSiteFeedbackAction();
-    expect(all).toHaveLength(2);
-
-    await updateSiteFeedbackStatusAction({ id: a.id, status: "acknowledged" });
-    const updated = await listAllSiteFeedbackAction();
-    const aRow = updated.find((r) => r.id === a.id);
-    expect(aRow?.status).toBe("acknowledged");
   });
 });
 

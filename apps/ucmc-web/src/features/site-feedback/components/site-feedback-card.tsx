@@ -1,35 +1,25 @@
 import { ExternalLink } from "lucide-react";
-import { toast } from "sonner";
 
 import { MarkdownContent } from "#/components/markdown/markdown-content";
 import { UserAvatar } from "#/components/user-avatar";
 import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "#/components/ui/select";
-import { useUpdateSiteFeedbackStatus } from "#/features/site-feedback/api/use-update-site-feedback-status";
 import type { SiteFeedbackSummary } from "#/features/site-feedback/server/site-feedback-fns";
 import {
   SITE_FEEDBACK_KIND_LABELS,
-  SITE_FEEDBACK_STATUS_LABELS,
-  SITE_FEEDBACK_STATUS_VALUES,
+  SITE_FEEDBACK_STATE_LABELS,
 } from "#/features/site-feedback/server/limits";
-import type { SiteFeedbackStatus } from "#/features/site-feedback/server/limits";
+import type { SiteFeedbackState } from "#/features/site-feedback/server/limits";
 import { formatRelative } from "#/lib/date-format";
 
-const STATUS_VARIANTS: Record<
-  SiteFeedbackStatus,
+const STATE_VARIANTS: Record<
+  SiteFeedbackState,
   "default" | "warning" | "success" | "secondary"
 > = {
-  open: "default",
-  acknowledged: "warning",
+  new: "default",
+  in_draft: "warning",
+  tracked: "warning",
   resolved: "success",
-  closed: "secondary",
   wont_fix: "secondary",
   duplicate: "secondary",
 };
@@ -37,30 +27,10 @@ const STATUS_VARIANTS: Record<
 export function SiteFeedbackCard({
   entry,
   showSubmitter,
-  canManage,
 }: {
   entry: SiteFeedbackSummary;
   showSubmitter: boolean;
-  canManage: boolean;
 }) {
-  const updateStatus = useUpdateSiteFeedbackStatus();
-
-  const onChangeStatus = (next: string) => {
-    updateStatus.mutate(
-      { id: entry.id, status: next as SiteFeedbackStatus },
-      {
-        onSuccess: () => {
-          toast.success(
-            `Marked ${SITE_FEEDBACK_STATUS_LABELS[next as SiteFeedbackStatus].toLowerCase()}`,
-          );
-        },
-        onError: () => {
-          toast.error("Couldn’t update status. Please try again.");
-        },
-      },
-    );
-  };
-
   const author = entry.authorDisplayName ?? "Unknown";
 
   return (
@@ -72,28 +42,9 @@ export function SiteFeedbackCard({
               <Badge variant="outline">
                 {SITE_FEEDBACK_KIND_LABELS[entry.kind]}
               </Badge>
-              {canManage ? (
-                <Select
-                  value={entry.status}
-                  onValueChange={onChangeStatus}
-                  disabled={updateStatus.isPending}
-                >
-                  <SelectTrigger size="sm" className="h-7 w-[160px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SITE_FEEDBACK_STATUS_VALUES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {SITE_FEEDBACK_STATUS_LABELS[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Badge variant={STATUS_VARIANTS[entry.status]}>
-                  {SITE_FEEDBACK_STATUS_LABELS[entry.status]}
-                </Badge>
-              )}
+              <Badge variant={STATE_VARIANTS[entry.state]}>
+                {SITE_FEEDBACK_STATE_LABELS[entry.state]}
+              </Badge>
               {entry.trackedIn.map((issue) => (
                 <a
                   key={issue.number}

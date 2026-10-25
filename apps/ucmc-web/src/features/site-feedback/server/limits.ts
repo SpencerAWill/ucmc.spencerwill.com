@@ -64,11 +64,11 @@ export const SITE_FEEDBACK_KIND_LABELS: Record<SiteFeedbackKind, string> = {
   general: "General feedback",
 };
 
-export const SITE_FEEDBACK_STATUS_LABELS: Record<SiteFeedbackStatus, string> = {
-  open: "Open",
-  acknowledged: "Acknowledged",
+export const SITE_FEEDBACK_STATE_LABELS: Record<SiteFeedbackState, string> = {
+  new: "New",
+  in_draft: "In draft",
+  tracked: "Tracked",
   resolved: "Resolved",
-  closed: "Closed",
   wont_fix: "Won't fix",
   duplicate: "Duplicate",
 };
@@ -170,15 +170,6 @@ export type BugFeedbackInput = z.infer<typeof bugFeedbackSchema>;
 export type FeatureFeedbackInput = z.infer<typeof featureFeedbackSchema>;
 export type GeneralFeedbackInput = z.infer<typeof generalFeedbackSchema>;
 export type SiteFeedbackInput = z.infer<typeof siteFeedbackInputSchema>;
-
-export const siteFeedbackStatusUpdateSchema = z.object({
-  id: z.string().min(1),
-  status: z.enum(SITE_FEEDBACK_STATUS_VALUES),
-});
-
-export type SiteFeedbackStatusUpdateInput = z.infer<
-  typeof siteFeedbackStatusUpdateSchema
->;
 
 // ── triage inputs ───────────────────────────────────────────────────────
 

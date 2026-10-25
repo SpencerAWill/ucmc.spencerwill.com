@@ -51,26 +51,6 @@ const baseSelect = {
   authorAvatarKey: schema.profiles.avatarKey,
 };
 
-export async function listAllSiteFeedback(): Promise<SiteFeedbackRow[]> {
-  const db = getDb();
-  return db
-    .select(baseSelect)
-    .from(schema.siteFeedback)
-    .leftJoin(schema.users, eq(schema.users.id, schema.siteFeedback.createdBy))
-    .leftJoin(
-      schema.userEmails,
-      and(
-        eq(schema.userEmails.userId, schema.siteFeedback.createdBy),
-        eq(schema.userEmails.isPrimary, true),
-      ),
-    )
-    .leftJoin(
-      schema.profiles,
-      eq(schema.profiles.userId, schema.siteFeedback.createdBy),
-    )
-    .orderBy(desc(schema.siteFeedback.createdAt));
-}
-
 export async function listSiteFeedbackByUser(
   userId: string,
 ): Promise<SiteFeedbackRow[]> {
@@ -117,15 +97,4 @@ export async function insertSiteFeedback(input: {
     createdAt: now,
     updatedAt: now,
   });
-}
-
-export async function updateSiteFeedbackStatus(input: {
-  id: string;
-  status: SiteFeedbackStatus;
-}): Promise<void> {
-  const db = getDb();
-  await db
-    .update(schema.siteFeedback)
-    .set({ status: input.status, updatedAt: Temporal.Now.instant() })
-    .where(eq(schema.siteFeedback.id, input.id));
 }

@@ -11,13 +11,10 @@ import type {
   SiteFeedbackKind,
   SiteFeedbackState,
   SiteFeedbackStatus,
-  SiteFeedbackStatusUpdateInput,
 } from "#/features/site-feedback/server/limits";
 import {
   insertSiteFeedback,
-  listAllSiteFeedback,
   listSiteFeedbackByUser,
-  updateSiteFeedbackStatus,
 } from "#/features/site-feedback/server/repo.server";
 import {
   countFeedbackInStates,
@@ -194,14 +191,6 @@ export async function listMySiteFeedbackAction(): Promise<
   return toSummaries(rows, true);
 }
 
-export async function listAllSiteFeedbackAction(): Promise<
-  SiteFeedbackSummary[]
-> {
-  await requireSiteFeedbackManager();
-  const rows = await listAllSiteFeedback();
-  return toSummaries(rows, false);
-}
-
 export async function submitSiteFeedbackAction(
   input: SiteFeedbackInput,
 ): Promise<{ id: string }> {
@@ -236,14 +225,6 @@ export async function submitSiteFeedbackAction(
   });
 
   return { id };
-}
-
-export async function updateSiteFeedbackStatusAction(
-  input: SiteFeedbackStatusUpdateInput,
-): Promise<{ ok: true }> {
-  await requireSiteFeedbackManager();
-  await updateSiteFeedbackStatus(input);
-  return { ok: true };
 }
 
 export async function getSiteFeedbackOverviewAction(): Promise<SiteFeedbackOverview> {

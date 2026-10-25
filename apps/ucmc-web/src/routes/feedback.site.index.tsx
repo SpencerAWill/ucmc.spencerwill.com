@@ -9,7 +9,6 @@ import {
   requireApproved,
 } from "#/features/auth/guards";
 import {
-  allSiteFeedbackQueryOptions,
   mySiteFeedbackQueryOptions,
   siteFeedbackOverviewQueryOptions,
 } from "#/features/site-feedback/api/queries";
@@ -46,9 +45,6 @@ function SiteFeedbackPage() {
   const submissionsEnabled = flagsQuery.data?.siteFeedback ?? true;
 
   const myQuery = useQuery(mySiteFeedbackQueryOptions());
-  const adminQuery = useQuery(
-    allSiteFeedbackQueryOptions({ enabled: canManage }),
-  );
 
   const overviewQuery = useQuery({
     ...siteFeedbackOverviewQueryOptions(),
@@ -57,7 +53,6 @@ function SiteFeedbackPage() {
   const untriaged = overviewQuery.data?.untriaged ?? null;
 
   const mySubmissions = myQuery.data ?? [];
-  const allSubmissions = adminQuery.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -103,41 +98,12 @@ function SiteFeedbackPage() {
           <ul className="space-y-3">
             {mySubmissions.map((entry) => (
               <li key={entry.id}>
-                <SiteFeedbackCard
-                  entry={entry}
-                  showSubmitter={false}
-                  canManage={false}
-                />
+                <SiteFeedbackCard entry={entry} showSubmitter={false} />
               </li>
             ))}
           </ul>
         )}
       </section>
-
-      {canManage ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground">
-            All feedback (admin)
-          </h2>
-          {adminQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : allSubmissions.length === 0 ? (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyTitle>No feedback submitted yet.</EmptyTitle>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <ul className="space-y-3">
-              {allSubmissions.map((entry) => (
-                <li key={entry.id}>
-                  <SiteFeedbackCard entry={entry} showSubmitter canManage />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ) : null}
     </div>
   );
 }
