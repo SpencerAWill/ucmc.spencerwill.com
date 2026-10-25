@@ -57,6 +57,8 @@ import {
   visibleAnalyticsPages,
 } from "#/config/analytics-pages";
 import { GITHUB_REPO_URL } from "#/config/site";
+import { SITE_FEEDBACK_SCREENSHOT_MAX_BYTES } from "#/features/site-feedback/server/limits";
+import { captureViewport } from "#/lib/capture-viewport";
 import {
   publicFlagsQueryOptions,
   publicSiteContactQueryOptions,
@@ -114,9 +116,9 @@ function SidebarTriggerWithTooltip() {
   );
 }
 
-/** Screenshots switch on with capture support; until then, none. */
-async function noScreenshot() {
-  return null;
+/** The visible page, capped at the size the server accepts. */
+function captureForFeedback() {
+  return captureViewport({ maxBytes: SITE_FEEDBACK_SCREENSHOT_MAX_BYTES });
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -126,8 +128,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <FeedbackLauncherProvider
       canSend={surfaces.site || surfaces.club}
-      captureScreenshot={false}
-      capture={noScreenshot}
+      // Only site feedback carries a screenshot, so don't capture for a
+      // viewer who can only send club feedback.
+      captureScreenshot={surfaces.site}
+      capture={captureForFeedback}
     >
       <AppShell>{children}</AppShell>
       <FeedbackDialog surfaces={surfaces} />

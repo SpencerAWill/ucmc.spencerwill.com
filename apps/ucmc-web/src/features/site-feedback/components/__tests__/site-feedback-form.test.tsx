@@ -83,4 +83,83 @@ describe("SiteFeedbackForm", () => {
     );
     await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
   });
+
+  describe("screenshot", () => {
+    const WITH_SHOT: FeedbackPageContext = {
+      ...CONTEXT,
+      screenshot: {
+        dataUrl: "data:image/webp;base64,UklGRgAAAABXRUJQ",
+        contentType: "image/webp",
+        bytes: 12,
+      },
+    };
+
+    function checkbox() {
+      return screen.getByRole("checkbox", { name: "Include screenshot" });
+    }
+
+    it("Include screenshot is checked by default for Bug and unchecked for Feature and General", async () => {
+      render(<SiteFeedbackForm pageContext={WITH_SHOT} />);
+      expect(checkbox()).toBeChecked();
+      await userEvent.click(screen.getByRole("tab", { name: "Feature" }));
+      expect(checkbox()).not.toBeChecked();
+      await userEvent.click(screen.getByRole("tab", { name: "General" }));
+      expect(checkbox()).not.toBeChecked();
+      await userEvent.click(screen.getByRole("tab", { name: "Bug" }));
+      expect(checkbox()).toBeChecked();
+    });
+
+    it("once the member toggles it, switching kind keeps their choice", async () => {
+      render(<SiteFeedbackForm pageContext={WITH_SHOT} />);
+      await userEvent.click(checkbox());
+      expect(checkbox()).not.toBeChecked();
+      await userEvent.click(screen.getByRole("tab", { name: "General" }));
+      await userEvent.click(screen.getByRole("tab", { name: "Bug" }));
+      expect(checkbox()).not.toBeChecked();
+    });
+
+    it("ticked on a general report, the submission carries the screenshot", async () => {
+      render(<SiteFeedbackForm pageContext={WITH_SHOT} />);
+      await fillGeneral();
+      await userEvent.click(checkbox());
+      await userEvent.click(
+        screen.getByRole("button", { name: "Send feedback" }),
+      );
+      await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+      expect(mutate.mock.calls[0]?.[0]).toMatchObject({
+        screenshotDataUrl: WITH_SHOT.screenshot?.dataUrl,
+      });
+    });
+
+    it("unticked, the submission carries no screenshotDataUrl", async () => {
+      render(<SiteFeedbackForm pageContext={WITH_SHOT} />);
+      await fillGeneral();
+      expect(checkbox()).not.toBeChecked();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Send feedback" }),
+      );
+      await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+      expect(mutate.mock.calls[0]?.[0]).not.toHaveProperty("screenshotDataUrl");
+    });
+
+    it("no screenshot in pageContext renders no checkbox", () => {
+      render(<SiteFeedbackForm pageContext={CONTEXT} />);
+      expect(
+        screen.queryByRole("checkbox", { name: "Include screenshot" }),
+      ).toBeNull();
+      expect(screen.queryByRole("img")).toBeNull();
+    });
+
+    it("shows the thumbnail and the privacy helper text", () => {
+      render(<SiteFeedbackForm pageContext={WITH_SHOT} />);
+      expect(
+        screen.getByText(
+          "Visible only to you and site maintainers. Never posted publicly.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("img", { name: /screenshot/i }).getAttribute("src"),
+      ).toBe(WITH_SHOT.screenshot?.dataUrl);
+    });
+  });
 });

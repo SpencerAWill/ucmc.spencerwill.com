@@ -1,6 +1,17 @@
 import { toast } from "sonner";
 
-import type { FeedbackPageContext } from "#/components/feedback/feedback-launcher";
+import type {
+  CapturedScreenshot,
+  FeedbackPageContext,
+} from "#/components/feedback/feedback-launcher";
+import { Checkbox } from "#/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "#/components/ui/dialog";
+import { Label } from "#/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { useSubmitSiteFeedback } from "#/features/site-feedback/api/use-submit-site-feedback";
 import {
@@ -35,6 +46,9 @@ interface FormValues {
   // auto-captured
   pageUrl: string;
   userAgent: string;
+  // "auto" follows the kind (on for a bug) until the member touches the
+  // checkbox; after that their choice sticks across kind changes.
+  screenshotChoice: "auto" | "on" | "off";
 }
 
 const DEFAULTS: FormValues = {
@@ -50,7 +64,14 @@ const DEFAULTS: FormValues = {
   body: "",
   pageUrl: "",
   userAgent: "",
+  screenshotChoice: "auto",
 };
+
+function includesScreenshot(values: FormValues): boolean {
+  return values.screenshotChoice === "auto"
+    ? values.kind === "bug"
+    : values.screenshotChoice === "on";
+}
 
 // Short labels for the tab triggers. The full labels
 // (`SITE_FEEDBACK_KIND_LABELS`) stay in the admin triage card; on the
@@ -92,11 +113,18 @@ function validateFeedback({
   return { fields };
 }
 
-function projectToVariant(values: FormValues): SiteFeedbackInput {
+function projectToVariant(
+  values: FormValues,
+  screenshot: CapturedScreenshot | null = null,
+): SiteFeedbackInput {
   const base = {
     title: values.title,
     pageUrl: values.pageUrl,
     userAgent: values.userAgent,
+    // Only when ticked: an unticked box uploads nothing.
+    ...(screenshot !== null && includesScreenshot(values)
+      ? { screenshotDataUrl: screenshot.dataUrl }
+      : {}),
   };
   if (values.kind === "bug") {
     return {
@@ -157,23 +185,26 @@ export function SiteFeedbackForm({
           SITE_FEEDBACK_LIMITS.userAgent.max,
         ),
       };
-      submitMutation.mutate(projectToVariant(enriched), {
-        onSuccess: () => {
-          formApi.reset();
-          if (onSubmitted) {
-            onSubmitted();
-          } else {
-            toast.success("Thanks — your feedback was sent.");
-          }
+      submitMutation.mutate(
+        projectToVariant(enriched, pageContext.screenshot),
+        {
+          onSuccess: () => {
+            formApi.reset();
+            if (onSubmitted) {
+              onSubmitted();
+            } else {
+              toast.success("Thanks — your feedback was sent.");
+            }
+          },
+          onError: (err) => {
+            toast.error(
+              err instanceof Error
+                ? err.message
+                : "Couldn’t send your feedback. Please try again.",
+            );
+          },
         },
-        onError: (err) => {
-          toast.error(
-            err instanceof Error
-              ? err.message
-              : "Couldn’t send your feedback. Please try again.",
-          );
-        },
-      });
+      );
     },
   });
 
@@ -193,9 +224,10 @@ export function SiteFeedbackForm({
         selector={(s) => ({
           isSubmitting: s.isSubmitting,
           kind: s.values.kind,
+          includeScreenshot: includesScreenshot(s.values),
         })}
       >
-        {({ isSubmitting, kind }) => (
+        {({ isSubmitting, kind, includeScreenshot }) => (
           <fieldset disabled={isSubmitting} className="space-y-4 border-0 p-0">
             <Tabs
               value={kind}
@@ -320,6 +352,15 @@ export function SiteFeedbackForm({
                 </form.AppField>
               </TabsContent>
             </Tabs>
+            {pageContext.screenshot === null ? null : (
+              <ScreenshotChoice
+                screenshot={pageContext.screenshot}
+                checked={includeScreenshot}
+                onCheckedChange={(on) =>
+                  form.setFieldValue("screenshotChoice", on ? "on" : "off")
+                }
+              />
+            )}
           </fieldset>
         )}
       </form.Subscribe>
@@ -329,5 +370,60 @@ export function SiteFeedbackForm({
         </form.AppForm>
       </div>
     </form>
+  );
+}
+
+function ScreenshotChoice({
+  screenshot,
+  checked,
+  onCheckedChange,
+}: {
+  screenshot: CapturedScreenshot;
+  checked: boolean;
+  onCheckedChange: (on: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-md border bg-muted/30 p-3">
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="shrink-0 overflow-hidden rounded border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <img
+              src={screenshot.dataUrl}
+              alt="Screenshot of this page, opens full size"
+              className="h-16 w-24 object-cover object-top"
+            />
+          </button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-5xl">
+          <DialogTitle>Screenshot</DialogTitle>
+          <img
+            src={screenshot.dataUrl}
+            alt="Screenshot of the page you were on"
+            className="max-h-[75svh] w-full rounded border object-contain"
+          />
+        </DialogContent>
+      </Dialog>
+      <div className="flex items-start gap-2">
+        <Checkbox
+          id="site-feedback-include-screenshot"
+          checked={checked}
+          onCheckedChange={(value) => onCheckedChange(value === true)}
+        />
+        <div className="grid gap-1 leading-tight">
+          <Label
+            htmlFor="site-feedback-include-screenshot"
+            className="cursor-pointer"
+          >
+            Include screenshot
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Visible only to you and site maintainers. Never posted publicly.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
