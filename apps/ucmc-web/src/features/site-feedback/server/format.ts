@@ -8,7 +8,7 @@
  * as bold on GitHub and as preserved-whitespace plain text in the
  * admin triage card (`whitespace-pre-wrap`).
  */
-import type { FeedbackInput } from "#/features/feedback/server/limits";
+import type { SiteFeedbackInput } from "#/features/site-feedback/server/limits";
 
 interface Section {
   heading: string;
@@ -28,7 +28,7 @@ function renderSections(sections: Section[]): string {
     .join("\n\n");
 }
 
-export function composeFeedbackBody(input: FeedbackInput): string {
+export function composeSiteFeedbackBody(input: SiteFeedbackInput): string {
   if (input.kind === "general") {
     return input.body.trim();
   }

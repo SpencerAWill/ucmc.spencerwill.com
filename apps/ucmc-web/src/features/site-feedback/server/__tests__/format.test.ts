@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { composeFeedbackBody } from "#/features/feedback/server/format";
+import { composeSiteFeedbackBody } from "#/features/site-feedback/server/format";
 
-describe("composeFeedbackBody", () => {
+describe("composeSiteFeedbackBody", () => {
   it("returns the trimmed body verbatim for general feedback", () => {
-    const body = composeFeedbackBody({
+    const body = composeSiteFeedbackBody({
       kind: "general",
       title: "Hi",
       body: "  thanks for the new look  ",
@@ -13,7 +13,7 @@ describe("composeFeedbackBody", () => {
   });
 
   it("renders the bug template sections in template order", () => {
-    const body = composeFeedbackBody({
+    const body = composeSiteFeedbackBody({
       kind: "bug",
       title: "Login broken on iOS",
       bugDescription: "Sign-in button is offscreen.",
@@ -48,7 +48,7 @@ describe("composeFeedbackBody", () => {
   });
 
   it("includes the optional bug additional-context section when present", () => {
-    const body = composeFeedbackBody({
+    const body = composeSiteFeedbackBody({
       kind: "bug",
       title: "x",
       bugDescription: "a",
@@ -61,7 +61,7 @@ describe("composeFeedbackBody", () => {
   });
 
   it("renders the feature template sections in template order", () => {
-    const body = composeFeedbackBody({
+    const body = composeSiteFeedbackBody({
       kind: "feature",
       title: "Dark mode",
       problem: "Hard to read at night.",

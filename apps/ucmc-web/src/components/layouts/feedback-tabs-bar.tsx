@@ -1,6 +1,6 @@
 /**
  * Tab bar rendered by the `/feedback/_tabs` pathless layout. Bridges the
- * `features/feedback` (site) and `features/club-feedback` (governance)
+ * `features/site-feedback` (site) and `features/club-feedback` (governance)
  * surfaces — lives outside both features so neither has to cross-import
  * the other.
  *

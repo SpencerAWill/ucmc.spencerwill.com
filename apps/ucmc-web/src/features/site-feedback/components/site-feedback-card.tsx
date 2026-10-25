@@ -12,18 +12,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select";
-import { useUpdateFeedbackStatus } from "#/features/feedback/api/use-update-feedback-status";
-import type { FeedbackSummary } from "#/features/feedback/server/feedback-fns";
+import { useUpdateSiteFeedbackStatus } from "#/features/site-feedback/api/use-update-site-feedback-status";
+import type { SiteFeedbackSummary } from "#/features/site-feedback/server/site-feedback-fns";
 import {
-  FEEDBACK_KIND_LABELS,
-  FEEDBACK_STATUS_LABELS,
-  FEEDBACK_STATUS_VALUES,
-} from "#/features/feedback/server/limits";
-import type { FeedbackStatus } from "#/features/feedback/server/limits";
+  SITE_FEEDBACK_KIND_LABELS,
+  SITE_FEEDBACK_STATUS_LABELS,
+  SITE_FEEDBACK_STATUS_VALUES,
+} from "#/features/site-feedback/server/limits";
+import type { SiteFeedbackStatus } from "#/features/site-feedback/server/limits";
 import { formatRelative } from "#/lib/date-format";
 
 const STATUS_VARIANTS: Record<
-  FeedbackStatus,
+  SiteFeedbackStatus,
   "default" | "warning" | "success" | "secondary"
 > = {
   open: "default",
@@ -32,24 +32,24 @@ const STATUS_VARIANTS: Record<
   closed: "secondary",
 };
 
-export function FeedbackCard({
+export function SiteFeedbackCard({
   entry,
   showSubmitter,
   canManage,
 }: {
-  entry: FeedbackSummary;
+  entry: SiteFeedbackSummary;
   showSubmitter: boolean;
   canManage: boolean;
 }) {
-  const updateStatus = useUpdateFeedbackStatus();
+  const updateStatus = useUpdateSiteFeedbackStatus();
 
   const onChangeStatus = (next: string) => {
     updateStatus.mutate(
-      { id: entry.id, status: next as FeedbackStatus },
+      { id: entry.id, status: next as SiteFeedbackStatus },
       {
         onSuccess: () => {
           toast.success(
-            `Marked ${FEEDBACK_STATUS_LABELS[next as FeedbackStatus].toLowerCase()}`,
+            `Marked ${SITE_FEEDBACK_STATUS_LABELS[next as SiteFeedbackStatus].toLowerCase()}`,
           );
         },
         onError: () => {
@@ -68,7 +68,7 @@ export function FeedbackCard({
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">
-                {FEEDBACK_KIND_LABELS[entry.kind]}
+                {SITE_FEEDBACK_KIND_LABELS[entry.kind]}
               </Badge>
               {canManage ? (
                 <Select
@@ -80,16 +80,16 @@ export function FeedbackCard({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {FEEDBACK_STATUS_VALUES.map((s) => (
+                    {SITE_FEEDBACK_STATUS_VALUES.map((s) => (
                       <SelectItem key={s} value={s}>
-                        {FEEDBACK_STATUS_LABELS[s]}
+                        {SITE_FEEDBACK_STATUS_LABELS[s]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               ) : (
                 <Badge variant={STATUS_VARIANTS[entry.status]}>
-                  {FEEDBACK_STATUS_LABELS[entry.status]}
+                  {SITE_FEEDBACK_STATUS_LABELS[entry.status]}
                 </Badge>
               )}
               {entry.githubIssueUrl ? (

@@ -10,11 +10,11 @@ import {
   requireApproved,
 } from "#/features/auth/guards";
 import {
-  allFeedbackQueryOptions,
-  myFeedbackQueryOptions,
-} from "#/features/feedback/api/queries";
-import { FeedbackCard } from "#/features/feedback/components/feedback-card";
-import { FeedbackForm } from "#/features/feedback/components/feedback-form";
+  allSiteFeedbackQueryOptions,
+  mySiteFeedbackQueryOptions,
+} from "#/features/site-feedback/api/queries";
+import { SiteFeedbackCard } from "#/features/site-feedback/components/site-feedback-card";
+import { SiteFeedbackForm } from "#/features/site-feedback/components/site-feedback-form";
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
@@ -52,8 +52,10 @@ function SiteFeedbackPage() {
   const flagsQuery = useQuery(publicFlagsQueryOptions());
   const submissionsEnabled = flagsQuery.data?.siteFeedback ?? true;
 
-  const myQuery = useQuery(myFeedbackQueryOptions());
-  const adminQuery = useQuery(allFeedbackQueryOptions({ enabled: canManage }));
+  const myQuery = useQuery(mySiteFeedbackQueryOptions());
+  const adminQuery = useQuery(
+    allSiteFeedbackQueryOptions({ enabled: canManage }),
+  );
 
   const mySubmissions = myQuery.data ?? [];
   const allSubmissions = adminQuery.data ?? [];
@@ -61,7 +63,7 @@ function SiteFeedbackPage() {
   return (
     <div className="space-y-6">
       {canSubmit && submissionsEnabled ? (
-        <FeedbackForm />
+        <SiteFeedbackForm />
       ) : !submissionsEnabled && canSubmit ? (
         <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
           Site feedback submissions are paused right now. Check back later, or
@@ -85,7 +87,7 @@ function SiteFeedbackPage() {
           <ul className="space-y-3">
             {mySubmissions.map((entry) => (
               <li key={entry.id}>
-                <FeedbackCard
+                <SiteFeedbackCard
                   entry={entry}
                   showSubmitter={false}
                   canManage={false}
@@ -113,7 +115,7 @@ function SiteFeedbackPage() {
             <ul className="space-y-3">
               {allSubmissions.map((entry) => (
                 <li key={entry.id}>
-                  <FeedbackCard entry={entry} showSubmitter canManage />
+                  <SiteFeedbackCard entry={entry} showSubmitter canManage />
                 </li>
               ))}
             </ul>

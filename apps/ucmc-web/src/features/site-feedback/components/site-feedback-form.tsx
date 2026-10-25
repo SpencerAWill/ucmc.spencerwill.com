@@ -1,23 +1,23 @@
 import { toast } from "sonner";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
-import { useSubmitFeedback } from "#/features/feedback/api/use-submit-feedback";
+import { useSubmitSiteFeedback } from "#/features/site-feedback/api/use-submit-site-feedback";
 import {
-  FEEDBACK_KIND_VALUES,
-  FEEDBACK_LIMITS,
-  feedbackInputSchema,
-} from "#/features/feedback/server/limits";
+  SITE_FEEDBACK_KIND_VALUES,
+  SITE_FEEDBACK_LIMITS,
+  siteFeedbackInputSchema,
+} from "#/features/site-feedback/server/limits";
 import type {
-  FeedbackInput,
-  FeedbackKind,
-} from "#/features/feedback/server/limits";
+  SiteFeedbackInput,
+  SiteFeedbackKind,
+} from "#/features/site-feedback/server/limits";
 import { useAppForm } from "#/lib/form/form";
 
 // Flat shape that's a superset of every variant. The discriminated-union
 // validator picks the right slice based on `kind`; unused fields are
 // stripped on submit when we project to the active variant.
 interface FormValues {
-  kind: FeedbackKind;
+  kind: SiteFeedbackKind;
   title: string;
   // bug
   bugDescription: string;
@@ -52,11 +52,11 @@ const DEFAULTS: FormValues = {
 };
 
 // Short labels for the tab triggers. The full labels
-// (`FEEDBACK_KIND_LABELS`) stay in the admin triage card; on the
+// (`SITE_FEEDBACK_KIND_LABELS`) stay in the admin triage card; on the
 // submitter side the form's heading already says "Send feedback" so
 // "Bug" / "Feature" / "General" reads cleanly and keeps three triggers
 // fitting comfortably on a narrow phone viewport.
-const KIND_TAB_LABELS: Record<FeedbackKind, string> = {
+const KIND_TAB_LABELS: Record<SiteFeedbackKind, string> = {
   bug: "Bug",
   feature: "Feature",
   general: "General",
@@ -77,7 +77,7 @@ function validateFeedback({
 }: {
   value: FormValues;
 }): { fields: Record<string, string> } | undefined {
-  const result = feedbackInputSchema.safeParse(projectToVariant(value));
+  const result = siteFeedbackInputSchema.safeParse(projectToVariant(value));
   if (result.success) {
     return undefined;
   }
@@ -91,7 +91,7 @@ function validateFeedback({
   return { fields };
 }
 
-function projectToVariant(values: FormValues): FeedbackInput {
+function projectToVariant(values: FormValues): SiteFeedbackInput {
   const base = {
     title: values.title,
     pageUrl: values.pageUrl,
@@ -127,8 +127,8 @@ function projectToVariant(values: FormValues): FeedbackInput {
  * general feedback stays a free-form note. Captures the current page
  * URL + UA at submit time so admins have context when triaging.
  */
-export function FeedbackForm() {
-  const submitMutation = useSubmitFeedback();
+export function SiteFeedbackForm() {
+  const submitMutation = useSubmitSiteFeedback();
 
   const form = useAppForm({
     defaultValues: DEFAULTS,
@@ -144,7 +144,7 @@ export function FeedbackForm() {
         userAgent:
           typeof navigator === "undefined"
             ? ""
-            : navigator.userAgent.slice(0, FEEDBACK_LIMITS.userAgent.max),
+            : navigator.userAgent.slice(0, SITE_FEEDBACK_LIMITS.userAgent.max),
       };
       submitMutation.mutate(projectToVariant(enriched), {
         onSuccess: () => {
@@ -182,11 +182,11 @@ export function FeedbackForm() {
             <Tabs
               value={kind}
               onValueChange={(v) =>
-                form.setFieldValue("kind", v as FeedbackKind)
+                form.setFieldValue("kind", v as SiteFeedbackKind)
               }
             >
               <TabsList className="grid w-full grid-cols-3">
-                {FEEDBACK_KIND_VALUES.map((value) => (
+                {SITE_FEEDBACK_KIND_VALUES.map((value) => (
                   <TabsTrigger key={value} value={value}>
                     {KIND_TAB_LABELS[value]}
                   </TabsTrigger>
@@ -198,7 +198,7 @@ export function FeedbackForm() {
                   <field.TextField
                     label="Title"
                     placeholder="Short summary"
-                    maxLength={FEEDBACK_LIMITS.title.max}
+                    maxLength={SITE_FEEDBACK_LIMITS.title.max}
                   />
                 )}
               </form.AppField>
@@ -210,7 +210,7 @@ export function FeedbackForm() {
                       label="Describe the bug"
                       placeholder="A clear and concise description of what the bug is."
                       rows={4}
-                      maxLength={FEEDBACK_LIMITS.section.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -220,7 +220,7 @@ export function FeedbackForm() {
                       label="Steps to reproduce"
                       placeholder={STEPS_PLACEHOLDER}
                       rows={5}
-                      maxLength={FEEDBACK_LIMITS.section.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -230,7 +230,7 @@ export function FeedbackForm() {
                       label="Expected behavior"
                       placeholder="What did you expect to happen instead?"
                       rows={3}
-                      maxLength={FEEDBACK_LIMITS.section.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -240,7 +240,7 @@ export function FeedbackForm() {
                       label="Additional context (optional)"
                       placeholder="Anything else useful — related issues, environment details, etc."
                       rows={3}
-                      maxLength={FEEDBACK_LIMITS.optionalSection.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.optionalSection.max}
                     />
                   )}
                 </form.AppField>
@@ -253,7 +253,7 @@ export function FeedbackForm() {
                       label="Is your feature request related to a problem?"
                       placeholder="Ex. I'm always frustrated when…"
                       rows={4}
-                      maxLength={FEEDBACK_LIMITS.section.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -263,7 +263,7 @@ export function FeedbackForm() {
                       label="Describe the solution you'd like"
                       placeholder="A clear and concise description of what you want to happen."
                       rows={4}
-                      maxLength={FEEDBACK_LIMITS.section.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.section.max}
                     />
                   )}
                 </form.AppField>
@@ -273,7 +273,7 @@ export function FeedbackForm() {
                       label="Alternatives considered (optional)"
                       placeholder="Other approaches you've thought about."
                       rows={3}
-                      maxLength={FEEDBACK_LIMITS.optionalSection.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.optionalSection.max}
                     />
                   )}
                 </form.AppField>
@@ -283,7 +283,7 @@ export function FeedbackForm() {
                       label="Additional context (optional)"
                       placeholder="Anything else useful — links, mockups, related discussions."
                       rows={3}
-                      maxLength={FEEDBACK_LIMITS.optionalSection.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.optionalSection.max}
                     />
                   )}
                 </form.AppField>
@@ -296,7 +296,7 @@ export function FeedbackForm() {
                       label="Details"
                       placeholder="What's on your mind?"
                       rows={8}
-                      maxLength={FEEDBACK_LIMITS.body.max}
+                      maxLength={SITE_FEEDBACK_LIMITS.body.max}
                     />
                   )}
                 </form.AppField>

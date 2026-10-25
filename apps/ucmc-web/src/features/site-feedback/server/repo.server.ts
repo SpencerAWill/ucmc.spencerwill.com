@@ -7,16 +7,16 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import type {
-  FeedbackKind,
-  FeedbackStatus,
-} from "#/features/feedback/server/limits";
+  SiteFeedbackKind,
+  SiteFeedbackStatus,
+} from "#/features/site-feedback/server/limits";
 
-export interface FeedbackRow {
+export interface SiteFeedbackRow {
   id: string;
-  kind: FeedbackKind;
+  kind: SiteFeedbackKind;
   title: string;
   body: string;
-  status: FeedbackStatus;
+  status: SiteFeedbackStatus;
   pageUrl: string | null;
   userAgent: string | null;
   createdBy: string | null;
@@ -32,71 +32,71 @@ export interface FeedbackRow {
 }
 
 const baseSelect = {
-  id: schema.feedback.id,
-  kind: schema.feedback.kind,
-  title: schema.feedback.title,
-  body: schema.feedback.body,
-  status: schema.feedback.status,
-  pageUrl: schema.feedback.pageUrl,
-  userAgent: schema.feedback.userAgent,
-  createdBy: schema.feedback.createdBy,
+  id: schema.siteFeedback.id,
+  kind: schema.siteFeedback.kind,
+  title: schema.siteFeedback.title,
+  body: schema.siteFeedback.body,
+  status: schema.siteFeedback.status,
+  pageUrl: schema.siteFeedback.pageUrl,
+  userAgent: schema.siteFeedback.userAgent,
+  createdBy: schema.siteFeedback.createdBy,
   createdByPublicId: schema.users.publicId,
-  githubIssueNumber: schema.feedback.githubIssueNumber,
-  githubIssueUrl: schema.feedback.githubIssueUrl,
-  createdAt: schema.feedback.createdAt,
-  updatedAt: schema.feedback.updatedAt,
+  githubIssueNumber: schema.siteFeedback.githubIssueNumber,
+  githubIssueUrl: schema.siteFeedback.githubIssueUrl,
+  createdAt: schema.siteFeedback.createdAt,
+  updatedAt: schema.siteFeedback.updatedAt,
   authorEmail: schema.userEmails.email,
   authorFullName: schema.profiles.fullName,
   authorPreferredName: schema.profiles.preferredName,
   authorAvatarKey: schema.profiles.avatarKey,
 };
 
-export async function listAllFeedback(): Promise<FeedbackRow[]> {
+export async function listAllSiteFeedback(): Promise<SiteFeedbackRow[]> {
   const db = getDb();
   return db
     .select(baseSelect)
-    .from(schema.feedback)
-    .leftJoin(schema.users, eq(schema.users.id, schema.feedback.createdBy))
+    .from(schema.siteFeedback)
+    .leftJoin(schema.users, eq(schema.users.id, schema.siteFeedback.createdBy))
     .leftJoin(
       schema.userEmails,
       and(
-        eq(schema.userEmails.userId, schema.feedback.createdBy),
+        eq(schema.userEmails.userId, schema.siteFeedback.createdBy),
         eq(schema.userEmails.isPrimary, true),
       ),
     )
     .leftJoin(
       schema.profiles,
-      eq(schema.profiles.userId, schema.feedback.createdBy),
+      eq(schema.profiles.userId, schema.siteFeedback.createdBy),
     )
-    .orderBy(desc(schema.feedback.createdAt));
+    .orderBy(desc(schema.siteFeedback.createdAt));
 }
 
-export async function listFeedbackByUser(
+export async function listSiteFeedbackByUser(
   userId: string,
-): Promise<FeedbackRow[]> {
+): Promise<SiteFeedbackRow[]> {
   const db = getDb();
   return db
     .select(baseSelect)
-    .from(schema.feedback)
-    .leftJoin(schema.users, eq(schema.users.id, schema.feedback.createdBy))
+    .from(schema.siteFeedback)
+    .leftJoin(schema.users, eq(schema.users.id, schema.siteFeedback.createdBy))
     .leftJoin(
       schema.userEmails,
       and(
-        eq(schema.userEmails.userId, schema.feedback.createdBy),
+        eq(schema.userEmails.userId, schema.siteFeedback.createdBy),
         eq(schema.userEmails.isPrimary, true),
       ),
     )
     .leftJoin(
       schema.profiles,
-      eq(schema.profiles.userId, schema.feedback.createdBy),
+      eq(schema.profiles.userId, schema.siteFeedback.createdBy),
     )
-    .where(eq(schema.feedback.createdBy, userId))
-    .orderBy(desc(schema.feedback.createdAt));
+    .where(eq(schema.siteFeedback.createdBy, userId))
+    .orderBy(desc(schema.siteFeedback.createdAt));
 }
 
-export async function insertFeedback(input: {
+export async function insertSiteFeedback(input: {
   id: string;
-  kind: FeedbackKind;
+  kind: SiteFeedbackKind;
   title: string;
   body: string;
   pageUrl: string | null;
@@ -105,7 +105,7 @@ export async function insertFeedback(input: {
 }): Promise<void> {
   const db = getDb();
   const now = Temporal.Now.instant();
-  await db.insert(schema.feedback).values({
+  await db.insert(schema.siteFeedback).values({
     id: input.id,
     kind: input.kind,
     title: input.title,
@@ -119,13 +119,13 @@ export async function insertFeedback(input: {
   });
 }
 
-export async function updateFeedbackStatus(input: {
+export async function updateSiteFeedbackStatus(input: {
   id: string;
-  status: FeedbackStatus;
+  status: SiteFeedbackStatus;
 }): Promise<void> {
   const db = getDb();
   await db
-    .update(schema.feedback)
+    .update(schema.siteFeedback)
     .set({ status: input.status, updatedAt: Temporal.Now.instant() })
-    .where(eq(schema.feedback.id, input.id));
+    .where(eq(schema.siteFeedback.id, input.id));
 }

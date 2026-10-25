@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const FEEDBACK_LIMITS = {
+export const SITE_FEEDBACK_LIMITS = {
   title: { min: 1, max: 120 },
   // Single-textarea body, used by general feedback only.
   body: { min: 1, max: 5000 },
@@ -13,25 +13,25 @@ export const FEEDBACK_LIMITS = {
   userAgent: { max: 500 },
 } as const;
 
-export const FEEDBACK_KIND_VALUES = ["bug", "feature", "general"] as const;
+export const SITE_FEEDBACK_KIND_VALUES = ["bug", "feature", "general"] as const;
 
-export const FEEDBACK_STATUS_VALUES = [
+export const SITE_FEEDBACK_STATUS_VALUES = [
   "open",
   "acknowledged",
   "resolved",
   "closed",
 ] as const;
 
-export type FeedbackKind = (typeof FEEDBACK_KIND_VALUES)[number];
-export type FeedbackStatus = (typeof FEEDBACK_STATUS_VALUES)[number];
+export type SiteFeedbackKind = (typeof SITE_FEEDBACK_KIND_VALUES)[number];
+export type SiteFeedbackStatus = (typeof SITE_FEEDBACK_STATUS_VALUES)[number];
 
-export const FEEDBACK_KIND_LABELS: Record<FeedbackKind, string> = {
+export const SITE_FEEDBACK_KIND_LABELS: Record<SiteFeedbackKind, string> = {
   bug: "Bug report",
   feature: "Feature request",
   general: "General feedback",
 };
 
-export const FEEDBACK_STATUS_LABELS: Record<FeedbackStatus, string> = {
+export const SITE_FEEDBACK_STATUS_LABELS: Record<SiteFeedbackStatus, string> = {
   open: "Open",
   acknowledged: "Acknowledged",
   resolved: "Resolved",
@@ -41,27 +41,27 @@ export const FEEDBACK_STATUS_LABELS: Record<FeedbackStatus, string> = {
 const titleField = z
   .string()
   .trim()
-  .min(FEEDBACK_LIMITS.title.min, "Required")
+  .min(SITE_FEEDBACK_LIMITS.title.min, "Required")
   .max(
-    FEEDBACK_LIMITS.title.max,
-    `At most ${FEEDBACK_LIMITS.title.max} characters`,
+    SITE_FEEDBACK_LIMITS.title.max,
+    `At most ${SITE_FEEDBACK_LIMITS.title.max} characters`,
   );
 
 const requiredSectionField = z
   .string()
   .trim()
-  .min(FEEDBACK_LIMITS.section.min, "Required")
+  .min(SITE_FEEDBACK_LIMITS.section.min, "Required")
   .max(
-    FEEDBACK_LIMITS.section.max,
-    `At most ${FEEDBACK_LIMITS.section.max} characters`,
+    SITE_FEEDBACK_LIMITS.section.max,
+    `At most ${SITE_FEEDBACK_LIMITS.section.max} characters`,
   );
 
 const optionalSectionField = z
   .string()
   .trim()
   .max(
-    FEEDBACK_LIMITS.optionalSection.max,
-    `At most ${FEEDBACK_LIMITS.optionalSection.max} characters`,
+    SITE_FEEDBACK_LIMITS.optionalSection.max,
+    `At most ${SITE_FEEDBACK_LIMITS.optionalSection.max} characters`,
   )
   .optional()
   .or(z.literal(""));
@@ -69,23 +69,23 @@ const optionalSectionField = z
 const generalBodyField = z
   .string()
   .trim()
-  .min(FEEDBACK_LIMITS.body.min, "Required")
+  .min(SITE_FEEDBACK_LIMITS.body.min, "Required")
   .max(
-    FEEDBACK_LIMITS.body.max,
-    `At most ${FEEDBACK_LIMITS.body.max} characters`,
+    SITE_FEEDBACK_LIMITS.body.max,
+    `At most ${SITE_FEEDBACK_LIMITS.body.max} characters`,
   );
 
 const pageUrlField = z
   .string()
   .trim()
-  .max(FEEDBACK_LIMITS.pageUrl.max)
+  .max(SITE_FEEDBACK_LIMITS.pageUrl.max)
   .optional()
   .or(z.literal(""));
 
 const userAgentField = z
   .string()
   .trim()
-  .max(FEEDBACK_LIMITS.userAgent.max)
+  .max(SITE_FEEDBACK_LIMITS.userAgent.max)
   .optional()
   .or(z.literal(""));
 
@@ -125,7 +125,7 @@ export const generalFeedbackSchema = z.object({
   userAgent: userAgentField,
 });
 
-export const feedbackInputSchema = z.discriminatedUnion("kind", [
+export const siteFeedbackInputSchema = z.discriminatedUnion("kind", [
   bugFeedbackSchema,
   featureFeedbackSchema,
   generalFeedbackSchema,
@@ -134,13 +134,13 @@ export const feedbackInputSchema = z.discriminatedUnion("kind", [
 export type BugFeedbackInput = z.infer<typeof bugFeedbackSchema>;
 export type FeatureFeedbackInput = z.infer<typeof featureFeedbackSchema>;
 export type GeneralFeedbackInput = z.infer<typeof generalFeedbackSchema>;
-export type FeedbackInput = z.infer<typeof feedbackInputSchema>;
+export type SiteFeedbackInput = z.infer<typeof siteFeedbackInputSchema>;
 
-export const feedbackStatusUpdateSchema = z.object({
+export const siteFeedbackStatusUpdateSchema = z.object({
   id: z.string().min(1),
-  status: z.enum(FEEDBACK_STATUS_VALUES),
+  status: z.enum(SITE_FEEDBACK_STATUS_VALUES),
 });
 
-export type FeedbackStatusUpdateInput = z.infer<
-  typeof feedbackStatusUpdateSchema
+export type SiteFeedbackStatusUpdateInput = z.infer<
+  typeof siteFeedbackStatusUpdateSchema
 >;

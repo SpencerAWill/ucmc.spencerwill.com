@@ -975,25 +975,30 @@ export const auditLog = sqliteTable(
   ],
 );
 
-export const feedbackKind = ["bug", "feature", "general"] as const;
-export type FeedbackKind = (typeof feedbackKind)[number];
+export const siteFeedbackKind = ["bug", "feature", "general"] as const;
+export type SiteFeedbackKind = (typeof siteFeedbackKind)[number];
 
-export const feedbackStatus = [
+export const siteFeedbackStatus = [
   "open",
   "acknowledged",
   "resolved",
   "closed",
 ] as const;
-export type FeedbackStatus = (typeof feedbackStatus)[number];
+export type SiteFeedbackStatus = (typeof siteFeedbackStatus)[number];
 
-export const feedback = sqliteTable(
+// The SQL table stays `feedback`: migrations only add and rollback is
+// code-only, so renaming it would break the previous Worker mid-deploy.
+// Only the Drizzle export carries the explicit site-feedback name.
+export const siteFeedback = sqliteTable(
   "feedback",
   {
     id: text("id").primaryKey(),
-    kind: text("kind", { enum: feedbackKind }).notNull(),
+    kind: text("kind", { enum: siteFeedbackKind }).notNull(),
     title: text("title").notNull(),
     body: text("body").notNull(),
-    status: text("status", { enum: feedbackStatus }).notNull().default("open"),
+    status: text("status", { enum: siteFeedbackStatus })
+      .notNull()
+      .default("open"),
     pageUrl: text("page_url"),
     userAgent: text("user_agent"),
     createdBy: text("created_by").references(() => users.id, {
@@ -1044,8 +1049,8 @@ export type ClubFeedbackKind = (typeof clubFeedbackKind)[number];
 
 // Reuse the same status taxonomy as website feedback — the triage
 // workflow is identical even if the audiences differ.
-export const clubFeedbackStatus = feedbackStatus;
-export type ClubFeedbackStatus = FeedbackStatus;
+export const clubFeedbackStatus = siteFeedbackStatus;
+export type ClubFeedbackStatus = SiteFeedbackStatus;
 
 export const clubFeedback = sqliteTable(
   "club_feedback",
@@ -1870,7 +1875,7 @@ export type HeroSlide = typeof heroSlides.$inferSelect;
 export type LandingFaqItem = typeof landingFaqItems.$inferSelect;
 export type LandingActivity = typeof landingActivities.$inferSelect;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
-export type Feedback = typeof feedback.$inferSelect;
+export type SiteFeedback = typeof siteFeedback.$inferSelect;
 export type GearType = typeof gearTypes.$inferSelect;
 export type GearModel = typeof gearModels.$inferSelect;
 export type GearItem = typeof gearItems.$inferSelect;

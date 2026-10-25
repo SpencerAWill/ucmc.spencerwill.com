@@ -145,13 +145,16 @@ export async function checkUploadRateLimit(userId: string): Promise<boolean> {
 
 /**
  * Gate a feedback submission by user. Reuses the AUTH_RATE_LIMITER
- * binding under a distinct key namespace (`feedback:user:<id>`) — the
+ * binding under a distinct key namespace (`feedback:user:<id>`, unchanged
+ * by the site-feedback rename so live counters survive the deploy) — the
  * limiter counts per key, so this does not contend with auth-flow keys.
  * The 10 req/60 s budget is far more than legitimate feedback usage and
  * cheaper than provisioning a fourth binding. Fails open on binding
  * error so a broken limiter doesn't block submissions.
  */
-export async function checkFeedbackRateLimit(userId: string): Promise<boolean> {
+export async function checkSiteFeedbackRateLimit(
+  userId: string,
+): Promise<boolean> {
   if (isBypassed()) {
     return true;
   }
@@ -166,7 +169,7 @@ export async function checkFeedbackRateLimit(userId: string): Promise<boolean> {
 }
 
 /**
- * Parallel to `checkFeedbackRateLimit` for the club-feedback surface.
+ * Parallel to `checkSiteFeedbackRateLimit` for the club-feedback surface.
  * Distinct key namespace (`club_feedback:user:<id>`) so the site
  * + club budgets are independent — a member burning their site
  * budget shouldn't lock them out of submitting governance feedback,

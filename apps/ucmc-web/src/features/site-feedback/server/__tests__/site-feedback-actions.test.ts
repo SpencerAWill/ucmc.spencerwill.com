@@ -22,15 +22,16 @@ vi.mock("@tanstack/react-start/server", () => ({
 vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByIp: async () => true,
   checkAuthRateLimitByEmail: async () => true,
-  checkFeedbackRateLimit: async () => true,
+  checkSiteFeedbackRateLimit: async () => true,
 }));
 
 const {
-  listMyFeedbackAction,
-  listAllFeedbackAction,
-  submitFeedbackAction,
-  updateFeedbackStatusAction,
-} = await import("#/features/feedback/server/feedback-actions.server");
+  listMySiteFeedbackAction,
+  listAllSiteFeedbackAction,
+  submitSiteFeedbackAction,
+  updateSiteFeedbackStatusAction,
+} =
+  await import("#/features/site-feedback/server/site-feedback-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ async function signInAsBareUser(email = "bare@example.com"): Promise<string> {
 beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
-  await db.delete(schema.feedback);
+  await db.delete(schema.siteFeedback);
   await db.delete(schema.siteSettings);
   await db.delete(schema.userRoles);
   await db.delete(schema.sessions);
@@ -103,10 +104,10 @@ beforeEach(async () => {
 // ── authorization ─────────────────────────────────────────────────────
 
 describe("feedback authorization", () => {
-  it("submitFeedbackAction rejects unauthenticated callers", async () => {
+  it("submitSiteFeedbackAction rejects unauthenticated callers", async () => {
     cookieJar.clear();
     await expect(
-      submitFeedbackAction({
+      submitSiteFeedbackAction({
         kind: "bug",
         title: "x",
         bugDescription: "y",
@@ -116,10 +117,10 @@ describe("feedback authorization", () => {
     ).rejects.toThrow("Not signed in");
   });
 
-  it("submitFeedbackAction rejects users without site_feedback:submit", async () => {
+  it("submitSiteFeedbackAction rejects users without site_feedback:submit", async () => {
     await signInAsBareUser();
     await expect(
-      submitFeedbackAction({
+      submitSiteFeedbackAction({
         kind: "bug",
         title: "x",
         bugDescription: "y",
@@ -129,21 +130,21 @@ describe("feedback authorization", () => {
     ).rejects.toThrow("Forbidden: missing site_feedback:submit");
   });
 
-  it("listAllFeedbackAction rejects users without site_feedback:manage", async () => {
+  it("listAllSiteFeedbackAction rejects users without site_feedback:manage", async () => {
     await signInAsMember();
-    await expect(listAllFeedbackAction()).rejects.toThrow(
+    await expect(listAllSiteFeedbackAction()).rejects.toThrow(
       "Forbidden: missing site_feedback:manage",
     );
   });
 
-  it("updateFeedbackStatusAction rejects users without site_feedback:manage", async () => {
+  it("updateSiteFeedbackStatusAction rejects users without site_feedback:manage", async () => {
     await signInAsMember();
     await expect(
-      updateFeedbackStatusAction({ id: "fb_x", status: "resolved" }),
+      updateSiteFeedbackStatusAction({ id: "sfb_x", status: "resolved" }),
     ).rejects.toThrow("Forbidden: missing site_feedback:manage");
   });
 
-  it("submitFeedbackAction rejects when feedback.site_enabled is off", async () => {
+  it("submitSiteFeedbackAction rejects when feedback.site_enabled is off", async () => {
     await signInAsMember();
     // Set the kill switch to false. `readSetting` falls back to the
     // schema default (true) when the row is absent, so we have to
@@ -154,14 +155,14 @@ describe("feedback authorization", () => {
       updatedBy: null,
     });
     await expect(
-      submitFeedbackAction({
+      submitSiteFeedbackAction({
         kind: "general",
         title: "After hours",
         body: "Anyone home?",
       }),
     ).rejects.toThrow("Site feedback submissions are currently disabled.");
     // No row written.
-    expect(await getDb().select().from(schema.feedback)).toHaveLength(0);
+    expect(await getDb().select().from(schema.siteFeedback)).toHaveLength(0);
   });
 });
 
@@ -170,16 +171,16 @@ describe("feedback authorization", () => {
 describe("feedback lifecycle", () => {
   it("member can submit and list their own", async () => {
     const memberId = await signInAsMember();
-    const { id } = await submitFeedbackAction({
+    const { id } = await submitSiteFeedbackAction({
       kind: "bug",
       title: "Login button is hidden on mobile",
       bugDescription: "Sign-in form's primary button is offscreen on iOS.",
       stepsToReproduce: "Open the site on iPhone Safari, tap Sign in.",
       expectedBehavior: "The Sign in button should be visible.",
     });
-    expect(id).toMatch(/^fb_/);
+    expect(id).toMatch(/^sfb_/);
 
-    const mine = await listMyFeedbackAction();
+    const mine = await listMySiteFeedbackAction();
     expect(mine).toHaveLength(1);
     expect(mine[0].id).toBe(id);
     expect(mine[0].kind).toBe("bug");
@@ -194,27 +195,27 @@ describe("feedback lifecycle", () => {
     );
   });
 
-  it("listMyFeedbackAction scopes to the caller, not other members", async () => {
+  it("listMySiteFeedbackAction scopes to the caller, not other members", async () => {
     const memberA = await signInAsMember("a@example.com");
-    await submitFeedbackAction({
+    await submitSiteFeedbackAction({
       kind: "general",
       title: "Hi from A",
       body: "Hello",
     });
-    expect((await listMyFeedbackAction()).length).toBe(1);
+    expect((await listMySiteFeedbackAction()).length).toBe(1);
 
     await signInAsMember("b@example.com");
-    expect((await listMyFeedbackAction()).length).toBe(0);
+    expect((await listMySiteFeedbackAction()).length).toBe(0);
 
     // Sanity: A's row is still in the DB.
-    const total = await getDb().select().from(schema.feedback);
+    const total = await getDb().select().from(schema.siteFeedback);
     expect(total).toHaveLength(1);
     expect(total[0].createdBy).toBe(memberA);
   });
 
   it("normalizes pageUrl to origin+pathname before storing", async () => {
     await signInAsMember();
-    const { id } = await submitFeedbackAction({
+    const { id } = await submitSiteFeedbackAction({
       kind: "bug",
       title: "Strange thing",
       bugDescription: "Saw it on the callback page",
@@ -223,27 +224,27 @@ describe("feedback lifecycle", () => {
       pageUrl: "https://app.example.com/auth/callback?token=secret#frag",
     });
 
-    const row = await getDb().query.feedback.findFirst({
-      where: eq(schema.feedback.id, id),
+    const row = await getDb().query.siteFeedback.findFirst({
+      where: eq(schema.siteFeedback.id, id),
     });
     expect(row?.pageUrl).toBe("https://app.example.com/auth/callback");
   });
 
   it("stores null pageUrl when input is not a parseable URL", async () => {
     await signInAsMember();
-    const { id } = await submitFeedbackAction({
+    const { id } = await submitSiteFeedbackAction({
       kind: "general",
       title: "Hi",
       body: "Body",
       pageUrl: "not a url",
     });
-    const row = await getDb().query.feedback.findFirst({
-      where: eq(schema.feedback.id, id),
+    const row = await getDb().query.siteFeedback.findFirst({
+      where: eq(schema.siteFeedback.id, id),
     });
     expect(row?.pageUrl).toBeNull();
   });
 
-  it("submitFeedbackAction makes no outbound request", async () => {
+  it("submitSiteFeedbackAction makes no outbound request", async () => {
     await signInAsMember();
     // Configure the (retired) mirror's env so a reinstated mirror would
     // actually fire; with it unset the old code was a silent no-op.
@@ -259,9 +260,13 @@ describe("feedback lifecycle", () => {
       ),
     );
     try {
-      await submitFeedbackAction({ kind: "general", title: "t", body: "b" });
+      await submitSiteFeedbackAction({
+        kind: "general",
+        title: "t",
+        body: "b",
+      });
       expect(fetchSpy).not.toHaveBeenCalled();
-      const rows = await getDb().select().from(schema.feedback);
+      const rows = await getDb().select().from(schema.siteFeedback);
       expect(rows[0]?.githubIssueNumber).toBeNull();
     } finally {
       fetchSpy.mockRestore();
@@ -272,7 +277,7 @@ describe("feedback lifecycle", () => {
 
   it("admin lists all feedback across users and can update status", async () => {
     await signInAsMember("a@example.com");
-    const a = await submitFeedbackAction({
+    const a = await submitSiteFeedbackAction({
       kind: "bug",
       title: "From A",
       bugDescription: "Something",
@@ -280,7 +285,7 @@ describe("feedback lifecycle", () => {
       expectedBehavior: "Expected",
     });
     await signInAsMember("b@example.com");
-    await submitFeedbackAction({
+    await submitSiteFeedbackAction({
       kind: "feature",
       title: "From B",
       problem: "Annoying thing",
@@ -288,11 +293,11 @@ describe("feedback lifecycle", () => {
     });
 
     await signInAsAdmin();
-    const all = await listAllFeedbackAction();
+    const all = await listAllSiteFeedbackAction();
     expect(all).toHaveLength(2);
 
-    await updateFeedbackStatusAction({ id: a.id, status: "acknowledged" });
-    const updated = await listAllFeedbackAction();
+    await updateSiteFeedbackStatusAction({ id: a.id, status: "acknowledged" });
+    const updated = await listAllSiteFeedbackAction();
     const aRow = updated.find((r) => r.id === a.id);
     expect(aRow?.status).toBe("acknowledged");
   });

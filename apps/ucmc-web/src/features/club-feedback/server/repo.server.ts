@@ -4,7 +4,7 @@
  * submitter info when a row is flagged anonymous (the repo always
  * returns the joined identity columns; the actions layer redacts).
  *
- * Mirrors `features/feedback/server/repo.server.ts` shape minus the
+ * Mirrors `features/site-feedback/server/repo.server.ts` shape minus the
  * GitHub mirror helpers, which club feedback never uses.
  */
 import { and, desc, eq } from "drizzle-orm";

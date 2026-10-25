@@ -1,6 +1,6 @@
 ---
 paths:
-  - "apps/ucmc-web/src/features/feedback/**"
+  - "apps/ucmc-web/src/features/site-feedback/**"
   - "apps/ucmc-web/src/features/club-feedback/**"
   - "apps/ucmc-web/src/routes/feedback.*"
   - "apps/ucmc-web/src/routes/feedback._tabs*"

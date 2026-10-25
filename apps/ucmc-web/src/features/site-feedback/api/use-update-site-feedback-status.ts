@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { FEEDBACK_LIST_QUERY_KEY } from "#/features/feedback/api/query-keys";
-import { updateFeedbackStatusFn } from "#/features/feedback/server/feedback-fns";
-import type { FeedbackStatusUpdateInput } from "#/features/feedback/server/limits";
+import { siteFeedbackKeys } from "#/features/site-feedback/api/query-keys";
+import { updateSiteFeedbackStatusFn } from "#/features/site-feedback/server/site-feedback-fns";
+import type { SiteFeedbackStatusUpdateInput } from "#/features/site-feedback/server/limits";
 
 /**
  * Admin-only: change a feedback entry's triage status. Invalidates the
@@ -11,14 +11,14 @@ import type { FeedbackStatusUpdateInput } from "#/features/feedback/server/limit
  * typically own the submissions they triage; the staleTime is short
  * enough (30s) that submitters see updates on next navigation anyway.
  */
-export function useUpdateFeedbackStatus() {
+export function useUpdateSiteFeedbackStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: FeedbackStatusUpdateInput) =>
-      updateFeedbackStatusFn({ data }),
+    mutationFn: (data: SiteFeedbackStatusUpdateInput) =>
+      updateSiteFeedbackStatusFn({ data }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: FEEDBACK_LIST_QUERY_KEY,
+        queryKey: siteFeedbackKeys.list,
       });
     },
   });
