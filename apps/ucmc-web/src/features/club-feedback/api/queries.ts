@@ -1,8 +1,10 @@
 import {
   CLUB_FEEDBACK_LIST_QUERY_KEY,
+  CLUB_FEEDBACK_OVERVIEW_QUERY_KEY,
   CLUB_FEEDBACK_MY_QUERY_KEY,
 } from "#/features/club-feedback/api/query-keys";
 import {
+  getClubFeedbackOverviewFn,
   listAllClubFeedbackFn,
   listMyClubFeedbackFn,
 } from "#/features/club-feedback/server/club-feedback-fns";
@@ -31,5 +33,14 @@ export function allClubFeedbackQueryOptions(options: { enabled: boolean }) {
     queryFn: () => listAllClubFeedbackFn(),
     staleTime: 30_000,
     enabled: options.enabled,
+  } as const;
+}
+
+/** Card badge counts for the /feedback index. Same staleness as the lists. */
+export function clubFeedbackOverviewQueryOptions() {
+  return {
+    queryKey: CLUB_FEEDBACK_OVERVIEW_QUERY_KEY,
+    queryFn: () => getClubFeedbackOverviewFn(),
+    staleTime: 30_000,
   } as const;
 }

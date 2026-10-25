@@ -107,7 +107,7 @@ Whichever treatment is used, **an `overflow-x-auto` wrapper takes `overflow-y-hi
 
 **There is no logging library, deliberately.** Workers Logs _is_ the transport — the platform ingests `console.*` directly, takes the level from the method name, and makes an object passed as the second argument queryable. pino and friends resolve to a console shim in workerd (their real transports want `process.stdout`), so a dependency would buy bundle size and nothing else.
 
-- **Event names are `namespace.event_in_snake_case`** — `retention.sweep_failed`, `feedback.github_mirror_rejected`. They are dashboard filter keys, so they are stable identifiers; the prose goes in the fields.
+- **Event names are `namespace.event_in_snake_case`** — `retention.sweep_failed`, `site_feedback.sync_failed`. They are dashboard filter keys, so they are stable identifiers; the prose goes in the fields.
 - **`errorMessage(err)` for anything out of a `catch`.** It redacts, always. The call sites this replaced logged `err.message` raw, which is fine right up until the error is a D1 constraint violation echoing the row or a fetch failure carrying a token in a query string.
 - **`runWithLogContext(fields, fn)` binds ambient fields** to everything logged inside, across `await`s, via `AsyncLocalStorage` — which workerd supports under `nodejs_compat` (verified in `src/server/log/__tests__/log.test.ts`, not assumed). `server-entry.ts` binds `requestId` from `cf-ray` around the fetch handler and `cron` around each scheduled branch. Nesting merges onto the outer store.
 - **`LOG_LEVEL` is an optional Worker var**, unset everywhere. The threshold defaults to `info`, so `log.debug` can live in the code permanently and be turned on for one deployed worker during an incident without a deploy.

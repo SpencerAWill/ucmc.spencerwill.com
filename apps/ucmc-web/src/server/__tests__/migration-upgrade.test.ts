@@ -1,5 +1,9 @@
 import { applyD1Migrations, env } from "cloudflare:test";
+import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it } from "vitest";
+
+import { schema } from "#/server/db";
+import { SITE_FEEDBACK_SEARCH, searchMatches } from "#/server/db/search";
 
 /**
  * Migration UPGRADE tests: do the migrations survive contact with data?
@@ -494,6 +498,151 @@ describe("0081_search_fts backfills every searchable row", () => {
       results.map((r) => r.id),
       `${table} has no entry for a row that existed before 0081`,
     ).toEqual([id]);
+  });
+});
+
+describe("rename_feedback_submission_settings carries the switches and their history", () => {
+  // The submission switches were renamed per surface. A bare key rename
+  // would reset a paused intake to the registry default (ON) and strand
+  // the /settings history panel, which keys on the setting name.
+  const BEFORE = "0084_webauthn_consumed_ceremonies.sql";
+
+  beforeEach(async () => {
+    await applyThrough(BEFORE);
+
+    const seed = [
+      `INSERT INTO site_settings (key, value_json) VALUES ('feedback.site_enabled', 'false')`,
+      `INSERT INTO site_settings (key, value_json) VALUES ('feedback.club_enabled', 'false')`,
+      `INSERT INTO audit_log (id, action, target_type, target_id)
+       VALUES ('aud_site', 'settings_updated', 'site_setting', 'feedback.site_enabled')`,
+      `INSERT INTO audit_log (id, action, target_type, target_id)
+       VALUES ('aud_club', 'settings_updated', 'site_setting', 'feedback.club_enabled')`,
+    ];
+    for (const statement of seed) {
+      await env.MIGRATIONS_DB.prepare(statement).run();
+    }
+
+    await applyRest();
+  });
+
+  it.each([
+    ["feedback.site_enabled", "site_feedback.submissions_enabled", "aud_site"],
+    ["feedback.club_enabled", "club_feedback.submissions_enabled", "aud_club"],
+  ])(
+    "%s becomes %s with its value and audit row",
+    async (oldKey, newKey, auditId) => {
+      const renamed = await env.MIGRATIONS_DB.prepare(
+        `SELECT value_json FROM site_settings WHERE key = ?`,
+      )
+        .bind(newKey)
+        .first<{ value_json: string }>();
+      expect(renamed?.value_json, `${newKey} lost its stored value`).toBe(
+        "false",
+      );
+
+      const leftover = await env.MIGRATIONS_DB.prepare(
+        `SELECT key FROM site_settings WHERE key = ?`,
+      )
+        .bind(oldKey)
+        .first();
+      expect(leftover, `${oldKey} row survived the rename`).toBeNull();
+
+      const audit = await env.MIGRATIONS_DB.prepare(
+        `SELECT target_id FROM audit_log WHERE id = ?`,
+      )
+        .bind(auditId)
+        .first<{ target_id: string }>();
+      expect(audit?.target_id).toBe(newKey);
+    },
+  );
+});
+
+describe("site_feedback_issue_backfill turns legacy GitHub mirrors into issues and links", () => {
+  // The auto-mirror stamped `github_issue_number` / `github_issue_url` on
+  // each submission. The triage model reads issues and links instead, so
+  // those stamps reach it only through this INSERT...SELECT.
+  const BEFORE = "0085_rename_feedback_submission_settings.sql";
+
+  beforeEach(async () => {
+    await applyThrough(BEFORE);
+
+    const seed = [
+      `INSERT INTO feedback (id, kind, title, body, github_issue_number, github_issue_url, created_at, updated_at)
+       VALUES ('fb_late', 'bug', 'Later report', 'second body', 7, 'https://github.com/o/r/issues/7', 2000, 2000)`,
+      `INSERT INTO feedback (id, kind, title, body, github_issue_number, github_issue_url, created_at, updated_at)
+       VALUES ('fb_early', 'bug', 'Earliest report', 'first body', 7, 'https://github.com/o/r/issues/7', 1000, 1000)`,
+      `INSERT INTO feedback (id, kind, title, body, created_at, updated_at)
+       VALUES ('fb_none', 'general', 'Never mirrored', 'third body', 3000, 3000)`,
+    ];
+    for (const statement of seed) {
+      await env.MIGRATIONS_DB.prepare(statement).run();
+    }
+
+    await applyRest();
+  });
+
+  it("creates exactly one open issue per distinct legacy number", async () => {
+    const { results } = await env.MIGRATIONS_DB.prepare(
+      `SELECT id, state, title, github_number, github_url, summary_md, created_at, updated_at
+       FROM site_feedback_issues`,
+    ).all();
+    expect(results).toEqual([
+      {
+        id: "sfi_legacy_7",
+        state: "open",
+        title: "Earliest report",
+        github_number: 7,
+        github_url: "https://github.com/o/r/issues/7",
+        summary_md: null,
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
+  });
+
+  it("links both mirrored submissions as already posted, and not the third", async () => {
+    const { results } = await env.MIGRATIONS_DB.prepare(
+      `SELECT feedback_id, issue_id, quoted_md, posted_at
+       FROM site_feedback_issue_links ORDER BY feedback_id`,
+    ).all();
+    expect(results).toEqual([
+      {
+        feedback_id: "fb_early",
+        issue_id: "sfi_legacy_7",
+        quoted_md: "first body",
+        posted_at: 1000,
+      },
+      {
+        feedback_id: "fb_late",
+        issue_id: "sfi_legacy_7",
+        quoted_md: "second body",
+        posted_at: 2000,
+      },
+    ]);
+  });
+
+  it("makes the rows seeded before 0087 searchable", async () => {
+    // 0087 creates the FTS table and backfills it from existing rows; the
+    // triggers only cover rows written afterwards.
+    const db = drizzle(env.MIGRATIONS_DB, { schema });
+    const ids = async (q: string) =>
+      (
+        await db
+          .select({ id: schema.siteFeedback.id })
+          .from(schema.siteFeedback)
+          .where(
+            searchMatches(
+              schema.siteFeedback.id,
+              SITE_FEEDBACK_SEARCH,
+              "feedback_id",
+              q,
+            ),
+          )
+          .orderBy(schema.siteFeedback.id)
+      ).map((r) => r.id);
+    expect(await ids("earliest")).toEqual(["fb_early"]);
+    expect(await ids("third body")).toEqual(["fb_none"]);
+    expect(await ids("report")).toEqual(["fb_early", "fb_late"]);
   });
 });
 

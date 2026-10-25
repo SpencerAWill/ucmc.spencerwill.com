@@ -789,8 +789,8 @@ jobs:
           cloudflare-infra-api-token: ${{ secrets.CLOUDFLARE_INFRA_API_TOKEN }}
           session-secret: ${{ secrets.SESSION_SECRET }}
           cloudflare-account-read-token: ${{ secrets.CLOUDFLARE_ACCOUNT_READ_TOKEN }}
-          feedback-github-token: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
-          feedback-github-repo: ${{ vars.FEEDBACK_GITHUB_REPO }}
+          site-feedback-github-token: ${{ secrets.SITE_FEEDBACK_GITHUB_TOKEN }}
+          site-feedback-github-repo: ${{ vars.SITE_FEEDBACK_GITHUB_REPO }}
 
   # The same commit, once dev deployed it and passed its smoke test. Waits
   # for the `prod` environment's reviewer (infra/github); a waiting job
@@ -845,5 +845,5 @@ jobs:
           cloudflare-infra-api-token: ${{ secrets.CLOUDFLARE_INFRA_API_TOKEN }}
           session-secret: ${{ secrets.SESSION_SECRET }}
           cloudflare-account-read-token: ${{ secrets.CLOUDFLARE_ACCOUNT_READ_TOKEN }}
-          feedback-github-token: ${{ secrets.FEEDBACK_GITHUB_TOKEN }}
-          feedback-github-repo: ${{ vars.FEEDBACK_GITHUB_REPO }}
+          site-feedback-github-token: ${{ secrets.SITE_FEEDBACK_GITHUB_TOKEN }}
+          site-feedback-github-repo: ${{ vars.SITE_FEEDBACK_GITHUB_REPO }}

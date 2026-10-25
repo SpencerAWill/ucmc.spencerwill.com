@@ -1,7 +1,7 @@
 /**
  * Shape + size limits for club-feedback submissions.
  *
- * Mirrors `features/feedback/server/limits.ts` in spirit but with a
+ * Mirrors `features/site-feedback/server/limits.ts` in spirit but with a
  * deliberately simpler surface: every kind shares the same title + body
  * payload (no per-kind section templates), because club feedback is
  * narrative governance input, not a defect template.

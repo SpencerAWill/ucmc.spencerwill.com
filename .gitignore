@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 # The HTML report is a CI artifact from quality.yml, never committed.
 reports/
 .stryker-tmp/
+
+# Brainstorming visual-companion mockups (superpowers plugin). Local only.
+.superpowers/

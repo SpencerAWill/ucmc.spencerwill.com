@@ -118,24 +118,30 @@ export default {
       { runRetentionSweeps },
       { runGearLoanReminders },
       { runCostSnapshot },
+      { runSiteFeedbackIssueSync },
     ] = await Promise.all([
       import("./server/cron/retention.server"),
       import("./server/cron/gear-reminders.server"),
       import("./server/cron/cost-snapshot.server"),
+      import("./features/site-feedback/server/sync.server"),
     ]);
     ctx.waitUntil(
       runWithLogContext({ cron: event.cron }, async () => {
         // Independent: a failed sweep must not cost members their
         // reminders, and a provider outage must not stop the retention
         // promises on /privacy from being kept. `allSettled`, not `all`.
-        const [sweeps, reminders, costs] = await Promise.allSettled([
-          runRetentionSweeps(),
-          runGearLoanReminders({ now: Temporal.Now.instant() }),
-          // Third independent task: a vendor API outage must not cost
-          // members their reminders, and nothing here may stop the
-          // retention promises on /privacy from being kept.
-          runCostSnapshot(),
-        ]);
+        const [sweeps, reminders, costs, feedbackSync] =
+          await Promise.allSettled([
+            runRetentionSweeps(),
+            runGearLoanReminders({ now: Temporal.Now.instant() }),
+            // Third independent task: a vendor API outage must not cost
+            // members their reminders, and nothing here may stop the
+            // retention promises on /privacy from being kept.
+            runCostSnapshot(),
+            // Fourth: a GitHub outage must not cost anyone the above. The
+            // job catches its own errors; this entry is the backstop.
+            runSiteFeedbackIssueSync(),
+          ]);
         if (sweeps.status === "rejected") {
           log.error("retention.sweeps_failed", {
             error: errorMessage(sweeps.reason),
@@ -149,6 +155,11 @@ export default {
         if (costs.status === "rejected") {
           log.error("cost.snapshot_failed", {
             error: errorMessage(costs.reason),
+          });
+        }
+        if (feedbackSync.status === "rejected") {
+          log.error("site_feedback.sync_failed", {
+            error: errorMessage(feedbackSync.reason),
           });
         }
       }),

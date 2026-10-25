@@ -144,11 +144,6 @@ const config: KnipConfig = {
    * delete the entry rather than leaving the file unguarded.
    */
   ignoreIssues: {
-    // `clubFeedbackStatus` is a deliberate alias of `feedbackStatus`: the
-    // two tables share a status vocabulary and each column reads with its
-    // own name. Knip counts aliased re-exports as duplicates.
-    "drizzle/schema.ts": ["duplicates"],
-
     // Repository helpers written ahead of the callers that were meant to
     // use them, plus a few whose callers were removed by later reworks.
     // Candidates for deletion, but each needs a look at whether the caller
@@ -184,7 +179,7 @@ const config: KnipConfig = {
     // whole surface rather than whatever happens to be imported today.
     "src/features/auth/server/email-fns.ts": ["types"],
     "src/features/auth/server/server-fns.ts": ["types"],
-    "src/features/feedback/server/limits.ts": ["types"],
+    "src/features/site-feedback/server/limits.ts": ["types"],
     "src/features/gear/server/gear-fns.ts": ["exports", "types"],
     "src/features/members/server/member-fns.ts": ["types"],
     "src/features/settings/server/settings-fns.ts": ["exports", "types"],

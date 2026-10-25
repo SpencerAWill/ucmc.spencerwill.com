@@ -6,10 +6,9 @@ import {
   activeAccountTabFromPath,
 } from "#/components/layouts/account-tabs-bar";
 
-// Same stubbing shape as `feedback-tabs-bar.test.tsx`: the bar reads
-// `useLocation()` and the public-flags snapshot, so both are mocked and
-// `Link` becomes a plain `<a>` so accessible-name queries work without a
-// router. No auth stub — these tabs gate on page flags only.
+// The bar reads `useLocation()` and the public-flags snapshot, so both are
+// mocked, and `Link` becomes a plain `<a>` so accessible-name queries work
+// without a router. No auth stub — these tabs gate on page flags only.
 const useLocationMock = vi.hoisted(() => vi.fn());
 const flagsMock = vi.hoisted(() => vi.fn());
 

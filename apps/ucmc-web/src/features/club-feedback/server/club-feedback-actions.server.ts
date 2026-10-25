@@ -13,7 +13,7 @@
  *     redaction is applied here when projecting summaries for managers,
  *     so the FK never reaches the client. Owners always see their own
  *     rows un-redacted in the "Your submissions" list.
- *   - Submission gate. `feedback.club_enabled` controls whether new
+ *   - Submission gate. `club_feedback.submissions_enabled` controls whether new
  *     submissions are accepted; managers retain full triage access
  *     regardless (separate `club_feedback:manage` permission).
  */
@@ -26,6 +26,8 @@ import type {
   ClubFeedbackStatusUpdateInput,
 } from "#/features/club-feedback/server/limits";
 import {
+  countMyOpenClubFeedback,
+  countOpenClubFeedback,
   insertClubFeedback,
   listAllClubFeedback,
   listClubFeedbackByUser,
@@ -60,6 +62,21 @@ async function requireClubFeedbackManager(): Promise<Principal> {
   return principal;
 }
 
+async function requireClubFeedbackViewer(): Promise<{
+  principal: Principal;
+  canManage: boolean;
+}> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+  const canManage = principal.permissions.includes("club_feedback:manage");
+  if (!canManage && !principal.permissions.includes("club_feedback:submit")) {
+    throw new Error("Forbidden: missing club_feedback:submit");
+  }
+  return { principal, canManage };
+}
+
 // ── public types ────────────────────────────────────────────────────────
 
 export interface ClubFeedbackSummary {
@@ -77,6 +94,12 @@ export interface ClubFeedbackSummary {
   authorAvatarKey: string | null;
   createdAt: Temporal.Instant;
   updatedAt: Temporal.Instant;
+}
+
+export interface ClubFeedbackOverview {
+  mineOpen: number;
+  /** `null` unless the caller holds `club_feedback:manage`. Counts anonymous rows. */
+  newForOfficers: number | null;
 }
 
 type Row = {
@@ -154,7 +177,7 @@ export async function submitClubFeedbackAction(
   input: ClubFeedbackInput,
 ): Promise<{ id: string }> {
   const principal = await requireClubFeedbackSubmitter();
-  const enabled = await readSetting("feedback.club_enabled");
+  const enabled = await readSetting("club_feedback.submissions_enabled");
   if (!enabled) {
     throw new Error("Club feedback submissions are currently disabled.");
   }
@@ -182,4 +205,12 @@ export async function updateClubFeedbackStatusAction(
   await requireClubFeedbackManager();
   await updateClubFeedbackStatus(input);
   return { ok: true };
+}
+
+export async function getClubFeedbackOverviewAction(): Promise<ClubFeedbackOverview> {
+  const { principal, canManage } = await requireClubFeedbackViewer();
+  return {
+    mineOpen: await countMyOpenClubFeedback(principal.userId),
+    newForOfficers: canManage ? await countOpenClubFeedback() : null,
+  };
 }

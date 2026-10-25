@@ -8,6 +8,7 @@ import {
   GEAR_ITEM_NOTES_SEARCH,
   GEAR_MODEL_SEARCH,
   PROFILE_NAME_SEARCH,
+  SITE_FEEDBACK_SEARCH,
   searchMatches,
 } from "#/server/db/search";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
@@ -83,7 +84,7 @@ async function membersMatching(
 
 /** Index entries (key row joined to its FTS row) for one base id. */
 async function ftsRowCount(
-  index: (typeof INDEXES)[number],
+  index: { readonly table: string; readonly keyTable: string },
   key: string,
   id: string,
 ): Promise<number> {
@@ -467,5 +468,62 @@ describe("triggers keep the indexes in step", () => {
       ).toBeLessThan(DELETED * 30);
     }
     await expectIndexesConsistent();
+  });
+});
+
+describe("site feedback index", () => {
+  const ids = async (q: string) =>
+    (
+      await getDb()
+        .select({ id: schema.siteFeedback.id })
+        .from(schema.siteFeedback)
+        .where(
+          searchMatches(
+            schema.siteFeedback.id,
+            SITE_FEEDBACK_SEARCH,
+            "feedback_id",
+            q,
+          ),
+        )
+    ).map((r) => r.id);
+
+  it("follows a submission through insert, title edit and delete", async () => {
+    await getDb().insert(schema.siteFeedback).values({
+      id: "sfb_fts",
+      kind: "bug",
+      title: "Calendar blank on iPhone",
+      body: "Nothing renders",
+    });
+    expect(await ids("iphone")).toEqual(["sfb_fts"]);
+    expect(await ids("renders")).toEqual(["sfb_fts"]);
+
+    await getDb()
+      .update(schema.siteFeedback)
+      .set({ title: "Calendar blank on Android" })
+      .where(eq(schema.siteFeedback.id, "sfb_fts"));
+    expect(await ids("iphone")).toEqual([]);
+    expect(await ids("android")).toEqual(["sfb_fts"]);
+
+    await getDb()
+      .delete(schema.siteFeedback)
+      .where(eq(schema.siteFeedback.id, "sfb_fts"));
+    expect(
+      await ftsRowCount(SITE_FEEDBACK_SEARCH, "feedback_id", "sfb_fts"),
+    ).toBe(0);
+    expect(await ids("android")).toEqual([]);
+  });
+
+  it("has the descriptor's columns and keys", async () => {
+    const cols = await env.DB.prepare(
+      `PRAGMA table_info("site_feedback_fts")`,
+    ).all<{ name: string }>();
+    expect(cols.results.map((r) => r.name).sort()).toEqual(["body", "title"]);
+    const keys = await env.DB.prepare(
+      `PRAGMA table_info("site_feedback_fts_keys")`,
+    ).all<{ name: string }>();
+    expect(keys.results.map((r) => r.name).sort()).toEqual([
+      "feedback_id",
+      "id",
+    ]);
   });
 });

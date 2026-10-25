@@ -4,10 +4,10 @@
  * submitter info when a row is flagged anonymous (the repo always
  * returns the joined identity columns; the actions layer redacts).
  *
- * Mirrors `features/feedback/server/repo.server.ts` shape minus the
+ * Mirrors `features/site-feedback/server/repo.server.ts` shape minus the
  * GitHub mirror helpers, which club feedback never uses.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import type {
@@ -124,4 +124,27 @@ export async function updateClubFeedbackStatus(input: {
     .update(schema.clubFeedback)
     .set({ status: input.status, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.clubFeedback.id, input.id));
+}
+
+/** `count(*)` of one member's open rows. */
+export async function countMyOpenClubFeedback(userId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: count() })
+    .from(schema.clubFeedback)
+    .where(
+      and(
+        eq(schema.clubFeedback.createdBy, userId),
+        eq(schema.clubFeedback.status, "open"),
+      ),
+    );
+  return row.n;
+}
+
+/** `count(*)` of every open row, anonymous ones included. */
+export async function countOpenClubFeedback(): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: count() })
+    .from(schema.clubFeedback)
+    .where(eq(schema.clubFeedback.status, "open"));
+  return row.n;
 }

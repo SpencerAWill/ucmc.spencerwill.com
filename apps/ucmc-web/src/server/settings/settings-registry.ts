@@ -804,15 +804,18 @@ export const SETTINGS = {
   // fresh DB / new deploy keeps both forms open. Exposed publicly via
   // `getPublicFlagsFn` so the route guards and tab bar can decide
   // synchronously whether to render the submit UI for non-managers.
-  "feedback.site_enabled": z.boolean().default(true).register(registry, {
-    label: "Accept site feedback submissions",
-    description:
-      "Pauses NEW site-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Site tab page switch under Pages, which 404s the page for everyone. The GitHub mirror still fires for legacy in-flight rows.",
-    category: "features",
-    flagKind: "ops",
-    owner: "system_admin",
-    createdAt: "2026-05-16",
-  }),
+  "site_feedback.submissions_enabled": z
+    .boolean()
+    .default(true)
+    .register(registry, {
+      label: "Accept site feedback submissions",
+      description:
+        "Pauses NEW site-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Site tab page switch under Pages, which 404s the page for everyone.",
+      category: "features",
+      flagKind: "ops",
+      owner: "system_admin",
+      createdAt: "2026-05-16",
+    }),
   // ── Gear: member standing ────────────────────────────────────────────
   // Thresholds, not policy switches: the cave wants overdue gear to have
   // consequences, and wants to tune how forgiving they are without a
@@ -948,15 +951,18 @@ export const SETTINGS = {
       confirm:
         "Lowering this can block members who were fine a moment ago, and raising it un-blocks anyone currently caught by the old value. Standing is computed at read time, so the change takes effect on the next checkout attempt.",
     }),
-  "feedback.club_enabled": z.boolean().default(true).register(registry, {
-    label: "Accept club feedback submissions",
-    description:
-      "Pauses NEW club-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Club feedback page switch under Pages, which 404s the page for everyone.",
-    category: "features",
-    flagKind: "ops",
-    owner: "system_admin",
-    createdAt: "2026-05-16",
-  }),
+  "club_feedback.submissions_enabled": z
+    .boolean()
+    .default(true)
+    .register(registry, {
+      label: "Accept club feedback submissions",
+      description:
+        "Pauses NEW club-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Club feedback page switch under Pages, which 404s the page for everyone.",
+      category: "features",
+      flagKind: "ops",
+      owner: "system_admin",
+      createdAt: "2026-05-16",
+    }),
 } as const;
 
 // ── Derived types ───────────────────────────────────────────────────────

@@ -638,21 +638,17 @@ function SidebarUtilityNav() {
   const flagsOptions = publicFlagsQueryOptions();
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
   const pages = flags.pages;
-  // Sidebar entry is one link into the feedback surface; the tab layout
-  // decides which surfaces to show inside. Render the link if the user can
-  // submit to *either* surface AND that surface's page is enabled. Managers
-  // also see it via their `*:manage` permission (system_admin auto-grants
-  // both via the principal bypass). Point the link at whichever surface is
-  // actually enabled so it never lands on a switched-off /feedback.
+  // One sidebar link to the `/feedback` index, which shows a card per
+  // reachable surface. Gate it on the index's own condition: the master
+  // `pages.feedback` switch AND at least one surface the viewer can submit to
+  // or manage whose own page is enabled (system_admin auto-grants both via
+  // the principal bypass), so the link never lands on a 404.
   const canSiteFeedback =
     hasAnyPermission(SITE_FEEDBACK_PERMISSIONS) && pages.feedback_site;
   const canClubFeedback =
     hasAnyPermission(CLUB_FEEDBACK_PERMISSIONS) && pages.feedback_club;
-  const canSubmitFeedback = isApproved && (canSiteFeedback || canClubFeedback);
-  // Prefer club: it reaches the exec board and is the surface members are
-  // more likely to want, which is also why it's the first tab. Falls back to
-  // the site surface when the viewer can't reach club at all.
-  const feedbackTarget = canClubFeedback ? "/feedback/club" : "/feedback/site";
+  const canSubmitFeedback =
+    isApproved && pages.feedback && (canSiteFeedback || canClubFeedback);
   // `analytics:view` opens the area; each drill-down additionally needs
   // the permission for the data it shows, which is what
   // `visibleAnalyticsPages` resolves for the sub-menu below. The root
@@ -705,7 +701,7 @@ function SidebarUtilityNav() {
         {canSubmitFeedback ? (
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Feedback">
-              <Link to={feedbackTarget}>
+              <Link to="/feedback">
                 <MessageSquare />
                 <span>Feedback</span>
               </Link>

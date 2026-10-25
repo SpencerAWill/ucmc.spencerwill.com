@@ -21,7 +21,7 @@ vi.mock("@tanstack/react-start/server", () => ({
 vi.mock("#/server/rate-limit.server", () => ({
   checkAuthRateLimitByIp: async () => true,
   checkAuthRateLimitByEmail: async () => true,
-  checkFeedbackRateLimit: async () => true,
+  checkSiteFeedbackRateLimit: async () => true,
   checkClubFeedbackRateLimit: async () => true,
 }));
 
@@ -30,6 +30,7 @@ const {
   listAllClubFeedbackAction,
   submitClubFeedbackAction,
   updateClubFeedbackStatusAction,
+  getClubFeedbackOverviewAction,
 } =
   await import("#/features/club-feedback/server/club-feedback-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
@@ -148,10 +149,10 @@ describe("club feedback authorization", () => {
     ).rejects.toThrow("Forbidden: missing club_feedback:manage");
   });
 
-  it("submitClubFeedbackAction rejects when feedback.club_enabled is off", async () => {
+  it("submitClubFeedbackAction rejects when club_feedback.submissions_enabled is off", async () => {
     await signInAsMember();
     await getDb().insert(schema.siteSettings).values({
-      key: "feedback.club_enabled",
+      key: "club_feedback.submissions_enabled",
       valueJson: "false",
       updatedBy: null,
     });
@@ -316,5 +317,42 @@ describe("club feedback admin triage", () => {
     expect(stored?.updatedAt.epochMilliseconds).toBeGreaterThanOrEqual(
       stored?.createdAt.epochMilliseconds ?? 0,
     );
+  });
+});
+
+describe("getClubFeedbackOverviewAction", () => {
+  const input = {
+    kind: "suggestion" as const,
+    title: "t",
+    body: "A body long enough to pass.",
+  };
+
+  it("gives a member their own count and a null newForOfficers", async () => {
+    await signInAsMember();
+    await submitClubFeedbackAction({ ...input, anonymous: false });
+    await submitClubFeedbackAction({ ...input, anonymous: true });
+    expect(await getClubFeedbackOverviewAction()).toEqual({
+      mineOpen: 2,
+      newForOfficers: null,
+    });
+  });
+
+  it("counts anonymous rows for a manager without identity fields", async () => {
+    await signInAsMember("a@example.com");
+    await submitClubFeedbackAction({ ...input, anonymous: true });
+    await signInAsMember("b@example.com");
+    await submitClubFeedbackAction({ ...input, anonymous: false });
+    await signInAsAdmin();
+    const overview = await getClubFeedbackOverviewAction();
+    expect(Object.keys(overview).sort()).toEqual([
+      "mineOpen",
+      "newForOfficers",
+    ]);
+    expect(overview.newForOfficers).toBe(2);
+  });
+
+  it("rejects a caller with neither permission", async () => {
+    await signInAsBareUser();
+    await expect(getClubFeedbackOverviewAction()).rejects.toThrow("Forbidden");
   });
 });

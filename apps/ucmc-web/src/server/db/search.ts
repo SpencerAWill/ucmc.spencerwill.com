@@ -52,6 +52,13 @@ export const GEAR_MODEL_SEARCH = {
   columns: ["manufacturer", "name"],
 } as const satisfies SearchIndex<string, string>;
 
+export const SITE_FEEDBACK_SEARCH = {
+  table: "site_feedback_fts",
+  keyTable: "site_feedback_fts_keys",
+  keys: ["feedback_id"],
+  columns: ["title", "body"],
+} as const satisfies SearchIndex<string, string>;
+
 /**
  * The trigram tokenizer indexes three-character windows, so a needle
  * shorter than this has no trigram to look up and a MATCH on it returns

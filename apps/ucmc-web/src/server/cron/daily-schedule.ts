@@ -33,7 +33,8 @@
  * Cloudflare documents **no** timing guarantee for cron triggers — not
  * a tolerance, not a best effort. Community reports put it at
  * within-the-minute. Nothing here depends on better than hour-level
- * accuracy, and both daily jobs are idempotent: retention re-sweeps
+ * accuracy, and every daily job is idempotent (the site-feedback issue-state
+ * sync just re-reads GitHub): retention re-sweeps
  * whatever is still expired, and the reminder ladder is explicitly
  * built to catch a missed day at the right rung rather than skip it.
  */
