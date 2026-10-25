@@ -84,7 +84,7 @@ For approved members, after "My Cart": one flex row with two `DropdownMenuItem`s
 | `feedback`             | `status_changed_at`    | Stamped by Won't fix, Duplicate and Reopen                             |
 | `site_feedback_issues` | `closed_at`            | Stamped wherever an issue's `state` becomes `closed` (sync and attach) |
 
-**Resolution time** is a pure function in `features/site-feedback/lib/` (mutation-testable, in the shape of `gear/lib/loan-reminders.ts`): for a report linked to non-draft issues, it is the latest `closed_at` once all of them are closed; for an unlinked report with a resolving disposition, it is `status_changed_at`; otherwise there is none. A null timestamp yields no resolution time, so the row isn't swept, the same NULL-skip discipline as the existing sweeps. Rows from before the migration have no screenshots, so nothing is lost by skipping them.
+**Resolution time** is a pure function in `src/server/cron/screenshot-retention.ts` (mutation-testable, in the shape of `gear/lib/loan-reminders.ts`; not under the feature, because the sweep in `src/server/cron/` may not import one): for a report linked to non-draft issues, it is the latest `closed_at` once all of them are closed; for an unlinked report with a resolving disposition, it is `status_changed_at`; otherwise there is none. A null timestamp yields no resolution time, so the row isn't swept, the same NULL-skip discipline as the existing sweeps. Rows from before the migration have no screenshots, so nothing is lost by skipping them.
 
 The derived state itself is still never stored (`feature-site-feedback.md`); these are transition timestamps.
 
@@ -137,23 +137,24 @@ The derived state itself is still never stored (`feature-site-feedback.md`); the
 
 ## Delivery
 
-Members must always have a way to submit, so the forms leave `/feedback` only once the modal exists. Three PRs, each green and independently revertable, with sequenced commits inside each:
+**One PR**, as sequenced commits that are each green and independently revertable. Members must always have a way to submit, so within the sequence the forms leave `/feedback` only after the modal exists:
 
 1. **`/my/feedback`**: route, flag, the menu row with its "My feedback" half, empty states. Purely additive.
-2. **Feedback from anywhere, `/feedback` manager-only**: launcher, dialog and the "Send feedback…" half; page context captured at open; then removal of forms and own lists from `/feedback/*`, the guard and redirects, the sidebar gate, the permission constants, settings descriptions and rule files.
-3. **Screenshots**: migration, timestamp stamping, submit and R2 write, screenshot route, thumbnails, retention and orphan sweeps, Pulumi CORS, the `modern-screenshot` dependency.
+2. **Feedback from anywhere**: launcher, dialog and the "Send feedback…" half; page context captured at open.
+3. **`/feedback` manager-only**: removal of forms and own lists from `/feedback/*`, the guard and redirects, the sidebar gate, the permission constants, settings descriptions and rule files.
+4. **Screenshots**: migration, timestamp stamping, submit and R2 write, screenshot route, thumbnails, retention and orphan sweeps, Pulumi CORS, the `modern-screenshot` dependency.
 
-### Blocked before PR 3 reaches prod
+### Blocked before the PR reaches prod
 
-**The `/privacy` notice needs a line about screenshots and their 30-day retention.** That copy is legal review and must match the canonical PDF (`src/config/legal.ts`), so this design does not word it. The retention sweep lands in PR 3 regardless; the notice update is the owner's to supply.
+**The `/privacy` notice needs a line about screenshots and their 30-day retention.** That copy is legal review and must match the canonical PDF (`src/config/legal.ts`), so this design does not word it. The retention sweep ships regardless; the notice update is the owner's to supply, and prod deploy waits for it.
 
 ## Testing
 
 - **Workers pool**: submit with a screenshot (type, magic bytes, 1 MB cap, rate limit, R2-before-row ordering, cleanup on insert failure); the screenshot route (owner yes, manager yes, other member 404, emulating manager 404, purged 404); `status_changed_at` and `closed_at` stamping; the retention sweep (30-day boundary, NULL skip, multi-issue reports needing all closed, one batched delete); the private-prefix orphan sweep; no screenshot key or route in any GitHub payload.
-- **Pure lib**: the resolution-time function, covered by Stryker.
+- **Pure module**: the resolution-time function, covered by Stryker. It lives at `src/server/cron/screenshot-retention.ts` rather than under `features/site-feedback/lib/`, because the sweep in `src/server/cron/` may not import a feature.
 - **jsdom**: `useFeedbackLauncher` without a provider; the user-menu row's gate matrix (each half alone, both, neither); the dialog (chooser skipped with one surface, Back, screenshot discarded on Club, checkbox default per kind, opening without a screenshot when capture fails); `/feedback` guard redirects; index cards following the manage booleans.
 - **e2e**: a member on `/gear` sends a site bug from the menu and finds it in `/my/feedback` with page `/gear` and a thumbnail; a non-manager visiting `/feedback` lands on `/my/feedback`.
-- `knip` entries where a new entry point needs one, the mutation-hook contract test, and `pnpm verify` green per PR.
+- `knip` entries where a new entry point needs one, the mutation-hook contract test, and `pnpm verify` green on every commit.
 
 ## Rules and docs to update with the code
 
