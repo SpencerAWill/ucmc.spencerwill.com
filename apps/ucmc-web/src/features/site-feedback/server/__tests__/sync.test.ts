@@ -178,6 +178,20 @@ describe("runSiteFeedbackIssueSync", () => {
     }
   });
 
+  it("sync stamps closed_at on issues it closes and leaves open ones null", async () => {
+    const closing = await seedIssue("open", [], { githubNumber: 1 });
+    const staying = await seedIssue("open", [], { githubNumber: 2 });
+    mocked.states.mockResolvedValue(
+      new Map<number, "open" | "closed" | null>([
+        [1, "closed"],
+        [2, "open"],
+      ]),
+    );
+    await sync.runSiteFeedbackIssueSync();
+    expect((await issueRow(closing)).closedAt).not.toBeNull();
+    expect((await issueRow(staying)).closedAt).toBeNull();
+  });
+
   it("keeps open issues open and stamps the sync time", async () => {
     const a = await seedIssue("open", [], { githubNumber: 1 });
     mocked.states.mockResolvedValue(new Map([[1, "open"]]));

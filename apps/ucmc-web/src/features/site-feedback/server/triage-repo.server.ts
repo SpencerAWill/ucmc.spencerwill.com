@@ -343,9 +343,10 @@ export async function setDisposition(
   ids: readonly string[],
   disposition: SiteFeedbackDisposition,
 ): Promise<number> {
+  const now = Temporal.Now.instant();
   const rows = await getDb()
     .update(schema.siteFeedback)
-    .set({ status: disposition, updatedAt: Temporal.Now.instant() })
+    .set({ status: disposition, updatedAt: now, statusChangedAt: now })
     .where(
       and(
         inJsonArray(schema.siteFeedback.id, ids),
@@ -660,13 +661,23 @@ export async function upsertAttachedIssue(input: {
       githubNumber: input.number,
       githubUrl: input.url,
       githubSyncedAt: input.now,
+      closedAt: input.state === "closed" ? input.now : null,
       createdBy: input.createdBy,
       createdAt: input.now,
       updatedAt: input.now,
     })
     .onConflictDoUpdate({
       target: schema.siteFeedbackIssues.githubNumber,
-      set: { state: input.state, githubSyncedAt: input.now },
+      set: {
+        state: input.state,
+        githubSyncedAt: input.now,
+        // Keep the first time it was seen closed; an open answer means it
+        // was reopened, which un-resolves its reports.
+        closedAt:
+          input.state === "closed"
+            ? sql`coalesce(${schema.siteFeedbackIssues.closedAt}, ${input.now.epochMilliseconds})`
+            : null,
+      },
     });
   const row = await findIssueByGithubNumber(input.number);
   if (!row) {

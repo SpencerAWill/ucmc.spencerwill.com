@@ -1011,6 +1011,15 @@ export const siteFeedback = sqliteTable(
     }),
     githubIssueNumber: integer("github_issue_number"),
     githubIssueUrl: text("github_issue_url"),
+    // Private-bucket key of the screenshot a bug report carried; nulled
+    // when the retention sweep deletes the object (30 days after the
+    // report resolves), which then stamps `screenshot_purged_at`.
+    screenshotKey: text("screenshot_key"),
+    screenshotBytes: integer("screenshot_bytes"),
+    screenshotPurgedAt: timestamp("screenshot_purged_at"),
+    // When a maintainer last set the disposition (Won't fix, Duplicate,
+    // Reopen). The resolution time of an unlinked report.
+    statusChangedAt: timestamp("status_changed_at"),
     createdAt: timestamp("created_at")
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
@@ -1060,6 +1069,9 @@ export const siteFeedbackIssues = sqliteTable(
       onDelete: "set null",
     }),
     filedAt: timestamp("filed_at"),
+    // When the issue was first seen closed (sync or attach); cleared if
+    // it is attached again while open.
+    closedAt: timestamp("closed_at"),
     createdAt: timestamp("created_at")
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

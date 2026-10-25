@@ -466,6 +466,92 @@ describe("attachSiteFeedbackToGithubIssueAction", () => {
     expect(links[0].postedAt).toBeNull();
   });
 
+  it("attaching a closed issue stamps closed_at", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    mocked.getIssue.mockResolvedValue({
+      number: 13,
+      url: "https://github.com/o/r/issues/13",
+      title: "Done",
+      state: "closed",
+      isPullRequest: false,
+    });
+    const res = await triage.attachSiteFeedbackToGithubIssueAction({
+      number: 13,
+      feedbackIds: [a],
+    });
+    const row = await issueRow(res.ok ? res.issueId : "");
+    expect(row.closedAt).not.toBeNull();
+  });
+
+  it("attaching an open issue leaves closed_at null", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    mocked.getIssue.mockResolvedValue({
+      number: 14,
+      url: "https://github.com/o/r/issues/14",
+      title: "Open",
+      state: "open",
+      isPullRequest: false,
+    });
+    const res = await triage.attachSiteFeedbackToGithubIssueAction({
+      number: 14,
+      feedbackIds: [a],
+    });
+    const row = await issueRow(res.ok ? res.issueId : "");
+    expect(row.closedAt).toBeNull();
+  });
+
+  it("re-attaching an already-closed issue keeps its first closed_at", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    const b = await seedFeedback();
+    const firstClosed = Temporal.Instant.from("2026-01-01T00:00:00Z");
+    const existing = await seedIssue("closed", [a], {
+      githubNumber: 15,
+      githubUrl: "https://github.com/o/r/issues/15",
+      closedAt: firstClosed,
+    });
+    mocked.getIssue.mockResolvedValue({
+      number: 15,
+      url: "https://github.com/o/r/issues/15",
+      title: "Done",
+      state: "closed",
+      isPullRequest: false,
+    });
+    await triage.attachSiteFeedbackToGithubIssueAction({
+      number: 15,
+      feedbackIds: [b],
+    });
+    const row = await issueRow(existing);
+    expect(row.closedAt?.epochMilliseconds).toBe(firstClosed.epochMilliseconds);
+  });
+
+  it("re-attaching a reopened issue clears closed_at", async () => {
+    await seedAdmin();
+    const a = await seedFeedback();
+    const b = await seedFeedback();
+    const existing = await seedIssue("closed", [a], {
+      githubNumber: 16,
+      githubUrl: "https://github.com/o/r/issues/16",
+      closedAt: Temporal.Instant.from("2026-01-01T00:00:00Z"),
+    });
+    mocked.getIssue.mockResolvedValue({
+      number: 16,
+      url: "https://github.com/o/r/issues/16",
+      title: "Back",
+      state: "open",
+      isPullRequest: false,
+    });
+    await triage.attachSiteFeedbackToGithubIssueAction({
+      number: 16,
+      feedbackIds: [b],
+    });
+    const row = await issueRow(existing);
+    expect(row.state).toBe("open");
+    expect(row.closedAt).toBeNull();
+  });
+
   it("returns pull_request and creates no row for a PR", async () => {
     await seedAdmin();
     const a = await seedFeedback();

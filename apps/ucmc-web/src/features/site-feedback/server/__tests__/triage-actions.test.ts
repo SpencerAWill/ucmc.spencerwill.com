@@ -367,6 +367,35 @@ describe("setSiteFeedbackDispositionAction", () => {
     expect(status.get(drafted)).toBe("open");
     expect(status.get(tracked)).toBe("open");
   });
+
+  it("a disposition stamps status_changed_at", async () => {
+    const owner = await seedUser("o@example.com");
+    const id = await seedFeedback(owner);
+    await signInAsAdmin();
+    const before = Temporal.Now.instant();
+    await triage.setSiteFeedbackDispositionAction({
+      ids: [id],
+      disposition: "wont_fix",
+    });
+    const [row] = await getDb().select().from(schema.siteFeedback);
+    expect(row.statusChangedAt).not.toBeNull();
+    expect(
+      Temporal.Instant.compare(row.statusChangedAt!, before),
+    ).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a disposition skipped for a linked report leaves status_changed_at null", async () => {
+    const owner = await seedUser("o@example.com");
+    const tracked = await seedFeedback(owner);
+    await seedIssue("open", [tracked]);
+    await signInAsAdmin();
+    await triage.setSiteFeedbackDispositionAction({
+      ids: [tracked],
+      disposition: "duplicate",
+    });
+    const [row] = await getDb().select().from(schema.siteFeedback);
+    expect(row.statusChangedAt).toBeNull();
+  });
 });
 
 // ── drafts and links ──────────────────────────────────────────────────

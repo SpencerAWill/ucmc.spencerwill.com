@@ -62,7 +62,11 @@ export async function syncSiteFeedbackIssues(
   const write = (state: "open" | "closed", ids: readonly string[]) =>
     db
       .update(schema.siteFeedbackIssues)
-      .set({ state, githubSyncedAt: now })
+      .set(
+        state === "closed"
+          ? { state, githubSyncedAt: now, closedAt: now }
+          : { state, githubSyncedAt: now },
+      )
       .where(inJsonArray(schema.siteFeedbackIssues.id, ids));
   await runBatch([
     ...(closedIds.length > 0 ? [write("closed", closedIds)] : []),
