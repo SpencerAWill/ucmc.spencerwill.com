@@ -186,8 +186,9 @@ export const WAIVER_VIEW_PERMISSIONS = [
  * The permissions that open the managers' `/feedback` area: site
  * maintainers triage site feedback, the exec board reviews club feedback.
  * Members send feedback from the user menu and follow it up on
- * `/my/feedback`, so submit alone no longer reaches `/feedback`. Named
- * once because the sidebar entry, the layout guard and the index all ask.
+ * `/my/feedback`, so submit alone no longer reaches `/feedback`. The
+ * layout guard asks "either"; the sidebar entry and the index ask per
+ * surface, because each pairs the permission with that surface's page flag.
  */
 export const FEEDBACK_MANAGE_PERMISSIONS = [
   "site_feedback:manage",
@@ -212,17 +213,20 @@ export function feedbackAreaDecision(
   return myFeedbackEnabled ? "redirect_my_feedback" : "not_found";
 }
 
+export const MY_FEEDBACK_PERMISSIONS = [
+  "site_feedback:submit",
+  "club_feedback:submit",
+] as const;
+
 /**
  * Who may open `/my/feedback`: anyone who can send feedback to either
  * surface. Manage alone doesn't count — the page lists what the viewer
- * sent, and a manager who can't submit has nothing there. Shared by the
- * route guard and the user-menu link so the two can't disagree.
+ * sent, and a manager who can't submit has nothing there. The route
+ * guard calls this; the user-menu link hands `MY_FEEDBACK_PERMISSIONS` to
+ * `hasAnyPermission`, so the two read one list and can't disagree.
  */
 export function canReachMyFeedback(granted: readonly string[]): boolean {
-  return (
-    granted.includes("site_feedback:submit") ||
-    granted.includes("club_feedback:submit")
-  );
+  return MY_FEEDBACK_PERMISSIONS.some((p) => granted.includes(p));
 }
 
 /**

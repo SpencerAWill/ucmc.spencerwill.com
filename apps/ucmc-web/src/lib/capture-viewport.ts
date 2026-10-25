@@ -170,8 +170,9 @@ export async function captureViewport(
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
   runs.next += 1;
   const run: CaptureRun = { id: String(runs.next), unmark: () => {} };
+  const timer = { id: undefined as ReturnType<typeof setTimeout> | undefined };
   const timeout = new Promise<null>((resolve) => {
-    setTimeout(() => resolve(null), timeoutMs);
+    timer.id = setTimeout(() => resolve(null), timeoutMs);
   });
   try {
     const result = await Promise.race([
@@ -184,6 +185,7 @@ export async function captureViewport(
   } catch {
     return null;
   } finally {
+    clearTimeout(timer.id);
     // On a timeout the abandoned encode may run on for a while; take the
     // marks off the live page now rather than when it settles.
     run.unmark();

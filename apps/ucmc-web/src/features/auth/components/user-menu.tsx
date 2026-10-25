@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { useAuth } from "#/features/auth/api/use-auth";
+import { MY_FEEDBACK_PERMISSIONS } from "#/features/auth/guards";
 import {
   returnPathSearch,
   signInReturnPath,
@@ -149,11 +150,7 @@ export function UserMenu() {
             ) : null}
             <FeedbackMenuRow
               showMine={
-                pages.my_feedback &&
-                hasAnyPermission([
-                  "site_feedback:submit",
-                  "club_feedback:submit",
-                ])
+                pages.my_feedback && hasAnyPermission(MY_FEEDBACK_PERMISSIONS)
               }
             />
           </>

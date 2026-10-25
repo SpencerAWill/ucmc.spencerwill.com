@@ -70,7 +70,13 @@ const CSP_VALUE = [
   // the same CSP string ships to dev + prod environments.
   "frame-src 'self' https://challenges.cloudflare.com https://docs.google.com https://cdn.ucmc.spencerwill.com https://cdn.dev.ucmc.spencerwill.com",
   "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
+  // The R2 custom domains are here for the feedback screenshot:
+  // `modern-screenshot` re-fetches every image on the page with `fetch()`
+  // to inline it into the capture, which `connect-src` (not `img-src`)
+  // governs. The bucket's CORS rule (`infra/cloudflare`) is the other
+  // half; without this entry the fetch is refused and the image renders
+  // blank.
+  "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com https://cdn.ucmc.spencerwill.com https://cdn.dev.ucmc.spencerwill.com",
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
