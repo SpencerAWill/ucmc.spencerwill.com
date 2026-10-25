@@ -30,6 +30,7 @@ const {
   listAllSiteFeedbackAction,
   submitSiteFeedbackAction,
   updateSiteFeedbackStatusAction,
+  getSiteFeedbackOverviewAction,
 } =
   await import("#/features/site-feedback/server/site-feedback-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
@@ -310,5 +311,42 @@ describe("feedback lifecycle", () => {
     const updated = await listAllSiteFeedbackAction();
     const aRow = updated.find((r) => r.id === a.id);
     expect(aRow?.status).toBe("acknowledged");
+  });
+});
+
+describe("getSiteFeedbackOverviewAction", () => {
+  const bug = {
+    kind: "bug" as const,
+    title: "t",
+    bugDescription: "d",
+    stepsToReproduce: "s",
+    expectedBehavior: "e",
+  };
+
+  it("gives a member their own counts and a null untriaged", async () => {
+    await signInAsMember();
+    await submitSiteFeedbackAction(bug);
+    await submitSiteFeedbackAction(bug);
+    expect(await getSiteFeedbackOverviewAction()).toEqual({
+      mineOpen: 2,
+      mineTracked: 0,
+      untriaged: null,
+    });
+  });
+
+  it("counts everyone's open rows for a manager", async () => {
+    await signInAsMember("a@example.com");
+    await submitSiteFeedbackAction(bug);
+    await signInAsMember("b@example.com");
+    await submitSiteFeedbackAction(bug);
+    await signInAsAdmin();
+    const overview = await getSiteFeedbackOverviewAction();
+    expect(overview.untriaged).toBe(2);
+    expect(overview.mineOpen).toBe(0);
+  });
+
+  it("rejects a caller with neither permission", async () => {
+    await signInAsBareUser();
+    await expect(getSiteFeedbackOverviewAction()).rejects.toThrow("Forbidden");
   });
 });

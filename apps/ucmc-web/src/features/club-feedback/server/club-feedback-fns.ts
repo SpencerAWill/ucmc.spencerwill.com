@@ -5,13 +5,24 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 
-import type { ClubFeedbackSummary } from "#/features/club-feedback/server/club-feedback-actions.server";
+import type {
+  ClubFeedbackOverview,
+  ClubFeedbackSummary,
+} from "#/features/club-feedback/server/club-feedback-actions.server";
 import {
   clubFeedbackInputSchema,
   clubFeedbackStatusUpdateSchema,
 } from "#/features/club-feedback/server/limits";
 
-export type { ClubFeedbackSummary };
+export type { ClubFeedbackOverview, ClubFeedbackSummary };
+
+export const getClubFeedbackOverviewFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<ClubFeedbackOverview> => {
+  const { getClubFeedbackOverviewAction } =
+    await import("#/features/club-feedback/server/club-feedback-actions.server");
+  return getClubFeedbackOverviewAction();
+});
 
 export const listMyClubFeedbackFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<ClubFeedbackSummary[]> => {

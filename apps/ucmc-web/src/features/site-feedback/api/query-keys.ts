@@ -8,4 +8,5 @@ export const siteFeedbackKeys = {
   all: ["site-feedback"],
   mine: ["site-feedback", "mine"],
   list: ["site-feedback", "list"],
+  overview: ["site-feedback", "overview"],
 } as const;

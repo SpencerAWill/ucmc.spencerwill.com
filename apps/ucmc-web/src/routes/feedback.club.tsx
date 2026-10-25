@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
 import {
   CLUB_FEEDBACK_PERMISSIONS,
-  SITE_FEEDBACK_PERMISSIONS,
   effectivePermissionsFor,
   requireApproved,
 } from "#/features/auth/guards";
@@ -18,7 +17,7 @@ import { ClubFeedbackForm } from "#/features/club-feedback/components/club-feedb
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
-export const Route = createFileRoute("/feedback/_tabs/club")({
+export const Route = createFileRoute("/feedback/club")({
   staticData: { pageFlag: "feedback_club" },
   beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
@@ -30,17 +29,9 @@ export const Route = createFileRoute("/feedback/_tabs/club")({
     const canSeeClub = CLUB_FEEDBACK_PERMISSIONS.some((p) =>
       granted.includes(p),
     );
-    // Mirror of the site route's fallback: someone without club access who
-    // can see site feedback lands there instead of a dead end. Neither ->
-    // notFound, and the two can't ping-pong because each only redirects
-    // toward a surface the viewer can actually see.
+    // Unreachable (no club permission) is a 404; `/feedback` only links to
+    // surfaces the viewer can reach.
     if (!canSeeClub) {
-      const canSite = SITE_FEEDBACK_PERMISSIONS.some((p) =>
-        granted.includes(p),
-      );
-      if (canSite) {
-        throw redirect({ to: "/feedback/site" });
-      }
       throw notFound();
     }
   },
@@ -66,6 +57,13 @@ function ClubFeedbackPage() {
 
   return (
     <div className="space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold">Club feedback</h1>
+        <p className="text-sm text-muted-foreground">
+          Reaches the exec board. Suggestions, concerns, praise about trips,
+          meetings, gear, anything club. Can be anonymous.
+        </p>
+      </header>
       {canSubmit && submissionsEnabled ? (
         <ClubFeedbackForm />
       ) : !submissionsEnabled && canSubmit ? (

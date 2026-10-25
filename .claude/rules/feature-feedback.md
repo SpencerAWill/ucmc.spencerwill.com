@@ -3,22 +3,22 @@ paths:
   - "apps/ucmc-web/src/features/site-feedback/**"
   - "apps/ucmc-web/src/features/club-feedback/**"
   - "apps/ucmc-web/src/routes/feedback.*"
-  - "apps/ucmc-web/src/routes/feedback._tabs*"
+  - "apps/ucmc-web/src/components/feedback/**"
 ---
 
 # Feedback (`/feedback/*`)
 
-Two surfaces share one route under a pathless `_tabs` layout (mirrors `/members`).
+Two surfaces, `/feedback/club` and `/feedback/site`, hang off a `/feedback` layout (`feedback.tsx`: page chrome, a breadcrumb hidden on the index, `requireEnabledPages` for the master `pages.feedback` switch, then `requireApproved`).
 
-**`/feedback` is a redirect, not a page** (`feedback.index.tsx`) — it has no surface of its own and sends you to `/feedback/club`, or to `/feedback/site` when the viewer has no club access. **That choice is permission-aware on purpose**: `/feedback/club` 404s without club access, so a blind redirect would strand a site-only member arriving from the sidebar or an old bookmark. Both surface routes carry the symmetric fallback (each redirects to the other when the viewer can't see it, `notFound` when they can see neither), which can't ping-pong because each only redirects toward a surface the viewer actually holds a permission for.
+**`/feedback` is an index page of cards** (`feedback.index.tsx`), one per surface the viewer can reach, club first because it reaches the exec board. Reachability is permission AND `pages.*` flag aware, and the index 404s only when neither surface is reachable. The route computes plain props (reachability, `hasPermission(...:manage)`, the overview counts from `siteFeedbackOverviewQueryOptions` / `clubFeedbackOverviewQueryOptions`) and hands them to `FeedbackIndexCards` in `src/components/feedback/`, which holds no hooks so a test can pin the one rule that matters: **manager badges and the Review link follow the `canManage*` boolean, never the presence of a count in the payload** (the server answers the real principal, so under role emulation the payload still carries a manager count). A badge whose count is 0 is omitted.
 
-**Club is the first tab, the redirect target, and the sidebar entry's default target** — it reaches the exec board, so it outranks site maintenance.
+Each surface route 404s when the viewer can't reach it; there are no sibling redirects, because the index only links to surfaces the viewer holds. Each surface page owns its `<h1>` and subtitle. The sidebar links to `/feedback`, gated on `pages.feedback` AND (site reachable OR club reachable).
 
-## Site tab (`/feedback/site`)
+## Site surface (`/feedback/site`)
 
 Bug / feature / general submissions aimed at site maintainers. Permissions are `site_feedback:submit` / `site_feedback:manage` (`role_member` auto-granted submit), renamed from the unprefixed `feedback:*` so they read as siblings of `club_feedback:*`. Gated by `pages.feedback_site`.
 
-## Club tab (`/feedback/club`, the default)
+## Club surface (`/feedback/club`)
 
 Suggestion / concern / praise / general submissions aimed at the exec board for club governance. Separate `club_feedback` table, separate `club_feedback:submit` / `club_feedback:manage` permissions (`role_member` auto-granted submit).
 
@@ -28,6 +28,4 @@ Suggestion / concern / praise / general submissions aimed at the exec board for 
 
 Each surface is independently gated by the `site_feedback.submissions_enabled` / `club_feedback.submissions_enabled` **feature** settings (both default ON). **Toggling off blocks new submissions only**; managers retain triage access via the separate `*:manage` permission. That's why these are `features.*` and not page flags — see the settings rule.
 
-The surface switcher is a compact segmented control of real `<Link>`s sitting right-aligned on the `<h1>`'s row rather than as a full-width bar, which leaves the subtitle the full column to describe the active surface. The shared `FeedbackTabsBar` lives in `src/components/layouts/` so neither feature has to cross-import the other.
-
-**`CLUB_FEEDBACK_PERMISSIONS` / `SITE_FEEDBACK_PERMISSIONS`** (`features/auth/guards.ts`) name the surface pairs once — five places ask the question (sidebar entry, tab bar, three routes), and the club/site split out of a single `feedback:*` is the kind of change that makes spelled-out copies drift. The three routes pick between two surfaces rather than gating on one permission, so they can't use `requirePermission` and must read `effectivePermissionsFor` — a hand-rolled `principal.permissions.includes()` bypasses role emulation silently.
+**`CLUB_FEEDBACK_PERMISSIONS` / `SITE_FEEDBACK_PERMISSIONS`** (`features/auth/guards.ts`) name the surface pairs once — four places ask the question (sidebar entry, the index, two surface routes), and the club/site split out of a single `feedback:*` is the kind of change that makes spelled-out copies drift. The index picks between two surfaces rather than gating on one permission, so it can't use `requirePermission` and must read `effectivePermissionsFor` — a hand-rolled `principal.permissions.includes()` bypasses role emulation silently.

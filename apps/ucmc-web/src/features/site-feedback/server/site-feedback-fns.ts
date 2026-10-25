@@ -5,13 +5,24 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 
-import type { SiteFeedbackSummary } from "#/features/site-feedback/server/site-feedback-actions.server";
+import type {
+  SiteFeedbackOverview,
+  SiteFeedbackSummary,
+} from "#/features/site-feedback/server/site-feedback-actions.server";
 import {
   siteFeedbackInputSchema,
   siteFeedbackStatusUpdateSchema,
 } from "#/features/site-feedback/server/limits";
 
-export type { SiteFeedbackSummary };
+export type { SiteFeedbackOverview, SiteFeedbackSummary };
+
+export const getSiteFeedbackOverviewFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<SiteFeedbackOverview> => {
+  const { getSiteFeedbackOverviewAction } =
+    await import("#/features/site-feedback/server/site-feedback-actions.server");
+  return getSiteFeedbackOverviewAction();
+});
 
 export const listMySiteFeedbackFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<SiteFeedbackSummary[]> => {

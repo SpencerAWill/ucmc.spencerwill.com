@@ -30,6 +30,7 @@ const {
   listAllClubFeedbackAction,
   submitClubFeedbackAction,
   updateClubFeedbackStatusAction,
+  getClubFeedbackOverviewAction,
 } =
   await import("#/features/club-feedback/server/club-feedback-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
@@ -316,5 +317,42 @@ describe("club feedback admin triage", () => {
     expect(stored?.updatedAt.epochMilliseconds).toBeGreaterThanOrEqual(
       stored?.createdAt.epochMilliseconds ?? 0,
     );
+  });
+});
+
+describe("getClubFeedbackOverviewAction", () => {
+  const input = {
+    kind: "suggestion" as const,
+    title: "t",
+    body: "A body long enough to pass.",
+  };
+
+  it("gives a member their own count and a null newForOfficers", async () => {
+    await signInAsMember();
+    await submitClubFeedbackAction({ ...input, anonymous: false });
+    await submitClubFeedbackAction({ ...input, anonymous: true });
+    expect(await getClubFeedbackOverviewAction()).toEqual({
+      mineOpen: 2,
+      newForOfficers: null,
+    });
+  });
+
+  it("counts anonymous rows for a manager without identity fields", async () => {
+    await signInAsMember("a@example.com");
+    await submitClubFeedbackAction({ ...input, anonymous: true });
+    await signInAsMember("b@example.com");
+    await submitClubFeedbackAction({ ...input, anonymous: false });
+    await signInAsAdmin();
+    const overview = await getClubFeedbackOverviewAction();
+    expect(Object.keys(overview).sort()).toEqual([
+      "mineOpen",
+      "newForOfficers",
+    ]);
+    expect(overview.newForOfficers).toBe(2);
+  });
+
+  it("rejects a caller with neither permission", async () => {
+    await signInAsBareUser();
+    await expect(getClubFeedbackOverviewAction()).rejects.toThrow("Forbidden");
   });
 });

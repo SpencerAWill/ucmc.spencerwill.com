@@ -55,7 +55,8 @@ import { Route as CalendarIndexRouteImport } from './routes/calendar.index'
 import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicId'
 import { Route as DevOutboxRouteImport } from './routes/dev.outbox'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
-import { Route as FeedbackTabsRouteImport } from './routes/feedback._tabs'
+import { Route as FeedbackClubRouteImport } from './routes/feedback.club'
+import { Route as FeedbackSiteRouteImport } from './routes/feedback.site'
 import { Route as GazetteIndexRouteImport } from './routes/gazette.index'
 import { Route as GazettePublicIdRouteImport } from './routes/gazette.$publicId'
 import { Route as GearIndexRouteImport } from './routes/gear.index'
@@ -76,8 +77,7 @@ import { Route as ApiGazettePdfSplatRouteImport } from './routes/api/gazette-pdf
 import { Route as ApiGearThumbnailsSplatRouteImport } from './routes/api/gear-thumbnails.$'
 import { Route as ApiLandingSplatRouteImport } from './routes/api/landing.$'
 import { Route as ApiSponsorLogoSplatRouteImport } from './routes/api/sponsor-logo.$'
-import { Route as FeedbackTabsClubRouteImport } from './routes/feedback._tabs.club'
-import { Route as FeedbackTabsSiteRouteImport } from './routes/feedback._tabs.site'
+import { Route as FeedbackSiteIndexRouteImport } from './routes/feedback.site.index'
 import { Route as GearLoansIndexRouteImport } from './routes/gear.loans.index'
 import { Route as GearLoansPublicIdRouteImport } from './routes/gear.loans.$publicId'
 import { Route as MembersTabsIndexRouteImport } from './routes/members._tabs.index'
@@ -325,8 +325,14 @@ const FeedbackIndexRoute = FeedbackIndexRouteImport.update({
   path: '/',
   getParentRoute: () => FeedbackRoute,
 } as any)
-const FeedbackTabsRoute = FeedbackTabsRouteImport.update({
-  id: '/_tabs',
+const FeedbackClubRoute = FeedbackClubRouteImport.update({
+  id: '/club',
+  path: '/club',
+  getParentRoute: () => FeedbackRoute,
+} as any)
+const FeedbackSiteRoute = FeedbackSiteRouteImport.update({
+  id: '/site',
+  path: '/site',
   getParentRoute: () => FeedbackRoute,
 } as any)
 const GazetteIndexRoute = GazetteIndexRouteImport.update({
@@ -427,15 +433,10 @@ const ApiSponsorLogoSplatRoute = ApiSponsorLogoSplatRouteImport.update({
   path: '/api/sponsor-logo/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FeedbackTabsClubRoute = FeedbackTabsClubRouteImport.update({
-  id: '/club',
-  path: '/club',
-  getParentRoute: () => FeedbackTabsRoute,
-} as any)
-const FeedbackTabsSiteRoute = FeedbackTabsSiteRouteImport.update({
-  id: '/site',
-  path: '/site',
-  getParentRoute: () => FeedbackTabsRoute,
+const FeedbackSiteIndexRoute = FeedbackSiteIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => FeedbackSiteRoute,
 } as any)
 const GearLoansIndexRoute = GearLoansIndexRouteImport.update({
   id: '/loans/',
@@ -562,6 +563,8 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/dev/outbox': typeof DevOutboxRoute
+  '/feedback/club': typeof FeedbackClubRoute
+  '/feedback/site': typeof FeedbackSiteRouteWithChildren
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -583,8 +586,6 @@ export interface FileRoutesByFullPath {
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/api/sponsor-logo/$': typeof ApiSponsorLogoSplatRoute
-  '/feedback/club': typeof FeedbackTabsClubRoute
-  '/feedback/site': typeof FeedbackTabsSiteRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/deactivated': typeof MembersTabsDeactivatedRoute
   '/members/pending': typeof MembersTabsPendingRoute
@@ -598,6 +599,7 @@ export interface FileRoutesByFullPath {
   '/my/security': typeof MyTabsSecurityRoute
   '/my/waiver': typeof MyTabsWaiverRoute
   '/my/gear/cart': typeof MyGearCartRoute
+  '/feedback/site/': typeof FeedbackSiteIndexRoute
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/': typeof MembersTabsIndexRoute
   '/my/gear/': typeof MyGearIndexRoute
@@ -640,7 +642,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/dev/outbox': typeof DevOutboxRoute
-  '/feedback': typeof FeedbackIndexRoute
+  '/feedback/club': typeof FeedbackClubRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -650,6 +652,7 @@ export interface FileRoutesByTo {
   '/register/profile': typeof RegisterProfileRoute
   '/analytics': typeof AnalyticsIndexRoute
   '/calendar': typeof CalendarIndexRoute
+  '/feedback': typeof FeedbackIndexRoute
   '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
   '/api/account/export': typeof ApiAccountExportRoute
@@ -660,8 +663,6 @@ export interface FileRoutesByTo {
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/api/sponsor-logo/$': typeof ApiSponsorLogoSplatRoute
-  '/feedback/club': typeof FeedbackTabsClubRoute
-  '/feedback/site': typeof FeedbackTabsSiteRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/deactivated': typeof MembersTabsDeactivatedRoute
   '/members/pending': typeof MembersTabsPendingRoute
@@ -675,6 +676,7 @@ export interface FileRoutesByTo {
   '/my/security': typeof MyTabsSecurityRoute
   '/my/waiver': typeof MyTabsWaiverRoute
   '/my/gear/cart': typeof MyGearCartRoute
+  '/feedback/site': typeof FeedbackSiteIndexRoute
   '/gear/loans': typeof GearLoansIndexRoute
   '/my/gear': typeof MyGearIndexRoute
 }
@@ -723,7 +725,8 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/dev/outbox': typeof DevOutboxRoute
-  '/feedback/_tabs': typeof FeedbackTabsRouteWithChildren
+  '/feedback/club': typeof FeedbackClubRoute
+  '/feedback/site': typeof FeedbackSiteRouteWithChildren
   '/gazette/$publicId': typeof GazettePublicIdRoute
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
@@ -747,8 +750,6 @@ export interface FileRoutesById {
   '/api/gear-thumbnails/$': typeof ApiGearThumbnailsSplatRoute
   '/api/landing/$': typeof ApiLandingSplatRoute
   '/api/sponsor-logo/$': typeof ApiSponsorLogoSplatRoute
-  '/feedback/_tabs/club': typeof FeedbackTabsClubRoute
-  '/feedback/_tabs/site': typeof FeedbackTabsSiteRoute
   '/gear/loans/$publicId': typeof GearLoansPublicIdRoute
   '/members/_tabs/deactivated': typeof MembersTabsDeactivatedRoute
   '/members/_tabs/pending': typeof MembersTabsPendingRoute
@@ -762,6 +763,7 @@ export interface FileRoutesById {
   '/my/_tabs/security': typeof MyTabsSecurityRoute
   '/my/_tabs/waiver': typeof MyTabsWaiverRoute
   '/my/gear/cart': typeof MyGearCartRoute
+  '/feedback/site/': typeof FeedbackSiteIndexRoute
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/_tabs/': typeof MembersTabsIndexRoute
   '/my/gear/': typeof MyGearIndexRoute
@@ -812,6 +814,8 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/calendar/$publicId'
     | '/dev/outbox'
+    | '/feedback/club'
+    | '/feedback/site'
     | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
@@ -833,8 +837,6 @@ export interface FileRouteTypes {
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/api/sponsor-logo/$'
-    | '/feedback/club'
-    | '/feedback/site'
     | '/gear/loans/$publicId'
     | '/members/deactivated'
     | '/members/pending'
@@ -848,6 +850,7 @@ export interface FileRouteTypes {
     | '/my/security'
     | '/my/waiver'
     | '/my/gear/cart'
+    | '/feedback/site/'
     | '/gear/loans/'
     | '/members/'
     | '/my/gear/'
@@ -890,7 +893,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/calendar/$publicId'
     | '/dev/outbox'
-    | '/feedback'
+    | '/feedback/club'
     | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
@@ -900,6 +903,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/analytics'
     | '/calendar'
+    | '/feedback'
     | '/gazette'
     | '/gear'
     | '/api/account/export'
@@ -910,8 +914,6 @@ export interface FileRouteTypes {
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/api/sponsor-logo/$'
-    | '/feedback/club'
-    | '/feedback/site'
     | '/gear/loans/$publicId'
     | '/members/deactivated'
     | '/members/pending'
@@ -925,6 +927,7 @@ export interface FileRouteTypes {
     | '/my/security'
     | '/my/waiver'
     | '/my/gear/cart'
+    | '/feedback/site'
     | '/gear/loans'
     | '/my/gear'
   id:
@@ -972,7 +975,8 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/calendar/$publicId'
     | '/dev/outbox'
-    | '/feedback/_tabs'
+    | '/feedback/club'
+    | '/feedback/site'
     | '/gazette/$publicId'
     | '/gear/$publicId'
     | '/members/$publicId'
@@ -996,8 +1000,6 @@ export interface FileRouteTypes {
     | '/api/gear-thumbnails/$'
     | '/api/landing/$'
     | '/api/sponsor-logo/$'
-    | '/feedback/_tabs/club'
-    | '/feedback/_tabs/site'
     | '/gear/loans/$publicId'
     | '/members/_tabs/deactivated'
     | '/members/_tabs/pending'
@@ -1011,6 +1013,7 @@ export interface FileRouteTypes {
     | '/my/_tabs/security'
     | '/my/_tabs/waiver'
     | '/my/gear/cart'
+    | '/feedback/site/'
     | '/gear/loans/'
     | '/members/_tabs/'
     | '/my/gear/'
@@ -1390,11 +1393,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackIndexRouteImport
       parentRoute: typeof FeedbackRoute
     }
-    '/feedback/_tabs': {
-      id: '/feedback/_tabs'
-      path: ''
-      fullPath: '/feedback'
-      preLoaderRoute: typeof FeedbackTabsRouteImport
+    '/feedback/club': {
+      id: '/feedback/club'
+      path: '/club'
+      fullPath: '/feedback/club'
+      preLoaderRoute: typeof FeedbackClubRouteImport
+      parentRoute: typeof FeedbackRoute
+    }
+    '/feedback/site': {
+      id: '/feedback/site'
+      path: '/site'
+      fullPath: '/feedback/site'
+      preLoaderRoute: typeof FeedbackSiteRouteImport
       parentRoute: typeof FeedbackRoute
     }
     '/gazette/': {
@@ -1537,19 +1547,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSponsorLogoSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/feedback/_tabs/club': {
-      id: '/feedback/_tabs/club'
-      path: '/club'
-      fullPath: '/feedback/club'
-      preLoaderRoute: typeof FeedbackTabsClubRouteImport
-      parentRoute: typeof FeedbackTabsRoute
-    }
-    '/feedback/_tabs/site': {
-      id: '/feedback/_tabs/site'
-      path: '/site'
-      fullPath: '/feedback/site'
-      preLoaderRoute: typeof FeedbackTabsSiteRouteImport
-      parentRoute: typeof FeedbackTabsRoute
+    '/feedback/site/': {
+      id: '/feedback/site/'
+      path: '/'
+      fullPath: '/feedback/site/'
+      preLoaderRoute: typeof FeedbackSiteIndexRouteImport
+      parentRoute: typeof FeedbackSiteRoute
     }
     '/gear/loans/': {
       id: '/gear/loans/'
@@ -1702,27 +1705,27 @@ const CalendarRouteWithChildren = CalendarRoute._addFileChildren(
   CalendarRouteChildren,
 )
 
-interface FeedbackTabsRouteChildren {
-  FeedbackTabsClubRoute: typeof FeedbackTabsClubRoute
-  FeedbackTabsSiteRoute: typeof FeedbackTabsSiteRoute
+interface FeedbackSiteRouteChildren {
+  FeedbackSiteIndexRoute: typeof FeedbackSiteIndexRoute
 }
 
-const FeedbackTabsRouteChildren: FeedbackTabsRouteChildren = {
-  FeedbackTabsClubRoute: FeedbackTabsClubRoute,
-  FeedbackTabsSiteRoute: FeedbackTabsSiteRoute,
+const FeedbackSiteRouteChildren: FeedbackSiteRouteChildren = {
+  FeedbackSiteIndexRoute: FeedbackSiteIndexRoute,
 }
 
-const FeedbackTabsRouteWithChildren = FeedbackTabsRoute._addFileChildren(
-  FeedbackTabsRouteChildren,
+const FeedbackSiteRouteWithChildren = FeedbackSiteRoute._addFileChildren(
+  FeedbackSiteRouteChildren,
 )
 
 interface FeedbackRouteChildren {
-  FeedbackTabsRoute: typeof FeedbackTabsRouteWithChildren
+  FeedbackClubRoute: typeof FeedbackClubRoute
+  FeedbackSiteRoute: typeof FeedbackSiteRouteWithChildren
   FeedbackIndexRoute: typeof FeedbackIndexRoute
 }
 
 const FeedbackRouteChildren: FeedbackRouteChildren = {
-  FeedbackTabsRoute: FeedbackTabsRouteWithChildren,
+  FeedbackClubRoute: FeedbackClubRoute,
+  FeedbackSiteRoute: FeedbackSiteRouteWithChildren,
   FeedbackIndexRoute: FeedbackIndexRoute,
 }
 

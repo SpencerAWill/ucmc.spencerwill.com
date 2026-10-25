@@ -171,6 +171,9 @@ export function SiteFeedbackForm() {
         void form.handleSubmit();
       }}
     >
+      <p className="text-sm text-muted-foreground">
+        Read by the site maintainers.
+      </p>
       <form.Subscribe
         selector={(s) => ({
           isSubmitting: s.isSubmitting,

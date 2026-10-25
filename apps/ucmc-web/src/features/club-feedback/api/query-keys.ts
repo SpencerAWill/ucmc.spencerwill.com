@@ -7,3 +7,8 @@
 export const CLUB_FEEDBACK_MY_QUERY_KEY = ["club-feedback", "my"] as const;
 
 export const CLUB_FEEDBACK_LIST_QUERY_KEY = ["club-feedback", "list"] as const;
+
+export const CLUB_FEEDBACK_OVERVIEW_QUERY_KEY = [
+  "club-feedback",
+  "overview",
+] as const;

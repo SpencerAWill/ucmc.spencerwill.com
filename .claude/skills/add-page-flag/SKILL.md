@@ -33,7 +33,7 @@ Or `requirePageEnabled(queryClient, "<key>", "<permission>")` for an anonymous-c
 
 If that view permission is new, **its migration must also set `anonymous_grantable = 1` on it**, or `/access` won't offer it to the `anonymous` role and the server refuses the grant (`0083`). Set it only on a view permission whose page is meant to be public: every signed-in viewer inherits the anonymous role's grants.
 
-**Nested under an auth-guarded parent** (`/gear/*`, `/my/*`, `/members/_tabs/*`, `/feedback/_tabs/*`):
+**Nested under an auth-guarded parent** (`/gear/*`, `/my/*`, `/members/_tabs/*`, `/feedback/*`):
 
 TanStack runs `beforeLoad` parent-to-child, so a parent's redirect (`requirePermission` / `requireApproved`) fires _before_ a leaf `notFound`, bouncing anonymous visitors to sign-in instead of 404ing uniformly. So:
 

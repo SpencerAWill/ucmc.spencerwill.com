@@ -26,6 +26,8 @@ import type {
   ClubFeedbackStatusUpdateInput,
 } from "#/features/club-feedback/server/limits";
 import {
+  countMyOpenClubFeedback,
+  countOpenClubFeedback,
   insertClubFeedback,
   listAllClubFeedback,
   listClubFeedbackByUser,
@@ -60,6 +62,21 @@ async function requireClubFeedbackManager(): Promise<Principal> {
   return principal;
 }
 
+async function requireClubFeedbackViewer(): Promise<{
+  principal: Principal;
+  canManage: boolean;
+}> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+  const canManage = principal.permissions.includes("club_feedback:manage");
+  if (!canManage && !principal.permissions.includes("club_feedback:submit")) {
+    throw new Error("Forbidden: missing club_feedback:submit");
+  }
+  return { principal, canManage };
+}
+
 // ── public types ────────────────────────────────────────────────────────
 
 export interface ClubFeedbackSummary {
@@ -77,6 +94,12 @@ export interface ClubFeedbackSummary {
   authorAvatarKey: string | null;
   createdAt: Temporal.Instant;
   updatedAt: Temporal.Instant;
+}
+
+export interface ClubFeedbackOverview {
+  mineOpen: number;
+  /** `null` unless the caller holds `club_feedback:manage`. Counts anonymous rows. */
+  newForOfficers: number | null;
 }
 
 type Row = {
@@ -182,4 +205,12 @@ export async function updateClubFeedbackStatusAction(
   await requireClubFeedbackManager();
   await updateClubFeedbackStatus(input);
   return { ok: true };
+}
+
+export async function getClubFeedbackOverviewAction(): Promise<ClubFeedbackOverview> {
+  const { principal, canManage } = await requireClubFeedbackViewer();
+  return {
+    mineOpen: await countMyOpenClubFeedback(principal.userId),
+    newForOfficers: canManage ? await countOpenClubFeedback() : null,
+  };
 }

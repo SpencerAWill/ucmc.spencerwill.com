@@ -1,10 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import { useAuth } from "#/features/auth/api/use-auth";
 import {
-  CLUB_FEEDBACK_PERMISSIONS,
   SITE_FEEDBACK_PERMISSIONS,
   effectivePermissionsFor,
   requireApproved,
@@ -18,7 +17,7 @@ import { SiteFeedbackForm } from "#/features/site-feedback/components/site-feedb
 import { requireEnabledPages } from "#/features/settings/api/page-guards";
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
-export const Route = createFileRoute("/feedback/_tabs/site")({
+export const Route = createFileRoute("/feedback/site/")({
   staticData: { pageFlag: "feedback_site" },
   beforeLoad: async ({ context, location, matches }) => {
     await requireEnabledPages(context.queryClient, matches);
@@ -28,16 +27,9 @@ export const Route = createFileRoute("/feedback/_tabs/site")({
       principal,
     );
     const canSite = SITE_FEEDBACK_PERMISSIONS.some((p) => granted.includes(p));
-    const canClub = CLUB_FEEDBACK_PERMISSIONS.some((p) => granted.includes(p));
-
-    // Someone who can't see site feedback but can see club feedback lands
-    // there rather than getting a notFound from a link or a stale
-    // bookmark. With access to neither, fall through to notFound — the
-    // sidebar entry doesn't render for them either.
+    // Unreachable (no site permission) is a 404; `/feedback` only links to
+    // surfaces the viewer can reach.
     if (!canSite) {
-      if (canClub) {
-        throw redirect({ to: "/feedback/club" });
-      }
       throw notFound();
     }
   },
@@ -62,6 +54,13 @@ function SiteFeedbackPage() {
 
   return (
     <div className="space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold">Site feedback</h1>
+        <p className="text-sm text-muted-foreground">
+          Reaches the site maintainers. Bugs, feature ideas, anything about this
+          website.
+        </p>
+      </header>
       {canSubmit && submissionsEnabled ? (
         <SiteFeedbackForm />
       ) : !submissionsEnabled && canSubmit ? (

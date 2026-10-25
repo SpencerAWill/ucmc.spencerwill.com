@@ -1,5 +1,6 @@
 import { siteFeedbackKeys } from "#/features/site-feedback/api/query-keys";
 import {
+  getSiteFeedbackOverviewFn,
   listAllSiteFeedbackFn,
   listMySiteFeedbackFn,
 } from "#/features/site-feedback/server/site-feedback-fns";
@@ -28,5 +29,14 @@ export function allSiteFeedbackQueryOptions(options: { enabled: boolean }) {
     queryFn: () => listAllSiteFeedbackFn(),
     staleTime: 30_000,
     enabled: options.enabled,
+  } as const;
+}
+
+/** Card badge counts for the /feedback index. Same staleness as the lists. */
+export function siteFeedbackOverviewQueryOptions() {
+  return {
+    queryKey: siteFeedbackKeys.overview,
+    queryFn: () => getSiteFeedbackOverviewFn(),
+    staleTime: 30_000,
   } as const;
 }

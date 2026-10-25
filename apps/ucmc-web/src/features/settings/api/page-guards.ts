@@ -58,7 +58,7 @@ export async function requirePageFlag(
  * This is the ordering-safe variant of {@link requirePageFlag}. TanStack
  * runs `beforeLoad` parent-to-child, so a leaf route that calls
  * `requirePageFlag` *after* an auth-guarded parent layout (`/gear`, `/my`,
- * `/members/_tabs`, `/feedback/_tabs`) never gets the chance to 404 an
+ * `/members/_tabs`) never gets the chance to 404 an
  * anonymous / unauthorized visitor — the parent's redirect fires first. By
  * declaring the flag in `staticData` and calling this from the PARENT's
  * `beforeLoad` (before its auth guard) AND from the leaf (so sibling-tab
@@ -73,8 +73,7 @@ export async function requirePageFlag(
  *
  *  1. Equivalence — the leaf's own `staticData.pageFlag` is the only
  *     gated entry in its match chain whenever the layouts above it are
- *     flag-less (true for `/my`, `/gear`, `/members/_tabs`,
- *     `/feedback/_tabs`), so walking `matches` there just re-finds the
+ *     flag-less (true for `/my`, `/gear`, `/members/_tabs`), so walking `matches` there just re-finds the
  *     key the leaf already knows statically. Ordering doesn't matter on
  *     sibling-tab navigation because the parent's auth guard isn't
  *     re-running.

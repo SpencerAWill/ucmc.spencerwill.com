@@ -3,7 +3,7 @@
  * layer is responsible for authorization. Joins users + profiles to project
  * the submitter's display name and avatar key alongside each row.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import type {
@@ -128,4 +128,38 @@ export async function updateSiteFeedbackStatus(input: {
     .update(schema.siteFeedback)
     .set({ status: input.status, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.siteFeedback.id, input.id));
+}
+
+/** `count(*)` of one member's open rows, and how many of them have a GitHub issue. */
+export async function countMySiteFeedback(
+  userId: string,
+): Promise<{ open: number; tracked: number }> {
+  const [open] = await getDb()
+    .select({ n: count() })
+    .from(schema.siteFeedback)
+    .where(
+      and(
+        eq(schema.siteFeedback.createdBy, userId),
+        eq(schema.siteFeedback.status, "open"),
+      ),
+    );
+  const [tracked] = await getDb()
+    .select({ n: count() })
+    .from(schema.siteFeedback)
+    .where(
+      and(
+        eq(schema.siteFeedback.createdBy, userId),
+        isNotNull(schema.siteFeedback.githubIssueNumber),
+      ),
+    );
+  return { open: open.n, tracked: tracked.n };
+}
+
+/** `count(*)` of every member's open rows. */
+export async function countOpenSiteFeedback(): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: count() })
+    .from(schema.siteFeedback)
+    .where(eq(schema.siteFeedback.status, "open"));
+  return row.n;
 }

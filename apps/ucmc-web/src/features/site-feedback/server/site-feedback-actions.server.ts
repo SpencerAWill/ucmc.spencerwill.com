@@ -13,6 +13,8 @@ import type {
   SiteFeedbackStatusUpdateInput,
 } from "#/features/site-feedback/server/limits";
 import {
+  countMySiteFeedback,
+  countOpenSiteFeedback,
   insertSiteFeedback,
   listAllSiteFeedback,
   listSiteFeedbackByUser,
@@ -69,6 +71,21 @@ async function requireSiteFeedbackManager(): Promise<Principal> {
   return principal;
 }
 
+async function requireSiteFeedbackViewer(): Promise<{
+  principal: Principal;
+  canManage: boolean;
+}> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    throw new Error("Not signed in");
+  }
+  const canManage = principal.permissions.includes("site_feedback:manage");
+  if (!canManage && !principal.permissions.includes("site_feedback:submit")) {
+    throw new Error("Forbidden: missing site_feedback:submit");
+  }
+  return { principal, canManage };
+}
+
 // ── public types ────────────────────────────────────────────────────────
 
 export interface SiteFeedbackSummary {
@@ -86,6 +103,13 @@ export interface SiteFeedbackSummary {
   githubIssueUrl: string | null;
   createdAt: Temporal.Instant;
   updatedAt: Temporal.Instant;
+}
+
+export interface SiteFeedbackOverview {
+  mineOpen: number;
+  mineTracked: number;
+  /** `null` unless the caller holds `site_feedback:manage`. */
+  untriaged: number | null;
 }
 
 function toSummary(row: {
@@ -185,4 +209,14 @@ export async function updateSiteFeedbackStatusAction(
   await requireSiteFeedbackManager();
   await updateSiteFeedbackStatus(input);
   return { ok: true };
+}
+
+export async function getSiteFeedbackOverviewAction(): Promise<SiteFeedbackOverview> {
+  const { principal, canManage } = await requireSiteFeedbackViewer();
+  const mine = await countMySiteFeedback(principal.userId);
+  return {
+    mineOpen: mine.open,
+    mineTracked: mine.tracked,
+    untriaged: canManage ? await countOpenSiteFeedback() : null,
+  };
 }
