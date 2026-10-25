@@ -11,9 +11,10 @@
 # the deterministic half.
 #
 # Cheap by construction:
-#   - nothing to do when no .ts/.tsx/.js/.mjs differs from HEAD (a turn that
+#   - nothing to do when no code or tsconfig differs from HEAD (a turn that
 #     only answered a question, or after a commit -- pre-commit already ran
-#     the same checks);
+#     the same checks). Deletions and tsconfig edits count, as they do in
+#     pre-commit: removing a module breaks whatever imported it;
 #   - nothing to do when the changed code is byte-identical to the last
 #     state that passed in this session (a fingerprint in $TMPDIR);
 #   - ESLint sees only the changed files, and the web lint and typecheck run
@@ -21,7 +22,9 @@
 #
 # ESLint runs from inside each package, never the repo root: the web
 # config's `import/no-restricted-paths` zones resolve against cwd and fail
-# OPEN from the root (see CLAUDE.md).
+# OPEN from the root (see CLAUDE.md). The binaries are called directly, not
+# through `pnpm exec`: pnpm may install first when the manifest changed, and
+# the checks run in parallel, so two of them would install at once.
 #
 # It blocks once per stop. When Claude stops again straight after being
 # blocked (`stop_hook_active`), the stop goes through, so a check Claude
@@ -33,6 +36,10 @@ set -uo pipefail
 
 payload=$(cat)
 
+# Without jq, `stop_hook_active` can't be read and every stop would block.
+if ! command -v jq >/dev/null; then
+  exit 0
+fi
 if [[ $(jq -r '.stop_hook_active // false' <<<"$payload") == "true" ]]; then
   exit 0
 fi
@@ -43,11 +50,12 @@ fi
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 git rev-parse --verify -q HEAD >/dev/null || exit 0
 
+# Everything that can change a lint or typecheck result, deletions included.
 changed=$(
   {
-    git diff --name-only --diff-filter=d HEAD
+    git diff --name-only HEAD
     git ls-files --others --exclude-standard
-  } | grep -E '\.(ts|tsx|js|mjs)$' | grep -v '\.gen\.' | sort -u
+  } | grep -E '\.(ts|tsx|mts|cts|js|mjs|cjs)$|(^|/)tsconfig[^/]*\.json$' | sort -u
 )
 if [[ -z $changed ]]; then
   exit 0
@@ -58,8 +66,8 @@ stamp="${TMPDIR:-/tmp}/ucmc-verify-on-stop-${session//[^A-Za-z0-9_-]/_}"
 fingerprint=$(
   {
     git diff HEAD -- $changed
-    git ls-files --others --exclude-standard -- $changed | xargs shasum 2>/dev/null
-  } | shasum | cut -d' ' -f1
+    git ls-files --others --exclude-standard -- $changed | git hash-object --stdin-paths
+  } | git hash-object --stdin
 )
 if [[ -f $stamp && $(cat "$stamp") == "$fingerprint" ]]; then
   exit 0
@@ -82,13 +90,19 @@ run() {
 }
 
 for pkg in apps/ucmc-web infra/cloudflare infra/github; do
-  files=$(grep "^$pkg/" <<<"$changed" | sed "s#^$pkg/##")
-  if [[ -z $files ]]; then
+  if ! grep -q "^$pkg/" <<<"$changed"; then
     continue
   fi
   label=${pkg##*/}
-  run "eslint-$label" "$pkg" pnpm -s exec eslint --no-warn-ignored -- $files
-  run "tsc-$label" "$pkg" pnpm -s exec tsc --noEmit
+  # Lint only source files that still exist; generated files are not linted.
+  files=$(
+    grep "^$pkg/" <<<"$changed" | grep -vE '\.json$|\.gen\.' |
+      while read -r f; do [[ -f $f ]] && echo "${f#"$pkg/"}"; done
+  )
+  if [[ -n $files ]]; then
+    run "eslint-$label" "$pkg" node_modules/.bin/eslint --no-warn-ignored -- $files
+  fi
+  run "tsc-$label" "$pkg" node_modules/.bin/tsc --noEmit
 done
 
 failed=""
