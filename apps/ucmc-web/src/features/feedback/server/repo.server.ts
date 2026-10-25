@@ -94,15 +94,6 @@ export async function listFeedbackByUser(
     .orderBy(desc(schema.feedback.createdAt));
 }
 
-export async function getUserPublicId(userId: string): Promise<string | null> {
-  const db = getDb();
-  const row = await db.query.users.findFirst({
-    where: eq(schema.users.id, userId),
-    columns: { publicId: true },
-  });
-  return row?.publicId ?? null;
-}
-
 export async function insertFeedback(input: {
   id: string;
   kind: FeedbackKind;
@@ -137,20 +128,4 @@ export async function updateFeedbackStatus(input: {
     .update(schema.feedback)
     .set({ status: input.status, updatedAt: Temporal.Now.instant() })
     .where(eq(schema.feedback.id, input.id));
-}
-
-export async function setGithubIssue(
-  id: string,
-  number: number,
-  url: string,
-): Promise<void> {
-  const db = getDb();
-  await db
-    .update(schema.feedback)
-    .set({
-      githubIssueNumber: number,
-      githubIssueUrl: url,
-      updatedAt: Temporal.Now.instant(),
-    })
-    .where(eq(schema.feedback.id, id));
 }

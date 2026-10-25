@@ -6,7 +6,6 @@
 import { uuidv7 } from "uuidv7";
 
 import { composeFeedbackBody } from "#/features/feedback/server/format";
-import { mirrorToGithub } from "#/features/feedback/server/github.server";
 import type {
   FeedbackInput,
   FeedbackKind,
@@ -14,24 +13,22 @@ import type {
   FeedbackStatusUpdateInput,
 } from "#/features/feedback/server/limits";
 import {
-  getUserPublicId,
   insertFeedback,
   listAllFeedback,
   listFeedbackByUser,
-  setGithubIssue,
   updateFeedbackStatus,
 } from "#/features/feedback/server/repo.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { errorMessage, log } from "#/server/log/log.server";
 import { checkFeedbackRateLimit } from "#/server/rate-limit.server";
 import { readSetting } from "#/server/settings/settings-repo.server";
 
 // Strip query + fragment from a submitter-provided URL before it
-// reaches D1 or the GitHub mirror. Submitters set `pageUrl` to
-// `window.location.href`, which routinely carries tokens / emails in
-// query params on auth-callback-shaped routes; mirroring those into
-// a public-ish issue tracker would leak. Keep origin + pathname so
+// reaches D1. Submitters set `pageUrl` to `window.location.href`,
+// which routinely carries tokens / emails in query params on
+// auth-callback-shaped routes; storing those would leak them to every
+// triager (and to any issue tracker a later step copies them into). Keep origin +
+// pathname so
 // the routing context is still useful in triage.
 function normalizePageUrl(input: string | null | undefined): string | null {
   if (!input) {
@@ -149,7 +146,7 @@ export async function submitFeedbackAction(
   const principal = await requireFeedbackSubmitter();
   // Runtime kill switch. Admins flip this off when they need to pause
   // the site-feedback intake (e.g. while triaging a backlog) without
-  // also nuking the GitHub mirror or revoking everyone's permission.
+  // also revoking everyone's permission.
   // The `*:manage` permission keeps managers' access to the triage view
   // intact regardless — this gate is on **submissions**, not reads.
   const enabled = await readSetting("feedback.site_enabled");
@@ -175,25 +172,6 @@ export async function submitFeedbackAction(
     userAgent,
     createdBy: principal.userId,
   });
-
-  // Best-effort GitHub mirror. mirrorToGithub already swallows failures
-  // and returns null; we wrap setGithubIssue too because a write back to
-  // D1 must never poison the user's success path either.
-  try {
-    const submitterPublicId = await getUserPublicId(principal.userId);
-    const result = await mirrorToGithub({
-      kind: input.kind,
-      title: input.title,
-      body,
-      submitterPublicId,
-      pageUrl,
-    });
-    if (result) {
-      await setGithubIssue(id, result.number, result.url);
-    }
-  } catch (err) {
-    log.error("feedback.mirror_failed", { error: errorMessage(err) });
-  }
 
   return { id };
 }

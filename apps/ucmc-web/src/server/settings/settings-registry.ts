@@ -807,7 +807,7 @@ export const SETTINGS = {
   "feedback.site_enabled": z.boolean().default(true).register(registry, {
     label: "Accept site feedback submissions",
     description:
-      "Pauses NEW site-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Site tab page switch under Pages, which 404s the page for everyone. The GitHub mirror still fires for legacy in-flight rows.",
+      "Pauses NEW site-feedback submissions: the form and the endpoint both refuse. The page stays reachable and managers keep triaging the backlog — that's the difference from the Site tab page switch under Pages, which 404s the page for everyone.",
     category: "features",
     flagKind: "ops",
     owner: "system_admin",

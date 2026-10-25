@@ -18,11 +18,9 @@ Two surfaces share one route under a pathless `_tabs` layout (mirrors `/members`
 
 Bug / feature / general submissions aimed at site maintainers. Permissions are `site_feedback:submit` / `site_feedback:manage` (`role_member` auto-granted submit), renamed from the unprefixed `feedback:*` so they read as siblings of `club_feedback:*`. Gated by `pages.feedback_site`.
 
-Optionally mirrors to GitHub Issues when both `FEEDBACK_GITHUB_TOKEN` (fine-grained PAT, Issues r/w) and `FEEDBACK_GITHUB_REPO` are set. **The issue body uses opaque `users.publicId` only — never email or name.** Best-effort: GitHub failures don't block the D1 insert.
-
 ## Club tab (`/feedback/club`, the default)
 
-Suggestion / concern / praise / general submissions aimed at the exec board for club governance. Separate `club_feedback` table, separate `club_feedback:submit` / `club_feedback:manage` permissions (`role_member` auto-granted submit), and it **never** mirrors to GitHub.
+Suggestion / concern / praise / general submissions aimed at the exec board for club governance. Separate `club_feedback` table, separate `club_feedback:submit` / `club_feedback:manage` permissions (`role_member` auto-granted submit).
 
 **Opt-in anonymous toggle**: the server still records `createdBy` for per-user rate limiting and abuse handling, but `anonymous = 1` causes the actions layer to strip submitter columns (`createdBy`, `createdByPublicId`, joined name/avatar) from manager-facing projections — **the wire payload itself carries no identity.** Owners always see their own row un-redacted.
 
