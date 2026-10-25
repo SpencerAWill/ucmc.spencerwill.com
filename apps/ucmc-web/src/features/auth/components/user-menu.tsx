@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LogOut,
   Map,
+  MessageSquare,
   ShoppingCart,
   User as UserIcon,
 } from "lucide-react";
@@ -27,7 +28,8 @@ import {
 import { publicFlagsQueryOptions } from "#/features/settings/api/queries";
 
 export function UserMenu() {
-  const { principal, isLoading, emulatedRole, signOut } = useAuth();
+  const { principal, isLoading, emulatedRole, signOut, hasAnyPermission } =
+    useAuth();
   const navigate = useNavigate();
   // Signing in from a public page lands back on it. Path + search only,
   // like the guards, so the SSR and hydrated hrefs agree.
@@ -143,6 +145,15 @@ export function UserMenu() {
                 </Link>
               </DropdownMenuItem>
             ) : null}
+            <FeedbackMenuRow
+              showMine={
+                pages.my_feedback &&
+                hasAnyPermission([
+                  "site_feedback:submit",
+                  "club_feedback:submit",
+                ])
+              }
+            />
           </>
         )}
         <DropdownMenuSeparator />
@@ -158,5 +169,26 @@ export function UserMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * One row, up to two actions side by side: "My feedback" links to the
+ * member's own submissions. Each half has its own gate; with neither
+ * the row isn't rendered at all.
+ */
+function FeedbackMenuRow({ showMine }: { showMine: boolean }) {
+  if (!showMine) {
+    return null;
+  }
+  return (
+    <div data-testid="feedback-menu-row" className="flex">
+      <DropdownMenuItem asChild className="flex-1">
+        <Link to="/my/feedback">
+          <MessageSquare className="mr-2 size-4" />
+          My feedback
+        </Link>
+      </DropdownMenuItem>
+    </div>
   );
 }

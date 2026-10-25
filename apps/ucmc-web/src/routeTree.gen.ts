@@ -66,6 +66,7 @@ import { Route as MembersTabsRouteImport } from './routes/members._tabs'
 import { Route as MembersWaiversRouteImport } from './routes/members.waivers'
 import { Route as MyIndexRouteImport } from './routes/my.index'
 import { Route as MyTabsRouteImport } from './routes/my._tabs'
+import { Route as MyFeedbackRouteImport } from './routes/my.feedback'
 import { Route as MyGearRouteImport } from './routes/my.gear'
 import { Route as RegisterPendingRouteImport } from './routes/register.pending'
 import { Route as RegisterProfileRouteImport } from './routes/register.profile'
@@ -380,6 +381,11 @@ const MyTabsRoute = MyTabsRouteImport.update({
   id: '/_tabs',
   getParentRoute: () => MyRoute,
 } as any)
+const MyFeedbackRoute = MyFeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => MyRoute,
+} as any)
 const MyGearRoute = MyGearRouteImport.update({
   id: '/gear',
   path: '/gear',
@@ -582,6 +588,7 @@ export interface FileRoutesByFullPath {
   '/gear/$publicId': typeof GearPublicIdRoute
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/waivers': typeof MembersWaiversRoute
+  '/my/feedback': typeof MyFeedbackRoute
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
@@ -663,6 +670,7 @@ export interface FileRoutesByTo {
   '/members/$publicId': typeof MembersPublicIdRoute
   '/members/waivers': typeof MembersWaiversRoute
   '/my': typeof MyIndexRoute
+  '/my/feedback': typeof MyFeedbackRoute
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
   '/analytics': typeof AnalyticsIndexRoute
@@ -750,6 +758,7 @@ export interface FileRoutesById {
   '/members/_tabs': typeof MembersTabsRouteWithChildren
   '/members/waivers': typeof MembersWaiversRoute
   '/my/_tabs': typeof MyTabsRouteWithChildren
+  '/my/feedback': typeof MyFeedbackRoute
   '/my/gear': typeof MyGearRouteWithChildren
   '/register/pending': typeof RegisterPendingRoute
   '/register/profile': typeof RegisterProfileRoute
@@ -839,6 +848,7 @@ export interface FileRouteTypes {
     | '/gear/$publicId'
     | '/members/$publicId'
     | '/members/waivers'
+    | '/my/feedback'
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
@@ -920,6 +930,7 @@ export interface FileRouteTypes {
     | '/members/$publicId'
     | '/members/waivers'
     | '/my'
+    | '/my/feedback'
     | '/register/pending'
     | '/register/profile'
     | '/analytics'
@@ -1006,6 +1017,7 @@ export interface FileRouteTypes {
     | '/members/_tabs'
     | '/members/waivers'
     | '/my/_tabs'
+    | '/my/feedback'
     | '/my/gear'
     | '/register/pending'
     | '/register/profile'
@@ -1495,6 +1507,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyTabsRouteImport
       parentRoute: typeof MyRoute
     }
+    '/my/feedback': {
+      id: '/my/feedback'
+      path: '/feedback'
+      fullPath: '/my/feedback'
+      preLoaderRoute: typeof MyFeedbackRouteImport
+      parentRoute: typeof MyRoute
+    }
     '/my/gear': {
       id: '/my/gear'
       path: '/gear'
@@ -1878,12 +1897,14 @@ const MyGearRouteWithChildren =
 
 interface MyRouteChildren {
   MyTabsRoute: typeof MyTabsRouteWithChildren
+  MyFeedbackRoute: typeof MyFeedbackRoute
   MyGearRoute: typeof MyGearRouteWithChildren
   MyIndexRoute: typeof MyIndexRoute
 }
 
 const MyRouteChildren: MyRouteChildren = {
   MyTabsRoute: MyTabsRouteWithChildren,
+  MyFeedbackRoute: MyFeedbackRoute,
   MyGearRoute: MyGearRouteWithChildren,
   MyIndexRoute: MyIndexRoute,
 }

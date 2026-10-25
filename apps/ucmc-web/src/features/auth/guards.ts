@@ -204,6 +204,19 @@ export const SITE_FEEDBACK_PERMISSIONS = [
 ] as const;
 
 /**
+ * Who may open `/my/feedback`: anyone who can send feedback to either
+ * surface. Manage alone doesn't count — the page lists what the viewer
+ * sent, and a manager who can't submit has nothing there. Shared by the
+ * route guard and the user-menu link so the two can't disagree.
+ */
+export function canReachMyFeedback(granted: readonly string[]): boolean {
+  return (
+    granted.includes("site_feedback:submit") ||
+    granted.includes("club_feedback:submit")
+  );
+}
+
+/**
  * Require a signed-in, approved user who holds AT LEAST ONE of
  * `permissions`. Same redirect behaviour as `requirePermission`.
  *

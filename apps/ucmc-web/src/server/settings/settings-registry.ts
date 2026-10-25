@@ -796,6 +796,16 @@ export const SETTINGS = {
     createdAt: "2026-08-21",
     parent: "my_gear",
   }),
+  "pages.my_feedback": z.boolean().default(true).register(registry, {
+    label: "My Feedback enabled",
+    description:
+      "When off, the My feedback link is hidden and /my/feedback returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-25",
+    parent: "my",
+  }),
 
   // Submission gates for the two feedback surfaces. Each flag controls
   // ONLY whether new submissions are accepted — managers always retain

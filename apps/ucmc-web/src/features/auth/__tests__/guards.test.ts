@@ -14,6 +14,7 @@ import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
 import {
   CLUB_FEEDBACK_PERMISSIONS,
   SITE_FEEDBACK_PERMISSIONS,
+  canReachMyFeedback,
   effectivePermissionsFor,
   requireAnyPermission,
   requireAnyPermissionOrNotFound,
@@ -491,5 +492,22 @@ describe("effectivePermissionsFor and the anonymous floor", () => {
     await expect(effectivePermissionsFor(client, pending)).resolves.toEqual([
       "public_calendar:view",
     ]);
+  });
+});
+
+describe("canReachMyFeedback", () => {
+  it("is true for site_feedback:submit alone", () => {
+    expect(canReachMyFeedback(["site_feedback:submit"])).toBe(true);
+  });
+
+  it("is true for club_feedback:submit alone", () => {
+    expect(canReachMyFeedback(["club_feedback:submit"])).toBe(true);
+  });
+
+  it("is false for neither, even holding both manage permissions", () => {
+    expect(canReachMyFeedback([])).toBe(false);
+    expect(
+      canReachMyFeedback(["site_feedback:manage", "club_feedback:manage"]),
+    ).toBe(false);
   });
 });
