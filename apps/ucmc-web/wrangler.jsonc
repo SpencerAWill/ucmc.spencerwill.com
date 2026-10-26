@@ -141,6 +141,13 @@
       "id": "22222222-2222-2222-2222-222222222222",
     },
   ],
+  // Cloudflare Images binding: the Album's metadata-free full-size copy
+  // (`album-clean-copy.server.ts`). Not a resource, so Pulumi and sync-env
+  // have nothing to write for it. The copy MUST be WebP: through this
+  // binding JPEG output keeps GPS (spec "The JPEG trap",
+  // docs/superpowers/2026-10-25-album-originals/design.md). Local mode runs
+  // on sharp, ignores quality and doesn't apply EXIF orientation.
+  "images": { "binding": "IMAGES" },
   // Rate Limiting bindings live under `unsafe` in wrangler config even
   // though the runtime feature is GA — "unsafe" here refers to wrangler's
   // config-schema stability (the shape may change in a future release),
@@ -250,6 +257,8 @@
           "id": "33333333-3333-3333-3333-333333333333",
         },
       ],
+      // Bindings don't inherit: repeat it (see the top level).
+      "images": { "binding": "IMAGES" },
       "unsafe": {
         "bindings": [
           {
