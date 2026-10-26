@@ -638,6 +638,20 @@
       "when": 1792969797194,
       "tag": "0090_add_notice_manage_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "6",
+      "when": 1792982504987,
+      "tag": "0091_album_photo_originals",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "6",
+      "when": 1792982508784,
+      "tag": "0092_add_album_view_original_permission",
+      "breakpoints": true
     }
   ]
 }
