@@ -68,12 +68,15 @@ export function MeetingInfoEditor({
   }
 
   async function uploadImage() {
-    const dataUrl = await crop.getCroppedDataUrl();
-    if (!dataUrl) {
-      toast.error("Pick and crop an image first.");
-      return;
-    }
+    // The encode is inside the `try`: it throws an `ImageUploadError`
+    // (on iOS, because Safari can't encode WebP) whose message is meant
+    // for the member, and outside it the button just did nothing.
     try {
+      const dataUrl = await crop.getCroppedDataUrl();
+      if (!dataUrl) {
+        toast.error("Pick and crop an image first.");
+        return;
+      }
       await setImage.mutateAsync({ dataUrl });
       crop.reset();
       toast.success("Meeting image saved");

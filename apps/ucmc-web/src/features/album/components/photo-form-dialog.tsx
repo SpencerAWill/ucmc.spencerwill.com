@@ -112,16 +112,7 @@ export function PhotoFormDialog({
       return;
     }
 
-    // Only require a fresh crop on create. On edit, the existing
-    // image stays if the user didn't load a new one.
-    let imageDataUrl: string | null = null;
-    if (crop.hasCompletedCrop) {
-      imageDataUrl = await crop.getCroppedDataUrl();
-      if (!imageDataUrl) {
-        toast.error("Couldn't render the cropped image.");
-        return;
-      }
-    } else if (seed.mode === "create") {
+    if (!crop.hasCompletedCrop && seed.mode === "create") {
       toast.error("Pick a photo and complete the crop.");
       return;
     }
@@ -141,7 +132,20 @@ export function PhotoFormDialog({
       heightPx: ALBUM_OUTPUT_HEIGHT,
     };
 
+    // The encode is inside the `try` with the upload: it throws an
+    // `ImageUploadError` (on iOS, because Safari can't encode WebP), and
+    // `submit` runs as `void submit()`, so a throw outside this block was
+    // an unhandled rejection — Save did nothing and said nothing.
     try {
+      // Only a fresh crop is encoded. On edit, the existing image stays
+      // if the user didn't load a new one.
+      const imageDataUrl = crop.hasCompletedCrop
+        ? await crop.getCroppedDataUrl()
+        : null;
+      if (crop.hasCompletedCrop && !imageDataUrl) {
+        toast.error("Couldn't render the cropped image.");
+        return;
+      }
       if (seed.mode === "create") {
         if (!imageDataUrl) {
           toast.error("Pick a photo and complete the crop.");
