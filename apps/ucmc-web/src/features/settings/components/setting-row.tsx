@@ -176,15 +176,30 @@ export function SettingRow<TKey extends SettingKey>({
       {isEnum ? (
         // Laid out like a text row's value line so the picker gets the
         // width its labels need, but with no pencil: choosing an option is
-        // the commit, through the same `requestSave` (and `confirm` gate)
-        // as every other write. Renders the canonical value, never a draft.
+        // the commit, through the same saver (and `confirm` gate) as every
+        // other write.
         <div className="flex items-center gap-2">
           <Select
-            value={String(value)}
+            // Same optimism as the switch: the pick shows while it saves
+            // (a controlled Select on the canonical value snaps back to
+            // the old option for the round trip), except behind a
+            // `confirm` gate, which renders the canonical value until the
+            // dialog commits. A failed write puts the canonical one back.
+            value={String(draft)}
             disabled={saver.isPending}
-            onValueChange={(next) =>
-              void saver.requestSave(next as SettingValue<TKey>)
-            }
+            onValueChange={(raw) => {
+              const next = raw as SettingValue<TKey>;
+              if (meta.confirm) {
+                void saver.requestSave(next);
+                return;
+              }
+              setDraft(next);
+              void saver.persist(next).then((saved) => {
+                if (!saved) {
+                  setDraft(value);
+                }
+              });
+            }}
           >
             <SelectTrigger aria-label={meta.label} className="min-w-0 flex-1">
               <SelectValue />

@@ -262,6 +262,36 @@ describe("SettingRow (enum setting)", () => {
     expect(screen.getByRole("button", { name: "Edit history" })).toBeVisible();
   });
 
+  it("shows the new pick while it saves, not the old one", async () => {
+    // A controlled Select bound to the saved value snaps back to the old
+    // option for the whole round trip, which reads as the pick refused.
+    mutateAsync.mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    renderEnumRow("notice.tone", "warning");
+
+    await user.click(screen.getByRole("combobox", { name: "Tone" }));
+    await user.click(screen.getByRole("option", { name: "Danger" }));
+
+    expect(screen.getByRole("combobox", { name: "Tone" })).toHaveTextContent(
+      "Danger",
+    );
+  });
+
+  it("puts the saved value back when the write fails", async () => {
+    mutateAsync.mockResolvedValue({ ok: false, reason: "invalid_value" });
+    const user = userEvent.setup();
+    renderEnumRow("notice.tone", "warning");
+
+    await user.click(screen.getByRole("combobox", { name: "Tone" }));
+    await user.click(screen.getByRole("option", { name: "Danger" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Tone" })).toHaveTextContent(
+        "Warning",
+      ),
+    );
+  });
+
   it("labels options from the registry, not the raw value", async () => {
     const user = userEvent.setup();
     renderEnumRow("notice.audience", "members");

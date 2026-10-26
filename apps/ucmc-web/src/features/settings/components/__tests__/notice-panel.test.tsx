@@ -58,6 +58,16 @@ describe("NoticePanel", () => {
     expect(screen.getByText("Live")).toBeVisible();
   });
 
+  it("isn't Live while the text is blank, because the site shows no bar", () => {
+    renderPanel({
+      ...snapshot(true),
+      "notice.text": { value: "", updatedAtMs: null, updatedByName: null },
+    });
+
+    expect(screen.queryByText("Live")).toBeNull();
+    expect(screen.getByText("Preview (not live)")).toBeVisible();
+  });
+
   it("renders all four settings", () => {
     renderPanel(snapshot(false));
 

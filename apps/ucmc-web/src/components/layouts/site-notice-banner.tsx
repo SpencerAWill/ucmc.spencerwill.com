@@ -103,7 +103,10 @@ export function SiteNoticeBar({
 
   // Measures the first copy's natural width against the viewport. Re-run
   // when the text or the mode changes, because both swap the element the
-  // refs point at; the observer covers every width change in between.
+  // refs point at, and when reduced motion flips: the wrapped text it
+  // shows measures as never overflowing, so turning it off must re-ask
+  // rather than wait for a resize. The observer covers every width change
+  // in between.
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) {
@@ -118,7 +121,7 @@ export function SiteNoticeBar({
     const observer = new ResizeObserver(measure);
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [text, marquee]);
+  }, [text, marquee, reducedMotion]);
 
   return (
     <aside

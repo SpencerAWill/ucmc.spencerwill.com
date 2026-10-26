@@ -60,7 +60,9 @@ export function NoticePanel({
 
       <div className="space-y-2 rounded-lg border p-4">
         <p className="text-xs font-medium text-muted-foreground">
-          {enabled ? "Live" : "Preview (not live)"}
+          {/* Blank text is no bar on the site (`resolveSiteNotice`), so
+              "Live" needs both. */}
+          {enabled && text.length > 0 ? "Live" : "Preview (not live)"}
         </p>
         {text.length > 0 ? (
           // Not sticky here: it previews the bar, it isn't the bar.
@@ -80,42 +82,29 @@ export function NoticePanel({
       </div>
 
       <div className="space-y-3">
-        {entries === undefined ? (
-          NOTICE_KEYS.map((key) => (
-            <div
-              key={key}
-              className="h-20 animate-pulse rounded-lg border bg-muted/40"
-            />
-          ))
-        ) : (
-          <>
-            {entries["notice.enabled"] ? (
-              <SettingRow
-                settingKey="notice.enabled"
-                entry={entries["notice.enabled"]}
+        {entries === undefined
+          ? NOTICE_KEYS.map((key) => (
+              <div
+                key={key}
+                className="h-20 animate-pulse rounded-lg border bg-muted/40"
               />
-            ) : null}
-            {entries["notice.text"] ? (
-              <SettingRow
-                settingKey="notice.text"
-                entry={entries["notice.text"]}
-              />
-            ) : null}
-            {entries["notice.audience"] ? (
-              <SettingRow
-                settingKey="notice.audience"
-                entry={entries["notice.audience"]}
-              />
-            ) : null}
-            {entries["notice.tone"] ? (
-              <SettingRow
-                settingKey="notice.tone"
-                entry={entries["notice.tone"]}
-                renderOption={(value) => <ToneSwatch tone={value} />}
-              />
-            ) : null}
-          </>
-        )}
+            ))
+          : NOTICE_KEYS.map((key) => {
+              const entry = entries[key];
+              if (entry === undefined) {
+                return null;
+              }
+              return key === "notice.tone" ? (
+                <SettingRow
+                  key={key}
+                  settingKey={key}
+                  entry={entry}
+                  renderOption={(value) => <ToneSwatch tone={value} />}
+                />
+              ) : (
+                <SettingRow key={key} settingKey={key} entry={entry} />
+              );
+            })}
       </div>
     </section>
   );

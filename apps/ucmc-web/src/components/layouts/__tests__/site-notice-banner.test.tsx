@@ -46,15 +46,40 @@ function resize(next: Partial<typeof widths>) {
   });
 }
 
+const motionListeners = new Set<(event: MediaQueryListEvent) => void>();
+const motion = { reduce: false };
+
+/** Sets the preference; after mount, tells listeners as the browser would. */
 function setReducedMotion(reduce: boolean) {
+  motion.reduce = reduce;
+  act(() => {
+    for (const listener of motionListeners) {
+      listener({ matches: reduce } as MediaQueryListEvent);
+    }
+  });
+}
+
+function stubMatchMedia() {
   vi.spyOn(window, "matchMedia").mockImplementation(
     (query: string) =>
       ({
-        matches: reduce && query === "(prefers-reduced-motion: reduce)",
+        matches: motion.reduce && query === "(prefers-reduced-motion: reduce)",
         media: query,
         onchange: null,
-        addEventListener: () => {},
-        removeEventListener: () => {},
+        addEventListener: (
+          _type: string,
+          listener: (event: MediaQueryListEvent) => void,
+        ) => {
+          if (query === "(prefers-reduced-motion: reduce)") {
+            motionListeners.add(listener);
+          }
+        },
+        removeEventListener: (
+          _type: string,
+          listener: (event: MediaQueryListEvent) => void,
+        ) => {
+          motionListeners.delete(listener);
+        },
         addListener: () => {},
         removeListener: () => {},
         dispatchEvent: () => false,
@@ -73,10 +98,19 @@ beforeEach(() => {
   );
   vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(
     function (this: HTMLElement) {
-      return this.dataset.slot === "notice-text" ? widths.text : 0;
+      if (this.dataset.slot !== "notice-text") {
+        return 0;
+      }
+      // Wrapped text grows downwards, so it never measures wider than
+      // the viewport — as in a real layout.
+      return this.classList.contains("whitespace-normal")
+        ? Math.min(widths.text, widths.viewport)
+        : widths.text;
     },
   );
-  setReducedMotion(false);
+  motionListeners.clear();
+  motion.reduce = false;
+  stubMatchMedia();
 });
 
 afterEach(() => {
@@ -183,6 +217,20 @@ describe("SiteNoticeBar", () => {
     expect(copies()[0]).toHaveClass("whitespace-normal");
     expect(copies()[0]).not.toHaveClass("truncate");
     expect(screen.queryByRole("button")).toBeNull();
+  });
+});
+
+describe("SiteNoticeBar, reduced motion switched off", () => {
+  it("starts ticking without waiting for a resize", () => {
+    // Wrapped text never measures as overflowing, so nothing about the
+    // width changes when the preference flips — the bar has to re-ask.
+    setReducedMotion(true);
+    render(<SiteNoticeBar text={TEXT} tone="info" />);
+    resize({ viewport: 300, text: 552 });
+    expect(copies()).toHaveLength(1);
+
+    setReducedMotion(false);
+    expect(copies()).toHaveLength(2);
   });
 });
 
