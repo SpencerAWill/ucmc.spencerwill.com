@@ -18,7 +18,8 @@
     "src/server/member-profile/season-progress.ts",
     "src/server/log/redact.server.ts",
     "src/server/cron/screenshot-retention.ts",
-    "src/server/settings/site-notice.ts"
+    "src/server/settings/site-notice.ts",
+    "src/server/r2/exif-date.server.ts"
   ],
   "reporters": ["html", "clear-text", "progress"],
   "htmlReporter": {
