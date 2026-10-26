@@ -41,6 +41,7 @@ export default defineConfig({
       "src/server/cron/__tests__/screenshot-retention.test.ts",
       "src/server/settings/__tests__/site-notice.test.ts",
       "src/server/log/__tests__/redact.property.test.ts",
+      "src/server/r2/__tests__/exif-date.test.ts",
     ],
     globals: false,
   },

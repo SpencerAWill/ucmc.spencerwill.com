@@ -21,6 +21,11 @@ export interface WorkerEnv {
   // unguessability.
   BUCKET_PUBLIC: R2Bucket;
   KV: KVNamespace;
+  // Cloudflare Images — the Album's metadata-free WebP copy. Local mode
+  // (wrangler dev, the vitest pool) runs on sharp: it ignores `quality`
+  // and does NOT apply EXIF orientation, so a sideways-tagged photo comes
+  // out sideways there. Deployed and `--remote` are correct.
+  IMAGES: ImagesBinding;
   HEALTH_RATE_LIMITER: RateLimit;
   AUTH_RATE_LIMITER: RateLimit;
   UPLOAD_RATE_LIMITER: RateLimit;

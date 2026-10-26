@@ -42,7 +42,7 @@ Publishing is the choice here because forwarding is a devcontainer **client** fe
 
 **Never list a published port in `forwardPorts` as well.** VS Code finds the host port taken and silently remaps to a random one ([vscode-remote-release#3025](https://github.com/microsoft/vscode-remote-release/issues/3025)) — which presents as "port forwarding is broken" and sends you looking in the wrong place. Adding a new long-running server means adding it to `ports:`, and to `portsAttributes` only for its label.
 
-**An address is relative to where you are standing, and both sides are correct.** Mailpit is `http://localhost:8025` from a host browser and `http://mailpit:8025` from inside the container, where compose DNS resolves service names; neither is the "real" one. Anything running in the container — the worker's `MAILPIT_URL`, the Playwright fixtures — wants the service name. The same split is why CI sets `MAILPIT_URL=http://localhost:8025`: GitHub service containers publish to the runner's loopback and there is no compose network. See `testing-e2e.md`.
+**An address is relative to where you are standing, and both sides are correct.** Mailpit is `http://localhost:8025` from a host browser and `http://mailpit:8025` from inside the container, where compose DNS resolves service names; neither is the "real" one. Anything running in the container — the worker's `MAILPIT_URL`, the Playwright fixtures — wants the service name. CI's `e2e-desktop` uses the service name too, because it runs as a container job on a Docker network shared with its Mailpit service; a job on the bare runner would need `localhost:8025`, where services publish to loopback. See `testing-e2e.md`.
 
 ## Nothing visual runs in here — there is no X server
 

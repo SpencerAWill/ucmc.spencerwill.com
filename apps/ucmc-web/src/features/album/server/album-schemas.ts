@@ -37,9 +37,22 @@ const imageDataUrl = z
     message: "Expected a base64 data URL with image/webp MIME type",
   });
 
+/**
+ * The keys `uploadAlbumOriginalAction` returned. Never trusted: the
+ * action re-checks the shape, the photoId and the objects behind them.
+ * `fullKey` is null when clean-copy generation failed; self-repair
+ * fills it in later.
+ */
+const originalRef = z.object({
+  photoId: z.string().uuid(),
+  originalKey: z.string().max(200),
+  fullKey: z.string().max(200).nullable(),
+});
+
 export const createAlbumPhotoInputSchema = z.object({
   ...photoFields,
   imageDataUrl,
+  original: originalRef.optional(),
 });
 export type CreateAlbumPhotoInput = z.infer<typeof createAlbumPhotoInputSchema>;
 
@@ -52,6 +65,7 @@ export const updateAlbumPhotoInputSchema = z.object({
   publicId: z.string().min(1),
   ...photoFields,
   imageDataUrl: imageDataUrl.optional(),
+  original: originalRef.optional(),
 });
 export type UpdateAlbumPhotoInput = z.infer<typeof updateAlbumPhotoInputSchema>;
 

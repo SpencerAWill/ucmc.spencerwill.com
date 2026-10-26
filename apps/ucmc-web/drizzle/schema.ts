@@ -2198,6 +2198,16 @@ export const albumPhotos = sqliteTable(
     imageBytes: integer("image_bytes").notNull(),
     widthPx: integer("width_px").notNull(),
     heightPx: integer("height_px").notNull(),
+    // The member-only originals (private bucket). All null for photos
+    // uploaded before originals were kept; `fullKey` is also null until
+    // the clean WebP copy has been made.
+    originalKey: text("original_key"),
+    originalBytes: integer("original_bytes"),
+    originalContentType: text("original_content_type"),
+    fullKey: text("full_key"),
+    fullWidthPx: integer("full_width_px"),
+    fullHeightPx: integer("full_height_px"),
+    fullBytes: integer("full_bytes"),
     createdAt: timestamp("created_at")
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

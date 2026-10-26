@@ -159,10 +159,14 @@ export function SiteNoticeBar({
             }}
           >
             <span className="pr-12">
+              {/* `inline-block`, not inline: an inline box measures a
+                  `scrollWidth` of 0, which reads as fitting, switches the
+                  ticker off, measures as overflowing again, and loops
+                  until React gives up (error #185). */}
               <span
                 ref={textRef}
                 data-slot="notice-text"
-                className="whitespace-nowrap"
+                className="inline-block whitespace-nowrap"
               >
                 {text}
               </span>
