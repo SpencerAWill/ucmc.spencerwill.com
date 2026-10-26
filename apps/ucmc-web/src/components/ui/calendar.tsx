@@ -4,7 +4,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "lucide-react";
-import { DayPicker, getDefaultClassNames } from "react-day-picker";
+import { DateLib, DayPicker, getDefaultClassNames } from "react-day-picker";
 import type { DayButton } from "react-day-picker";
 
 import { cn } from "#/lib/utils";
@@ -17,6 +17,7 @@ function Calendar({
   captionLayout = "label",
   buttonVariant = "ghost",
   formatters,
+  labels,
   components,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
@@ -38,6 +39,22 @@ function Calendar({
         formatMonthDropdown: (date) =>
           date.toLocaleString("default", { month: "short" }),
         ...formatters,
+      }}
+      labels={{
+        // DayPicker's default names a day "September 27th, 2026" while
+        // the button shows "27". axe's label-content-name-mismatch
+        // (WCAG 2.5.3, Label in Name) matches whole words, so "27" is
+        // not found in "27th" and every two-digit day fails. A cardinal
+        // day number keeps the visible text inside the accessible name.
+        labelDayButton: (date, modifiers, options, dateLib) => {
+          const day = (dateLib ?? new DateLib(options)).format(
+            date,
+            "EEEE, MMMM d, y",
+          );
+          const label = modifiers.today ? `Today, ${day}` : day;
+          return modifiers.selected ? `${label}, selected` : label;
+        },
+        ...labels,
       }}
       classNames={{
         root: cn("w-fit", defaultClassNames.root),

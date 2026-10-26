@@ -70,6 +70,35 @@ describe("HeaderMasthead", () => {
     ).toBeInTheDocument();
   });
 
+  it("includes the visible tagline in the link's name", () => {
+    // At `lg` the tagline is visible text inside the link, so Label in
+    // Name requires it in the accessible name too — axe 4.14 flagged
+    // the title-only label on every page.
+    renderWith("Rock Club", "Est. 1971–2026");
+
+    expect(
+      screen.getByRole("link", { name: /^Rock Club, Est\. 1971–2026 — home$/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("separates the two strings in the link's visible text", () => {
+    // axe computes visible text from the DOM, and two adjacent spans
+    // read as one word ("ClubEst.") that no label can contain.
+    renderWith("Rock Club", "Est. 1971–2026");
+
+    expect(screen.getByRole("link").textContent).toBe(
+      "Rock Club Est. 1971–2026",
+    );
+  });
+
+  it("names the link with the tagline alone when the title is blank", () => {
+    renderWith("", "Est. 1971–2026");
+
+    expect(
+      screen.getByRole("link", { name: /^Est\. 1971–2026 — home$/ }),
+    ).toBeInTheDocument();
+  });
+
   it("keeps the link named when the title is blank", () => {
     // At narrow widths the title is display:none and the image is
     // alt="", so without the fallback the link would have no name at
