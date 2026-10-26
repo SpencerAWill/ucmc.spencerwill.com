@@ -153,7 +153,7 @@ export function UserMenu() {
               <DropdownMenuItem asChild>
                 <Link to="/my/feedback">
                   <MessageSquare className="mr-2 size-4" />
-                  My feedback
+                  My Feedback
                 </Link>
               </DropdownMenuItem>
             ) : null}
@@ -165,7 +165,7 @@ export function UserMenu() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => launcher.open()}>
                   <MessageSquarePlus className="mr-2 size-4" />
-                  Send feedback…
+                  Send Feedback
                 </DropdownMenuItem>
               </>
             ) : null}

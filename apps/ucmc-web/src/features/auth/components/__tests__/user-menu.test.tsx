@@ -1,6 +1,6 @@
 /**
  * The account menu's two feedback entries, each on its own gate: "My
- * feedback" (a link) sits with the other "My" pages, and "Send feedback…"
+ * Feedback" (a link) sits with the other "My" pages, and "Send Feedback"
  * (opens the dialog) is a section of its own above Sign out.
  */
 import { render, screen } from "@testing-library/react";
@@ -83,68 +83,68 @@ describe("UserMenu feedback entries", () => {
     launcher.open.mockReset();
   });
 
-  it("shows My feedback when pages.my_feedback is on and the member holds site_feedback:submit", async () => {
+  it("shows My Feedback when pages.my_feedback is on and the member holds site_feedback:submit", async () => {
     setup(["site_feedback:submit"]);
     await openMenu();
     expect(
-      screen.getByRole("menuitem", { name: "My feedback" }),
+      screen.getByRole("menuitem", { name: "My Feedback" }),
     ).toHaveAttribute("href", "/my/feedback");
   });
 
-  it("shows My feedback for club_feedback:submit alone", async () => {
+  it("shows My Feedback for club_feedback:submit alone", async () => {
     setup(["club_feedback:submit"]);
     await openMenu();
     expect(
-      screen.getByRole("menuitem", { name: "My feedback" }),
+      screen.getByRole("menuitem", { name: "My Feedback" }),
     ).toBeInTheDocument();
   });
 
-  it("hides My feedback when pages.my_feedback is off", async () => {
+  it("hides My Feedback when pages.my_feedback is off", async () => {
     setup(["site_feedback:submit"], { my_feedback: false });
     await openMenu();
     expect(
-      screen.queryByRole("menuitem", { name: "My feedback" }),
+      screen.queryByRole("menuitem", { name: "My Feedback" }),
     ).not.toBeInTheDocument();
   });
 
-  it("hides My feedback when the member holds neither submit permission", async () => {
+  it("hides My Feedback when the member holds neither submit permission", async () => {
     setup(["site_feedback:manage"]);
     await openMenu();
     expect(
-      screen.queryByRole("menuitem", { name: "My feedback" }),
+      screen.queryByRole("menuitem", { name: "My Feedback" }),
     ).not.toBeInTheDocument();
   });
 
-  it("Send feedback… renders when canSend and opens the launcher", async () => {
+  it("Send Feedback renders when canSend and opens the launcher", async () => {
     launcher.canSend = true;
     setup(["site_feedback:submit"]);
     await openMenu();
     await userEvent.click(
-      screen.getByRole("menuitem", { name: "Send feedback…" }),
+      screen.getByRole("menuitem", { name: "Send Feedback" }),
     );
     expect(launcher.open).toHaveBeenCalledTimes(1);
   });
 
-  it("shows only My feedback when canSend is false", async () => {
+  it("shows only My Feedback when canSend is false", async () => {
     setup(["site_feedback:submit"]);
     await openMenu();
     expect(
-      screen.queryByRole("menuitem", { name: "Send feedback…" }),
+      screen.queryByRole("menuitem", { name: "Send Feedback" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("menuitem", { name: "My feedback" }),
+      screen.getByRole("menuitem", { name: "My Feedback" }),
     ).toBeInTheDocument();
   });
 
-  it("shows only Send feedback… when My feedback is off", async () => {
+  it("shows only Send Feedback when My Feedback is off", async () => {
     launcher.canSend = true;
     setup(["site_feedback:submit"], { my_feedback: false });
     await openMenu();
     expect(
-      screen.getByRole("menuitem", { name: "Send feedback…" }),
+      screen.getByRole("menuitem", { name: "Send Feedback" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("menuitem", { name: "My feedback" }),
+      screen.queryByRole("menuitem", { name: "My Feedback" }),
     ).not.toBeInTheDocument();
   });
 
@@ -157,7 +157,7 @@ describe("UserMenu feedback entries", () => {
     expect(screen.getAllByRole("separator")).toHaveLength(2);
   });
 
-  it("My feedback follows the My pages; Send feedback… is its own section before Sign out", async () => {
+  it("My Feedback follows the My pages; Send Feedback is its own section before Sign out", async () => {
     launcher.canSend = true;
     setup(["site_feedback:submit"], { my_feedback: true, my_gear_cart: true });
     await openMenu();
@@ -167,11 +167,11 @@ describe("UserMenu feedback entries", () => {
     ).map((el) =>
       el.getAttribute("role") === "separator" ? "---" : el.textContent,
     );
-    const mine = sequence.indexOf("My feedback");
+    const mine = sequence.indexOf("My Feedback");
     expect(sequence[mine - 1]).toBe("My Cart");
     expect(sequence.slice(mine + 1)).toEqual([
       "---",
-      "Send feedback…",
+      "Send Feedback",
       "---",
       "Sign out",
     ]);
