@@ -13,7 +13,9 @@ import {
   updateAlbumPhotoInputSchema,
 } from "#/features/album/server/album-schemas";
 
-export type { AlbumPhotoSummary };
+import type { UploadAlbumOriginalResult } from "#/features/album/server/album-original-actions.server";
+
+export type { AlbumPhotoSummary, UploadAlbumOriginalResult };
 
 // ── reads (gated at the route layer by public_album:view) ────────────
 
@@ -57,4 +59,19 @@ export const deleteAlbumPhotoFn = createServerFn({ method: "POST" })
     const { deleteAlbumPhotoAction } =
       await import("#/features/album/server/album-actions.server");
     return deleteAlbumPhotoAction(data);
+  });
+
+// The upload is a FormData POST so the raw file travels as a binary body.
+// Being a serverFn, it passes through createCsrfMiddleware.
+export const uploadAlbumOriginalFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => {
+    if (!(data instanceof FormData)) {
+      throw new Error("Expected FormData");
+    }
+    return data;
+  })
+  .handler(async ({ data }): Promise<UploadAlbumOriginalResult> => {
+    const { uploadAlbumOriginalAction } =
+      await import("#/features/album/server/album-original-actions.server");
+    return uploadAlbumOriginalAction(data);
   });

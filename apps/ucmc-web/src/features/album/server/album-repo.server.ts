@@ -25,6 +25,10 @@ export async function listAlbumPhotos() {
         imageBytes: schema.albumPhotos.imageBytes,
         widthPx: schema.albumPhotos.widthPx,
         heightPx: schema.albumPhotos.heightPx,
+        originalKey: schema.albumPhotos.originalKey,
+        originalBytes: schema.albumPhotos.originalBytes,
+        fullWidthPx: schema.albumPhotos.fullWidthPx,
+        fullHeightPx: schema.albumPhotos.fullHeightPx,
         createdAt: schema.albumPhotos.createdAt,
       })
       .from(schema.albumPhotos)

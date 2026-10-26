@@ -95,6 +95,7 @@ import { Route as MyTabsSecurityRouteImport } from './routes/my._tabs.security'
 import { Route as MyTabsWaiverRouteImport } from './routes/my._tabs.waiver'
 import { Route as MyGearIndexRouteImport } from './routes/my.gear.index'
 import { Route as MyGearCartRouteImport } from './routes/my.gear.cart'
+import { Route as ApiAlbumFullPublicIdFileRouteImport } from './routes/api/album-full.$publicId.$file'
 import { Route as ApiSiteFeedbackIdScreenshotRouteImport } from './routes/api/site-feedback.$id.screenshot'
 import { Route as FeedbackSiteTriageIndexRouteImport } from './routes/feedback.site.triage.index'
 import { Route as FeedbackSiteTriageIssuesIssueIdRouteImport } from './routes/feedback.site.triage.issues.$issueId'
@@ -527,6 +528,12 @@ const MyGearCartRoute = MyGearCartRouteImport.update({
   path: '/cart',
   getParentRoute: () => MyGearRoute,
 } as any)
+const ApiAlbumFullPublicIdFileRoute =
+  ApiAlbumFullPublicIdFileRouteImport.update({
+    id: '/api/album-full/$publicId/$file',
+    path: '/api/album-full/$publicId/$file',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiSiteFeedbackIdScreenshotRoute =
   ApiSiteFeedbackIdScreenshotRouteImport.update({
     id: '/api/site-feedback/$id/screenshot',
@@ -630,6 +637,7 @@ export interface FileRoutesByFullPath {
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/': typeof MembersTabsIndexRoute
   '/my/gear/': typeof MyGearIndexRoute
+  '/api/album-full/$publicId/$file': typeof ApiAlbumFullPublicIdFileRoute
   '/api/site-feedback/$id/screenshot': typeof ApiSiteFeedbackIdScreenshotRoute
   '/feedback/site/triage/': typeof FeedbackSiteTriageIndexRoute
   '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
@@ -710,6 +718,7 @@ export interface FileRoutesByTo {
   '/feedback/site': typeof FeedbackSiteIndexRoute
   '/gear/loans': typeof GearLoansIndexRoute
   '/my/gear': typeof MyGearIndexRoute
+  '/api/album-full/$publicId/$file': typeof ApiAlbumFullPublicIdFileRoute
   '/api/site-feedback/$id/screenshot': typeof ApiSiteFeedbackIdScreenshotRoute
   '/feedback/site/triage': typeof FeedbackSiteTriageIndexRoute
   '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
@@ -802,6 +811,7 @@ export interface FileRoutesById {
   '/gear/loans/': typeof GearLoansIndexRoute
   '/members/_tabs/': typeof MembersTabsIndexRoute
   '/my/gear/': typeof MyGearIndexRoute
+  '/api/album-full/$publicId/$file': typeof ApiAlbumFullPublicIdFileRoute
   '/api/site-feedback/$id/screenshot': typeof ApiSiteFeedbackIdScreenshotRoute
   '/feedback/site/triage/': typeof FeedbackSiteTriageIndexRoute
   '/feedback/site/triage/issues/$issueId': typeof FeedbackSiteTriageIssuesIssueIdRoute
@@ -893,6 +903,7 @@ export interface FileRouteTypes {
     | '/gear/loans/'
     | '/members/'
     | '/my/gear/'
+    | '/api/album-full/$publicId/$file'
     | '/api/site-feedback/$id/screenshot'
     | '/feedback/site/triage/'
     | '/feedback/site/triage/issues/$issueId'
@@ -973,6 +984,7 @@ export interface FileRouteTypes {
     | '/feedback/site'
     | '/gear/loans'
     | '/my/gear'
+    | '/api/album-full/$publicId/$file'
     | '/api/site-feedback/$id/screenshot'
     | '/feedback/site/triage'
     | '/feedback/site/triage/issues/$issueId'
@@ -1064,6 +1076,7 @@ export interface FileRouteTypes {
     | '/gear/loans/'
     | '/members/_tabs/'
     | '/my/gear/'
+    | '/api/album-full/$publicId/$file'
     | '/api/site-feedback/$id/screenshot'
     | '/feedback/site/triage/'
     | '/feedback/site/triage/issues/$issueId'
@@ -1117,6 +1130,7 @@ export interface RootRouteChildren {
   ApiGearThumbnailsSplatRoute: typeof ApiGearThumbnailsSplatRoute
   ApiLandingSplatRoute: typeof ApiLandingSplatRoute
   ApiSponsorLogoSplatRoute: typeof ApiSponsorLogoSplatRoute
+  ApiAlbumFullPublicIdFileRoute: typeof ApiAlbumFullPublicIdFileRoute
   ApiSiteFeedbackIdScreenshotRoute: typeof ApiSiteFeedbackIdScreenshotRoute
 }
 
@@ -1724,6 +1738,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyGearCartRouteImport
       parentRoute: typeof MyGearRoute
     }
+    '/api/album-full/$publicId/$file': {
+      id: '/api/album-full/$publicId/$file'
+      path: '/api/album-full/$publicId/$file'
+      fullPath: '/api/album-full/$publicId/$file'
+      preLoaderRoute: typeof ApiAlbumFullPublicIdFileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/site-feedback/$id/screenshot': {
       id: '/api/site-feedback/$id/screenshot'
       path: '/api/site-feedback/$id/screenshot'
@@ -1980,6 +2001,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGearThumbnailsSplatRoute: ApiGearThumbnailsSplatRoute,
   ApiLandingSplatRoute: ApiLandingSplatRoute,
   ApiSponsorLogoSplatRoute: ApiSponsorLogoSplatRoute,
+  ApiAlbumFullPublicIdFileRoute: ApiAlbumFullPublicIdFileRoute,
   ApiSiteFeedbackIdScreenshotRoute: ApiSiteFeedbackIdScreenshotRoute,
 }
 export const routeTree = rootRouteImport

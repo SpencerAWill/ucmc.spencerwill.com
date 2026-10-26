@@ -1,10 +1,19 @@
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useEffect } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Loader2,
+  Maximize2,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
+import { toast } from "sonner";
 
 import { Button } from "#/components/ui/button";
-import { albumImageUrl } from "#/features/album/lib/image-url";
+import { albumFullUrl, albumImageUrl } from "#/features/album/lib/image-url";
 import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
+import { useAuth } from "#/features/auth/api/use-auth";
 import { cn } from "#/lib/utils";
 
 /**
@@ -25,6 +34,11 @@ import { cn } from "#/lib/utils";
  *     list (the same list the grid renders, so prev/next traverse
  *     the current filter rather than the full archive).
  *   - Esc closes (Radix native).
+ *
+ * Members who hold `public_album:view_original` also get "Show
+ * original" and "Download" for photos that have a full-size copy. The
+ * gate is `hasPermission` (never the payload alone) so role emulation
+ * hides the controls.
  *
  * Open state is fully controlled by the parent: pass the active
  * photo's `publicId` and the `photos` array. `null` closes. The
@@ -48,6 +62,52 @@ export function PhotoLightbox({
     : -1;
   const active = activeIndex >= 0 ? photos[activeIndex] : null;
   const isOpen = active !== null;
+
+  const { hasPermission } = useAuth();
+  // Keyed by photo, so moving to another photo falls back to the crop
+  // without an effect. `loaded` flips when the preload finishes.
+  const [original, setOriginal] = useState<{
+    publicId: string;
+    loaded: boolean;
+  } | null>(null);
+  // Reset when the active photo changes (including close, where it goes
+  // null), so returning to a photo never finds the toggle still on.
+  const [prevActiveId, setPrevActiveId] = useState(activePublicId);
+  if (prevActiveId !== activePublicId) {
+    setPrevActiveId(activePublicId);
+    setOriginal(null);
+  }
+  const fullHash = active?.fullHash ?? null;
+  const canViewOriginal =
+    hasPermission("public_album:view_original") && fullHash !== null;
+  const showOriginal =
+    canViewOriginal && original?.publicId === active?.publicId;
+  const originalLoaded = showOriginal && original?.loaded === true;
+
+  // Preload while the toggle is on, so the crop stays up until the full
+  // image can replace it. A failure (404, or a copy still awaiting
+  // self-repair) drops back to the crop with the toggle off and says so
+  // in a toast, so the click isn't silently undone. The cleanup
+  // detaches the handlers so a late load can't swap in a photo the
+  // viewer has already navigated away from.
+  const activeId = active?.publicId ?? null;
+  const preloading = showOriginal && !originalLoaded;
+  useEffect(() => {
+    if (!preloading || activeId === null) {
+      return;
+    }
+    const img = new Image();
+    img.onload = () => setOriginal({ publicId: activeId, loaded: true });
+    img.onerror = () => {
+      setOriginal(null);
+      toast.error("Couldn't load the full-size photo.");
+    };
+    img.src = albumFullUrl(activeId, fullHash);
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [preloading, activeId, fullHash]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -101,17 +161,58 @@ export function PhotoLightbox({
             <span>
               {activeIndex + 1} / {photos.length}
             </span>
-            <DialogPrimitive.Close asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-white hover:bg-white/10 hover:text-white"
-                aria-label="Close"
-              >
-                <X className="size-5" />
-              </Button>
-            </DialogPrimitive.Close>
+            <div className="flex items-center gap-1">
+              {active && canViewOriginal ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    // The label stays put and `aria-pressed` carries the
+                    // state; pressed reads as a filled button, as the gear
+                    // viewfinder's toggles do.
+                    className="text-white hover:bg-white/10 hover:text-white aria-pressed:bg-white aria-pressed:text-black aria-pressed:hover:bg-white/90 aria-pressed:hover:text-black"
+                    aria-pressed={showOriginal}
+                    onClick={() =>
+                      setOriginal(
+                        showOriginal
+                          ? null
+                          : { publicId: active.publicId, loaded: false },
+                      )
+                    }
+                  >
+                    <Maximize2 className="size-5" />
+                    Show original
+                  </Button>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="text-white hover:bg-white/10 hover:text-white"
+                  >
+                    <a
+                      href={albumFullUrl(active.publicId, fullHash, {
+                        download: true,
+                      })}
+                    >
+                      <Download className="size-5" />
+                      Download
+                    </a>
+                  </Button>
+                </>
+              ) : null}
+              <DialogPrimitive.Close asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:bg-white/10 hover:text-white"
+                  aria-label="Close"
+                >
+                  <X className="size-5" />
+                </Button>
+              </DialogPrimitive.Close>
+            </div>
           </div>
 
           {/*
@@ -121,13 +222,30 @@ export function PhotoLightbox({
             viewport. `min-w-0` does the same job horizontally.
           */}
           <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center">
-            {active ? (
+            {active && !originalLoaded ? (
               <img
                 key={active.publicId}
                 src={albumImageUrl(active.imageKey)}
                 alt={active.altText}
                 className="max-h-full max-w-full object-contain"
               />
+            ) : null}
+            {active && originalLoaded ? (
+              <img
+                key={`${active.publicId}-full`}
+                src={albumFullUrl(active.publicId, fullHash)}
+                alt={active.altText}
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : null}
+            {preloading ? (
+              <div
+                role="status"
+                className="absolute right-2 top-2 rounded-full bg-black/50 p-2 text-white"
+              >
+                <Loader2 className="size-5 animate-spin" aria-hidden />
+                <span className="sr-only">Loading full-size photo</span>
+              </div>
             ) : null}
 
             {activeIndex > 0 ? (

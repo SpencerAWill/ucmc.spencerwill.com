@@ -20,7 +20,7 @@ const stubEnv: { VITE_R2_PUBLIC_HOST: string | undefined } = {
 };
 vi.mock("#/config/env", () => ({ env: stubEnv }));
 
-const { albumImageUrl, ALBUM_R2_PREFIX } =
+const { albumFullUrl, albumImageUrl, ALBUM_R2_PREFIX } =
   await import("#/features/album/lib/image-url");
 const { albumImageKey } = await import("#/server/r2/album-images.server");
 
@@ -68,5 +68,20 @@ describe("album photo R2 keys", () => {
     } finally {
       stubEnv.VITE_R2_PUBLIC_HOST = undefined;
     }
+  });
+});
+
+describe("albumFullUrl", () => {
+  it("builds the members-only route path", () => {
+    expect(albumFullUrl(ID, HASH)).toBe(`/api/album-full/${ID}/${HASH}.webp`);
+  });
+
+  it("adds ?download=1 only when asked", () => {
+    expect(albumFullUrl(ID, HASH, { download: true })).toBe(
+      `/api/album-full/${ID}/${HASH}.webp?download=1`,
+    );
+    expect(albumFullUrl(ID, HASH, { download: false })).toBe(
+      `/api/album-full/${ID}/${HASH}.webp`,
+    );
   });
 });
