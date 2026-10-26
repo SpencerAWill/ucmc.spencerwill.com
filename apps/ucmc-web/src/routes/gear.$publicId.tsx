@@ -80,6 +80,7 @@ function GearDetailPage() {
           <div className="flex items-center gap-2">
             {data.code ? (
               <Button
+                aria-haspopup="dialog"
                 variant="outline"
                 size="sm"
                 onClick={() => setLabelsOpen(true)}
@@ -89,6 +90,7 @@ function GearDetailPage() {
               </Button>
             ) : null}
             <Button
+              aria-haspopup="dialog"
               variant="outline"
               size="sm"
               onClick={() => setEditOpen(true)}

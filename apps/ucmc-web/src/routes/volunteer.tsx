@@ -160,6 +160,7 @@ function VolunteerPage() {
         {canManage ? (
           <div className="flex justify-end">
             <Button
+              aria-haspopup="dialog"
               variant="outline"
               size="sm"
               onClick={() => setEditNarrativeOpen(true)}

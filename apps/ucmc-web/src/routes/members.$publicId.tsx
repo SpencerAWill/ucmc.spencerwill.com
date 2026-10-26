@@ -440,6 +440,7 @@ function MemberManageActions({
     <>
       {member.status === "approved" ? (
         <Button
+          aria-haspopup="dialog"
           variant="outline"
           size="sm"
           className="text-destructive hover:bg-destructive/10"
@@ -489,6 +490,7 @@ function MemberManageActions({
       ) : null}
 
       <Button
+        aria-haspopup="dialog"
         variant="outline"
         size="sm"
         onClick={() => setConfirmAction("profileEdit")}
@@ -573,6 +575,7 @@ function RevokeSessionsButton({
   return (
     <>
       <Button
+        aria-haspopup="dialog"
         variant="outline"
         size="sm"
         className="text-destructive hover:bg-destructive/10"
@@ -631,7 +634,12 @@ function RoleAssignButton({ member }: { member: MemberDetail }) {
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button
+        aria-haspopup="dialog"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+      >
         <Shield className="mr-1 size-3.5" />
         Manage Roles
       </Button>

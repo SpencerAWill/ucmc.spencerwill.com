@@ -304,6 +304,7 @@ function CheckinNotesButton({
   return (
     <>
       <Button
+        aria-haspopup="dialog"
         variant="ghost"
         size="icon"
         onClick={() => setOpen(true)}

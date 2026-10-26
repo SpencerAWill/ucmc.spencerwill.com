@@ -57,6 +57,7 @@ function ScholarshipsPage() {
         {canManage ? (
           <div className="flex justify-end">
             <Button
+              aria-haspopup="dialog"
               variant="outline"
               size="sm"
               onClick={() => setEditOpen(true)}

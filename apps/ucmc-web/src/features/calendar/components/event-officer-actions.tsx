@@ -158,6 +158,7 @@ export function EventOfficerActions({
         </Button>
 
         <Button
+          aria-haspopup="dialog"
           variant="ghost"
           size="sm"
           className="w-full justify-start text-destructive hover:text-destructive"

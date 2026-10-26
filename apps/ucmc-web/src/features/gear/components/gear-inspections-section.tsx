@@ -31,7 +31,12 @@ export function GearInspectionsSection({
           Inspection log
         </CardTitle>
         {canInspect ? (
-          <Button size="sm" variant="outline" onClick={() => setLogOpen(true)}>
+          <Button
+            aria-haspopup="dialog"
+            size="sm"
+            variant="outline"
+            onClick={() => setLogOpen(true)}
+          >
             <Plus className="size-4" />
             Log inspection
           </Button>

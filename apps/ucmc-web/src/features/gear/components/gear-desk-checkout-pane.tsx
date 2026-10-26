@@ -729,6 +729,7 @@ export function GearDeskCheckoutPane({ onSuccess }: { onSuccess: () => void }) {
             The override is recorded against your name in the audit log.
           </p>
           <Button
+            aria-haspopup="dialog"
             variant="outline"
             size="sm"
             onClick={() => setOverrideOpen(true)}

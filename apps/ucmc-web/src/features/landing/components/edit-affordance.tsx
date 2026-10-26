@@ -61,6 +61,7 @@ export function EditAffordance({
   return (
     <>
       <Button
+        aria-haspopup="dialog"
         type="button"
         variant="secondary"
         size="sm"

@@ -395,6 +395,7 @@ function GearIndexPage() {
             <div className="hidden flex-wrap items-center gap-2 sm:flex">
               {manageActions.map((action) => (
                 <Button
+                  aria-haspopup="dialog"
                   key={action.label}
                   variant="outline"
                   size="sm"
@@ -416,6 +417,7 @@ function GearIndexPage() {
               <DropdownMenuContent align="end">
                 {manageActions.map((action) => (
                   <DropdownMenuItem
+                    aria-haspopup="dialog"
                     key={action.label}
                     onSelect={() => action.open(openers)}
                   >
@@ -434,6 +436,7 @@ function GearIndexPage() {
             {canManage ? (
               <ButtonGroup>
                 <Button
+                  aria-haspopup="dialog"
                   size="sm"
                   onClick={() => {
                     setFormIntent({ mode: "create" });
@@ -451,7 +454,10 @@ function GearIndexPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                    <DropdownMenuItem
+                      aria-haspopup="dialog"
+                      onSelect={() => setImportOpen(true)}
+                    >
                       <Upload className="size-4" />
                       Bulk import…
                     </DropdownMenuItem>

@@ -92,7 +92,7 @@ export function MyCartList() {
           <Trash2 className="size-4" />
           Clear cart
         </Button>
-        <Button onClick={() => setQrOpen(true)}>
+        <Button aria-haspopup="dialog" onClick={() => setQrOpen(true)}>
           <QrCode className="size-4" />
           Show QR at gear desk
         </Button>

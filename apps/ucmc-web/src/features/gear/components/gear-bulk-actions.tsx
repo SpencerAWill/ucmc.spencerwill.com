@@ -162,11 +162,17 @@ export function useGearBulkActions({
 
   const items = (
     <>
-      <DropdownMenuItem onSelect={() => setLabelsOpen(true)}>
+      <DropdownMenuItem
+        aria-haspopup="dialog"
+        onSelect={() => setLabelsOpen(true)}
+      >
         <Printer className="size-4" />
         Print labels…
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => setTagsOpen(true)}>
+      <DropdownMenuItem
+        aria-haspopup="dialog"
+        onSelect={() => setTagsOpen(true)}
+      >
         <Tag className="size-4" />
         Add tags…
       </DropdownMenuItem>
@@ -185,6 +191,7 @@ export function useGearBulkActions({
       </DropdownMenuSub>
       {statusFilter === "active" ? (
         <DropdownMenuItem
+          aria-haspopup="dialog"
           variant="destructive"
           onSelect={() => setRetireOpen(true)}
         >
