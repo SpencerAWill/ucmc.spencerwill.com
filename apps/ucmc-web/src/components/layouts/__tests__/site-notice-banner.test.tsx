@@ -101,6 +101,16 @@ beforeEach(() => {
       if (this.dataset.slot !== "notice-text") {
         return 0;
       }
+      // An inline box has no scrolling area, so it measures 0 in WebKit
+      // and Chromium alike. The ticker's copy once was one: it measured
+      // as fitting, which switched the ticker off, which measured as
+      // overflowing again — React error #185 on every phone.
+      if (
+        !this.classList.contains("block") &&
+        !this.classList.contains("inline-block")
+      ) {
+        return 0;
+      }
       // Wrapped text grows downwards, so it never measures wider than
       // the viewport — as in a real layout.
       return this.classList.contains("whitespace-normal")
