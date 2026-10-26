@@ -43,6 +43,15 @@ replace-on-change, so the refreshed `null` against the program's `"enam"` is a
 replace is the provider's own plan, not an input diff); removing the property
 from the program does, leaving an in-place update with no input changes.
 
+**That in-place update then failed the dev deploy** (run 40367460851):
+6.22.1's D1 update is a full PUT, and with `readReplication` undeclared it
+sends `read_replication: null`, which Cloudflare rejects —
+`400 … Invalid property: read_replication => Expected object, received null`.
+`preview` can't catch this; only `up` makes the call. The program now declares
+`readReplication: { mode: "disabled" }`, which is what both databases already
+had (`wrangler d1 info <uuid> --json`). With it declared, `preview` plans no
+D1 step at all on either stack, so `up` never makes the PUT.
+
 So a `@pulumi/cloudflare` bump is still **not** a routine dependency update here:
 
 - Raise it in its own PR, never inside a Dependabot group bump.
