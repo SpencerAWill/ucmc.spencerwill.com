@@ -7,11 +7,15 @@
  * `fullKey: null` and self-repair fills the copy in later. See "Upload
  * flow" in docs/superpowers/2026-10-25-album-originals/design.md.
  */
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { renderCleanWebp } from "#/features/album/server/album-clean-copy.server";
-import { requireAlbumManager } from "#/features/album/server/album-permissions.server";
+import { getAlbumPhotoByPublicId } from "#/features/album/server/album-repo.server";
+import {
+  canViewAlbumOriginal,
+  requireAlbumManager,
+} from "#/features/album/server/album-permissions.server";
 import {
   UPLOAD_NO_FILE,
   UPLOAD_NOT_AN_IMAGE,
@@ -20,12 +24,15 @@ import {
   UPLOAD_STORE_FAILED,
   uploadTooLargeMessage,
 } from "#/features/album/lib/upload-messages";
+import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { MAX_SOURCE_BYTES } from "#/lib/image-upload";
 import { getDb, schema } from "#/server/db";
 import { errorMessage, log } from "#/server/log/log.server";
 import {
   albumFullKey,
   albumOriginalKey,
+  getAlbumPrivate,
+  parseAlbumOriginalKey,
   putAlbumFull,
   putAlbumOriginal,
 } from "#/server/r2/album-originals.server";
@@ -157,4 +164,105 @@ export async function uploadAlbumOriginalAction(
     fullWidthPx,
     fullHeightPx,
   };
+}
+
+const FULL_FILE_RE = /^[0-9a-f]{16}\.webp$/;
+
+/**
+ * Builds the missing clean copy from the stored original and records it.
+ * The UPDATE is guarded on `full_key IS NULL`, so of two racing viewers
+ * only the first changes the row. The loser wrote the same bytes to the
+ * same key (the key is derived from the original's hash), so it serves
+ * its own copy and nothing is clobbered. Returns the key, or `null` when
+ * the original is gone or cannot be rendered.
+ */
+async function repairFullCopy(
+  photoId: string,
+  originalKey: string,
+  hash: string,
+): Promise<string | null> {
+  try {
+    const original = await getAlbumPrivate(originalKey);
+    if (!original) {
+      log.warn("album.full_repair_original_missing", { photoId, originalKey });
+      return null;
+    }
+    const clean = await renderCleanWebp(await original.arrayBuffer());
+    const fullKey = albumFullKey(photoId, hash);
+    await putAlbumFull(fullKey, clean.bytes, clean);
+    const db = getDb();
+    const updated = await db
+      .update(schema.albumPhotos)
+      .set({
+        fullKey,
+        fullWidthPx: clean.widthPx,
+        fullHeightPx: clean.heightPx,
+        fullBytes: clean.bytes.byteLength,
+      })
+      .where(
+        and(
+          eq(schema.albumPhotos.id, photoId),
+          eq(schema.albumPhotos.originalKey, originalKey),
+          isNull(schema.albumPhotos.fullKey),
+        ),
+      )
+      .returning({ id: schema.albumPhotos.id });
+    if (updated.length > 0) {
+      return fullKey;
+    }
+    // Lost the race, or the image was replaced while rendering. The copy
+    // is only good to serve while it still matches the current original.
+    const current = await db
+      .select({ originalKey: schema.albumPhotos.originalKey })
+      .from(schema.albumPhotos)
+      .where(eq(schema.albumPhotos.id, photoId))
+      .get();
+    return current?.originalKey === originalKey ? fullKey : null;
+  } catch (err) {
+    log.error("album.full_repair_failed", {
+      photoId,
+      error: errorMessage(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * The full-size clean copy for members. `null` is every refusal alike
+ * (signed out, no permission, unknown or legacy photo, stale `file`,
+ * failed self-repair, missing object): the route turns them into one
+ * identical 404.
+ */
+export async function getAlbumFullImageAction(
+  publicId: string,
+  file: string,
+): Promise<{ body: ReadableStream; bytes: number; publicId: string } | null> {
+  if (!FULL_FILE_RE.test(file)) {
+    return null;
+  }
+  const principal = await loadCurrentPrincipal();
+  if (!principal || !canViewAlbumOriginal(principal)) {
+    return null;
+  }
+  const row = await getAlbumPhotoByPublicId(publicId);
+  if (!row?.originalKey) {
+    return null;
+  }
+  const hash = parseAlbumOriginalKey(row.originalKey)?.hash;
+  if (!hash || file !== `${hash}.webp`) {
+    return null;
+  }
+  // Only a key derived from the current original's hash is trusted; any
+  // other value is stale and treated as missing.
+  const fullKey =
+    row.fullKey === albumFullKey(row.id, hash)
+      ? row.fullKey
+      : await repairFullCopy(row.id, row.originalKey, hash);
+  if (!fullKey) {
+    return null;
+  }
+  const object = await getAlbumPrivate(fullKey);
+  return object
+    ? { body: object.body, bytes: object.size, publicId: row.publicId }
+    : null;
 }

@@ -1,3 +1,4 @@
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -44,7 +45,7 @@ vi.mock("#/server/images", () => ({
   getImages: () => ({ input: mocks.input, info: mocks.info }),
 }));
 
-const { uploadAlbumOriginalAction } =
+const { getAlbumFullImageAction, uploadAlbumOriginalAction } =
   await import("#/features/album/server/album-original-actions.server");
 const { parseAlbumFullKey, parseAlbumOriginalKey } =
   await import("#/server/r2/album-originals.server");
@@ -291,5 +292,365 @@ describe("uploadAlbumOriginalAction", () => {
     expect(await privateKeys()).toEqual([result.originalKey]);
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+// ── full-size route ────────────────────────────────────────────────────
+
+const PHOTO_ID = "0190b6a2-7c1e-7a3b-8f2d-1c2d3e4f5a6b";
+const PUBLIC_ID = "abcdef123456";
+const HASH = "a1b2c3d4e5f60718";
+const FILE = `${HASH}.webp`;
+const ORIGINAL_KEY = `album-originals/${PHOTO_ID}/${HASH}.jpg`;
+const FULL_KEY = `album-full/${PHOTO_ID}/${HASH}.webp`;
+const STORED_FULL = new Uint8Array([9, 9, 9]);
+
+async function seedPhoto(opts: {
+  original?: boolean;
+  full?: boolean;
+  originalObject?: boolean;
+}): Promise<void> {
+  const { original = true, full = true, originalObject = true } = opts;
+  await getDb()
+    .insert(schema.albumPhotos)
+    .values({
+      id: PHOTO_ID,
+      publicId: PUBLIC_ID,
+      altText: "alt",
+      imageKey: "gallery/x/y.webp",
+      imageBytes: 1,
+      widthPx: 1600,
+      heightPx: 1200,
+      originalKey: original ? ORIGINAL_KEY : null,
+      fullKey: original && full ? FULL_KEY : null,
+      fullBytes: original && full ? STORED_FULL.byteLength : null,
+    });
+  const bucket = getPrivateBucket();
+  if (original && originalObject) {
+    await bucket.put(ORIGINAL_KEY, JPEG);
+  }
+  if (original && full) {
+    await bucket.put(FULL_KEY, STORED_FULL);
+  }
+}
+
+async function bytesOf(
+  image: { body: ReadableStream } | null,
+): Promise<number[]> {
+  return Array.from(
+    new Uint8Array(await new Response(image?.body).arrayBuffer()),
+  );
+}
+
+async function photoRow() {
+  return getDb()
+    .select()
+    .from(schema.albumPhotos)
+    .where(eq(schema.albumPhotos.id, PHOTO_ID))
+    .get();
+}
+
+describe("getAlbumFullImageAction", () => {
+  it("returns null for each refusal", async () => {
+    await seedPhoto({});
+    const legacyId = "0190b6a2-7c1e-7a3b-8f2d-1c2d3e4f5a6c";
+    await getDb().insert(schema.albumPhotos).values({
+      id: legacyId,
+      publicId: "legacy123456",
+      altText: "alt",
+      imageKey: "gallery/l/l.webp",
+      imageBytes: 1,
+      widthPx: 1600,
+      heightPx: 1200,
+    });
+
+    // signed out
+    cookieJar.clear();
+    expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).toBeNull();
+
+    // a member without the grant
+    await signInAsMember();
+    const grant = {
+      roleId: "role_member",
+      permissionId: "perm_public_album_view_original",
+    };
+    await getDb()
+      .delete(schema.rolePermissions)
+      .where(
+        and(
+          eq(schema.rolePermissions.roleId, grant.roleId),
+          eq(schema.rolePermissions.permissionId, grant.permissionId),
+        ),
+      );
+    try {
+      expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).toBeNull();
+    } finally {
+      await getDb().insert(schema.rolePermissions).values(grant);
+    }
+
+    // with the grant: unknown, legacy, stale and malformed names
+    expect(await getAlbumFullImageAction("nope00000000", FILE)).toBeNull();
+    expect(await getAlbumFullImageAction("legacy123456", FILE)).toBeNull();
+    expect(
+      await getAlbumFullImageAction(PUBLIC_ID, "ffffffffffffffff.webp"),
+    ).toBeNull();
+    expect(
+      await getAlbumFullImageAction(PUBLIC_ID, `${HASH}.webp/`),
+    ).toBeNull();
+    expect(await getAlbumFullImageAction(PUBLIC_ID, "../x.webp")).toBeNull();
+    // and the control: the same member gets the photo
+    expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).not.toBeNull();
+  });
+
+  it("serves the stored full copy to a member", async () => {
+    await seedPhoto({});
+    await signInAsMember();
+    const image = await getAlbumFullImageAction(PUBLIC_ID, FILE);
+    expect(image?.bytes).toBe(3);
+    expect(await bytesOf(image)).toEqual([9, 9, 9]);
+    expect(mocks.input).not.toHaveBeenCalled();
+  });
+
+  it("self-repairs a missing full copy", async () => {
+    await seedPhoto({ full: false });
+    await signInAsMember();
+    const image = await getAlbumFullImageAction(PUBLIC_ID, FILE);
+    expect(await bytesOf(image)).toEqual([...new Uint8Array(WEBP_OUT)]);
+    const row = await photoRow();
+    expect(row).toMatchObject({
+      fullKey: FULL_KEY,
+      fullWidthPx: 3024,
+      fullHeightPx: 4032,
+      fullBytes: WEBP_OUT.byteLength,
+    });
+    expect(await getPrivateBucket().head(FULL_KEY)).not.toBeNull();
+  });
+
+  it("a lost self-repair race doesn't error", async () => {
+    await seedPhoto({ full: false });
+    await signInAsMember();
+    // The other viewer finishes while this one is still rendering.
+    mocks.output.mockImplementation(async () => {
+      await getDb()
+        .update(schema.albumPhotos)
+        .set({
+          fullKey: FULL_KEY,
+          fullWidthPx: 1,
+          fullHeightPx: 2,
+          fullBytes: 99,
+        })
+        .where(eq(schema.albumPhotos.id, PHOTO_ID));
+      return { response: mocks.response };
+    });
+    const image = await getAlbumFullImageAction(PUBLIC_ID, FILE);
+    expect(await bytesOf(image)).toEqual([...new Uint8Array(WEBP_OUT)]);
+    // The guarded UPDATE matched nothing, so the winner's columns stand.
+    expect(await photoRow()).toMatchObject({
+      fullWidthPx: 1,
+      fullHeightPx: 2,
+      fullBytes: 99,
+    });
+  });
+
+  it("returns null when self-repair fails", async () => {
+    await seedPhoto({ full: false });
+    await signInAsMember();
+    mocks.output.mockRejectedValue(new Error("9422"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).toBeNull();
+    expect((await photoRow())?.fullKey).toBeNull();
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("is refused under view-as for a role without the permission", async () => {
+    await seedPhoto({});
+    const adminId = await signInAsAdmin();
+    await getDb()
+      .insert(schema.userRoles)
+      .values({ userId: adminId, roleId: "role_advisor" });
+    expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).not.toBeNull();
+    // Re-resolved per request: the principal now holds the advisor role too.
+    cookieJar.set("ucmc_view_as", "advisor");
+    expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).toBeNull();
+  });
+
+  it("never lets a render of a replaced original write onto the new row", async () => {
+    await seedPhoto({ full: false });
+    await signInAsMember();
+    const NEW_KEY = `album-originals/${PHOTO_ID}/ffffffffffffffff.jpg`;
+    mocks.output.mockImplementation(async () => {
+      await getDb()
+        .update(schema.albumPhotos)
+        .set({ originalKey: NEW_KEY })
+        .where(eq(schema.albumPhotos.id, PHOTO_ID));
+      return { response: mocks.response };
+    });
+    expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).toBeNull();
+    const row = await photoRow();
+    expect(row?.originalKey).toBe(NEW_KEY);
+    expect(row?.fullKey).toBeNull();
+    expect(row?.fullWidthPx).toBeNull();
+  });
+
+  it("repairs a full_key that doesn't match the current original", async () => {
+    await seedPhoto({});
+    await getDb()
+      .update(schema.albumPhotos)
+      .set({ fullKey: `album-full/${PHOTO_ID}/ffffffffffffffff.webp` })
+      .where(eq(schema.albumPhotos.id, PHOTO_ID));
+    await signInAsMember();
+    const image = await getAlbumFullImageAction(PUBLIC_ID, FILE);
+    expect(await bytesOf(image)).toEqual([...new Uint8Array(WEBP_OUT)]);
+  });
+
+  it("returns null when the original object is gone", async () => {
+    await seedPhoto({ full: false, originalObject: false });
+    await signInAsMember();
+    expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).toBeNull();
+  });
+
+  it("returns null when the stored full object is missing", async () => {
+    await seedPhoto({});
+    await getPrivateBucket().delete(FULL_KEY);
+    await signInAsMember();
+    expect(await getAlbumFullImageAction(PUBLIC_ID, FILE)).toBeNull();
+  });
+});
+
+describe("GET /api/album-full/$publicId/$file", () => {
+  async function callGet(
+    file: string,
+    query = "",
+    publicId = PUBLIC_ID,
+  ): Promise<Response> {
+    const { Route } = await import("#/routes/api/album-full.$publicId.$file");
+    const handlers = (
+      Route.options as unknown as {
+        server: {
+          handlers: {
+            GET: (ctx: {
+              params: { publicId: string; file: string };
+              request: Request;
+            }) => Promise<Response>;
+          };
+        };
+      }
+    ).server.handlers;
+    return handlers.GET({
+      params: { publicId, file },
+      request: new Request(
+        `https://x.test/api/album-full/${publicId}/${file}${query}`,
+      ),
+    });
+  }
+
+  it("sends the success headers inline, and an attachment for ?download=1", async () => {
+    await seedPhoto({});
+    await signInAsMember();
+    const inline = await callGet(FILE);
+    expect(inline.status).toBe(200);
+    expect(Object.fromEntries(inline.headers)).toMatchObject({
+      "content-type": "image/webp",
+      "content-length": "3",
+      "cache-control": "private, max-age=31536000, immutable",
+      "x-content-type-options": "nosniff",
+      "content-disposition": "inline",
+    });
+    expect(Array.from(new Uint8Array(await inline.arrayBuffer()))).toEqual([
+      9, 9, 9,
+    ]);
+
+    const download = await callGet(FILE, "?download=1");
+    expect(download.headers.get("content-disposition")).toBe(
+      `attachment; filename="ucmc-${PUBLIC_ID}.webp"`,
+    );
+    await download.arrayBuffer();
+  });
+
+  it("answers every refusal with one identical 404", async () => {
+    await seedPhoto({});
+    await signInAsMember();
+    const cases: Array<() => Promise<Response>> = [
+      () => callGet("ffffffffffffffff.webp"),
+      () => callGet("not-a-hash.webp"),
+      () => callGet(FILE, "", "nope00000000"),
+      async () => {
+        await getDb().insert(schema.albumPhotos).values({
+          id: "0190b6a2-7c1e-7a3b-8f2d-1c2d3e4f5a6c",
+          publicId: "legacy123456",
+          altText: "alt",
+          imageKey: "gallery/l/l.webp",
+          imageBytes: 1,
+          widthPx: 1600,
+          heightPx: 1200,
+        });
+        return callGet(FILE, "", "legacy123456");
+      },
+      async () => {
+        const grant = {
+          roleId: "role_member",
+          permissionId: "perm_public_album_view_original",
+        };
+        await getDb()
+          .delete(schema.rolePermissions)
+          .where(
+            and(
+              eq(schema.rolePermissions.roleId, grant.roleId),
+              eq(schema.rolePermissions.permissionId, grant.permissionId),
+            ),
+          );
+        try {
+          return await callGet(FILE);
+        } finally {
+          await getDb().insert(schema.rolePermissions).values(grant);
+        }
+      },
+      async () => {
+        await getPrivateBucket().delete(FULL_KEY);
+        return callGet(FILE);
+      },
+      async () => {
+        await getPrivateBucket().put(FULL_KEY, STORED_FULL);
+        await getDb()
+          .update(schema.albumPhotos)
+          .set({ fullKey: null })
+          .where(eq(schema.albumPhotos.id, PHOTO_ID));
+        await getPrivateBucket().delete(FULL_KEY);
+        mocks.output.mockRejectedValue(new Error("9422"));
+        return callGet(FILE);
+      },
+      async () => {
+        cookieJar.clear();
+        return callGet(FILE);
+      },
+    ];
+    const seen: Array<{
+      status: number;
+      headers: [string, string][];
+      body: string;
+    }> = [];
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    for (const run of cases) {
+      const res = await run();
+      seen.push({
+        status: res.status,
+        headers: [...res.headers].sort(),
+        body: await res.text(),
+      });
+    }
+    spy.mockRestore();
+    expect(seen).toHaveLength(cases.length);
+    expect(seen[0]).toEqual({
+      status: 404,
+      headers: [
+        ["cache-control", "private, no-store"],
+        ["content-type", "text/plain;charset=UTF-8"],
+      ],
+      body: "Not found",
+    });
+    for (const other of seen) {
+      expect(other).toEqual(seen[0]);
+    }
   });
 });
