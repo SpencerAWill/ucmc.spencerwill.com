@@ -77,6 +77,8 @@ TanStack Start's import-protection plugin blocks `*.server.*` from the client gr
 
 **Use `radix-ui`, the unified package** — `import { Slot } from "radix-ui"`, never the legacy per-component `@radix-ui/react-*` scoped packages, which are not dependencies. Nearly every file in `src/components/ui/` is Radix-based.
 
+**Overlays are sized with a `size` prop, never a width class (#243).** `DialogContent` (`sm`…`5xl`, default `lg`) and `SheetContent` (`sm`…`3xl`, default `sm`, left/right only) map the size to an `sm:max-w-*`. Below `sm` every dialog is the viewport less a 16px gutter (`max-w-[calc(100%-2rem)]`), and every side sheet is full width with its gutter inside: sheet bodies carry `px-4` to match the header and footer slots. A caller's bare `max-w-lg` used to _replace_ that gutter under tailwind-merge, and four dialogs ran edge to edge on a phone, so **ESLint bans width utilities in any `*Content` `className`**, and `overlay-gutter.test.tsx` pins every size. Heights (`max-h-*`) are still the caller's. The same rule set bans **`break-words`**: `<body>` carries `wrap-anywhere`, which lets a long token shrink its box's min-content width, and `break-words` downgrades that to `overflow-wrap: break-word`, which does not. One unbroken word in a grid or flex child then holds the column open and widens the page.
+
 **`@base-ui/react` is a single-component exception**: `combobox.tsx` only, because shadcn's Combobox has no Radix implementation. Don't reach for Base UI for anything else — a second parallel primitive stack is worse than either one alone. Standardizing on Base UI would be a deliberate full-catalog migration, not something to drift into per-component.
 
 ## Responsive collections (tables vs. stacked rows)

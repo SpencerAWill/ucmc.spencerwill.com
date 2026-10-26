@@ -114,7 +114,11 @@ export function FeedbackDialog({ surfaces }: { surfaces: FeedbackSurfaces }) {
       <Sheet open={isOpen} onOpenChange={onOpenChange}>
         <SheetContent
           side="bottom"
-          className="h-[100svh] overflow-y-auto"
+          // The sheet brings no padding of its own (only its header
+          // does), and the forms below were laid out for the dialog's
+          // `p-6` — so on a phone they ran edge to edge (#243). The
+          // gutter goes here, and the header drops its own to match.
+          className="h-[100svh] overflow-y-auto px-4 pb-6"
           data-feedback-capture-exclude
         >
           {body}
@@ -125,7 +129,8 @@ export function FeedbackDialog({ surfaces }: { surfaces: FeedbackSurfaces }) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[90svh] overflow-y-auto sm:max-w-2xl"
+        size="2xl"
+        className="max-h-[90svh] overflow-y-auto"
         data-feedback-capture-exclude
       >
         {body}
@@ -153,7 +158,7 @@ function FeedbackSteps({
 
   return (
     <div className="space-y-4">
-      <Header>
+      <Header className={isMobile ? "px-0" : undefined}>
         {canGoBack ? (
           <Button
             type="button"

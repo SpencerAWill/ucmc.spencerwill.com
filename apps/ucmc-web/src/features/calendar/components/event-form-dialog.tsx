@@ -231,7 +231,7 @@ export function EventFormDialog({
 
   return (
     <Dialog open={seed !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {seed?.mode === "edit" ? "Edit event" : "New event"}

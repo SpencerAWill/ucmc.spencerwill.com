@@ -127,7 +127,7 @@ export function FieldEmergencyCard({ phone, contacts }: EmergencyCardProps) {
                   Contact{contacts.length > 1 ? ` ${i + 1}` : ""}
                 </dt>
                 <dd className="min-w-0">
-                  <span className="break-words">{contact.name}</span>{" "}
+                  <span className="wrap-anywhere">{contact.name}</span>{" "}
                   <PhoneLink phone={contact.phone} />
                   <span className="ml-1 text-xs text-muted-foreground">
                     — {contact.relationship.replace(/_/g, " ")}

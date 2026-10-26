@@ -177,7 +177,7 @@ export function OutingFormDialog({
         }
       }}
     >
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {seed?.mode === "edit" ? "Edit outing" : "Add outing"}

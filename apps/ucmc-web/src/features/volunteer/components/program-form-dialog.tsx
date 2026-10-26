@@ -108,7 +108,7 @@ export function ProgramFormDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {seed?.mode === "edit"

@@ -392,7 +392,7 @@ function GearIndexPage() {
              * pushed the search box, the filters and the first piece of
              * gear under the fold, on the device the cave desk actually
              * runs on. */}
-            <div className="hidden items-center gap-2 sm:flex">
+            <div className="hidden flex-wrap items-center gap-2 sm:flex">
               {manageActions.map((action) => (
                 <Button
                   key={action.label}

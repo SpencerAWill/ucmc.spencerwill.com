@@ -105,7 +105,7 @@ export function GearTypesManageDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {mode.kind !== "list" ? (

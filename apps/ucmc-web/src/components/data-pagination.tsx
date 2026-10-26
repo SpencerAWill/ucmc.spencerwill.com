@@ -116,16 +116,24 @@ export function DataPagination({
               }}
             />
           </PaginationItem>
+          {/* Below `sm` the numbered links are hidden and the arrows
+           * carry it: Previous + seven 36px links + Next is ~356px,
+           * wider than a 320px screen once the page gutter is paid
+           * (#243), and "Page 3 of 12" on the left already says where
+           * you are. */}
           {pageList.map((entry, i) =>
             entry === "ellipsis" ? (
               // Two ellipses can appear in the middle layout, so the
               // key uses both the marker and its position so React
               // doesn't collapse them.
-              <PaginationItem key={`ellipsis-${i}`}>
+              <PaginationItem
+                key={`ellipsis-${i}`}
+                className="hidden sm:list-item"
+              >
                 <PaginationEllipsis />
               </PaginationItem>
             ) : (
-              <PaginationItem key={entry}>
+              <PaginationItem key={entry} className="hidden sm:list-item">
                 <PaginationLink
                   href="#"
                   isActive={entry === page}

@@ -67,7 +67,7 @@ export function GearBatchInspectionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {selected ? (

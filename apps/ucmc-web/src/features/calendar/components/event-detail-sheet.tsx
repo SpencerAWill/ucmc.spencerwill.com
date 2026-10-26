@@ -38,7 +38,7 @@ export function EventDetailSheet({
 }) {
   return (
     <Sheet open={occurrence !== null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent size="md" side="right">
         {occurrence ? (
           <>
             <SheetHeader>

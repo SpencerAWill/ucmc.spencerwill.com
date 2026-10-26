@@ -472,7 +472,7 @@ function QueueCard({
           as={canVerify ? "label" : "div"}
           htmlFor={canVerify ? `queue-${member.userId}` : undefined}
         >
-          <div className="font-medium break-words">{label}</div>
+          <div className="font-medium">{label}</div>
           {/* `break-all`, not `truncate`: a truncated address is
               useless for the one thing it is here to do, which is match
               a member against a signed paper. A long uc.edu address

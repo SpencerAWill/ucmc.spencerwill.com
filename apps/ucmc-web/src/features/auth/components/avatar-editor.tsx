@@ -208,7 +208,7 @@ export function AvatarEditor({
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Crop your photo</DialogTitle>
           </DialogHeader>

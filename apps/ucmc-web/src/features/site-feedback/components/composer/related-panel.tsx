@@ -29,7 +29,7 @@ function CandidateRow({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <Badge variant="outline">{SITE_FEEDBACK_KIND_LABELS[row.kind]}</Badge>
-          <p className="text-sm font-medium break-words">{row.title}</p>
+          <p className="text-sm font-medium">{row.title}</p>
         </div>
         <Button
           type="button"

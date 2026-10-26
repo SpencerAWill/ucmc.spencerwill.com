@@ -154,7 +154,7 @@ describe("AccountTabsBar", () => {
 
   // Both of these pin a *mobile* defect that only reproduces on a
   // touch device, so a rendered assertion on the class list is the only
-  // regression guard available in this pool. `e2e/mobile-overflow.spec.ts`
+  // regression guard available in this pool. `e2e/reflow-pages.spec.ts`
   // covers the observable half.
   it("mirrors PageContainer's responsive gutter in its bleed and its padding", () => {
     // The bar is the one element on `/my` that reaches outside the

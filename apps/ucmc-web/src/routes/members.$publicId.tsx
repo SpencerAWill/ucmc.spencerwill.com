@@ -248,7 +248,7 @@ function MemberDetailPage() {
     // width of the viewport, so it sits outside the container and
     // everything else sits inside one. A negative margin would have
     // to track the container's gutter at every breakpoint instead,
-    // which is the overflow bug `mobile-overflow.spec.ts` guards.
+    // which is the overflow bug `reflow-pages.spec.ts` guards.
     <div className="pb-8">
       {/* The back link rides on the banner rather than on a strip
           above it: a band of page background over a full-bleed image

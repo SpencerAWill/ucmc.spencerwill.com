@@ -317,7 +317,15 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background",
+        // `min-w-0` is the fix for every page overflowing at 768px
+        // (#243). This `<main>` is a flex item beside the sidebar, and a
+        // flex item's automatic minimum width is its content's
+        // min-content width — so one wide descendant (a tab row, a
+        // chart, a table) stopped `<main>` shrinking into the 512px left
+        // over once the 256px sidebar appears at `md`, and the document
+        // grew instead. With `min-w-0` the content's own overflow
+        // handling (wrapping, `overflow-x-auto`) is what gets used.
+        "relative flex w-full min-w-0 flex-1 flex-col bg-background",
         "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
         className,
       )}

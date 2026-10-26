@@ -217,7 +217,7 @@ export function IssueFormDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {seed?.mode === "edit" ? "Edit Gazette issue" : "Add Gazette issue"}

@@ -134,14 +134,14 @@ export function AdminProfileSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent className="overflow-y-auto sm:max-w-lg">
+      <SheetContent size="lg" className="overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Edit profile</SheetTitle>
           <SheetDescription>{email}</SheetDescription>
         </SheetHeader>
 
         <form
-          className="space-y-6 px-1 pt-4"
+          className="space-y-6 px-4 pt-4 pb-4"
           onSubmit={(e) => {
             e.preventDefault();
             e.stopPropagation();

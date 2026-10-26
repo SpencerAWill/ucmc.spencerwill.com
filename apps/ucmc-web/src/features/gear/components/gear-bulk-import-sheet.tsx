@@ -341,10 +341,7 @@ export function GearBulkImportSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 sm:max-w-2xl"
-      >
+      <SheetContent size="2xl" side="right" className="flex flex-col gap-0">
         <SheetHeader>
           <SheetTitle>Bulk import gear</SheetTitle>
           <SheetDescription>
