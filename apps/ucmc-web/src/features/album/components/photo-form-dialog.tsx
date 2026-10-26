@@ -22,6 +22,7 @@ import {
   useUpdateAlbumPhoto,
 } from "#/features/album/api/use-album-mutations";
 import { albumImageUrl } from "#/features/album/lib/image-url";
+import { albumTakenDateToWire } from "#/features/album/lib/taken-date";
 import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
 import { useImageCrop } from "#/hooks/use-image-crop";
 import { toDateInputValue } from "#/lib/date-format";
@@ -129,7 +130,8 @@ export function PhotoFormDialog({
     const caption = form.caption.trim().length > 0 ? form.caption.trim() : null;
     const credit = form.credit.trim().length > 0 ? form.credit.trim() : null;
     const tag = form.tag.trim().length > 0 ? form.tag.trim() : null;
-    const takenAt = form.takenAt.length > 0 ? new Date(form.takenAt) : null;
+    const takenAt =
+      form.takenAt.length > 0 ? albumTakenDateToWire(form.takenAt) : null;
 
     const base = {
       caption,

@@ -56,6 +56,7 @@ export function PhotoGrid({
   onDeletePhoto?: (photo: AlbumPhotoSummary) => void;
 }) {
   // Distinct years from takenAt, in descending order.
+  // takenAt is a calendar date stored as UTC midnight; read it in UTC (see lib/taken-date.ts).
   const years = Array.from(
     new Set(
       photos
@@ -91,6 +92,7 @@ export function PhotoGrid({
 
   const visible = photos.filter((p) => {
     if (selectedYear !== ALL_VALUE) {
+      // takenAt is a calendar date stored as UTC midnight; read it in UTC (see lib/taken-date.ts).
       const year = p.takenAt ? p.takenAt.toZonedDateTimeISO("UTC").year : null;
       if (String(year) !== selectedYear) {
         return false;
