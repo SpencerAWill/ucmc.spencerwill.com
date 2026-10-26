@@ -98,7 +98,7 @@ Two different patterns is **not** the inconsistency — an undocumented choice i
 
 **Bulk selection is kept at phone width here, which is a deliberate divergence.** Polaris suppresses bulk actions in `condensed` mode on the grounds that multi-select doesn't belong on a phone. `/members/waivers` keeps it because the use case is concrete and specifically mobile: an officer stands at a meeting with a stack of signed waivers and ticks down the list. Weigh it per surface — the general case is that Polaris is right.
 
-Whichever treatment is used, **an `overflow-x-auto` wrapper takes `overflow-y-hidden` with it.** Per CSS Overflow 3 a non-`visible` value on one axis computes the other from `visible` to `auto`, so the wrapper otherwise captures vertical scroll as well and a touch-drag slides the content inside its own box. `e2e/mobile-overflow.spec.ts` guards the related failure — anything reaching outside `PageContainer`'s gutter widens the document and makes the whole page scroll sideways.
+Whichever treatment is used, **an `overflow-x-auto` wrapper takes `overflow-y-hidden` with it.** Per CSS Overflow 3 a non-`visible` value on one axis computes the other from `visible` to `auto`, so the wrapper otherwise captures vertical scroll as well and a touch-drag slides the content inside its own box. `e2e/reflow-pages.spec.ts` guards the related failure — anything reaching outside `PageContainer`'s gutter widens the document and makes the whole page scroll sideways.
 
 ## TypeScript & observability
 

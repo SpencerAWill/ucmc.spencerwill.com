@@ -87,7 +87,7 @@ The agenda is stacked `<li>` rows, not a table — a find-one-and-act surface pe
 
 **Times render in `CLUB_TIME_ZONE`, deliberately not through `#/lib/date-format`**, which renders in the viewer's zone. A member in Denver needs the time the club is meeting, and a viewer-zone time would let a row say 4:00 PM under a heading that says Wednesday. The day buckets use the same zone so the two can't disagree. `react-day-picker` is a hard `Date`-and-browser-zone boundary: build its `Date` from the plain date's components, never from the instant.
 
-`/calendar` and `/my/calendar` are both in `mobile-overflow.spec.ts`'s route list. The month grid is a seven-column table that cannot reflow, next to a chip row and an agenda of badge-carrying rows — the densest fixed-width surface on the site, and exactly the shape that reaches past the gutter.
+`/calendar` and `/my/calendar` are both in `reflow-pages.spec.ts`'s route list. The month grid is a seven-column table that cannot reflow, next to a chip row and an agenda of badge-carrying rows — the densest fixed-width surface on the site, and exactly the shape that reaches past the gutter.
 
 **`/calendar` is a public page** (`0076`), gated like every other one: the `pages.calendar` flag plus `public_calendar:view`, which `role_anonymous` holds. It shipped member-only, which left an incoherence — the anonymous `.ics` feed exists for prospective members, and the only surface linking to it was itself member-only, so its audience could never see it.
 

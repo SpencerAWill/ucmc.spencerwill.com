@@ -223,7 +223,7 @@ jobs:
           # Anchored on `image:` so this step's own source can't match.
           pins=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*mcr\.microsoft\.com\/playwright:v([0-9][^-@[:space:]]*)-.*/\1/p' .github/workflows/cicd.yml)
           if [ "$(printf '%s\n' "$pins" | grep -c .)" -ne 2 ]; then
-            echo "::error::Expected 2 Playwright image pins in cicd.yml (e2e-desktop, e2e-mobile), found: '$pins'"
+            echo "::error::Expected 2 Playwright image pins in cicd.yml (e2e-desktop, e2e-viewports), found: '$pins'"
             exit 1
           fi
           for pin in $pins; do
@@ -313,14 +313,15 @@ jobs:
   # "everything else, local-only" — 10 of 14 specs, including every
   # sign-in, gear-desk and member-management flow, never ran on a PR. A
   # Mailpit service container removes the reason for that, so the only
-  # remaining reason to split is the browser download: `e2e-mobile` needs
-  # WebKit, `e2e-desktop` doesn't.
+  # remaining reason to split is the browser download: `e2e-viewports`
+  # needs WebKit, `e2e-desktop` doesn't.
   #
   # Each job selects by Playwright PROJECT, not by file name, and that is
   # what keeps the two in sync without a workflow edit. The projects'
   # own `testMatch`/`testIgnore` in playwright.config.ts already partition
-  # the suite — `mobile-*` to the two mobile projects, everything else to
-  # chromium — so a spec added tomorrow runs in CI by construction. The
+  # the suite — `mobile-*` and `reflow-pages` to the two mobile projects,
+  # the reflow specs to `reflow-sweep` / `reflow-overlays`, everything else
+  # to chromium — so a spec added tomorrow runs in CI by construction. The
   # previous arrangement named files in the workflow, which is precisely
   # how 10 specs stayed uncovered.
   e2e-desktop:
@@ -332,7 +333,7 @@ jobs:
     # specs share one local D1 and cannot be parallelised — two workers
     # would collide on `user_emails.email`'s global UNIQUE and on the
     # delete-then-insert each seed opens with. Investigated and declined
-    # in #238: this job and e2e-mobile run in parallel and are within
+    # in #238: this job and e2e-viewports run in parallel and are within
     # ~15s of each other, so the remaining prize is ~70s. If it is ever
     # wanted, `--shard=i/n` across runners is the cheaper route and needs
     # no isolation work. `retries: 2` on CI.
@@ -478,12 +479,27 @@ jobs:
           path: apps/ucmc-web/playwright-report/
           retention-days: 7
 
-  e2e-mobile:
-    name: E2E — mobile Safari + Chrome
+  e2e-viewports:
+    name: E2E — ${{ matrix.label }}
     if: github.event.pull_request.draft != true && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
-    # Two specs in two engines.
+    # One runner per project, in parallel, so this job costs its slowest
+    # entry rather than their sum. Selection stays by project. Folded into
+    # one runner, the reflow work added in #243 made this ~8 min of specs:
+    # the CI long pole #239 had just removed.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: mobile Safari
+            project: mobile-safari
+          - label: mobile Chrome
+            project: mobile-chrome
+          - label: reflow sweep
+            project: reflow-sweep
+          - label: reflow overlays
+            project: reflow-overlays
     timeout-minutes: 20
     permissions:
       contents: read
@@ -501,9 +517,9 @@ jobs:
       RESEND_FROM: noreply@localhost
       RESEND_FROM_NAME: UCMC (ci)
       SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
-      # No Mailpit here on purpose: both mobile specs seed their session
-      # directly via `seedSession`, so this job needs no mailbox and pays
-      # for no service container.
+      # No Mailpit here on purpose: every spec these projects match seeds
+      # its session directly via `seedSession`, so no runner needs a
+      # mailbox or pays for a service container.
       MAILPIT_URL: ""
 
     steps:
@@ -523,23 +539,29 @@ jobs:
       - name: Apply local D1 migrations
         run: pnpm --filter ucmc-web db:migrate:local
 
-      # `mobile-overflow` walks every route and fails if anything made the
+      # `reflow-pages` walks every route and fails if anything made the
       # document wider than the viewport — easy to regress, since each
-      # cause (`-mx-*`, a fixed `w-[Npx]`) is reasonable in isolation and
-      # the symptom is invisible at desktop width. `mobile-waiver-queue`
-      # measures that selecting a member doesn't move the rows under the
-      # officer's finger. Both engines, because they fail differently:
+      # cause (`-mx-*`, a fixed `w-[Npx]`, a flex item without `min-w-0`)
+      # is reasonable in isolation and the symptom is invisible at desktop
+      # width. It runs at the two phone widths in both engines, because
       # `overflow` axis computation and `touch-action` handling are
-      # exactly the areas where WebKit and Blink have diverged before,
-      # and iOS Safari is what the membership actually carries.
-      - name: Run mobile specs
-        run: pnpm --filter ucmc-web e2e --project=mobile-safari --project=mobile-chrome
+      # exactly where WebKit and Blink have diverged before and iOS
+      # Safari is what the membership carries — and in `reflow-sweep`
+      # from 320px through every breakpoint edge, which is where #243
+      # found the bugs the phone widths never saw. `reflow-overlays`
+      # opens every dialog and sheet it can find, at 320px, in its own
+      # project. `mobile-waiver-queue` measures that selecting a member
+      # doesn't move the rows under the officer's finger.
+      - name: Run specs
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: pnpm --filter ucmc-web e2e --project="$PROJECT"
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report-mobile
+          name: playwright-report-${{ matrix.project }}
           path: apps/ucmc-web/playwright-report/
           retention-days: 7
 
@@ -701,7 +723,7 @@ jobs:
       - web-lint-test
       - infra-lint
       - e2e-desktop
-      - e2e-mobile
+      - e2e-viewports
       - workflow-lint
     runs-on: ubuntu-latest
     timeout-minutes: 2

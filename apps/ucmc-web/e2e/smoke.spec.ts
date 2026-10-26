@@ -67,7 +67,7 @@ for (const path of PUBLIC_ROUTES) {
 
     // A worker that renders its error boundary also returns 200 and
     // hydrates. Assert there is a real page under it: the same
-    // "did anything actually render" guard `mobile-overflow.spec.ts`
+    // "did anything actually render" guard `reflow-pages.spec.ts`
     // uses, for the same reason.
     const main = page.locator("#main");
     await expect(main).toBeVisible();

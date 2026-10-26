@@ -167,7 +167,7 @@ other.
 
 The banner is full-bleed by sitting **outside** `PageContainer`, not
 by a negative margin that would have to track the gutter at every
-breakpoint. `/members/$publicId` is in `mobile-overflow.spec.ts` with
+breakpoint. `/members/$publicId` is in `reflow-pages.spec.ts` with
 deliberately hostile fixture data — an unbreakable long name, a long
 single-token email, an over-long status line — because it is the
 first page built around free text a member types about themselves.
