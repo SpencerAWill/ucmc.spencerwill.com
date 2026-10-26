@@ -75,6 +75,7 @@ afterEach(async () => {
   const db = getDb();
   await db.delete(schema.siteFeedbackIssues);
   await db.delete(schema.siteFeedback);
+  await db.delete(schema.albumPhotos);
   await db.delete(schema.emailSends);
   await db.delete(schema.webauthnConsumedCeremonies);
   await db.delete(schema.waiverAttestations);
@@ -599,10 +600,78 @@ describe("sweepOrphanPrivateR2Keys", () => {
     expect(await getPrivateBucket().head(fresh)).toBeNull();
   });
 
-  it("never touches objects outside the screenshot prefix", async () => {
+  it("never touches objects outside its prefixes", async () => {
     await getPrivateBucket().put("waivers/x.pdf", new Uint8Array([1]));
     expect(await sweepOrphanPrivateR2Keys(NOW, 0)).toBe(0);
     expect(await getPrivateBucket().head("waivers/x.pdf")).not.toBeNull();
+  });
+});
+
+describe("sweepOrphanPrivateR2Keys album originals", () => {
+  const photoId = "0190b6a2-7c1e-7a3b-8f2d-1c2d3e4f5a6b";
+  const originalKey = `album-originals/${photoId}/0123456789abcdef.jpg`;
+  const fullKey = `album-full/${photoId}/0123456789abcdef.webp`;
+
+  async function putBoth(): Promise<void> {
+    await getPrivateBucket().put(originalKey, new Uint8Array([1]));
+    await getPrivateBucket().put(fullKey, new Uint8Array([2]));
+  }
+
+  it("sweeps an old unreferenced album original and full copy", async () => {
+    await putBoth();
+    expect(await sweepOrphanPrivateR2Keys(NOW, 0)).toBe(2);
+    expect(await getPrivateBucket().head(originalKey)).toBeNull();
+    expect(await getPrivateBucket().head(fullKey)).toBeNull();
+  });
+
+  it("keeps album keys a row references", async () => {
+    await putBoth();
+    await getDb()
+      .insert(schema.albumPhotos)
+      .values({
+        id: photoId,
+        publicId: uid("pub").slice(0, 12),
+        altText: "alt",
+        imageKey: `gallery/${photoId}/aaaaaaaaaaaaaaaa.webp`,
+        imageBytes: 1,
+        widthPx: 1600,
+        heightPx: 1200,
+        originalKey,
+        fullKey,
+      });
+    expect(await sweepOrphanPrivateR2Keys(NOW, 0)).toBe(0);
+    expect(await getPrivateBucket().head(originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(fullKey)).not.toBeNull();
+  });
+
+  it("keeps a young unreferenced original", async () => {
+    await putBoth();
+    expect(await sweepOrphanPrivateR2Keys(Temporal.Now.instant())).toBe(0);
+    expect(await getPrivateBucket().head(originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(fullKey)).not.toBeNull();
+    // Once they are old enough, the same objects are swept.
+    expect(await sweepOrphanPrivateR2Keys(NOW)).toBe(2);
+  });
+
+  // The upload waits on a member cropping and captioning, so a dialog
+  // open over the daily sweep must not lose its original.
+  it("keeps a 30-minute-old unreferenced original while sweeping a screenshot that age", async () => {
+    await putBoth();
+    const screenshot = "site-feedback/screenshots/sfb_old.webp";
+    await getPrivateBucket().put(screenshot, new Uint8Array([1]));
+    const thirtyMinutesOn = Temporal.Now.instant().add({ minutes: 30 });
+    expect(await sweepOrphanPrivateR2Keys(thirtyMinutesOn)).toBe(1);
+    expect(await getPrivateBucket().head(screenshot)).toBeNull();
+    expect(await getPrivateBucket().head(originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(fullKey)).not.toBeNull();
+  });
+
+  it("sweeps a 25-hour-old unreferenced original", async () => {
+    await putBoth();
+    const twentyFiveHoursOn = Temporal.Now.instant().add({ hours: 25 });
+    expect(await sweepOrphanPrivateR2Keys(twentyFiveHoursOn)).toBe(2);
+    expect(await getPrivateBucket().head(originalKey)).toBeNull();
+    expect(await getPrivateBucket().head(fullKey)).toBeNull();
   });
 });
 

@@ -33,7 +33,7 @@ const {
 } = await import("#/features/album/server/album-actions.server");
 const { ALBUM_R2_PREFIX } = await import("#/features/album/lib/image-url");
 const { openSession } = await import("#/server/auth/session.server");
-const { getPublicBucket } = await import("#/server/r2");
+const { getPrivateBucket, getPublicBucket } = await import("#/server/r2");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -387,5 +387,31 @@ describe("deleteAlbumPhotoAction", () => {
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, "album_photo.deleted"));
     expect(auditRows).toHaveLength(1);
+  });
+
+  it("deleting a photo removes its original and full copy", async () => {
+    await signInAsAdmin();
+    const { publicId } = await createAlbumPhotoAction({
+      ...VALID_PHOTO,
+      imageDataUrl: makeWebpDataUrl(),
+    });
+    const [{ id }] = await getDb()
+      .select({ id: schema.albumPhotos.id })
+      .from(schema.albumPhotos)
+      .where(eq(schema.albumPhotos.publicId, publicId));
+    const originalKey = `album-originals/${id}/0123456789abcdef.jpg`;
+    const fullKey = `album-full/${id}/0123456789abcdef.webp`;
+    await getPrivateBucket().put(originalKey, new Uint8Array([1]));
+    await getPrivateBucket().put(fullKey, new Uint8Array([2]));
+    await getDb()
+      .update(schema.albumPhotos)
+      .set({ originalKey, fullKey })
+      .where(eq(schema.albumPhotos.publicId, publicId));
+
+    await deleteAlbumPhotoAction({ publicId });
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await getPrivateBucket().head(originalKey)).toBeNull();
+    expect(await getPrivateBucket().head(fullKey)).toBeNull();
   });
 });

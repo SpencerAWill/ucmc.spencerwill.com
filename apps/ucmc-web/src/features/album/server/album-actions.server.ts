@@ -44,6 +44,7 @@ import {
   ALBUM_IMAGE_MAX_BYTES,
   putAlbumImage,
 } from "#/server/r2/album-images.server";
+import { deleteAlbumPrivate } from "#/server/r2/album-originals.server";
 import { shortContentHash } from "#/server/r2/image-codec.server";
 
 // ── public shapes ───────────────────────────────────────────────────────
@@ -295,6 +296,9 @@ export async function deleteAlbumPhotoAction(
     .where(eq(schema.albumPhotos.id, existing.id));
 
   void deleteAlbumImage(existing.imageKey).catch(() => {});
+  void deleteAlbumPrivate(
+    [existing.originalKey, existing.fullKey].filter((k) => k !== null),
+  );
 
   await recordAuditEvent({
     actorUserId: principal.userId,

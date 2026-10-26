@@ -40,13 +40,13 @@ export function decodeImageDataUrl(
       `Image exceeds ${maxBytes} bytes (got ${bytes.byteLength})`,
     );
   }
-  if (!matchesMagic(bytes, contentType)) {
+  if (!matchesImageMagic(bytes, contentType)) {
     throw new Error("Image bytes do not match declared content type");
   }
   return { contentType, bytes: bytes.buffer };
 }
 
-function matchesMagic(
+export function matchesImageMagic(
   bytes: Uint8Array,
   contentType: AcceptedImageContentType,
 ) {
