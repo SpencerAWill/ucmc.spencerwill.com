@@ -32,11 +32,16 @@ const resendFromName = cfg.require("resendFromName");
 // create-only and Cloudflare never returns it on read. Newer providers (seen
 // on 6.21.0 and 6.22.1) mark it replace-on-change, so declaring it plans a
 // replacement of the database on every preview. See `.claude/rules/infra.md`.
+//
+// `readReplication` is declared, though `disabled` is what both databases
+// already have: undeclared, 6.22.1's update sends `read_replication: null`,
+// which the API rejects with a 400 and fails the deploy.
 const database = new cloudflare.D1Database(
   `ucmc-web-${stack}-db`,
   {
     accountId,
     name: d1DatabaseName,
+    readReplication: { mode: "disabled" },
   },
   { protect: true },
 );
