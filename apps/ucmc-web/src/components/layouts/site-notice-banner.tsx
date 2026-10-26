@@ -5,9 +5,12 @@
  * **One line, always.** When the text doesn't fit, the bar becomes a
  * ticker: two copies of the text slide left back to back and loop. The
  * second copy is `aria-hidden`, so a screen reader hears the notice once.
- * It pauses on hover and while anything in it has focus, and a pause/play
- * button stops it outright (WCAG 2.2.2 — anything that moves for more than five seconds
- * needs a way to stop it).
+ * It pauses on hover (devices that can hover), and a pause/play button
+ * stops it outright (WCAG 2.2.2 — anything that moves for more than five
+ * seconds needs a way to stop it). There is deliberately no focus pause:
+ * the button is the only focusable thing in the bar and a tap or Enter
+ * leaves it focused, so a focus-within pause held the ticker still after
+ * Play until the user tapped somewhere else.
  *
  * **Reduced motion breaks the one-line rule on purpose.** Nothing moves;
  * the text wraps onto as many lines as it needs. Truncating it instead
@@ -140,12 +143,13 @@ export function SiteNoticeBar({
         {marquee ? (
           <div
             data-slot="notice-strip"
-            // Hover and focus pause in CSS rather than through handlers on
-            // the landmark: no state to keep in sync, and a pointer leaving
-            // mid-render can't strand it paused. The button's pause is the
-            // inline style, which only ever says "paused" — an inline
-            // "running" would beat these classes.
-            className="inline-flex w-max group-focus-within/notice:[animation-play-state:paused] group-hover/notice:[animation-play-state:paused]"
+            // Hover pauses in CSS rather than through handlers on the
+            // landmark: no state to keep in sync, and Tailwind's hover
+            // variants only apply where the device can hover, so a tap
+            // can't leave it stuck. The button's pause is the inline
+            // style, which only ever says "paused" — an inline "running"
+            // would beat this class.
+            className="inline-flex w-max group-hover/notice:[animation-play-state:paused]"
             style={{
               animationName: "site-notice-marquee",
               animationDuration: `${marqueeDurationSeconds((textWidth ?? 0) + MARQUEE_GAP_PX)}s`,

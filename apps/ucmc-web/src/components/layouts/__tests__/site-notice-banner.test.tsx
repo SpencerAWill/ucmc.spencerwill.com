@@ -185,17 +185,33 @@ describe("SiteNoticeBar", () => {
     expect(strip().style.animationPlayState).toBe("");
   });
 
-  it("pauses on hover and on focus within, in CSS", () => {
+  it("pauses on hover, in CSS", () => {
     // jsdom applies no stylesheet, so this pins the hook rather than the
-    // effect: the variants are keyed to the bar's own group.
+    // effect: the variant is keyed to the bar's own group, and Tailwind's
+    // hover variants only apply on devices that can hover.
     render(<SiteNoticeBar text={TEXT} tone="info" />);
     resize({ viewport: 300, text: 552 });
 
     expect(bar()).toHaveClass("group/notice");
     expect(strip()).toHaveClass(
       "group-hover/notice:[animation-play-state:paused]",
-      "group-focus-within/notice:[animation-play-state:paused]",
     );
+  });
+
+  it("plays again from its button while the button keeps focus", async () => {
+    // The button is the only focusable thing in the bar, and a tap (or
+    // Enter) leaves it focused. A focus-within pause therefore held the
+    // ticker still after Play on a phone, until the user tapped elsewhere.
+    const user = userEvent.setup();
+    render(<SiteNoticeBar text={TEXT} tone="info" />);
+    resize({ viewport: 300, text: 552 });
+
+    await user.click(screen.getByRole("button", { name: "Pause notice" }));
+    await user.click(screen.getByRole("button", { name: "Play notice" }));
+
+    expect(screen.getByRole("button", { name: "Pause notice" })).toHaveFocus();
+    expect(strip().style.animationPlayState).toBe("");
+    expect(strip().className).not.toMatch(/focus/);
   });
 
   it("stops ticking when a resize makes the text fit again", () => {
