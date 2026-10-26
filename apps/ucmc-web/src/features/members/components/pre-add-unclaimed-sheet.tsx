@@ -248,10 +248,7 @@ export function PreAddUnclaimedSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 sm:max-w-lg"
-      >
+      <SheetContent size="lg" side="right" className="flex flex-col gap-0">
         <SheetHeader>
           <SheetTitle>Pre-add unclaimed members</SheetTitle>
           <SheetDescription>

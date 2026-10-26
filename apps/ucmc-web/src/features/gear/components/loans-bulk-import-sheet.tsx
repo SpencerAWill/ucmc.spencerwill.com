@@ -287,10 +287,7 @@ export function LoansBulkImportSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 sm:max-w-3xl"
-      >
+      <SheetContent size="3xl" side="right" className="flex flex-col gap-0">
         <SheetHeader>
           <SheetTitle>Backfill loans</SheetTitle>
           <SheetDescription>

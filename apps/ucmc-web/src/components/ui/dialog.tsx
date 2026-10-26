@@ -45,13 +45,36 @@ function DialogOverlay({
   );
 }
 
+/**
+ * The width a dialog grows to from `sm` up. Below `sm` every size is the
+ * same — the viewport less a 16px gutter each side — and that is the
+ * point of routing width through a prop rather than `className`.
+ *
+ * A caller's bare `max-w-lg` in `className` used to *replace* the base
+ * `max-w-[calc(100%-2rem)]` (tailwind-merge keeps the last of two
+ * conflicting `max-w-*`), so four dialogs ran edge to edge on a phone
+ * and nothing complained (#243). Width utilities on `*Content` are now
+ * an ESLint error; pick a size here instead.
+ */
+const DIALOG_SIZES = {
+  sm: "sm:max-w-sm",
+  md: "sm:max-w-md",
+  lg: "sm:max-w-lg",
+  xl: "sm:max-w-xl",
+  "2xl": "sm:max-w-2xl",
+  "4xl": "sm:max-w-4xl",
+  "5xl": "sm:max-w-5xl",
+} as const;
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  size = "lg",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  size?: keyof typeof DIALOG_SIZES;
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -66,7 +89,8 @@ function DialogContent({
           // mobile browser chrome doesn't clip the bottom of the
           // dialog. `overscroll-contain` keeps a scroll inside the
           // dialog from bouncing the page underneath.
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          DIALOG_SIZES[size],
           className,
         )}
         {...props}

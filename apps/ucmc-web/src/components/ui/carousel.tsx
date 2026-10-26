@@ -181,10 +181,17 @@ function CarouselPrevious({
       variant={variant}
       size={size}
       className={cn(
+        // Inside the frame, overlaid on the slide — not shadcn's stock
+        // `-left-12`, which hangs the button 48px outside the carousel.
+        // That only fits when whatever contains the carousel happens to
+        // leave 48px spare on each side, and on the landing page it never
+        // did: the arrows widened the document by 24–32px at every width
+        // from 320 to 1280 (#243). Inside, they cannot overhang anything,
+        // wherever the carousel is placed.
         "absolute size-8 rounded-full",
         orientation === "horizontal"
-          ? "top-1/2 -left-12 -translate-y-1/2"
-          : "-top-12 left-1/2 -translate-x-1/2 rotate-90",
+          ? "top-1/2 left-2 -translate-y-1/2"
+          : "top-2 left-1/2 -translate-x-1/2 rotate-90",
         className,
       )}
       disabled={!canScrollPrev}
@@ -212,9 +219,10 @@ function CarouselNext({
       size={size}
       className={cn(
         "absolute size-8 rounded-full",
+        // Inside the frame, for the reason on `CarouselPrevious`.
         orientation === "horizontal"
-          ? "top-1/2 -right-12 -translate-y-1/2"
-          : "-bottom-12 left-1/2 -translate-x-1/2 rotate-90",
+          ? "top-1/2 right-2 -translate-y-1/2"
+          : "bottom-2 left-1/2 -translate-x-1/2 rotate-90",
         className,
       )}
       disabled={!canScrollNext}

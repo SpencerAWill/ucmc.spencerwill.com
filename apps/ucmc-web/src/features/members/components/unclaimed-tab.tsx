@@ -145,7 +145,12 @@ export function UnclaimedTab({
             No unclaimed members yet.
           </span>
         )}
-        <Button type="button" size="sm" onClick={() => setSheetOpen(true)}>
+        <Button
+          aria-haspopup="dialog"
+          type="button"
+          size="sm"
+          onClick={() => setSheetOpen(true)}
+        >
           <Plus className="size-4" />
           Pre-add members
         </Button>

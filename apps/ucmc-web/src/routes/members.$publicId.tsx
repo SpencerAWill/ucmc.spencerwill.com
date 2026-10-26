@@ -248,7 +248,7 @@ function MemberDetailPage() {
     // width of the viewport, so it sits outside the container and
     // everything else sits inside one. A negative margin would have
     // to track the container's gutter at every breakpoint instead,
-    // which is the overflow bug `mobile-overflow.spec.ts` guards.
+    // which is the overflow bug `reflow-pages.spec.ts` guards.
     <div className="pb-8">
       {/* The back link rides on the banner rather than on a strip
           above it: a band of page background over a full-bleed image
@@ -440,6 +440,7 @@ function MemberManageActions({
     <>
       {member.status === "approved" ? (
         <Button
+          aria-haspopup="dialog"
           variant="outline"
           size="sm"
           className="text-destructive hover:bg-destructive/10"
@@ -489,6 +490,7 @@ function MemberManageActions({
       ) : null}
 
       <Button
+        aria-haspopup="dialog"
         variant="outline"
         size="sm"
         onClick={() => setConfirmAction("profileEdit")}
@@ -573,6 +575,7 @@ function RevokeSessionsButton({
   return (
     <>
       <Button
+        aria-haspopup="dialog"
         variant="outline"
         size="sm"
         className="text-destructive hover:bg-destructive/10"
@@ -631,7 +634,12 @@ function RoleAssignButton({ member }: { member: MemberDetail }) {
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button
+        aria-haspopup="dialog"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+      >
         <Shield className="mr-1 size-3.5" />
         Manage Roles
       </Button>

@@ -191,7 +191,7 @@ export function SponsorFormDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {seed?.mode === "edit" ? "Edit sponsor" : "Add sponsor"}

@@ -122,7 +122,7 @@ export function HonoraryFormDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {seed?.mode === "edit"

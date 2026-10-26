@@ -67,7 +67,7 @@ export function GearBatchInspectionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {selected ? (
@@ -177,7 +177,12 @@ function ModelPane({ model }: { model: CountedModelForInspectionDto }) {
         <p className="text-xs text-muted-foreground">
           The whole batch, checked at once.
         </p>
-        <Button size="sm" variant="outline" onClick={() => setLogOpen(true)}>
+        <Button
+          aria-haspopup="dialog"
+          size="sm"
+          variant="outline"
+          onClick={() => setLogOpen(true)}
+        >
           <Plus className="size-4" />
           Log inspection
         </Button>

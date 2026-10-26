@@ -1,5 +1,35 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import type { ReflowOptions } from "./e2e/fixtures/reflow";
+
+/**
+ * The reflow specs (`reflow-pages`, `reflow-overlays`) assert on layout
+ * at a width, which is not a phone concern — so they are matched by
+ * their own name, never by `mobile-*`. Filing them under `mobile-*` is
+ * how the overflow guard ended up measuring 390 and 412px and nothing
+ * else (#243).
+ */
+const REFLOW_SPECS = /reflow-.*\.spec\.ts/;
+
+/**
+ * The two reflow specs, apart. The phone projects run the page check
+ * only: an overlay's width is always a cap, never a floor, so the
+ * `reflow-overlays` project at 320px is the binding case, and
+ * re-crawling every dialog at 390 and 412 in two more engines cost
+ * ~3.5 min for no width it doesn't already cover.
+ */
+const REFLOW_PAGE_SPEC = /reflow-pages\.spec\.ts/;
+const REFLOW_OVERLAY_SPEC = /reflow-overlays\.spec\.ts/;
+
+/**
+ * The `reflow-sweep` widths: the WCAG 1.4.10 floor, then both sides of
+ * every Tailwind breakpoint. The edges are where `sm:` / `md:` / `lg:`
+ * hand a layout from stacked to side-by-side, and an off-by-one there is
+ * a real failure a sweep of round numbers would step over. Narrowest
+ * first: only the first gets a fresh load (see `fixtures/reflow.ts`).
+ */
+const REFLOW_SWEEP_WIDTHS = [320, 639, 640, 767, 768, 1023, 1024, 1279, 1280];
+
 // An externally-supplied base URL means we are pointed at a DEPLOYED
 // worker (the post-deploy smoke step in .github/actions/deploy), not at a dev server
 // this config is responsible for. It therefore does double duty: it sets
@@ -35,7 +65,7 @@ const BASE_URL =
 // hostname; default works for `pnpm e2e` invoked from the workspace.
 const MAILPIT_URL = process.env.MAILPIT_URL ?? "http://mailpit:8025";
 
-export default defineConfig({
+export default defineConfig<ReflowOptions>({
   testDir: "./e2e",
   // Clears users left behind by previous runs before anything starts.
   // Seeds key on `${prefix}-${Date.now()}@example.com`, so every run
@@ -67,15 +97,15 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      // The mobile spec is the mobile projects' business. Without this
-      // it would also run at 1280px, where it passes trivially and
-      // says nothing. `smoke.spec.ts` is excluded for a different
-      // reason — see the `smoke` project below.
-      testIgnore: [/mobile-.*\.spec\.ts/, /smoke\.spec\.ts/],
+      // The mobile specs are the mobile projects' business, and the
+      // reflow specs are `reflow-sweep`'s, which measures 1280 among
+      // its widths. `smoke.spec.ts` is excluded for a different reason
+      // — see the `smoke` project below.
+      testIgnore: [/mobile-.*\.spec\.ts/, REFLOW_SPECS, /smoke\.spec\.ts/],
     },
     /*
      * Two mobile projects, and `testMatch` confines both to the
-     * `mobile-*` specs rather than re-running the whole suite at phone
+     * `mobile-*` specs and `reflow-pages` rather than re-running the whole suite at phone
      * width. That is not thrift — most of the suite is *hostile* to it.
      * `gear-scanner.spec.ts`'s camera cases launch their own Chromium
      * with fake-camera flags and would ignore the project's device
@@ -96,12 +126,47 @@ export default defineConfig({
     {
       name: "mobile-safari",
       use: { ...devices["iPhone 14"] },
-      testMatch: /mobile-.*\.spec\.ts/,
+      testMatch: [/mobile-.*\.spec\.ts/, REFLOW_PAGE_SPEC],
     },
     {
       name: "mobile-chrome",
       use: { ...devices["Pixel 7"] },
-      testMatch: /mobile-.*\.spec\.ts/,
+      testMatch: [/mobile-.*\.spec\.ts/, REFLOW_PAGE_SPEC],
+    },
+    /*
+     * The page check across the width range, in one engine. The two
+     * phone projects above keep a fresh page load at the widths most of
+     * the membership uses, in both engines; this one covers everything
+     * they don't — 320px, tablets, split-screen, a half-width laptop
+     * window — by loading once at 320 and resizing up through
+     * `REFLOW_SWEEP_WIDTHS`.
+     *
+     * One engine because a width sweep is layout, not engine behaviour,
+     * and a second would double the cost for no new failure class
+     * (#239 is why the cost matters). Chromium because it is the engine
+     * the desktop job already carries.
+     */
+    {
+      name: "reflow-sweep",
+      use: {
+        ...devices["Desktop Chrome"],
+        reflowWidths: REFLOW_SWEEP_WIDTHS,
+      },
+      testMatch: REFLOW_PAGE_SPEC,
+    },
+    /*
+     * Every overlay the crawl can open, at the 320px floor. Its own
+     * project rather than a second file in `reflow-sweep` so CI can give
+     * each a runner by project: `--shard` balances by test count and
+     * left one shard holding both files and the other empty.
+     */
+    {
+      name: "reflow-overlays",
+      use: {
+        ...devices["Desktop Chrome"],
+        reflowWidths: [REFLOW_SWEEP_WIDTHS[0]],
+      },
+      testMatch: REFLOW_OVERLAY_SPEC,
     },
     /*
      * Post-deploy smoke. Selected explicitly (`--project=smoke`) by the

@@ -48,6 +48,7 @@ export function GearDeskSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        size="3xl"
         side="right"
         // Wider on desktop so the inline scanner viewfinder and items
         // list can sit side-by-side. The panes stack to a single
@@ -58,7 +59,7 @@ export function GearDeskSheet({
         // offset the sticky scanner away from the actual viewport top.
         // SheetHeader has its own `p-4` so the title still gets the
         // spacing it needs.
-        className="w-full overflow-y-auto px-4 pb-6 sm:max-w-3xl"
+        className="overflow-y-auto px-4 pb-6"
       >
         <SheetHeader className="px-0">
           {/* Title and mode on one row. The mode switch used to be a

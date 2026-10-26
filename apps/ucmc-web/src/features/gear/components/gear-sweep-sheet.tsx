@@ -54,7 +54,7 @@ export function GearSweepSheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-xl">
+      <SheetContent size="xl" className="flex flex-col gap-0">
         <SheetHeader>
           <SheetTitle>Inventory sweep</SheetTitle>
           <SheetDescription>

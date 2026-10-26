@@ -61,6 +61,7 @@ export function EditAffordance({
   return (
     <>
       <Button
+        aria-haspopup="dialog"
         type="button"
         variant="secondary"
         size="sm"
@@ -72,7 +73,10 @@ export function EditAffordance({
         Edit
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[85dvh] max-w-2xl flex-col gap-4 overflow-hidden">
+        <DialogContent
+          size="2xl"
+          className="flex max-h-[85dvh] flex-col gap-4 overflow-hidden"
+        >
           <DialogHeader>
             <DialogTitle>{label}</DialogTitle>
             <DialogDescription className="sr-only">

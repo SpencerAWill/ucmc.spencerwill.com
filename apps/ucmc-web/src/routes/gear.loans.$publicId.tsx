@@ -64,6 +64,7 @@ function LoanDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           {isActive ? (
             <Button
+              aria-haspopup="dialog"
               variant="outline"
               size="sm"
               onClick={() => setExtendOpen(true)}
@@ -74,6 +75,7 @@ function LoanDetailPage() {
           ) : null}
           {canWriteOff ? (
             <Button
+              aria-haspopup="dialog"
               variant="outline"
               size="sm"
               onClick={() => setWriteOffOpen(true)}

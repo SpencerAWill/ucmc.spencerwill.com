@@ -459,7 +459,7 @@ export function RoleEditorSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-lg">
+      <SheetContent size="lg" className="flex flex-col gap-0">
         <SheetHeader>
           <SheetTitle>{role?.displayName ?? roleName}</SheetTitle>
           <SheetDescription>

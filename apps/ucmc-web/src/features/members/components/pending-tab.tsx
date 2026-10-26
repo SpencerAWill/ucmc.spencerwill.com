@@ -319,7 +319,10 @@ function DateRangeCalendar({
         numberOfMonths={6}
         showOutsideDays={false}
         disabled={{ after: today }}
-        classNames={{ months: "flex flex-col gap-4" }}
+        // Replaces the stock `months` class wholesale, so it must keep
+        // its `relative`: the month nav is absolutely positioned against
+        // it, and without one the arrows pin to the popover's edges.
+        classNames={{ months: "relative flex flex-col gap-4" }}
         startMonth={fiveMonthsAgo}
         endMonth={today}
         defaultMonth={today}

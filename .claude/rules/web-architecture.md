@@ -77,6 +77,10 @@ TanStack Start's import-protection plugin blocks `*.server.*` from the client gr
 
 **Use `radix-ui`, the unified package** — `import { Slot } from "radix-ui"`, never the legacy per-component `@radix-ui/react-*` scoped packages, which are not dependencies. Nearly every file in `src/components/ui/` is Radix-based.
 
+**Overlays are sized with a `size` prop, never a width class (#243).** `DialogContent` (`sm`…`5xl`, default `lg`) and `SheetContent` (`sm`…`3xl`, default `sm`, left/right only) map the size to an `sm:max-w-*`. Below `sm` every dialog is the viewport less a 16px gutter (`max-w-[calc(100%-2rem)]`), and every side sheet is full width with its gutter inside: sheet bodies carry `px-4` to match the header and footer slots. A caller's bare `max-w-lg` used to _replace_ that gutter under tailwind-merge, and four dialogs ran edge to edge on a phone, so **ESLint bans width utilities in any `*Content` `className`**, and `overlay-gutter.test.tsx` pins every size. Heights (`max-h-*`) are still the caller's. The same rule set bans **`break-words`**: `<body>` carries `wrap-anywhere`, which lets a long token shrink its box's min-content width, and `break-words` downgrades that to `overflow-wrap: break-word`, which does not. One unbroken word in a grid or flex child then holds the column open and widens the page.
+
+**A button or menu item that opens a dialog carries `aria-haspopup="dialog"`.** Radix's own `*Trigger`s stamp it, but most dialogs here are controlled and open from a plain `onClick`. It is correct ARIA (a screen reader announces "opens dialog"), and it is how `e2e/reflow-overlays.spec.ts` finds the dialog to measure. An opener without it is invisible to that spec.
+
 **`@base-ui/react` is a single-component exception**: `combobox.tsx` only, because shadcn's Combobox has no Radix implementation. Don't reach for Base UI for anything else — a second parallel primitive stack is worse than either one alone. Standardizing on Base UI would be a deliberate full-catalog migration, not something to drift into per-component.
 
 ## Responsive collections (tables vs. stacked rows)
@@ -94,7 +98,7 @@ Two different patterns is **not** the inconsistency — an undocumented choice i
 
 **Bulk selection is kept at phone width here, which is a deliberate divergence.** Polaris suppresses bulk actions in `condensed` mode on the grounds that multi-select doesn't belong on a phone. `/members/waivers` keeps it because the use case is concrete and specifically mobile: an officer stands at a meeting with a stack of signed waivers and ticks down the list. Weigh it per surface — the general case is that Polaris is right.
 
-Whichever treatment is used, **an `overflow-x-auto` wrapper takes `overflow-y-hidden` with it.** Per CSS Overflow 3 a non-`visible` value on one axis computes the other from `visible` to `auto`, so the wrapper otherwise captures vertical scroll as well and a touch-drag slides the content inside its own box. `e2e/mobile-overflow.spec.ts` guards the related failure — anything reaching outside `PageContainer`'s gutter widens the document and makes the whole page scroll sideways.
+Whichever treatment is used, **an `overflow-x-auto` wrapper takes `overflow-y-hidden` with it.** Per CSS Overflow 3 a non-`visible` value on one axis computes the other from `visible` to `auto`, so the wrapper otherwise captures vertical scroll as well and a touch-drag slides the content inside its own box. `e2e/reflow-pages.spec.ts` guards the related failure — anything reaching outside `PageContainer`'s gutter widens the document and makes the whole page scroll sideways.
 
 ## TypeScript & observability
 

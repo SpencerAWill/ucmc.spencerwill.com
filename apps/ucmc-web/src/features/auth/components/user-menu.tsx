@@ -163,7 +163,10 @@ export function UserMenu() {
             {launcher.canSend ? (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => launcher.open()}>
+                <DropdownMenuItem
+                  aria-haspopup="dialog"
+                  onSelect={() => launcher.open()}
+                >
                   <MessageSquarePlus className="mr-2 size-4" />
                   Send Feedback
                 </DropdownMenuItem>

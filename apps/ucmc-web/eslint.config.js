@@ -107,6 +107,55 @@ const ZONE_EXCEPTIONS = {
 };
 
 /**
+ * Drizzle's relational-query callback hands the operators in as an
+ * argument, so neither import ban sees them: destructured
+ * (`(t, { inArray }) => …`) or reached through it (`ops.inArray`).
+ */
+const D1_SYNTAX_BANS = [
+  {
+    selector: "ObjectPattern > Property[key.name=/^(inArray|notInArray)$/]",
+    message:
+      "Drizzle's relational-query inArray binds one D1 parameter per element (#291). Use inJsonArray from #/server/db.",
+  },
+  {
+    selector: "MemberExpression[property.name=/^(inArray|notInArray)$/]",
+    message:
+      "Drizzle's relational-query inArray binds one D1 parameter per element (#291). Use inJsonArray from #/server/db.",
+  },
+];
+
+/**
+ * Class-string patterns that have each made the app scroll sideways on a
+ * phone (#243). Each matches a string literal or a template-literal
+ * chunk anywhere inside the attribute, so a `cn(...)` argument or a
+ * `` `max-w-lg ${x}` `` is caught as well as a bare string, and the
+ * variant prefix accepts brackets (`data-[size=sm]:`).
+ */
+const WIDTH_CLASS = String.raw`/(^|\s)([^\s:]+:)*!?(max-w|min-w|w)-/`;
+const BREAK_WORDS_CLASS = String.raw`/(^|\s)([^\s:]+:)*break-words(\s|$)/`;
+const OVERLAY_CLASSNAME =
+  "JSXOpeningElement[name.name=/^(Dialog|AlertDialog|Sheet|Drawer)Content$/] > JSXAttribute[name.name='className']";
+const LAYOUT_SYNTAX_BANS = [
+  {
+    // A width utility on an overlay's content box. A bare `max-w-lg`
+    // *replaces* the primitive's `max-w-[calc(100%-2rem)]` phone gutter
+    // under tailwind-merge, and four dialogs ran edge to edge that way.
+    selector: `${OVERLAY_CLASSNAME} :matches(Literal[value=${WIDTH_CLASS}], TemplateElement[value.raw=${WIDTH_CLASS}])`,
+    message:
+      "Size overlays with the `size` prop, not width classes — a width class can remove the phone gutter (#243). See DIALOG_SIZES / SHEET_SIZES.",
+  },
+  {
+    // `<body>` carries `wrap-anywhere`, which lets a long token shrink
+    // its box's min-content width. `break-words` *downgrades* that to
+    // `overflow-wrap: break-word`, which does not — so an unbroken word
+    // in a grid or flex child holds the column open and widens the page.
+    selector: `JSXAttribute[name.name='className'] :matches(Literal[value=${BREAK_WORDS_CLASS}], TemplateElement[value.raw=${BREAK_WORDS_CLASS}])`,
+    message:
+      "`break-words` undoes the global `wrap-anywhere` and lets long text widen the page (#243). Inherit it — or use `wrap-anywhere` / `break-all` explicitly.",
+  },
+];
+
+/**
  * Features don't import features. Compose at the route level.
  *
  * Generated as every ordered pair, so a new entry in FEATURES is
@@ -337,22 +386,26 @@ export default [
           ],
         },
       ],
+      "no-restricted-syntax": ["error", ...D1_SYNTAX_BANS],
+    },
+  },
+  /**
+   * Layout bans (#243), for app code only — `src/components/ui/` is the
+   * vendored primitive layer that *implements* these widths, and the
+   * sidebar legitimately sizes its own mobile sheet there.
+   *
+   * It restates `no-restricted-syntax` with the D1 selectors included,
+   * because a second block for the rule replaces the first for the files
+   * both match rather than adding to it.
+   */
+  {
+    files: ["src/**/*.tsx"],
+    ignores: ["src/components/ui/**", "src/**/__tests__/**"],
+    rules: {
       "no-restricted-syntax": [
         "error",
-        // The relational-query callback hands the operators in as an
-        // argument, so neither import ban sees them: destructured
-        // (`(t, { inArray }) => …`) or reached through it (`ops.inArray`).
-        {
-          selector:
-            "ObjectPattern > Property[key.name=/^(inArray|notInArray)$/]",
-          message:
-            "Drizzle's relational-query inArray binds one D1 parameter per element (#291). Use inJsonArray from #/server/db.",
-        },
-        {
-          selector: "MemberExpression[property.name=/^(inArray|notInArray)$/]",
-          message:
-            "Drizzle's relational-query inArray binds one D1 parameter per element (#291). Use inJsonArray from #/server/db.",
-        },
+        ...D1_SYNTAX_BANS,
+        ...LAYOUT_SYNTAX_BANS,
       ],
     },
   },

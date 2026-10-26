@@ -143,6 +143,7 @@ function GearLoansPage() {
         <div className="flex items-center gap-2">
           {canLoan ? (
             <Button
+              aria-haspopup="dialog"
               variant="outline"
               size="sm"
               onClick={() => setBulkImportOpen(true)}

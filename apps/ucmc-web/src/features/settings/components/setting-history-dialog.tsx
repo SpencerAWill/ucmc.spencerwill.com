@@ -44,7 +44,7 @@ export function SettingHistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit history — {label}</DialogTitle>
           <DialogDescription>

@@ -9,7 +9,7 @@
  * route renders `TopoBanner` outside `PageContainer` to achieve that,
  * rather than pulling it out with a negative margin that would have
  * to track the container's gutter at every breakpoint (the mismatch
- * `mobile-overflow.spec.ts` exists to catch).
+ * `reflow-pages.spec.ts` exists to catch).
  *
  * Mobile-first, and the stacking is not incidental. At phone width
  * the rings sit above the name rather than beside it, because a
@@ -76,9 +76,7 @@ export function ProfileHeader({
         <div className="min-w-0 flex-1 space-y-1 sm:pb-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             {name ? (
-              <h1 className="text-xl font-semibold break-words sm:text-2xl">
-                {name}
-              </h1>
+              <h1 className="text-xl font-semibold sm:text-2xl">{name}</h1>
             ) : null}
             {pronouns ? (
               <span className="text-sm text-muted-foreground">{pronouns}</span>

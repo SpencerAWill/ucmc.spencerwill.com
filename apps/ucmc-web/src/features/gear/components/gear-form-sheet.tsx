@@ -94,7 +94,7 @@ export function GearFormSheet({
   const isEdit = intent.mode === "edit";
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-xl">
+      <SheetContent size="xl" className="flex flex-col gap-0">
         <SheetHeader>
           <SheetTitle>{isEdit ? "Edit gear" : "Add gear"}</SheetTitle>
           <SheetDescription>

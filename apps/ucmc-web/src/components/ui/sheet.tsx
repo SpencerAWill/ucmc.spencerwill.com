@@ -44,15 +44,38 @@ function SheetOverlay({
   );
 }
 
+/**
+ * How wide a left or right sheet grows from `sm` up. Below `sm` a side
+ * sheet is the full screen width: these sheets hold forms, and stock
+ * shadcn's `w-3/4` left a 240px column on a 320px phone. Full width
+ * puts the gutter *inside* — every sheet body carries `px-4`, matching
+ * the header and footer slots — rather than as a strip of page.
+ *
+ * Routed through a prop rather than `className` for the reason on
+ * `DIALOG_SIZES` in `dialog.tsx`: width utilities on `*Content` are an
+ * ESLint error (#243). Ignored for `top` / `bottom`, which span the
+ * viewport.
+ */
+const SHEET_SIZES = {
+  sm: "sm:max-w-sm",
+  md: "sm:max-w-md",
+  lg: "sm:max-w-lg",
+  xl: "sm:max-w-xl",
+  "2xl": "sm:max-w-2xl",
+  "3xl": "sm:max-w-3xl",
+} as const;
+
 function SheetContent({
   className,
   children,
   side = "right",
   showCloseButton = true,
+  size = "sm",
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
+  size?: keyof typeof SHEET_SIZES;
 }) {
   return (
     <SheetPortal>
@@ -62,9 +85,10 @@ function SheetContent({
         className={cn(
           "fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:animate-in data-[state=open]:duration-500",
           side === "right" &&
-            "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
+            "inset-y-0 right-0 h-full w-full border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
           side === "left" &&
-            "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+            "inset-y-0 left-0 h-full w-full border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
+          (side === "right" || side === "left") && SHEET_SIZES[size],
           side === "top" &&
             "inset-x-0 top-0 h-auto border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
           side === "bottom" &&

@@ -397,7 +397,7 @@ function ScreenshotChoice({
             />
           </button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-5xl">
+        <DialogContent size="5xl">
           <DialogTitle>Screenshot</DialogTitle>
           <img
             src={screenshot.dataUrl}

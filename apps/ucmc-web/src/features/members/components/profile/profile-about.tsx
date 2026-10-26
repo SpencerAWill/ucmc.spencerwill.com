@@ -50,7 +50,7 @@ export function ProfilePrompts({
                 <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   {PROFILE_PROMPTS[prompt.key].question}
                 </p>
-                <p className="mt-1 font-medium break-words">{prompt.answer}</p>
+                <p className="mt-1 font-medium">{prompt.answer}</p>
               </li>
             ))}
           </ul>

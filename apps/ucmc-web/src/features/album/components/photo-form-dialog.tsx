@@ -345,7 +345,7 @@ export function PhotoFormDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>
             {seed?.mode === "edit" ? "Edit photo" : "Add photo"}

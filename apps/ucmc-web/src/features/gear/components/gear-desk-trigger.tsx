@@ -26,6 +26,7 @@ export function GearDeskTrigger({
   return (
     <>
       <Button
+        aria-haspopup="dialog"
         onClick={() => setOpen(true)}
         className={cn(className)}
         aria-label="Open gear desk"
