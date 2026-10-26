@@ -209,6 +209,27 @@ jobs:
             exit 1
           fi
 
+      # Both E2E jobs run in `mcr.microsoft.com/playwright`, whose browser
+      # builds belong to one Playwright release. A `@playwright/test` bump
+      # (Dependabot's, usually) that leaves the image behind fails every
+      # spec on "Executable doesn't exist"; this fails first, and says why.
+      - name: Playwright image matches @playwright/test
+        run: |
+          want=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
+          # Anchored on `image:` so this step's own source can't match.
+          pins=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*mcr\.microsoft\.com\/playwright:v([0-9][^-@[:space:]]*)-.*/\1/p' .github/workflows/cicd.yml)
+          if [ "$(printf '%s\n' "$pins" | grep -c .)" -ne 2 ]; then
+            echo "::error::Expected 2 Playwright image pins in cicd.yml (e2e-desktop, e2e-mobile), found: '$pins'"
+            exit 1
+          fi
+          for pin in $pins; do
+            if [ "$pin" != "$want" ]; then
+              echo "::error::Playwright image is v$pin but @playwright/test is $want. Move both E2E jobs to mcr.microsoft.com/playwright:v$want-noble, pinned by its index digest."
+              exit 1
+            fi
+          done
+          echo "Playwright image pins match @playwright/test $want"
+
   web-lint-test:
     name: Web — lint, typecheck, knip, drift, test
     if: github.event.pull_request.draft != true && needs.paths.outputs.web == 'true'
@@ -315,6 +336,24 @@ jobs:
     permissions:
       contents: read
 
+    # Microsoft's Playwright image: Node 24 (as `.nvmrc`), every browser
+    # at `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, and every system
+    # library they need. This used to cache the browser binaries and run
+    # `playwright install-deps` on each job, which is ~150 apt packages
+    # for WebKit — and on 2026-10-26 the Ubuntu mirror served them at
+    # ~60 KB/s, so this job hit its timeout twice in a row before running
+    # a single spec. Nothing is installed at job time now.
+    #
+    # Version AND index digest, like every image here. **The tag must
+    # equal the locked `@playwright/test`**, or the library looks for
+    # browser builds the image doesn't carry; the `audit` job fails when
+    # they differ, which is what catches a Dependabot bump. Both E2E jobs
+    # pin the same line. `--ipc=host` is Playwright's own recommendation:
+    # Docker's 64 MB /dev/shm is small enough to crash Chromium.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+      options: --ipc=host
+
     # Magic-link, passkey, preadd and claim flows all need a mailbox. The
     # app POSTs to `${MAILPIT_URL}/api/v1/send` over HTTP (see
     # src/server/email/resend.ts) and the Playwright fixture polls the
@@ -327,8 +366,6 @@ jobs:
         # github-actions ecosystem doesn't read service images, so bump this
         # by hand alongside the compose file when Dependabot moves that one.
         image: axllent/mailpit:v1.31.6@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
-        ports:
-          - 8025:8025
 
     # Worker env vars are passthrough placeholders — the dev server's
     # first SSR request crashes without APP_BASE_URL / SESSION_SECRET /
@@ -347,12 +384,13 @@ jobs:
       RESEND_FROM: noreply@localhost
       RESEND_FROM_NAME: UCMC (ci)
       SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
-      # Service containers publish to the runner's loopback, not to a
-      # Docker network hostname: `http://mailpit:8025` — the devcontainer
-      # default baked into the fixture — does not resolve here. Read by
-      # the Playwright fixture directly, and by the worker via the
+      # A container job shares a Docker network with its services, so
+      # Mailpit is reached by service name — the devcontainer's address
+      # and the fixture's default. (It was `localhost:8025` while the job
+      # ran on the bare runner, where services publish to loopback.) Read
+      # by the Playwright fixture directly, and by the worker via the
       # webServer env block in playwright.config.ts.
-      MAILPIT_URL: http://localhost:8025
+      MAILPIT_URL: http://mailpit:8025
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -367,39 +405,6 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-
-      # Chromium only. WebKit is `e2e-mobile`'s business and downloading
-      # it here would add minutes for nothing: the passkey specs drive a
-      # WebAuthn virtual authenticator over CDP, which WebKit has no
-      # equivalent for, and gear-scanner launches its own Chromium with
-      # fake-camera flags.
-      # Cache the browser binaries, keyed on the resolved Playwright
-      # version rather than the lockfile — the lockfile changes on every
-      # dependency bump, and a key that churns is a cache that never hits.
-      # The binaries are the expensive part (~130 MB Chromium, ~90 MB
-      # WebKit, downloaded and extracted on a cold runner); the apt
-      # packages behind `--with-deps` are not cacheable, so a hit still
-      # pays `install-deps`, which is much the cheaper half.
-      - name: Resolve Playwright version
-        id: pw
-        run: |
-          version=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
-
-      - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium
-
-      - name: Install Playwright system deps (cache hit)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: pnpm --filter ucmc-web exec playwright install-deps chromium
 
       # Apply Drizzle migrations to the Miniflare-backed local D1 before
       # the dev server boots. Without this, the home-page loader queries
@@ -419,7 +424,7 @@ jobs:
       - name: Wait for Mailpit
         run: |
           for i in $(seq 1 30); do
-            if curl -sSf http://localhost:8025/api/v1/info > /dev/null 2>&1; then
+            if curl -sSf http://mailpit:8025/api/v1/info > /dev/null 2>&1; then
               echo "mailpit ready after ${i}s"
               exit 0
             fi
@@ -430,7 +435,10 @@ jobs:
 
       # The whole chromium project: the axe-core WCAG 2.1 AA gate, the
       # real ZXing WASM decode, and the 10 flows that until now only ran
-      # on a developer's laptop.
+      # on a developer's laptop. Chromium only, though the image carries
+      # WebKit: the passkey specs drive a WebAuthn virtual authenticator
+      # over CDP, which WebKit has no equivalent for, and gear-scanner
+      # launches its own Chromium with fake-camera flags.
       - name: Run E2E specs
         run: pnpm --filter ucmc-web e2e --project=chromium
 
@@ -471,10 +479,15 @@ jobs:
     if: github.event.pull_request.draft != true && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
-    # Two specs in two engines, plus a WebKit download.
+    # Two specs in two engines.
     timeout-minutes: 20
     permissions:
       contents: read
+
+    # The same image and pin as `e2e-desktop` — see the note there.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+      options: --ipc=host
 
     env:
       CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
@@ -503,38 +516,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Both engines, because they fail differently. `overflow` axis
-      # computation and `touch-action` handling are exactly the areas
-      # where WebKit and Blink have diverged before, and iOS Safari is
-      # what the membership actually carries.
-      # Cache the browser binaries, keyed on the resolved Playwright
-      # version rather than the lockfile — the lockfile changes on every
-      # dependency bump, and a key that churns is a cache that never hits.
-      # The binaries are the expensive part (~130 MB Chromium, ~90 MB
-      # WebKit, downloaded and extracted on a cold runner); the apt
-      # packages behind `--with-deps` are not cacheable, so a hit still
-      # pays `install-deps`, which is much the cheaper half.
-      - name: Resolve Playwright version
-        id: pw
-        run: |
-          version=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium-webkit
-
-      - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter ucmc-web exec playwright install --with-deps chromium webkit
-
-      - name: Install Playwright system deps (cache hit)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: pnpm --filter ucmc-web exec playwright install-deps chromium webkit
-
       - name: Apply local D1 migrations
         run: pnpm --filter ucmc-web db:migrate:local
 
@@ -543,7 +524,10 @@ jobs:
       # cause (`-mx-*`, a fixed `w-[Npx]`) is reasonable in isolation and
       # the symptom is invisible at desktop width. `mobile-waiver-queue`
       # measures that selecting a member doesn't move the rows under the
-      # officer's finger.
+      # officer's finger. Both engines, because they fail differently:
+      # `overflow` axis computation and `touch-action` handling are
+      # exactly the areas where WebKit and Blink have diverged before,
+      # and iOS Safari is what the membership actually carries.
       - name: Run mobile specs
         run: pnpm --filter ucmc-web e2e --project=mobile-safari --project=mobile-chrome
 
