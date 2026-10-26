@@ -20,6 +20,7 @@ import type {
   SettingValue,
   UpdateSettingInput,
 } from "#/server/settings/settings-registry";
+import type { SiteNotice } from "#/server/settings/site-notice";
 import type { UpdateSettingResult } from "./settings-actions.server";
 import type {
   SiteSettingEntry,
@@ -30,13 +31,14 @@ export type { UpdateSettingResult, UpdateSettingInput };
 
 // Public alias kept for route + UI imports. The per-key shape now includes
 // edit metadata (updatedAtMs + updatedByName) alongside the value.
-export type SiteSettingsSnapshot = SiteSettingsEntries;
+// Partial because the list is filtered to the keys the caller can edit —
+// a `notice:manage`-only officer gets the `notice.*` entries alone.
+export type SiteSettingsSnapshot = Partial<SiteSettingsEntries>;
 export type { SiteSettingEntry };
 
 /**
- * Read every site setting. Officer-gated server-side (the action checks
- * `settings:manage`) — non-officers never need this; the page lives
- * behind the same gate.
+ * Read every site setting the caller can edit. Gated server-side per key
+ * (`settingPermissionOf`) — the page lives behind the same gate.
  *
  * Returned as a single map keyed by `SettingKey` so the admin page can
  * hydrate every form in one query.
@@ -97,6 +99,22 @@ export const getPublicBrandingFn = createServerFn({
 });
 
 /**
+ * The site notice for whoever is asking, or `null` for none. No auth gate;
+ * the audience policy is applied in the action, so a members-only notice
+ * is never in a signed-out response. Query it per viewer
+ * (`siteNoticeQueryOptions`) so signing in or out re-keys the banner.
+ */
+export type { SiteNotice };
+
+export const getSiteNoticeFn = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<SiteNotice | null> => {
+  const { getSiteNoticeAction } =
+    await import("./settings-actions-read.server");
+  return getSiteNoticeAction();
+});
+
+/**
  * Public read of feature-flag state. No auth gate — "is this feature
  * visible?" isn't sensitive (anyone hitting the gated URL would get the
  * same answer back), and the sidebar and tab bars need this synchronously
@@ -127,15 +145,16 @@ export const getPublicFlagsFn = createServerFn({
 /**
  * Per-setting change history. Officer-gated. Returns the most recent
  * `settings_updated` audit rows for a given key, with the actor's
- * display name resolved. `booleanValue` is non-null only when the audit
- * row recorded a boolean (matches the metadata policy in
- * settings-actions.server.ts).
+ * display name resolved. `booleanValue` / `enumValue` are non-null only
+ * when the audit row recorded a boolean / an enum value (matches the
+ * metadata policy in settings-actions.server.ts).
  */
 export type SettingHistoryEntry = {
   id: string;
   atMs: number;
   actorName: string | null;
   booleanValue: boolean | null;
+  enumValue: string | null;
 };
 
 const listSettingHistoryInputSchema = z.object({

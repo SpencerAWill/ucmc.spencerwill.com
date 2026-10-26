@@ -1,3 +1,5 @@
+import type { NoticeViewer } from "#/server/settings/site-notice";
+
 /**
  * Single TanStack Query key for the /settings admin surface. Every
  * setting hydrates from one snapshot fetch (cheap — a handful of rows)
@@ -39,6 +41,16 @@ export const PUBLIC_BRANDING_QUERY_KEY = [
   "site-settings",
   "public-branding",
 ] as const;
+
+/**
+ * The site notice, keyed by viewer. The server answers differently for a
+ * signed-out visitor, a pending account and an approved member, so each
+ * gets its own cache entry: signing in or out re-keys the banner rather
+ * than showing the previous audience's answer. Under the `["site-settings"]`
+ * prefix, so a notice edit invalidates every viewer's entry.
+ */
+export const siteNoticeQueryKey = (viewer: NoticeViewer) =>
+  ["site-settings", "notice", viewer] as const;
 
 export const settingHistoryQueryKey = (key: string) =>
   ["site-settings", "history", key] as const;

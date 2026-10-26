@@ -123,6 +123,18 @@ The base layer applies `border-border` to every element, so a bare
 edge — under the header that read as a gap rather than a border. **A
 coloured bar separates by colour; it takes no border rule.**
 
+## Site notice (`site-notice-banner.tsx`)
+
+`SiteNoticeBanner` is the **first child of `SidebarInset`, before `<main>`** — inside the page column, sticky at `top-(--header-height)` with `z-20` under the header's `z-30`. It belongs to the page, so it never spans the sidebar or sits between the header and it. The server decides whether there is a notice at all (`site-settings.md`); this file only draws one.
+
+**One line, and a ticker when it doesn't fit.** `ResizeObserver` compares the text's `scrollWidth` with the viewport on every width change, so rotating a phone engages and disengages it — the server render and first client render are the static truncated line, because overflow is a measurement. The ticker is two copies back to back (the second `aria-hidden`) translated by `-50%` in `@keyframes site-notice-marquee`, at **60px/s** over one copy plus its 48px gap (`marqueeDurationSeconds`). It pauses on hover and focus-within **in CSS** (`group-hover/notice`, `group-focus-within/notice`) — handlers on the `<aside>` landmark are what `jsx-a11y/no-noninteractive-element-interactions` forbids — and a pause/play button (`aria-pressed`) sets an inline `paused`. That inline style is never `running`, which would beat the classes.
+
+**Reduced motion breaks the one-line rule on purpose**: nothing moves and the text wraps. Truncating would hide the end of the notice from the people who asked the page to sit still.
+
+**The button's focus outline is the tone's foreground, not `--ring`.** The brand-green ring is measured against the page and can vanish on a coloured fill (green on success); the foreground is already held to 4.5:1 against it. The bar takes no border, per the chrome rule above.
+
+**The `--notice-<tone>` pairs are gated by `notice-contrast.test.tsx`**, which reads `styles.css` from disk (both vitest pools stub CSS, so `?raw` is empty) and converts OKLCH to sRGB luminance: every tone, both themes, ≥ 4.5:1. Light uses deep fills with a near-white foreground except warning, which only reads as amber when light and takes a near-black foreground; dark is re-stepped, not flipped. The measured ratios sit in a comment above each block — re-run the test after touching any of them.
+
 ## Page containers (`page-container.tsx`)
 
 `<main>` in `app-layout.tsx` carries **no padding on purpose** — the

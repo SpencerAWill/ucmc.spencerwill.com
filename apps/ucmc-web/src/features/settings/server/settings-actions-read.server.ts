@@ -4,26 +4,35 @@
  * member-side "public settings" reader can share the same repo without
  * inheriting the `settings:manage` gate.
  *
- * Today the admin UI is the only caller, so this still gates on
- * `settings:manage`.
+ * The admin reads are gated per key: the list returns only the settings
+ * the caller can edit, and history checks the key asked about.
  */
 import { and, desc, eq } from "drizzle-orm";
 
 import * as schema from "../../../../drizzle/schema";
 import { getDb } from "#/server/db";
-import { requireSettingsManager } from "./permissions.server";
+import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import {
+  requireAnySettingPermission,
+  requireSettingPermission,
+} from "./permissions.server";
 import {
   readAllSettings,
   readSetting,
 } from "#/server/settings/settings-repo.server";
 import {
+  canEditSetting,
   effectivePageFlags,
   isSettingKey,
   pageFlagKeyOf,
   PAGE_SETTING_KEYS,
-  SETTINGS,
 } from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
+import {
+  noticeViewerOf,
+  resolveSiteNotice,
+} from "#/server/settings/site-notice";
+import type { SiteNotice } from "#/server/settings/site-notice";
 import type {
   PublicBranding,
   PublicFlags,
@@ -32,9 +41,19 @@ import type {
   SiteSettingsSnapshot,
 } from "./settings-fns";
 
+/**
+ * Every setting the caller can edit, with its edit metadata. Filtered per
+ * key, so a `notice:manage`-only officer gets the four `notice.*` entries
+ * and never sees the values of settings they can't change.
+ */
 export async function listSiteSettingsAction(): Promise<SiteSettingsSnapshot> {
-  await requireSettingsManager();
-  return readAllSettings();
+  const principal = await requireAnySettingPermission();
+  const all = await readAllSettings();
+  return Object.fromEntries(
+    Object.entries(all).filter(([key]) =>
+      canEditSetting(principal.permissions, key as SettingKey),
+    ),
+  );
 }
 
 /**
@@ -65,6 +84,28 @@ export async function getPublicBrandingAction(): Promise<PublicBranding> {
     readSetting("appearance.headerTagline"),
   ]);
   return { headerTitle, headerTagline };
+}
+
+/**
+ * The site notice this caller should see, or `null`. No auth gate, but
+ * unlike the other public reads the answer depends on who is asking: a
+ * members-only notice is decided away here, on the server, so its text
+ * never ships to a signed-out browser — not in the SSR HTML and not in
+ * the dehydrated query cache. Its own allowlisted payload, like the
+ * contact and branding reads; `resolveSiteNotice` holds the policy.
+ */
+export async function getSiteNoticeAction(): Promise<SiteNotice | null> {
+  const [enabled, text, audience, tone, principal] = await Promise.all([
+    readSetting("notice.enabled"),
+    readSetting("notice.text"),
+    readSetting("notice.audience"),
+    readSetting("notice.tone"),
+    loadCurrentPrincipal(),
+  ]);
+  return resolveSiteNotice(
+    { enabled, text, audience, tone },
+    noticeViewerOf(principal),
+  );
 }
 
 /**
@@ -99,12 +140,11 @@ export async function getPublicFlagsAction(): Promise<PublicFlags> {
 /**
  * Per-setting audit history. Returns the last N `settings_updated` rows
  * for a given key, joined to `profiles.full_name` for actor display.
- * Gated by `settings:manage` — same surface as the rest of the admin
- * read API.
+ * Gated by the key's own permission — the same one that edits it.
  *
  * Value rendering uses the same policy as the audit recorder: boolean
- * values come back populated, every other shape returns `null` (the
- * audit row never stored a value for those — see settings-actions
+ * and enum values come back populated, every other shape returns `null`
+ * (the audit row never stored a value for those — see settings-actions
  * for the metadata policy).
  */
 const HISTORY_LIMIT = 50;
@@ -112,12 +152,11 @@ const HISTORY_LIMIT = 50;
 export async function listSettingHistoryAction(input: {
   key: SettingKey;
 }): Promise<SettingHistoryEntry[]> {
-  await requireSettingsManager();
-  if (!isSettingKey(input.key)) return [];
-  // Defense in depth — the gate above is the real boundary, but
-  // referencing SETTINGS[key] here makes the loop below total over
-  // every registered key.
-  if (!Object.prototype.hasOwnProperty.call(SETTINGS, input.key)) return [];
+  if (!isSettingKey(input.key)) {
+    await requireAnySettingPermission();
+    return [];
+  }
+  await requireSettingPermission(input.key);
 
   const rows = await getDb()
     .select({
@@ -147,24 +186,29 @@ export async function listSettingHistoryAction(input: {
     .all();
 
   return rows.map((r) => {
-    let parsedValue: boolean | null = null;
-    if (r.metadataJson) {
-      try {
-        const parsed = JSON.parse(r.metadataJson) as {
-          key?: unknown;
-          value?: unknown;
-        };
-        if (typeof parsed.value === "boolean") parsedValue = parsed.value;
-      } catch {
-        // Audit metadata is officer-trusted but if anything ever writes
-        // malformed JSON we shouldn't crash the history view.
-      }
-    }
+    const parsedValue = auditValueOf(r.metadataJson);
     return {
       id: r.id,
       atMs: r.createdAt.epochMilliseconds,
       actorName: r.actorName,
-      booleanValue: parsedValue,
+      booleanValue: typeof parsedValue === "boolean" ? parsedValue : null,
+      // Only enums record a string value; free text is logged key-only.
+      enumValue: typeof parsedValue === "string" ? parsedValue : null,
     };
   });
+}
+
+/** The `value` an audit row recorded, or `null` for none / unreadable. */
+function auditValueOf(metadataJson: string | null): unknown {
+  if (!metadataJson) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(metadataJson) as { value?: unknown };
+    return parsed.value ?? null;
+  } catch {
+    // Audit metadata is officer-trusted but if anything ever writes
+    // malformed JSON we shouldn't crash the history view.
+    return null;
+  }
 }

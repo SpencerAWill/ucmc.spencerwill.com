@@ -2,26 +2,19 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { PageContainer } from "#/components/layouts/page-container";
-import { requirePermission } from "#/features/auth/guards";
+import { requireAnyPermission } from "#/features/auth/guards";
 import { siteSettingsQueryOptions } from "#/features/settings/api/queries";
-import { PageFlagsPanel } from "#/features/settings/components/page-flags-panel";
-import { SettingRow } from "#/features/settings/components/setting-row";
-import type { SiteSettingsSnapshot } from "#/features/settings/server/settings-fns";
-import {
-  CATEGORY_LABELS,
-  getMeta,
-  isStale,
-  keysByCategory,
-  SETTING_CATEGORIES,
-} from "#/server/settings/settings-registry";
-import type {
-  SettingCategory,
-  SettingKey,
-} from "#/server/settings/settings-registry";
+import { SettingsCategories } from "#/features/settings/components/settings-categories";
+import { SETTINGS_PAGE_PERMISSIONS } from "#/server/settings/settings-registry";
 
 export const Route = createFileRoute("/settings")({
   beforeLoad: async ({ context, location }) => {
-    await requirePermission({ context, location }, "settings:manage");
+    // Per-key gating: anyone who can edit at least one setting gets in,
+    // and the page renders only what they can edit.
+    await requireAnyPermission(
+      { context, location },
+      SETTINGS_PAGE_PERMISSIONS,
+    );
   },
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(siteSettingsQueryOptions());
@@ -31,7 +24,6 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsPage() {
   const query = useQuery(siteSettingsQueryOptions());
-  const grouped = keysByCategory();
 
   return (
     <PageContainer width="app" className="space-y-8">
@@ -44,86 +36,7 @@ function SettingsPage() {
         </p>
       </header>
 
-      <StaleSummary />
-
-      {SETTING_CATEGORIES.map((category) => {
-        const keys = grouped[category];
-        if (keys.length === 0) return null;
-        // The `pages` category is ~40 homogeneous booleans with a section
-        // hierarchy — it gets a compact tree instead of one card per row.
-        // See `PageFlagsPanel` for why.
-        if (category === "pages") {
-          return <PageFlagsPanel key={category} entries={query.data} />;
-        }
-        return (
-          <CategorySection
-            key={category}
-            category={category}
-            keys={keys}
-            entries={query.data}
-          />
-        );
-      })}
+      <SettingsCategories entries={query.data} />
     </PageContainer>
-  );
-}
-
-function CategorySection({
-  category,
-  keys,
-  entries,
-}: {
-  category: SettingCategory;
-  keys: SettingKey[];
-  entries: SiteSettingsSnapshot | undefined;
-}) {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-semibold">{CATEGORY_LABELS[category]}</h2>
-      <div className="space-y-3">
-        {keys.map((key) =>
-          entries === undefined ? (
-            <SettingRowSkeleton key={key} />
-          ) : (
-            <SettingRow key={key} settingKey={key} entry={entries[key]} />
-          ),
-        )}
-      </div>
-    </section>
-  );
-}
-
-function SettingRowSkeleton() {
-  return <div className="h-20 animate-pulse rounded-lg border bg-muted/40" />;
-}
-
-/**
- * Aggregate "needs review" tray. Visible only when at least one setting
- * is past `expiresAt`. Keeps officers honest about flag hygiene without
- * cluttering the page when everything is fresh.
- */
-function StaleSummary() {
-  const grouped = keysByCategory();
-  const overdue: SettingKey[] = [];
-  for (const category of SETTING_CATEGORIES) {
-    for (const key of grouped[category]) {
-      if (isStale(getMeta(key))) overdue.push(key);
-    }
-  }
-  if (overdue.length === 0) return null;
-  return (
-    <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
-      <p className="text-sm font-medium">
-        {overdue.length} setting{overdue.length === 1 ? "" : "s"} past their
-        review date
-      </p>
-      <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
-        {overdue.map((key) => (
-          <li key={key}>
-            <code className="font-mono">{key}</code> — {getMeta(key).label}
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

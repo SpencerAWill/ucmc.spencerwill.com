@@ -45,6 +45,7 @@ import {
   useFeedbackSurfaces,
 } from "#/components/layouts/feedback-dialog";
 import { HeaderMasthead } from "#/components/layouts/header-masthead";
+import { SiteNoticeBanner } from "#/components/layouts/site-notice-banner";
 import { ModeToggle } from "#/components/mode-toggle";
 import { SocialIconLinks } from "#/components/social-icon-links";
 import {
@@ -92,6 +93,7 @@ import {
 } from "#/components/ui/tooltip";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
+import { SETTINGS_PAGE_PERMISSIONS } from "#/server/settings/settings-registry";
 
 const HEADER_HEIGHT = "3.5rem";
 
@@ -195,6 +197,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarRail />
         </Sidebar>
         <SidebarInset>
+          {/*
+           * Inside the inset, not above the sidebar row: the notice is
+           * about the page, so it spans the page column and sticks under
+           * the header (z-20 against the header's z-30), never between
+           * the header and the sidebar.
+           */}
+          <SiteNoticeBanner />
           {/*
            * `tabIndex={-1}` makes the landmark programmatically
            * focusable so the skip-link target receives focus on
@@ -658,7 +667,7 @@ export function SidebarNav() {
 }
 
 export function SidebarUtilityNav() {
-  const { isApproved, hasPermission } = useAuth();
+  const { isApproved, hasPermission, hasAnyPermission } = useAuth();
   // Page kill switches for entries in this group. `placeholderData` is the
   // schema default (on) until the query resolves.
   const flagsOptions = publicFlagsQueryOptions();
@@ -684,7 +693,9 @@ export function SidebarUtilityNav() {
     hasPermission(ANALYTICS_VIEW_PERMISSION) && pages.analytics;
   const analyticsPages = visibleAnalyticsPages(hasPermission, pages);
   const canViewAudit = hasPermission("audit:view");
-  const canManageSettings = hasPermission("settings:manage");
+  // Any permission that edits some setting opens /settings — the page
+  // then shows each viewer only the categories they can edit.
+  const canManageSettings = hasAnyPermission(SETTINGS_PAGE_PERMISSIONS);
   // The permission is still `roles:manage` — the page is named for the
   // umbrella concern (access), the permission for the object it edits.
   const canManageAccess = hasPermission("roles:manage") && pages.access;

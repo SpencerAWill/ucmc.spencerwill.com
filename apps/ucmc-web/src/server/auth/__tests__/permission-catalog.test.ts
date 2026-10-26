@@ -13,6 +13,7 @@ import { asc, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import { getDb, schema } from "#/server/db";
+import { SETTINGS_PAGE_PERMISSIONS } from "#/server/settings/settings-registry";
 
 describe("permission catalog", () => {
   it("renames landed on `name`, leaving the `perm_*` ids intact", async () => {
@@ -109,6 +110,43 @@ describe("permission catalog", () => {
       .from(schema.rolePermissions)
       .where(eq(schema.rolePermissions.permissionId, "perm_gear_inspect"));
     expect(rows).toEqual([]);
+  });
+});
+
+describe("notice:manage", () => {
+  it("is registered under its id, and not anonymous-grantable", async () => {
+    const rows = await getDb()
+      .select({
+        name: schema.permissions.name,
+        grantable: schema.permissions.anonymousGrantable,
+      })
+      .from(schema.permissions)
+      .where(eq(schema.permissions.id, "perm_notice_manage"));
+    expect(rows).toEqual([{ name: "notice:manage", grantable: false }]);
+  });
+
+  it("seeds no grants — system_admin holds it via the bypass", async () => {
+    const rows = await getDb()
+      .select({ roleId: schema.rolePermissions.roleId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.permissionId, "perm_notice_manage"));
+    expect(rows).toEqual([]);
+  });
+});
+
+/**
+ * `SettingMeta.permission` is a plain string — permissions are rows, so
+ * there is no compile-time list to type it against. A typo there would
+ * leave the setting editable only by system_admin (who holds every name
+ * via the bypass) and nobody would notice; this is the check instead.
+ */
+describe("setting permissions", () => {
+  it("name only permissions that exist", async () => {
+    const rows = await getDb()
+      .select({ name: schema.permissions.name })
+      .from(schema.permissions);
+    const names = new Set(rows.map((r) => r.name));
+    expect(SETTINGS_PAGE_PERMISSIONS.filter((p) => !names.has(p))).toEqual([]);
   });
 });
 

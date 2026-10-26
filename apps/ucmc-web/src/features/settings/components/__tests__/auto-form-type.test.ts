@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { autoFormType } from "#/features/settings/components/auto-form/introspect";
+import {
+  autoFormType,
+  enumOptions,
+} from "#/features/settings/components/auto-form/introspect";
 import { SETTINGS } from "#/server/settings/settings-registry";
 import type { SettingKey } from "#/server/settings/settings-registry";
 
@@ -46,5 +49,23 @@ describe("gear.caveOpenDays", () => {
     // exactly like the feature not existing.
     expect(() => schema.parse("Wensday")).toThrow();
     expect(() => schema.parse("Wed,tomorrow")).toThrow();
+  });
+});
+
+describe("enum settings", () => {
+  it("renders an enum schema as an enum row", () => {
+    expect(autoFormType(SETTINGS["notice.tone"])).toBe("enum");
+    expect(autoFormType(SETTINGS["notice.audience"])).toBe("enum");
+  });
+
+  it("reads the options through the default wrapper, in declared order", () => {
+    expect(enumOptions(SETTINGS["notice.audience"])).toEqual([
+      "public",
+      "members",
+    ]);
+  });
+
+  it("has no options for a non-enum", () => {
+    expect(enumOptions(SETTINGS["notice.text"])).toEqual([]);
   });
 });

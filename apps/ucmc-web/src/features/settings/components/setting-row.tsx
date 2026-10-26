@@ -4,7 +4,9 @@
  * entry declares a custom `editor` key (no built-in editor keys today;
  * the introspection path handles every v1 entry).
  *
- * **Booleans apply on change; everything else is click-to-edit.** That
+ * **Booleans and enums apply on change; everything else is click-to-edit.**
+ * An enum is a pick from a short fixed list, which carries its own commit
+ * the way a switch does. That
  * split is the shape of the page rather than an inconsistency: a switch
  * carries its own commit (you can see what you did and undo it in one
  * tap), while a text value needs a deliberate write because each one is
@@ -38,6 +40,13 @@ import {
   InputGroupInput,
 } from "#/components/ui/input-group";
 import { Label } from "#/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "#/components/ui/select";
 import { Switch } from "#/components/ui/switch";
 import {
   Tooltip,
@@ -58,15 +67,18 @@ import type {
   SettingMeta,
   SettingValue,
 } from "#/server/settings/settings-registry";
-import { autoFormType } from "./auto-form/introspect";
+import { autoFormType, enumOptions } from "./auto-form/introspect";
 import { SettingHistoryDialog } from "./setting-history-dialog";
 
 export function SettingRow<TKey extends SettingKey>({
   settingKey,
   entry,
+  renderOption,
 }: {
   settingKey: TKey;
   entry: SiteSettingEntry<TKey>;
+  /** For an enum row: drawn before each option's label (a tone swatch). */
+  renderOption?: (value: string) => React.ReactNode;
 }) {
   const meta = getMeta(settingKey);
   const formType = autoFormType(SETTINGS[settingKey]);
@@ -87,6 +99,9 @@ export function SettingRow<TKey extends SettingKey>({
 
   const isDirty = draft !== value;
   const isBoolean = formType === "boolean";
+  const isEnum = formType === "enum";
+  // Booleans and enums both apply on change and have no value row.
+  const appliesOnChange = isBoolean || isEnum;
   // `0` is a legitimate value for a numeric setting, so this asks
   // whether the string form is empty rather than leaning on falsiness.
   const hasValue = String(value).length > 0;
@@ -158,7 +173,55 @@ export function SettingRow<TKey extends SettingKey>({
           </div>
         ) : null}
       </div>
-      {!isBoolean ? (
+      {isEnum ? (
+        // Laid out like a text row's value line so the picker gets the
+        // width its labels need, but with no pencil: choosing an option is
+        // the commit, through the same saver (and `confirm` gate) as every
+        // other write.
+        <div className="flex items-center gap-2">
+          <Select
+            // Same optimism as the switch: the pick shows while it saves
+            // (a controlled Select on the canonical value snaps back to
+            // the old option for the round trip), except behind a
+            // `confirm` gate, which renders the canonical value until the
+            // dialog commits. A failed write puts the canonical one back.
+            value={String(draft)}
+            disabled={saver.isPending}
+            onValueChange={(raw) => {
+              const next = raw as SettingValue<TKey>;
+              if (meta.confirm) {
+                void saver.requestSave(next);
+                return;
+              }
+              setDraft(next);
+              void saver.persist(next).then((saved) => {
+                if (!saved) {
+                  setDraft(value);
+                }
+              });
+            }}
+          >
+            <SelectTrigger aria-label={meta.label} className="min-w-0 flex-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {enumOptions(SETTINGS[settingKey]).map((option) => (
+                <SelectItem key={option} value={option}>
+                  {renderOption?.(option)}
+                  {meta.optionLabels?.[option] ?? option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <RowActions
+            isCustomized={isCustomized}
+            canReset={isCustomized && !saver.isPending}
+            onReset={() => void saver.requestSave(defaultValue)}
+            onOpenHistory={() => setHistoryOpen(true)}
+          />
+        </div>
+      ) : null}
+      {!appliesOnChange ? (
         /*
          * The actions are the row's trailing cluster in *both* states,
          * which is the point of this shape. Only the leading part swaps
