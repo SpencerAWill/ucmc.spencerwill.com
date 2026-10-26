@@ -68,6 +68,13 @@ export interface UseImageCropOptions {
 export interface UseImageCropResult {
   workingUrl: string | null;
   /**
+   * The picked `File` exactly as chosen, before the working-copy
+   * normalization. Set only once that step has accepted it, so a file
+   * rejected for size or type never reaches a caller that uploads it.
+   * Plain state, so it keeps the stability contract above.
+   */
+  sourceFile: File | null;
+  /**
    * Set when the picked file was rejected or couldn't be decoded, and
    * cleared on the next pick. Callers must render it: before it existed
    * `onFileChosen` was an `async` handler with no `catch`, so every
@@ -123,6 +130,7 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [workingUrl, setWorkingUrl] = useState<string | null>(null);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [crop, setCrop] = useState<PercentCrop | undefined>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | undefined>();
@@ -146,6 +154,7 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
    */
   const reset = useCallback(() => {
     setWorkingUrl(null);
+    setSourceFile(null);
     setError(null);
     setCrop(undefined);
     setCompletedCrop(undefined);
@@ -171,6 +180,7 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
         fileType: "image/jpeg",
       });
       setWorkingUrl(URL.createObjectURL(normalized));
+      setSourceFile(file);
     } catch (err) {
       // An `async` onChange handler that throws produces an unhandled
       // rejection and nothing else — no state change, no message, and a
@@ -275,6 +285,7 @@ export function useImageCrop(options: UseImageCropOptions): UseImageCropResult {
 
   return {
     workingUrl,
+    sourceFile,
     error,
     crop,
     imgRef,

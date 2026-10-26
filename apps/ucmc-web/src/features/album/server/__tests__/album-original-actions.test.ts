@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  UPLOAD_NO_FILE,
+  UPLOAD_NOT_AN_IMAGE,
+  UPLOAD_PHOTO_GONE,
+  UPLOAD_RATE_LIMITED,
+  UPLOAD_STORE_FAILED,
+  uploadTooLargeMessage,
+} from "#/features/album/lib/upload-messages";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import { jpegWithApp1, tiff } from "#/server/r2/__tests__/exif-fixtures";
@@ -153,14 +161,14 @@ describe("uploadAlbumOriginalAction", () => {
     mocks.rateLimitOk = false;
     await expect(
       uploadAlbumOriginalAction(formOf(JPEG, "image/jpeg")),
-    ).rejects.toThrow(/Too many/);
+    ).rejects.toThrow(UPLOAD_RATE_LIMITED);
     expect(await privateKeys()).toEqual([]);
   });
 
   it("rejects a missing file", async () => {
     await signInAsAdmin();
     await expect(uploadAlbumOriginalAction(new FormData())).rejects.toThrow(
-      /Choose a photo/,
+      UPLOAD_NO_FILE,
     );
     expect(await privateKeys()).toEqual([]);
   });
@@ -171,7 +179,7 @@ describe("uploadAlbumOriginalAction", () => {
     big.set(JPEG);
     await expect(
       uploadAlbumOriginalAction(formOf(big, "image/jpeg")),
-    ).rejects.toThrow(/under 12 MB/);
+    ).rejects.toThrow(uploadTooLargeMessage(big.byteLength));
     expect(await privateKeys()).toEqual([]);
   });
 
@@ -179,7 +187,7 @@ describe("uploadAlbumOriginalAction", () => {
     await signInAsAdmin();
     await expect(
       uploadAlbumOriginalAction(formOf(JPEG, "image/gif")),
-    ).rejects.toThrow(/JPEG, PNG or WebP/);
+    ).rejects.toThrow(UPLOAD_NOT_AN_IMAGE);
     expect(await privateKeys()).toEqual([]);
   });
 
@@ -190,9 +198,22 @@ describe("uploadAlbumOriginalAction", () => {
     ]);
     await expect(
       uploadAlbumOriginalAction(formOf(heic, "image/jpeg")),
-    ).rejects.toThrow(/JPEG, PNG or WebP/);
+    ).rejects.toThrow(UPLOAD_NOT_AN_IMAGE);
     expect(await privateKeys()).toEqual([]);
     expect(mocks.input).not.toHaveBeenCalled();
+  });
+
+  it("rethrows a fixed message when the R2 put fails", async () => {
+    await signInAsAdmin();
+    const bucket = getPrivateBucket();
+    vi.spyOn(bucket, "put").mockRejectedValueOnce(
+      new Error("R2: secret internal detail"),
+    );
+    const err = await uploadAlbumOriginalAction(
+      formOf(JPEG, "image/jpeg"),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe(UPLOAD_STORE_FAILED);
   });
 
   it("rejects an unknown photoId on edit", async () => {
@@ -201,7 +222,7 @@ describe("uploadAlbumOriginalAction", () => {
       uploadAlbumOriginalAction(
         formOf(JPEG, "image/jpeg", "0190b6a2-7c1e-7a3b-8f2d-1c2d3e4f5a6b"),
       ),
-    ).rejects.toThrow(/no longer exists/);
+    ).rejects.toThrow(UPLOAD_PHOTO_GONE);
     expect(await privateKeys()).toEqual([]);
   });
 

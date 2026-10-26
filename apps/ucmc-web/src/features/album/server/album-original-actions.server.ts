@@ -12,6 +12,14 @@ import { uuidv7 } from "uuidv7";
 
 import { renderCleanWebp } from "#/features/album/server/album-clean-copy.server";
 import { requireAlbumManager } from "#/features/album/server/album-permissions.server";
+import {
+  UPLOAD_NO_FILE,
+  UPLOAD_NOT_AN_IMAGE,
+  UPLOAD_PHOTO_GONE,
+  UPLOAD_RATE_LIMITED,
+  UPLOAD_STORE_FAILED,
+  uploadTooLargeMessage,
+} from "#/features/album/lib/upload-messages";
 import { MAX_SOURCE_BYTES } from "#/lib/image-upload";
 import { getDb, schema } from "#/server/db";
 import { errorMessage, log } from "#/server/log/log.server";
@@ -40,10 +48,22 @@ export interface UploadAlbumOriginalResult {
 }
 
 const ACCEPTED: readonly string[] = ["image/jpeg", "image/png", "image/webp"];
-const NOT_AN_IMAGE = "That file isn't a JPEG, PNG or WebP image.";
 
 function isAccepted(type: string): type is AcceptedImageContentType {
   return ACCEPTED.includes(type);
+}
+
+/**
+ * Runs a storage step, logging a raw failure and rethrowing a fixed
+ * message: D1 and R2 text must not reach the member.
+ */
+async function storing<T>(event: string, step: () => Promise<T>): Promise<T> {
+  try {
+    return await step();
+  } catch (err) {
+    log.error(event, { error: errorMessage(err) });
+    throw new Error(UPLOAD_STORE_FAILED, { cause: err });
+  }
 }
 
 /** An edit reuses the existing row's id; a create mints a new one. */
@@ -51,13 +71,15 @@ async function resolvePhotoId(requested: FormDataEntryValue | null) {
   if (typeof requested !== "string" || requested === "") {
     return uuidv7();
   }
-  const row = await getDb()
-    .select({ id: schema.albumPhotos.id })
-    .from(schema.albumPhotos)
-    .where(eq(schema.albumPhotos.id, requested))
-    .get();
+  const row = await storing("album.photo_lookup_failed", () =>
+    getDb()
+      .select({ id: schema.albumPhotos.id })
+      .from(schema.albumPhotos)
+      .where(eq(schema.albumPhotos.id, requested))
+      .get(),
+  );
   if (!row) {
-    throw new Error("That photo no longer exists.");
+    throw new Error(UPLOAD_PHOTO_GONE);
   }
   return row.id;
 }
@@ -92,32 +114,33 @@ export async function uploadAlbumOriginalAction(
 ): Promise<UploadAlbumOriginalResult> {
   const principal = await requireAlbumManager();
   if (!(await checkUploadRateLimit(principal.userId))) {
-    throw new Error("Too many photo uploads, try again in a minute.");
+    throw new Error(UPLOAD_RATE_LIMITED);
   }
 
   const file = form.get("file");
   if (!(file instanceof File)) {
-    throw new Error("Choose a photo to upload.");
+    throw new Error(UPLOAD_NO_FILE);
   }
   // The multipart body is already parsed by now, so this cap saves the second
   // copy and does not bound request memory.
   if (file.size > MAX_SOURCE_BYTES) {
-    throw new Error(
-      `That image is ${Math.ceil(file.size / 1024 / 1024)} MB. Pick one under ${Math.round(MAX_SOURCE_BYTES / 1024 / 1024)} MB.`,
-    );
+    throw new Error(uploadTooLargeMessage(file.size));
   }
   if (!isAccepted(file.type)) {
-    throw new Error(NOT_AN_IMAGE);
+    throw new Error(UPLOAD_NOT_AN_IMAGE);
   }
   const bytes = await file.arrayBuffer();
   if (!matchesImageMagic(new Uint8Array(bytes), file.type)) {
-    throw new Error(NOT_AN_IMAGE);
+    throw new Error(UPLOAD_NOT_AN_IMAGE);
   }
 
   const photoId = await resolvePhotoId(form.get("photoId"));
   const hash = await shortContentHash(bytes);
-  const originalKey = albumOriginalKey(photoId, hash, file.type);
-  await putAlbumOriginal(originalKey, bytes, file.type);
+  const contentType = file.type;
+  const originalKey = albumOriginalKey(photoId, hash, contentType);
+  await storing("album.original_put_failed", () =>
+    putAlbumOriginal(originalKey, bytes, contentType),
+  );
 
   const { fullKey, fullWidthPx, fullHeightPx } = await storeCleanCopy(
     photoId,
