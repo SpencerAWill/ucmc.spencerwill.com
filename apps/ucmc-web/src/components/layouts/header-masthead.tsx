@@ -32,6 +32,11 @@ import { CURRENT_YEAR_TOKEN } from "#/server/settings/settings-registry";
  * page. The dark theme passes at every alpha, so light is the binding
  * constraint and eyeballing dark will mislead.
  */
+function homeLinkLabel(title: string, tagline: string): string {
+  const visible = [title, tagline].filter(Boolean);
+  return visible.length > 0 ? `${visible.join(", ")} — home` : "UCMC home";
+}
+
 export function HeaderMasthead() {
   const options = publicBrandingQueryOptions();
   const { data: branding = options.placeholderData } = useQuery(options);
@@ -81,14 +86,14 @@ export function HeaderMasthead() {
 
           An explicit aria-label names the link, which matters at narrow
           widths where both strings are `display: none` and the only
-          child left is an `alt=""` image. It leads with the visible
-          title so the accessible name contains it (WCAG 2.5.3, Label in
-          Name). */}
+          child left is an `alt=""` image. It carries both visible
+          strings so the accessible name contains all the visible text
+          (WCAG 2.5.3, Label in Name) — axe 4.14 checks every word, and a
+          label naming only the title failed on every page at `lg`, where
+          the tagline shows. */}
       <Link
         to="/"
-        aria-label={
-          branding.headerTitle ? `${branding.headerTitle} — home` : "UCMC home"
-        }
+        aria-label={homeLinkLabel(branding.headerTitle, tagline)}
         className="relative flex w-full items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
       >
         <span className="relative flex shrink-0 items-center">
@@ -96,6 +101,14 @@ export function HeaderMasthead() {
             {branding.headerTitle}
           </span>
           <img src="/logo192.png" alt="" className="h-8 w-auto" />
+          {/* The space is text, not layout — a flex container drops
+              whitespace-only children from its boxes, so it moves
+              nothing. Without it the two strings concatenate to
+              "…ClubEst. 1971…" in the computed visible text, a word the
+              label can never contain, and axe's Label in Name check
+              fails however the label is written. Only rendered between
+              two strings, so a blank masthead keeps an empty link. */}
+          {branding.headerTitle && tagline ? " " : null}
           <span className="absolute left-full top-1/2 ml-2 hidden max-w-56 -translate-y-1/2 truncate text-left text-xs font-normal lg:block lg:ml-3">
             {tagline}
           </span>
