@@ -26,13 +26,17 @@ const resendFromName = cfg.require("resendFromName");
 // `protect: true` — replacing a D1 database wipes all data. To
 // recreate, remove the protection deliberately via `pulumi state`
 // and accept the data loss.
+//
+// No `primaryLocationHint`, deliberately: both databases were created with
+// `enam` (Eastern North America, close to Cincinnati), but the hint is
+// create-only and Cloudflare never returns it on read. Newer providers (seen
+// on 6.21.0 and 6.22.1) mark it replace-on-change, so declaring it plans a
+// replacement of the database on every preview. See `.claude/rules/infra.md`.
 const database = new cloudflare.D1Database(
   `ucmc-web-${stack}-db`,
   {
     accountId,
     name: d1DatabaseName,
-    // Eastern North America — close to Cincinnati.
-    primaryLocationHint: "enam",
   },
   { protect: true },
 );

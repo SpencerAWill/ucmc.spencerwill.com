@@ -28,27 +28,34 @@ Until #298, prod owned a `ResendDomain` component for `ucmc.spencerwill.com` (vi
 
 ## `@pulumi/cloudflare` and `@pulumi/pulumi` are pinned EXACTLY, on purpose
 
-`infra/cloudflare/package.json` carries `6.17.0` and `3.257.0` with no caret. package.json
-cannot hold a comment, so the reason lives here: **provider 6.21.0 plans a
-REPLACEMENT of the dev D1 database** — `+-1 to replace`, with an empty property
-diff, which is the signature of a resource whose schema changed under a stable
-program rather than of anything the program asked for.
+`infra/cloudflare/package.json` carries `6.22.1` and `3.270.0` with no caret. package.json
+cannot hold a comment, so the reason lives here: **provider 6.21.0 and 6.22.1 planned a
+REPLACEMENT of the D1 database on both stacks** — `+-1 to replace`, with an
+empty property diff. The `protect: true` on that resource is what caught it
+(`error: unable to replace resource … as it is currently marked for
+protection`), in `pulumi preview` on a PR, not in the auto-deploy of dev.
 
-Replacing a D1 database wipes every row. The `protect: true` on that resource is
-what caught it (`error: unable to replace resource … as it is currently marked
-for protection`), and it caught it in `pulumi preview` on a PR, which is the
-only reason it was not discovered by the pipeline auto-deploying dev on the next
-push to main.
+**The cause was `primaryLocationHint`.** `pulumi preview --json` names it in the
+step's `replaceReasons` even though old and new both read `"enam"`: the hint is
+create-only, Cloudflare never returns it on read, and newer providers mark it
+replace-on-change, so the refreshed `null` against the program's `"enam"` is a
+"change". `ignoreChanges: ["primaryLocationHint"]` does **not** fix it (the
+replace is the provider's own plan, not an input diff); removing the property
+from the program does, leaving an in-place update with no input changes.
 
-So a `@pulumi/cloudflare` bump is **not** a routine dependency update here:
+So a `@pulumi/cloudflare` bump is still **not** a routine dependency update here:
 
 - Raise it in its own PR, never inside a Dependabot group bump.
-- Read the `pulumi preview` diff before merging. A `replace` or `delete` line
-  against D1, R2 or KV means stop — those are the `protect: true` resources, and
-  protection turns the data loss into a failed deploy, not a safe one.
-- Dependabot will keep proposing the bump. Closing it is a valid answer until
-  somebody has time to work out which property the provider now treats as
-  replace-triggering and pin or `ignoreChanges` it.
+- Read the `pulumi preview` diff before merging, on **both** stacks. A `replace`
+  or `delete` line against D1, R2 or KV means stop — those are the
+  `protect: true` resources, and protection turns the data loss into a failed
+  deploy, not a safe one.
+- An empty diff on a replace doesn't hide the cause:
+  `pulumi preview --stack <s> --json` lists it under the step's
+  `replaceReasons`. A create-only property is the usual suspect; dropping it
+  from the program is the fix when the resource already exists.
+- `infra/github` also depends on `@pulumi/cloudflare` (still `6.17.0`, for
+  token minting); bump it separately with its own preview.
 
 ## The dev email outbox (`infra/cloudflare/outbox.ts`)
 
