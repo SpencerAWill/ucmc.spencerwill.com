@@ -215,7 +215,11 @@ jobs:
       # spec on "Executable doesn't exist"; this fails first, and says why.
       - name: Playwright image matches @playwright/test
         run: |
-          want=$(pnpm --filter ucmc-web exec playwright --version | awk '{print $2}')
+          # Read from the installed package, not `playwright --version`
+          # through `pnpm exec`: in this job pnpm wrote more than the
+          # version line to stdout, and `awk '{print $2}'` came out as
+          # "all" (#369's first run). The package.json is the exact string.
+          want=$(node -p "require('./apps/ucmc-web/node_modules/@playwright/test/package.json').version")
           # Anchored on `image:` so this step's own source can't match.
           pins=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*mcr\.microsoft\.com\/playwright:v([0-9][^-@[:space:]]*)-.*/\1/p' .github/workflows/cicd.yml)
           if [ "$(printf '%s\n' "$pins" | grep -c .)" -ne 2 ]; then
