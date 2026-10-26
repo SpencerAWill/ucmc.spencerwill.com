@@ -58,10 +58,10 @@ That WebP drops everything was probed with JPEG input only, so the clean copy is
 | `album-originals/<photoId>/<hash>.<jpg\|png\|webp>` | The raw bytes exactly as received, with the uploaded type as `contentType` | **Never.** No route reads it |
 | `album-full/<photoId>/<hash>.webp`                  | The clean copy. Width, height and size in `customMetadata`                 | Members-only route, below    |
 
-- `<hash>` is `shortContentHash` of the stored bytes, as for `gallery/` keys.
+- `<hash>` is `shortContentHash` of **the raw original's bytes**, in both keys. The clean copy reuses the original's hash rather than hashing its own output, so its URL is known before it exists (see [Self-repair](#self-repair)).
 - The public `gallery/<id>/<hash>.webp` crop is unchanged: same bucket, CDN and `Cache-Control`.
 - **The photo ID is minted at upload.** The upload action generates the `album_photos.id` (uuidv7) and writes the raw file under it. Create then reuses that ID. R2 has no rename, so this avoids a staging prefix and a copy. An upload never saved is an object no row references.
-- **Both prefixes join `sweepOrphanPrivateR2Keys`** in `src/server/cron/retention.server.ts`, and `loadReferencedPrivateR2Keys` learns the two new columns. The sweep's age guard keeps an upload safe while its dialog is still open.
+- **Both prefixes join `sweepOrphanPrivateR2Keys`** in `src/server/cron/retention.server.ts`, and `loadReferencedPrivateR2Keys` learns the two new columns. Their age guard is a day, not the five minutes screenshots get: the upload lands on pick and the row on Save, and between the two a member is cropping and captioning, so a dialog left open over the daily sweep must not lose its upload.
 
 ### Schema (one add-only migration via `db:generate`)
 
