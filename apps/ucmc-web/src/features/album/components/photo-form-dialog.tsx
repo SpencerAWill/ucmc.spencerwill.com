@@ -23,6 +23,7 @@ import {
   useUpdateAlbumPhoto,
 } from "#/features/album/api/use-album-mutations";
 import { albumImageUrl } from "#/features/album/lib/image-url";
+import { originalLabel } from "#/features/album/lib/original-label";
 import { uploadErrorMessage } from "#/features/album/lib/upload-messages";
 import { albumTakenDateToWire } from "#/features/album/lib/taken-date";
 import type {
@@ -309,6 +310,17 @@ export function PhotoFormDialog({
 
   const existingImageUrl =
     seed?.mode === "edit" ? albumImageUrl(seed.photo.imageKey) : null;
+  // A fresh upload's facts win over the seed photo's. On create there is
+  // nothing to say until one lands; on edit, no original reads as such.
+  // While a new pick is uploading or has failed, the seed's line would be
+  // stale, so show none.
+  const originalLine = upload.result
+    ? originalLabel(upload.result)
+    : sourceFile !== null
+      ? null
+      : seed?.mode === "edit"
+        ? (originalLabel(seed.photo) ?? "No original stored")
+        : null;
 
   return (
     <Dialog
@@ -387,6 +399,11 @@ export function PhotoFormDialog({
                 </div>
                 <input ref={crop.fileInputRef} {...crop.fileInputProps} />
                 <ImagePickerError message={crop.error} />
+                {originalLine ? (
+                  <p className="text-sm text-muted-foreground">
+                    {originalLine}
+                  </p>
+                ) : null}
                 {upload.status === "uploading" ? (
                   <p role="status" className="text-sm text-muted-foreground">
                     Uploading original…

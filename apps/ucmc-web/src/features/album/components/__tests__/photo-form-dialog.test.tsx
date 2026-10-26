@@ -190,6 +190,173 @@ describe("PhotoFormDialog", () => {
     ).not.toThrow();
   });
 
+  describe("original line", () => {
+    const MB = 1024 * 1024;
+
+    it("shows the dimensions and size for a photo with an original", () => {
+      render(
+        <PhotoFormDialog
+          seed={{
+            mode: "edit",
+            photo: photo({
+              fullHash: "aaaaaaaaaaaaaaaa",
+              originalBytes: 3.1 * MB,
+              fullWidthPx: 3024,
+              fullHeightPx: 4032,
+            }),
+          }}
+          onClose={vi.fn()}
+        />,
+      );
+      expect(
+        screen.getByText("Original: 3024 \u00d7 4032 \u00b7 3.1 MB"),
+      ).toBeInTheDocument();
+    });
+
+    it("shows only the size while the dimensions are missing", () => {
+      render(
+        <PhotoFormDialog
+          seed={{
+            mode: "edit",
+            photo: photo({
+              fullHash: "aaaaaaaaaaaaaaaa",
+              originalBytes: 3.1 * MB,
+            }),
+          }}
+          onClose={vi.fn()}
+        />,
+      );
+      expect(screen.getByText("Original: 3.1 MB")).toBeInTheDocument();
+    });
+
+    it("says no original is stored for a legacy photo", () => {
+      render(
+        <PhotoFormDialog
+          seed={{ mode: "edit", photo: photo() }}
+          onClose={vi.fn()}
+        />,
+      );
+      expect(screen.getByText("No original stored")).toBeInTheDocument();
+    });
+
+    it("shows nothing on create before an upload", () => {
+      render(<PhotoFormDialog seed={{ mode: "create" }} onClose={vi.fn()} />);
+      expect(screen.queryByText(/Original:/)).not.toBeInTheDocument();
+      expect(screen.queryByText("No original stored")).not.toBeInTheDocument();
+    });
+
+    it("shows the line from a fresh upload, ahead of the seed's", async () => {
+      mocks.upload.mockResolvedValue(
+        uploaded({
+          originalBytes: 2 * MB,
+          fullWidthPx: 4000,
+          fullHeightPx: 3000,
+        }),
+      );
+      render(
+        <PhotoFormDialog
+          seed={{
+            mode: "edit",
+            photo: photo({
+              fullHash: "aaaaaaaaaaaaaaaa",
+              originalBytes: 3.1 * MB,
+              fullWidthPx: 3024,
+              fullHeightPx: 4032,
+            }),
+          }}
+          onClose={vi.fn()}
+        />,
+      );
+      const user = userEvent.setup();
+      const { file, input } = pickFile("new.jpg");
+      await user.upload(input, file);
+      expect(
+        await screen.findByText("Original: 4000 \u00d7 3000 \u00b7 2.0 MB"),
+      ).toBeInTheDocument();
+    });
+
+    const seeded = () => (
+      <PhotoFormDialog
+        seed={{
+          mode: "edit",
+          photo: photo({
+            fullHash: "aaaaaaaaaaaaaaaa",
+            originalBytes: 3.1 * MB,
+            fullWidthPx: 3024,
+            fullHeightPx: 4032,
+          }),
+        }}
+        onClose={vi.fn()}
+      />
+    );
+    const SEED_LINE = "Original: 3024 \u00d7 4032 \u00b7 3.1 MB";
+
+    it("shows no line while a new pick uploads", async () => {
+      mocks.upload.mockReturnValue(new Promise(() => undefined));
+      render(seeded());
+      const user = userEvent.setup();
+      const { file, input } = pickFile("new.jpg");
+      await user.upload(input, file);
+      await screen.findByText("Uploading original…");
+      expect(screen.queryByText(SEED_LINE)).not.toBeInTheDocument();
+      expect(screen.queryByText("No original stored")).not.toBeInTheDocument();
+    });
+
+    it("shows no line after a failed upload", async () => {
+      mocks.upload.mockRejectedValue(new Error("boom"));
+      render(seeded());
+      const user = userEvent.setup();
+      const { file, input } = pickFile("new.jpg");
+      await user.upload(input, file);
+      await screen.findByRole("button", { name: "Try again" });
+      expect(screen.queryByText(SEED_LINE)).not.toBeInTheDocument();
+    });
+
+    it("brings the seed's line back after Cancel new photo", async () => {
+      mocks.upload.mockReturnValue(new Promise(() => undefined));
+      render(seeded());
+      const user = userEvent.setup();
+      const { file, input } = pickFile("new.jpg");
+      await user.upload(input, file);
+      await user.click(
+        await screen.findByRole("button", { name: "Cancel new photo" }),
+      );
+      expect(await screen.findByText(SEED_LINE)).toBeInTheDocument();
+    });
+
+    it("shows KB below one megabyte", () => {
+      render(
+        <PhotoFormDialog
+          seed={{
+            mode: "edit",
+            photo: photo({
+              fullHash: "aaaaaaaaaaaaaaaa",
+              originalBytes: 48 * 1024,
+            }),
+          }}
+          onClose={vi.fn()}
+        />,
+      );
+      expect(screen.getByText("Original: 48 KB")).toBeInTheDocument();
+    });
+
+    it("shows no dimensions when the upload could not size the full copy", async () => {
+      mocks.upload.mockResolvedValue(
+        uploaded({
+          originalBytes: 2 * MB,
+          fullWidthPx: null,
+          fullHeightPx: null,
+          fullKey: null,
+        }),
+      );
+      render(<PhotoFormDialog seed={{ mode: "create" }} onClose={vi.fn()} />);
+      const user = userEvent.setup();
+      const { file, input } = pickFile("new.jpg");
+      await user.upload(input, file);
+      expect(await screen.findByText("Original: 2.0 MB")).toBeInTheDocument();
+    });
+  });
+
   describe("original upload", () => {
     const save = () => screen.getByRole("button", { name: "Save" });
 
