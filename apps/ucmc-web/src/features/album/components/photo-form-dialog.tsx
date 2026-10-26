@@ -1,5 +1,5 @@
 import { Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactCrop from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { toast } from "sonner";
@@ -17,12 +17,19 @@ import {
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
+import { useUploadAlbumOriginal } from "#/features/album/api/use-upload-album-original";
 import {
   useCreateAlbumPhoto,
   useUpdateAlbumPhoto,
 } from "#/features/album/api/use-album-mutations";
 import { albumImageUrl } from "#/features/album/lib/image-url";
-import type { AlbumPhotoSummary } from "#/features/album/server/album-fns";
+import { originalLabel } from "#/features/album/lib/original-label";
+import { uploadErrorMessage } from "#/features/album/lib/upload-messages";
+import { albumTakenDateToWire } from "#/features/album/lib/taken-date";
+import type {
+  AlbumPhotoSummary,
+  UploadAlbumOriginalResult,
+} from "#/features/album/server/album-fns";
 import { useImageCrop } from "#/hooks/use-image-crop";
 import { toDateInputValue } from "#/lib/date-format";
 
@@ -44,6 +51,30 @@ interface FormState {
   takenAt: string; // YYYY-MM-DD for <input type="date">
   tag: string;
   altText: string;
+}
+
+/**
+ * Progress of the original-file upload for the *current* pick. Tracked
+ * here rather than read off the mutation, because a superseded pick's
+ * request is still in flight and must not be mistaken for this one's.
+ */
+interface UploadState {
+  status: "idle" | "uploading" | "done" | "error";
+  result: UploadAlbumOriginalResult | null;
+  error: string | null;
+}
+
+const IDLE_UPLOAD: UploadState = { status: "idle", result: null, error: null };
+
+function takenDateOrInvalid(value: string): Date | null | "invalid" {
+  if (value.length === 0) {
+    return null;
+  }
+  try {
+    return albumTakenDateToWire(value);
+  } catch {
+    return "invalid";
+  }
 }
 
 function seedToForm(seed: PhotoFormSeed): FormState {
@@ -76,7 +107,23 @@ export function PhotoFormDialog({
 }) {
   const createMut = useCreateAlbumPhoto();
   const updateMut = useUpdateAlbumPhoto();
+  const uploadMut = useUploadAlbumOriginal();
   const [form, setForm] = useState<FormState | null>(null);
+  const [upload, setUpload] = useState<UploadState>(IDLE_UPLOAD);
+  // Bumped on every pick (and on clearing); a reply applies only if the
+  // counter still holds the value it was sent under.
+  const pickRef = useRef(0);
+  // The date this dialog filled in from a photo, if the field still holds
+  // it. A new pick or a reset clears the field only while it matches, so
+  // a date the member edited is never taken back.
+  const prefilledRef = useRef<string | null>(null);
+  // Latest-value refs, so the upload callback keeps a stable identity and
+  // the effect below fires on a pick, never on a re-render.
+  const uploadFnRef = useRef(uploadMut.mutateAsync);
+  uploadFnRef.current = uploadMut.mutateAsync;
+  const editPhotoId = seed?.mode === "edit" ? seed.photo.id : undefined;
+  const editPhotoIdRef = useRef(editPhotoId);
+  editPhotoIdRef.current = editPhotoId;
 
   const crop = useImageCrop({
     aspect: 4 / 3,
@@ -94,11 +141,75 @@ export function PhotoFormDialog({
   // Also reset the crop UI on close so the previous photo's working
   // URL doesn't carry over.
   useEffect(() => {
+    prefilledRef.current = null;
     setForm(seed === null ? null : seedToForm(seed));
     if (seed === null) {
       resetCrop();
     }
   }, [seed, resetCrop]);
+
+  const clearPrefilledDate = useCallback(() => {
+    const prefilled = prefilledRef.current;
+    prefilledRef.current = null;
+    if (prefilled !== null) {
+      setForm((f) =>
+        f && f.takenAt === prefilled ? { ...f, takenAt: "" } : f,
+      );
+    }
+  }, []);
+
+  const startUpload = useCallback(
+    async (file: File) => {
+      clearPrefilledDate();
+      pickRef.current += 1;
+      const pick = pickRef.current;
+      setUpload({ status: "uploading", result: null, error: null });
+      try {
+        const photoId = editPhotoIdRef.current;
+        const result = await uploadFnRef.current(
+          photoId === undefined ? { file } : { file, photoId },
+        );
+        if (pick !== pickRef.current) {
+          return;
+        }
+        setUpload({ status: "done", result, error: null });
+        // Fill only a date the member hasn't touched.
+        if (result.takenDate !== null) {
+          const { takenDate } = result;
+          setForm((f) => {
+            if (f && f.takenAt === "") {
+              prefilledRef.current = takenDate;
+              return { ...f, takenAt: takenDate };
+            }
+            return f;
+          });
+        }
+      } catch (err) {
+        if (pick !== pickRef.current) {
+          return;
+        }
+        // The transport rethrows whatever text the response carried, so
+        // only known upload messages reach the member.
+        setUpload({
+          status: "error",
+          result: null,
+          error: uploadErrorMessage(err),
+        });
+      }
+    },
+    [clearPrefilledDate],
+  );
+
+  const { sourceFile } = crop;
+  useEffect(() => {
+    if (sourceFile === null) {
+      clearPrefilledDate();
+      pickRef.current += 1;
+      setUpload(IDLE_UPLOAD);
+      return;
+    }
+    void startUpload(sourceFile);
+  }, [sourceFile, startUpload, clearPrefilledDate]);
 
   const submitting = createMut.isPending || updateMut.isPending;
 
@@ -129,7 +240,26 @@ export function PhotoFormDialog({
     const caption = form.caption.trim().length > 0 ? form.caption.trim() : null;
     const credit = form.credit.trim().length > 0 ? form.credit.trim() : null;
     const tag = form.tag.trim().length > 0 ? form.tag.trim() : null;
-    const takenAt = form.takenAt.length > 0 ? new Date(form.takenAt) : null;
+    // A browser without a native date picker accepts free text, and the
+    // wire conversion throws on a date that doesn't exist; say so rather
+    // than leave an unhandled rejection and a Save that does nothing.
+    const takenAt = takenDateOrInvalid(form.takenAt);
+    if (takenAt === "invalid") {
+      toast.error("Enter a real date, or leave it blank.");
+      return;
+    }
+
+    const uploaded =
+      sourceFile !== null && upload.status === "done" && upload.result
+        ? {
+            photoId: upload.result.photoId,
+            originalKey: upload.result.originalKey,
+            fullKey: upload.result.fullKey,
+          }
+        : null;
+    // Edit sends the original only with a new crop.
+    const original =
+      seed.mode === "create" || imageDataUrl !== null ? uploaded : null;
 
     const base = {
       caption,
@@ -147,13 +277,18 @@ export function PhotoFormDialog({
           toast.error("Pick a photo and complete the crop.");
           return;
         }
-        await createMut.mutateAsync({ ...base, imageDataUrl });
+        await createMut.mutateAsync({
+          ...base,
+          imageDataUrl,
+          ...(original ? { original } : {}),
+        });
         toast.success("Photo uploaded.");
       } else {
         await updateMut.mutateAsync({
           publicId: seed.photo.publicId,
           ...base,
           ...(imageDataUrl ? { imageDataUrl } : {}),
+          ...(original ? { original } : {}),
         });
         toast.success("Photo updated.");
       }
@@ -164,11 +299,28 @@ export function PhotoFormDialog({
           ? err.message
           : "Couldn't save the photo.",
       );
+      // A failed save deletes the private objects it was sent, so those
+      // keys are spent. Upload the same file again for fresh ones; Save
+      // stays disabled until they land.
+      if (original !== null && sourceFile !== null) {
+        void startUpload(sourceFile);
+      }
     }
   }
 
   const existingImageUrl =
     seed?.mode === "edit" ? albumImageUrl(seed.photo.imageKey) : null;
+  // A fresh upload's facts win over the seed photo's. On create there is
+  // nothing to say until one lands; on edit, no original reads as such.
+  // While a new pick is uploading or has failed, the seed's line would be
+  // stale, so show none.
+  const originalLine = upload.result
+    ? originalLabel(upload.result)
+    : sourceFile !== null
+      ? null
+      : seed?.mode === "edit"
+        ? (originalLabel(seed.photo) ?? "No original stored")
+        : null;
 
   return (
     <Dialog
@@ -247,6 +399,31 @@ export function PhotoFormDialog({
                 </div>
                 <input ref={crop.fileInputRef} {...crop.fileInputProps} />
                 <ImagePickerError message={crop.error} />
+                {originalLine ? (
+                  <p className="text-sm text-muted-foreground">
+                    {originalLine}
+                  </p>
+                ) : null}
+                {upload.status === "uploading" ? (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    Uploading original…
+                  </p>
+                ) : null}
+                {upload.status === "error" ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ImagePickerError message={upload.error} />
+                    {sourceFile ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void startUpload(sourceFile)}
+                      >
+                        Try again
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -295,6 +472,12 @@ export function PhotoFormDialog({
                     setForm({ ...form, takenAt: e.target.value })
                   }
                 />
+                {upload.result?.takenDate &&
+                form.takenAt === upload.result.takenDate ? (
+                  <p className="text-xs text-muted-foreground">
+                    From the photo
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <Label htmlFor="album-tag">Tag (optional)</Label>
@@ -329,7 +512,12 @@ export function PhotoFormDialog({
           <Button
             type="submit"
             form="album-photo-form"
-            disabled={submitting || form === null}
+            disabled={
+              submitting ||
+              form === null ||
+              upload.status === "uploading" ||
+              upload.status === "error"
+            }
           >
             {submitting ? "Saving…" : "Save"}
           </Button>

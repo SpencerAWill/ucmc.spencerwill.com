@@ -134,6 +134,40 @@ describe("notice:manage", () => {
   });
 });
 
+describe("public_album:view_original", () => {
+  it("is registered under its id, described, and not anonymous-grantable", async () => {
+    const rows = await getDb()
+      .select({
+        name: schema.permissions.name,
+        description: schema.permissions.description,
+        grantable: schema.permissions.anonymousGrantable,
+      })
+      .from(schema.permissions)
+      .where(eq(schema.permissions.id, "perm_public_album_view_original"));
+    expect(rows).toEqual([
+      {
+        name: "public_album:view_original",
+        description:
+          "Open and download the full-size, uncropped version of Album photos",
+        grantable: false,
+      },
+    ]);
+  });
+
+  it("is granted to role_member and nobody else", async () => {
+    const rows = await getDb()
+      .select({ roleId: schema.rolePermissions.roleId })
+      .from(schema.rolePermissions)
+      .where(
+        eq(
+          schema.rolePermissions.permissionId,
+          "perm_public_album_view_original",
+        ),
+      );
+    expect(rows).toEqual([{ roleId: "role_member" }]);
+  });
+});
+
 /**
  * `SettingMeta.permission` is a plain string — permissions are rows, so
  * there is no compile-time list to type it against. A typo there would

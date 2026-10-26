@@ -9,7 +9,8 @@
  *     row are deleted from the bucket
  *   - site-feedback screenshots deleted 30 days after their report
  *     resolves (the rule is `screenshot-retention.ts`), plus an orphan
- *     pass over the private bucket's screenshot prefix
+ *     pass over the private bucket's screenshot and Album-original
+ *     prefixes (the Album ones wait a day before an orphan goes)
  *
  * It also sweeps `email_sends`, which is **not** a privacy promise and
  * is deliberately absent from the list above. That table carries no
@@ -50,6 +51,10 @@ import { sweepEmailOutbox } from "#/server/email/outbox.server";
 import { errorMessage, log } from "#/server/log/log.server";
 import { getPrivateBucket, getPublicBucket } from "#/server/r2";
 import {
+  ALBUM_FULL_PREFIX,
+  ALBUM_ORIGINAL_PREFIX,
+} from "#/server/r2/album-originals.server";
+import {
   SITE_FEEDBACK_SCREENSHOT_PREFIX,
   deleteSiteFeedbackScreenshots,
 } from "#/server/r2/site-feedback-screenshots.server";
@@ -80,6 +85,15 @@ const EMAIL_SEND_LOG_RETENTION_DAYS = 90;
 // gets picked up on the next day's sweep — never lost, just delayed.
 const DEFAULT_MIN_ORPHAN_AGE_MS = 5 * 60 * 1000;
 
+// Album originals and clean copies get a day, not five minutes. Their
+// PUT happens when the member picks a file, and the row that references
+// them is only inserted when they press Save, after cropping and writing
+// alt text and a caption. That gap waits on a person, not on a request,
+// so a dialog left open over the daily sweep (`0 12 * * *` UTC) would
+// otherwise lose its upload and fail on Save. A day comfortably outlasts
+// any open dialog; an abandoned upload is still gone by the next sweep.
+const ALBUM_MIN_ORPHAN_AGE_MS = DAY_MS;
+
 // R2's batch-delete API accepts up to 1000 keys per call.
 const R2_BATCH_DELETE_LIMIT = 1000;
 
@@ -102,6 +116,26 @@ const GC_PREFIXES = [
 // is a singleton key/value store; the about + meeting sections store
 // their image as `value_json: JSON.stringify("landing/about/abc.webp")`.
 const SETTINGS_IMAGE_KEYS = ["about.image_key", "meeting.image_key"];
+
+/** A prefix the orphan sweep may GC, and how old an orphan must be first. */
+interface SweepPrefix {
+  prefix: string;
+  minOrphanAgeMs: number;
+}
+
+/**
+ * Each prefix with its own age guard, unless the caller overrides every
+ * guard at once (tests pass `0`).
+ */
+function withAgeGuards(
+  prefixes: readonly SweepPrefix[],
+  override: number | undefined,
+): SweepPrefix[] {
+  return prefixes.map(({ prefix, minOrphanAgeMs }) => ({
+    prefix,
+    minOrphanAgeMs: override ?? minOrphanAgeMs,
+  }));
+}
 
 export interface SweepCounts {
   rejectedRegistrations: number;
@@ -214,9 +248,9 @@ export async function sweepRevokedWaiverAttestations(
  *      both — kept correctly.
  *
  *   2. **Age guard.** Skip any object whose `uploaded` timestamp is
- *      within the last `minOrphanAgeMs`. Even if the cron runs slow,
- *      the PUT-to-UPDATE gap (sub-second in practice) can never
- *      exceed five minutes.
+ *      within its prefix's age guard (five minutes here). Even if the
+ *      cron runs slow, the PUT-to-UPDATE gap (sub-second in practice)
+ *      can never exceed five minutes.
  *
  * Memory: collects all R2 keys + the DB live set in memory. Bounded
  * by club membership + landing assets — a few hundred KB at worst.
@@ -227,42 +261,58 @@ export async function sweepOrphanR2Keys(
 ): Promise<number> {
   return sweepOrphansIn(
     getPublicBucket(),
-    GC_PREFIXES,
+    GC_PREFIXES.map((prefix) => ({ prefix, minOrphanAgeMs })),
     loadReferencedR2Keys,
     now,
-    minOrphanAgeMs,
   );
 }
 
 /**
- * The same sweep over the private bucket. Its only prefix so far holds
- * site-feedback screenshots, which are PUT before their row is inserted
- * (and deleted again if the insert fails), so the race guard applies
- * exactly as it does to avatars.
+ * The same sweep over the private bucket. Its prefixes hold site-feedback
+ * screenshots and Album originals / clean copies. Each is PUT before its
+ * row is inserted (screenshots are deleted again if the insert fails;
+ * an Album upload the member never saves is simply left), so the race
+ * guard applies as it does to avatars, with one difference: the Album
+ * prefixes wait a day (`ALBUM_MIN_ORPHAN_AGE_MS`), because their gap
+ * between PUT and INSERT is a member filling in the dialog, not a
+ * request. Screenshots keep the five-minute guard. `minOrphanAgeMs`, when
+ * given, overrides every prefix's guard (tests pass `0`).
  */
 export async function sweepOrphanPrivateR2Keys(
   now: Temporal.Instant = Temporal.Now.instant(),
-  minOrphanAgeMs: number = DEFAULT_MIN_ORPHAN_AGE_MS,
+  minOrphanAgeMs?: number,
 ): Promise<number> {
   return sweepOrphansIn(
     getPrivateBucket(),
-    [SITE_FEEDBACK_SCREENSHOT_PREFIX],
+    withAgeGuards(
+      [
+        {
+          prefix: SITE_FEEDBACK_SCREENSHOT_PREFIX,
+          minOrphanAgeMs: DEFAULT_MIN_ORPHAN_AGE_MS,
+        },
+        {
+          prefix: ALBUM_ORIGINAL_PREFIX,
+          minOrphanAgeMs: ALBUM_MIN_ORPHAN_AGE_MS,
+        },
+        { prefix: ALBUM_FULL_PREFIX, minOrphanAgeMs: ALBUM_MIN_ORPHAN_AGE_MS },
+      ],
+      minOrphanAgeMs,
+    ),
     loadReferencedPrivateR2Keys,
     now,
-    minOrphanAgeMs,
   );
 }
 
 async function sweepOrphansIn(
   bucket: R2Bucket,
-  prefixes: readonly string[],
+  prefixes: readonly SweepPrefix[],
   loadLiveKeys: () => Promise<Set<string>>,
   now: Temporal.Instant,
-  minOrphanAgeMs: number,
 ): Promise<number> {
-  // 1. List every key under the GC prefixes BEFORE reading the DB.
-  const r2Objects: R2Object[] = [];
-  for (const prefix of prefixes) {
+  // 1. List every key under the GC prefixes BEFORE reading the DB, and
+  //    remember which prefix's age guard each object falls under.
+  const r2Objects: Array<{ object: R2Object; minOrphanAgeMs: number }> = [];
+  for (const { prefix, minOrphanAgeMs } of prefixes) {
     let cursor: string | undefined;
     let truncated = true;
     while (truncated) {
@@ -271,7 +321,9 @@ async function sweepOrphansIn(
         cursor,
         limit: R2_BATCH_DELETE_LIMIT,
       });
-      r2Objects.push(...page.objects);
+      r2Objects.push(
+        ...page.objects.map((object) => ({ object, minOrphanAgeMs })),
+      );
       truncated = page.truncated;
       cursor = page.truncated ? page.cursor : undefined;
     }
@@ -281,16 +333,15 @@ async function sweepOrphansIn(
   //    R2 has either also landed in DB (no-op) or is too new for the
   //    age guard (skipped).
   const liveKeys = await loadLiveKeys();
-  // R2 `object.uploaded` is a native Date (R2 API), so the age guard stays
-  // in epoch-ms space rather than mixing Instant comparisons.
-  const ageCutoffMs = now.epochMilliseconds - minOrphanAgeMs;
 
   const orphans: string[] = [];
-  for (const object of r2Objects) {
+  for (const { object, minOrphanAgeMs } of r2Objects) {
     if (liveKeys.has(object.key)) {
       continue;
     }
-    if (object.uploaded.getTime() >= ageCutoffMs) {
+    // R2 `object.uploaded` is a native Date (R2 API), so the age guard
+    // stays in epoch-ms space rather than mixing Instant comparisons.
+    if (object.uploaded.getTime() >= now.epochMilliseconds - minOrphanAgeMs) {
       // Skip — within the upload-race window. Next sweep picks it up
       // if it's still unreferenced then.
       continue;
@@ -309,11 +360,27 @@ async function sweepOrphansIn(
 }
 
 async function loadReferencedPrivateR2Keys(): Promise<Set<string>> {
-  const rows = await getDb()
-    .select({ key: schema.siteFeedback.screenshotKey })
-    .from(schema.siteFeedback)
-    .where(isNotNull(schema.siteFeedback.screenshotKey));
-  return new Set(rows.flatMap((row) => (row.key === null ? [] : [row.key])));
+  const db = getDb();
+  // Three selects, none with a bound key list (D1 caps parameters at 100).
+  const [screenshots, originals, fulls] = await db.batch([
+    db
+      .select({ key: schema.siteFeedback.screenshotKey })
+      .from(schema.siteFeedback)
+      .where(isNotNull(schema.siteFeedback.screenshotKey)),
+    db
+      .select({ key: schema.albumPhotos.originalKey })
+      .from(schema.albumPhotos)
+      .where(isNotNull(schema.albumPhotos.originalKey)),
+    db
+      .select({ key: schema.albumPhotos.fullKey })
+      .from(schema.albumPhotos)
+      .where(isNotNull(schema.albumPhotos.fullKey)),
+  ]);
+  return new Set(
+    [...screenshots, ...originals, ...fulls].flatMap((row) =>
+      row.key === null ? [] : [row.key],
+    ),
+  );
 }
 
 /**
@@ -478,8 +545,8 @@ async function loadReferencedR2Keys(): Promise<Set<string>> {
 
 export interface RunRetentionSweepsOptions {
   /**
-   * Override for the orphan-GC age guard (default: 5 minutes). The
-   * scheduled handler in production never sets this — only tests
+   * Override for every orphan-GC age guard (default: 5 minutes, and a day
+   * for the Album prefixes of the private bucket). The scheduled handler in production never sets this — only tests
    * pass `0` so freshly-uploaded fixture objects don't fall into the
    * upload-race skip window.
    */

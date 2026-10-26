@@ -44,6 +44,8 @@ const NO_CACHE_BY_DESIGN: Record<string, string | undefined> = {
     "sends an email; nothing server-side that is cached has changed yet",
   "src/features/auth/api/use-add-email.ts":
     "the address is not attached until the link is consumed — `/verify-email` invalidates on its own success",
+  "src/features/album/api/use-upload-album-original.ts":
+    "writes only private R2 objects before any `album_photos` row exists; the create/update mutation that follows does the invalidation",
 };
 
 // `readdirSync(..., { recursive: true })` rather than a glob package:

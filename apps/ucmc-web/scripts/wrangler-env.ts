@@ -129,13 +129,15 @@ const R2: Record<string, (o: StackOutputs) => string> = {
  * Keys whose meaning per stack is settled. Anything else (`services`,
  * `queues`, `durable_objects`, a new env) stops the sync until someone
  * decides how it maps. `unsafe` holds the rate limiters, whose namespace
- * ids are committed per section and aren't stack outputs.
+ * ids are committed per section and aren't stack outputs. `images` is
+ * the Cloudflare Images binding: one fixed name, no resource behind it.
  */
 const BINDING_KEYS = [
   "d1_databases",
   "kv_namespaces",
   "r2_buckets",
   "unsafe",
+  "images",
 ] as const;
 const SECTION_KEYS = new Set<string>([
   "name",
@@ -167,6 +169,7 @@ interface Section {
   }[];
   readonly kv_namespaces?: readonly { binding: string }[];
   readonly r2_buckets?: readonly { binding: string; bucket_name: string }[];
+  readonly images?: { readonly binding: string };
   readonly unsafe?: { readonly bindings?: readonly { name: string }[] };
   readonly env?: Readonly<Record<string, Section>>;
 }
@@ -182,6 +185,9 @@ function bindingNames(
 ): string[] {
   if (key === "unsafe") {
     return (section.unsafe?.bindings ?? []).map((b) => b.name);
+  }
+  if (key === "images") {
+    return section.images === undefined ? [] : [section.images.binding];
   }
   return (section[key] ?? []).map((b) => b.binding);
 }

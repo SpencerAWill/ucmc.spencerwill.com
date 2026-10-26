@@ -53,6 +53,7 @@ const PROD: StackOutputs = {
 
 interface Section {
   name: string;
+  images?: { binding: string };
   vars?: Record<string, string>;
   d1_databases: { database_id: string }[];
   kv_namespaces: { id: string }[];
@@ -224,6 +225,36 @@ describe("syncWranglerConfig", () => {
     expect(() => syncWranglerConfig(text, "dev", DEV)).toThrow(
       /env\.production\.unsafe binds .* but the top level binds .*CEREMONY_RATE_LIMITER/,
     );
+  });
+
+  it("accepts an images binding repeated in env.production", () => {
+    const synced = read(syncWranglerConfig(committed, "prod", PROD));
+
+    expect(synced.images).toEqual({ binding: "IMAGES" });
+    expect(synced.env.production.images).toEqual({ binding: "IMAGES" });
+  });
+
+  it("refuses an images binding missing from env.production", () => {
+    const text = edit(["env", "production", "images"], undefined);
+
+    expect(() => syncWranglerConfig(text, "dev", DEV)).toThrow(
+      /env\.production\.images binds \[\] but the top level binds \[IMAGES\]/,
+    );
+  });
+
+  it("leaves the images binding unchanged when syncing", () => {
+    for (const [stack, outputs] of [
+      ["dev", DEV],
+      ["prod", PROD],
+    ] as const) {
+      const synced = read(syncWranglerConfig(committed, stack, outputs));
+      const before = read(committed);
+
+      expect(synced.images).toEqual(before.images);
+      expect(synced.env.production.images).toEqual(
+        before.env.production.images,
+      );
+    }
   });
 
   it("names the parse error in a malformed file", () => {

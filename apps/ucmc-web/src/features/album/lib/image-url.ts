@@ -43,3 +43,16 @@ export function albumImageUrl(imageKey: string): string {
   }
   return `/api/album-image/${imageKey.slice(ALBUM_R2_PREFIX.length)}`;
 }
+
+/**
+ * The members-only full-size copy, served by `routes/api/album-full.$publicId.$file.ts`.
+ * `fullHash` is the original's hash, so the URL changes when the image does.
+ */
+export function albumFullUrl(
+  publicId: string,
+  fullHash: string,
+  opts: { download?: boolean } = {},
+): string {
+  const base = `/api/album-full/${publicId}/${fullHash}.webp`;
+  return opts.download ? `${base}?download=1` : base;
+}
