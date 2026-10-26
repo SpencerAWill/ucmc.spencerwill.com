@@ -32,6 +32,7 @@ import type {
 } from "#/features/album/server/album-fns";
 import { useImageCrop } from "#/hooks/use-image-crop";
 import { toDateInputValue } from "#/lib/date-format";
+import { imageUploadErrorMessage } from "#/lib/image-upload";
 
 /**
  * Seed for opening the photo dialog. `mode = "create"` opens a fresh
@@ -223,7 +224,29 @@ export function PhotoFormDialog({
       return;
     }
 
-    if (!crop.hasCompletedCrop && seed.mode === "create") {
+    // Only a fresh crop is encoded. On edit, the existing image stays if
+    // the user didn't load a new one.
+    //
+    // The encode throws an `ImageUploadError` (on iOS always, because
+    // Safari can't encode WebP), and `submit` runs as `void submit()`, so
+    // an uncaught throw here was an unhandled rejection: Save did nothing
+    // and said nothing. It is caught on its own rather than by the write's
+    // `try` below, because nothing has been sent yet: no keys are spent,
+    // so it must not trigger that block's re-upload.
+    const imageDataUrl = crop.hasCompletedCrop
+      ? await crop.getCroppedDataUrl().catch((err: unknown) => {
+          toast.error(imageUploadErrorMessage(err));
+          return undefined;
+        })
+      : null;
+    if (imageDataUrl === undefined) {
+      return;
+    }
+    if (crop.hasCompletedCrop && !imageDataUrl) {
+      toast.error("Couldn't render the cropped image.");
+      return;
+    }
+    if (!imageDataUrl && seed.mode === "create") {
       toast.error("Pick a photo and complete the crop.");
       return;
     }
@@ -262,20 +285,7 @@ export function PhotoFormDialog({
       heightPx: ALBUM_OUTPUT_HEIGHT,
     };
 
-    // The encode is inside the `try` with the upload: it throws an
-    // `ImageUploadError` (on iOS, because Safari can't encode WebP), and
-    // `submit` runs as `void submit()`, so a throw outside this block was
-    // an unhandled rejection — Save did nothing and said nothing.
     try {
-      // Only a fresh crop is encoded. On edit, the existing image stays
-      // if the user didn't load a new one.
-      const imageDataUrl = crop.hasCompletedCrop
-        ? await crop.getCroppedDataUrl()
-        : null;
-      if (crop.hasCompletedCrop && !imageDataUrl) {
-        toast.error("Couldn't render the cropped image.");
-        return;
-      }
       if (seed.mode === "create") {
         if (!imageDataUrl) {
           toast.error("Pick a photo and complete the crop.");
