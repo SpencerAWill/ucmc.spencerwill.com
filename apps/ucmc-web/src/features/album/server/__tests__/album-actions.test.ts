@@ -34,6 +34,9 @@ const {
 const { ALBUM_R2_PREFIX } = await import("#/features/album/lib/image-url");
 const { openSession } = await import("#/server/auth/session.server");
 const { getPrivateBucket, getPublicBucket } = await import("#/server/r2");
+const { albumFullKey, albumOriginalKey, putAlbumFull, putAlbumOriginal } =
+  await import("#/server/r2/album-originals.server");
+const { sql } = await import("drizzle-orm");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -413,5 +416,457 @@ describe("deleteAlbumPhotoAction", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(await getPrivateBucket().head(originalKey)).toBeNull();
     expect(await getPrivateBucket().head(fullKey)).toBeNull();
+  });
+});
+
+// ── originals (create + update record a verified original) ────────────
+
+const HASH_A = "0123456789abcdef";
+const HASH_B = "fedcba9876543210";
+
+async function seedUpload(
+  photoId: string,
+  hash: string,
+  opts: { full?: boolean; bytes?: number } = {},
+) {
+  const originalKey = albumOriginalKey(photoId, hash, "image/jpeg");
+  await putAlbumOriginal(
+    originalKey,
+    new Uint8Array(opts.bytes ?? 7).buffer,
+    "image/jpeg",
+  );
+  let fullKey: string | null = null;
+  if (opts.full !== false) {
+    fullKey = albumFullKey(photoId, hash);
+    await putAlbumFull(fullKey, new Uint8Array(3).buffer, {
+      widthPx: 4000,
+      heightPx: 3000,
+    });
+  }
+  return { photoId, originalKey, fullKey };
+}
+
+async function rowFor(publicId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(schema.albumPhotos)
+    .where(eq(schema.albumPhotos.publicId, publicId));
+  return row;
+}
+
+describe("originals on create", () => {
+  it("records a verified original from the R2 heads, not the input", async () => {
+    await signInAsAdmin();
+    const photoId = crypto.randomUUID();
+    const original = await seedUpload(photoId, HASH_A, { bytes: 11 });
+    const { publicId } = await createAlbumPhotoAction({
+      ...VALID_PHOTO,
+      imageDataUrl: makeWebpDataUrl(),
+      original,
+    });
+    const row = await rowFor(publicId);
+    expect(row.id).toBe(photoId);
+    expect(row.originalKey).toBe(original.originalKey);
+    expect(row.originalBytes).toBe(11);
+    expect(row.originalContentType).toBe("image/jpeg");
+    expect(row.fullKey).toBe(original.fullKey);
+    expect(row.fullBytes).toBe(3);
+    expect(row.fullWidthPx).toBe(4000);
+    expect(row.fullHeightPx).toBe(3000);
+    const summary = await getAlbumPhotoByPublicIdAction({ publicId });
+    expect(summary).toMatchObject({
+      fullHash: HASH_A,
+      originalBytes: 11,
+      fullWidthPx: 4000,
+      fullHeightPx: 3000,
+    });
+  });
+
+  it("accepts a null fullKey and stores null full columns", async () => {
+    await signInAsAdmin();
+    const photoId = crypto.randomUUID();
+    const original = await seedUpload(photoId, HASH_A, { full: false });
+    const { publicId } = await createAlbumPhotoAction({
+      ...VALID_PHOTO,
+      imageDataUrl: makeWebpDataUrl(),
+      original,
+    });
+    const row = await rowFor(publicId);
+    expect(row.originalKey).toBe(original.originalKey);
+    expect(row.fullKey).toBeNull();
+    expect(row.fullWidthPx).toBeNull();
+    expect((await getAlbumPhotoByPublicIdAction({ publicId }))!.fullHash).toBe(
+      HASH_A,
+    );
+  });
+
+  it("rejects an original key for a different photoId", async () => {
+    await signInAsAdmin();
+    const other = await seedUpload(crypto.randomUUID(), HASH_A);
+    await expect(
+      createAlbumPhotoAction({
+        ...VALID_PHOTO,
+        imageDataUrl: makeWebpDataUrl(),
+        original: { ...other, photoId: crypto.randomUUID() },
+      }),
+    ).rejects.toThrow("Uploaded original not found");
+  });
+
+  it("rejects a key with no object behind it", async () => {
+    await signInAsAdmin();
+    const photoId = crypto.randomUUID();
+    await expect(
+      createAlbumPhotoAction({
+        ...VALID_PHOTO,
+        imageDataUrl: makeWebpDataUrl(),
+        original: {
+          photoId,
+          originalKey: albumOriginalKey(photoId, HASH_A, "image/jpeg"),
+          fullKey: null,
+        },
+      }),
+    ).rejects.toThrow("Uploaded original not found");
+  });
+
+  it("rejects a full key that doesn't match the original's photoId and hash", async () => {
+    await signInAsAdmin();
+    const photoId = crypto.randomUUID();
+    const original = await seedUpload(photoId, HASH_A);
+    const wrongHash = albumFullKey(photoId, HASH_B);
+    await putAlbumFull(wrongHash, new Uint8Array(3).buffer, {
+      widthPx: 1,
+      heightPx: 1,
+    });
+    await expect(
+      createAlbumPhotoAction({
+        ...VALID_PHOTO,
+        imageDataUrl: makeWebpDataUrl(),
+        original: { ...original, fullKey: wrongHash },
+      }),
+    ).rejects.toThrow("Uploaded original not found");
+    const wrongPhoto = albumFullKey(crypto.randomUUID(), HASH_A);
+    await putAlbumFull(wrongPhoto, new Uint8Array(3).buffer, {
+      widthPx: 1,
+      heightPx: 1,
+    });
+    await expect(
+      createAlbumPhotoAction({
+        ...VALID_PHOTO,
+        imageDataUrl: makeWebpDataUrl(),
+        original: { ...original, fullKey: wrongPhoto },
+      }),
+    ).rejects.toThrow("Uploaded original not found");
+  });
+
+  it("without original still works and stores nulls", async () => {
+    await signInAsAdmin();
+    const { publicId } = await createAlbumPhotoAction({
+      ...VALID_PHOTO,
+      imageDataUrl: makeWebpDataUrl(),
+    });
+    const row = await rowFor(publicId);
+    expect(row.originalKey).toBeNull();
+    expect(row.fullKey).toBeNull();
+    expect(row.originalBytes).toBeNull();
+    expect(row.fullBytes).toBeNull();
+    expect(await getAlbumPhotoByPublicIdAction({ publicId })).toMatchObject({
+      fullHash: null,
+      originalBytes: null,
+      fullWidthPx: null,
+      fullHeightPx: null,
+    });
+  });
+});
+
+describe("originals on update", () => {
+  async function createWithOriginal() {
+    const photoId = crypto.randomUUID();
+    const original = await seedUpload(photoId, HASH_A);
+    const { publicId } = await createAlbumPhotoAction({
+      ...VALID_PHOTO,
+      imageDataUrl: makeWebpDataUrl(0x01),
+      original,
+    });
+    return { photoId, publicId, original };
+  }
+
+  it("swaps the keys and deletes the old private objects", async () => {
+    await signInAsAdmin();
+    const { photoId, publicId, original: old } = await createWithOriginal();
+    const next = await seedUpload(photoId, HASH_B, { bytes: 21 });
+    await updateAlbumPhotoAction({
+      publicId,
+      ...VALID_PHOTO,
+      imageDataUrl: makeWebpDataUrl(0x02),
+      original: next,
+    });
+    const row = await rowFor(publicId);
+    expect(row.originalKey).toBe(next.originalKey);
+    expect(row.originalBytes).toBe(21);
+    expect(row.fullKey).toBe(next.fullKey);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await getPrivateBucket().head(old.originalKey)).toBeNull();
+    expect(await getPrivateBucket().head(old.fullKey!)).toBeNull();
+    expect(await getPrivateBucket().head(next.originalKey)).not.toBeNull();
+  });
+
+  it("rejects an original whose photoId isn't the row being edited", async () => {
+    await signInAsAdmin();
+    const { publicId } = await createWithOriginal();
+    const stray = await seedUpload(crypto.randomUUID(), HASH_B);
+    await expect(
+      updateAlbumPhotoAction({ publicId, ...VALID_PHOTO, original: stray }),
+    ).rejects.toThrow("Uploaded original not found");
+  });
+
+  it("a text-only update leaves the private keys untouched", async () => {
+    await signInAsAdmin();
+    const { publicId, original } = await createWithOriginal();
+    const before = await rowFor(publicId);
+    await updateAlbumPhotoAction({
+      publicId,
+      ...VALID_PHOTO,
+      caption: "Renamed",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    const after = await rowFor(publicId);
+    expect(after.originalKey).toBe(before.originalKey);
+    expect(after.fullKey).toBe(before.fullKey);
+    expect(after.originalBytes).toBe(before.originalBytes);
+    expect(await getPrivateBucket().head(original.originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(original.fullKey!)).not.toBeNull();
+  });
+
+  it("a new crop without a new original leaves the original columns alone", async () => {
+    await signInAsAdmin();
+    const { publicId, original } = await createWithOriginal();
+    await updateAlbumPhotoAction({
+      publicId,
+      ...VALID_PHOTO,
+      imageDataUrl: makeWebpDataUrl(0x02),
+    });
+    const row = await rowFor(publicId);
+    expect(row.originalKey).toBe(original.originalKey);
+    expect(row.fullKey).toBe(original.fullKey);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await getPrivateBucket().head(original.originalKey)).not.toBeNull();
+  });
+
+  it("cleans up new private keys when the UPDATE fails", async () => {
+    await signInAsAdmin();
+    const { photoId, publicId, original: old } = await createWithOriginal();
+    const before = await rowFor(publicId);
+    const next = await seedUpload(photoId, HASH_B);
+    const db = getDb();
+    await db.run(
+      sql`CREATE TRIGGER album_photos_test_fail BEFORE UPDATE ON album_photos BEGIN SELECT RAISE(ABORT, 'forced'); END`,
+    );
+    try {
+      await expect(
+        updateAlbumPhotoAction({
+          publicId,
+          ...VALID_PHOTO,
+          imageDataUrl: makeWebpDataUrl(0x02),
+          original: next,
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await db.run(sql`DROP TRIGGER album_photos_test_fail`);
+    }
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await getPrivateBucket().head(next.originalKey)).toBeNull();
+    expect(await getPrivateBucket().head(next.fullKey!)).toBeNull();
+    expect(await getPrivateBucket().head(old.originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(old.fullKey!)).not.toBeNull();
+    expect(await rowFor(publicId)).toEqual(before);
+  });
+
+  async function withFailingTrigger(
+    event: "UPDATE" | "INSERT",
+    fn: () => Promise<void>,
+  ) {
+    const db = getDb();
+    await db.run(
+      sql.raw(
+        `CREATE TRIGGER album_photos_test_fail BEFORE ${event} ON album_photos BEGIN SELECT RAISE(ABORT, 'forced'); END`,
+      ),
+    );
+    try {
+      await fn();
+    } finally {
+      await db.run(sql`DROP TRIGGER album_photos_test_fail`);
+    }
+  }
+
+  it("refuses a create that reuses a photoId, and keeps the first row's objects", async () => {
+    await signInAsAdmin();
+    const { original } = await createWithOriginal();
+    await expect(
+      createAlbumPhotoAction({
+        ...VALID_PHOTO,
+        imageDataUrl: makeWebpDataUrl(0x03),
+        original,
+      }),
+    ).rejects.toThrow("Uploaded original not found");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await getPrivateBucket().head(original.originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(original.fullKey!)).not.toBeNull();
+  });
+
+  it("deletes the new private keys when the INSERT fails", async () => {
+    await signInAsAdmin();
+    const original = await seedUpload(crypto.randomUUID(), HASH_A);
+    await withFailingTrigger("INSERT", async () => {
+      await expect(
+        createAlbumPhotoAction({
+          ...VALID_PHOTO,
+          imageDataUrl: makeWebpDataUrl(),
+          original,
+        }),
+      ).rejects.toThrow();
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await getPrivateBucket().head(original.originalKey)).toBeNull();
+    expect(await getPrivateBucket().head(original.fullKey!)).toBeNull();
+  });
+
+  // Local R2 deletes finish before the next head(), which would hide a
+  // fire-and-forget delete; hold each private delete back to expose one.
+  function slowPrivateDeletes() {
+    const bucket = getPrivateBucket();
+    const real = bucket.delete.bind(bucket);
+    return vi.spyOn(bucket, "delete").mockImplementation(async (keys) => {
+      await new Promise((r) => setTimeout(r, 100));
+      return real(keys);
+    });
+  }
+
+  it("a failed update has removed its new private keys by the time it rejects", async () => {
+    await signInAsAdmin();
+    const { photoId, publicId } = await createWithOriginal();
+    const next = await seedUpload(photoId, HASH_B);
+    const slow = slowPrivateDeletes();
+    await withFailingTrigger("UPDATE", async () => {
+      await expect(
+        updateAlbumPhotoAction({
+          publicId,
+          ...VALID_PHOTO,
+          imageDataUrl: makeWebpDataUrl(0x02),
+          original: next,
+        }),
+      ).rejects.toThrow();
+    });
+    slow.mockRestore();
+    // No sleep: the dialog re-uploads these very keys right after.
+    expect(await getPrivateBucket().head(next.originalKey)).toBeNull();
+    expect(await getPrivateBucket().head(next.fullKey!)).toBeNull();
+  });
+
+  it("a failed create has removed its private keys by the time it rejects", async () => {
+    await signInAsAdmin();
+    const original = await seedUpload(crypto.randomUUID(), HASH_A);
+    const slow = slowPrivateDeletes();
+    await withFailingTrigger("INSERT", async () => {
+      await expect(
+        createAlbumPhotoAction({
+          ...VALID_PHOTO,
+          imageDataUrl: makeWebpDataUrl(),
+          original,
+        }),
+      ).rejects.toThrow();
+    });
+    slow.mockRestore();
+    expect(await getPrivateBucket().head(original.originalKey)).toBeNull();
+    expect(await getPrivateBucket().head(original.fullKey!)).toBeNull();
+  });
+
+  // The pre-insert "is the id taken" check is not atomic, and
+  // albumPhotoIdTaken is module-internal, so it can't be spied directly.
+  // Instead the first select from album_photos (that pre-check) is made to
+  // report "not taken" while the winner's row, same id and keys, already
+  // exists, so the create's own insert then loses the primary-key race.
+  it("a create that loses the photoId race leaves the winner's private objects", async () => {
+    await signInAsAdmin();
+    const original = await seedUpload(crypto.randomUUID(), HASH_A);
+    const db = getDb();
+    await db.insert(schema.albumPhotos).values({
+      id: original.photoId,
+      publicId: "winner",
+      altText: "winner",
+      imageKey: "gallery/winner.webp",
+      imageBytes: 1,
+      widthPx: 1,
+      heightPx: 1,
+      originalKey: original.originalKey,
+      fullKey: original.fullKey,
+    });
+    const realSelect = db.select.bind(db) as (...a: unknown[]) => {
+      from: (t: unknown) => unknown;
+    };
+    let hidden = false;
+    const spy = vi.spyOn(db, "select").mockImplementation(((
+      ...args: unknown[]
+    ) => {
+      const real = realSelect(...args);
+      return {
+        from: (t: unknown) => {
+          if (t === schema.albumPhotos && !hidden) {
+            hidden = true;
+            return { where: () => ({ limit: () => Promise.resolve([]) }) };
+          }
+          return real.from(t);
+        },
+      };
+    }) as never);
+    try {
+      await expect(
+        createAlbumPhotoAction({
+          ...VALID_PHOTO,
+          imageDataUrl: makeWebpDataUrl(),
+          original,
+        }),
+      ).rejects.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(hidden).toBe(true);
+    expect(await getPrivateBucket().head(original.originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(original.fullKey!)).not.toBeNull();
+  });
+
+  it("keeps shared keys when the same original is re-sent, on success and on failure", async () => {
+    await signInAsAdmin();
+    const { publicId, original } = await createWithOriginal();
+    await updateAlbumPhotoAction({ publicId, ...VALID_PHOTO, original });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await getPrivateBucket().head(original.originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(original.fullKey!)).not.toBeNull();
+
+    await withFailingTrigger("UPDATE", async () => {
+      await expect(
+        updateAlbumPhotoAction({ publicId, ...VALID_PHOTO, original }),
+      ).rejects.toThrow();
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await getPrivateBucket().head(original.originalKey)).not.toBeNull();
+    expect(await getPrivateBucket().head(original.fullKey!)).not.toBeNull();
+  });
+
+  it("keeps the row's clean copy when the same original is re-sent with a null fullKey", async () => {
+    await signInAsAdmin();
+    const { publicId, original } = await createWithOriginal();
+    const before = await rowFor(publicId);
+    await updateAlbumPhotoAction({
+      publicId,
+      ...VALID_PHOTO,
+      original: { ...original, fullKey: null },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    const after = await rowFor(publicId);
+    expect(after.fullKey).toBe(before.fullKey);
+    expect(after.fullWidthPx).toBe(4000);
+    expect(after.fullHeightPx).toBe(3000);
+    expect(after.fullBytes).toBe(before.fullBytes);
+    expect(await getPrivateBucket().head(original.fullKey!)).not.toBeNull();
   });
 });

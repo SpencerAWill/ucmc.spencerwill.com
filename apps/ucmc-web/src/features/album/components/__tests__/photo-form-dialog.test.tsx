@@ -24,6 +24,10 @@ function photo(overrides: Partial<AlbumPhotoSummary> = {}): AlbumPhotoSummary {
     imageBytes: 120_000,
     widthPx: 1600,
     heightPx: 1200,
+    fullHash: null,
+    originalBytes: null,
+    fullWidthPx: null,
+    fullHeightPx: null,
     ...overrides,
   };
 }

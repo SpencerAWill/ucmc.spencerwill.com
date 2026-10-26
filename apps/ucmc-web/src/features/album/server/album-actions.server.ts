@@ -44,7 +44,12 @@ import {
   ALBUM_IMAGE_MAX_BYTES,
   putAlbumImage,
 } from "#/server/r2/album-images.server";
-import { deleteAlbumPrivate } from "#/server/r2/album-originals.server";
+import {
+  deleteAlbumPrivate,
+  headAlbumPrivate,
+  parseAlbumFullKey,
+  parseAlbumOriginalKey,
+} from "#/server/r2/album-originals.server";
 import { shortContentHash } from "#/server/r2/image-codec.server";
 
 // ── public shapes ───────────────────────────────────────────────────────
@@ -61,6 +66,54 @@ export interface AlbumPhotoSummary {
   imageBytes: number;
   widthPx: number;
   heightPx: number;
+  /** The original's hash, or null for photos with no original. */
+  fullHash: string | null;
+  originalBytes: number | null;
+  fullWidthPx: number | null;
+  fullHeightPx: number | null;
+}
+
+interface SummaryRow {
+  id: string;
+  publicId: string;
+  caption: string | null;
+  credit: string | null;
+  takenAt: Temporal.Instant | null;
+  tag: string | null;
+  altText: string;
+  imageKey: string;
+  imageBytes: number;
+  widthPx: number;
+  heightPx: number;
+  originalKey: string | null;
+  originalBytes: number | null;
+  fullWidthPx: number | null;
+  fullHeightPx: number | null;
+}
+
+function toSummary(r: SummaryRow): AlbumPhotoSummary {
+  return {
+    id: r.id,
+    publicId: r.publicId,
+    caption: r.caption,
+    credit: r.credit,
+    takenAt: r.takenAt,
+    tag: r.tag,
+    altText: r.altText,
+    imageKey: r.imageKey,
+    imageBytes: r.imageBytes,
+    widthPx: r.widthPx,
+    heightPx: r.heightPx,
+    // Always the original's hash, never full_key's: self-repair needs
+    // the URL before full_key exists.
+    fullHash:
+      r.originalKey === null
+        ? null
+        : (parseAlbumOriginalKey(r.originalKey)?.hash ?? null),
+    originalBytes: r.originalBytes,
+    fullWidthPx: r.fullWidthPx,
+    fullHeightPx: r.fullHeightPx,
+  };
 }
 
 // ── reads ───────────────────────────────────────────────────────────────
@@ -69,21 +122,7 @@ export async function getAlbumPhotosAction(): Promise<{
   photos: AlbumPhotoSummary[];
 }> {
   const rows = await listAlbumPhotos();
-  return {
-    photos: rows.map((r) => ({
-      id: r.id,
-      publicId: r.publicId,
-      caption: r.caption,
-      credit: r.credit,
-      takenAt: r.takenAt,
-      tag: r.tag,
-      altText: r.altText,
-      imageKey: r.imageKey,
-      imageBytes: r.imageBytes,
-      widthPx: r.widthPx,
-      heightPx: r.heightPx,
-    })),
-  };
+  return { photos: rows.map(toSummary) };
 }
 
 export async function getAlbumPhotoByPublicIdAction(
@@ -93,19 +132,7 @@ export async function getAlbumPhotoByPublicIdAction(
   if (!row) {
     return null;
   }
-  return {
-    id: row.id,
-    publicId: row.publicId,
-    caption: row.caption,
-    credit: row.credit,
-    takenAt: row.takenAt,
-    tag: row.tag,
-    altText: row.altText,
-    imageKey: row.imageKey,
-    imageBytes: row.imageBytes,
-    widthPx: row.widthPx,
-    heightPx: row.heightPx,
-  };
+  return toSummary(row);
 }
 
 // ── mutations (public_album:manage) ──────────────────────────────────
@@ -149,13 +176,118 @@ function decodeWebpDataUrl(dataUrl: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+type OriginalInput = NonNullable<CreateAlbumPhotoInput["original"]>;
+
+interface VerifiedOriginal {
+  originalKey: string;
+  originalBytes: number;
+  originalContentType: string;
+  fullKey: string | null;
+  fullWidthPx: number | null;
+  fullHeightPx: number | null;
+  fullBytes: number | null;
+}
+
+const ORIGINAL_NOT_FOUND = "Uploaded original not found";
+
+function positiveInt(raw: string | undefined): number | null {
+  const n = Number(raw);
+  return raw !== undefined && Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/**
+ * Never trust the client's keys: each must parse, name the expected
+ * photo, and have an object behind it. Every column value is read
+ * from R2, not from the input.
+ */
+async function verifyOriginal(
+  original: OriginalInput,
+  expectedPhotoId: string | null,
+): Promise<VerifiedOriginal> {
+  const parsed = parseAlbumOriginalKey(original.originalKey);
+  if (
+    !parsed ||
+    parsed.photoId !== original.photoId ||
+    (expectedPhotoId !== null && parsed.photoId !== expectedPhotoId)
+  ) {
+    throw new Error(ORIGINAL_NOT_FOUND);
+  }
+  const originalHead = await headAlbumPrivate(original.originalKey);
+  if (
+    !originalHead ||
+    originalHead.httpMetadata?.contentType !== parsed.contentType
+  ) {
+    throw new Error(ORIGINAL_NOT_FOUND);
+  }
+  const base = {
+    originalKey: original.originalKey,
+    originalBytes: originalHead.size,
+    originalContentType: parsed.contentType,
+  };
+  if (original.fullKey === null) {
+    return {
+      ...base,
+      fullKey: null,
+      fullWidthPx: null,
+      fullHeightPx: null,
+      fullBytes: null,
+    };
+  }
+  const fullParsed = parseAlbumFullKey(original.fullKey);
+  if (
+    !fullParsed ||
+    fullParsed.photoId !== parsed.photoId ||
+    fullParsed.hash !== parsed.hash
+  ) {
+    throw new Error(ORIGINAL_NOT_FOUND);
+  }
+  const fullHead = await headAlbumPrivate(original.fullKey);
+  const fullWidthPx = positiveInt(fullHead?.customMetadata?.widthPx);
+  const fullHeightPx = positiveInt(fullHead?.customMetadata?.heightPx);
+  if (!fullHead || fullWidthPx === null || fullHeightPx === null) {
+    throw new Error(ORIGINAL_NOT_FOUND);
+  }
+  return {
+    ...base,
+    fullKey: original.fullKey,
+    fullWidthPx,
+    fullHeightPx,
+    fullBytes: fullHead.size,
+  };
+}
+
+async function albumPhotoIdTaken(id: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ id: schema.albumPhotos.id })
+    .from(schema.albumPhotos)
+    .where(eq(schema.albumPhotos.id, id))
+    .limit(1);
+  return rows.length > 0;
+}
+
+function privateKeys(v: {
+  originalKey: string | null;
+  fullKey: string | null;
+}) {
+  return [v.originalKey, v.fullKey].filter((k) => k !== null);
+}
+
 export async function createAlbumPhotoAction(
   input: CreateAlbumPhotoInput,
 ): Promise<{ publicId: string }> {
   const principal = await requireAlbumManager();
 
   const bytes = decodeWebpDataUrl(input.imageDataUrl);
-  const id = uuidv7();
+  const verified = input.original
+    ? await verifyOriginal(input.original, null)
+    : null;
+  const id = input.original ? input.original.photoId : uuidv7();
+  if (input.original) {
+    // A reused photoId would make a failed insert delete a live row's keys.
+    if (await albumPhotoIdTaken(id)) {
+      throw new Error(ORIGINAL_NOT_FOUND);
+    }
+  }
   const publicId = generatePublicId();
   const hash = await shortContentHash(bytes);
   const imageKey = albumImageKey(id, hash);
@@ -180,6 +312,7 @@ export async function createAlbumPhotoAction(
         imageBytes: bytes.byteLength,
         widthPx: input.widthPx,
         heightPx: input.heightPx,
+        ...verified,
         createdBy: principal.userId,
         updatedBy: principal.userId,
       });
@@ -188,6 +321,14 @@ export async function createAlbumPhotoAction(
     // storage. Best-effort; the orphan-GC sweep catches anything we
     // miss.
     void deleteAlbumImage(imageKey).catch(() => {});
+    // Awaited, unlike the public image: the dialog re-uploads straight
+    // after a failed save, and a late delete must not land on top of it.
+    // Skipped when a row already holds this id: the pre-insert check is
+    // not atomic, so a double-submitted Save can lose the PK race here,
+    // and these keys then belong to the row that won it.
+    if (verified && !(await albumPhotoIdTaken(id).catch(() => true))) {
+      await deleteAlbumPrivate(privateKeys(verified));
+    }
     throw err;
   }
 
@@ -218,6 +359,29 @@ export async function updateAlbumPhotoAction(
   let imageKey = existing.imageKey;
   let imageBytes = existing.imageBytes;
   let oldKeyToDelete: string | null = null;
+  // A new original replaces all three private columns; without one
+  // (text-only edit, or a new crop alone) they stay as they are.
+  const checked = input.original
+    ? await verifyOriginal(input.original, existing.id)
+    : null;
+  // Same original re-sent without a clean copy: keep the copy the row has.
+  const verified =
+    checked &&
+    checked.fullKey === null &&
+    existing.fullKey !== null &&
+    checked.originalKey === existing.originalKey
+      ? {
+          ...checked,
+          fullKey: existing.fullKey,
+          fullWidthPx: existing.fullWidthPx,
+          fullHeightPx: existing.fullHeightPx,
+          fullBytes: existing.fullBytes,
+        }
+      : checked;
+  const oldPrivateKeys = privateKeys(existing);
+  const newPrivateKeys = verified
+    ? privateKeys(verified).filter((k) => !oldPrivateKeys.includes(k))
+    : [];
 
   if (input.imageDataUrl) {
     const bytes = decodeWebpDataUrl(input.imageDataUrl);
@@ -248,6 +412,7 @@ export async function updateAlbumPhotoAction(
         imageBytes,
         widthPx: input.widthPx,
         heightPx: input.heightPx,
+        ...verified,
         updatedAt: Temporal.Now.instant(),
         updatedBy: principal.userId,
       })
@@ -260,11 +425,19 @@ export async function updateAlbumPhotoAction(
     if (imageKey !== existing.imageKey) {
       void deleteAlbumImage(imageKey).catch(() => {});
     }
+    // Awaited: an edit's keys are derived from the photo id and the file's
+    // hash, so the dialog's re-upload after this failure writes the very
+    // same keys, and an unawaited delete could land after it.
+    await deleteAlbumPrivate(newPrivateKeys);
     throw err;
   }
 
   if (oldKeyToDelete) {
     void deleteAlbumImage(oldKeyToDelete).catch(() => {});
+  }
+  if (verified) {
+    const kept = privateKeys(verified);
+    void deleteAlbumPrivate(oldPrivateKeys.filter((k) => !kept.includes(k)));
   }
 
   await recordAuditEvent({
@@ -296,9 +469,7 @@ export async function deleteAlbumPhotoAction(
     .where(eq(schema.albumPhotos.id, existing.id));
 
   void deleteAlbumImage(existing.imageKey).catch(() => {});
-  void deleteAlbumPrivate(
-    [existing.originalKey, existing.fullKey].filter((k) => k !== null),
-  );
+  void deleteAlbumPrivate(privateKeys(existing));
 
   await recordAuditEvent({
     actorUserId: principal.userId,
