@@ -129,6 +129,8 @@ coloured bar separates by colour; it takes no border rule.**
 
 **One line, and a ticker when it doesn't fit.** `ResizeObserver` compares the text's `scrollWidth` with the viewport on every width change, so rotating a phone engages and disengages it — the server render and first client render are the static truncated line, because overflow is a measurement. The ticker is two copies back to back (the second `aria-hidden`) translated by `-50%` in `@keyframes site-notice-marquee`, at **60px/s** over one copy plus its 48px gap (`marqueeDurationSeconds`). It pauses on hover and focus-within **in CSS** (`group-hover/notice`, `group-focus-within/notice`) — handlers on the `<aside>` landmark are what `jsx-a11y/no-noninteractive-element-interactions` forbids — and a pause/play button (`aria-pressed`) sets an inline `paused`. That inline style is never `running`, which would beat the classes.
 
+**Static text is centred** — the line that fits and the reduced-motion wrap both; the ticker scrolls from the leading edge, where centring has no meaning.
+
 **Reduced motion breaks the one-line rule on purpose**: nothing moves and the text wraps. Truncating would hide the end of the notice from the people who asked the page to sit still.
 
 **The button's focus outline is the tone's foreground, not `--ring`.** The brand-green ring is measured against the page and can vanish on a coloured fill (green on success); the foreground is already held to 4.5:1 against it. The bar takes no border, per the chrome rule above.

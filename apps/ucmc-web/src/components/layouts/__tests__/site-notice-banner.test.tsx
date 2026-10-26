@@ -148,7 +148,7 @@ describe("SiteNoticeBar", () => {
     resize({ viewport: 300, text: 200 });
 
     expect(copies()).toHaveLength(1);
-    expect(copies()[0]).toHaveClass("truncate");
+    expect(copies()[0]).toHaveClass("truncate", "text-center");
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -214,7 +214,7 @@ describe("SiteNoticeBar", () => {
     resize({ viewport: 300, text: 552 });
 
     expect(copies()).toHaveLength(1);
-    expect(copies()[0]).toHaveClass("whitespace-normal");
+    expect(copies()[0]).toHaveClass("whitespace-normal", "text-center");
     expect(copies()[0]).not.toHaveClass("truncate");
     expect(screen.queryByRole("button")).toBeNull();
   });

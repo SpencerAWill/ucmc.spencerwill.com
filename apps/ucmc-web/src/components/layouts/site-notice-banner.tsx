@@ -172,7 +172,7 @@ export function SiteNoticeBar({
             ref={textRef}
             data-slot="notice-text"
             className={cn(
-              "block",
+              "block text-center",
               reducedMotion ? "whitespace-normal" : "truncate",
             )}
           >
