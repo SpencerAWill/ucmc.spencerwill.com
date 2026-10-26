@@ -67,7 +67,7 @@ test("a member sends a bug with a screenshot from any page and finds it on My fe
   await page.goto("/gear");
   await waitForHydration(page);
   await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("menuitem", { name: "Send feedback…" }).click();
+  await page.getByRole("menuitem", { name: "Send Feedback" }).click();
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
