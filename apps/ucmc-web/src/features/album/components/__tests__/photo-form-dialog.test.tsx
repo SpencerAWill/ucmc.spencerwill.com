@@ -13,6 +13,7 @@ import {
   UPLOAD_GENERIC_FAILURE,
   UPLOAD_PHOTO_GONE,
 } from "#/features/album/lib/upload-messages";
+import { ImageUploadError } from "#/lib/image-upload";
 import type * as ImageUploadNs from "#/lib/image-upload";
 import type {
   AlbumPhotoSummary,
@@ -26,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
   upload: vi.fn(),
+  encode: vi.fn<() => Promise<string>>(),
 }));
 
 vi.mock("sonner", () => ({
@@ -46,7 +48,7 @@ vi.mock("#/features/album/api/use-upload-album-original", () => ({
 vi.mock("#/lib/image-upload", async (importOriginal) => ({
   ...(await importOriginal<ImageUploadModule>()),
   normalizeImageFile: (file: File) => Promise.resolve(file),
-  encodeCanvasToDataUrl: () => Promise.resolve("data:image/webp;base64,AAAA"),
+  encodeCanvasToDataUrl: () => mocks.encode(),
 }));
 
 // The real cropper needs layout jsdom doesn't have. This stand-in
@@ -135,6 +137,7 @@ function pickFile(name: string) {
 describe("PhotoFormDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.encode.mockResolvedValue("data:image/webp;base64,AAAA");
     URL.createObjectURL = vi.fn(() => "blob:test");
     URL.revokeObjectURL = vi.fn();
     HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
@@ -391,6 +394,29 @@ describe("PhotoFormDialog", () => {
           },
         }),
       );
+    });
+
+    /**
+     * iOS Safari can't encode a canvas as WebP, so on an iPhone the encode
+     * always throws. It used to be an unhandled rejection: Save did nothing
+     * and said nothing. Nothing has been sent at that point, so the
+     * upload's keys aren't spent and it must not re-upload the original,
+     * as a failed write does.
+     */
+    it("says why when the crop can't be encoded, without re-uploading", async () => {
+      const message =
+        "This browser can’t save images in WebP format, which this upload requires.";
+      mocks.encode.mockRejectedValue(new ImageUploadError(message));
+      mocks.upload.mockResolvedValue(uploaded());
+      render(<PhotoFormDialog seed={{ mode: "create" }} onClose={vi.fn()} />);
+      await pick("a.jpg");
+      await waitFor(() => expect(save()).toBeEnabled());
+      await submitCreate();
+      await waitFor(() =>
+        expect(mocks.toastError).toHaveBeenCalledWith(message),
+      );
+      expect(mocks.create).not.toHaveBeenCalled();
+      expect(mocks.upload).toHaveBeenCalledTimes(1);
     });
 
     it("starts uploading the picked file immediately on create", async () => {

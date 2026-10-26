@@ -17,6 +17,13 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
         // set the attribute; other callers can opt in by passing
         // data-valid directly.
         "data-[valid=true]:border-emerald-500 data-[valid=true]:ring-emerald-500/20 dark:data-[valid=true]:ring-emerald-500/40",
+        // iOS Safari draws date/time inputs as a native control with its
+        // own intrinsic width, which ignores `w-full min-w-0`: the field
+        // ran past its siblings and widened a phone dialog into sideways
+        // scroll. Dropping the native appearance makes it size like every
+        // other input; the value then needs pinning left (iOS centres it)
+        // and a line of height so an empty field doesn't collapse.
+        "[&:is([type=date],[type=datetime-local],[type=month],[type=time])]:appearance-none [&::-webkit-date-and-time-value]:min-h-[1lh] [&::-webkit-date-and-time-value]:text-left",
         className,
       )}
       {...props}
