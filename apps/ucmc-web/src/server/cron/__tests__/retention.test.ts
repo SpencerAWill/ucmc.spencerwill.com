@@ -1,10 +1,13 @@
+import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { getDb, schema } from "#/server/db";
+import { getDb, insertMany, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import { getPrivateBucket, getPublicBucket } from "#/server/r2";
 import {
+  EXPIRED_ROWS_PER_TICK,
+  expiredRowsDelete,
   runRetentionSweeps,
   sweepOrphanPrivateR2Keys,
   sweepResolvedSiteFeedbackScreenshots,
@@ -12,6 +15,8 @@ import {
   sweepOrphanR2Keys,
   sweepRejectedRegistrations,
   sweepEmailSendLog,
+  sweepExpiredMagicLinks,
+  sweepExpiredSessions,
   sweepRevokedWaiverAttestations,
   sweepWebauthnCeremonies,
 } from "#/server/cron/retention.server";
@@ -78,6 +83,8 @@ afterEach(async () => {
   await db.delete(schema.albumPhotos);
   await db.delete(schema.emailSends);
   await db.delete(schema.webauthnConsumedCeremonies);
+  await db.delete(schema.magicLinks);
+  await db.delete(schema.sessions);
   await db.delete(schema.waiverAttestations);
   await db.delete(schema.profiles);
   await db.delete(schema.heroSlides);
@@ -364,7 +371,7 @@ describe("sweepOrphanR2Keys", () => {
 });
 
 describe("runRetentionSweeps", () => {
-  it("aggregates counts across all four sweeps", async () => {
+  it("aggregates counts across every sweep", async () => {
     // Seed one row that each sweep will pick up.
     const rejectedId = await seedUser({
       status: "rejected",
@@ -398,6 +405,8 @@ describe("runRetentionSweeps", () => {
       emailSendLog: 0,
       emailOutbox: 0,
       webauthnCeremonies: 0,
+      expiredSessions: 0,
+      expiredMagicLinks: 0,
     });
 
     // Verify side effects landed.
@@ -476,6 +485,145 @@ describe("sweepWebauthnCeremonies", () => {
     const counts = await runRetentionSweeps(NOW);
 
     expect(counts.webauthnCeremonies).toBe(1);
+  });
+});
+
+describe("sweepExpiredSessions", () => {
+  async function seedSession(expiresAt: Temporal.Instant): Promise<string> {
+    const userId = await seedUser({ status: "approved" });
+    const id = uid("ses");
+    await getDb()
+      .insert(schema.sessions)
+      .values({
+        id,
+        userId,
+        createdAt: expiresAt.subtract({ milliseconds: 30 * DAY_MS }),
+        lastSeenAt: expiresAt.subtract({ milliseconds: 30 * DAY_MS }),
+        expiresAt,
+      });
+    return id;
+  }
+
+  it("drops expired sessions and keeps live ones", async () => {
+    await seedSession(NOW.subtract({ milliseconds: 1 }));
+    const live = await seedSession(NOW.add({ seconds: 60 }));
+
+    expect(await sweepExpiredSessions(NOW)).toBe(1);
+
+    const left = await getDb().select().from(schema.sessions);
+    expect(left.map((row) => row.id)).toEqual([live]);
+  });
+
+  it("keeps a session expiring exactly now", async () => {
+    await seedSession(NOW);
+
+    expect(await sweepExpiredSessions(NOW)).toBe(0);
+  });
+
+  it("is reported by the orchestrator under its own counter", async () => {
+    await seedSession(NOW.subtract({ milliseconds: DAY_MS }));
+
+    const counts = await runRetentionSweeps(NOW);
+
+    expect(counts.expiredSessions).toBe(1);
+  });
+});
+
+describe("sweepExpiredMagicLinks", () => {
+  function magicLink(
+    expiresAt: Temporal.Instant,
+    consumedAt: Temporal.Instant | null = null,
+  ) {
+    return {
+      tokenHash: uid("tok"),
+      email: "member@example.com",
+      intent: "login" as const,
+      createdAt: expiresAt.subtract({ minutes: 15 }),
+      expiresAt,
+      consumedAt,
+    };
+  }
+
+  it("drops expired links, consumed or not, and keeps live ones", async () => {
+    const expired = NOW.subtract({ milliseconds: 1 });
+    const live = magicLink(NOW.add({ seconds: 60 }));
+    await insertMany(schema.magicLinks, [
+      magicLink(expired),
+      magicLink(expired, expired.subtract({ minutes: 5 })),
+      live,
+    ]);
+
+    expect(await sweepExpiredMagicLinks(NOW)).toBe(2);
+
+    const left = await getDb().select().from(schema.magicLinks);
+    expect(left.map((row) => row.tokenHash)).toEqual([live.tokenHash]);
+  });
+
+  it("keeps a consumed link until it expires", async () => {
+    await insertMany(schema.magicLinks, [
+      magicLink(NOW.add({ minutes: 10 }), NOW.subtract({ minutes: 1 })),
+    ]);
+
+    expect(await sweepExpiredMagicLinks(NOW)).toBe(0);
+  });
+
+  it("deletes at most EXPIRED_ROWS_PER_TICK rows, oldest first", async () => {
+    const rows = Array.from({ length: EXPIRED_ROWS_PER_TICK + 1 }, (_, i) =>
+      magicLink(NOW.subtract({ seconds: EXPIRED_ROWS_PER_TICK + 1 - i })),
+    );
+    await insertMany(schema.magicLinks, rows);
+
+    expect(await sweepExpiredMagicLinks(NOW)).toBe(EXPIRED_ROWS_PER_TICK);
+
+    // The newest expiry is the one the cap left for the next tick.
+    const left = await getDb().select().from(schema.magicLinks);
+    expect(left.map((row) => row.tokenHash)).toEqual([rows.at(-1)?.tokenHash]);
+    expect(await sweepExpiredMagicLinks(NOW)).toBe(1);
+  });
+
+  it("is reported by the orchestrator under its own counter", async () => {
+    await insertMany(schema.magicLinks, [
+      magicLink(NOW.subtract({ milliseconds: DAY_MS })),
+    ]);
+
+    const counts = await runRetentionSweeps(NOW);
+
+    expect(counts.expiredMagicLinks).toBe(1);
+  });
+});
+
+describe("expiry sweeps use their expires_at index", () => {
+  // The issue this closes (#373) asked for it outright: without the index
+  // every daily sweep reads the whole table, and those reads are billed.
+  it.each([
+    [
+      "sessions_expires_at_idx",
+      schema.sessions,
+      schema.sessions.id,
+      schema.sessions.expiresAt,
+    ],
+    [
+      "magic_links_expires_at_idx",
+      schema.magicLinks,
+      schema.magicLinks.tokenHash,
+      schema.magicLinks.expiresAt,
+    ],
+    [
+      "webauthn_consumed_ceremonies_expires_at_idx",
+      schema.webauthnConsumedCeremonies,
+      schema.webauthnConsumedCeremonies.id,
+      schema.webauthnConsumedCeremonies.expiresAt,
+    ],
+  ])("%s", async (indexName, table, id, expiresAt) => {
+    const query = expiredRowsDelete(table, id, expiresAt, NOW).toSQL();
+    const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${query.sql}`)
+      .bind(...query.params)
+      .all<{ detail: string }>();
+    const plan = results.map((row) => row.detail);
+
+    expect(plan.some((step) => step.includes(indexName))).toBe(true);
+    // No full scan of the table anywhere in the statement.
+    expect(plan.filter((step) => /^SCAN \w+$/.test(step))).toEqual([]);
   });
 });
 

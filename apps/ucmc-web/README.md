@@ -108,6 +108,7 @@ A daily Cloudflare cron (12:00 UTC — 08:00 EDT / 07:00 EST; see `wrangler.json
 - Deactivated accounts 12 months after deactivation
 - Revoked waiver attestations 90 days after revocation
 - R2 objects (avatars + landing images) not referenced by any DB row, with a 5-minute upload-race age guard
+- Expired sessions, magic links and consumed passkey ceremonies, at most 2,000 rows of each a day
 
 Pre-migration rows with NULL `rejected_at` / `deactivated_at` are deliberately skipped — historical state isn't auto-purged retroactively.
 
