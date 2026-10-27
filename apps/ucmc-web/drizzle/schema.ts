@@ -444,7 +444,7 @@ export const passkeyCredentials = sqliteTable(
  * `0084_webauthn_consumed_ceremonies.sql`. The ceremony itself lives in
  * the signed ceremony cookie; this table only makes it single-use
  * (`features/auth/server/webauthn-challenge.server.ts`). Swept daily once
- * `expires_at` passes.
+ * `expires_at` passes; the index serves that sweep.
  */
 export const webauthnConsumedCeremonies = sqliteTable(
   "webauthn_consumed_ceremonies",
@@ -452,40 +452,54 @@ export const webauthnConsumedCeremonies = sqliteTable(
     id: text("id").primaryKey(),
     expiresAt: timestamp("expires_at").notNull(),
   },
+  (t) => [index("webauthn_consumed_ceremonies_expires_at_idx").on(t.expiresAt)],
 );
 
-export const sessions = sqliteTable("sessions", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").notNull(),
-  lastSeenAt: timestamp("last_seen_at").notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
-});
+// An expired row is deleted when its cookie comes back
+// (`getSessionRow`), and by the daily retention sweep otherwise (#373);
+// the index serves that sweep.
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull(),
+    lastSeenAt: timestamp("last_seen_at").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+  (t) => [index("sessions_expires_at_idx").on(t.expiresAt)],
+);
 
 export const magicLinkIntent = ["register", "login", "add_email"] as const;
 export type MagicLinkIntent = (typeof magicLinkIntent)[number];
 
 // Stores SHA-256 hash of the token (base64url), never the raw token.
 // Atomic single-use is enforced via `UPDATE ... WHERE consumed_at IS NULL`.
-export const magicLinks = sqliteTable("magic_links", {
-  tokenHash: text("token_hash").primaryKey(),
-  email: text("email").notNull(),
-  intent: text("intent", { enum: magicLinkIntent }).notNull(),
-  // Populated only for `intent = "add_email"`. The consume handler
-  // asserts `session.userId === targetUserId` so an attacker can't
-  // request a link to a victim's address and then have the victim
-  // (signed in as themselves) attach the email to the attacker's
-  // account by clicking the link. SET NULL on user delete keeps the
-  // historical row.
-  targetUserId: text("target_user_id").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamp("created_at").notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
-  consumedAt: timestamp("consumed_at"),
-});
+// Swept daily once `expires_at` passes, consumed or not (#373): a deleted
+// token and a consumed one both fail to consume. The index serves that sweep.
+export const magicLinks = sqliteTable(
+  "magic_links",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    email: text("email").notNull(),
+    intent: text("intent", { enum: magicLinkIntent }).notNull(),
+    // Populated only for `intent = "add_email"`. The consume handler
+    // asserts `session.userId === targetUserId` so an attacker can't
+    // request a link to a victim's address and then have the victim
+    // (signed in as themselves) attach the email to the attacker's
+    // account by clicking the link. SET NULL on user delete keeps the
+    // historical row.
+    targetUserId: text("target_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+  },
+  (t) => [index("magic_links_expires_at_idx").on(t.expiresAt)],
+);
 
 // Singleton key/value store for editable landing-page text. One row per
 // well-known key (e.g. "hero.heading", "about.paragraphs"). Values are JSON
