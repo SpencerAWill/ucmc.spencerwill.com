@@ -2,7 +2,7 @@
 
 Member portal for the **University of Cincinnati Mountaineering Club** (UCMC), a Registered Student Organization. Deployed at <https://ucmc.spencerwill.com> with a dev twin at <https://dev.ucmc.spencerwill.com>.
 
-This file is the human-developer entry point. For the model's source of truth (every tooling, env, and test convention), see [`/CLAUDE.md`](../../CLAUDE.md). For the legal/policy obligation → site behavior matrix, see the wiki's [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance).
+This file is the human-developer entry point. For the model's source of truth (every tooling, env, and test convention), see [`/AGENTS.md`](../../AGENTS.md). For the legal/policy obligation → site behavior matrix, see the wiki's [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance).
 
 ## Stack
 
@@ -140,7 +140,7 @@ Files land in `src/components/ui/` per the project's `components.json` config.
 
 ### A new server function
 
-Three-layer pattern (server-only module boundary requires this; see `/CLAUDE.md` for the full reasoning):
+Three-layer pattern (server-only module boundary requires this; see `/AGENTS.md` for the full reasoning):
 
 1. **Leaf helpers** in `*.server.ts` — D1/R2/KV access, cookies, rate limiting.
 2. **Action functions** in `*-actions.server.ts` — the actual business logic. Tests call these directly.
@@ -152,7 +152,7 @@ Three-layer pattern (server-only module boundary requires this; see `/CLAUDE.md`
 
 ## Where to read more
 
-- [`/CLAUDE.md`](../../CLAUDE.md) — full tooling/conventions reference
+- [`/AGENTS.md`](../../AGENTS.md) — full tooling/conventions reference
 - [Compliance](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) (wiki) — obligation → site behavior matrix
 - [Ohio Law and Student Organizations](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Ohio-Law-and-Student-Organizations), [UC Trademark and Licensing for RSOs](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UC-Trademark-and-Licensing-for-RSOs), [UC RSO Resources](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UC-RSO-Resources) (wiki) — research that drove the compliance design
 - [UCMC Constitution & Bylaws](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/UCMC-Constitution-%26-Bylaws) (wiki) — governance reference

@@ -12,7 +12,7 @@
   // `eslint .` at the root: the web ESLint config resolves its
   // `import/no-restricted-paths` zones against `process.cwd()`, and from the
   // root those zones match nothing and the rule fails OPEN — it passes
-  // silently rather than erroring. See CLAUDE.md.
+  // silently rather than erroring. See AGENTS.md.
   "version": "2.0.0",
   "tasks": [
     {
@@ -87,7 +87,7 @@
     },
     {
       "label": "web: knip",
-      "detail": "Unused files/exports/deps — must stay green (see CLAUDE.md)",
+      "detail": "Unused files/exports/deps — must stay green (see AGENTS.md)",
       "type": "shell",
       "command": "pnpm --filter ucmc-web knip",
       "problemMatcher": []

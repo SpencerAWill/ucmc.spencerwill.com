@@ -24,7 +24,7 @@ export interface ServiceTotals {
  * the club's year is the club's year, and the waiver term is the same
  * season. Rolls over at midnight Cincinnati-local on Aug 1. Defining a
  * parallel August boundary here is exactly the ad-hoc re-derivation
- * CLAUDE.md warns against; the two would then disagree the first time
+ * AGENTS.md warns against; the two would then disagree the first time
  * the boundary moved — which it since has.
  */
 export function clubYearOf(event: VolunteerEventEntry): string {

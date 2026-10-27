@@ -19,37 +19,27 @@ paths:
 
 # Compliance, legal copy, and waivers
 
-## Legal copy is not word-smithing
+Why the waiver term is the club season: `docs/adr/0004-the-club-season-is-the-waiver-term.md`. This file is the rules for changing legal copy and waivers.
 
-**`src/config/legal.ts`** is the source of truth for every legal/policy string the site renders, plus `WAIVER_PDF_PATH`, `WAIVER_VERSION`, `POLICIES_VERSION`.
+## Where things go
 
-**Site copy must match the canonical PDF byte-for-byte.** Treat copy edits to `/disclaimer`, `/nondiscrimination`, `/anti-hazing`, `/waiver`, `/privacy`, `/terms`, `/about`, `/membership`, `/legal`, `/open-source` as **legal review, not word-smithing** — raise them with the user rather than tidying prose.
+- **`src/config/legal.ts`** is the source of truth for every legal/policy string the site renders, plus `WAIVER_PDF_PATH`, `WAIVER_VERSION`, `POLICIES_VERSION`.
+- **`src/server/waivers/current-attestation.server.ts`** is the one home of the "current attestation" predicate (`currentAttestationFilter` / `currentlyAttestedUserIds` / `hasCurrentAttestation` / `loadMemberWaiverStatus`). It is in `src/server/`, not `features/waivers/`, because `features/waivers` (queue + attest flow), `features/gear` (`requireCartMember`) and `features/members` (the detail page's standing) all ask the question.
+- **`WAIVER_VIEW_PERMISSIONS`** (`features/auth/guards.ts`) names the view/verify pair once, for `requireWaiverViewer`, the route guard, the sidebar entry and the member-detail card.
+- **The compliance matrix** is in the [GitHub wiki](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance), mapping each obligation (Ohio law, UC trademark, FERPA, Clery, EIT 9.2.1, bylaws) to the file or route satisfying it. It is not checked out here.
 
-The registration disclaimer (UC Rule 40-03-01) uses an inline-style font to survive Tailwind purging.
+## Rules that are easy to break
 
-The **compliance matrix** in the [GitHub wiki](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) maps each obligation (Ohio law, UC trademark, FERPA, Clery, EIT 9.2.1, bylaws) to the file/route satisfying it. The wiki is edited on GitHub and is not checked out into this repo — **update it when adding compliance-shaped features.**
+- **Site copy must match the canonical PDF byte-for-byte.** Copy edits to `/disclaimer`, `/nondiscrimination`, `/anti-hazing`, `/waiver`, `/privacy`, `/terms`, `/about`, `/membership`, `/legal`, `/open-source` are **legal review, not word-smithing**: raise them with the user rather than tidying prose.
+- **The registration disclaimer (UC Rule 40-03-01) uses an inline-style font** so Tailwind purging can't drop it.
+- **Bumping `WAIVER_VERSION` invalidates every existing attestation**: `requireCurrentWaiver` filters on `(userId, cycle, version)` together. `POLICIES_VERSION` is informational; no guard re-prompts on it.
+- **Never re-derive `(cycle, version, revokedAt IS NULL)` inline.** Import the predicate; copies disagree at the next version bump (`features/gear` had one until it was consolidated).
+- **The cycle is `currentSeason()`**, never an ad-hoc August boundary, with no grace window. `attestWaiver` stamps the season at attest time, so a mid-season waiver covers the whole season.
+- **`waivers:view` is read-only** (queue, history, the member-detail card; seeded to president, treasurer, advisor). **`waivers:verify`** also attests, bulk-attests and revokes. `verify` implies `view` only through the OR in `requireWaiverViewer` and the route's `requireAnyPermission`, and the seed grants `view` explicitly to verify-holders so `/access` shows the real grant.
+- **No signed PDF is ever stored**; an attestation row is `(userId, cycle, version, attestedAt, attestedBy)`. That is what keeps the read tier low-risk; keep it that way.
+- **Attestation is officer-driven**, so a member can't self-serve one. A surface that merely benefits from standing uses `getCurrentWaiverStatus` for an advisory banner, not `requireCurrentWaiver`, which would strand someone waiting on the Treasurer (`/trips` is the example).
 
-## Versions
+## Adding things
 
-**Bumping `WAIVER_VERSION` invalidates every existing attestation** — `requireCurrentWaiver` filters on `(userId, cycle, version)` together, so non-revoked is not enough. `POLICIES_VERSION` is informational; no guard re-prompts on it.
-
-## The "current attestation" predicate has exactly one home
-
-**`src/server/waivers/current-attestation.server.ts`** (`currentAttestationFilter` / `currentlyAttestedUserIds` / `hasCurrentAttestation` / `loadMemberWaiverStatus`). It lives in `src/server/` rather than `features/waivers/` for the same reason the audit _recorder_ does: three features ask the question (`features/waivers` owns the queue + attest flow, `features/gear`'s `requireCartMember` refuses carts from lapsed members, `features/members` renders waiver standing on the detail page) but only one owns the read-side UI, and `import/no-restricted-paths` forbids features importing each other. `features/gear` had hand-rolled its own copy of the three-condition WHERE until it was consolidated.
-
-**Never re-derive `(cycle, version, revokedAt IS NULL)` inline** — the next `WAIVER_VERSION` bump is where the copies silently disagree.
-
-The cycle itself comes from `currentSeason()` — see the dates rule; never compute the August boundary ad-hoc. **The waiver term IS the club season** (Aug 1 → Jul 31 Cincinnati-local), with no grace window: collection is continuous, so a member who wants gear on Aug 3 signs on Aug 3, and the club does run trips in early August. A waiver signed mid-season still covers the whole season, because `attestWaiver` stamps `cycle = currentSeason()` at attest time.
-
-## Two waiver permission tiers
-
-- **`waivers:view`** is read-only — the `/members/waivers` queue, another member's attestation history, and the waiver card on `/members/$publicId`. Seeded to president, treasurer, and advisor, since exec who need to answer "is this member covered?" shouldn't need the attestation power to do it.
-- **`waivers:verify`** additionally attests, bulk-attests, and revokes.
-
-There is no permission-implication mechanism, so `verify` implies `view` via an OR check in exactly two places — `requireWaiverViewer` (server) and `requireAnyPermission({ context, location }, [...])` on the route guard — and the seed migration grants `waivers:view` explicitly to the verify-holding roles so `/access` shows the real grant rather than an invisible implication. **`WAIVER_VIEW_PERMISSIONS`** (`features/auth/guards.ts`) names the pair once for the server helper, the route guard, the sidebar entry, and that card.
-
-Handing out the read tier broadly is deliberately low-risk: **no signed PDF is ever stored**, so an attestation row is just `(userId, cycle, version, attestedAt, attestedBy)`.
-
-## Attestation is officer-driven, which constrains where it can gate
-
-A member cannot self-serve an attestation. So a surface that merely _benefits_ from current standing should call `getCurrentWaiverStatus` for an advisory banner rather than `requireCurrentWaiver` — redirecting to `/my/waiver` strands someone who has already handed in their signed paper and is waiting on the Treasurer. `/trips` is the standing example.
+- **A compliance-shaped feature** updates the wiki's compliance matrix in the same change.
+- **A new surface that asks "is this member covered?"** imports from `current-attestation.server.ts`; a client gate uses `WAIVER_VIEW_PERMISSIONS`.

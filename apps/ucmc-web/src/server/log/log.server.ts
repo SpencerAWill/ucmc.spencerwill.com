@@ -55,7 +55,7 @@ const LEVEL_RANK: Record<LogLevel, number> = {
  * point: it can be set on a deployed worker to turn debug on for an
  * incident without a code change. Resolved lazily and memoised because
  * reading a binding at module scope breaks the client build (see
- * CLAUDE.md), and defensively because `env` is not readable in every
+ * AGENTS.md), and defensively because `env` is not readable in every
  * context this module might be imported from.
  */
 const threshold: { rank?: number } = {};

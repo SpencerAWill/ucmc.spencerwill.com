@@ -156,9 +156,10 @@
   // getting dedicated top-level keys, and rate limit is expected to
   // follow the same path.
   //
-  // The `namespace_id` is a worker-local unique integer (not an account
-  // resource, so nothing to provision in Pulumi). Dev and prod use
-  // different IDs so their counters are isolated. Miniflare simulates
+  // The `namespace_id` is a positive integer unique within the Cloudflare
+  // account (nothing to provision in Pulumi). Bindings that share one
+  // share counters, across Workers too, so every binding gets its own id
+  // and dev and prod use different ones. Miniflare simulates
   // the binding in-memory for local dev.
   "unsafe": {
     "bindings": [

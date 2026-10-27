@@ -257,7 +257,7 @@ function insertUser(options: InsertUserOptions): string {
       // NULL)`, so a fixture that hard-coded either would silently stop
       // satisfying the queue's anti-join after the Aug 1 rollover or a
       // `WAIVER_VERSION` bump — and the symptom would be a slow return
-      // of the queue pollution this exists to prevent. (CLAUDE.md also
+      // of the queue pollution this exists to prevent. (AGENTS.md also
       // forbids deriving the club year ad-hoc.)
       //
       // `attested_by` is null on purpose: no officer attested this, and

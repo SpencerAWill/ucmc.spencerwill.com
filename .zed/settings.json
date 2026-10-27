@@ -31,7 +31,7 @@
     "JSON": { "formatter": "prettier" },
     "JSONC": { "formatter": "prettier" },
     "CSS": { "formatter": "prettier" },
-    // Prettier reflows Markdown in ways that fight the prose in CLAUDE.md
+    // Prettier reflows Markdown in ways that fight the prose in AGENTS.md
     // and the READMEs, and `prettier --check .` in CI covers them anyway.
     "Markdown": { "format_on_save": "off" }
   },

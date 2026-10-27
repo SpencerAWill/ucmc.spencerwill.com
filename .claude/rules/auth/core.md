@@ -15,46 +15,60 @@ paths:
 
 # Auth, identity, and RBAC
 
-Session, identity, permissions and the member surfaces. The rest of this rule is
-split by area under `.claude/rules/auth/` and loads with the files it is about:
-`passkeys.md` (WebAuthn and the three enrollment surfaces), `access.md` (the
-`/access` panel and the role sheet) and `emulation.md` (role preview, the
-`anonymous` floor, `hasPermission`). Read the relevant one before changing
-behaviour it covers.
+Why auth is ours (magic links, optional passkeys, sessions in D1) and its known gaps: `docs/adr/0005-own-auth-magic-links-and-passkeys.md`. Why permissions are rows: `docs/adr/0010-registries-not-rows.md`. This file is the rules for changing it.
 
-## Session & identity
+The rest of the auth rule is split by area under `.claude/rules/auth/` and loads with its files: `passkeys.md`, `access.md` (the `/access` panel and role sheet), `emulation.md` (role preview, the `anonymous` floor, `hasPermission`).
 
-- **Session/principal** lives in `src/server/auth/`. The principal exposes `primaryEmail: string`, `emails: string[]`, and `preferredName: string | null` — the profile's name, `null` until registration is finished. The whole principal is serialized to the client in the session payload, so anything added to it is public to that user. **`preferredName` is what the account chrome shows** (the `UserMenu` label and the avatar's initials fallback), with the email as the fallback for the pre-profile window; the email itself is on `/my/details`. A blank `preferred_name` is normalised to `null` in `loadPrincipal`, since the column is NOT NULL and an empty string would render as an empty label instead of falling back.
-- **Multiple verified emails per user**: a `user_emails` table with one `is_primary = 1` row enforced by a partial unique index. `users` has no `email` column — every read joins. A global `UNIQUE(email)` means an address belongs to exactly one account; race safety relies on that constraint via `isUniqueViolation()` in `src/server/db/index.ts`. **All inserts/lookups must go through `src/server/auth/email-normalize.ts`** (`trim().toLowerCase()`). Adding an email is a magic-link round-trip with `intent = "add_email"`; `/verify-email` asserts `session.userId === magicLink.target_user_id` so a stranger can't graft an address onto another account. Promotion is a `db.batch` swap (SQLite enforces partial-unique at statement boundaries). Removing the primary or the last row is blocked.
-- **Magic link**: `requestMagicLinkAction` pads the response to ≥500 ms + 0–300 ms jitter to flatten the registered/not-registered timing signal. Only the publicly-enumerable request endpoint gets jitter.
-- **Turnstile**: the client widget is gated on `VITE_TURNSTILE_SITE_KEY`; server verification in `features/auth/server/turnstile.server.ts` fails open when `TURNSTILE_SECRET_KEY` is unset.
-- **`/register/profile`** accepts a proof cookie (first-time, no `users` row yet) OR a session cookie (returning user with no `profiles` row). `requireRegistrationContext` exposes `{ source, email }`. It collects **only what an exec needs to review the account** — legal + preferred name, phone, UC affiliation, policies ack. The optional parts (emergency contacts, bio) submit empty and are offered on **`/register/pending`**, which mounts `PasskeyEnrollmentCard` + `ContactsEditor` + `BioEditor` behind their own Saves. Those write through the WebAuthn register pair / `submitDetailsFn` / `submitPublicProfileFn`, which require a session but **not** approval — that's what makes them legal before an exec acts, and why the split works without draft state. `/register/pending` redirects an approved principal to its `?redirect` or else `/my/profile` (where the same fields sit beside everything else) and a profile-less one back to `/register/profile`.
-- **Officer pre-add ("unclaimed" members)**: `members:manage` officers bulk-add by name + email so off-platform records FK to a stable `users.id`. Unclaimed users have `status="unclaimed"`, `placeholder_name`, `unclaimed_at`, and a primary `user_emails` row with `verified_at = NULL`. The first magic-link click flips them to approved on profile submit, skipping the pending queue — pre-add IS the approval signal. Audit chain: `member.pre_added` → `member.claimed`. Excluded from the public directory and from RBAC role assignment.
+## Where things go
 
-## Return path after sign-in (`?redirect=`)
+- **`src/server/auth/`**: sessions (`session.server.ts`, `session-config.ts`, `session-cookie.server.ts`), the principal (`principal.server.ts`), `email-normalize.ts`, signing.
+- **`features/auth/`**: magic links, WebAuthn, Turnstile (`server/turnstile.server.ts`), guards (`guards.ts`, including the permission-pair constants `WAIVER_VIEW_PERMISSIONS`, `FEEDBACK_MANAGE_PERMISSIONS`), and `lib/post-sign-in.ts` (`postSignInHref` / `callbackHref`, the post-sign-in decision table shared by `/auth/callback`, both passkey paths and the registration form).
+- **`safeReturnPath`** (`src/lib/`) is the one return-path validator; `signInReturnPath` builds the value.
+- **`user_emails`**: several verified emails per user, one `is_primary = 1` (partial unique index), global `UNIQUE(email)`. `users` has no `email` column.
+- **`/members`**: Approved is the default tab; Pending / Unclaimed / Rejected / Deactivated are sibling routes under the pathless `routes/members._tabs.tsx`, each with its own search schema.
+- **`/my/*`**: `my.tsx` is the auth boundary (`requireApproved` + `requireEnabledPages(matches)`); children don't re-gate. Bare `/my` redirects to `/my/profile`. The pathless `my._tabs.tsx` holds the greeting and tabs over `/my/profile`, `/my/details` (legal name, phone, the email manager), `/my/contacts`, `/my/waiver`, `/my/security` (passkeys), `/my/preferences`. `/my/gear`, `/my/gear/cart`, `/my/feedback` and future `/my/dashboard` / `/my/trips` are direct siblings outside the tab chrome. There is no `/account` segment.
 
-**Signing in lands back on the page that was asked for.** The account-status guards (`requireAuth`, `requireApproved`, `requireCurrentWaiver` and the permission guards built on them) take the `beforeLoad` args object — `requireApproved({ context, location })` — not a bare `QueryClient`, so a route can't forget to pass the location: it is part of the only argument. When only 3 of ~29 guard calls passed one, most gated pages signed people in to `/`. The value is `pathname + searchStr`, never the hash, which `beforeLoad` doesn't see during SSR. The header's "Sign in" link carries the current page the same way, and both go through `signInReturnPath`, which returns nothing for a page inside the sign-in flow (`/sign-in`, `/auth/`, `/register/`, `/verify-email`) or `/deactivated` — `/register/pending` and `/deactivated` call `requireAuth` themselves, and a return path to them would nest `?redirect=` inside itself or land the next person to sign in on a stale "account deactivated" page.
+## Rules that are easy to break
 
-- **Every hop re-checks it with `safeReturnPath` (`src/lib/`)**, the one validator: a single leading `/` not followed by `/` or `\`, no control characters, length-capped. A bare `startsWith("/")` accepts `//evil.example` and `/\evil.example`, and the URL parser strips tab/CR/LF, so `/\t/evil.example` becomes `//evil.example`. Six copies of that check had existed; its property test resolves every accepted value against our origin and requires the origin unchanged.
-- **Navigate to it with `navigate({ href })`, never `{ to }`**, so its search string survives. `href` does a full document navigation for any value with a scheme, which is the other reason it must pass `safeReturnPath` first.
-- **The post-sign-in decision table is `postSignInHref` / `callbackHref` (`features/auth/lib/post-sign-in.ts`)**, shared by `/auth/callback`, both passkey paths and the registration form. It carries the path through `/register/profile` to `/register/pending` and stops there: approval can take days, so the pending page offers it as a link. A claimed officer pre-add (approved on submit) goes straight to it.
+**Session and principal**
 
-## Permissions are DB rows
+- **The whole principal is serialized to its own browser.** Anything added to it is visible to that user; never another user's data or a secret.
+- **`preferredName` is what the account chrome shows** (`UserMenu`, avatar initials), falling back to the email. `loadPrincipal` normalises a blank `preferred_name` to `null`.
+- **Every email insert and lookup goes through `email-normalize.ts`** (`trim().toLowerCase()`). Race safety relies on the UNIQUE constraint via `isUniqueViolation()`.
+- **Adding an email is a magic-link round-trip (`intent = "add_email"`)**, and `/verify-email` asserts `session.userId === magicLink.target_user_id`. Promotion is a `db.batch` swap. Removing the primary or the last email is blocked.
+- **`requestMagicLinkAction` pads to ≥500 ms plus 0–300 ms jitter.** Only that publicly enumerable endpoint gets jitter.
+- **Turnstile**: the widget is gated on `VITE_TURNSTILE_SITE_KEY`; server verification fails open when `TURNSTILE_SECRET_KEY` is unset.
 
-**Adding a permission needs a migration** — unlike site settings, where a new registry entry is the whole change. Roles, and which permissions each role holds, are runtime-editable at `/access`; the permission catalog itself is not.
+**Registration**
 
-**There is no permission-implication mechanism.** Where a write permission should imply its read counterpart (`waivers:verify` → `waivers:view`, `gear:manage` → `gear:inspect`), the OR is expressed at the gate — one shared helper per pair (`requireWaiverViewer`, `requireGearInspector`, `requireAnyPermission` for route guards) rather than `includes() || includes()` scattered across call sites — and the seed migration additionally grants the read permission to the roles holding the write one, so `/access` shows the real grant instead of an invisible implication. Permission-pair constants live beside each other in `features/auth/guards.ts` (`WAIVER_VIEW_PERMISSIONS`, `FEEDBACK_MANAGE_PERMISSIONS`) because several call sites ask the same question and spelled-out copies drift.
+- **`/register/profile` accepts a proof cookie (no `users` row yet) or a session (no `profiles` row)**; `requireRegistrationContext` exposes `{ source, email }`. It collects only what an exec needs to review: legal + preferred name, phone, UC affiliation, policies ack.
+- **Optional parts live on `/register/pending`** (`PasskeyEnrollmentCard`, `ContactsEditor`, `BioEditor`), whose writes need a session but not approval. It redirects an approved principal to its `?redirect` or `/my/profile`, and a profile-less one back to `/register/profile`.
+- **Officer pre-add ("unclaimed")**: `members:manage` officers add by name + email (`status="unclaimed"`, `placeholder_name`, `unclaimed_at`, primary email with `verified_at = NULL`). The first magic-link click approves on profile submit, skipping the queue. Audit chain `member.pre_added` → `member.claimed`. Excluded from the directory and from role assignment.
 
-**`roles.displayName` is the only half that may reach the screen; `roles.name` is a slug for comparison.** Directory rows and `MemberDetail` carry `MemberRoleBadge = { name, displayName }` for that reason — they used to carry bare slugs that each badge prettified with `replace("_", " ")` + CSS `capitalize`, which rendered `gear_cave_manager` as "Gear Cave_manager" (non-global replace, first underscore only). **Don't prettify a slug**: it can't recover intended casing, and `capitalize` mangles a real label ("VP of Trips" → "VP Of Trips"), so the badge markup carries no `capitalize` class. The principal carries **`roleDisplayNames`** (slug → label) keyed identically to `rolePermissionMap`, filled in both branches of `loadPrincipal` beside the permission map precisely so a previewable role can't appear in one without the other.
+**Return path (`?redirect=`)**
 
-## Member management (`/members`)
+- **Account-status guards take the `beforeLoad` args object** (`requireApproved({ context, location })`), never a bare `QueryClient`, so a route can't forget the location.
+- **The value is `pathname + searchStr`**, never the hash (`beforeLoad` doesn't see it during SSR).
+- **`/register/pending` and `/deactivated` call `requireAuth` themselves**, which is why neither may be a return path.
+- **`signInReturnPath` returns nothing inside the sign-in flow** (`/sign-in`, `/auth/`, `/register/`, `/verify-email`) or for `/deactivated`.
+- **Every hop re-checks with `safeReturnPath`**: one leading `/` not followed by `/` or `\`, no control characters, length-capped. Never a bare `startsWith("/")`. Its property test requires the origin unchanged.
+- **Navigate with `navigate({ href })`, never `{ to }`**, so the search string survives.
+- **The path is carried through `/register/profile` to `/register/pending` and stops there**, offered as a link; a claimed pre-add goes straight to it.
 
-The directory and the four management buckets share one surface. Approved is the default tab at `/members`; Pending / Unclaimed / Rejected / Deactivated are real sibling routes under a pathless `_tabs` layout (`routes/members._tabs.tsx`). Approved-only members never see the tab bar (`MembersTabsBar` returns `null` without `members:manage`); each management child route stacks `requirePermissionOrNotFound("members:manage")` so deep links by non-officers surface the notFound boundary instead of redirecting. Each tab owns its own search-param schema — no cross-tab filter carryover.
+**RBAC**
 
-## Personal namespace (`/my/*`)
+- **Adding a permission needs a migration.** Roles and grants are editable at `/access`; the catalog isn't.
+- **No permission implication.** Where a write implies a read (`waivers:verify` → `waivers:view`, `gear:manage` → `gear:inspect`), the OR lives in one shared helper per pair (`requireWaiverViewer`, `requireGearInspector`, `requireAnyPermission` for route guards), never `includes() || includes()` at call sites, and the seed grants the read explicitly.
+- **`roles.displayName` is the only half that reaches the screen; `roles.name` is a slug.** Never prettify a slug, and no `capitalize` class on badges. Rows carry `MemberRoleBadge = { name, displayName }`; the principal's `roleDisplayNames` is filled beside `rolePermissionMap` in both branches of `loadPrincipal`.
+- **Non-officers never see the `/members` tab bar** (`MembersTabsBar` returns `null` without `members:manage`), and each management route stacks `requirePermissionOrNotFound("members:manage")`.
+- **`/my/feedback` 404s without either `*_feedback:submit`** (`canReachMyFeedback`).
 
-`my.tsx` is the auth boundary for everything personal — it runs `requireApproved` once plus the `requireEnabledPages(matches)` walk, so no child re-gates auth. Bare `/my` redirects to `/my/profile`.
+**Forms**
 
-The account surface is a **pathless `my._tabs.tsx` layout** holding the "Hi {preferred name}!" greeting and the tab bar over six sibling routes: `/my/profile`, `/my/details` (legal name, phone, **and the verified-email manager**), `/my/contacts`, `/my/waiver`, `/my/security` (passkeys), `/my/preferences`. It's pathless so the greeting and tabs don't leak into `/my/gear`, `/my/gear/cart`, `/my/feedback` (the member's own site and club feedback, 404 without either `*_feedback:submit`, gate `canReachMyFeedback` in `guards.ts`), or the planned `/my/dashboard` + `/my/trips`, which are direct siblings that opt out of the chrome. **There is no `/account` URL segment** — the tab group is defined by the layout file, not the URL.
+- **`/my/details` and `/my/contacts` both write through `submitDetailsFn`** with the whole `detailsInputSchema`. Each page passes the other's fields through unchanged, or saving one blanks the other.
 
-**`/my/details` and `/my/contacts` both write through the one `submitDetailsFn`**, which takes the whole `detailsInputSchema` shape — **each page must pass the other's fields through unchanged from the loaded profile**, or saving from one blanks the other's columns. Emails live on Details rather than Security because they're contact details as much as magic-link targets, which leaves Security to passkeys alone.
+## Adding things
+
+- **A permission**: a migration (row + seed grants), plus a shared helper and constant in `guards.ts` if it pairs with another. Only `anonymous_grantable` permissions may go on `anonymous` (`emulation.md`).
+- **A gated route**: guards take `{ context, location }`; a `/my` child needs no auth guard of its own.
+- **A field on the principal**: assume the user can read it.

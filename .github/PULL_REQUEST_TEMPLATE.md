@@ -37,10 +37,10 @@ For bug fixes, include the regression test you added.
 ## Checklist
 
 - [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/) with a valid workspace scope (`pnpm commit` if unsure).
-- [ ] `pnpm exec eslint .` and `pnpm exec prettier --check .` pass.
+- [ ] `pnpm lint` and `pnpm format:check` pass (never a bare `eslint .` from the root; see `AGENTS.md`).
 - [ ] `pnpm --filter ucmc-web typecheck` passes (if `apps/ucmc-web/` changed).
 - [ ] `pnpm --filter ucmc-web test` passes (if `apps/ucmc-web/` changed). New behavior has a test; bug fixes have a regression test.
-- [ ] `README.md` and `CLAUDE.md` updated together if tooling / scripts / workflows / repo structure changed.
+- [ ] `README.md` and `AGENTS.md` updated together if tooling / scripts / workflows / repo structure changed.
 - [ ] The wiki's [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) updated if this PR adds or changes a compliance obligation.
 
 ## Risk / rollout notes

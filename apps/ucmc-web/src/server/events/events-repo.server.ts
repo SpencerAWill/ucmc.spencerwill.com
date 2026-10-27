@@ -6,7 +6,7 @@
  * `.ics` feeds, and `features/trips` — and later `features/volunteer` —
  * will own satellite tables keyed on `event_id` and need to read it
  * too. Three features is the repo's own threshold for hoisting
- * (CLAUDE.md), and the alternative is a `FEATURE_PUBLIC_API` entry that
+ * (AGENTS.md), and the alternative is a `FEATURE_PUBLIC_API` entry that
  * exists only so siblings can reach into the calendar's internals. This
  * is the same split the audit log already uses: the shared recorder in
  * `src/server/audit/`, the read-side viewer in `features/audit/`.

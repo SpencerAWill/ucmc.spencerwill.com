@@ -8,23 +8,16 @@ paths:
 
 # Cloudflare bindings, D1, and env
 
-The binding-access rule, the bindings and the D1 parameter limit: true of every
-server statement. The rest of this rule is split by area under
-`.claude/rules/data/` and loads with the files it is about: `migrations.md`
-(`generate`, drift, and why a parent table can't be rebuilt), `search.md`
-(FTS5 and `likeContains`), `r2.md` (key prefixes), `env-and-email.md` and
-`cost-snapshots.md`. Read the relevant one before changing behaviour it covers.
+Why no statement binds a data-dependent number of parameters, and why not chunking or caps: `docs/adr/0006-d1-statements-bind-a-fixed-number.md`. Platform numbers (D1, KV, R2, Workers Free): `docs/platform-limits.md`. This file is the rules for server code that touches bindings.
 
-## Function-wrapped access invariant
+The rest of the data rule is split by area under `.claude/rules/data/` and loads with its files: `migrations.md`, `search.md` (FTS5, `likeContains`), `r2.md` (key prefixes), `env-and-email.md`, `cost-snapshots.md`.
 
-**Never read `env.DB` / `env.KV` / `env.BUCKET_*` at module scope.** Always go through `getDb()` / `getKv()` / `getPrivateBucket()` / `getPublicBucket()`. The `cloudflare:workers` module is stubbed for non-SSR bundles by a vite plugin, so module-scope access breaks the client build.
+## Where things go
 
-## The bindings
-
-- **D1** (Drizzle ORM) — schema `drizzle/schema.ts`, generated migrations committed in `drizzle/migrations/`. `wrangler.jsonc`'s `database_id` is a placeholder; the deploy's `sync-env` (`scripts/wrangler-env.ts`) writes it from the Pulumi `d1DatabaseId` output. **A new binding must be taught to `wrangler-env.ts`** and repeated in `env.production`, or `sync-env` refuses the file.
-- **KV** — same UUID-injection pattern (`kvNamespaceId` Pulumi output).
-- **R2** — name-based bindings (no UUID injection). Two buckets per env: `BUCKET_PRIVATE` (worker-mediated reads, the default for new media) and `BUCKET_PUBLIC` (bound to `cdn.{dev.,}ucmc.spencerwill.com` via `R2CustomDomain`, reads bypass the worker). **Use `getPrivateBucket()` for any new media unless the URL shape is unguessable AND the content is intended public.** Avatars and landing images use content-hashed keys + opaque public IDs in the public bucket. **Public uploads MUST set `httpMetadata.cacheControl` at upload time** — custom domains pass through stored metadata, not worker headers.
-- **Rate limiting** — five `unsafe.bindings`, each its own budget. Wrappers in `src/server/rate-limit.server.ts` fail _open_. `E2E_BYPASS_RATE_LIMIT=1` short-circuits for Playwright.
+- **D1** (Drizzle): schema `drizzle/schema.ts`, generated migrations in `drizzle/migrations/`. The `wrangler.jsonc` `database_id` is a placeholder; `sync-env` (`scripts/wrangler-env.ts`) writes it from the Pulumi `d1DatabaseId` output.
+- **KV**: same injection (`kvNamespaceId`).
+- **R2**: name-based bindings. `BUCKET_PRIVATE` (Worker-mediated reads, the default for new media) and `BUCKET_PUBLIC` (served from `cdn.{dev.,}ucmc.spencerwill.com` by `R2CustomDomain`, bypassing the Worker).
+- **Rate limiting**: five `unsafe.bindings`, each its own budget, wrapped in `src/server/rate-limit.server.ts` (fail **open**; `E2E_BYPASS_RATE_LIMIT=1` short-circuits for Playwright).
 
   | Binding                 | Budget                 | Covers                                                                                                |
   | ----------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -34,30 +27,26 @@ server statement. The rest of this rule is split by area under
   | `UPLOAD_RATE_LIMITER`   | 5/60s per user         | avatar uploads                                                                                        |
   | `CALENDAR_RATE_LIMITER` | 60/60s per token or IP | `.ics` feeds                                                                                          |
 
-  **Passkey begin is off `AUTH_RATE_LIMITER` on purpose.** Autofill starts an authenticate ceremony on every `/sign-in` load, before the visitor does anything, and a campus NAT puts many visitors on one IP — on the shared budget, loading the page could exhaust the magic-link request, whose deliberate "check your email" reply then hides that no email was sent. Begin writes nothing (the ceremony travels in a signed cookie); finish, which verifies a credential and writes the single-use marker, stays on the strict budget.
+- **The D1 helpers** live in `src/server/db/index.ts`: `D1_MAX_BOUND_PARAMS = 100`, `inSubquery` / `notInSubquery`, `inJsonArray` / `notInJsonArray`, `insertStatements` / `insertMany`, `rowsPerInsertStatement`, `runBatch`, `isUniqueViolation`. `src/server/db/__tests__/d1-bound-params.test.ts` pins the ceiling against real D1 (100 binds, 101 raises `too many SQL variables`).
 
-## No statement may bind a data-dependent number of parameters (#291)
+## Rules that are easy to break
 
-`D1_MAX_BOUND_PARAMS = 100` in `src/server/db/index.ts`, pinned against real D1 by `src/server/db/__tests__/d1-bound-params.test.ts` (100 binds, 101 raises `too many SQL variables`). This is D1's limit — the [limits page](https://developers.cloudflare.com/d1/platform/limits/) — not Drizzle's: Drizzle emits a correct statement and the driver refuses to bind it.
+- **Never read `env.DB` / `env.KV` / `env.BUCKET_*` at module scope.** Go through `getDb()` / `getKv()` / `getPrivateBucket()` / `getPublicBucket()`; `cloudflare:workers` is stubbed for non-SSR bundles, so module-scope access breaks the client build.
+- **Use `getPrivateBucket()` for new media** unless the URL is unguessable **and** the content is meant to be public (avatars and landing images: content-hashed keys + opaque public ids).
+- **Public uploads set `httpMetadata.cacheControl` at upload time.** The custom domain serves stored metadata, not Worker headers.
+- **Passkey begin stays off `AUTH_RATE_LIMITER`.** Autofill begins a ceremony on every `/sign-in` load, and a campus NAT shares one IP; on the shared budget, loading the page could exhaust the magic-link request, whose "check your email" reply would then hide that nothing was sent. Finish stays on the strict budget.
+- **No statement's parameter count may grow with the data** (D1 refuses past 100). In order of preference:
+  1. **List came out of the database** → a subquery or join, written with `inSubquery` / `notInSubquery`. Don't fetch ids into JavaScript to hand them back.
+  2. **List came from the caller** → `inJsonArray` / `notInJsonArray` (one JSON parameter via `json_each`; an empty list matches nothing).
+  3. **Multi-row write** → `insertStatements(table, rows, { onConflictDoNothing | onConflictDoUpdate })` / `insertMany`: split to fit, one atomic batch. An upsert's `set` reads `excluded.*`, never a bound JS value. Use `runBatch` when the statement list may be empty.
+  4. **Cross product** → built in SQL (`INSERT … SELECT … FROM json_each(?) CROSS JOIN json_each(?) WHERE true ON CONFLICT DO NOTHING`; `WHERE true` resolves SQLite's `ON CONFLICT` parse ambiguity), never as rows in JavaScript.
+- **ESLint bans `inArray` / `notInArray`**, imported from any `drizzle-orm` path or reached as `ops.inArray` in a relational-query callback. The only exemption is `d1-bound-params.test.ts`.
+- **Fixed constant lists go through `json_each` too** (`status IN ('approved','unclaimed')`, the calendar's visibility scope). One sanctioned form, no judgement call.
+- **`rowsPerInsertStatement` must be handed the rows**: a column with a SQL default binds when the row supplies it. The sizing may overcount, never undercount.
+- **No chunked reads, and no caps as a fix.** Workers Free allows 50 D1 queries per invocation; keep batches short too (the largest today is a 500-row bulk audit at 36 statements). Remaining caps (`BULK_ATTEST_MAX`, `ROLE_MEMBERS_DIFF_MAX`, the 500-row gear selections) are product bounds.
 
-Two ordinary shapes grow with the data, and both reach 100 through normal use:
+## Adding things
 
-- **`inArray(col, list)`** binds one parameter per element.
-- **`insert().values(rows)`** binds one parameter per column **per row**. Far tighter than it looks: an audit row binds 7, so 15 audit events in one statement fail — which is how every bulk action that touched 15+ targets broke at once, and an 8-piece desk checkout with it.
-
-So the rule is about the statement's shape, not about call sites that happen to have broken. Three tools, in order of preference:
-
-1. **A subquery or join, when the list came out of the database.** `WHERE model_id IN (SELECT id FROM gear_models WHERE type_id = ?)` — one parameter, the planner does the matching, and there is no list to outgrow anything. Fetching ids in JavaScript only to hand them back is the round trip to remove. Write it with **`inSubquery` / `notInSubquery`**, typed to take a query builder and reject an array.
-2. **`inJsonArray(col, values)` / `notInJsonArray`, when the list came from the caller.** One JSON parameter expanded by `json_each`, at any length (verified with 5000). This is the pattern D1's own docs give: [Expand arrays for IN queries](https://developers.cloudflare.com/d1/reference/query-json). An empty list matches nothing.
-3. **`insertStatements(table, rows, { onConflictDoNothing | onConflictDoUpdate })` / `insertMany`, for multi-row writes.** Splits the rows into statements of `rowsPerInsertStatement(table, rows)` and runs them in one batch. D1 applies its per-query limits to **each statement in a batch** and runs the batch as a transaction, so the write stays atomic and costs one round trip. An upsert's `set` must read `excluded.*` — a bound JS value there would add parameters the sizing doesn't count. Use `runBatch` for any statement list that may be empty: Drizzle's batch is typed as a non-empty tuple.
-4. **A cross product is built in SQL, not in JavaScript.** Bulk tagging's 500 items × 50 tags is 25,000 rows; split to fit, that was a thousand statements in one batch. `bulkAddGearItemTags` is one `INSERT … SELECT … FROM json_each(?) CROSS JOIN json_each(?) WHERE true ON CONFLICT DO NOTHING` — four parameters at any size. (`WHERE true` resolves SQLite's parse ambiguity between `ON CONFLICT` and a join constraint.)
-
-**`rowsPerInsertStatement` must be handed the rows.** A column with a SQL-expression default (`created_at` = `unixepoch() * 1000`) is inlined only when the row _omits_ it; supplied, it binds. Counting it as inlined is how the bulk tagger — which supplies `assigned_at` — still overflowed after the first pass of #291. Everything else is counted even when omitted (Drizzle actually writes a literal `null`), so the figure can only overcount: an extra statement costs nothing, a miscount costs a 500.
-
-**ESLint bans `inArray` / `notInArray`** — from `drizzle-orm` and every sub-path that re-exports them (`no-restricted-imports`), and in the relational-query callback whether destructured or reached as `ops.inArray` (`no-restricted-syntax`), which no import ban can see. The only exemption is `d1-bound-params.test.ts`, which has to build the forbidden statement to pin the ceiling. Inserts aren't lint-guarded — a multi-row `.values(rows)` is legitimate for a fixed small set — so a new bulk write goes through `insertStatements` by convention and gets a test past its old limit.
-
-**Fixed constant lists go through `json_each` too** (`status IN ('approved','unclaimed')`, the calendar's visibility scope). A table-valued function over two or three values costs nothing measurable, and a second sanctioned form for "lists that can't grow" would bring back the judgement call the ban exists to remove.
-
-**Chunked reads are gone.** #261's `selectInChunks` split one query into several, and **Workers Free allows 50 D1 queries per invocation**; `json_each` and a subquery stay at one, and keep a single `ORDER BY`. Whether each statement _inside_ a batch counts toward that 50 is not documented — the limits page ties the figure to subrequests, and Drizzle's `batch` is one call to D1, so most likely not, but Miniflare doesn't enforce it and it is unverified. Keep batches short regardless: the largest today is a 500-row bulk audit at 36 statements. Caps on callers are not a fix either — they couple a product decision to a storage limit, and #291's audit found twenty caps that still let a statement past 100. The caps that remain (`BULK_ATTEST_MAX`, `ROLE_MEMBERS_DIFF_MAX`, the 500-row gear selections) are product bounds; no statement's size depends on them.
-
-Found the hard way twice: #259 (a 500 once a table crossed ~100 rows in the window) and #291 (an audit of every query: 37 unbounded, 20 capped above the limit).
+- **A new binding** is added to `wrangler.jsonc` top level **and** `env.production` (bindings don't inherit), and taught to `scripts/wrangler-env.ts`, or `sync-env` refuses the file.
+- **A new rate-limit binding** gets its own `namespace_id`, distinct from every other binding's and between dev and prod: the id is account-wide, and bindings that share one share counters, across Workers too.
+- **A new bulk write** goes through `insertStatements` (inserts aren't lint-guarded) and gets a test past its old limit.

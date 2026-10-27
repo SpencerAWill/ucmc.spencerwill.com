@@ -52,7 +52,7 @@ case "$tool" in
     # word that decides which program actually runs. Scanning the whole
     # command string instead is what makes this class of guard unusable:
     # a heredoc that merely *documents* an in-place edit (this repo's
-    # CLAUDE.md does) reads identically to one that performs it. The
+    # AGENTS.md does) reads identically to one that performs it. The
     # head check costs nothing and removes that false-positive class.
     #
     # Reads stay allowed on purpose: `git diff --exit-code

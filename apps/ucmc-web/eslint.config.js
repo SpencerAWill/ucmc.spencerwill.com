@@ -14,10 +14,11 @@ import vitest from "@vitest/eslint-plugin";
  * against `process.cwd()`. The zones were written as `./src/features/...`,
  * which is correct under `pnpm --filter ucmc-web lint` (cwd is this
  * package, which is how CI runs it) but resolves to `<repo>/src/features/...`
- * — a path that doesn't exist — under the `pnpm exec eslint .` documented
- * in CLAUDE.md's Commands section. A zone whose paths match nothing fails
- * open: the rule silently passes instead of erroring, so the boundary
- * check appears to run and enforces nothing.
+ * — a path that doesn't exist — under a bare `eslint .` from the repo
+ * root, which AGENTS.md's Commands section forbids for this reason. A
+ * zone whose paths match nothing fails open: the rule silently passes
+ * instead of erroring, so the boundary check appears to run and enforces
+ * nothing.
  *
  * The resolver's `project` path below has the same problem and has to be
  * anchored too — an unresolvable `#/features/...` specifier also fails
@@ -34,7 +35,7 @@ const zonePath = (rel) => new URL(rel, import.meta.url).pathname;
  * It used to be 62 hand-written zone objects, which drifted badly: by the
  * time this was generated, `album`, `gazette`, `gear`, `history` and
  * `settings` had no zones at all, so the cross-feature import rule that
- * CLAUDE.md documents wasn't actually enforced for any feature added after
+ * AGENTS.md documents wasn't actually enforced for any feature added after
  * `club-feedback`. Generating the pairs is what makes "add a feature, get
  * the boundary" true rather than aspirational.
  */

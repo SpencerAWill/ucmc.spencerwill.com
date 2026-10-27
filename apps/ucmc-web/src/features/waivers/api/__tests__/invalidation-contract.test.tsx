@@ -16,7 +16,7 @@ import { expectInvalidates } from "#/test-support/invalidation-contract";
 /**
  * The cache-invalidation contract for the waivers mutation hooks.
  *
- * CLAUDE.md requires every mutation to live in a `use-*.ts` hook "with a
+ * AGENTS.md requires every mutation to live in a `use-*.ts` hook "with a
  * fixed cache-invalidation contract", and until now nothing enforced the
  * second half of that sentence. The failure it describes is silent: a
  * hook that drops a key leaves the officer looking at a queue that still
