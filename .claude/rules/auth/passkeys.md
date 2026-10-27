@@ -11,7 +11,7 @@ paths:
 
 # Passkeys (WebAuthn)
 
-Part of the auth rule; `auth/core.md` covers sessions and registration.
+Part of the auth rule; `auth/core.md` covers sessions and registration. Why passkeys are optional and ceremonies are single-use markers: `docs/adr/0005-own-auth-magic-links-and-passkeys.md`.
 
 `@simplewebauthn/server` + `browser`. The RP is pinned to `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `APP_BASE_URL` (per-env from Pulumi). **Begin writes nothing**: the ceremony (id, challenge, type, user, expiry) goes into the `__Host-ucmc_webauthn` cookie, HMAC-signed with `SESSION_SECRET` under the `webauthn-ceremony` purpose (`src/server/auth/signing.server.ts`). Autofill begins one on every `/sign-in` load, so a stored row per begin would let one IP spend D1's daily write quota by reloading a page. **Finish consumes the ceremony id with one `INSERT … ON CONFLICT DO NOTHING RETURNING` into `webauthn_consumed_ceremonies`, before verifying, and clears the cookie on every branch.** Single use is one statement, never a read followed by a write — it was KV `get` then `delete` until #314, which two concurrent finishes could both pass. Magic links hold the same line with `UPDATE … WHERE consumed_at IS NULL RETURNING`. **That marker is the only replay defence for synced passkeys**, which always report a sign counter of 0 and so switch off the counter-regression check. Markers carry the ceremony's expiry and the daily retention tick sweeps them. Sign-in runs a background conditional-UI ceremony for autofill — which is why **begin is rate-limited on `CEREMONY_RATE_LIMITER` and finish on `AUTH_RATE_LIMITER`** (#306; see `data/core.md`).
 

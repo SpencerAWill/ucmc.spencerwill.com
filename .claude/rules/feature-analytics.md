@@ -8,164 +8,66 @@ paths:
 
 # Analytics (`/analytics`)
 
-Officer-facing club-health reporting: a root dashboard plus five
-drill-downs. Issue #267 settled the design; the information
-architecture came from the artifact linked on #275.
+Officer-facing club-health reporting: a root dashboard plus five drill-downs (design: #267; information architecture: the artifact on #275). Why TanStack Charts and `ChartSurface`: `docs/adr/0009-tanstack-charts-through-chartsurface.md`. Why the season axis: `docs/adr/0004-the-club-season-is-the-waiver-term.md`. This file is the rules for changing it.
 
-## The page registry is the single source
+## Where things go
 
-`src/config/analytics-pages.ts` names every surface, its route, its
-`pages.*` kill switch, and the permissions that reveal it. **Four
-consumers read it** — the sidebar sub-menu, the root page's door
-cards, the drill-down sub-nav, and each route's own `beforeLoad`. Add
-a page there and all four follow; spell it out at each site and they
-drift into a door card that 404s.
+- **`src/config/analytics-pages.ts`** is the page registry: every surface, its route, its `pages.*` kill switch, its permissions. **Four consumers read it**: the sidebar sub-menu, the root page's door cards, the drill-down sub-nav, and each route's `beforeLoad`. Pure data: `src/config/` holds no React and no lucide.
+- **`src/components/analytics-page-icons.tsx`** holds the icons, outside the feature because the sidebar needs them. Typed `satisfies Record<AnalyticsPageKey, LucideIcon>`.
+- **`lib/`** holds pure policy (thresholds, rates in `lib/rates.ts`, the attention derivation), where routes can import it and Stryker could mutate it. None of `lib/` is on `stryker.config.json`'s `mutate` list yet.
+- **`api/`** holds no `use-*.ts` mutation hooks and owes none; the feature is read-only.
+- **`server/analytics-fns.ts`** re-exports only the types a **component** names in its props (routes infer results through query options; extra re-exports are knip findings).
+- **Charts**: `@tanstack/charts`. Read its version-locked docs in `node_modules/@tanstack/charts/docs/` (start at `llms.txt`), not the docs site, which tracks unreleased `main`. Nine of its skills are symlinked into `.claude/skills/` (see `.claude/skills/README.md`).
 
-It is **pure data** because `src/config/` holds no React and no lucide
-(check before adding either). Icons live in
-`src/components/analytics-page-icons.tsx` — in `src/components/`
-rather than under the feature because the **sidebar** needs them and
-shared chrome cannot import a feature. The map is typed `satisfies
-Record<AnalyticsPageKey, LucideIcon>`, which is what stops the two
-halves drifting: a new page fails the typecheck until it has an icon.
+## Rules that are easy to break
 
-`flag` is a bare string there, because importing `PageFlagKey` would
-make `src/config/` depend on `src/server/`. A typo is therefore not a
-type error — `analytics-pages.test.ts` asserts every declared flag
-exists in the settings registry instead. Keep that test.
+**Registry and gates**
 
-## Two permissions, and the gates sit on the data
+- **Add a page in `analytics-pages.ts`, never at each consumer.** Spelled-out copies drift into a door card that 404s.
+- **`flag` there is a bare string** (importing `PageFlagKey` would make `src/config/` depend on `src/server/`). Keep `analytics-pages.test.ts`, which asserts every flag exists in the settings registry.
+- **`analytics:view` (migration 0080) opens the area and grants nothing else.** Each drill-down also requires one of its `dataPermissions`; the gate is on the data, not the route.
+- **Route guards are `requirePageFlag` then `requireAnyPermissionOrNotFound`**: `notFound`, never a redirect.
+- **Server actions re-check the real principal** (`loadCurrentPrincipal`), never the emulated one.
+- **Client gates read `hasPermission` via `canSeeAnalyticsPage`**, never `principal.permissions`.
+- **The root page runs each query `enabled` on the viewer's permissions.** The actions refuse callers without them; don't route around it.
+- **`pages.analytics` is the five children's `parent`**; `effectivePageFlags` already ANDs it in. Never AND it again by hand.
 
-`analytics:view` (migration 0080) opens the area and grants nothing
-else. Every drill-down additionally requires one of its
-`dataPermissions`. A Trip Coordinator reading the activity page must
-not thereby get the waiver roster, so the gate belongs on the data,
-not on the route.
+**Season axis**
 
-- Route guards: `requirePageFlag` then `requireAnyPermissionOrNotFound`.
-  **`notFound`, not redirect** — a hidden page must be
-  indistinguishable from one that does not exist, the same treatment a
-  switched-off page gets.
-- Server actions re-check the **real** principal (`loadCurrentPrincipal`),
-  never the emulated one.
-- Client gates read `hasPermission` via `canSeeAnalyticsPage`, never
-  `principal.permissions`.
-- The root page runs each query `enabled` on the viewer's permissions,
-  because the actions refuse callers who lack them. That is the gate
-  working, not something to route around.
+- **Never re-derive a club year**; import from `#/config/club-season`.
+- **x is month-position within the season, 0 = August**, not a calendar month.
+- **State the band/point domain explicitly**; an inferred one drops empty months and hides the gap.
+- **Bucket through `CLUB_TIME_ZONE`.**
+- **Divide semester totals by `SEMESTERS[s].monthCount`.**
 
-`pages.analytics` is a section switch **and** a real page; the five
-children declare it as `parent`, so the cascade in
-`effectivePageFlags` already ANDs it in — never AND it again by hand.
+**Honesty (N is a few hundred)**
 
-## Everything is on the season axis
+- **Counts lead, percentages follow.** `CoverageBar` takes the raw pair, not a share.
+- **A zero denominator returns `null`, never 0** (`lib/rates.ts`).
+- **"No data" and "zero" are different.** `AnalyticsPanelEmpty` is for no data; the platform page's `noSnapshots` flag keeps them apart.
+- **Say what a page can't answer.** `/analytics/activity` counts what was scheduled, and says so, until trips (#275) record attendance.
 
-Never re-derive a club year; import from `#/config/club-season`. See
-the `dates-and-formats` rule for the helper table.
+**Charts**
 
-- **x is month-position within the season, 0 = August** — not a
-  calendar month. A Jan–Dec axis cuts every season in half, and sorting
-  by calendar month puts January before August.
-- **State the band/point domain, never let it infer.** An inferred
-  domain drops a month the club did nothing in and closes the gap,
-  which is exactly the thing worth seeing.
-- **Bucket through `CLUB_TIME_ZONE`.** The worker runs UTC; an 8pm
-  Cincinnati event reads as tomorrow, which at a month boundary is the
-  wrong bar and on Jul 31 the wrong season.
-- **Divide semester totals by `SEMESTERS[s].monthCount`.** Fall is 5
-  months, Spring 4, Summer 3 — raw totals flatter Fall for free.
+- **Mount every chart through `ChartSurface`**, never `<Chart>` directly.
+- **Keep `height` / `initialWidth`.** Without them the server falls back to 320 and the first paint jumps.
+- **Charts name no colours.** Series identity goes on `color` or `z`; `--chart-*` is identity and `--chart-ramp-*` magnitude (`styles.css`).
+- **Every chart keeps its exact-value table.** Three of the six categorical slots are under 3:1 against the card.
+- **Memoize any definition that captures data** (`useMemo` on the rows), and **sort rows before a line mark** (input order is path order).
+- **Don't remove `recharts` in passing.** Only the vendored `src/components/ui/chart.tsx` reaches it; removing it is its own follow-up.
 
-## Honesty rules, because N is a few hundred
+**Platform page (`cost_snapshots`)**
 
-These are not style preferences; they are why several panels look more
-verbose than they need to.
+- **Keep the two windows separate** (`analyticsWindow` vs `planSnapshotWindow`). Billable Usage (R2) keeps ~108 days and backfills 90-day spans; the GraphQL datasets (Workers, D1, KV) reject any range wider than `4w4d` (31 days answers, 32 errors) and only ever go trailing. Handing them the backfill window deadlocked the job.
+- **Keep the backfill-floor test looking at billing rows alone**; analytics returns rows on every run.
 
-- **Counts lead, percentages follow.** "Coverage fell 8%" can be three
-  people. `CoverageBar` takes the raw pair rather than a pre-computed
-  share so the honest version is not optional.
-- **A zero denominator returns `null`, never 0.** `lib/rates.ts` is
-  where that lives. 0% claims an achievement the club did not earn.
-- **"No data" and "zero" are different claims.** `AnalyticsPanelEmpty`
-  is for the first; render the real figure for the second. The
-  platform page's `noSnapshots` flag exists only to keep them apart.
-- **Say what a page cannot answer.** `/analytics/activity` counts what
-  was _scheduled_; nothing records attendance until trips (#275) ship.
-  The page carries a panel saying so rather than letting a trip count
-  stand in for participation.
+## Adding things
 
-## Charts
-
-`@tanstack/charts`, adopted on trial per §5 of #267. **Its own docs
-ship inside the package** and are version-locked — read
-`node_modules/@tanstack/charts/docs/` (start at `llms.txt`) rather
-than the docs site, which tracks unreleased `main`. Nine of its twelve
-shipped skills are symlinked into `.claude/skills/`; see
-`.claude/skills/README.md` for why symlinks rather than copies.
-
-- **Mount every chart through `ChartSurface`.** It carries the
-  `--chart-*` → `--ts-chart-*` palette bridge, a required `ariaLabel`,
-  deterministic SSR sizing, and the exact-value table. Do not render
-  `<Chart>` directly.
-- **Do not drop `height` / `initialWidth`.** Full server-side SVG is
-  the reason this library was chosen over Recharts; without a size the
-  server falls back to 320 and the first paint jumps.
-- **Charts name no colours.** Series identity goes on the `color` or
-  `z` channel and the palette comes from the bridge.
-- **Every chart owes a table.** Three of our six categorical slots sit
-  under 3:1 against the card (see `styles.css`), so the exact-value
-  disclosure is an obligation here, not a nicety.
-- **Memoize any definition that captures data** (`useMemo` on the
-  rows), and **sort rows before a line mark** — input order is path
-  order, so unsorted data draws a scribble.
-- `recharts` is still installed, reached only by the vendored shadcn
-  `src/components/ui/chart.tsx`. Removing it is a follow-up, not a
-  drive-by.
-
-## Shape of the feature
-
-Standard layout (see `web-architecture`), with two notes:
-
-- **`api/` holds no `use-*.ts` mutation hooks and owes none** — the
-  whole feature is read-only.
-- **`server/analytics-fns.ts` re-exports only the types a COMPONENT
-  names in its props.** A route infers the whole result through its
-  query options, so re-exporting result types leaves exports with no
-  importer and knip correctly flags them.
-
-Pure policy — thresholds, rates, the attention derivation — lives in
-`lib/` so Stryker can mutate it. An identical helper inlined into an
-action is not mutation-testable and cannot be imported by a route.
-
-## The platform page's data has two very different clocks
-
-`cost_snapshots` is fed by one cron but two APIs with incompatible
-retention, and conflating them is a bug this has already had:
-
-| Source                              | Retention                 | Window                         |
-| ----------------------------------- | ------------------------- | ------------------------------ |
-| Billable Usage (R2)                 | ~108 days on this account | backfills, 90-day spans        |
-| GraphQL analytics (Workers, D1, KV) | **~1 month, enforced**    | trailing only, never backfills |
-
-The GraphQL datasets reject any range wider than `4w4d` — measured on
-this account, a 31-day span answers and 32 errors. Handing them the
-billing backfill window deadlocked the whole job: the call failed every
-run, the failure landed in `sourcesFailed`, and the backfill floor is
-only recorded when that list is empty — so the mode never flipped to
-trailing and Workers, D1 and KV produced no rows at all while R2 filled
-in normally. **Keep the two windows separate** (`analyticsWindow` vs
-`planSnapshotWindow`), and keep the floor test looking at billing rows
-alone, since analytics now returns rows on every run including backfill
-ones.
+- **A drill-down**: an entry in `analytics-pages.ts`, an icon in the `satisfies` map (the typecheck fails until it has one), its `pages.*` flag with `parent: "analytics"`, and its `dataPermissions`.
+- **A pure helper**: in `lib/`, not inlined into an action.
 
 ## Not built yet
 
-- **`member_activity_days`** (§1 of #267) — the append-only rollup
-  behind "members active per month". It needs the privacy notice
-  amended in the same change and a sweep in `retention.server.ts`; the
-  officer decision is recorded on the issue. Until it lands, the root
-  page's headline is the attention list rather than an activity trend.
-- **Cloudflare traffic** (tier 3) — needs an account-scoped API token
-  secret. Keep it in its own clearly-labelled section when it lands:
-  mixing anonymous visitor counts with member counts invites exactly
-  the comparison that is not valid.
-- **Participation** — waits on trips (#275).
+- **`member_activity_days`** (#267 §1), the rollup behind "members active per month". It needs the privacy notice amended in the same change and a sweep in `retention.server.ts`; the officer decision is on the issue.
+- **Cloudflare traffic** needs an account-scoped API token secret, and goes in its own labelled section: anonymous visitor counts must not sit beside member counts.
+- **Participation** waits on trips (#275).

@@ -7,88 +7,65 @@ paths:
 
 # Site settings & page flags (`/settings`)
 
-Runtime-editable platform configuration, **gated per key**. Each setting edits with `settingPermissionOf(key)`: its `SettingMeta.permission`, else `settings:manage`. The `notice.*` keys carry `notice:manage` (migration `0090`, no seeded grants), so a role can be handed the site notice without the page kill switches and contact details. Both permissions are auto-granted only to `system_admin` via the bypass in `principal.server.ts`; delegate at `/access`.
+Why settings are a code registry while permissions are rows: `docs/adr/0010-registries-not-rows.md`. This file is the rules for changing settings, flags and the `/settings` page.
 
-The page and its sidebar entry admit anyone holding one of **`SETTINGS_PAGE_PERMISSIONS`** (derived from the registry, `settings:manage` first). From there every surface answers per key: `updateSettingAction` and `listSettingHistoryAction` check the key they touch (`requireSettingPermission`), `listSiteSettingsAction` returns only editable keys (so `SiteSettingsSnapshot` is `Partial`), and `SettingsCategories` renders only the categories the viewer can edit, reading `hasPermission` so a role preview applies. `canEditSetting` is the shared pure predicate. **A new permission-scoped category is a `permission` on its entries plus the permission's migration** — nothing on the page or in the actions changes.
+## Where things go
 
-**Adding a new setting is one entry in `SETTINGS` — no migration, no new mutation hook, no new audit action.**
+- **`src/server/settings/settings-registry.ts`** is the single source of truth. Each `SETTINGS` entry declares a Zod schema and metadata (label, description, category, optional `flagKind` / `owner` / `expiresAt` / `permission` / `optionLabels` / `parent` / `confirm`, and a reserved `editor`). It drives the types (`readSetting("the.key")` is narrowed), the update validator, the admin UI (auto-form by schema introspection) and the audit metadata.
+- **Storage**: `site_settings` (`value_json TEXT`), with **fail-open reads**: a missing row, a parse error or a D1 throw falls back to the schema default.
+- **Audit**: one action, `settings_updated`, `targetType: "site_setting"`, `targetId: <key>`. Booleans and enums are logged with their value (`isEnumSetting`); everything else with the key only.
+- **Permissions**: each key edits with `settingPermissionOf(key)` (its `permission`, else `settings:manage`). `notice.*` carries `notice:manage` (`0090`). Both are auto-granted only to `system_admin` (`principal.server.ts`); delegate at `/access`. The page admits anyone holding one of `SETTINGS_PAGE_PERMISSIONS`; `canEditSetting` is the shared predicate.
+- **Public reads**, each its own allowlisted payload under the `["site-settings"]` query prefix: `getPublicSiteContactFn` (club email + three social URLs, rendered through `<SocialIconLinks>`), `getPublicFlagsFn`, `getPublicBrandingFn` (`appearance.headerTitle` / `headerTagline`), and `getSiteNoticeFn`.
+- **`resolveSiteNotice`** (pure, `site-notice.ts`, in Stryker's `mutate` list) decides who sees the notice; queried per `NoticeViewer` (`siteNoticeQueryKey(viewer)`), prefetched by the root loader after the session, no `placeholderData`.
+- **`effectivePageFlags`** applies the section cascade, in exactly one place. `pageParentOf()` is the narrowing accessor for `SettingMeta.parent`.
+- **Renderers**: `SettingRow` (generic), `PageFlagsPanel` (the `pages` tree), `NoticePanel` (the `notice` rows under a live `SiteNoticeBar` preview). All writes go through `useSettingSaver` + `SettingConfirmDialog`.
+- **Static, not settings**: `config/site.ts` (`MAINTAINER_EMAIL`, `GITHUB_REPO_URL`), maintainer-identifying and ~never changing.
 
-## Three kinds of setting, one per category, and the distinction is load-bearing
+## Rules that are easy to break
 
-- **`contact.*`** — _values_ the site displays.
-- **`pages.*`** — _reachability_ switches with one uniform meaning (hide from nav + `notFound()` for everyone). That uniformity is what lets the route guards and the flags map be generic.
-- **`features.*`** — _behaviour_ switches that do more than hide a page.
+**Kinds of setting**
 
-**A boolean that does more than hide-and-404 a page does not belong in `pages`, however page-shaped it looks.** The feedback submission switches (`site_feedback.submissions_enabled` / `club_feedback.submissions_enabled`) are the standing example and are **deliberately NOT merged into the page flags** — switching one off pauses new submissions while leaving the page reachable so managers keep triaging the backlog, whereas the page flag 404s the page for everyone including them. Each pair cross-references the other in its registry description. (`features.announcements` was the other long-standing example until the announcements feature was removed wholesale in `0074`; the classification argument it illustrated is unchanged.)
+- **`contact.*` are values, `pages.*` reachability switches, `features.*` behaviour switches**, and the distinction is load-bearing. Every `pages.*` flag means exactly "hide from nav + `notFound()` for everyone".
+- **A boolean that does more than hide-and-404 a page is not a `pages` flag.** The feedback submission switches (`site_feedback.submissions_enabled` / `club_feedback.submissions_enabled`) stay separate from their page flags: off pauses submissions while managers keep triaging. Each pair cross-references the other in its description.
+- **There is no `features.*` route guard.** Enforce a behaviour flag where the behaviour lives; re-add a flat guard reading the snapshot only if one must 404 a route.
 
-Route guards mirror the split: `requirePageFlag` for `pages.*`. There is **no `features.*` route guard at present** — `requireFeatureFlag` existed for `/announcements` and went with it in `0074`, because a feature flag that also governs behaviour is usually enforced where that behaviour lives (the feedback switches are read from the snapshot inside the page, which is what keeps the page reachable for triage). Re-add the guard, flat and reading the snapshot's top-level fields, if a `features.*` flag ever needs to 404 a route outright.
+**Values and the editor**
 
-## The registry is the single source of truth
+- **Every setting is a scalar.** `SettingRow` has no `"unknown"` branch: an array or object renders as `"1,3"` and is written back as a string. A non-scalar needs the reserved `editor` slot built first; `auto-form-type.test.ts` asserts every entry is renderable. A `.refine()` is fine (it stays a `ZodString` to `unwrapDefault`). `gear.caveOpenDays` stayed a string (`"Mon,Wed"`, `parseWeekdayList`) rather than be the first non-scalar.
+- **Name keys ending `Url` / `Email`** to get `type="url"` / `type="email"` from `inferInputType`.
+- **Booleans and enums apply on change, optimistically**; a failed write restores the canonical value. Behind `confirm`, an enum goes through `requestSave` and shows the canonical value until the dialog commits.
+- **Everything else is click-to-edit** (pencil → `InputGroup` with tick/cross; Enter saves, Escape cancels).
+- **The editor closes on success, not on submit.** `requestSave` resolves a `SaveOutcome` (`"saved" | "failed" | "confirming"`); a rejected value must stay on screen. `setting-row.test.tsx` pins both failure paths.
+- **Reset and history (`RowActions`) are the trailing element of the value row in both edit states** and never unmount; only the leading part swaps. The footer holds only `LastEditedLine`, which renders nothing for an untouched setting.
+- **`persist` catches a rejected `mutateAsync` and sets `error`**; callers reach it through `void`.
+- **Every surface answers per key**: `updateSettingAction` and `listSettingHistoryAction` check the key they touch (`requireSettingPermission`), `listSiteSettingsAction` returns only editable keys (so `SiteSettingsSnapshot` is `Partial`), and `SettingsCategories` renders only categories the viewer can edit, reading `hasPermission` so a role preview applies.
+- **A setting's `permission` is a plain string**; `permission-catalog.test.ts` asserts each name exists.
 
-`src/server/settings/settings-registry.ts`. Every setting declares its schema (`z.string()`, `z.boolean()`, `z.enum([...])`, anything) and metadata (label, description, category, optional `flagKind` / `owner` / `expiresAt` / `permission` / `optionLabels`) in one entry. The `SETTINGS` map drives types (`readSetting("the.key")` is type-narrowed), the discriminated update validator, the admin UI (auto-form by schema introspection, plus a _reserved_ `editor` slot for freeform shapes — see below, nothing maps it yet), and the audit metadata branch (boolean and enum values logged with value — both are picked from a fixed list — everything else with key only; `isEnumSetting` decides, and the history returns `enumValue`).
+**Public subset**
 
-Storage is D1 (`site_settings`, `value_json TEXT` accepts any JSON shape) with **fail-open reads**: missing rows / parse errors / D1 throws all fall back to the schema default so the site keeps working on a fresh DB.
+- **Each public read is its own allowlist in its action.** Never widen one payload to carry unrelated keys, and never let a category change publish a key by accident.
+- **Every public key shares the `["site-settings"]` prefix**, so one `useUpdateSetting` write invalidates all of them; keep new public reads under it.
+- **A blank social URL means "no such account"**: drop the icon, never `href=""`.
+- **The notice is resolved in the Worker**: members-only text never reaches a signed-out browser, not even in the dehydrated cache.
 
-One audit action covers every change: `settings_updated`, with `targetType: "site_setting"` + `targetId: <key>`.
+**Page flags**
 
-Keys ending in `Url` / `Email` get `<input type="url">` / `type="email"` for free via `inferInputType` in `setting-row.tsx` — **name new keys accordingly**.
+- **One `pages.<key>` per reachable page, default ON**, including route-less "coming soon" sidebar placeholders.
+- **No flag (always reachable)** for home (every fallback redirects there), `/settings` (self-lockout), Audit, auth/registration plumbing, and legal/compliance pages.
+- **Four sections exist: `members`, `gear`, `feedback`, `my`.** A section key is a grouping node with no page; the index page has its own key (`members_approved`, `gear_inventory`, `feedback_site`). Nesting follows the URLs (`gear_loans_detail` → `gear_loans` → `gear`).
+- **Parentage is declared, never inferred from the key name** (`pages.gear_cave` is not a child of `pages.gear`). `page-flag-cascade.test.ts` pins it.
+- **`SettingMeta.parent` stays typed `string`** (naming `PageFlagKey` there is circular, TS2502/TS2615); a typo degrades to "root page" via `pageParentOf()`.
+- **Every consumer reads `flags.pages[<key>]`**, which already holds effective values. **`/settings` alone reads raw values** (`listSiteSettingsFn`), so a child off only because of its parent doesn't look switched off.
+- **A nav entry gates on the flag of the page its link targets**, not the section's (`members_approved`, `gear_inventory`).
+- **`pages.my` gates all member self-service** (waiver, contacts, passkeys); keep its `confirm` saying so.
+- **`PageFlagsPanel` is a single-column tree, not a grid.** Each row's info popover is a `HoverCard` on a real button (opens on focus). Its section `Collapsible`s are **controlled**, so a filtered match inside a collapsed section renders.
+- **Never reimplement the write path or the `confirm` gate** in a renderer; use `useSettingSaver` + `SettingConfirmDialog`.
+- **`NoticePanel` previews the raw settings**, not `resolveSiteNotice`, with a "Visible to:" caption; blank text shows a prompt. Bar tones, ticker and placement: `app-chrome.md`.
 
-**Every setting is a scalar, and the admin UI currently requires that.** `autoFormType` answers `"string" | "boolean" | "number" | "enum" | "unknown"`, and `SettingRow` has no `"unknown"` branch: it falls through to a text `<Input>` fed `String(value)` and computes `isDirty` with `!==`. For a scalar that is right; for an array or object it renders `"1,3"` into a control that writes a string back, and dirty-checking compares by reference. `isDefault` already JSON-compares, so the gap is the row, not the registry.
+## Adding things
 
-So **a non-scalar schema means building the reserved `editor` slot first** (`SettingMeta.editor` records the key; nothing maps it yet). `auto-form-type.test.ts` asserts every entry in `SETTINGS` is renderable, which is what turns that into a failing test rather than a value quietly corrupted on save. `gear.caveOpenDays` is the setting that met this and stayed a string (`"Mon,Wed"`, parsed by `parseWeekdayList`) — a one-line list edited about once a semester did not justify being the first non-scalar. **A refinement is fine**: `.refine()` leaves the schema a `ZodString` as far as `unwrapDefault` is concerned, so validation can be arbitrarily strict without changing the renderer.
-
-## How a row is edited
-
-**Booleans and enums apply on change; everything else is click-to-edit.** An enum row is a `Select` whose choice saves at once, with options from `enumOptions(schema)` labelled by `SettingMeta.optionLabels` and an optional `renderOption` prefix (the tone swatches). It is optimistic the way the switch is: the pick shows while it saves and a failed write puts the canonical value back. Bound to the canonical value instead, a controlled `Select` snaps back to the old option for the whole round trip, which reads as the pick being refused. Behind a `confirm` gate it goes through `requestSave` and renders the canonical value until the dialog commits. A setting's `permission` is a plain string (permissions are rows, so there is no type to check it against); `permission-catalog.test.ts` asserts every name in `SETTINGS_PAGE_PERMISSIONS` exists. A switch carries its own commit — you can see what you did and undo it in one tap — while a text value gets a pencil at rest, opening an `InputGroup` with tick/cross (Enter saves, Escape cancels, the same contract as `passkey-section`'s rename). That split is the shape of the page, not an inconsistency: every write is an audit event and several settings are live kill switches, so a text change earns a deliberate commit, but forty permanently-mounted inputs with forty Save buttons is what the page looked like before, and on a phone each row cost two stacked full-width blocks for an interaction that is overwhelmingly _reading_ a value.
-
-**The editor closes on success, not on submit**, and that is the part a refactor breaks silently. A value rejected by the registry schema is exactly when the admin needs their text still on screen; the row behind the editor renders the canonical value, so closing would discard the edit and read as the row ignoring them. `useSettingSaver.requestSave` therefore resolves a **`SaveOutcome`** (`"saved" | "failed" | "confirming"`) rather than returning void. `"confirming"` is its own outcome because nothing has been written yet — the value is parked in `pending` and `SettingConfirmDialog` owns it from there, so a caller that closed on it would be guessing. `setting-row.test.tsx` pins both failure paths.
-
-**Reset-to-default and edit-history ride with the row's control, not in a footer.** `RowActions` is the trailing element of the value row for a text setting and of the header row beside the switch for a boolean, which leaves the footer position holding nothing but `LastEditedLine` — and that returns null for a setting nobody has changed, so an untouched row has no footer at all. As an icons-only footer it was a whole extra row of dead space on most of the forty-odd cards.
-
-**The cluster is the trailing element in both edit states on purpose.** Only the leading part of the value row swaps — value + pencil at rest, the editor and its own tick/cross while editing — so the flexible element absorbs the width change and reset/history stay exactly where the eye left them. A control that relocates when you start typing is worse than the row being a line taller. `setting-row.test.tsx` pins that they never unmount, which is the half a refactor is likely to break by moving them into a state-specific branch.
-
-`persist` catches a rejected `mutateAsync` and sets `error`. Every caller reaches it through a `void`, so before that a dropped connection was an unhandled rejection and nothing on screen — the row simply appeared not to respond.
-
-## The public subset
-
-`getPublicSiteContactFn` is a curated allowlist in `settings-actions-read.server.ts` carrying `contact.clubEmail` plus the three social URLs, read by both the app footer and the landing page's "Where to find us" block. Both render through the shared presentational `<SocialIconLinks>` (`src/components/social-icon-links.tsx`), which takes plain URL strings rather than reading the query itself — that keeps it out of `src/features/` and lets a blank URL mean "no such account" (the icon is dropped; an `href=""` would resolve as a same-origin reload).
-
-**`getSiteNoticeFn` is the fourth public read and the only viewer-dependent one.** `resolveSiteNotice` (pure, `src/server/settings/site-notice.ts`, in Stryker's `mutate` list) returns `null` when the notice is off, blank or whitespace, or members-only for anyone who isn't `approved`; the action applies it in the worker so members text never ships to a signed-out browser, not even in the dehydrated cache. It is queried per `NoticeViewer` (`siteNoticeQueryKey(viewer)`, `"anonymous" | "pending" | "approved"`) so signing in or out re-keys the banner, and the root loader prefetches it after the session so the bar is in the SSR HTML. It has no `placeholderData`: the default notice is none.
-
-**Each public read is its own allowlisted payload, not extra fields bolted onto a neighbour.** `getPublicBrandingFn` (`appearance.headerTitle` / `headerTagline`) is a third public read alongside the contact and flags ones rather than two extra fields on the contact payload — that one is genuinely contact information, and widening it to carry chrome text would make the name a lie. Allowlisting in the action is also what stops reclassifying a setting into `appearance` from surfacing it publicly by accident. Every public key shares the `["site-settings"]` prefix, so one `useUpdateSetting` write invalidates all of them.
-
-Static `config/site.ts` constants (`MAINTAINER_EMAIL`, `GITHUB_REPO_URL`) are intentionally NOT runtime-editable; they're maintainer-identifying and ~never change — which is also why the footer's GitHub icon stays hardcoded while the social icons beside it don't.
-
-## Per-page kill switches
-
-One `pages.<key>` boolean per reachable page, **universal across the sidebar**, including route-less "coming soon" placeholders whose flags only hide the sidebar entry. **Keep new placeholders flagged so "is it flagged?" never needs checking.**
-
-They surface in the public-flags snapshot as a **generic map** `flags.pages[<key>]` (`getPublicFlagsFn` → `publicFlagsQueryOptions`), typed `Record<PageFlagKey, boolean>` where `PageFlagKey` derives from the `pages.*` registry keys. The map, its type, the server reader, and the client fallback are all built by iterating `PAGE_SETTING_KEYS`, so **adding a page flag is one `SETTINGS` entry**. See the `add-page-flag` skill for the guard wiring.
-
-**Every `pages.*` default is ON.** Intentionally flag-less (always reachable): the **home/landing page** — it's the target of the header logo, sign-out, post-account-deletion, the permission-denied `redirect({ to: "/" })` in `requirePermission`, and the not-found/error pages' own "home" links, none of which consult the flag, so a disableable home would soft-brick every fallback; **Settings** (self-lockout hazard — it's where flags are managed), **Audit**, auth/registration plumbing, and the legal/compliance pages.
-
-## Sections cascade
-
-A `pages.*` entry may declare `parent: "<flag key>"` in its registry metadata, making it a child of a **section node** — a flag with no page of its own that acts as the master switch for an area. A page is _effectively_ on only when its own switch AND every ancestor's are on.
-
-The cascade is applied in exactly one place, **`effectivePageFlags`** in `settings-registry.ts`, called where the flags map is built (`getPublicFlagsAction` and the `publicFlagsQueryOptions` fallback). Because every consumer — sidebar, both tab bars, every route guard — reads `flags.pages[<key>]`, folding ancestry into that map gives all of them cascade with **no call-site changes and no way for one to forget**.
-
-**`/settings` is the deliberate exception**: it reads **raw** values via `listSiteSettingsFn`, because a child shown as off merely because its parent is off would be indistinguishable from the admin having switched the child off, and re-enabling the parent would look like the child's setting had been lost.
-
-**`SettingMeta.parent` is typed `string`, not `PageFlagKey`**: that type derives from `SETTINGS`, whose entries are typed by this very metadata, so naming it there is a circular reference (TS2502 / TS2615). **`pageParentOf()` is the narrowing accessor** and validates membership at runtime, so a typo degrades to "root page" rather than switching a live page off.
-
-**Parentage is declared, never inferred from the key name.** The keys only look hierarchical: `pages.gear_cave` is the public `/gear-cave` page and NOT a child of `pages.gear`, and `pages.members_detail` / `pages.gear_loans_detail` name route params rather than URL segments, so splitting on `_` would silently reparent all three. `page-flag-cascade.test.ts` pins that.
-
-Four sections exist — `members`, `gear`, `feedback`, `my`. The first three each used to name an index page while reading like a section, so the index page kept its own key (`members_approved`, `gear_inventory`, `feedback_site`) and the bare key became the grouping node. Nesting goes as deep as the URLs: `gear_loans_detail` → `gear_loans` → `gear`. **`pages.my` deserves care** — it's the one section that gates member self-service, so switching it off stops every member reaching their own waiver, contacts, and passkeys; its `confirm` says so.
-
-**A nav entry must be gated on the flag of the page its link actually targets, not on the section flag.** The sidebar's "Members" / "Gear" entries link to `/members` and `/gear`, so they read `members_approved` / `gear_inventory`. Effective flags mean the section still hides them, and this is what keeps the entry from linking to a page that 404s when only the index is switched off. Both sidebar entries had this wrong when the sections landed.
-
-## The `pages` renderer
-
-The `pages` category gets its own compact renderer, **`PageFlagsPanel`** — a single-column tree, deliberately not a grid, because a page's meaning comes from its position under its section and columns break that reading order. Sections collapse, nested sections collapse independently, and each row carries an info popover (a `HoverCard` on a real button, so it opens on focus too). It replaces the generic one-card-per-setting `SettingRow`: ~40 homogeneous booleans as 80px cards is several screens of scrolling.
-
-A filter box narrows the tree, and because the section rows stay mounted across filter changes their `Collapsible` is **controlled** — `defaultOpen` is read once at mount, so a filtered-to match inside a collapsed section would never render. It's built by iterating `PAGE_SETTING_KEYS`, so a new flag needs no edit here. The write path (including the `meta.confirm` gate) is shared with `SettingRow` through **`useSettingSaver`** + **`SettingConfirmDialog`** — don't reimplement it in either; the confirm gate is a safety feature.
-
-## The notice renderer
-
-The `notice` category renders through **`NoticePanel`**: the four rows under a preview of the real `SiteNoticeBar` (ticker included), labelled "Live" or "Preview (not live)", and a "Visible to:" caption from the audience's option label. The preview reads the raw settings, not `resolveSiteNotice` — the editor sees the notice whatever the audience, which is why the caption names who else will. Blank text shows a prompt instead of an empty bar, matching "blank means no bar" on the site. The bar's tones, ticker and placement are in `app-chrome.md`.
+- **A setting** is one `SETTINGS` entry: no migration, no mutation hook, no audit action.
+- **A page flag** is one `pages.*` entry (`parent` if it's in a section); the map, its type, the reader and the client fallback iterate `PAGE_SETTING_KEYS`. Wire the guard and nav with the `add-page-flag` skill.
+- **A permission-scoped category** is `permission` on its entries plus that permission's migration; nothing on the page or in the actions changes.
+- **A public key** is added to the relevant allowlisted read (or a new read), never by reclassifying it.
+- **Renaming a key** follows the `rename-permission-or-setting` skill.

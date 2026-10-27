@@ -9,63 +9,39 @@ paths:
 
 # Notifications and per-user preferences
 
-## The registry is the single source of truth
+Why categories are a code registry with sparse preference rows, and why those reads fail closed: `docs/adr/0010-registries-not-rows.md`. Why the dev outbox exists: `docs/adr/0001-dev-email-outbox.md`. This file is the rules for changing senders and preferences.
 
-`src/server/notifications/notification-registry.ts` is the per-user mirror of `settings-registry.ts`. **Adding a notification category is one entry there — no migration**, because `user_notification_preferences` stores a sparse row only when a member moves a category off its default. A boolean column per category would have made every category a migration.
+## Where things go
 
-It lives in `src/server/` rather than a feature because the senders, the preferences tab and the cron all need it and features can't import each other — the same reasoning as `gear-cave-standing.server.ts`.
+- **`src/server/notifications/notification-registry.ts`** is the single source of truth for categories: labels, descriptions, defaults, `suppressible`, `alwaysOnReason`. In `src/server/` because the senders, the preferences tab and the cron all need it.
+- **`user_notification_preferences`**: composite PK `(user_id, category, channel)` plus an index on `(category, channel, enabled)` for the cron's "everyone who turned this off" read. A row exists only once a member moves a category; `source` (`user` | `unsubscribe_link`) and `updatedAt` are the record. `channel` is only `email` today.
+- **`shouldNotify`**, **`listSuppressedUserIds`**, **`setMyNotificationPreferenceAction`**: the read, the bulk read, the write.
+- **`src/server/email/resend.ts`** sends through the provider `emailTier()` (`email-tier.ts`) picks, which `/health` also reads:
+  1. **Outbox** when `EMAIL_OUTBOX` is set (dev only, read at `/dev/outbox` behind Access; refused without `ACCESS_TEAM_DOMAIN` and `ACCESS_OUTBOX_AUD`). It beats Resend, so a stale `RESEND_API_KEY` can't put real mail back on the wire. Mailpit still wins locally.
+  2. **Resend** when `RESEND_API_KEY` is set.
+  3. **Mailpit** when `MAILPIT_URL` is set.
 
-Labels and descriptions are served **from** the registry to the UI. The preferences section renders whatever rows the action returns, so a new category grows a row without the component being touched. Don't put copy in the component.
+  Otherwise it throws `EmailNotConfiguredError`.
 
-## `suppressible` is where transactional-vs-courtesy lives
+- **`EmailMessage`** is `{ to, subject, text, html?, headers?, idempotencyKey? }`. There is no HTML layout; magic-link and gear reminder emails are plain text.
 
-It is a **registry field, deliberately not a fork in the architecture** — declarative, greppable, testable, and it makes "an unsubscribe link on a notice that shouldn't have one" unrepresentable rather than a thing to remember.
+## Rules that are easy to break
 
-The line is the CAN-SPAM one, and it was researched rather than guessed:
+- **Copy lives in the registry**, served to the UI. The preferences section renders whatever rows the action returns; don't put copy in the component.
+- **`suppressible` is the CAN-SPAM line.** A courtesy message ("gear due in two days") is `suppressible: true`. A relationship message about club property a member is holding ("three weeks overdue") is `suppressible: false` with an `alwaysOnReason` the UI shows.
+- **No RFC 8058 one-click unsubscribe requirement here** (it binds bulk senders on marketing mail). A `List-Unsubscribe` header on a courtesy message is hygiene; **never add one to a non-suppressible category.**
+- **A non-suppressible category never reads the table**: `shouldNotify` short-circuits on `isSuppressible` before D1. **`setMyNotificationPreferenceAction` refuses such a write** (`not_suppressible`) rather than accepting and ignoring it. `notification-prefs.test.ts` pins both.
+- **Preference reads fail CLOSED**, the opposite of `readSetting`: unreadable means "do not send".
+- **`listSuppressedUserIds` throws** rather than returning an empty set. A caller that catches it abandons the run.
+- **Preference writes are not audited.** The audit log is for officer actions against the club.
+- **Write a row even when the value matches the default.** The contract is "absent means default".
+- **There is no console tier**, and never add one: it either leaks magic-link URLs into Workers Logs or silently drops mail. The outbox is not a console tier (opted into per stack, Access-only, kept one day, refused on prod by infra).
+- **`devOutboxHref`** (beside `emailTier()`) is null unless the outbox tier is active, and must stay a function of the environment alone: the sign-in response is enumeration-proof. `DevOutboxLink` renders nothing for null.
+- **Every gear reminder carries `gear.caveHoursNote`**, free text; blank collapses the line and its separator (the summer case).
+- **Each reminder rung has its own subject line**, so an escalation is visible from the inbox.
 
-- A **courtesy** message ("gear due in two days") is opt-out-able. `suppressible: true`.
-- A **relationship** message ("you are holding club gear three weeks overdue") concerns club property the member is holding. It is exempt from the opt-out requirement, and it is the club's only way to reach them. `suppressible: false`, plus an `alwaysOnReason` the UI states.
+## Adding things
 
-**RFC 8058 one-click unsubscribe is not required here.** It binds _bulk senders_ (5,000+/day to Gmail) on marketing and subscribed mail, and explicitly excludes transactional mail. A `List-Unsubscribe` header on a courtesy message is hygiene, not compliance. Don't add one to a non-suppressible category.
-
-### A non-suppressible category never reads the preferences table
-
-`shouldNotify` short-circuits on `isSuppressible` **before** touching D1, so a stray row — planted by a bug, a migration, or a future unsubscribe link — cannot silence one. `setMyNotificationPreferenceAction` additionally **refuses** such a write (`not_suppressible`) rather than accepting and ignoring it: a member who is told "saved" about a switch the senders never read ends up certain they opted out of something that keeps arriving. Both halves are pinned in `notification-prefs.test.ts`.
-
-## Reads fail CLOSED — the opposite of `readSetting`
-
-This is the thing to understand before changing the repo. `readSetting` fails **open** (returns the default on any error) so the site keeps working against a fresh or flaky database. Preference reads fail **closed**: an unreadable preference resolves to "do not send".
-
-The harm is asymmetric. Emailing somebody who opted out is the failure the table exists to prevent; a skipped courtesy nudge costs nothing, because the member still sees the `/my/gear` banner and the next rung tries again tomorrow. Without the inversion, one D1 hiccup during the daily cron mails every opted-out member at once.
-
-`listSuppressedUserIds` **throws** rather than returning an empty set, for the same reason: an empty set reads as "nobody opted out", which is precisely the mistake that would mail everyone. A caller that catches it must abandon the run, not proceed.
-
-## Preference writes are not audited
-
-Unlike settings writes, which batch with an audit event. The audit log records **officer actions against the club**; a member toggling their own email preference would be noise in it. The row's `source` (`user` | `unsubscribe_link`) and `updatedAt` are the record, and together they answer the only question anyone actually asks: "I never turned that off."
-
-## Storage shape
-
-`user_notification_preferences`, composite PK `(user_id, category, channel)`, plus an index on `(category, channel, enabled)`. The index leads with `category` on purpose — the PK already answers "this member's preferences", and the query that needs an index is the cron's "everyone who turned one category off", which is one read per run rather than one per recipient.
-
-`channel` carries one value (`email`) today. It is in early because it is part of the primary key and SQLite has no `ALTER COLUMN`; see `data/migrations.md` for why a key rebuild is not available on D1.
-
-**A row is written even when the value matches the default.** The contract is "absent means default", not "present means changed" — keeping an explicit `true` means a later change to a registry default leaves members who already made a choice where they put themselves.
-
-## Sending
-
-`src/server/email/resend.ts` picks its provider through `emailTier()` (`src/server/email/email-tier.ts`), which `/health` reads too so the two can't disagree:
-
-1. **Outbox** when `EMAIL_OUTBOX` is set — **dev only.** The message is stored in D1 and read at `/dev/outbox` behind Cloudflare Access (#297, `docs/adr/0001-dev-email-outbox.md`). It beats Resend on purpose: a Worker secret outlives the deploy that stopped uploading it, so a stale `RESEND_API_KEY` on dev must not put real mail back on the wire. Mailpit still wins over it locally. Without `ACCESS_TEAM_DOMAIN` and `ACCESS_OUTBOX_AUD` the outbox is refused, not accepted into a table nobody can open.
-2. **Resend** when `RESEND_API_KEY` is set.
-3. **Mailpit** when `MAILPIT_URL` is set.
-
-Otherwise it **throws** `EmailNotConfiguredError`. **There is no console tier.** An earlier revision logged the message to the Worker console as a "fallback"; that either dumped magic-link URLs into dashboard-readable Workers Logs or left users staring at a never-arriving email. Failing loudly is the behaviour — don't reintroduce a silent tier. The outbox is not one: it is opted into per stack, readable only through Access (and the page verifies Access's token itself), kept one day, and **infra refuses it on prod** because it holds working sign-in links.
-
-**The "check your email" confirmations link to the outbox on dev, and the server decides when.** `requestMagicLinkAction` and `requestAddEmailAction` return `devOutboxHref` (from `devOutboxHref()` beside `emailTier()`), null unless the outbox tier is active; `DevOutboxLink` renders nothing for null. It must stay a function of the environment alone: the sign-in response is enumeration-proof, and a field that varied with the address would undo that.
-
-**Every reminder carries `gear.caveHoursNote`.** The cave is open about two hours a week (Wednesdays, either side of the meeting), so "bring it back during open hours" without naming them is an instruction a member cannot follow — and it is what makes the day-one overdue notice worth sending at all, since the next chance to return anything may be six days away. It is free text, not a structured schedule: the hours shift each semester, have exceptions, and off-cycle checkouts happen by arrangement. Blank collapses the line and its separator, which is the summer case.
-
-**Each rung has its own subject line.** `flagged` used to reuse the plain overdue wording, so the escalation was invisible from the inbox list — two apparently identical emails a week apart, and the one that actually changed something looked like a repeat.
-
-`EmailMessage` is `{ to, subject, text, html?, headers?, idempotencyKey? }`. There is no HTML layout; `magicLinkEmail` and the gear reminders are plain text. Adding one is a real edit, not free.
+- **A notification category** is one registry entry: no migration. Decide `suppressible` first; a non-suppressible one needs an `alwaysOnReason`.
+- **A new channel** is a new `channel` value; it is already part of the PK, because SQLite can't change a key without the rebuild `data/migrations.md` forbids.
+- **An HTML email** needs a layout built first; it is a real edit, not free.
