@@ -30,6 +30,16 @@
  * cookie it guards. Past `expires_at` the cookie's own signed expiry
  * refuses the ceremony, so the marker is dead weight.
  *
+ * `sessions` and `magic_links` are swept the same way (#373). An expired
+ * session is otherwise deleted only when its cookie comes back, so a
+ * member who never returns would leave the row forever; a magic link was
+ * never deleted at all. A magic link goes once `expires_at` passes,
+ * consumed or not: a consumed token and a deleted one both fail to
+ * consume. These three expiry sweeps each delete at most
+ * `EXPIRED_ROWS_PER_TICK` rows, oldest first, through an index on
+ * `expires_at`, so the first run after a backlog spends a bounded share
+ * of the day's rows-written quota and the rest goes on later days.
+ *
  * NULL-skip discipline: rows whose timestamp column is NULL are
  * deliberately ignored. `rejected_at` / `deactivated_at` were added in
  * migration 0019, so historical rejections / deactivations don't have
@@ -42,7 +52,8 @@
  * `runRetentionSweeps()` runs them sequentially and aggregates a
  * structured result that the scheduled handler logs.
  */
-import { and, eq, isNotNull, lt } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lt } from "drizzle-orm";
+import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 
 import { screenshotPurgeDue } from "#/server/cron/screenshot-retention";
 import type { ScreenshotRetentionInput } from "#/server/cron/screenshot-retention";
@@ -74,6 +85,15 @@ const REVOKED_WAIVER_RETENTION_DAYS = 90;
  * through the aggregate.
  */
 const EMAIL_SEND_LOG_RETENTION_DAYS = 90;
+
+/**
+ * Most rows one expiry sweep deletes per tick. Not a parameter-limit
+ * workaround (the delete binds two values however many rows match): it
+ * bounds what one tick spends of D1 Free's 100,000 rows written a day,
+ * where each deleted row also writes its two index entries. Steady-state
+ * growth is far below this, so only a backlog ever reaches it.
+ */
+export const EXPIRED_ROWS_PER_TICK = 2000;
 
 // Skip orphan-GC for any R2 object uploaded in the last 5 minutes.
 // Avatars are uploaded in two steps (PUT R2, then UPDATE D1); a cron
@@ -147,6 +167,8 @@ export interface SweepCounts {
   emailSendLog: number;
   emailOutbox: number;
   webauthnCeremonies: number;
+  expiredSessions: number;
+  expiredMagicLinks: number;
 }
 
 /** Housekeeping, not a privacy promise — see the module doc comment. */
@@ -163,15 +185,70 @@ export async function sweepEmailSendLog(
   return deleted.length;
 }
 
+/**
+ * The DELETE behind each expiry sweep: up to `EXPIRED_ROWS_PER_TICK` rows
+ * of `table` whose `expiresAt` is before `now`, oldest first. SQLite's
+ * `DELETE … LIMIT` is a compile option D1 doesn't enable, so the cap is a
+ * primary-key subquery, which the `expires_at` index serves in order.
+ * Exported so the test can check that plan against D1.
+ */
+export function expiredRowsDelete(
+  table: SQLiteTable,
+  id: SQLiteColumn,
+  expiresAt: SQLiteColumn,
+  now: Temporal.Instant,
+) {
+  const db = getDb();
+  const due = db
+    .select({ id })
+    .from(table)
+    .where(lt(expiresAt, now))
+    .orderBy(asc(expiresAt))
+    .limit(EXPIRED_ROWS_PER_TICK);
+  return db.delete(table).where(inSubquery(id, due)).returning({ id });
+}
+
+async function sweepExpired(
+  ...args: Parameters<typeof expiredRowsDelete>
+): Promise<number> {
+  const deleted = await expiredRowsDelete(...args);
+  return deleted.length;
+}
+
 /** Housekeeping, not a privacy promise — see the module doc comment. */
 export async function sweepWebauthnCeremonies(
   now: Temporal.Instant,
 ): Promise<number> {
-  const deleted = await getDb()
-    .delete(schema.webauthnConsumedCeremonies)
-    .where(lt(schema.webauthnConsumedCeremonies.expiresAt, now))
-    .returning({ id: schema.webauthnConsumedCeremonies.id });
-  return deleted.length;
+  return sweepExpired(
+    schema.webauthnConsumedCeremonies,
+    schema.webauthnConsumedCeremonies.id,
+    schema.webauthnConsumedCeremonies.expiresAt,
+    now,
+  );
+}
+
+/** Housekeeping, not a privacy promise — see the module doc comment. */
+export async function sweepExpiredSessions(
+  now: Temporal.Instant,
+): Promise<number> {
+  return sweepExpired(
+    schema.sessions,
+    schema.sessions.id,
+    schema.sessions.expiresAt,
+    now,
+  );
+}
+
+/** Housekeeping, not a privacy promise — see the module doc comment. */
+export async function sweepExpiredMagicLinks(
+  now: Temporal.Instant,
+): Promise<number> {
+  return sweepExpired(
+    schema.magicLinks,
+    schema.magicLinks.tokenHash,
+    schema.magicLinks.expiresAt,
+    now,
+  );
 }
 
 export async function sweepRejectedRegistrations(
@@ -567,6 +644,8 @@ export async function runRetentionSweeps(
     emailSendLog: 0,
     emailOutbox: 0,
     webauthnCeremonies: 0,
+    expiredSessions: 0,
+    expiredMagicLinks: 0,
   };
 
   // Each sweep is wrapped so an error in one (e.g. R2 outage) doesn't
@@ -597,6 +676,8 @@ export async function runRetentionSweeps(
     { name: "emailSendLog", run: () => sweepEmailSendLog(now) },
     { name: "emailOutbox", run: () => sweepEmailOutbox(now) },
     { name: "webauthnCeremonies", run: () => sweepWebauthnCeremonies(now) },
+    { name: "expiredSessions", run: () => sweepExpiredSessions(now) },
+    { name: "expiredMagicLinks", run: () => sweepExpiredMagicLinks(now) },
   ];
 
   for (const sweep of sweeps) {

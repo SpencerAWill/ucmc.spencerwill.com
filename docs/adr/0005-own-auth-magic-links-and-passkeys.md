@@ -25,6 +25,6 @@ We own authentication in `src/server/auth/` and `features/auth/`, with no passwo
 
 - No vendor and no per-user cost. A session check is one indexed D1 read.
 - Security fixes are ours to make. Two that came out of comparison with flareling are done: ceremonies moved from KV, where read-then-delete isn't atomic, to a D1 marker (#314), and starting a passkey ceremony got its own rate-limit budget (#306).
-- **Known gaps:** sliding refreshes the row's `expires_at` but does not re-send the cookie, so the browser still drops it 30 days after sign-in (#374). The session id is stored as-is rather than hashed, so a D1 read leak is a session leak (#375). Nothing sweeps expired sessions or magic links: a session row is deleted only if its cookie comes back after expiry, and a magic link never (#373).
+- **Known gaps:** sliding refreshes the row's `expires_at` but does not re-send the cookie, so the browser still drops it 30 days after sign-in (#374). The session id is stored as-is rather than hashed, so a D1 read leak is a session leak (#375). Nothing swept expired sessions or magic links, so a session row was deleted only if its cookie came back after expiry and a magic link never; the daily retention tick now sweeps both (#373).
 - Email delivery is part of sign-in itself. With no transport configured, sending throws (ADR 0001); there is no console fallback.
 - Not built: SSO, a session list with remote sign-out, self-service account deletion and export.

@@ -652,6 +652,13 @@
       "when": 1792982508784,
       "tag": "0092_add_album_view_original_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "6",
+      "when": 1793136081390,
+      "tag": "0093_expiry_sweep_indexes",
+      "breakpoints": true
     }
   ]
 }
