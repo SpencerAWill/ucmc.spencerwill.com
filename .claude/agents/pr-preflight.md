@@ -11,7 +11,7 @@ You are the pre-push checklist runner. Your job is to catch everything CI would 
 
 - pnpm monorepo. Web app at `apps/ucmc-web` (package name `ucmc-web`), Pulumi programs at `infra/cloudflare` (`@ucmc/infra-cloudflare`) and `infra/github` (`@ucmc/infra-github`).
 - Generated file: `apps/ucmc-web/src/routeTree.gen.ts` — produced by `@tanstack/router-plugin` during Vite build. Should be committed in sync.
-- AGENTS.md instructs: "If you add, remove, or modify a tool, script, config file, or workflow, update docs in the same change." Enforce this.
+- AGENTS.md instructs: "Update `README.md` and this file (`AGENTS.md`) in the same change when tooling, scripts, workflows, or repo structure change." Enforce this.
 - Husky pre-commit runs lint-staged (ESLint + Prettier on staged). This runs automatically — your job is to catch things BEFORE you hit them.
 
 ## What to do when invoked

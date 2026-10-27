@@ -74,7 +74,7 @@ The root [`AGENTS.md`](./AGENTS.md) carries the always-on invariants, and [`.cla
 
 - **Bulletproof feature layout.** Features live under `src/features/<name>/` with `components/`, `api/`, `server/`. Features cannot import each other (enforced by `import/no-restricted-paths`); shared code cannot import features.
 - **No inline `useMutation` in routes/components.** Every mutation gets a `use-*.ts` hook under the feature's `api/` directory, with its own cache-invalidation contract.
-- **Server-only modules** end in `*.server.ts` and must not be imported from the client graph. Server functions follow the three-layer pattern (leaf helper / action / shell). See the "Server-only module boundary" section in `AGENTS.md`.
+- **Server-only modules** end in `*.server.ts` and must not be imported from the client graph. Server functions follow the three-layer pattern (leaf helper / action / shell). See the "Server-only boundary" invariant in `AGENTS.md`.
 - **Cloudflare bindings** (`DB`, `KV`, `BUCKET_*`) are accessed via `getDb()` / `getKv()` / `getPrivateBucket()` / `getPublicBucket()` only — never at module scope.
 - **Email normalization.** Every read/write of an email address goes through `apps/ucmc-web/src/server/auth/email-normalize.ts`.
 - **Club season.** Always compute via `currentSeason()` from `apps/ucmc-web/src/config/club-season.ts`. Never inline the math — the season boundary is also the waiver term.

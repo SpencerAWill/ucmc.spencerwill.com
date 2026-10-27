@@ -36,7 +36,7 @@ Why settings are a code registry while permissions are rows: `docs/adr/0010-regi
 - **Booleans and enums apply on change, optimistically**; a failed write restores the canonical value. Behind `confirm`, an enum goes through `requestSave` and shows the canonical value until the dialog commits.
 - **Everything else is click-to-edit** (pencil → `InputGroup` with tick/cross; Enter saves, Escape cancels).
 - **The editor closes on success, not on submit.** `requestSave` resolves a `SaveOutcome` (`"saved" | "failed" | "confirming"`); a rejected value must stay on screen. `setting-row.test.tsx` pins both failure paths.
-- **Reset and history (`RowActions`) are the trailing element of the value row in both edit states** and never unmount; only the leading part swaps. The footer holds only `LastEditedLine`, which renders nothing for an untouched setting.
+- **Reset and history (`RowActions`) ride with the row's control**: the trailing element of the value row for a text setting (in both edit states, never unmounting; only the leading part swaps), and beside the switch in the header row for a boolean. The footer holds only `LastEditedLine`, which renders nothing for an untouched setting.
 - **`persist` catches a rejected `mutateAsync` and sets `error`**; callers reach it through `void`.
 - **Every surface answers per key**: `updateSettingAction` and `listSettingHistoryAction` check the key they touch (`requireSettingPermission`), `listSiteSettingsAction` returns only editable keys (so `SiteSettingsSnapshot` is `Partial`), and `SettingsCategories` renders only categories the viewer can edit, reading `hasPermission` so a role preview applies.
 - **A setting's `permission` is a plain string**; `permission-catalog.test.ts` asserts each name exists.

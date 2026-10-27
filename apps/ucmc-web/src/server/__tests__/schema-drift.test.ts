@@ -9,13 +9,14 @@ import * as schema from "../../../drizzle/schema.ts";
  * Schema-drift gate: does `drizzle/schema.ts` still describe the database
  * the migrations actually produce?
  *
- * Nothing else checks this. Migrations are hand-written SQL (see
- * AGENTS.md — `db:generate` cannot run against the meta snapshots, which
- * have been stale since 0059), and `schema.ts` is hand-edited beside
- * them. The two are related only by whoever wrote them remembering to do
- * both. When they disagree, Drizzle keeps generating SQL against the
- * shape it believes in: a column it thinks is nullable but isn't turns
- * every insert that omits it into a runtime NOT NULL failure, and an
+ * Nothing else checks this. `db:drift` compares `schema.ts` with the
+ * newest drizzle-kit snapshot, but the snapshot follows `schema.ts`, not
+ * the database: `0060`–`0083` were hand-written SQL with no snapshots,
+ * and `--custom` migrations still carry SQL no snapshot sees (see
+ * AGENTS.md and ADR 0007). So `schema.ts` and the real schema are related
+ * only by whoever wrote them remembering to do both. When they disagree,
+ * Drizzle keeps generating SQL against the shape it believes in: a
+ * column it thinks is nullable but isn't turns every insert that omits it into a runtime NOT NULL failure, and an
  * index it believes exists turns a query plan into a table scan that
  * nothing reports.
  *

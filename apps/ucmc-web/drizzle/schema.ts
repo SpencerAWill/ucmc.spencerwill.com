@@ -1,11 +1,11 @@
 // Define Drizzle table schemas here.
 //
-// After edits, hand-write the migration under `drizzle/migrations/` and
-// add its `meta/_journal.json` entry by hand. `db:generate` does NOT
-// run: the meta snapshots have been stale since 0059, so drizzle-kit
-// diffs against a snapshot many migrations behind, tries to resolve the
-// gap as table renames, and blocks on a prompt that fails without a
-// TTY. See CLAUDE.md.
+// After edits, run `pnpm --filter ucmc-web db:generate --name <what_it_does>`
+// (or `--custom` for an empty file to write SQL into). Never write a
+// migration file or a `meta/_journal.json` entry by hand: generate also
+// writes the snapshot the next run diffs against, and `db:drift` fails
+// when this file and the newest snapshot disagree. See AGENTS.md and
+// docs/adr/0007-every-migration-through-generate.md.
 //
 // See: https://orm.drizzle.team/docs/sql-schema-declaration
 
