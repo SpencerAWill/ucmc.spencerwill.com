@@ -10,7 +10,7 @@ import * as schema from "../../../drizzle/schema.ts";
  * the migrations actually produce?
  *
  * Nothing else checks this. Migrations are hand-written SQL (see
- * CLAUDE.md — `db:generate` cannot run against the meta snapshots, which
+ * AGENTS.md — `db:generate` cannot run against the meta snapshots, which
  * have been stale since 0059), and `schema.ts` is hand-edited beside
  * them. The two are related only by whoever wrote them remembering to do
  * both. When they disagree, Drizzle keeps generating SQL against the

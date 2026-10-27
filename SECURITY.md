@@ -70,7 +70,7 @@ If in doubt about whether something is in scope or safe to test, ask first via t
 
 ## Hardening notes for contributors
 
-Most security-relevant invariants live in [`CLAUDE.md`](./CLAUDE.md). The ones to keep front-of-mind when writing code:
+Most security-relevant invariants live in [`AGENTS.md`](./AGENTS.md). The ones to keep front-of-mind when writing code:
 
 - **Email normalization** is centralized in `apps/ucmc-web/src/server/auth/email-normalize.ts`. Every read or write of an email address must go through it.
 - **`/verify-email`** must assert `session.userId === magicLink.target_user_id` before grafting a new address onto an account.

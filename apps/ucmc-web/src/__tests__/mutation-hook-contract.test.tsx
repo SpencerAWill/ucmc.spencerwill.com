@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
  * Structural guard over EVERY mutation hook, not just the few with
  * behavioural tests.
  *
- * CLAUDE.md: "Inline `useMutation` in routes/components is forbidden —
+ * AGENTS.md: "Inline `useMutation` in routes/components is forbidden —
  * every mutation has a `use-*.ts` hook with a fixed cache-invalidation
  * contract." There are 98 such hooks. Asserting each one's exact key set
  * is worth doing where the keys are subtle (see

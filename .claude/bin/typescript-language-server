@@ -11,7 +11,7 @@
 #
 # Linked onto PATH as ~/.local/bin/typescript-language-server: by
 # .devcontainer/lifecycle.sh in the container, and once by hand on a host
-# (see CLAUDE.md).
+# (see AGENTS.md).
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root=
 bin="$root/node_modules/.bin/typescript-language-server"
 if [ -z "$root" ] || [ ! -x "$bin" ]; then

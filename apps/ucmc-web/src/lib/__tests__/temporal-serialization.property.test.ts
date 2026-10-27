@@ -114,7 +114,7 @@ describe("Temporal.ZonedDateTime adapter", () => {
     // Dropping the bracketed zone still produces a parseable string and
     // the correct instant, so an instant-only assertion would pass while
     // every calendar read in `CLUB_TIME_ZONE` silently moved to UTC —
-    // which is the exact bug CLAUDE.md's time-zone rule exists to stop.
+    // which is the exact bug AGENTS.md's time-zone rule exists to stop.
     fc.assert(
       fc.property(
         epochMsArb,

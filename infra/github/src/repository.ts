@@ -34,7 +34,7 @@ export const repository = new github.Repository(
     topics: [],
 
     hasIssues: true,
-    // The compliance wiki lives here (CLAUDE.md, "Keeping docs honest").
+    // The compliance wiki lives here (AGENTS.md, "Keeping docs honest").
     hasWiki: true,
     hasProjects: false,
     hasDiscussions: false,

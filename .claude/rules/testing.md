@@ -49,7 +49,7 @@ Prefer asserting the _reason_ a thing is written the way it is, not just that it
 
 ## Mutation-hook cache contracts
 
-CLAUDE.md requires every mutation to live in a `use-*.ts` hook "with a fixed cache-invalidation contract". There are 98 of them, and until recently nothing enforced the second half of that sentence. **The failure it describes is silent:** a hook that drops a key leaves the officer looking at a queue that still lists the member they just attested, so they attest them again. No error is raised, and the server did its job correctly.
+AGENTS.md requires every mutation to live in a `use-*.ts` hook "with a fixed cache-invalidation contract". There are 98 of them, and until recently nothing enforced the second half of that sentence. **The failure it describes is silent:** a hook that drops a key leaves the officer looking at a queue that still lists the member they just attested, so they attest them again. No error is raised, and the server did its job correctly.
 
 Two layers, because they catch different things:
 

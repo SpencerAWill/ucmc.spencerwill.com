@@ -7,7 +7,7 @@
 #
 # ESLint is where most of this repo's invariants are machine-checked: the
 # feature import boundaries, the `inArray` ban (#291), the server-only
-# boundary. Instructions in CLAUDE.md and the rules are advisory; this is
+# boundary. Instructions in AGENTS.md and the rules are advisory; this is
 # the deterministic half.
 #
 # Cheap by construction:
@@ -22,7 +22,7 @@
 #
 # ESLint runs from inside each package, never the repo root: the web
 # config's `import/no-restricted-paths` zones resolve against cwd and fail
-# OPEN from the root (see CLAUDE.md). The binaries are called directly, not
+# OPEN from the root (see AGENTS.md). The binaries are called directly, not
 # through `pnpm exec`: pnpm may install first when the manifest changed, and
 # the checks run in parallel, so two of them would install at once.
 #

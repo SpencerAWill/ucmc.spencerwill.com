@@ -61,4 +61,4 @@ pnpm --filter ucmc-web typecheck
 pnpm --filter ucmc-web test
 ```
 
-Then update `README.md`, `CLAUDE.md` if an always-on invariant changed, and add or extend the matching `.claude/rules/` file.
+Then update `README.md`, `AGENTS.md` if an always-on invariant changed, and add or extend the matching `.claude/rules/` file.

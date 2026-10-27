@@ -6,7 +6,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 /**
- * Harness for the cache-invalidation contract CLAUDE.md requires of
+ * Harness for the cache-invalidation contract AGENTS.md requires of
  * every `use-*.ts` mutation hook.
  *
  * The rule — "inline `useMutation` in routes/components is forbidden;

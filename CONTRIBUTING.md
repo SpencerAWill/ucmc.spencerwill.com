@@ -70,11 +70,11 @@ Examples:
 
 ## Architectural invariants (web app)
 
-The root [`CLAUDE.md`](./CLAUDE.md) carries the always-on invariants, and [`.claude/rules/`](./.claude/rules/) holds the per-area detail (each file lists the paths it applies to). The ones contributors break most often:
+The root [`AGENTS.md`](./AGENTS.md) carries the always-on invariants, and [`.claude/rules/`](./.claude/rules/) holds the per-area detail (each file lists the paths it applies to). The ones contributors break most often:
 
 - **Bulletproof feature layout.** Features live under `src/features/<name>/` with `components/`, `api/`, `server/`. Features cannot import each other (enforced by `import/no-restricted-paths`); shared code cannot import features.
 - **No inline `useMutation` in routes/components.** Every mutation gets a `use-*.ts` hook under the feature's `api/` directory, with its own cache-invalidation contract.
-- **Server-only modules** end in `*.server.ts` and must not be imported from the client graph. Server functions follow the three-layer pattern (leaf helper / action / shell). See the "Server-only module boundary" section in `CLAUDE.md`.
+- **Server-only modules** end in `*.server.ts` and must not be imported from the client graph. Server functions follow the three-layer pattern (leaf helper / action / shell). See the "Server-only module boundary" section in `AGENTS.md`.
 - **Cloudflare bindings** (`DB`, `KV`, `BUCKET_*`) are accessed via `getDb()` / `getKv()` / `getPrivateBucket()` / `getPublicBucket()` only — never at module scope.
 - **Email normalization.** Every read/write of an email address goes through `apps/ucmc-web/src/server/auth/email-normalize.ts`.
 - **Club season.** Always compute via `currentSeason()` from `apps/ucmc-web/src/config/club-season.ts`. Never inline the math — the season boundary is also the waiver term.
@@ -95,7 +95,7 @@ When you fix a bug, add a regression test in the same PR.
 
 ## Documentation
 
-- **Update `README.md`, `CLAUDE.md`, and any affected `.claude/rules/` file in the same PR** whenever you change tooling, scripts, workflows, the workspace layout, or any load-bearing invariant. CI does not detect doc drift, so reviewers will.
+- **Update `README.md`, `AGENTS.md`, and any affected `.claude/rules/` file in the same PR** whenever you change tooling, scripts, workflows, the workspace layout, or any load-bearing invariant. CI does not detect doc drift, so reviewers will.
 - Compliance-shaped features: update the [compliance matrix](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki/Compliance) in the wiki to map the new obligation → file/route.
 - The [wiki](https://github.com/SpencerAWill/ucmc.spencerwill.com/wiki) is edited on GitHub and is not checked out into this repo.
 
@@ -113,7 +113,7 @@ When reviewing someone else's PR:
 
 - Check the PR template's test plan against the diff. Reject "n/a" without a reason.
 - For UI changes, pull the branch and click through the actual flow — typecheck and Vitest don't catch feature-level regressions.
-- For server-fn / auth / compliance changes, verify the invariants in `CLAUDE.md` and the matching `.claude/rules/` file still hold.
+- For server-fn / auth / compliance changes, verify the invariants in `AGENTS.md` and the matching `.claude/rules/` file still hold.
 
 ## Questions
 

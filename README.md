@@ -11,7 +11,9 @@ This is a polyglot pnpm monorepo with the following workspace layout:
 - `infra/` — Pulumi infrastructure-as-code
   - `infra/cloudflare/` — Cloudflare resources (stacks `dev`, `prod`)
   - `infra/github/` — this repo's GitHub settings and CI secrets (stack `main`, run locally by an admin)
-- `docs/adr/` — architecture decision records, for decisions that span infra, app and workflow at once
+- `docs/adr/` — architecture decision records: why the hard-to-reverse decisions were made (index and template in its README)
+- `docs/platform-limits.md` — the Cloudflare, Resend and GitHub limits the code depends on, sourced and dated
+- `AGENTS.md` — instructions for coding agents (`CLAUDE.md` imports it); per-area detail in `.claude/rules/`
 - `.devcontainer/` — Dev container configuration (`initialize.sh` on the host, `configure-git.sh` on create; see [`.claude/rules/devcontainer.md`](.claude/rules/devcontainer.md) on git index-lock contention)
 - `.zed/`, `.vscode/` — editor settings; both committed, and their scan/watch exclusions are load-bearing for git performance. `.vscode/tasks.json` wraps the pnpm scripts as run configurations and `.vscode/launch.json` holds the debug ones (Chrome against the dev server, Vitest/Playwright/tsx on the current file)
 
@@ -27,7 +29,7 @@ The container provides:
 - pnpm (via corepack)
 - Pulumi CLI
 - GitHub CLI
-- Claude Code CLI, with `typescript-language-server` on `PATH` for the project's `typescript-lsp` plugin (outside the container, see CLAUDE.md for the one-time link)
+- Claude Code CLI, with `typescript-language-server` on `PATH` for the project's `typescript-lsp` plugin (outside the container, see AGENTS.md for the one-time link)
 - VS Code extensions: Prettier, ESLint, EditorConfig
 
 Named Docker volumes persist the pnpm store, Pulumi config, and Claude data across container rebuilds. GitHub CLI auth is bind-mounted from the host's `~/.config/gh`, so a one-time `gh auth login` on the host carries into every container (macOS users: run it with `--insecure-storage` so the token lands in `hosts.yml` rather than Keychain).

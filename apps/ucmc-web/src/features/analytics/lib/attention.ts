@@ -159,7 +159,7 @@ export function buildAttention(inputs: AttentionInputs): AttentionItem[] {
     // Two distinct conditions, spelled separately rather than collapsed
     // into a loose `!= null`: `undefined` means no service reported at
     // all, `null` means the service has no published ceiling to be a
-    // share of. Strict equality throughout, per CLAUDE.md.
+    // share of. Strict equality throughout, per AGENTS.md.
     if (
       tightest !== undefined &&
       tightest.fraction !== null &&

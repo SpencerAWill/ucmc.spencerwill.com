@@ -7,7 +7,7 @@ Two kinds of entry live here, and the difference is visible at a glance:
 
 `add-feature-module`, `add-page-flag`, `rename-permission-or-setting` —
 multi-step procedures specific to this codebase that we wrote and maintain.
-CLAUDE.md's "Where things live" table is the rule for what earns one.
+AGENTS.md's "Where things live" table is the rule for what earns one.
 
 ## Vendored library skills (symlinks into `node_modules`)
 

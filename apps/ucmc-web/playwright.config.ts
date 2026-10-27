@@ -217,7 +217,7 @@ export default defineConfig<ReflowOptions>({
           // continuously, blocking `networkidle` and stealing focus from
           // the email input mid-keystroke. Empty string overrides
           // .env.local; the form skips rendering the widget when unset and
-          // the server skips verification (per CLAUDE.md auth notes).
+          // the server skips verification (per AGENTS.md auth notes).
           VITE_TURNSTILE_SITE_KEY: "",
           TURNSTILE_SECRET_KEY: "",
           // Bypass auth/health/upload rate limiters for the duration of the
