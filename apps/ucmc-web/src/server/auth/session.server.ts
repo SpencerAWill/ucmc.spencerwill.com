@@ -9,7 +9,8 @@
  * Lifecycle:
  *   - `openSession(userId)` → insert row, write cookie.
  *   - `loadCurrentPrincipal()` → read cookie → look up row → load principal;
- *     slides `lastSeenAt`/`expiresAt` if ~1h has passed since last read.
+ *     slides `lastSeenAt`/`expiresAt` and re-sends the cookie if ~1h has
+ *     passed since last read.
  *   - `rotateSession(userId)` → replace the session token atomically: issue a
  *     new row, write the new cookie, delete the old row. Called on every
  *     privilege boundary (email verification, passkey enrollment,
@@ -107,7 +108,7 @@ export async function rotateSession(userId: string): Promise<void> {
   const oldToken = readSessionCookie();
   const newToken = await insertSessionRow(userId);
   writeSessionCookie(newToken);
-  if (oldToken && oldToken !== newToken) {
+  if (oldToken) {
     await deleteSessionRow(await hashToken(oldToken));
   }
 }
@@ -165,6 +166,10 @@ export async function loadCurrentPrincipal(): Promise<Principal | null> {
     SESSION_SLIDING_REFRESH_MS
   ) {
     await slideSessionRow(sid);
+    // Re-send the cookie so its maxAge moves with the row's expiresAt;
+    // otherwise the browser drops it 30 days after sign-in regardless.
+    // The cookie carries the token, never the row id (its hash).
+    writeSessionCookie(token);
   }
 
   return principal;

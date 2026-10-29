@@ -320,7 +320,7 @@ export const PRIVACY_BODY: readonly LegalSection[] = [
     heading: "Cookies",
     paragraphs: ["We set only essential cookies needed to operate the site:"],
     bullets: [
-      "Session cookie (HTTP-only, SameSite=Strict, 30-day TTL with sliding refresh) — keeps you signed in.",
+      "Session cookie (HTTP-only, SameSite=Lax, 30-day TTL with sliding refresh) — keeps you signed in.",
       "Proof cookie (HTTP-only, short-lived) — set after a magic-link click for first-time registrants who don't have an account row yet.",
       "WebAuthn ceremony cookie (HTTP-only, 5-minute TTL) — links a passkey-registration begin/finish pair.",
       "Theme + view-mode cookies — your light/dark/role-emulation UI preferences.",
