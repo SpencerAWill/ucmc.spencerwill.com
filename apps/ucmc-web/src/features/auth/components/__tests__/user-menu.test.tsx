@@ -177,3 +177,18 @@ describe("UserMenu feedback entries", () => {
     ]);
   });
 });
+
+describe("UserMenu signed out", () => {
+  it("links to /sign-in with the words, not only the ? avatar (#307)", () => {
+    flagsMock.mockReturnValue({ pages: {} });
+    useAuthMock.mockReturnValue({
+      ...authStub([], { isApproved: false, principal: null }),
+      isLoading: false,
+      signOut: vi.fn(),
+    });
+    render(<UserMenu />);
+    const link = screen.getByRole("link", { name: "Sign in" });
+    expect(link.getAttribute("href")).toBe("/sign-in");
+    expect(link.textContent).toContain("Sign in");
+  });
+});

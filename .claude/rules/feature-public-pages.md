@@ -34,7 +34,7 @@ Every public page renders the same hero band — a gradient or auto-advancing ga
 
 **Every hero is the same height** — `min-h-[420px] md:min-h-[560px]`, home included. The `size` prop controls type scale and inner padding, **not** height; the subpage variant shipped at 220/280px and read as a thin strip beside the front door's band.
 
-Interior heroes additionally get `flex flex-col justify-center`, because their copy is much shorter than home's (no logo, no CTA pair) and a taller box doesn't move top-aligned text, it just opens dead space beneath it. **Home deliberately stays top-aligned**: its content is also shorter than the band, so centring would shift the front door's copy down ~72px.
+Interior heroes additionally get `flex flex-col justify-center`, because their copy is much shorter than home's (no logo, no call to action) and a taller box doesn't move top-aligned text, it just opens dead space beneath it. **Home deliberately stays top-aligned**: its content is also shorter than the band, so centring would shift the front door's copy down ~72px.
 
 **The hero carries the page's `<h1>`.** Each adopting page dropped the title and description out of its own `<header>`, keeping only its action button (now a right-aligned row) — so the page name appears once and there's one accessible heading. `defaultHeading` / `defaultTagline` were seeded from each page's existing shipped copy verbatim, so adopting the hero changed the layout without changing a word.
 

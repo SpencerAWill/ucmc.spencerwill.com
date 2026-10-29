@@ -56,16 +56,25 @@ export function UserMenu() {
   }
 
   if (!principal) {
+    // The words, not just the "?" avatar: since #307 this is the only
+    // dedicated way back in for a returning member, the home hero having
+    // merged its Sign in button into "Join or sign in". The label shows
+    // from `sm` up; below that the header's right third has room for the
+    // avatar and the theme toggle only, so the `aria-label` carries the
+    // name there and matches the visible text everywhere else.
     return (
       <Link
         to="/sign-in"
         search={returnPathSearch(returnPath)}
         aria-label="Sign in"
-        className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group flex items-center gap-2 rounded-full sm:pr-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Avatar>
           <AvatarFallback>?</AvatarFallback>
         </Avatar>
+        <span className="hidden whitespace-nowrap text-sm font-medium underline-offset-4 group-hover:underline sm:inline">
+          Sign in
+        </span>
       </Link>
     );
   }

@@ -30,7 +30,7 @@ import { cn } from "#/lib/utils";
 export interface PageHeroProps {
   page: HeroPage;
   /**
-   * Rendered under the tagline — the home page's Join / Sign in buttons,
+   * Rendered under the tagline — the home page's Join or sign in button,
    * its logo, anything else page-specific. Kept as a slot so the shared
    * band doesn't grow a prop per page.
    */
