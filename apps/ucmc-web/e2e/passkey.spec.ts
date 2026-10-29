@@ -93,8 +93,12 @@ test("register a passkey and sign back in with it", async ({
   await page.waitForURL((u) => u.pathname === "/", { timeout: 10_000 });
 
   // Confirm the session was actually torn down — the user menu reverts to
-  // the anonymous "Sign in" link.
-  await expect(page.getByRole("link", { name: /sign in/i })).toBeVisible();
+  // the anonymous "Sign in" link. Exact, because sign-out lands on "/",
+  // whose hero CTA "Join or sign in" a /sign in/i regex also matches —
+  // two links is a Playwright strict-mode violation.
+  await expect(
+    page.getByRole("link", { name: "Sign in", exact: true }),
+  ).toBeVisible();
 
   // ── Step 4: sign back in via Conditional UI ───────────────────────────
   // MagicLinkForm's autofill hook fires `startAuthentication` with
