@@ -75,7 +75,7 @@ export default {
     // Schedules currently wired (must match wrangler.jsonc):
     //   - "0 12 * * *"  → daily retention sweeps + gear reminders +
     //                     cost snapshot + feedback sync + calendar
-    //                     token backfill
+    //                     token scrub
     //                     (08:00 EDT / 07:00 EST — see
     //                     ./server/cron/daily-schedule)
     //   - "15 8 1 3 *"  → annual officer-archive snapshot (March 1)
@@ -120,7 +120,7 @@ export default {
       { runGearLoanReminders },
       { runCostSnapshot },
       { runSiteFeedbackIssueSync },
-      { backfillSubscriptionTokenHashes },
+      { scrubSubscriptionTokens },
     ] = await Promise.all([
       import("./server/cron/retention.server"),
       import("./server/cron/gear-reminders.server"),
@@ -144,9 +144,9 @@ export default {
             // Fourth: a GitHub outage must not cost anyone the above. The
             // job catches its own errors; this entry is the backstop.
             runSiteFeedbackIssueSync(),
-            // Fifth: hashes calendar feed tokens minted before #379. A
-            // migration shim; it logs `hashed: 0` once nothing is left.
-            backfillSubscriptionTokenHashes(),
+            // Fifth: no calendar_subscriptions row may hold a usable
+            // feed token (#379).
+            scrubSubscriptionTokens(),
           ]);
         if (sweeps.status === "rejected") {
           log.error("retention.sweeps_failed", {
@@ -169,11 +169,11 @@ export default {
           });
         }
         if (tokenBackfill.status === "rejected") {
-          log.error("calendar.token_backfill_failed", {
+          log.error("calendar.token_scrub_failed", {
             error: errorMessage(tokenBackfill.reason),
           });
         } else {
-          log.info("calendar.token_backfill_complete", {
+          log.info("calendar.token_scrub_complete", {
             ...tokenBackfill.value,
           });
         }

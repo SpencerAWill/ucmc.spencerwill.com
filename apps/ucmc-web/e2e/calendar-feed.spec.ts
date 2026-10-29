@@ -43,7 +43,7 @@ function seedUserId(email: string): string {
 /**
  * Mint a subscription straight in the DB; the UI has its own coverage.
  * Same shape as `createSubscriptionToken` (#379): 32 random bytes as
- * hex, stored with their SHA-256.
+ * hex, and only their SHA-256 stored.
  */
 function seedSubscription(email: string): string {
   const userId = seedUserId(email);
@@ -52,21 +52,7 @@ function seedSubscription(email: string): string {
   const id = `cal_${crypto.randomUUID()}`;
   execD1(
     `INSERT INTO calendar_subscriptions (id, user_id, token, token_hash, created_at)
-     VALUES ('${id}', '${userId}', '${token}', '${tokenHash}', ${Date.now()})`,
-  );
-  return token;
-}
-
-/**
- * A subscription as the code before #379 minted it: a raw uuidv7-shaped
- * token in `token` and no hash. Members' calendars hold URLs like this.
- */
-function seedLegacySubscription(email: string): string {
-  const userId = seedUserId(email);
-  const token = crypto.randomUUID();
-  execD1(
-    `INSERT INTO calendar_subscriptions (id, user_id, token, created_at)
-     VALUES ('cal_${token}', '${userId}', '${token}', ${Date.now()})`,
+     VALUES ('${id}', '${userId}', 'hashed:${id}', '${tokenHash}', ${Date.now()})`,
   );
   return token;
 }
@@ -142,17 +128,6 @@ test("an unknown token answers 404, not 403", async ({ request }) => {
   );
   // 403 would confirm the token namespace and turn this into an oracle.
   expect(response.status()).toBe(404);
-});
-
-test("a link minted before tokens were hashed still serves", async ({
-  request,
-}) => {
-  const token = seedLegacySubscription(
-    `e2e-feed-legacy-${Date.now()}@example.com`,
-  );
-  const response = await getFeed(request, `/api/calendar/${token}.ics`);
-  expect(response.status()).toBe(200);
-  expect(await response.text()).toContain("BEGIN:VCALENDAR");
 });
 
 test("a revoked token stops working immediately", async ({ request }) => {
