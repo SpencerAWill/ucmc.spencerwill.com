@@ -1,6 +1,6 @@
 /**
- * Session cookie helpers. Opaque session ID in an HTTP-only cookie; the
- * corresponding record lives in D1 (see `#/server/auth/session`).
+ * Session cookie helpers. Opaque session token in an HTTP-only cookie; the
+ * D1 record is keyed by its hash (see `#/server/auth/session.server`).
  */
 import {
   deleteCookie,
@@ -27,8 +27,8 @@ export function readSessionCookie(): string | undefined {
   return getCookie(sessionCookieName());
 }
 
-export function writeSessionCookie(sid: string): void {
-  setCookie(sessionCookieName(), sid, {
+export function writeSessionCookie(token: string): void {
+  setCookie(sessionCookieName(), token, {
     httpOnly: true,
     secure: isSecure(),
     sameSite: "lax",

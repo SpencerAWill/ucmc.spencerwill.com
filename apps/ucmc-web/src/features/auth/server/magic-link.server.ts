@@ -15,6 +15,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import { safeReturnPath } from "#/lib/safe-return-path";
+import { generateToken, hashToken } from "#/server/auth/bearer-token.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import { getDb, schema } from "#/server/db";
 import { magicLinkEmail, sendEmail } from "#/server/email/resend";
@@ -31,26 +32,6 @@ export interface MagicLinkProof {
   // email to the user; cross-account or logged-out clicks are
   // refused.
   targetUserId: string | null;
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) {
-    bin += String.fromCharCode(b);
-  }
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function hashToken(token: string): Promise<string> {
-  const data = new TextEncoder().encode(token);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return bytesToBase64Url(new Uint8Array(digest));
-}
-
-function generateToken(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return bytesToBase64Url(bytes);
 }
 
 /**
