@@ -1,8 +1,8 @@
 /**
- * Bearer tokens that D1 only ever sees hashed: magic links and session
- * cookies. The holder gets 32 random bytes, base64url-encoded; the row
- * stores their SHA-256, so a leaked backup, export or Time Travel restore
- * holds no usable token.
+ * Bearer tokens that D1 only ever sees hashed: magic links, session
+ * cookies and calendar feed URLs (#379). The holder gets 32 random
+ * bytes, base64url-encoded; the row stores their SHA-256, so a leaked
+ * backup, export or Time Travel restore holds no usable token.
  *
  * No salt or key stretching: the input is 256 bits of randomness, not a
  * password, so there is nothing to brute-force.

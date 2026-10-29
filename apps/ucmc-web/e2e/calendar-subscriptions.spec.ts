@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
@@ -32,14 +34,32 @@ async function signIn(page: Page, prefix: string): Promise<string> {
   return email;
 }
 
+/**
+ * Live rows for a member. The feed looks a token up by its hash (#379),
+ * so a spec reads the token off the page and compares hashes.
+ */
 function liveTokens(email: string) {
-  return queryD1<{ token: string; label: string | null }>(
-    `SELECT cs.token as token, cs.label as label
+  return queryD1<{ tokenHash: string; label: string | null }>(
+    `SELECT cs.token_hash as tokenHash, cs.label as label
      FROM calendar_subscriptions cs
      JOIN user_emails ue ON ue.user_id = cs.user_id
      WHERE ue.email = ? AND cs.revoked_at IS NULL`,
     email,
   );
+}
+
+const FEED_URL = /\/api\/calendar\/([0-9a-f]{64})\.ics/;
+
+/** The token in the feed URL the page is showing. */
+async function shownToken(page: Page): Promise<string> {
+  const text = await page.getByText(FEED_URL).first().textContent();
+  const token = FEED_URL.exec(text ?? "")?.[1];
+  expect(token).toBeDefined();
+  return token ?? "";
+}
+
+function sha256(token: string): string {
+  return createHash("sha256").update(token).digest("base64url");
 }
 
 test("a member mints a link and it is shown exactly once", async ({ page }) => {
@@ -55,7 +75,8 @@ test("a member mints a link and it is shown exactly once", async ({ page }) => {
   const [row] = liveTokens(email);
   expect(row).toBeDefined();
   // The URL on screen must be the one that actually works.
-  await expect(page.getByText(new RegExp(row.token))).toBeVisible();
+  const token = await shownToken(page);
+  expect(sha256(token)).toBe(row.tokenHash);
   expect(row.label).toBe("iPhone");
 
   /**
@@ -68,7 +89,7 @@ test("a member mints a link and it is shown exactly once", async ({ page }) => {
   await page.reload();
   await waitForHydration(page);
   await expect(page.getByText("iPhone")).toBeVisible();
-  await expect(page.getByText(new RegExp(row.token))).toHaveCount(0);
+  await expect(page.getByText(token)).toHaveCount(0);
 });
 
 test("a filtered link carries its filter in the URL", async ({ page }) => {
@@ -83,10 +104,12 @@ test("a filtered link carries its filter in the URL", async ({ page }) => {
   await expect(page.getByText(/your calendar link is ready/i)).toBeVisible();
 
   const [row] = liveTokens(email);
+  const token = await shownToken(page);
+  expect(sha256(token)).toBe(row.tokenHash);
   // The filter is baked into the URL, which is what lets a member
   // subscribe twice and get two separately-coloured calendars.
   await expect(
-    page.getByText(new RegExp(`${row.token}\\.ics\\?kind=trip`)),
+    page.getByText(new RegExp(`${token}\\.ics\\?kind=trip`)),
   ).toBeVisible();
   // Unnamed filtered links are labelled by their kinds, so the list is
   // readable when it holds several.

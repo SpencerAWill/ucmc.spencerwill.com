@@ -2645,7 +2645,20 @@ export const calendarSubscriptions = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * The raw bearer token. **No longer read since #379**, which looks
+     * up by `token_hash`; still written so that rolling the code back
+     * keeps every feed URL working. A follow-up stops writing it and
+     * overwrites the values. It stays NOT NULL UNIQUE, because relaxing
+     * that is a table rebuild.
+     */
     token: text("token").notNull().unique(),
+    /**
+     * base64url SHA-256 of the URL token (`hashToken`). The lookup key.
+     * UNIQUE, and revoked rows are kept, so a token is never reissued.
+     * NULL only on a row minted before #379 and not yet backfilled.
+     */
+    tokenHash: text("token_hash").unique(),
     /** Member-supplied, e.g. "iPhone". NULL until they name it. */
     label: text("label"),
     createdAt: timestamp("created_at")

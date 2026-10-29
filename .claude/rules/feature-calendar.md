@@ -16,7 +16,7 @@ Why `events` is a base table, why recurrence is club-zone calendar arithmetic, a
 - **`src/server/events/`**: the `events` table's repo, `recurrence.ts` (occurrence expansion), `ical.ts` (the serializer). Not in `features/calendar/`.
 - **`features/calendar/`**: `/calendar` (month grid + agenda, officer authoring inline) and `/my/calendar` (personal subscription links). `lib/recurrence-form.ts` compiles the four repeat shapes officers pick into an RRULE.
 - **Satellite tables keyed on `event_id`** belong to their feature (`features/trips` next; `volunteer_events` to follow).
-- **`calendar_subscriptions`**: one labelled token per device, `last_fetched_at`, `revoked_at`.
+- **`calendar_subscriptions`**: one labelled token per device, `last_fetched_at`, `revoked_at`. Lookups go by `token_hash` (#379). The raw `token` is still written, so a code-only rollback keeps feeds working, until the follow-up clears it.
 - **Tests**: unit suites for recurrence, occurrence building, the serializer and the actions. Three e2e specs cover what they can't: `calendar.spec.ts` (renders, hydrates clean, real tap targets, URL state), `calendar-feed.spec.ts` (the `.ics` HTTP contract, via Playwright's `request`), `calendar-authoring.spec.ts` (the recurrence builder, asserted against the stored `rrule`).
 
 ## Rules that are easy to break
@@ -44,7 +44,10 @@ Why `events` is a base table, why recurrence is club-zone calendar arithmetic, a
 - **No `events:view` permission.** Approved membership is the qualification; `events:read_private` and `events:manage` are the two that exist. `/calendar` itself is public (`pages.calendar` + `public_calendar:view`, held by `role_anonymous`); events default to `visibility = 'members'`.
 - **Feed scope is computed from the token's user at fetch time**, never baked in.
 - **A bad token answers 404, never 403.** Never log the token or put it in an audit `target_id` (use the row id).
-- **Revocation is `revoked_at`, never a DELETE**, so the UNIQUE index can't reissue a leaked token. Revoked rows don't count toward the per-member cap.
+- **Look up by `token_hash` (`hashToken`, as for sessions), never by `token`.** `token` is still written only so the pre-#379 code can be rolled back to; nothing reads it except the shim below.
+- **Tokens are 64 hex characters**, not `generateToken()`'s base64url, so a new link still matches the old route's pattern (no `_`) on rollback.
+- **Links minted before #379 have no `token_hash`** until the daily cron's `backfillSubscriptionTokenHashes`, or their next poll, fills it. Both are a migration shim to delete once prod logs `hashed: 0`, in the same change that clears `token`.
+- **Revocation is `revoked_at`, never a DELETE**, so the UNIQUE index on `token_hash` can't reissue a leaked token. Revoked rows don't count toward the per-member cap.
 - **A token is returned once**, on the response that mints it. List queries never carry tokens.
 - **The kind filter lives in the URL** (`?kind=trip,meeting`), not per member. Empty means everything, which is why the chips start empty.
 - **Feeds emit series, not expanded occurrences**: one `VEVENT` with its `RRULE`, plus `EXDATE`s and `RECURRENCE-ID` overrides. An override never carries the series' `RRULE`.

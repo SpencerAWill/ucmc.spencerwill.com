@@ -14,8 +14,9 @@ import type { EventKind } from "#/../drizzle/schema";
  * and no way to complete an auth flow, so the member feed carries an
  * opaque per-user token in its URL instead.
  *
- * `public` can never collide with a real token: tokens are uuidv7, and
- * the literal is checked first regardless.
+ * `public` can never collide with a real token: tokens are 64 hex
+ * characters (uuidv7s before #379), and the literal is checked first
+ * regardless. The token is looked up by its SHA-256.
  *
  * **A bad token answers 404, never 403.** Distinguishing "no such
  * token" from "revoked" would turn this into an oracle for walking
