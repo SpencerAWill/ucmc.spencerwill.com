@@ -108,7 +108,7 @@ export async function rotateSession(userId: string): Promise<void> {
   const oldToken = readSessionCookie();
   const newToken = await insertSessionRow(userId);
   writeSessionCookie(newToken);
-  if (oldToken && oldToken !== newToken) {
+  if (oldToken) {
     await deleteSessionRow(await hashToken(oldToken));
   }
 }

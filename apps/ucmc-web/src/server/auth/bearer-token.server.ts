@@ -8,7 +8,7 @@
  * password, so there is nothing to brute-force.
  */
 
-function bytesToBase64Url(bytes: Uint8Array): string {
+export function bytesToBase64Url(bytes: Uint8Array): string {
   let bin = "";
   for (const b of bytes) {
     bin += String.fromCharCode(b);

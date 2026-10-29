@@ -153,7 +153,7 @@ export async function webauthnRegisterFinishAction(args: {
   });
 
   // Privilege boundary — replace the cookie so a stolen pre-enrollment
-  // session ID can't be used post-enrollment.
+  // session token can't be used post-enrollment.
   await rotateSession(principal.userId);
 
   return { ok: true, credentialId: info.credential.id };

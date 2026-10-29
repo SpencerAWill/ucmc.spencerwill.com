@@ -13,6 +13,7 @@
  * changing that would invalidate proofs in flight across a deploy, and
  * its payload shape cannot parse as a ceremony anyway.
  */
+import { bytesToBase64Url } from "#/server/auth/bearer-token.server";
 import { env } from "#/server/cloudflare-env";
 
 function requireSecret(): string {
@@ -23,14 +24,6 @@ function requireSecret(): string {
     );
   }
   return secret;
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) {
-    bin += String.fromCharCode(b);
-  }
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 export function base64UrlEncode(s: string): string {
