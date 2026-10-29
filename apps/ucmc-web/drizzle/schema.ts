@@ -458,6 +458,8 @@ export const webauthnConsumedCeremonies = sqliteTable(
 // An expired row is deleted when its cookie comes back
 // (`getSessionRow`), and by the daily retention sweep otherwise (#373);
 // the index serves that sweep.
+// `id` is the SHA-256 (base64url) of the cookie's token, never the token
+// itself (#375): a leaked backup or export holds no usable session.
 export const sessions = sqliteTable(
   "sessions",
   {

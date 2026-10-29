@@ -1,15 +1,16 @@
 /**
- * Session store + lifecycle helpers. Sessions are opaque IDs in an
- * HTTP-only cookie, backed by a row in the D1 `sessions` table. There's no
- * signing because there's nothing to sign — the ID itself is the secret,
- * and its validity is decided by "does the row still exist and hasn't
- * expired".
+ * Session store + lifecycle helpers. The HTTP-only cookie holds an opaque
+ * bearer token (32 random bytes); the D1 `sessions` row is keyed by its
+ * SHA-256, so the table never holds a working session (#375). There's no
+ * signing because there's nothing to sign — the token itself is the
+ * secret, and its validity is decided by "does the row for its hash still
+ * exist and hasn't expired".
  *
  * Lifecycle:
  *   - `openSession(userId)` → insert row, write cookie.
  *   - `loadCurrentPrincipal()` → read cookie → look up row → load principal;
  *     slides `lastSeenAt`/`expiresAt` if ~1h has passed since last read.
- *   - `rotateSession(userId)` → replace the session ID atomically: issue a
+ *   - `rotateSession(userId)` → replace the session token atomically: issue a
  *     new row, write the new cookie, delete the old row. Called on every
  *     privilege boundary (email verification, passkey enrollment,
  *     approval). If the current cookie points at nothing (stolen, cleared,
@@ -17,8 +18,8 @@
  *   - `closeSession()` → delete row + clear cookie.
  */
 import { eq } from "drizzle-orm";
-import { uuidv7 } from "uuidv7";
 
+import { generateToken, hashToken } from "#/server/auth/bearer-token.server";
 import { loadPrincipal } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import {
@@ -40,6 +41,8 @@ interface SessionRow {
   expiresAt: Temporal.Instant;
 }
 
+// Every helper below takes the row id, i.e. `hashToken(cookie)`, never the
+// cookie value itself.
 async function getSessionRow(sid: string): Promise<SessionRow | null> {
   const row = await getDb().query.sessions.findFirst({
     where: eq(schema.sessions.id, sid),
@@ -54,18 +57,21 @@ async function getSessionRow(sid: string): Promise<SessionRow | null> {
   return row;
 }
 
+/** Insert a row and return the token for the cookie (not the row id). */
 async function insertSessionRow(userId: string): Promise<string> {
-  const sid = uuidv7();
+  const token = generateToken();
   const now = Temporal.Now.instant();
   const expiresAt = now.add({ milliseconds: SESSION_TTL_MS });
-  await getDb().insert(schema.sessions).values({
-    id: sid,
-    userId,
-    createdAt: now,
-    lastSeenAt: now,
-    expiresAt,
-  });
-  return sid;
+  await getDb()
+    .insert(schema.sessions)
+    .values({
+      id: await hashToken(token),
+      userId,
+      createdAt: now,
+      lastSeenAt: now,
+      expiresAt,
+    });
+  return token;
 }
 
 async function slideSessionRow(sid: string): Promise<void> {
@@ -88,21 +94,21 @@ async function deleteSessionRow(sid: string): Promise<void> {
  * existing session (callers that want rotation should use `rotateSession`).
  */
 export async function openSession(userId: string): Promise<void> {
-  const sid = await insertSessionRow(userId);
-  writeSessionCookie(sid);
+  const token = await insertSessionRow(userId);
+  writeSessionCookie(token);
 }
 
 /**
  * Replace the current session with a fresh one for `userId`. Invalidates
- * the old session ID (can't be re-used if it leaked). Safe to call when
+ * the old session token (can't be re-used if it leaked). Safe to call when
  * there's no current session — it just opens one.
  */
 export async function rotateSession(userId: string): Promise<void> {
-  const oldSid = readSessionCookie();
-  const newSid = await insertSessionRow(userId);
-  writeSessionCookie(newSid);
-  if (oldSid && oldSid !== newSid) {
-    await deleteSessionRow(oldSid);
+  const oldToken = readSessionCookie();
+  const newToken = await insertSessionRow(userId);
+  writeSessionCookie(newToken);
+  if (oldToken && oldToken !== newToken) {
+    await deleteSessionRow(await hashToken(oldToken));
   }
 }
 
@@ -110,9 +116,9 @@ export async function rotateSession(userId: string): Promise<void> {
  * Delete the current session (if any) and clear the cookie.
  */
 export async function closeSession(): Promise<void> {
-  const sid = readSessionCookie();
-  if (sid) {
-    await deleteSessionRow(sid);
+  const token = readSessionCookie();
+  if (token) {
+    await deleteSessionRow(await hashToken(token));
   }
   clearSessionCookie();
 }
@@ -125,10 +131,11 @@ export async function closeSession(): Promise<void> {
  * since `lastSeenAt`.
  */
 export async function loadCurrentPrincipal(): Promise<Principal | null> {
-  const sid = readSessionCookie();
-  if (!sid) {
+  const token = readSessionCookie();
+  if (!token) {
     return null;
   }
+  const sid = await hashToken(token);
 
   const session = await getSessionRow(sid);
   if (!session) {
@@ -187,10 +194,11 @@ export async function loadCurrentPrincipal(): Promise<Principal | null> {
 export async function loadCurrentSession(): Promise<{
   userId: string;
 } | null> {
-  const sid = readSessionCookie();
-  if (!sid) {
+  const token = readSessionCookie();
+  if (!token) {
     return null;
   }
+  const sid = await hashToken(token);
 
   const session = await getSessionRow(sid);
   if (!session) {

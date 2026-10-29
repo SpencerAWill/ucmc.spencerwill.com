@@ -32,6 +32,7 @@ The rest of the auth rule is split by area under `.claude/rules/auth/` and loads
 
 **Session and principal**
 
+- **`sessions.id` is `hashToken(cookie)`, never the cookie value** (#375), the same as `magic_links.token_hash`. Anything that looks a session up by the cookie, or compares a row to "this session", hashes first through `bearer-token.server.ts`; a new bearer credential stored in D1 uses the same helpers.
 - **The whole principal is serialized to its own browser.** Anything added to it is visible to that user; never another user's data or a secret.
 - **`preferredName` is what the account chrome shows** (`UserMenu`, avatar initials), falling back to the email. `loadPrincipal` normalises a blank `preferred_name` to `null`.
 - **Every email insert and lookup goes through `email-normalize.ts`** (`trim().toLowerCase()`). Race safety relies on the UNIQUE constraint via `isUniqueViolation()`.

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -442,10 +442,10 @@ export function queryD1<T>(
 }
 
 /**
- * Insert a live session row for the user owning `email` and return its
- * id — which IS the value of the `ucmc_session` cookie, since the
- * session cookie holds the opaque session id and nothing derived from
- * it (see `src/server/auth/session-cookie.server.ts`).
+ * Insert a live session row for the user owning `email` and return the
+ * value for the `ucmc_session` cookie. The row is keyed by the token's
+ * SHA-256, never the token, matching `insertSessionRow` in
+ * `src/server/auth/session.server.ts` (#375).
  *
  * Lets a spec arrive signed-in without a magic-link round-trip, and so
  * without Mailpit. Use it when the spec is about something *after*
@@ -453,10 +453,10 @@ export function queryD1<T>(
  * still go through the real magic link.
  */
 export function seedSession(email: string): string {
-  // uuidv7-shaped, matching `insertSessionRow`. The format isn't load-
-  // bearing — the column is an opaque primary key — but staying close
-  // to production keeps a debugging session from chasing a red herring.
-  const sid = randomUUID();
+  // Same shape as `bearer-token.server.ts`: 32 random bytes, base64url,
+  // and the row id is the base64url SHA-256 of that string.
+  const token = randomBytes(32).toString("base64url");
+  const sid = createHash("sha256").update(token).digest("base64url");
   const nowMs = Date.now();
   const expiresMs = nowMs + 30 * 24 * 60 * 60 * 1000; // SESSION_TTL_MS
   db()
@@ -465,7 +465,7 @@ export function seedSession(email: string): string {
        SELECT ?, user_id, ?, ?, ? FROM user_emails WHERE email = ? AND is_primary = 1`,
     )
     .run(sid, nowMs, nowMs, expiresMs, email);
-  return sid;
+  return token;
 }
 
 /** Cookie name for the seeded session over plain http (the `__Host-`

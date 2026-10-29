@@ -81,9 +81,9 @@ test("a pending member enrolls a passkey and stays signed in through the rotatio
 }) => {
   const email = `e2e-pending-passkey-${Date.now()}@example.com`;
   seedPendingUserWithProfile(email);
-  const seededSid = seedSession(email);
+  const seededToken = seedSession(email);
   await context.addCookies([
-    { name: SESSION_COOKIE_NAME, value: seededSid, url: BASE_URL },
+    { name: SESSION_COOKIE_NAME, value: seededToken, url: BASE_URL },
   ]);
   await attachVirtualAuthenticator(page, context);
 
@@ -104,12 +104,12 @@ test("a pending member enrolls a passkey and stays signed in through the rotatio
   // The credential is really on the account, not just reported.
   expect(credentialCount(email)).toBe(1);
 
-  // Rotation happened: a different opaque session id is in the cookie.
+  // Rotation happened: a different session token is in the cookie.
   const rotated = (await context.cookies(BASE_URL)).find(
     (c) => c.name === SESSION_COOKIE_NAME,
   );
   expect(rotated?.value).toBeTruthy();
-  expect(rotated?.value).not.toBe(seededSid);
+  expect(rotated?.value).not.toBe(seededToken);
 
   // And the replacement is a session the server honours. A reload is
   // what proves it: `/register/pending` runs `requireAuth`, so a
