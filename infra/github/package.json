@@ -13,7 +13,7 @@
     "apply": "GITHUB_TOKEN=$(gh auth token) pulumi up --diff"
   },
   "dependencies": {
-    "@pulumi/cloudflare": "6.17.0",
+    "@pulumi/cloudflare": "6.23.1",
     "@pulumi/github": "6.15.0",
     "@pulumi/pulumi": "3.270.0"
   },
