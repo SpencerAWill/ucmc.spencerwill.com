@@ -659,6 +659,13 @@
       "when": 1793136081390,
       "tag": "0093_expiry_sweep_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1793308868372,
+      "tag": "0094_calendar_subscription_token_hash",
+      "breakpoints": true
     }
   ]
 }

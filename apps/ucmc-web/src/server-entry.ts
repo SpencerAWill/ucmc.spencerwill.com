@@ -74,7 +74,8 @@ export default {
     //
     // Schedules currently wired (must match wrangler.jsonc):
     //   - "0 12 * * *"  → daily retention sweeps + gear reminders +
-    //                     cost snapshot
+    //                     cost snapshot + feedback sync + calendar
+    //                     token backfill
     //                     (08:00 EDT / 07:00 EST — see
     //                     ./server/cron/daily-schedule)
     //   - "15 8 1 3 *"  → annual officer-archive snapshot (March 1)
@@ -119,18 +120,20 @@ export default {
       { runGearLoanReminders },
       { runCostSnapshot },
       { runSiteFeedbackIssueSync },
+      { backfillSubscriptionTokenHashes },
     ] = await Promise.all([
       import("./server/cron/retention.server"),
       import("./server/cron/gear-reminders.server"),
       import("./server/cron/cost-snapshot.server"),
       import("./features/site-feedback/server/sync.server"),
+      import("./features/calendar/server/feed-actions.server"),
     ]);
     ctx.waitUntil(
       runWithLogContext({ cron: event.cron }, async () => {
         // Independent: a failed sweep must not cost members their
         // reminders, and a provider outage must not stop the retention
         // promises on /privacy from being kept. `allSettled`, not `all`.
-        const [sweeps, reminders, costs, feedbackSync] =
+        const [sweeps, reminders, costs, feedbackSync, tokenBackfill] =
           await Promise.allSettled([
             runRetentionSweeps(),
             runGearLoanReminders({ now: Temporal.Now.instant() }),
@@ -141,6 +144,9 @@ export default {
             // Fourth: a GitHub outage must not cost anyone the above. The
             // job catches its own errors; this entry is the backstop.
             runSiteFeedbackIssueSync(),
+            // Fifth: hashes calendar feed tokens minted before #379. A
+            // migration shim; it logs `hashed: 0` once nothing is left.
+            backfillSubscriptionTokenHashes(),
           ]);
         if (sweeps.status === "rejected") {
           log.error("retention.sweeps_failed", {
@@ -160,6 +166,15 @@ export default {
         if (feedbackSync.status === "rejected") {
           log.error("site_feedback.sync_failed", {
             error: errorMessage(feedbackSync.reason),
+          });
+        }
+        if (tokenBackfill.status === "rejected") {
+          log.error("calendar.token_backfill_failed", {
+            error: errorMessage(tokenBackfill.reason),
+          });
+        } else {
+          log.info("calendar.token_backfill_complete", {
+            ...tokenBackfill.value,
           });
         }
       }),

@@ -32,11 +32,13 @@ vi.mock("#/server/rate-limit.server", () => ({
 }));
 
 const {
+  backfillSubscriptionTokenHashes,
   buildFeedAction,
   createSubscriptionToken,
   resolveSubscriptionToken,
   scopeForSubscriber,
 } = await import("#/features/calendar/server/feed-actions.server");
+const { hashToken } = await import("#/server/auth/bearer-token.server");
 const { createEventAction, overrideOccurrenceAction, cancelEventAction } =
   await import("#/features/calendar/server/event-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
@@ -190,6 +192,149 @@ describe("subscription tokens", () => {
     const second = await createSubscriptionToken(userId, "Laptop");
     expect(first.token).not.toBe(second.token);
     expect(await resolveSubscriptionToken(second.token)).toBe(userId);
+  });
+});
+
+async function subscriptionRow(id: string) {
+  const rows = await getDb()
+    .select()
+    .from(schema.calendarSubscriptions)
+    .where(eq(schema.calendarSubscriptions.id, id));
+  return rows[0];
+}
+
+/**
+ * A row as the code before #379 wrote it: the raw uuidv7 token in
+ * `token` and no hash. Live feed URLs in members' calendars point at
+ * rows like this until the backfill reaches them.
+ */
+async function seedLegacySubscription(
+  userId: string,
+  revoked = false,
+): Promise<{ id: string; token: string }> {
+  const token = crypto.randomUUID();
+  const id = `cal_${crypto.randomUUID()}`;
+  await getDb()
+    .insert(schema.calendarSubscriptions)
+    .values({
+      id,
+      userId,
+      token,
+      revokedAt: revoked ? Temporal.Now.instant() : null,
+    });
+  return { id, token };
+}
+
+/**
+ * #379, first phase: lookups go by the token's SHA-256. The raw token
+ * is still written so a code-only rollback keeps every feed working.
+ */
+describe("subscription token storage", () => {
+  it("stores the token's hash and resolves by it", async () => {
+    const userId = await seedUser("hash@example.com", "approved");
+    const { id, token } = await createSubscriptionToken(userId, null);
+
+    const row = await subscriptionRow(id);
+    expect(row.tokenHash).toBe(await hashToken(token));
+    // Resolves by hash even once the raw column no longer matches,
+    // which is the state the follow-up that clears it will leave.
+    await getDb()
+      .update(schema.calendarSubscriptions)
+      .set({ token: `cleared:${id}` })
+      .where(eq(schema.calendarSubscriptions.id, id));
+    expect(await resolveSubscriptionToken(token)).toBe(userId);
+  });
+
+  /**
+   * Once `token` is cleared, the hash is all a copy of the table holds,
+   * and it must not work as a URL.
+   */
+  it("does not resolve the stored hash presented as a token", async () => {
+    const userId = await seedUser("stolen@example.com", "approved");
+    const { id } = await createSubscriptionToken(userId, null);
+    const row = await subscriptionRow(id);
+
+    expect(row.tokenHash).not.toBeNull();
+    expect(await resolveSubscriptionToken(row.tokenHash ?? "")).toBeNull();
+  });
+
+  /**
+   * The rollback guarantee: the code before #379 looks rows up by
+   * `token = <url token>` and only accepts `[A-Za-z0-9-]{1,64}`, so a
+   * link minted now must satisfy both.
+   */
+  it("mints links the pre-#379 code can still serve", async () => {
+    const userId = await seedUser("rollback@example.com", "approved");
+    const { id, token } = await createSubscriptionToken(userId, null);
+
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(token).toMatch(/^[A-Za-z0-9-]{1,64}$/);
+    expect((await subscriptionRow(id)).token).toBe(token);
+  });
+});
+
+/**
+ * Feed URLs minted before #379 live in members' phone calendars, which
+ * poll in the background and fail silently. They must keep working.
+ */
+describe("subscription tokens minted before hashing", () => {
+  it("still resolves, and hashes the row on first use", async () => {
+    const userId = await seedUser("legacy@example.com", "approved");
+    const { id, token } = await seedLegacySubscription(userId);
+
+    expect(await resolveSubscriptionToken(token)).toBe(userId);
+
+    const row = await subscriptionRow(id);
+    expect(row.tokenHash).toBe(await hashToken(token));
+    // The raw value stays until the follow-up, for rollback.
+    expect(row.token).toBe(token);
+    // And keeps resolving, now by hash.
+    expect(await resolveSubscriptionToken(token)).toBe(userId);
+  });
+
+  it("does not resolve once revoked", async () => {
+    const userId = await seedUser("legacy-rev@example.com", "approved");
+    const { token } = await seedLegacySubscription(userId, true);
+    expect(await resolveSubscriptionToken(token)).toBeNull();
+  });
+
+  it("is backfilled, live and revoked alike, and still resolves", async () => {
+    const userId = await seedUser("backfill@example.com", "approved");
+    const live = await seedLegacySubscription(userId);
+    const revoked = await seedLegacySubscription(userId, true);
+    const fresh = await createSubscriptionToken(userId, null);
+
+    expect(await backfillSubscriptionTokenHashes()).toEqual({ hashed: 2 });
+
+    for (const { id, token } of [live, revoked]) {
+      const row = await subscriptionRow(id);
+      expect(row.tokenHash).toBe(await hashToken(token));
+      expect(row.token).toBe(token);
+    }
+    expect(await resolveSubscriptionToken(live.token)).toBe(userId);
+    expect(await resolveSubscriptionToken(revoked.token)).toBeNull();
+    expect(await resolveSubscriptionToken(fresh.token)).toBe(userId);
+    // Nothing left to do on the next tick.
+    expect(await backfillSubscriptionTokenHashes()).toEqual({ hashed: 0 });
+  });
+
+  /**
+   * One UPDATE carries every row's hash, so this pins that each row
+   * gets its OWN hash rather than, say, the first row's for all.
+   */
+  it("gives every row its own hash in one pass", async () => {
+    const userId = await seedUser("many@example.com", "approved");
+    const seeded = await Promise.all(
+      Array.from({ length: 120 }, () => seedLegacySubscription(userId)),
+    );
+
+    expect(await backfillSubscriptionTokenHashes()).toEqual({ hashed: 120 });
+    for (const { id, token } of [seeded[0], seeded[60], seeded[119]]) {
+      expect((await subscriptionRow(id)).tokenHash).toBe(
+        await hashToken(token),
+      );
+      expect(await resolveSubscriptionToken(token)).toBe(userId);
+    }
   });
 });
 

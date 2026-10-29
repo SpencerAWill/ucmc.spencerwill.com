@@ -1,3 +1,5 @@
+import { createHash, randomBytes } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 
@@ -27,8 +29,7 @@ import { ensureApprovedUser, execD1, queryD1 } from "./fixtures/db";
 
 const BASE = "http://localhost:3000";
 
-/** Mint a subscription straight in the DB; the UI has its own coverage. */
-function seedSubscription(email: string): string {
+function seedUserId(email: string): string {
   ensureApprovedUser(email);
   const [user] = queryD1<{ id: string }>(
     `SELECT u.id as id FROM users u
@@ -36,10 +37,36 @@ function seedSubscription(email: string): string {
      WHERE ue.email = ?`,
     email,
   );
+  return user.id;
+}
+
+/**
+ * Mint a subscription straight in the DB; the UI has its own coverage.
+ * Same shape as `createSubscriptionToken` (#379): 32 random bytes as
+ * hex, stored with their SHA-256.
+ */
+function seedSubscription(email: string): string {
+  const userId = seedUserId(email);
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(token).digest("base64url");
+  const id = `cal_${crypto.randomUUID()}`;
+  execD1(
+    `INSERT INTO calendar_subscriptions (id, user_id, token, token_hash, created_at)
+     VALUES ('${id}', '${userId}', '${token}', '${tokenHash}', ${Date.now()})`,
+  );
+  return token;
+}
+
+/**
+ * A subscription as the code before #379 minted it: a raw uuidv7-shaped
+ * token in `token` and no hash. Members' calendars hold URLs like this.
+ */
+function seedLegacySubscription(email: string): string {
+  const userId = seedUserId(email);
   const token = crypto.randomUUID();
   execD1(
     `INSERT INTO calendar_subscriptions (id, user_id, token, created_at)
-     VALUES ('cal_${token}', '${user.id}', '${token}', ${Date.now()})`,
+     VALUES ('cal_${token}', '${userId}', '${token}', ${Date.now()})`,
   );
   return token;
 }
@@ -117,6 +144,17 @@ test("an unknown token answers 404, not 403", async ({ request }) => {
   expect(response.status()).toBe(404);
 });
 
+test("a link minted before tokens were hashed still serves", async ({
+  request,
+}) => {
+  const token = seedLegacySubscription(
+    `e2e-feed-legacy-${Date.now()}@example.com`,
+  );
+  const response = await getFeed(request, `/api/calendar/${token}.ics`);
+  expect(response.status()).toBe(200);
+  expect(await response.text()).toContain("BEGIN:VCALENDAR");
+});
+
 test("a revoked token stops working immediately", async ({ request }) => {
   const token = seedSubscription(`e2e-feed-revoke-${Date.now()}@example.com`);
   expect((await getFeed(request, `/api/calendar/${token}.ics`)).status()).toBe(
@@ -124,7 +162,8 @@ test("a revoked token stops working immediately", async ({ request }) => {
   );
 
   execD1(
-    `UPDATE calendar_subscriptions SET revoked_at = ${Date.now()} WHERE token = '${token}'`,
+    `UPDATE calendar_subscriptions SET revoked_at = ${Date.now()}
+     WHERE token_hash = '${createHash("sha256").update(token).digest("base64url")}'`,
   );
 
   expect((await getFeed(request, `/api/calendar/${token}.ics`)).status()).toBe(

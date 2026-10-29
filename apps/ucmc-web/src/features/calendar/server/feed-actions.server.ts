@@ -18,14 +18,20 @@
  *     audit row's `target_id`, and a bad one answers 404 rather than
  *     403 — a distinguishable "that token exists but is revoked" turns
  *     the endpoint into an oracle for guessing them.
+ *   - It is looked up by its SHA-256, `token_hash` (#379), as with
+ *     sessions. The raw `token` column is still written in this first
+ *     phase so that a code-only rollback keeps every feed working; the
+ *     follow-up stops writing it and clears it, after which a backup,
+ *     export or Time Travel restore holds no working feed URL.
  *
  * Feeds emit SERIES, not expanded occurrences: one VEVENT with its
  * RRULE, plus EXDATEs and RECURRENCE-ID overrides. See
  * `seriesAsOccurrence` for why an expanded feed is the wrong answer.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import { hashToken } from "#/server/auth/bearer-token.server";
 import { loadPrincipal } from "#/server/auth/principal.server";
 import { getDb, schema } from "#/server/db";
 import type { EventKind } from "#/../drizzle/schema";
@@ -77,6 +83,7 @@ export interface FeedResult {
 export async function resolveSubscriptionToken(
   token: string,
 ): Promise<string | null> {
+  const tokenHash = await hashToken(token);
   const rows = await getDb()
     .select({
       id: schema.calendarSubscriptions.id,
@@ -85,13 +92,13 @@ export async function resolveSubscriptionToken(
     .from(schema.calendarSubscriptions)
     .where(
       and(
-        eq(schema.calendarSubscriptions.token, token),
+        eq(schema.calendarSubscriptions.tokenHash, tokenHash),
         isNull(schema.calendarSubscriptions.revokedAt),
       ),
     )
     .limit(1);
 
-  const row = rows.at(0);
+  const row = rows.at(0) ?? (await resolveLegacyToken(token));
   if (!row) {
     return null;
   }
@@ -102,6 +109,110 @@ export async function resolveSubscriptionToken(
     .where(eq(schema.calendarSubscriptions.id, row.id));
 
   return row.userId;
+}
+
+/**
+ * A URL minted before #379, whose row has no hash yet.
+ *
+ * **Migration shim**: these URLs live in members' phone calendars,
+ * which poll in the background and fail silently, so they have to keep
+ * working until the daily backfill reaches their row. A hit hashes the
+ * row on the spot. Remove with `backfillSubscriptionTokenHashes` once
+ * no row is unhashed.
+ */
+async function resolveLegacyToken(
+  token: string,
+): Promise<{ id: string; userId: string } | undefined> {
+  const rows = await getDb()
+    .select({
+      id: schema.calendarSubscriptions.id,
+      userId: schema.calendarSubscriptions.userId,
+    })
+    .from(schema.calendarSubscriptions)
+    .where(
+      and(
+        eq(schema.calendarSubscriptions.token, token),
+        isNull(schema.calendarSubscriptions.tokenHash),
+        isNull(schema.calendarSubscriptions.revokedAt),
+      ),
+    )
+    .limit(1);
+  const row = rows.at(0);
+  if (row) {
+    await getDb()
+      .update(schema.calendarSubscriptions)
+      .set({ tokenHash: await hashToken(token) })
+      .where(
+        and(
+          eq(schema.calendarSubscriptions.id, row.id),
+          isNull(schema.calendarSubscriptions.tokenHash),
+        ),
+      );
+  }
+  return row;
+}
+
+/**
+ * Give every row without one its `token_hash`, live or revoked (#379).
+ *
+ * It does not clear `token`: rolling the code back must keep every feed
+ * working, and the old code looks rows up by the raw value. Clearing it
+ * is the follow-up, once this has run in prod.
+ *
+ * Runs on the daily cron. Revoked rows are included because they are
+ * kept forever so the UNIQUE index never reissues a token, and that
+ * guarantee has to move to `token_hash` with them. It also catches rows
+ * the previous code version minted in the window between the migration
+ * and the deploy, which is why it is idempotent rather than one-off.
+ *
+ * Two queries whatever the row count: the daily tick shares Workers
+ * Free's 50-query invocation budget with every other sweep, so the
+ * hashes go to one UPDATE as a single JSON parameter (`data/core.md`)
+ * rather than one statement per row. The UPDATE re-checks
+ * `token_hash IS NULL`, so a row the lazy path hashed in between is
+ * left alone.
+ *
+ * **Migration shim**, with `resolveLegacyToken`: once prod logs
+ * `hashed: 0` there is nothing left for either to do.
+ */
+export async function backfillSubscriptionTokenHashes(): Promise<{
+  hashed: number;
+}> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.calendarSubscriptions.id,
+      token: schema.calendarSubscriptions.token,
+    })
+    .from(schema.calendarSubscriptions)
+    .where(isNull(schema.calendarSubscriptions.tokenHash));
+  if (rows.length === 0) {
+    return { hashed: 0 };
+  }
+  const replacements = await Promise.all(
+    rows.map(async (row) => ({
+      id: row.id,
+      hash: await hashToken(row.token),
+    })),
+  );
+  // `UPDATE … FROM` joins the JSON once, rather than a correlated
+  // subquery per column per row re-walking the whole array.
+  const result = await db.run(sql`
+    UPDATE calendar_subscriptions
+    SET token_hash = replacement.hash
+    FROM (
+      SELECT
+        json_extract(value, '$.id') AS id,
+        json_extract(value, '$.hash') AS hash
+      FROM json_each(${JSON.stringify(replacements)})
+    ) AS replacement
+    WHERE calendar_subscriptions.id = replacement.id
+      AND calendar_subscriptions.token_hash IS NULL
+  `);
+  // The rows this UPDATE changed, not the rows it read: one the lazy
+  // path hashed in between is skipped and must not be counted, or the
+  // `hashed: 0` that retires this shim could be reported late or never.
+  return { hashed: result.meta.changes };
 }
 
 /** The visibility scope a subscription's owner currently holds. */
@@ -179,20 +290,32 @@ export async function buildFeedAction(
   return { ics, etag: await contentEtag(ics) };
 }
 
+/**
+ * 256 random bits as 64 hex characters.
+ *
+ * This is a bearer credential that ends up in Google's and Apple's
+ * fetchers. It was a uuidv7, whose leading 48 bits are a timestamp,
+ * leaving 74 random ones. Hex rather than `generateToken()`'s base64url
+ * so that a link minted now still fits the route pattern of the code
+ * before #379 (`[A-Za-z0-9-]{1,64}`, no `_`), which is what keeps a
+ * code-only rollback from breaking it.
+ */
+function generateFeedToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /** Mint a subscription token for a member. */
 export async function createSubscriptionToken(
   userId: string,
   label: string | null,
 ): Promise<{ id: string; token: string }> {
   const id = `cal_${uuidv7()}`;
-  // uuidv7 rather than `generatePublicId()`: this is a bearer
-  // credential that ends up in Google's and Apple's fetchers, so it
-  // wants the full 122 bits rather than the 12-character alphabet that
-  // is fine for a guessable-but-harmless URL id.
-  const token = uuidv7();
+  const token = generateFeedToken();
   await getDb()
     .insert(schema.calendarSubscriptions)
-    .values({ id, userId, token, label });
+    .values({ id, userId, token, tokenHash: await hashToken(token), label });
   return { id, token };
 }
 
