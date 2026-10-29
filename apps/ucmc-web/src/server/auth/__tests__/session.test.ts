@@ -1,27 +1,33 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { eq } from "drizzle-orm";
-
 import { hashToken } from "#/server/auth/bearer-token.server";
+import {
+  SESSION_SLIDING_REFRESH_MS,
+  SESSION_TTL_MS,
+} from "#/server/auth/session-config";
 import { getDb, schema } from "#/server/db";
 import type { UserStatus } from "#/../drizzle/schema";
 import type * as PrincipalModule from "#/server/auth/principal.server";
 
 let cookieValue: string | undefined;
 let cookieCleared = false;
+const setCookieSpy = vi.fn((_name: string, value: string) => {
+  cookieValue = value;
+});
 
 vi.mock("@tanstack/react-start/server", () => ({
   getCookie: () => cookieValue,
-  setCookie: (_name: string, value: string) => {
-    cookieValue = value;
-  },
+  setCookie: setCookieSpy,
   deleteCookie: () => {
     cookieCleared = true;
   },
   getRequestHeader: () => undefined,
 }));
 
-const loadPrincipalSpy = vi.fn(async () => null);
+const loadPrincipalSpy = vi.fn(
+  async (): Promise<PrincipalModule.Principal | null> => null,
+);
 vi.mock("#/server/auth/principal.server", async () => {
   const actual = await vi.importActual<typeof PrincipalModule>(
     "#/server/auth/principal.server",
@@ -32,12 +38,18 @@ vi.mock("#/server/auth/principal.server", async () => {
   };
 });
 
-const { closeSession, loadCurrentSession, openSession, rotateSession } =
-  await import("#/server/auth/session.server");
+const {
+  closeSession,
+  loadCurrentPrincipal,
+  loadCurrentSession,
+  openSession,
+  rotateSession,
+} = await import("#/server/auth/session.server");
 
 async function seedSession(
   opts: {
     expiresAt?: Temporal.Instant;
+    lastSeenAt?: Temporal.Instant;
     status?: UserStatus;
   } = {},
 ): Promise<{ sid: string; userId: string }> {
@@ -51,7 +63,7 @@ async function seedSession(
       id: await hashToken(sid),
       userId,
       createdAt: now,
-      lastSeenAt: now,
+      lastSeenAt: opts.lastSeenAt ?? now,
       expiresAt: opts.expiresAt ?? now.add({ milliseconds: 60_000 }),
     });
   return { sid, userId };
@@ -83,7 +95,53 @@ beforeEach(async () => {
   await db.delete(schema.users);
   cookieValue = undefined;
   cookieCleared = false;
+  setCookieSpy.mockClear();
   loadPrincipalSpy.mockClear();
+});
+
+describe("loadCurrentPrincipal sliding refresh", () => {
+  // Only `status` is read past the null check, so a partial principal is
+  // enough to reach the sliding branch.
+  const approvedPrincipal = {
+    status: "approved",
+  } as PrincipalModule.Principal;
+
+  it("re-sends the cookie with a full maxAge when the session slides (#374)", async () => {
+    const now = Temporal.Now.instant();
+    const { sid } = await seedSession({
+      lastSeenAt: now.subtract({
+        milliseconds: SESSION_SLIDING_REFRESH_MS + 1000,
+      }),
+    });
+    cookieValue = sid;
+    loadPrincipalSpy.mockResolvedValueOnce(approvedPrincipal);
+
+    expect(await loadCurrentPrincipal()).toBe(approvedPrincipal);
+
+    const row = await getDb().query.sessions.findFirst({
+      where: eq(schema.sessions.id, await hashToken(sid)),
+    });
+    expect(
+      row!.expiresAt.epochMilliseconds - now.epochMilliseconds,
+    ).toBeGreaterThanOrEqual(SESSION_TTL_MS);
+    // The cookie must carry the token itself; re-sending the row id (its
+    // hash) would miss on the next request and sign the member out.
+    expect(setCookieSpy).toHaveBeenCalledTimes(1);
+    expect(setCookieSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      sid,
+      expect.objectContaining({ maxAge: Math.floor(SESSION_TTL_MS / 1000) }),
+    );
+  });
+
+  it("leaves the cookie alone inside the refresh window", async () => {
+    const { sid } = await seedSession();
+    cookieValue = sid;
+    loadPrincipalSpy.mockResolvedValueOnce(approvedPrincipal);
+
+    expect(await loadCurrentPrincipal()).toBe(approvedPrincipal);
+    expect(setCookieSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("loadCurrentSession", () => {
