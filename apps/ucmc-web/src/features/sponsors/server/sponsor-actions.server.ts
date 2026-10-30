@@ -1,8 +1,8 @@
 /**
  * /sponsors actions (issue #185).
  *
- * The read is anonymous-safe and gated at the route layer by
- * `public_sponsors:view`; every write gates on `public_sponsors:manage`
+ * The read is anonymous-safe and gates on `public_sponsors:view` here
+ * as well as at the route layer (#381); every write gates on `public_sponsors:manage`
  * here at the action layer and records one audit event.
  *
  * **The perk projection is the load-bearing part of this file.**
@@ -60,6 +60,7 @@ import type {
 } from "#/features/sponsors/server/sponsor-schemas";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
+import { assertCanView } from "#/server/auth/view-permission.server";
 import { getDb, schema } from "#/server/db";
 import {
   decodeImageDataUrl,
@@ -126,6 +127,7 @@ function toEntry(row: SponsorRow, includePerks: boolean): SponsorEntry {
 // ── read ────────────────────────────────────────────────────────────────
 
 export async function getSponsorsContentAction(): Promise<SponsorsContent> {
+  await assertCanView("public_sponsors:view");
   const [rows, includePerks] = await Promise.all([
     listSponsors(),
     viewerHoldsPerks(),

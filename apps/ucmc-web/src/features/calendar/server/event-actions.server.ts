@@ -1,8 +1,8 @@
 /**
  * Club calendar actions (issue #187).
  *
- * Reads choose a visibility scope from the viewer and hand it to the
- * repo; writes gate on `events:manage` here at the action layer and
+ * Reads gate on `public_calendar:view` (#381), choose a visibility scope
+ * from the viewer and hand it to the repo; writes gate on `events:manage` here at the action layer and
  * record one audit event each.
  *
  * **The visibility projection is the load-bearing part of this file.**
@@ -37,6 +37,7 @@ import type {
 } from "#/features/calendar/server/event-schemas";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
+import { assertCanView } from "#/server/auth/view-permission.server";
 import { getDb, schema } from "#/server/db";
 import {
   getEventByPublicIdUnscoped,
@@ -83,6 +84,11 @@ export async function listCalendarOccurrencesAction({
   kinds,
   scope,
 }: CalendarWindowQuery): Promise<CalendarOccurrence[]> {
+  // An explicit scope is the `.ics` feed's, which authenticates by token
+  // and has no session for the view check to read.
+  if (!scope) {
+    await assertCanView("public_calendar:view");
+  }
   const effectiveScope = scope ?? (await currentVisibilityScope());
   const series = await listEventSeriesForWindow(
     effectiveScope,
@@ -111,6 +117,7 @@ export async function getCalendarOccurrenceAction(input: {
   publicId: string;
   occurrenceStart?: Temporal.Instant;
 }): Promise<CalendarOccurrence | null> {
+  await assertCanView("public_calendar:view");
   const scope = await currentVisibilityScope();
   const series = await getEventByPublicId(input.publicId, scope);
   if (!series) {

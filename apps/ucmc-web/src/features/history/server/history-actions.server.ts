@@ -1,6 +1,6 @@
 /**
- * /history actions. Reads (`getHistoryContentAction`) are gated at
- * the route layer by `history:view`; writes (narrative, officer CRUD,
+ * /history actions. Reads (`getHistoryContentAction`) gate on
+ * `history:view` here as well as at the route layer (#381); writes (narrative, officer CRUD,
  * honorary CRUD) gate on `history:manage` here at the action layer and
  * record one audit event per mutation.
  *
@@ -24,6 +24,7 @@ import {
   listHonoraryMembers,
 } from "#/features/history/server/history-repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
+import { assertCanView } from "#/server/auth/view-permission.server";
 import { getDb, schema } from "#/server/db";
 import { readMarkdownPage } from "#/server/markdown-pages/markdown-pages-repo.server";
 
@@ -54,6 +55,7 @@ export interface HistoryContent {
 }
 
 export async function getHistoryContentAction(): Promise<HistoryContent> {
+  await assertCanView("history:view");
   const [narrativeMarkdown, officers, honorary] = await Promise.all([
     readMarkdownPage("history.narrative"),
     listHistoricalOfficers(),

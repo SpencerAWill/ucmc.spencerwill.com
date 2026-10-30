@@ -72,4 +72,5 @@ The rest of the auth rule is split by area under `.claude/rules/auth/` and loads
 
 - **A permission**: a migration (row + seed grants), plus a shared helper and constant in `guards.ts` if it pairs with another. Only `anonymous_grantable` permissions may go on `anonymous` (`emulation.md`).
 - **A gated route**: guards take `{ context, location }`; a `/my` child needs no auth guard of its own.
+- **A public page's read action** calls `assertCanView("<page>:view")` (`src/server/auth/view-permission.server.ts`) as well as the route's `requireViewPermission`, so revoking the anonymous grant closes the server fn too (#381). It checks the anonymous role first (KV-cached), then the real principal.
 - **A field on the principal**: assume the user can read it.

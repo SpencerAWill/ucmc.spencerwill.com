@@ -1,7 +1,7 @@
 /**
  * Album CRUD actions. Reads (`getAlbumPhotosAction`,
- * `getAlbumPhotoByPublicIdAction`) are gated at the route layer by
- * `public_album:view`; writes gate on `public_album:manage` here
+ * `getAlbumPhotoByPublicIdAction`) gate on `public_album:view` here as
+ * well as at the route layer (#381); writes gate on `public_album:manage` here
  * via `requireAlbumManager()` and record one audit event per
  * mutation.
  *
@@ -37,6 +37,7 @@ import type {
 } from "#/features/album/server/album-schemas";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
+import { assertCanView } from "#/server/auth/view-permission.server";
 import { getDb, schema } from "#/server/db";
 import {
   deleteAlbumImage,
@@ -121,6 +122,7 @@ function toSummary(r: SummaryRow): AlbumPhotoSummary {
 export async function getAlbumPhotosAction(): Promise<{
   photos: AlbumPhotoSummary[];
 }> {
+  await assertCanView("public_album:view");
   const rows = await listAlbumPhotos();
   return { photos: rows.map(toSummary) };
 }
@@ -128,6 +130,7 @@ export async function getAlbumPhotosAction(): Promise<{
 export async function getAlbumPhotoByPublicIdAction(
   input: GetAlbumPhotoByPublicIdInput,
 ): Promise<AlbumPhotoSummary | null> {
+  await assertCanView("public_album:view");
   const row = await getAlbumPhotoByPublicId(input.publicId);
   if (!row) {
     return null;
