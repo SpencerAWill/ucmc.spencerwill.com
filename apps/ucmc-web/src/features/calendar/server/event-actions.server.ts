@@ -84,11 +84,7 @@ export async function listCalendarOccurrencesAction({
   kinds,
   scope,
 }: CalendarWindowQuery): Promise<CalendarOccurrence[]> {
-  // An explicit scope is the `.ics` feed's, which authenticates by token
-  // and has no session for the view check to read.
-  if (!scope) {
-    await assertCanView("public_calendar:view");
-  }
+  await assertCanView("public_calendar:view");
   const effectiveScope = scope ?? (await currentVisibilityScope());
   const series = await listEventSeriesForWindow(
     effectiveScope,

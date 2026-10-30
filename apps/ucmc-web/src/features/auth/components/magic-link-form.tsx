@@ -47,6 +47,7 @@ export function MagicLinkForm({
   const [submittedTo, setSubmittedTo] = useState<string | null>(null);
   const [outboxHref, setOutboxHref] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileFailed, setTurnstileFailed] = useState(false);
   const turnstile = useRef<TurnstileInstance>(null);
   const turnstileSiteKey = env.VITE_TURNSTILE_SITE_KEY;
   // The server verifies every token, an empty one included (#381), so a
@@ -140,15 +141,27 @@ export function MagicLinkForm({
         <Turnstile
           ref={turnstile}
           siteKey={turnstileSiteKey}
-          onSuccess={setTurnstileToken}
+          onSuccess={(token) => {
+            setTurnstileFailed(false);
+            setTurnstileToken(token);
+          }}
           onExpire={() => {
             setTurnstileToken("");
           }}
           onError={() => {
+            // The button stays held without a token, so say why.
+            setTurnstileFailed(true);
             setTurnstileToken("");
           }}
           options={{ theme: "auto", size: "flexible" }}
         />
+      ) : null}
+
+      {turnstileFailed ? (
+        <p role="alert" className="text-sm text-destructive">
+          The verification check didn&rsquo;t load. Refresh the page to try
+          again.
+        </p>
       ) : null}
 
       {mutation.isError ? (

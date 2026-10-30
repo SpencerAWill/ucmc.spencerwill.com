@@ -19,6 +19,11 @@ export async function verifyTurnstile(token: string): Promise<boolean> {
     // No secret configured — skip verification (local dev).
     return true;
   }
+  if (!token) {
+    // Nothing to verify: refuse here rather than spend a subrequest on a
+    // siteverify call that can only fail, or fail open if it's down (#381).
+    return false;
+  }
 
   try {
     const ip = getRequestHeader("cf-connecting-ip") ?? "";

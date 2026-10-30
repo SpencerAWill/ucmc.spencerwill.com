@@ -4,6 +4,7 @@
  * `unclaimed-actions.server.ts`, future ones) don't need to cross-import
  * each other's full action surface just to share a single guard.
  */
+import { WAIVER_VIEW_PERMISSIONS } from "#/features/auth/guards";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import type { Principal } from "#/server/auth/principal.server";
 
@@ -40,8 +41,7 @@ export async function requireMembersManager(): Promise<Principal> {
  */
 const ANY_MEMBER_STATUS_PERMISSIONS = [
   "members:manage",
-  "waivers:view",
-  "waivers:verify",
+  ...WAIVER_VIEW_PERMISSIONS,
   "audit:view",
 ] as const;
 

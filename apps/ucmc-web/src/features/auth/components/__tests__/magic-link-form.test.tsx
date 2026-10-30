@@ -34,9 +34,11 @@ vi.mock("@marsidev/react-turnstile", () => ({
   Turnstile: ({
     onSuccess,
     onExpire,
+    onError,
   }: {
     onSuccess: (token: string) => void;
     onExpire: () => void;
+    onError: () => void;
   }) => (
     <>
       <button type="button" onClick={() => onSuccess("turnstile-token")}>
@@ -44,6 +46,9 @@ vi.mock("@marsidev/react-turnstile", () => ({
       </button>
       <button type="button" onClick={onExpire}>
         expire challenge
+      </button>
+      <button type="button" onClick={onError}>
+        fail challenge
       </button>
     </>
   ),
@@ -148,6 +153,23 @@ describe("MagicLinkForm", () => {
         data: { email: "alice@example.com", turnstileToken: "turnstile-token" },
       });
     });
+  });
+
+  it("says why the button is held when the Turnstile widget fails", async () => {
+    mockEnv.VITE_TURNSTILE_SITE_KEY = "site-key";
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(screen.getByRole("button", { name: "fail challenge" }));
+    expect(
+      screen.getByText(/verification check didn[’']?t load/i),
+    ).toBeInTheDocument();
+
+    // A retry that succeeds clears the message.
+    await user.click(screen.getByRole("button", { name: "solve challenge" }));
+    expect(
+      screen.queryByText(/verification check didn[’']?t load/i),
+    ).not.toBeInTheDocument();
   });
 
   it("links to the dev outbox when the server says the email went there", async () => {
