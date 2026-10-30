@@ -51,13 +51,22 @@ const config = defineConfig({
     port: 3000,
     strictPort: true,
   },
-  // The feedback route loads a Tiptap-based markdown editor that legitimately
-  // splits to ~1.1 MB; the rest of the app sits well under 500 kB. Lifting
-  // the warning limit just above the editor chunk keeps the signal: any *other*
-  // chunk that creeps past this number will still trip the warning.
+  // This warning is a build-log hint, not the gate. The gate is `pnpm size`
+  // (`scripts/check-bundle-size.ts`, budgets in `scripts/bundle-budget.ts`),
+  // which CI runs and which fails on regression (#190). It budgets gzip;
+  // this limit is raw kB. In the client build the largest chunk is the
+  // entry (~1.0 MB raw, ~285 kB gzip) and the lazy Tiptap editor is ~550 kB.
+  // The SSR copy of the editor is ~1.2 MB, but it ships in the Worker, which
+  // `pnpm size` measures as a whole.
   build: {
     chunkSizeWarningLimit: 1200,
     sourcemap: false,
+  },
+  // The client manifest is what `pnpm size` walks to tell the initial load
+  // from lazy chunks. `public/.assetsignore` keeps `.vite/` out of the
+  // deployed assets.
+  environments: {
+    client: { build: { manifest: true } },
   },
   plugins: [
     devtools(),

@@ -71,7 +71,7 @@ TanStack Start's import-protection plugin blocks `*.server.*` from the client gr
 ## Markdown surface
 
 - `<MarkdownContent>` (`src/components/markdown/`) renders via `react-markdown` + `remark-gfm` + `remark-breaks` in a Tailwind `prose` wrapper. **No `rehype-raw`** — raw HTML pass-through is intentionally OFF for XSS safety. The `<a>` renderer only sets `target="_blank"`/rel on absolute http(s) URLs.
-- `<MarkdownEditor>` (`src/components/editor/`) is TipTap WYSIWYG round-tripped to a markdown string via `tiptap-markdown` (storage stays plain text). Exposed to forms as `field.MarkdownField` (registered in `src/lib/form/form.ts`) and lazy-loaded — the bundle only ships on routes that mount it. Cap enforcement uses markdown string length, matching the zod `.max()`.
+- `<MarkdownEditor>` (`src/components/editor/`) is TipTap WYSIWYG round-tripped to a markdown string via `tiptap-markdown` (storage stays plain text). Exposed to forms as `field.MarkdownField` (registered in `src/lib/form/form.ts`) and lazy-loaded — the bundle only ships on routes that mount it. `pnpm size` holds that: `markdown-editor` is a named `lazyExemptions` entry in `scripts/bundle-budget.ts`, and the check fails if it lands in the initial load. Cap enforcement uses markdown string length, matching the zod `.max()`.
 
 ## UI primitives
 

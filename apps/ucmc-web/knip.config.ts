@@ -63,7 +63,7 @@ const config: KnipConfig = {
     "test/*.ts",
     "e2e/**/*.ts",
 
-    // Run by package scripts (`generate:sitemap`, `sync:wasm`, `sync-env`),
+    // Run by package scripts (`generate:sitemap`, `sync:wasm`, `sync-env`, `size`),
     // not imported.
     "scripts/*.ts",
 

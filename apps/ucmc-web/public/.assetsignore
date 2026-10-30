@@ -1,0 +1,7 @@
+# Wrangler skips these when it uploads dist/client as static assets. The
+# Cloudflare Vite plugin adds its own entries (wrangler.json, .dev.vars) after
+# these. This file uses .gitignore syntax.
+
+# The client build manifest, which `pnpm size` reads (#190). It's a build
+# report, not something the site serves.
+.vite
