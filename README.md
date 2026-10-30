@@ -168,6 +168,7 @@ Common commands (run from the repo root):
 ```bash
 pnpm --filter ucmc-web dev          # start the dev server on http://localhost:3000
 pnpm --filter ucmc-web build        # production build
+pnpm --filter ucmc-web size         # after build: client + Worker bundle-size budget (scripts/bundle-budget.ts)
 pnpm --filter ucmc-web test         # run Vitest unit tests (both pools)
 pnpm --filter ucmc-web test:coverage     # same, with an Istanbul coverage report
 pnpm --filter ucmc-web test:mutation     # Stryker mutation testing (pure modules only)

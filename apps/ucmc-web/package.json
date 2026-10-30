@@ -11,6 +11,7 @@
     "prepare:assets": "pnpm run generate:sitemap && pnpm run sync:wasm",
     "dev": "pnpm run prepare:assets && vite dev --port 3000",
     "build": "pnpm run prepare:assets && vite build",
+    "size": "tsx scripts/check-bundle-size.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

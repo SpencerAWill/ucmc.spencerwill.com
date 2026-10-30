@@ -235,7 +235,7 @@ jobs:
           echo "Playwright image pins match @playwright/test $want"
 
   web-lint-test:
-    name: Web — lint, typecheck, knip, drift, test
+    name: Web — lint, typecheck, knip, drift, test, size
     if: github.event.pull_request.draft != true && needs.paths.outputs.web == 'true'
     needs: paths
     runs-on: ubuntu-latest
@@ -275,6 +275,17 @@ jobs:
 
       - name: Test
         run: pnpm --filter ucmc-web test
+
+      # Bundle-size budget (#190): initial client JS, the entry, every other
+      # chunk, and the Worker's gzip upload, against
+      # apps/ucmc-web/scripts/bundle-budget.ts. A failure names the chunk
+      # and the delta. Builds here rather than reusing e2e-desktop's preview
+      # build, so the budget doesn't depend on the E2E job's internals.
+      - name: Build
+        run: pnpm --filter ucmc-web build
+
+      - name: Bundle size
+        run: pnpm --filter ucmc-web size
 
   infra-lint:
     name: Infra — lint, typecheck

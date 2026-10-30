@@ -23,6 +23,7 @@ Detailed guidance is scoped to the files it applies to in **`.claude/rules/`** a
 - `pnpm install` · `pnpm commit` · `pnpm format` (`format:check`)
 - `pnpm verify` — lint + typecheck + knip + migration drift + test across every package, ~70s. `pnpm {lint,typecheck,knip,db:drift,test}` run the pieces individually.
 - `pnpm --filter ucmc-web {dev,build,test,test:coverage,test:mutation,typecheck,lint,knip,storybook,e2e,e2e:ui}`
+- `pnpm --filter ucmc-web size` — after `build`: fails when initial client JS, the entry, any other chunk or the Worker upload is over its gzip budget in `scripts/bundle-budget.ts` (#190). CI runs it in the web job. **A new heavy lazy chunk gets a named entry in `lazyExemptions`, not a raised `chunkGzipKb`**, and an exempt chunk that becomes part of the initial load fails.
 - `pnpm --filter ucmc-web {deploy:dev,deploy:prod}`
 - `pnpm --filter ucmc-web sync-env --stack <dev|prod> --outputs <pulumi stack output --json file> [--dry-run]` — points `wrangler.jsonc` at a stack; CI runs it before every deploy build. **A new binding must be taught to `scripts/wrangler-env.ts`** or it refuses the file.
 - `pnpm --filter ucmc-web {db:generate,db:drift,db:migrate:local,db:seed:local}` — remote sysadmin seeding is the `seed-admin.yml` GitHub Action, not a script
