@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { and, eq } from "drizzle-orm";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
 import { getDb, schema } from "#/server/db";
@@ -34,6 +34,7 @@ vi.mock("#/server/rate-limit.server", () => ({
 const {
   buildFeedAction,
   createSubscriptionToken,
+  publicFeedVisible,
   resolveSubscriptionToken,
   scopeForSubscriber,
   scrubSubscriptionTokens,
@@ -42,6 +43,8 @@ const { hashToken } = await import("#/server/auth/bearer-token.server");
 const { createEventAction, overrideOccurrenceAction, cancelEventAction } =
   await import("#/features/calendar/server/event-actions.server");
 const { openSession } = await import("#/server/auth/session.server");
+const { invalidateAnonymousPermissionsCache } =
+  await import("#/server/auth/principal.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -385,6 +388,57 @@ describe("scopeForSubscriber", () => {
       .where(eq(schema.userRoles.userId, userId));
 
     expect(await scopeForSubscriber(userId)).toEqual(MEMBER_SCOPE);
+  });
+});
+
+describe("calendar view permission on the feeds (#381)", () => {
+  const anonymousGrant = {
+    roleId: "role_anonymous",
+    permissionId: "perm_public_calendar_view",
+  };
+
+  /** Make the calendar members-only, as an operator would at /access. */
+  async function revokeAnonymousGrant() {
+    await getDb()
+      .delete(schema.rolePermissions)
+      .where(
+        and(
+          eq(schema.rolePermissions.roleId, anonymousGrant.roleId),
+          eq(schema.rolePermissions.permissionId, anonymousGrant.permissionId),
+        ),
+      );
+    await invalidateAnonymousPermissionsCache();
+  }
+
+  afterEach(async () => {
+    await getDb()
+      .insert(schema.rolePermissions)
+      .values(anonymousGrant)
+      .onConflictDoNothing();
+    await invalidateAnonymousPermissionsCache();
+  });
+
+  it("serves public.ics while the anonymous role holds the grant", async () => {
+    expect(await publicFeedVisible()).toBe(true);
+  });
+
+  it("closes public.ics once the anonymous grant is revoked", async () => {
+    await revokeAnonymousGrant();
+    expect(await publicFeedVisible()).toBe(false);
+  });
+
+  it("keeps a member's subscription when only the anonymous grant goes", async () => {
+    // role_member holds the grant too, as it does for /calendar.
+    await revokeAnonymousGrant();
+    const userId = await seedUser("member@example.com", "approved");
+    await assignRole(userId, "role_member");
+    expect(await scopeForSubscriber(userId)).toEqual(MEMBER_SCOPE);
+  });
+
+  it("refuses a subscriber holding neither grant", async () => {
+    await revokeAnonymousGrant();
+    const userId = await seedUser("pending@example.com", "pending");
+    expect(await scopeForSubscriber(userId)).toBeNull();
   });
 });
 
