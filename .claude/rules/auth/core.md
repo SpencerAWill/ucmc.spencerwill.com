@@ -61,6 +61,7 @@ The rest of the auth rule is split by area under `.claude/rules/auth/` and loads
 - **Adding a permission needs a migration.** Roles and grants are editable at `/access`; the catalog isn't.
 - **No permission implication.** Where a write implies a read (`waivers:verify` → `waivers:view`, `gear:manage` → `gear:inspect`), the OR lives in one shared helper per pair (`requireWaiverViewer`, `requireGearInspector`, `requireAnyPermission` for route guards), never `includes() || includes()` at call sites, and the seed grants the read explicitly.
 - **`roles.displayName` is the only half that reaches the screen; `roles.name` is a slug.** Never prettify a slug, and no `capitalize` class on badges. Rows carry `MemberRoleBadge = { name, displayName }`; the principal's `roleDisplayNames` is filled beside `rolePermissionMap` in both branches of `loadPrincipal`.
+- **`/members/$publicId` opens a non-approved member only for `canViewAnyMemberStatus`** (`members:manage`, `waivers:view`/`:verify`, `audit:view`; `features/members/server/permissions.server.ts`). Everyone else gets the unknown-id `null`, matching the directory (#381).
 - **Non-officers never see the `/members` tab bar** (`MembersTabsBar` returns `null` without `members:manage`), and each management route stacks `requirePermissionOrNotFound("members:manage")`.
 - **`/my/feedback` 404s without either `*_feedback:submit`** (`canReachMyFeedback`).
 
