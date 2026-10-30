@@ -10,6 +10,7 @@ import {
   seedSession,
 } from "./fixtures/db";
 import { waitForHydration } from "./fixtures/hydration";
+import { CLUB_TIME_ZONE } from "#/config/time";
 
 /**
  * `/calendar` end to end (issue #187).
@@ -65,11 +66,16 @@ function collectPageErrors(page: Page): string[] {
   return errors;
 }
 
-/** A dated event, two days out, at the given visibility. */
+/**
+ * A dated event, two days out, at the given visibility. Returns the
+ * club-zone month it falls in too: two days out crosses into next month
+ * on the last two days of every month, where `/calendar` would still be
+ * showing this one.
+ */
 function seedEvent(
   title: string,
   visibility: "public" | "members" = "members",
-): string {
+): { publicId: string; month: string } {
   // Random, not `Date.now()`: tests seed two events back to back, and two
   // calls inside one millisecond produced the same id and failed on
   // UNIQUE(events.public_id).
@@ -79,7 +85,12 @@ function seedEvent(
     `INSERT INTO events (id, public_id, title, starts_at, ends_at, kind, visibility)
      VALUES ('evt_${publicId}', '${publicId}', '${title}', ${startsAt}, ${startsAt + 3600000}, 'meeting', '${visibility}')`,
   );
-  return publicId;
+  const month = Temporal.Instant.fromEpochMilliseconds(startsAt)
+    .toZonedDateTimeISO(CLUB_TIME_ZONE)
+    .toPlainDate()
+    .toPlainYearMonth()
+    .toString();
+  return { publicId, month };
 }
 
 test("renders, hydrates clean, and the grid is clickable", async ({ page }) => {
@@ -152,7 +163,7 @@ test("a type filter is shareable and survives a reload", async ({ page }) => {
 
 test("an event opens at its own URL", async ({ page }) => {
   await signIn(page, "e2e-calendar-detail");
-  const publicId = seedEvent("E2E weekly meeting");
+  const { publicId } = seedEvent("E2E weekly meeting");
 
   await page.goto(`/calendar/${publicId}`);
   await waitForHydration(page);
@@ -197,10 +208,10 @@ test("an anonymous visitor sees public events and not members-only ones", async 
   const stamp = Date.now();
   const publicTitle = `E2E anon public ${stamp}`;
   const memberTitle = `E2E anon members ${stamp}`;
-  seedEvent(publicTitle, "public");
+  const { month } = seedEvent(publicTitle, "public");
   seedEvent(memberTitle, "members");
 
-  await page.goto("/calendar");
+  await page.goto(`/calendar?month=${month}`);
   await waitForHydration(page);
 
   // Filtered in the SQL WHERE, so the members-only title never reaches

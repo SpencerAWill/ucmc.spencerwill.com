@@ -15,8 +15,8 @@ import type { EventKind } from "#/../drizzle/schema";
  * opaque per-user token in its URL instead.
  *
  * `public` can never collide with a real token: tokens are 64 hex
- * characters (uuidv7s before #379), and the literal is checked first
- * regardless. The token is looked up by its SHA-256.
+ * characters, and the literal is checked first regardless. The token
+ * is looked up by its SHA-256; D1 never holds it.
  *
  * **A bad token answers 404, never 403.** Distinguishing "no such
  * token" from "revoked" would turn this into an oracle for walking
