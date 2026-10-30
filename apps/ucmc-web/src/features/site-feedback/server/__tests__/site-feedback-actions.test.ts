@@ -3,10 +3,25 @@ import { eq } from "drizzle-orm";
 
 import type * as RepoModule from "#/features/site-feedback/server/repo.server";
 import { env } from "#/server/cloudflare-env";
+import type * as EnvModule from "#/server/env.server";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
 
 // ── mocks ──────────────────────────────────────────────────────────────
+
+// `serverEnv()` is cached per isolate, so the GitHub vars are layered on
+// top of it rather than written onto the binding object.
+const githubEnv = vi.hoisted(() => ({
+  SITE_FEEDBACK_GITHUB_TOKEN: undefined as string | undefined,
+  SITE_FEEDBACK_GITHUB_REPO: undefined as string | undefined,
+}));
+vi.mock("#/server/env.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof EnvModule>();
+  return {
+    ...actual,
+    serverEnv: () => ({ ...actual.serverEnv(), ...githubEnv }),
+  };
+});
 
 const cookieJar = new Map<string, string>();
 vi.mock("@tanstack/react-start/server", () => ({
@@ -253,10 +268,8 @@ describe("feedback lifecycle", () => {
     await signInAsMember();
     // Configure the (retired) mirror's env so a reinstated mirror would
     // actually fire; with it unset the old code was a silent no-op.
-    const priorToken = env.SITE_FEEDBACK_GITHUB_TOKEN;
-    const priorRepo = env.SITE_FEEDBACK_GITHUB_REPO;
-    env.SITE_FEEDBACK_GITHUB_TOKEN = "test-token";
-    env.SITE_FEEDBACK_GITHUB_REPO = "example/repo";
+    githubEnv.SITE_FEEDBACK_GITHUB_TOKEN = "test-token";
+    githubEnv.SITE_FEEDBACK_GITHUB_REPO = "example/repo";
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -277,16 +290,8 @@ describe("feedback lifecycle", () => {
       expect(rows[0]?.githubIssueNumber).toBeNull();
     } finally {
       fetchSpy.mockRestore();
-      if (priorToken === undefined) {
-        delete env.SITE_FEEDBACK_GITHUB_TOKEN;
-      } else {
-        env.SITE_FEEDBACK_GITHUB_TOKEN = priorToken;
-      }
-      if (priorRepo === undefined) {
-        delete env.SITE_FEEDBACK_GITHUB_REPO;
-      } else {
-        env.SITE_FEEDBACK_GITHUB_REPO = priorRepo;
-      }
+      githubEnv.SITE_FEEDBACK_GITHUB_TOKEN = undefined;
+      githubEnv.SITE_FEEDBACK_GITHUB_REPO = undefined;
     }
   });
 });

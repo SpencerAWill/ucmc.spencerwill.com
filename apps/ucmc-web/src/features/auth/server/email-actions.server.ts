@@ -34,7 +34,7 @@ import {
   requestMagicLink,
 } from "#/features/auth/server/magic-link.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 import { getDb, isUniqueViolation, schema } from "#/server/db";
 import { devOutboxHref } from "#/server/email/email-tier";
 import {
@@ -179,7 +179,7 @@ export async function requestAddEmailAction(args: {
     intent: "add_email",
     targetUserId: principal.userId,
   });
-  return { ok: true, devOutboxHref: devOutboxHref(env) };
+  return { ok: true, devOutboxHref: devOutboxHref(serverEnv()) };
 }
 
 // ── add (consume) ───────────────────────────────────────────────────────

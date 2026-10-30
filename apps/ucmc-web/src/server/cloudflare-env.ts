@@ -2,9 +2,11 @@
  * Typed accessor for Cloudflare Worker bindings.
  *
  * In the @cloudflare/vite-plugin SSR runtime (workerd), bindings declared
- * in wrangler.jsonc — D1 databases, KV namespaces, vars, secrets — are
+ * in wrangler.jsonc — D1 databases, KV namespaces, R2 buckets — are
  * reachable via the `cloudflare:workers` `env` import. This module
  * re-exports it with proper types so server code never has to cast.
+ * Vars and secrets arrive on the same object but are typed and
+ * validated by `./env.server`, not here.
  */
 import { env as workerEnv } from "cloudflare:workers";
 
@@ -32,96 +34,11 @@ export interface WorkerEnv {
   CALENDAR_RATE_LIMITER: RateLimit;
   CEREMONY_RATE_LIMITER: RateLimit;
 
-  // Vars — injected at deploy time from Pulumi stack outputs for dev/prod,
-  // supplied via .env.local locally. See .env.example for documentation.
-  APP_BASE_URL: string;
-  WEBAUTHN_RP_ID: string;
-  WEBAUTHN_RP_NAME: string;
-  // Optional: dev has no sending address since #297 (its mail goes to
-  // the outbox). `sendEmail` refuses the Resend and Mailpit tiers
-  // without it rather than sending from `<undefined>`.
-  RESEND_FROM?: string;
-  RESEND_FROM_NAME: string;
-  // Cloudflare account the worker's resources live in. Every Billable
-  // Usage / GraphQL Analytics path embeds it. Optional: unset simply
-  // disables the daily cost snapshot, the same way site-feedback filing
-  // degrades without its GitHub vars below.
-  CLOUDFLARE_ACCOUNT_ID?: string;
-
-  // Secrets — uploaded with each deploy (`wrangler deploy --secrets-file`
-  // in .github/actions/deploy) in deployed envs, or .env.local
-  // locally. RESEND_API_KEY is optional because the email adapter uses
-  // Mailpit or the outbox instead, or throws (see `email/email-tier.ts`). SESSION_SECRET is required wherever
-  // the proof cookie is issued — the module that reads it throws at first
-  // use, not here at module scope. TURNSTILE_SECRET_KEY is optional —
-  // when unset, the sign-in form skips the challenge and Turnstile
-  // verification is bypassed server-side (local dev without a widget).
-  RESEND_API_KEY?: string;
-  SESSION_SECRET?: string;
-  TURNSTILE_SECRET_KEY?: string;
-
-  // Site-feedback triage — where maintainers draft and publish GitHub
-  // issues from site-feedback submissions. SITE_FEEDBACK_GITHUB_REPO is
-  // "owner/name"; SITE_FEEDBACK_GITHUB_TOKEN is a fine-grained PAT, Issues
-  // read/write. Used only by maintainer actions in site-feedback triage;
-  // never on submit. Both optional: when unset, GitHub actions are off and
-  // everything else works.
-  SITE_FEEDBACK_GITHUB_TOKEN?: string;
-  SITE_FEEDBACK_GITHUB_REPO?: string;
-
-  // Cost/usage snapshots (#268) — read ONLY by the daily cron, never by
-  // a route handler. Optional: when unset (or when CLOUDFLARE_ACCOUNT_ID
-  // is), the snapshot task logs and skips, and every other daily task
-  // still runs.
-  //
-  // **Account-scoped and read-only across more than billing**, which is
-  // why it is not named for billing: Billing Read covers
-  // `/billable-usage`, and Workers Scripts Read + D1 Read + Workers KV
-  // Storage Read are each required for their own GraphQL analytics
-  // dataset — Account Analytics Read does NOT cover them, despite what
-  // the docs imply. It therefore reads operational telemetry for the
-  // WHOLE account, including workers unrelated to this app.
-  //
-  // That breadth is why it lives on the cron path and nowhere a request
-  // can reach it. **Adding a scope here widens a credential the whole
-  // account is exposed to** — weigh it like a permission grant, not a
-  // config tweak.
-  CLOUDFLARE_ACCOUNT_READ_TOKEN?: string;
-
-  // Dev-only — base URL of the Mailpit sidecar (e.g.
-  // "http://mailpit:8025"). When set AND RESEND_API_KEY is absent, the
-  // email adapter POSTs to Mailpit's HTTP send API. See
-  // docker-compose.yml for the sidecar config.
-  MAILPIT_URL?: string;
-
-  // Dev-only — the email outbox (#297, docs/adr/0001-dev-email-outbox.md).
-  // When EMAIL_OUTBOX is "1", `sendEmail` stores each message in D1
-  // instead of sending it, and `/dev/outbox` lists them. Written as vars
-  // by `sync-env` from the dev stack's Pulumi outputs; prod's outputs
-  // are empty strings, and infra refuses `emailOutbox` on prod.
-  //
-  // The page verifies Cloudflare Access's token itself: issuer
-  // `https://${ACCESS_TEAM_DOMAIN}`, audience ACCESS_OUTBOX_AUD (the
-  // Access application's tag). Without both, the sender refuses
-  // EMAIL_OUTBOX rather than fill a table nobody can read.
-  EMAIL_OUTBOX?: string;
-  ACCESS_TEAM_DOMAIN?: string;
-  ACCESS_OUTBOX_AUD?: string;
-
-  // Logging threshold for `server/log/log.server.ts` — "debug" |
-  // "info" | "warn" | "error". Unset everywhere today, which is the
-  // point: `log.debug` lines can live in the code permanently and be
-  // turned on for one deployed worker during an incident without a
-  // code change. Anything unrecognised falls back to "info".
+  // Vars and secrets are NOT here: read them validated, through
+  // `serverEnv()` in `./env.server` (#319). The one exception is
+  // LOG_LEVEL, which the logger reads raw because it has to keep working
+  // while that validation is failing.
   LOG_LEVEL?: string;
-
-  // E2e-only escape hatch — when set to "1", auth/health/upload rate
-  // limiters fail open (allow every request). The Playwright suite does
-  // 6+ rate-limited calls per run and reuses the dev server between
-  // runs, so the 10 req/60 s budget per IP would otherwise trip mid-run.
-  // Production envs MUST NEVER set this; only Playwright's webServer env
-  // and a dev who's actively running e2e should ever flip it on.
-  E2E_BYPASS_RATE_LIMIT?: string;
 }
 
 export const env = workerEnv as unknown as WorkerEnv;

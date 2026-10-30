@@ -1,6 +1,7 @@
 import { getRequestHeader } from "@tanstack/react-start/server";
 
 import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 
 /**
  * E2e-only escape hatch. When `E2E_BYPASS_RATE_LIMIT=1` is set on the
@@ -10,7 +11,7 @@ import { env } from "#/server/cloudflare-env";
  * server. Production envs MUST NEVER set this.
  */
 function isBypassed(): boolean {
-  return env.E2E_BYPASS_RATE_LIMIT === "1";
+  return serverEnv().E2E_BYPASS_RATE_LIMIT === "1";
 }
 
 /**

@@ -6,8 +6,8 @@
  *
  * rpID is the hostname the credential is bound to — a passkey registered
  * under `dev.ucmc.spencerwill.com` cannot be used on `ucmc.spencerwill.com`
- * (WebAuthn spec). It's pulled from `env.WEBAUTHN_RP_ID`, which Pulumi
- * sets per-env (see apps/ucmc-web/src/server/cloudflare-env.ts).
+ * (WebAuthn spec). It's pulled from `WEBAUTHN_RP_ID`, which Pulumi
+ * sets per-env (validated in apps/ucmc-web/src/server/env.server.ts).
  */
 import {
   generateAuthenticationOptions,
@@ -23,20 +23,20 @@ import type {
   RegistrationResponseJSON,
 } from "@simplewebauthn/server";
 
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 
 function rpID(): string {
-  return env.WEBAUTHN_RP_ID;
+  return serverEnv().WEBAUTHN_RP_ID;
 }
 
 function rpName(): string {
-  return env.WEBAUTHN_RP_NAME;
+  return serverEnv().WEBAUTHN_RP_NAME;
 }
 
 function expectedOrigin(): string {
   // APP_BASE_URL is the scheme+host the browser sees; WebAuthn verify
   // enforces that the clientDataJSON.origin matches exactly.
-  return env.APP_BASE_URL;
+  return serverEnv().APP_BASE_URL;
 }
 
 export interface UserForRegistration {

@@ -10,7 +10,21 @@ import {
   getIssue,
   getIssueStates,
 } from "#/features/site-feedback/server/github.server";
-import { env } from "#/server/cloudflare-env";
+import type * as EnvModule from "#/server/env.server";
+
+// `serverEnv()` is cached per isolate, so the GitHub vars are layered on
+// top of it rather than written onto the binding object.
+const githubEnv = vi.hoisted(() => ({
+  SITE_FEEDBACK_GITHUB_TOKEN: undefined as string | undefined,
+  SITE_FEEDBACK_GITHUB_REPO: undefined as string | undefined,
+}));
+vi.mock("#/server/env.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof EnvModule>();
+  return {
+    ...actual,
+    serverEnv: () => ({ ...actual.serverEnv(), ...githubEnv }),
+  };
+});
 
 const cfg = { token: "tok", repo: "o/r" };
 
@@ -33,29 +47,14 @@ afterEach(() => {
 
 describe("getGithubConfig", () => {
   it("returns null when either env var is unset", () => {
-    const priorToken = env.SITE_FEEDBACK_GITHUB_TOKEN;
-    const priorRepo = env.SITE_FEEDBACK_GITHUB_REPO;
-    try {
-      delete env.SITE_FEEDBACK_GITHUB_TOKEN;
-      env.SITE_FEEDBACK_GITHUB_REPO = "o/r";
-      expect(getGithubConfig()).toBeNull();
-      env.SITE_FEEDBACK_GITHUB_TOKEN = "t";
-      delete env.SITE_FEEDBACK_GITHUB_REPO;
-      expect(getGithubConfig()).toBeNull();
-      env.SITE_FEEDBACK_GITHUB_REPO = "o/r";
-      expect(getGithubConfig()).toEqual({ token: "t", repo: "o/r" });
-    } finally {
-      if (priorToken === undefined) {
-        delete env.SITE_FEEDBACK_GITHUB_TOKEN;
-      } else {
-        env.SITE_FEEDBACK_GITHUB_TOKEN = priorToken;
-      }
-      if (priorRepo === undefined) {
-        delete env.SITE_FEEDBACK_GITHUB_REPO;
-      } else {
-        env.SITE_FEEDBACK_GITHUB_REPO = priorRepo;
-      }
-    }
+    githubEnv.SITE_FEEDBACK_GITHUB_TOKEN = undefined;
+    githubEnv.SITE_FEEDBACK_GITHUB_REPO = "o/r";
+    expect(getGithubConfig()).toBeNull();
+    githubEnv.SITE_FEEDBACK_GITHUB_TOKEN = "t";
+    githubEnv.SITE_FEEDBACK_GITHUB_REPO = undefined;
+    expect(getGithubConfig()).toBeNull();
+    githubEnv.SITE_FEEDBACK_GITHUB_REPO = "o/r";
+    expect(getGithubConfig()).toEqual({ token: "t", repo: "o/r" });
   });
 });
 

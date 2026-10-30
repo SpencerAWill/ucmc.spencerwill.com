@@ -9,7 +9,7 @@
  */
 import { sql } from "drizzle-orm";
 
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 import { getDb, schema } from "#/server/db";
 import { DEV_OUTBOX_PATH, emailTier } from "#/server/email/email-tier";
 import { getKv } from "#/server/kv";
@@ -79,7 +79,7 @@ async function checkEmail(): Promise<HealthCheck> {
 
   // The same `emailTier()` `sendEmail` reads, so /health reports which
   // provider it would actually use right now.
-  const tier = emailTier(env);
+  const tier = emailTier(serverEnv());
 
   if (tier.tier === "outbox") {
     // Probes the table itself, not D1 in general: `d1:read` passes on a
@@ -126,7 +126,7 @@ async function checkEmail(): Promise<HealthCheck> {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          Authorization: `Bearer ${serverEnv().RESEND_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: "{}",
@@ -153,7 +153,7 @@ async function checkEmail(): Promise<HealthCheck> {
 
   if (tier.tier === "mailpit") {
     try {
-      const res = await fetch(`${env.MAILPIT_URL}/api/v1/info`, {
+      const res = await fetch(`${serverEnv().MAILPIT_URL}/api/v1/info`, {
         method: "GET",
         signal: AbortSignal.timeout(EMAIL_PROBE_TIMEOUT_MS),
       });

@@ -14,10 +14,10 @@
  * its payload shape cannot parse as a ceremony anyway.
  */
 import { bytesToBase64Url } from "#/server/auth/bearer-token.server";
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 
 function requireSecret(): string {
-  const secret = env.SESSION_SECRET;
+  const secret = serverEnv().SESSION_SECRET;
   if (!secret || secret.length < 32) {
     throw new Error(
       "SESSION_SECRET must be set (>=32 chars) to issue or read signed cookies",

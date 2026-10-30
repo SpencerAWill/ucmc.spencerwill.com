@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type * as CloudflareEnvModule from "#/server/cloudflare-env";
+import type * as EnvModule from "#/server/env.server";
 
 /**
  * `/health` is the post-deploy gate: the deploy action runs a smoke spec that
@@ -28,10 +28,9 @@ vi.mock("#/server/rate-limit.server", () => ({
   checkHealthRateLimit: async () => rateLimitAllowed.value,
 }));
 
-// Overrides ONLY the email-tier vars. A wholesale mock of
-// this module would take `DB`, `KV` and the buckets with it — `getDb()`
-// reads `env` from right here — and the probes would then be testing the
-// mock. The Proxy leaves every other binding untouched.
+// Overrides ONLY the email-tier vars, on top of the real validated env.
+// The bindings come from `cloudflare-env`, which stays unmocked, so the
+// probes still reach real D1, KV and R2.
 const emailEnv = vi.hoisted(() => ({
   RESEND_API_KEY: undefined as string | undefined,
   MAILPIT_URL: undefined as string | undefined,
@@ -40,18 +39,11 @@ const emailEnv = vi.hoisted(() => ({
   ACCESS_OUTBOX_AUD: undefined as string | undefined,
 }));
 
-vi.mock("#/server/cloudflare-env", async (importOriginal) => {
-  const actual = await importOriginal<typeof CloudflareEnvModule>();
+vi.mock("#/server/env.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof EnvModule>();
   return {
     ...actual,
-    env: new Proxy(actual.env, {
-      get(target, prop, receiver) {
-        if (typeof prop === "string" && prop in emailEnv) {
-          return emailEnv[prop as keyof typeof emailEnv];
-        }
-        return Reflect.get(target, prop, receiver) as unknown;
-      },
-    }),
+    serverEnv: () => ({ ...actual.serverEnv(), ...emailEnv }),
   };
 });
 

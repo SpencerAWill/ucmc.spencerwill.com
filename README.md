@@ -200,7 +200,7 @@ Copy `apps/ucmc-web/.env.example` to `apps/ucmc-web/.env.local` and fill in the 
 
 The full precedence chain (most → least specific, merged) is `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env`. The devcontainer also sets `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` in `docker-compose.yml`, so exporting a var in your host shell (e.g. `export SESSION_SECRET=…`) overrides whatever is in `.env.local` — useful for keeping per-developer secrets out of the workspace entirely.
 
-`.env.local` is the local analog of the Worker vars and secrets a deploy sets from Pulumi and the GitHub environments. Missing any required value will crash the Worker on first request that touches it.
+`.env.local` is the local analog of the Worker vars and secrets a deploy sets from Pulumi and the GitHub environments. The Worker validates them on the first request (`src/server/env.server.ts`), and a missing or malformed value — or a combination that can't work, like half a Turnstile pair — makes **every** request a 500, with an `env.invalid` log line naming the variables (never their values).
 
 Notable vars: `VITE_TURNSTILE_SITE_KEY` (client-side — leave unset to skip the Turnstile widget in local dev, or use Cloudflare's [always-pass test key](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) for integration testing).
 

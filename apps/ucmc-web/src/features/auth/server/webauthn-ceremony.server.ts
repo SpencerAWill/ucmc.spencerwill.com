@@ -27,11 +27,11 @@ import {
 import { CHALLENGE_TTL_SECONDS } from "#/features/auth/server/webauthn-challenge.server";
 import type { Ceremony } from "#/features/auth/server/webauthn-challenge.server";
 import { signJson, verifySignedJson } from "#/server/auth/signing.server";
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 
 const PURPOSE = "webauthn-ceremony";
 
-const isSecure = () => env.APP_BASE_URL.startsWith("https://");
+const isSecure = () => serverEnv().APP_BASE_URL.startsWith("https://");
 
 // `__Host-` prefix in prod; the browser will only accept it over HTTPS
 // with Path=/ and no Domain attribute — same defense-in-depth as the

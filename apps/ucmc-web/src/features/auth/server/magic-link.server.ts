@@ -20,7 +20,7 @@ import { normalizeEmail } from "#/server/auth/email-normalize";
 import { getDb, schema } from "#/server/db";
 import { magicLinkEmail, sendEmail } from "#/server/email/resend";
 
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 
 export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15; // 15 minutes
 
@@ -97,7 +97,7 @@ export async function requestMagicLink(
   }
   const callbackPath =
     args.intent === "add_email" ? "/verify-email" : "/auth/callback";
-  const url = `${env.APP_BASE_URL}${callbackPath}?${params.toString()}`;
+  const url = `${serverEnv().APP_BASE_URL}${callbackPath}?${params.toString()}`;
   await sendEmail(magicLinkEmail({ to: email, url, intent: args.intent }));
 }
 
