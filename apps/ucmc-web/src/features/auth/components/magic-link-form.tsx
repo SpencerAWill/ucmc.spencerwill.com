@@ -1,4 +1,5 @@
 import { Turnstile } from "@marsidev/react-turnstile";
+import type { TurnstileInstance } from "@marsidev/react-turnstile";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -45,8 +46,14 @@ export function MagicLinkForm({
 }) {
   const [submittedTo, setSubmittedTo] = useState<string | null>(null);
   const [outboxHref, setOutboxHref] = useState<string | null>(null);
-  const turnstileToken = useRef("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileFailed, setTurnstileFailed] = useState(false);
+  const turnstile = useRef<TurnstileInstance>(null);
   const turnstileSiteKey = env.VITE_TURNSTILE_SITE_KEY;
+  // The server verifies every token, an empty one included (#381), so a
+  // submit before the widget has answered would be silently dropped.
+  // Without a site key there is no widget and nothing to wait for.
+  const awaitingTurnstile = Boolean(turnstileSiteKey) && !turnstileToken;
 
   // Passkey autofill runs in the background. If it succeeds
   // the whole component navigates away before the magic-link mutation
@@ -66,13 +73,19 @@ export function MagicLinkForm({
       mutation.mutate(
         {
           email: value.email,
-          turnstileToken: turnstileToken.current,
+          turnstileToken,
           redirect: redirectTo,
         },
         {
           onSuccess: (result) => {
             setOutboxHref(result.devOutboxHref);
             setSubmittedTo(value.email);
+          },
+          // A token is single-use, and the server may have spent this one
+          // before failing, so ask the widget for a fresh one.
+          onError: () => {
+            setTurnstileToken("");
+            turnstile.current?.reset();
           },
         },
       );
@@ -92,6 +105,9 @@ export function MagicLinkForm({
           className="text-primary underline-offset-4 hover:underline"
           onClick={() => {
             setSubmittedTo(null);
+            // The widget remounts with the form and issues a new token;
+            // the one held here was spent on the request just sent.
+            setTurnstileToken("");
             form.reset();
           }}
         >
@@ -123,15 +139,29 @@ export function MagicLinkForm({
 
       {turnstileSiteKey ? (
         <Turnstile
+          ref={turnstile}
           siteKey={turnstileSiteKey}
           onSuccess={(token) => {
-            turnstileToken.current = token;
+            setTurnstileFailed(false);
+            setTurnstileToken(token);
           }}
           onExpire={() => {
-            turnstileToken.current = "";
+            setTurnstileToken("");
+          }}
+          onError={() => {
+            // The button stays held without a token, so say why.
+            setTurnstileFailed(true);
+            setTurnstileToken("");
           }}
           options={{ theme: "auto", size: "flexible" }}
         />
+      ) : null}
+
+      {turnstileFailed ? (
+        <p role="alert" className="text-sm text-destructive">
+          The verification check didn&rsquo;t load. Refresh the page to try
+          again.
+        </p>
       ) : null}
 
       {mutation.isError ? (
@@ -141,7 +171,10 @@ export function MagicLinkForm({
       ) : null}
 
       <form.AppForm>
-        <form.SubscribeButton label="Email me a link" />
+        <form.SubscribeButton
+          label="Email me a link"
+          disabled={awaitingTurnstile}
+        />
       </form.AppForm>
     </form>
   );

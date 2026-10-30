@@ -40,7 +40,10 @@ import type {
 } from "#/server/member-profile/profile-facets.server";
 import { loadProfileFacets } from "#/server/member-profile/profile-facets.server";
 import type { MemberWaiverStatus } from "#/server/waivers/current-attestation.server";
-import { requireMembersManager } from "#/features/members/server/permissions.server";
+import {
+  canViewAnyMemberStatus,
+  requireMembersManager,
+} from "#/features/members/server/permissions.server";
 import { optionalProfileText } from "#/server/profile/profile-schemas";
 
 // ── auth helpers ────────────────────────────────────────────────────────
@@ -516,6 +519,12 @@ export async function getMemberDetailAction(
   // /members/<publicId> URL can't surface a stub on the detail page.
   // Indistinguishable from an unknown publicId by design.
   if (row.status === "unclaimed") {
+    return null;
+  }
+  // The directory shows other viewers approved members only; mirror it
+  // so a known publicId can't open a pending, rejected or deactivated
+  // member (and their email). Same null as an unknown id (#381).
+  if (row.status !== "approved" && !canViewAnyMemberStatus(principal)) {
     return null;
   }
 

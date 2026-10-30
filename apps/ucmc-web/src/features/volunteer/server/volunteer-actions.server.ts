@@ -1,8 +1,9 @@
 /**
  * /volunteer actions.
  *
- * The read (`getVolunteerContentAction`) is anonymous-safe and gated at
- * the route layer by `public_volunteer:view`; every write gates on
+ * The read (`getVolunteerContentAction`) is anonymous-safe and gates on
+ * `public_volunteer:view` here as well as at the route layer (#381);
+ * every write gates on
  * `public_volunteer:manage` here at the action layer and records one
  * audit event.
  *
@@ -41,6 +42,7 @@ import {
 } from "#/features/volunteer/server/volunteer-repo.server";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
+import { assertCanView } from "#/server/auth/view-permission.server";
 import { getDb, schema } from "#/server/db";
 
 export interface VolunteerOpportunityEntry {
@@ -94,6 +96,7 @@ function toEntry(row: EventRow): VolunteerEventEntry {
 export async function getVolunteerContentAction(
   now: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<VolunteerContent> {
+  await assertCanView("public_volunteer:view");
   const dayStart = startOfClubDay(now);
   const [opportunities, upcoming, past] = await Promise.all([
     listOpportunities(),

@@ -23,9 +23,9 @@ import {
 } from "#/server/markdown-pages/markdown-pages-repo.server";
 import { permissionsForSlug } from "#/server/markdown-pages/slugs";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
-import { loadAnonymousPermissions } from "#/server/auth/principal.server";
 import type { Principal } from "#/server/auth/principal.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import { assertCanView } from "#/server/auth/view-permission.server";
 
 async function requireMarkdownPageManager(
   slug: UpdateMarkdownPageInput["slug"],
@@ -41,32 +41,10 @@ async function requireMarkdownPageManager(
   return principal;
 }
 
-/**
- * Server-side equivalent of `requireViewPermission` for this action
- * layer. We can't import the client-side guard (it takes a
- * QueryClient), so re-derive: an authenticated principal needs the
- * slug's view permission on their own set or on `role_anonymous`
- * (signing in never hides a public page — a pending account holds no
- * roles yet); anonymous callers need it on `role_anonymous`.
- */
-async function assertCanViewSlug(
-  slug: GetMarkdownPageInput["slug"],
-): Promise<void> {
-  const { view } = permissionsForSlug(slug);
-  const principal = await loadCurrentPrincipal();
-  if (principal?.permissions.includes(view)) {
-    return;
-  }
-  const anonPerms = await loadAnonymousPermissions();
-  if (!anonPerms.includes(view)) {
-    throw new Error(`Forbidden: missing ${view}`);
-  }
-}
-
 export async function getMarkdownPageAction(
   input: GetMarkdownPageInput,
 ): Promise<{ slug: GetMarkdownPageInput["slug"]; markdown: string }> {
-  await assertCanViewSlug(input.slug);
+  await assertCanView(permissionsForSlug(input.slug).view);
   const markdown = await readMarkdownPage(input.slug);
   return { slug: input.slug, markdown };
 }

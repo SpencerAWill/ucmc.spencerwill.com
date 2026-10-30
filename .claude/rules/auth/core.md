@@ -38,7 +38,7 @@ The rest of the auth rule is split by area under `.claude/rules/auth/` and loads
 - **Every email insert and lookup goes through `email-normalize.ts`** (`trim().toLowerCase()`). Race safety relies on the UNIQUE constraint via `isUniqueViolation()`.
 - **Adding an email is a magic-link round-trip (`intent = "add_email"`)**, and `/verify-email` asserts `session.userId === magicLink.target_user_id`. Promotion is a `db.batch` swap. Removing the primary or the last email is blocked.
 - **`requestMagicLinkAction` pads to ≥500 ms plus 0–300 ms jitter.** Only that publicly enumerable endpoint gets jitter.
-- **Turnstile**: the widget is gated on `VITE_TURNSTILE_SITE_KEY`; server verification fails open when `TURNSTILE_SECRET_KEY` is unset.
+- **Turnstile**: the widget is gated on `VITE_TURNSTILE_SITE_KEY`; server verification fails open when `TURNSTILE_SECRET_KEY` is unset. **The server verifies every token, an empty one included** (#381), so the form holds its submit button until the widget answers, and drops the token after a send or a failure (tokens are single-use).
 
 **Registration**
 
@@ -61,6 +61,7 @@ The rest of the auth rule is split by area under `.claude/rules/auth/` and loads
 - **Adding a permission needs a migration.** Roles and grants are editable at `/access`; the catalog isn't.
 - **No permission implication.** Where a write implies a read (`waivers:verify` → `waivers:view`, `gear:manage` → `gear:inspect`), the OR lives in one shared helper per pair (`requireWaiverViewer`, `requireGearInspector`, `requireAnyPermission` for route guards), never `includes() || includes()` at call sites, and the seed grants the read explicitly.
 - **`roles.displayName` is the only half that reaches the screen; `roles.name` is a slug.** Never prettify a slug, and no `capitalize` class on badges. Rows carry `MemberRoleBadge = { name, displayName }`; the principal's `roleDisplayNames` is filled beside `rolePermissionMap` in both branches of `loadPrincipal`.
+- **`/members/$publicId` opens a non-approved member only for `canViewAnyMemberStatus`** (`members:manage`, `waivers:view`/`:verify`, `audit:view`; `features/members/server/permissions.server.ts`). Everyone else gets the unknown-id `null`, matching the directory (#381).
 - **Non-officers never see the `/members` tab bar** (`MembersTabsBar` returns `null` without `members:manage`), and each management route stacks `requirePermissionOrNotFound("members:manage")`.
 - **`/my/feedback` 404s without either `*_feedback:submit`** (`canReachMyFeedback`).
 
@@ -72,4 +73,5 @@ The rest of the auth rule is split by area under `.claude/rules/auth/` and loads
 
 - **A permission**: a migration (row + seed grants), plus a shared helper and constant in `guards.ts` if it pairs with another. Only `anonymous_grantable` permissions may go on `anonymous` (`emulation.md`).
 - **A gated route**: guards take `{ context, location }`; a `/my` child needs no auth guard of its own.
+- **A public page's read action** calls `assertCanView("<page>:view")` (`src/server/auth/view-permission.server.ts`) as well as the route's `requireViewPermission`, so revoking the anonymous grant closes the server fn too (#381). It checks the anonymous role first (KV-cached), then the real principal.
 - **A field on the principal**: assume the user can read it.

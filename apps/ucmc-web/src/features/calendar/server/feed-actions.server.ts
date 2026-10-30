@@ -31,6 +31,7 @@ import { uuidv7 } from "uuidv7";
 
 import { hashToken } from "#/server/auth/bearer-token.server";
 import { loadPrincipal } from "#/server/auth/principal.server";
+import { canView } from "#/server/auth/view-permission.server";
 import { getDb, schema } from "#/server/db";
 import type { EventKind } from "#/../drizzle/schema";
 import {
@@ -199,11 +200,28 @@ async function hashUnhashedRows(
   return result.meta.changes;
 }
 
-/** The visibility scope a subscription's owner currently holds. */
+/**
+ * Whether `public.ics` is served at all. Same rule as `/calendar`: it
+ * goes dark when an operator takes `public_calendar:view` off the
+ * anonymous role (#381), without touching `calendar.feed_enabled`, which
+ * would also stop every member's subscription.
+ */
+export async function publicFeedVisible(): Promise<boolean> {
+  return canView("public_calendar:view", async () => null);
+}
+
+/**
+ * The visibility scope a subscription's owner currently holds, or `null`
+ * when they may not view the calendar at all (#381) — the route answers
+ * that with the same 404 as a bad token.
+ */
 export async function scopeForSubscriber(
   userId: string,
-): Promise<VisibilityScope> {
+): Promise<VisibilityScope | null> {
   const principal = await loadPrincipal(userId);
+  if (!(await canView("public_calendar:view", async () => principal))) {
+    return null;
+  }
   if (!principal) {
     return PUBLIC_SCOPE;
   }

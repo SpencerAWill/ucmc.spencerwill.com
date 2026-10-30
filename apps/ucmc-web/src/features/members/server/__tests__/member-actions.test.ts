@@ -1025,6 +1025,34 @@ describe("getMemberDetailAction", () => {
     });
     expect(await getMemberDetailAction(await publicIdOf(stub))).toBeNull();
   });
+
+  it.each(["pending", "rejected", "deactivated"] as const)(
+    "answers null to a plain member for a %s member",
+    async (status) => {
+      // #381: the directory shows a plain member approved members only,
+      // and a known publicId must not open the rest (with their email).
+      await signInAsMember();
+      const targetId = await seedUser(`${status}@example.com`, { status });
+      expect(
+        await getMemberDetailAction(await publicIdOf(targetId)),
+      ).toBeNull();
+    },
+  );
+
+  it.each(["members:manage", "waivers:view", "waivers:verify", "audit:view"])(
+    "opens a non-approved member for a %s holder",
+    async (permission) => {
+      // Managers review applications, the waiver card is the only place
+      // a deactivated member's attestation shows, and the audit log
+      // links to whoever an entry names.
+      await signInWithPermission("viewer@example.com", permission);
+      const targetId = await seedUser("former@example.com", {
+        status: "deactivated",
+      });
+      const detail = await detailOf(await publicIdOf(targetId));
+      expect(detail.status).toBe("deactivated");
+    },
+  );
 });
 
 // ── loadCurrentPrincipal deactivated check ──────────────────────────────

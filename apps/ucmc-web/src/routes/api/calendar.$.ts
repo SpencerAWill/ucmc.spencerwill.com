@@ -76,6 +76,7 @@ export const Route = createFileRoute("/api/calendar/$")({
           await import("#/server/rate-limit.server");
         const {
           buildFeedAction,
+          publicFeedVisible,
           resolveSubscriptionToken,
           scopeForSubscriber,
         } = await import("#/features/calendar/server/feed-actions.server");
@@ -94,7 +95,11 @@ export const Route = createFileRoute("/api/calendar/$")({
 
         let scope = PUBLIC_SCOPE;
         let calendarName = "UCMC";
-        if (!isPublicFeed) {
+        if (isPublicFeed) {
+          if (!(await publicFeedVisible())) {
+            return notFound();
+          }
+        } else {
           const userId = await resolveSubscriptionToken(identifier);
           if (!userId) {
             return notFound();
@@ -104,7 +109,13 @@ export const Route = createFileRoute("/api/calendar/$")({
           // revocation story a subscription URL can have. An officer
           // who loses their role stops seeing exec events on their next
           // poll.
-          scope = await scopeForSubscriber(userId);
+          // `null` is an owner who may no longer view the calendar; it
+          // answers like a bad token.
+          const subscriberScope = await scopeForSubscriber(userId);
+          if (!subscriberScope) {
+            return notFound();
+          }
+          scope = subscriberScope;
           calendarName = "UCMC (my calendar)";
         }
 

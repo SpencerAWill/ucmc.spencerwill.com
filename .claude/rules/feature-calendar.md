@@ -43,6 +43,7 @@ Why `events` is a base table, why recurrence is club-zone calendar arithmetic, a
 - **Visibility (`public | members | officers`, nested) is filtered in the SQL `WHERE`**, never in the payload. The scope is a required repo parameter; `visibilityScopeFor(isApprovedMember, canReadPrivate)` builds it.
 - **No `events:view` permission.** Approved membership is the qualification; `events:read_private` and `events:manage` are the two that exist. `/calendar` itself is public (`pages.calendar` + `public_calendar:view`, held by `role_anonymous`); events default to `visibility = 'members'`.
 - **Feed scope is computed from the token's user at fetch time**, never baked in.
+- **Both feeds honour `public_calendar:view`** (#381), by `canView`'s rule (anonymous role, or the token's owner). Revoking the anonymous grant 404s `public.ics` while members' subscriptions keep working through `role_member`; a token whose owner holds neither answers like a bad token. `calendar.feed_enabled` stays the switch for both.
 - **A bad token answers 404, never 403.** Never log the token or put it in an audit `target_id` (use the row id).
 - **Only the token's SHA-256 reaches D1** (`hashToken`, as for sessions). Look up by `token_hash`, never by `token`, which holds `hashed:<id>`.
 - **The daily cron's `scrubSubscriptionTokens` is a permanent guard**, not a migration shim: it hashes any row missing `token_hash` and overwrites any raw `token`. A writer that bypasses `createSubscriptionToken` (seeds, hand-written SQL) is caught within a day.

@@ -15,6 +15,8 @@
  *
  * Auth-gated to match the `/members` directory policy (any approved
  * member may view another member's avatar; anonymous visitors get 401).
+ * A signed-in account that isn't approved yet gets its own avatar only,
+ * which the account chrome and `/register/pending` show (#381).
  * The gate is also a defense-in-depth fallback in case `VITE_R2_PUBLIC_HOST`
  * is misconfigured in a deployed env and traffic flows through here.
  *
@@ -33,22 +35,26 @@ export const Route = createFileRoute("/api/avatars/$")({
   server: {
     handlers: {
       GET: async ({ params }: { params: { _splat?: string } }) => {
-        const { loadCurrentSession } =
+        const { loadCurrentPrincipal } =
           await import("#/server/auth/session.server");
         const { getAvatar } = await import("#/server/r2/avatars.server");
 
-        // Lightweight session check only — avatar bytes don't need the
-        // full principal, so we skip the RBAC/profile/email joins +
-        // sliding-refresh write that loadCurrentPrincipal pays for.
-        // See loadCurrentSession() in session.server.ts.
-        const session = await loadCurrentSession();
-        if (!session) {
+        // The full principal, not loadCurrentSession: status is on the
+        // user row, and only local dev pays for the extra joins.
+        const principal = await loadCurrentPrincipal();
+        if (!principal) {
           return new Response("Unauthorized", { status: 401 });
         }
 
         const key = params._splat ?? "";
         if (!KEY_PATTERN.test(key)) {
           return new Response("Not found", { status: 404 });
+        }
+        if (
+          principal.status !== "approved" &&
+          !key.startsWith(`avatars/${principal.userId}/`)
+        ) {
+          return new Response("Forbidden", { status: 403 });
         }
 
         const object = await getAvatar(key);

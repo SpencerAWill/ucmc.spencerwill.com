@@ -168,8 +168,10 @@ export async function requestMagicLinkAction(args: {
     // Turnstile check first — rejects bots before any rate-limit or DB
     // work. Silently succeeds when TURNSTILE_SECRET_KEY is unset (local
     // dev). Returns the same { ok: true } shape on failure so the caller
-    // can't distinguish a rejected challenge from a sent email.
-    if (args.turnstileToken && !(await verifyTurnstile(args.turnstileToken))) {
+    // can't distinguish a rejected challenge from a sent email. An empty
+    // token is verified too, never skipped: otherwise a client that
+    // leaves it out walks past the challenge (#381).
+    if (!(await verifyTurnstile(args.turnstileToken))) {
       return result;
     }
 

@@ -1,7 +1,7 @@
 /**
  * Goosedown Gazette CRUD actions. Reads (`getGazetteIssuesAction`,
- * `getGazetteIssueByPublicIdAction`) are gated at the route layer by
- * `public_gazette:view`; writes gate on `public_gazette:manage` here
+ * `getGazetteIssueByPublicIdAction`) gate on `public_gazette:view` here
+ * as well as at the route layer (#381); writes gate on `public_gazette:manage` here
  * via `requireGazetteManager()` and record one audit event per
  * mutation.
  *
@@ -36,6 +36,7 @@ import type {
 } from "#/features/gazette/server/gazette-schemas";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
+import { assertCanView } from "#/server/auth/view-permission.server";
 import { getDb, schema } from "#/server/db";
 import { shortContentHash } from "#/server/r2/image-codec.server";
 import {
@@ -66,6 +67,7 @@ export interface GazetteIssueSummary {
 export async function getGazetteIssuesAction(): Promise<{
   issues: GazetteIssueSummary[];
 }> {
+  await assertCanView("public_gazette:view");
   const rows = await listGazetteIssues();
   return {
     issues: rows.map((r) => ({
@@ -87,6 +89,7 @@ export async function getGazetteIssuesAction(): Promise<{
 export async function getGazetteIssueByPublicIdAction(
   input: GetGazetteIssueByPublicIdInput,
 ): Promise<GazetteIssueSummary | null> {
+  await assertCanView("public_gazette:view");
   const row = await getGazetteIssueByPublicId(input.publicId);
   if (!row) {
     return null;
