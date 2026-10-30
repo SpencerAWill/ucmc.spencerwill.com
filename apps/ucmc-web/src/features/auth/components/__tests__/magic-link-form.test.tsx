@@ -23,6 +23,32 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
 }));
 
+// The site key is read on render, so one test can turn the widget on.
+const mockEnv = vi.hoisted(() => ({
+  VITE_TURNSTILE_SITE_KEY: undefined as string | undefined,
+}));
+vi.mock("#/config/env", () => ({ env: mockEnv }));
+
+// Stand-in widget: a button per callback the form listens to.
+vi.mock("@marsidev/react-turnstile", () => ({
+  Turnstile: ({
+    onSuccess,
+    onExpire,
+  }: {
+    onSuccess: (token: string) => void;
+    onExpire: () => void;
+  }) => (
+    <>
+      <button type="button" onClick={() => onSuccess("turnstile-token")}>
+        solve challenge
+      </button>
+      <button type="button" onClick={onExpire}>
+        expire challenge
+      </button>
+    </>
+  ),
+}));
+
 function renderForm() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -41,6 +67,7 @@ describe("MagicLinkForm", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    mockEnv.VITE_TURNSTILE_SITE_KEY = undefined;
   });
 
   it("renders the email field and the submit button", () => {
@@ -92,6 +119,35 @@ describe("MagicLinkForm", () => {
 
     expect(await screen.findByText(/check.*for a link/i)).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
+  });
+
+  it("holds the submit button until the Turnstile widget answers", async () => {
+    // The server verifies every token, an empty one too, so an early
+    // submit would be dropped without the user being told (#381).
+    mockEnv.VITE_TURNSTILE_SITE_KEY = "site-key";
+    const user = userEvent.setup();
+    requestMagicLinkFn.mockResolvedValue({ ok: true, devOutboxHref: null });
+    renderForm();
+
+    await user.type(screen.getByLabelText(/email/i), "alice@example.com");
+    const button = screen.getByRole("button", { name: /email me a link/i });
+    expect(button).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "solve challenge" }));
+    await waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole("button", { name: "expire challenge" }));
+    expect(button).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "solve challenge" }));
+    await user.click(button);
+    await waitFor(() => {
+      expect(requestMagicLinkFn).toHaveBeenCalledWith({
+        data: { email: "alice@example.com", turnstileToken: "turnstile-token" },
+      });
+    });
   });
 
   it("links to the dev outbox when the server says the email went there", async () => {

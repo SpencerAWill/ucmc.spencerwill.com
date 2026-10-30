@@ -39,8 +39,9 @@ vi.mock("#/server/rate-limit.server", () => ({
   checkHealthRateLimit: async () => rateLimitAllowed,
 }));
 
+let turnstilePasses = true;
 vi.mock("#/features/auth/server/turnstile.server", () => ({
-  verifyTurnstile: async () => true,
+  verifyTurnstile: async () => turnstilePasses,
 }));
 
 // `sendEmail` would otherwise throw `EmailNotConfiguredError` in the
@@ -238,6 +239,7 @@ const validProfile = {
 beforeEach(async () => {
   cookieJar.clear();
   rateLimitAllowed = true;
+  turnstilePasses = true;
   const db = getDb();
   await db.delete(schema.userRoles);
   await db.delete(schema.rolePermissions);
@@ -269,6 +271,22 @@ describe("requestMagicLinkAction response", () => {
     expect(limited).toEqual(sent);
     // No outbox in the test Worker, so no link: the same as prod.
     expect(sent).toEqual({ ok: true, devOutboxHref: null });
+  });
+});
+
+describe("requestMagicLinkAction Turnstile", () => {
+  it("verifies an empty token rather than skipping the challenge", async () => {
+    // A client that leaves the token out must still face the check, or
+    // magic-link sends can be scripted past Turnstile entirely (#381).
+    vi.mocked(sendEmail).mockClear();
+    turnstilePasses = false;
+    const result = await requestMagicLinkAction({
+      email: TEST_EMAIL,
+      turnstileToken: "",
+    });
+    expect(result).toEqual({ ok: true, devOutboxHref: null });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(await getDb().select().from(schema.magicLinks)).toHaveLength(0);
   });
 });
 

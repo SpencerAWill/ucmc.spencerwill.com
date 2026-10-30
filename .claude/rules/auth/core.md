@@ -38,7 +38,7 @@ The rest of the auth rule is split by area under `.claude/rules/auth/` and loads
 - **Every email insert and lookup goes through `email-normalize.ts`** (`trim().toLowerCase()`). Race safety relies on the UNIQUE constraint via `isUniqueViolation()`.
 - **Adding an email is a magic-link round-trip (`intent = "add_email"`)**, and `/verify-email` asserts `session.userId === magicLink.target_user_id`. Promotion is a `db.batch` swap. Removing the primary or the last email is blocked.
 - **`requestMagicLinkAction` pads to ≥500 ms plus 0–300 ms jitter.** Only that publicly enumerable endpoint gets jitter.
-- **Turnstile**: the widget is gated on `VITE_TURNSTILE_SITE_KEY`; server verification fails open when `TURNSTILE_SECRET_KEY` is unset.
+- **Turnstile**: the widget is gated on `VITE_TURNSTILE_SITE_KEY`; server verification fails open when `TURNSTILE_SECRET_KEY` is unset. **The server verifies every token, an empty one included** (#381), so the form holds its submit button until the widget answers, and drops the token after a send or a failure (tokens are single-use).
 
 **Registration**
 

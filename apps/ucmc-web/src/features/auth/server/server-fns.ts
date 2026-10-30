@@ -65,7 +65,8 @@ export const requestMagicLinkFn = createServerFn({ method: "POST" })
       email: emailSchema,
       // Turnstile challenge token. Empty string when the widget isn't
       // rendered (local dev without VITE_TURNSTILE_SITE_KEY). The
-      // server skips verification when TURNSTILE_SECRET_KEY is unset.
+      // server still verifies it, and only passes an empty token when
+      // TURNSTILE_SECRET_KEY is unset.
       turnstileToken: z.string().default(""),
       // Optional post-sign-in redirect target captured from
       // /sign-in?redirect=... and round-tripped through the emailed

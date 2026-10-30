@@ -164,7 +164,14 @@ function useNativeValueSync<T extends HTMLInputElement | HTMLTextAreaElement>(
   return { ref, onAnimationStart };
 }
 
-export function SubscribeButton({ label }: { label: string }) {
+export function SubscribeButton({
+  label,
+  disabled = false,
+}: {
+  label: string;
+  /** An extra reason to hold the button, on top of the form's own state. */
+  disabled?: boolean;
+}) {
   const form = useFormContext();
   return (
     <form.Subscribe
@@ -183,7 +190,7 @@ export function SubscribeButton({ label }: { label: string }) {
         // "nothing to save" gate.
         <Button
           type="submit"
-          disabled={isSubmitting || !canSubmit || isDefaultValue}
+          disabled={disabled || isSubmitting || !canSubmit || isDefaultValue}
         >
           {isSubmitting ? "Submitting…" : label}
         </Button>
