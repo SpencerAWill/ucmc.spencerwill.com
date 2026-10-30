@@ -43,7 +43,7 @@ import {
   stageRank,
 } from "#/features/gear/lib/loan-reminders";
 import type { LoanReminderStage } from "#/features/gear/lib/loan-reminders";
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 import { gearReminderEmail } from "#/server/email/gear-reminder-email";
 import type { ReminderLoanLine } from "#/server/email/gear-reminder-email";
 import { sendEmail } from "#/server/email/resend";
@@ -191,7 +191,7 @@ export async function runGearLoanReminders(input: {
     channel: "email",
   });
 
-  const baseUrl = env.APP_BASE_URL;
+  const baseUrl = serverEnv().APP_BASE_URL;
   const myGearUrl = `${baseUrl}/my/gear`;
   const preferencesUrl = `${baseUrl}/my/preferences`;
   const clubDate = input.now

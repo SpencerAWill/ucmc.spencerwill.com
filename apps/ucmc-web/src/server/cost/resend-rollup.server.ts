@@ -14,7 +14,7 @@
 import { and, asc, gte, lt } from "drizzle-orm";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 import type { SnapshotRow } from "#/server/cost/snapshot-row";
 import { getDb, schema } from "#/server/db";
 import { emailTier } from "#/server/email/email-tier";
@@ -34,7 +34,7 @@ import { emailTier } from "#/server/email/email-tier";
  * exactly the month a report most needs to show something went wrong.
  */
 export function resendConfigured(): boolean {
-  return emailTier(env).tier !== "outbox";
+  return emailTier(serverEnv()).tier !== "outbox";
 }
 
 /** Civil date in the club zone for an instant. */

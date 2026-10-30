@@ -36,7 +36,7 @@ import {
   rotateSession,
 } from "#/server/auth/session.server";
 import { POLICIES_VERSION } from "#/config/legal";
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 import { devOutboxHref } from "#/server/email/email-tier";
 import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
 import type {
@@ -162,7 +162,7 @@ export async function requestMagicLinkAction(args: {
   // One object for every exit, so no path can drift from the others.
   const result: RequestMagicLinkResult = {
     ok: true,
-    devOutboxHref: devOutboxHref(env),
+    devOutboxHref: devOutboxHref(serverEnv()),
   };
   try {
     // Turnstile check first — rejects bots before any rate-limit or DB

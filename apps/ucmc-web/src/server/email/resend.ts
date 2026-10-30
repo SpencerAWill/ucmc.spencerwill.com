@@ -24,7 +24,8 @@
  * fallback: it is opted into explicitly, readable only through
  * Cloudflare Access, and refused on prod.
  */
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
+import type { ServerEnv } from "#/server/env.server";
 import type { EmailKind } from "#/server/email/email-kinds";
 import { emailTier } from "#/server/email/email-tier";
 import { recordEmailSend } from "#/server/email/email-send-log.server";
@@ -77,6 +78,7 @@ export interface EmailMessage {
 }
 
 export async function sendEmail(message: EmailMessage): Promise<void> {
+  const env = serverEnv();
   const tier = emailTier(env);
   if (tier.tier === "none") {
     // Deliberately NOT recorded: no provider is configured, so nothing
@@ -103,8 +105,8 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
 
   const send = {
     outbox: () => sendToOutbox(message),
-    resend: () => sendViaResend(message, from),
-    mailpit: () => sendViaMailpit(message, from),
+    resend: () => sendViaResend(message, from, env),
+    mailpit: () => sendViaMailpit(message, from, env),
   }[tier.tier];
 
   try {
@@ -133,6 +135,7 @@ async function sendToOutbox(message: EmailMessage): Promise<void> {
 async function sendViaResend(
   message: EmailMessage,
   fromAddress: string,
+  env: ServerEnv,
 ): Promise<void> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -169,6 +172,7 @@ async function sendViaResend(
 async function sendViaMailpit(
   message: EmailMessage,
   fromAddress: string,
+  env: ServerEnv,
 ): Promise<void> {
   const from = { Name: env.RESEND_FROM_NAME, Email: fromAddress };
 

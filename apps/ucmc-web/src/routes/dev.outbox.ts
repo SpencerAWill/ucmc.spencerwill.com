@@ -13,13 +13,14 @@ export const Route = createFileRoute("/dev/outbox")({
   server: {
     handlers: {
       GET: async ({ request }: { request: Request }) => {
-        const [{ env }, { emailTier }, { handleOutbox }, { listOutbox }] =
+        const [{ serverEnv }, { emailTier }, { handleOutbox }, { listOutbox }] =
           await Promise.all([
-            import("#/server/cloudflare-env"),
+            import("#/server/env.server"),
             import("#/server/email/email-tier"),
             import("#/server/email/outbox-page.server"),
             import("#/server/email/outbox.server"),
           ]);
+        const env = serverEnv();
         return handleOutbox(
           request,
           {

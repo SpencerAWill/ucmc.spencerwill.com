@@ -9,12 +9,12 @@ import {
 } from "@tanstack/react-start/server";
 
 import { SESSION_TTL_MS } from "#/server/auth/session-config";
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 
 // Browsers silently reject Secure cookies over http://, so in local dev
 // (APP_BASE_URL=http://localhost:...) we disable Secure. In any deployed env
 // APP_BASE_URL is https and Secure is required.
-const isSecure = () => env.APP_BASE_URL.startsWith("https://");
+const isSecure = () => serverEnv().APP_BASE_URL.startsWith("https://");
 
 // `__Host-` prefix is defense-in-depth: the browser only accepts the cookie
 // when it's set with Secure, Path=/, and no Domain attribute, preventing

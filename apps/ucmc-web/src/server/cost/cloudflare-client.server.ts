@@ -12,15 +12,17 @@
  * read as "we used nothing that day", which is worse than a gap because
  * it is indistinguishable from a true reading.
  */
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 import { errorMessage, log } from "#/server/log/log.server";
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 
 /** Guards every call; both halves must be present to reach the API. */
 export function costCredentials(): { accountId: string; token: string } | null {
-  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
-  const token = env.CLOUDFLARE_ACCOUNT_READ_TOKEN;
+  const {
+    CLOUDFLARE_ACCOUNT_ID: accountId,
+    CLOUDFLARE_ACCOUNT_READ_TOKEN: token,
+  } = serverEnv();
   return accountId && token ? { accountId, token } : null;
 }
 

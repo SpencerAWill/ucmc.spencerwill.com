@@ -25,7 +25,7 @@ import {
   hmacSign,
   timingSafeEqual,
 } from "#/server/auth/signing.server";
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 import type { schema } from "#/server/db";
 
 export const PROOF_TTL_MS = 1000 * 60 * 15; // 15 minutes
@@ -36,7 +36,7 @@ export interface EmailProof {
   issuedAt: number;
 }
 
-const isSecure = () => env.APP_BASE_URL.startsWith("https://");
+const isSecure = () => serverEnv().APP_BASE_URL.startsWith("https://");
 
 const proofCookieName = () => (isSecure() ? "__Host-ucmc_proof" : "ucmc_proof");
 

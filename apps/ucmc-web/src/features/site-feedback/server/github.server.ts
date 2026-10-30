@@ -1,14 +1,14 @@
 /**
  * Thin GitHub REST + GraphQL client for site-feedback triage.
  *
- * Reads `env.SITE_FEEDBACK_GITHUB_*` inside `getGithubConfig()` only, never
+ * Reads `SITE_FEEDBACK_GITHUB_*` inside `getGithubConfig()` only, never
  * at module scope. Every non-2xx response throws `GithubError`; callers
  * decide whether that is fatal. Text sent here attributes members by opaque
  * public id only, never name or email.
  */
 import { z } from "zod";
 
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 import { errorMessage, log } from "#/server/log/log.server";
 import { redactString } from "#/server/log/redact.server";
 
@@ -30,8 +30,8 @@ export class GithubError extends Error {
 }
 
 export function getGithubConfig(): GithubConfig | null {
-  const token = env.SITE_FEEDBACK_GITHUB_TOKEN;
-  const repo = env.SITE_FEEDBACK_GITHUB_REPO;
+  const { SITE_FEEDBACK_GITHUB_TOKEN: token, SITE_FEEDBACK_GITHUB_REPO: repo } =
+    serverEnv();
   if (!token || !repo) {
     return null;
   }

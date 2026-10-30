@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type * as CloudflareEnvModule from "#/server/cloudflare-env";
+import type * as EnvModule from "#/server/env.server";
 import { getDb, schema } from "#/server/db";
 import type { EmailMessage } from "#/server/email/resend";
 
-// Only the email-tier vars are overridden; `getDb()` reads `DB` from the
-// same module, so a wholesale mock would take the database with it.
+// Only the email-tier vars are overridden, on top of the real validated
+// env; the bindings (`getDb()`) are untouched.
 const emailEnv = vi.hoisted(() => ({
   RESEND_API_KEY: undefined as string | undefined,
   MAILPIT_URL: undefined as string | undefined,
@@ -15,18 +15,11 @@ const emailEnv = vi.hoisted(() => ({
   RESEND_FROM: undefined as string | undefined,
 }));
 
-vi.mock("#/server/cloudflare-env", async (importOriginal) => {
-  const actual = await importOriginal<typeof CloudflareEnvModule>();
+vi.mock("#/server/env.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof EnvModule>();
   return {
     ...actual,
-    env: new Proxy(actual.env, {
-      get(target, prop, receiver) {
-        if (typeof prop === "string" && prop in emailEnv) {
-          return emailEnv[prop as keyof typeof emailEnv];
-        }
-        return Reflect.get(target, prop, receiver) as unknown;
-      },
-    }),
+    serverEnv: () => ({ ...actual.serverEnv(), ...emailEnv }),
   };
 });
 

@@ -23,6 +23,7 @@ import startEntry from "@tanstack/react-start/server-entry";
 import { withPublicPageCache } from "./server/edge-cache";
 import type { WorkerFetchHandler } from "./server/edge-cache";
 import { isDailyCron } from "./server/cron/daily-schedule";
+import { serverEnv } from "./server/env.server";
 import { errorMessage, log, runWithLogContext } from "./server/log/log.server";
 
 /**
@@ -45,6 +46,47 @@ function withLogContext(inner: WorkerFetchHandler): WorkerFetchHandler {
   };
 }
 
+/**
+ * Validate the vars and secrets before anything else runs (#319).
+ *
+ * A misconfigured deploy then fails every request from the first one —
+ * cache hits included, which is why this wraps the cache layer rather
+ * than living in Start's request middleware — and the post-deploy smoke
+ * test sees it. The response says nothing about which variable: the log
+ * line has the names (never the values), the visitor gets a plain 500.
+ */
+function withEnvCheck(inner: WorkerFetchHandler): WorkerFetchHandler {
+  return function fetchWithEnvCheck(request, env, ctx) {
+    if (!envIsValid()) {
+      return Promise.resolve(
+        new Response("This site is misconfigured.", { status: 500 }),
+      );
+    }
+    return inner(request, env, ctx);
+  };
+}
+
+/**
+ * The env cannot change inside an isolate (a deploy or a secret change
+ * starts new ones), so a failure is remembered and logged once per
+ * isolate rather than re-parsed and re-logged on every request.
+ */
+const envCheck: { failed?: boolean } = {};
+
+function envIsValid(): boolean {
+  if (envCheck.failed) {
+    return false;
+  }
+  try {
+    serverEnv();
+    return true;
+  } catch (err) {
+    envCheck.failed = true;
+    log.error("env.invalid", { error: errorMessage(err) });
+    return false;
+  }
+}
+
 // `startEntry.fetch` is typed `(request, opts?)` even though the
 // Cloudflare runtime always invokes it as `(request, env, ctx)` via
 // the standard ExportedHandler contract. Cast to the runtime shape so
@@ -53,7 +95,9 @@ function withLogContext(inner: WorkerFetchHandler): WorkerFetchHandler {
 // `satisfies` line used `typeof startEntry.fetch` rather than
 // `ExportedHandlerFetchHandler` — keeping that to avoid further drift.)
 const cachedFetch = withLogContext(
-  withPublicPageCache(startEntry.fetch as unknown as WorkerFetchHandler),
+  withEnvCheck(
+    withPublicPageCache(startEntry.fetch as unknown as WorkerFetchHandler),
+  ),
 );
 
 // `ExportedHandler<WorkerEnv>` from @cloudflare/workers-types declares
@@ -84,6 +128,15 @@ export default {
     // expression: a scheduled invocation has no `cf-ray` to correlate
     // on, and "which tick produced this" is the only question worth
     // asking of a cron log line.
+    //
+    // A misconfigured Worker runs no task at all, the same as it serves
+    // no request: one error line beats five tasks each failing on
+    // whichever variable it reaches first.
+    const envOk = runWithLogContext({ cron: event.cron }, envIsValid);
+    if (!envOk) {
+      return;
+    }
+
     if (event.cron === "15 8 1 3 *") {
       const { archiveCurrentOfficers } =
         await import("./server/cron/archive-officers.server");

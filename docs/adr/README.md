@@ -37,3 +37,4 @@ Small, easily reversed choices don't need one; a comment beside the code is the 
 | [0008](0008-events-is-a-base-table.md)               | `events` is a base table; kinds own satellite tables                             | Accepted |
 | [0009](0009-tanstack-charts-through-chartsurface.md) | TanStack Charts, mounted through `ChartSurface`                                  | Accepted |
 | [0010](0010-registries-not-rows.md)                  | Settings, notifications, prompts and badges are registries; permissions are rows | Accepted |
+| [0011](0011-validate-the-worker-env-fail-closed.md)  | Validate the Worker env up front; a bad config fails every request               | Accepted |

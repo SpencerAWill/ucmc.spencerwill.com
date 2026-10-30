@@ -9,12 +9,12 @@
  */
 import { getRequestHeader } from "@tanstack/react-start/server";
 
-import { env } from "#/server/cloudflare-env";
+import { serverEnv } from "#/server/env.server";
 
 const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
 export async function verifyTurnstile(token: string): Promise<boolean> {
-  const secret = env.TURNSTILE_SECRET_KEY;
+  const secret = serverEnv().TURNSTILE_SECRET_KEY;
   if (!secret) {
     // No secret configured — skip verification (local dev).
     return true;
