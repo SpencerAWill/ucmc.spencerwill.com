@@ -113,8 +113,8 @@ importers:
         specifier: ^1.6.2
         version: 1.6.2(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@simplewebauthn/browser':
-        specifier: ^13.3.0
-        version: 13.3.0
+        specifier: ^14.0.0
+        version: 14.0.0
       '@simplewebauthn/server':
         specifier: ^13.3.2
         version: 13.3.3
@@ -3449,8 +3449,8 @@ packages:
     resolution: {integrity: sha512-fCTuZK4QBa+39Oz9l4OGfJfz+GpwCp3AqO7Zch3to99xHPgstVsRFpeQ8LNd2o1Gv8raL2mCFwiaHh7bFSp5DQ==}
     engines: {node: '>=22'}
 
-  '@simplewebauthn/browser@13.3.0':
-    resolution: {integrity: sha512-BE/UWv6FOToAdVk0EokzkqQQDOWtNydYlY6+OrmiZ5SCNmb41VehttboTetUM3T/fr6EAFYVXjz4My2wg230rQ==}
+  '@simplewebauthn/browser@14.0.0':
+    resolution: {integrity: sha512-1odWVqeEBTl7lJ9zMKLEsmTlnyrDO5iRcTvfMKKk1WThUnp/i8JJdffdj2icP+tty159s4PgwE3BiMoEW9NFow==}
 
   '@simplewebauthn/server@13.3.3':
     resolution: {integrity: sha512-LelX/lcy5cjc15A86i/aNxHhB5eU7dd20QsbP0VLAf9e38+SLlsnqCCyecx3xqfGofhmX05h1J9fKRYWxw+luA==}
@@ -11386,7 +11386,7 @@ snapshots:
 
   '@simple-libs/stream-utils@2.0.0': {}
 
-  '@simplewebauthn/browser@13.3.0': {}
+  '@simplewebauthn/browser@14.0.0': {}
 
   '@simplewebauthn/server@13.3.3':
     dependencies:
