@@ -171,8 +171,11 @@ export function MagicLinkForm({
       ) : null}
 
       <form.AppForm>
+        {/* Secondary: on /sign-in the passkey button is the primary action. */}
         <form.SubscribeButton
           label="Email me a link"
+          variant="outline"
+          className="w-full"
           disabled={awaitingTurnstile}
         />
       </form.AppForm>

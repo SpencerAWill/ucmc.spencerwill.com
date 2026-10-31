@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   marqueeDurationSeconds,
+  NOTICE_HEIGHT_PROPERTY,
   SiteNoticeBanner,
   SiteNoticeBar,
 } from "#/components/layouts/site-notice-banner";
@@ -308,5 +309,33 @@ describe("SiteNoticeBanner", () => {
     );
 
     expect(bar()).toHaveTextContent(TEXT);
+  });
+
+  // A page's sticky toolbar stops at `--page-sticky-top`, which adds this
+  // to the header height. Left behind after the bar goes, it would hold
+  // every sticky element a bar's height too low.
+  it("publishes its height while it is up, and withdraws it when it goes", () => {
+    const height = { px: 36 };
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+      function (this: HTMLElement) {
+        return this.tagName === "ASIDE" ? height.px : 0;
+      },
+    );
+    const published = () =>
+      document.documentElement.style.getPropertyValue(NOTICE_HEIGHT_PROPERTY);
+    useAuth.mockReturnValue(authStub([], { isApproved: false }));
+    const { unmount } = renderBanner(
+      clientWith([["anonymous", { text: TEXT, tone: "info" }]]),
+    );
+
+    expect(published()).toBe("36px");
+
+    // Reduced motion wraps the text, so the bar can grow after mount.
+    height.px = 56;
+    resize({});
+    expect(published()).toBe("56px");
+
+    unmount();
+    expect(published()).toBe("");
   });
 });

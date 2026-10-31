@@ -170,7 +170,7 @@ export function TriageSelectionToolbar({
     <div
       role="toolbar"
       aria-label="Selected reports"
-      className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-md border bg-background p-2 shadow-sm"
+      className="sticky top-(--page-sticky-top) z-10 flex flex-wrap items-center gap-2 rounded-md border bg-background p-2 shadow-sm"
     >
       <span className="px-1 text-sm font-medium">
         {selectedIds.length} selected

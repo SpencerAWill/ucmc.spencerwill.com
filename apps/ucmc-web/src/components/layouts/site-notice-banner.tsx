@@ -27,6 +27,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Pause, Play } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
+import type { Ref } from "react";
 
 import { Button } from "#/components/ui/button";
 import { useAuth } from "#/features/auth/api/use-auth";
@@ -35,6 +36,9 @@ import { REDUCED_MOTION_QUERY, useMediaQuery } from "#/hooks/use-media-query";
 import { cn } from "#/lib/utils";
 import { noticeViewerOf } from "#/server/settings/site-notice";
 import type { NoticeTone, SiteNotice } from "#/server/settings/site-notice";
+
+/** The live bar's measured height, on `<html>`; read by `--page-sticky-top`. */
+export const NOTICE_HEIGHT_PROPERTY = "--site-notice-height";
 
 /** Ticker speed. Slow enough to read a word at a time on a phone. */
 const MARQUEE_PX_PER_SECOND = 60;
@@ -94,7 +98,8 @@ export function SiteNoticeBar({
   text,
   tone,
   className,
-}: SiteNotice & { className?: string }) {
+  ref,
+}: SiteNotice & { className?: string; ref?: Ref<HTMLElement> }) {
   const reducedMotion = useMediaQuery(REDUCED_MOTION_QUERY);
   const viewportRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
@@ -128,6 +133,7 @@ export function SiteNoticeBar({
 
   return (
     <aside
+      ref={ref}
       aria-label="Site notice"
       className={cn(
         "group/notice sticky top-(--header-height) z-20 flex min-h-9 items-center gap-2 px-4 py-1 text-sm font-medium",
@@ -218,5 +224,35 @@ export function SiteNoticeBar({
 export function SiteNoticeBanner() {
   const { principal } = useAuth();
   const { data } = useQuery(siteNoticeQueryOptions(noticeViewerOf(principal)));
-  return data ? <SiteNoticeBar text={data.text} tone={data.tone} /> : null;
+  const barRef = useRef<HTMLElement>(null);
+  // Re-run when the bar comes or goes, not on every refetch: the
+  // observer already follows its height while it stays.
+  const hasBar = Boolean(data);
+
+  // Publishes the bar's height so a page's own sticky element can stop
+  // under it (`--page-sticky-top`, set by the shell) rather than sliding
+  // beneath. Measured, not assumed: reduced motion wraps the text onto
+  // as many lines as it needs. Absent when there is no bar, so the
+  // shell's fallback of 0 applies.
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!bar) {
+      return;
+    }
+    const root = document.documentElement;
+    const publish = () => {
+      root.style.setProperty(NOTICE_HEIGHT_PROPERTY, `${bar.offsetHeight}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty(NOTICE_HEIGHT_PROPERTY);
+    };
+  }, [hasBar]);
+
+  return data ? (
+    <SiteNoticeBar ref={barRef} text={data.text} tone={data.tone} />
+  ) : null;
 }

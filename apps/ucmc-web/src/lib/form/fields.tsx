@@ -32,7 +32,7 @@ import { DEFAULT_PHONE_COUNTRY } from "#/lib/phone-format";
 
 import type { MarkdownEditorHandle } from "#/components/editor/markdown-editor";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import type { AnimationEvent } from "react";
+import type { AnimationEvent, ComponentProps } from "react";
 
 // Matches the `@keyframes form-autofill-detect` rule in `styles.css`.
 const AUTOFILL_ANIMATION_NAME = "form-autofill-detect";
@@ -167,10 +167,15 @@ function useNativeValueSync<T extends HTMLInputElement | HTMLTextAreaElement>(
 export function SubscribeButton({
   label,
   disabled = false,
+  variant,
+  className,
 }: {
   label: string;
   /** An extra reason to hold the button, on top of the form's own state. */
   disabled?: boolean;
+  /** For a form whose submit isn't the page's primary action. */
+  variant?: ComponentProps<typeof Button>["variant"];
+  className?: string;
 }) {
   const form = useFormContext();
   return (
@@ -190,6 +195,8 @@ export function SubscribeButton({
         // "nothing to save" gate.
         <Button
           type="submit"
+          variant={variant}
+          className={className}
           disabled={disabled || isSubmitting || !canSubmit || isDefaultValue}
         >
           {isSubmitting ? "Submitting…" : label}

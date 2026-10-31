@@ -275,7 +275,8 @@ export function CalendarPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
-        <div className="lg:sticky lg:top-20 lg:self-start">
+        {/* 1.5rem of air under the header and notice. */}
+        <div className="lg:sticky lg:top-[calc(var(--page-sticky-top)+1.5rem)] lg:self-start">
           <div className="rounded-xl border bg-card p-3 shadow-xs">
             <CalendarMonthGrid
               month={month}

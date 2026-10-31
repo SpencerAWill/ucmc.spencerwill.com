@@ -45,7 +45,10 @@ import {
   useFeedbackSurfaces,
 } from "#/components/layouts/feedback-dialog";
 import { HeaderMasthead } from "#/components/layouts/header-masthead";
-import { SiteNoticeBanner } from "#/components/layouts/site-notice-banner";
+import {
+  NOTICE_HEIGHT_PROPERTY,
+  SiteNoticeBanner,
+} from "#/components/layouts/site-notice-banner";
 import { ModeToggle } from "#/components/mode-toggle";
 import { SocialIconLinks } from "#/components/social-icon-links";
 import {
@@ -145,7 +148,15 @@ function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider
       className="flex-col"
-      style={{ "--header-height": HEADER_HEIGHT } as CSSProperties}
+      style={
+        {
+          "--header-height": HEADER_HEIGHT,
+          // Where a page's own sticky element should stop: under the
+          // header and, when there is one, the notice, which publishes
+          // its measured height (`NOTICE_HEIGHT_PROPERTY`).
+          "--page-sticky-top": `calc(var(--header-height) + var(${NOTICE_HEIGHT_PROPERTY}, 0px))`,
+        } as CSSProperties
+      }
     >
       {/*
        * Skip link — visually hidden until it receives focus, at which
@@ -209,8 +220,15 @@ function AppShell({ children }: { children: React.ReactNode }) {
            * focusable so the skip-link target receives focus on
            * activation; without it, browsers vary on whether they
            * move focus or only scroll position.
+           *
+           * `isolate` makes the page its own stacking context, so no
+           * z-index a page sets can climb over the notice or the header.
+           * Without it the landing page's `z-20` Edit buttons tied with
+           * the banner's `z-20` and, coming later in the DOM, painted
+           * over it as it stuck. Overlays are unaffected: they
+           * portal to `<body>`.
            */}
-          <main id="main" tabIndex={-1} className="outline-none">
+          <main id="main" tabIndex={-1} className="isolate outline-none">
             {children}
           </main>
           <AppFooter />
