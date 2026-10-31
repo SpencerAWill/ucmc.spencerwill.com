@@ -207,7 +207,7 @@ These are registry entries, not rows.
 
 ## Delivery
 
-Sequenced PRs, each green and independently revertable:
+**One PR**, by the user's decision, built as sequenced commits that are each green and independently revertable, in this order:
 
 1. Schema, permissions, audit actions, `standing.server.ts`, and `/conduct` with **records only**: all four levels, the SCOC lock and the vote. Includes the page flag, sidebar entry, member-detail card, rule file and ADR.
 2. Member reports: the dialog, triage, `conduct.report_received` and the reports feature setting.
