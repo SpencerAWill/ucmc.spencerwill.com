@@ -23,11 +23,7 @@
  */
 import { uuidv7 } from "uuidv7";
 
-import type {
-  ConductLevel,
-  ConductReportStatus,
-  ScocState,
-} from "#/../drizzle/schema";
+import type { ConductLevel, ScocState } from "#/../drizzle/schema";
 import { conductLevel } from "#/../drizzle/schema";
 import { CLUB_TIME_ZONE } from "#/config/time";
 import {
@@ -54,6 +50,7 @@ import {
   listRecordHistory,
   listRecords,
   listRecordsForSubject,
+  findSubject,
   searchSubjects,
 } from "#/features/conduct/server/record-repo.server";
 import type {
@@ -62,6 +59,11 @@ import type {
   RecordForMutation,
   RequiredRecordState,
 } from "#/features/conduct/server/record-repo.server";
+import {
+  acceptCitedReportsStatements,
+  listReportsForRecord,
+} from "#/features/conduct/server/report-repo.server";
+import type { ConductReportSummary } from "#/features/conduct/server/report-repo.server";
 import { buildAuditEventStatement } from "#/server/audit/audit-log.server";
 import type { AuditAction } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
@@ -84,14 +86,6 @@ export interface ConductRecordSummary {
   scocState: ScocState;
   liftedAt: Temporal.Instant | null;
   createdAt: Temporal.Instant;
-}
-
-/** A report linked to a record. Filled in with the report actions. */
-export interface ConductReportSummary {
-  publicId: string;
-  occurredOn: Temporal.PlainDate;
-  status: ConductReportStatus;
-  possibleScoc: boolean;
 }
 
 export interface AuditRow {
@@ -186,7 +180,7 @@ export async function getConductRecordAction(
   }
   return {
     ...record,
-    reports: [],
+    reports: await listReportsForRecord(record.publicId, principal.userId),
     history: await listRecordHistory(record.publicId),
   };
 }
@@ -225,6 +219,14 @@ export async function searchConductSubjectsAction(input: {
   return searchSubjects(q, principal.userId);
 }
 
+/** One member by public id for the record form's prefill, or null. */
+export async function getConductSubjectAction(input: {
+  publicId: string;
+}): Promise<ConductSubjectOption | null> {
+  const principal = await requireConductManager();
+  return findSubject(input.publicId, principal.userId);
+}
+
 // ── create ──────────────────────────────────────────────────────────────
 
 export async function createConductRecordAction(
@@ -246,6 +248,9 @@ export async function createConductRecordAction(
   const reports = await findReportsByPublicId(reportIds, input.subjectUserId);
   if (reports.length !== reportIds.length) {
     throw new Error("Report not found");
+  }
+  if (reports.some((r) => r.status === "dismissed")) {
+    throw new Error("Report was dismissed");
   }
 
   // A flagged report needs referring unless SCCS has already dealt with a
@@ -314,6 +319,18 @@ export async function createConductRecordAction(
       id,
       reports.map((r) => r.id),
     ),
+    // Citing a report is triaging it: a `new` one becomes accepted.
+    ...acceptCitedReportsStatements({
+      reports,
+      recordPublicId: publicId,
+      actorUserId: principal.userId,
+      now,
+      retainUntil: retainUntil({
+        kind: "report",
+        status: "accepted",
+        lastActivity: now,
+      }),
+    }),
     buildAuditEventStatement(
       auditEvent(principal.userId, "conduct.record_created", publicId, {
         level: input.level,

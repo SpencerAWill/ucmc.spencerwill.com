@@ -1064,6 +1064,21 @@ export const SETTINGS = {
       owner: "system_admin",
       createdAt: "2026-05-16",
     }),
+  // Submission gate for member conduct reports, like the two feedback
+  // gates above: off refuses NEW reports only. Exec keeps triaging the
+  // backlog at /conduct, which `pages.conduct` gates separately.
+  "conduct_reports.submissions_enabled": z
+    .boolean()
+    .default(true)
+    .register(registry, {
+      label: "Accept conduct reports",
+      description:
+        "Accept conduct reports. Off blocks new reports only; triage stays available.",
+      category: "features",
+      flagKind: "ops",
+      owner: "system_admin",
+      createdAt: "2026-10-31",
+    }),
 } as const;
 
 // ── Derived types ───────────────────────────────────────────────────────

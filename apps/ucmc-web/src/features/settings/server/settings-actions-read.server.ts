@@ -116,11 +116,13 @@ export async function getSiteNoticeAction(): Promise<SiteNotice | null> {
  * feature is off" is the same answer the gated route already returns.
  */
 export async function getPublicFlagsAction(): Promise<PublicFlags> {
-  const [siteFeedback, clubFeedback, pageValues] = await Promise.all([
-    readSetting("site_feedback.submissions_enabled"),
-    readSetting("club_feedback.submissions_enabled"),
-    Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
-  ]);
+  const [siteFeedback, clubFeedback, conductReports, pageValues] =
+    await Promise.all([
+      readSetting("site_feedback.submissions_enabled"),
+      readSetting("club_feedback.submissions_enabled"),
+      readSetting("conduct_reports.submissions_enabled"),
+      Promise.all(PAGE_SETTING_KEYS.map((key) => readSetting(key))),
+    ]);
   const raw = Object.fromEntries(
     PAGE_SETTING_KEYS.map((key, i) => [pageFlagKeyOf(key), pageValues[i]]),
   ) as PublicFlags["pages"];
@@ -133,6 +135,7 @@ export async function getPublicFlagsAction(): Promise<PublicFlags> {
   return {
     siteFeedback,
     clubFeedback,
+    conductReports,
     pages: effectivePageFlags(raw),
   };
 }

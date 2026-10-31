@@ -16,6 +16,8 @@ export const CONDUCT_LIMITS = {
   notesMax: 10000,
   descriptionMax: 500,
   liftReasonMax: 2000,
+  locationMax: 200,
+  dismissReasonMax: 2000,
   /** Reports one record may cite at creation. */
   reportsPerRecordMax: 50,
 } as const;
@@ -182,6 +184,61 @@ export const listRecordsSchema = z.object({
   active: z.boolean().optional(),
   referred: z.boolean().optional(),
 });
+
+// ── reports ─────────────────────────────────────────────────────────────
+
+/**
+ * A member's report. The reporter names the member (`subjectPublicId`) or,
+ * when they do not know the name, describes them; one of the two is
+ * required, as the `conduct_reports_subject_known` CHECK also insists.
+ */
+export const submitReportSchema = z
+  .object({
+    /** The member's public id: internal ids never reach a member. */
+    subjectPublicId: id.optional(),
+    subjectDescription: z
+      .string()
+      .trim()
+      .max(CONDUCT_LIMITS.descriptionMax)
+      .optional(),
+    occurredOn: plainDate,
+    location: z.string().trim().max(CONDUCT_LIMITS.locationMax),
+    body: z.string().trim().min(1, "Required").max(CONDUCT_LIMITS.bodyMax),
+    possibleScoc: z.boolean(),
+  })
+  .refine(
+    (v) =>
+      v.subjectPublicId !== undefined ||
+      (v.subjectDescription !== undefined && v.subjectDescription !== ""),
+    {
+      message: "Name the member, or describe them",
+      path: ["subjectDescription"],
+    },
+  );
+
+export const listReportsSchema = z.object({
+  status: z.enum(["new", "accepted", "dismissed"]).optional(),
+});
+
+/** Report public id, and optionally the public id of a record to attach to. */
+export const acceptReportSchema = z.object({
+  reportId: id,
+  recordPublicId: id.optional(),
+});
+
+export const dismissReportSchema = z.object({
+  reportId: id,
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Required")
+    .max(CONDUCT_LIMITS.dismissReasonMax),
+});
+
+export type SubmitReportInput = z.input<typeof submitReportSchema>;
+export type SubmitReportArgs = z.output<typeof submitReportSchema>;
+export type AcceptReportArgs = z.output<typeof acceptReportSchema>;
+export type DismissReportArgs = z.output<typeof dismissReportSchema>;
 
 export type CreateRecordInput = z.input<typeof createRecordSchema>;
 export type CreateRecordArgs = z.output<typeof createRecordSchema>;

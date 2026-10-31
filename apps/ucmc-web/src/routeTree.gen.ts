@@ -58,6 +58,7 @@ import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicI
 import { Route as ConductIndexRouteImport } from './routes/conduct.index'
 import { Route as ConductPublicIdRouteImport } from './routes/conduct.$publicId'
 import { Route as ConductRecordsRouteImport } from './routes/conduct.records'
+import { Route as ConductReportsRouteImport } from './routes/conduct.reports'
 import { Route as DevOutboxRouteImport } from './routes/dev.outbox'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as FeedbackClubRouteImport } from './routes/feedback.club'
@@ -350,6 +351,11 @@ const ConductRecordsRoute = ConductRecordsRouteImport.update({
   path: '/records',
   getParentRoute: () => ConductRoute,
 } as any)
+const ConductReportsRoute = ConductReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => ConductRoute,
+} as any)
 const DevOutboxRoute = DevOutboxRouteImport.update({
   id: '/dev/outbox',
   path: '/dev/outbox',
@@ -629,6 +635,7 @@ export interface FileRoutesByFullPath {
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/conduct/$publicId': typeof ConductPublicIdRoute
   '/conduct/records': typeof ConductRecordsRoute
+  '/conduct/reports': typeof ConductReportsRoute
   '/dev/outbox': typeof DevOutboxRoute
   '/feedback/club': typeof FeedbackClubRoute
   '/feedback/site': typeof FeedbackSiteRouteWithChildren
@@ -717,6 +724,7 @@ export interface FileRoutesByTo {
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/conduct/$publicId': typeof ConductPublicIdRoute
   '/conduct/records': typeof ConductRecordsRoute
+  '/conduct/reports': typeof ConductReportsRoute
   '/dev/outbox': typeof DevOutboxRoute
   '/feedback/club': typeof FeedbackClubRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
@@ -810,6 +818,7 @@ export interface FileRoutesById {
   '/calendar/$publicId': typeof CalendarPublicIdRoute
   '/conduct/$publicId': typeof ConductPublicIdRoute
   '/conduct/records': typeof ConductRecordsRoute
+  '/conduct/reports': typeof ConductReportsRoute
   '/dev/outbox': typeof DevOutboxRoute
   '/feedback/club': typeof FeedbackClubRoute
   '/feedback/site': typeof FeedbackSiteRouteWithChildren
@@ -909,6 +918,7 @@ export interface FileRouteTypes {
     | '/calendar/$publicId'
     | '/conduct/$publicId'
     | '/conduct/records'
+    | '/conduct/reports'
     | '/dev/outbox'
     | '/feedback/club'
     | '/feedback/site'
@@ -997,6 +1007,7 @@ export interface FileRouteTypes {
     | '/calendar/$publicId'
     | '/conduct/$publicId'
     | '/conduct/records'
+    | '/conduct/reports'
     | '/dev/outbox'
     | '/feedback/club'
     | '/gazette/$publicId'
@@ -1089,6 +1100,7 @@ export interface FileRouteTypes {
     | '/calendar/$publicId'
     | '/conduct/$publicId'
     | '/conduct/records'
+    | '/conduct/reports'
     | '/dev/outbox'
     | '/feedback/club'
     | '/feedback/site'
@@ -1539,6 +1551,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConductRecordsRouteImport
       parentRoute: typeof ConductRoute
     }
+    '/conduct/reports': {
+      id: '/conduct/reports'
+      path: '/reports'
+      fullPath: '/conduct/reports'
+      preLoaderRoute: typeof ConductReportsRouteImport
+      parentRoute: typeof ConductRoute
+    }
     '/dev/outbox': {
       id: '/dev/outbox'
       path: '/dev/outbox'
@@ -1903,12 +1922,14 @@ const CalendarRouteWithChildren = CalendarRoute._addFileChildren(
 interface ConductRouteChildren {
   ConductPublicIdRoute: typeof ConductPublicIdRoute
   ConductRecordsRoute: typeof ConductRecordsRoute
+  ConductReportsRoute: typeof ConductReportsRoute
   ConductIndexRoute: typeof ConductIndexRoute
 }
 
 const ConductRouteChildren: ConductRouteChildren = {
   ConductPublicIdRoute: ConductPublicIdRoute,
   ConductRecordsRoute: ConductRecordsRoute,
+  ConductReportsRoute: ConductReportsRoute,
   ConductIndexRoute: ConductIndexRoute,
 }
 

@@ -22,7 +22,11 @@ import {
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
-import type { ConductLevel, ScocState } from "#/../drizzle/schema";
+import type {
+  ConductLevel,
+  ConductReportStatus,
+  ScocState,
+} from "#/../drizzle/schema";
 import type { AuditEventInput } from "#/server/audit/audit-log.server";
 import { buildConditionalAuditEventStatement } from "#/server/audit/audit-log.server";
 import { getDb, inJsonArray, insertStatements, schema } from "#/server/db";
@@ -95,9 +99,37 @@ export async function searchSubjects(
     .limit(limit);
 }
 
+/**
+ * One approved member by public id, in the picker's shape, or null.
+ * The viewer is left out, as in `searchSubjects`.
+ */
+export async function findSubject(
+  publicId: string,
+  viewerUserId: string,
+): Promise<ConductSubjectOption | null> {
+  const rows = await getDb()
+    .select({
+      userId: schema.users.id,
+      publicId: schema.users.publicId,
+      fullName: schema.profiles.fullName,
+    })
+    .from(schema.users)
+    .innerJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+    .where(
+      and(
+        eq(schema.users.publicId, publicId),
+        eq(schema.users.status, "approved"),
+        ne(schema.users.id, viewerUserId),
+      ),
+    )
+    .limit(1);
+  return rows.at(0) ?? null;
+}
+
 export interface LinkableReport {
   id: string;
   publicId: string;
+  status: ConductReportStatus;
   possibleScoc: boolean;
   /** Linked to a record that is referred to SCCS right now. */
   locked: boolean;
@@ -128,6 +160,7 @@ export async function findReportsByPublicId(
     .select({
       id: schema.conductReports.id,
       publicId: schema.conductReports.publicId,
+      status: schema.conductReports.status,
       possibleScoc: schema.conductReports.possibleScoc,
       locked: linkedRecordInState(["referred"]),
       sccsDone: linkedRecordInState(["returned", "sccs_sanctioned"]),
@@ -173,6 +206,8 @@ export interface RecordForMutation {
   id: string;
   publicId: string;
   level: ConductLevel;
+  /** `null` once the subject's account is gone. */
+  subjectUserId: string | null;
   endsOn: Temporal.PlainDate | null;
   liftedAt: Temporal.Instant | null;
   scocState: ScocState;
@@ -187,6 +222,7 @@ export async function findRecordForMutation(
       id: records.id,
       publicId: records.publicId,
       level: records.level,
+      subjectUserId: records.subjectUserId,
       endsOn: records.endsOn,
       liftedAt: records.liftedAt,
       scocState: records.scocState,

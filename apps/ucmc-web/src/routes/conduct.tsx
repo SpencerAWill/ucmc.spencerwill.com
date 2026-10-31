@@ -24,11 +24,18 @@ function ConductLayout() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Conduct</h1>
         <p className="text-sm text-muted-foreground">
-          Records of notes, warnings, suspensions and terminations. Visible only
-          to conduct officers.
+          Member reports, and records of notes, warnings, suspensions and
+          terminations. Visible only to conduct officers.
         </p>
       </header>
       <nav aria-label="Conduct sections" className="flex gap-2 border-b pb-2">
+        <Link
+          to="/conduct/reports"
+          className="rounded-md px-3 py-1.5 text-sm font-medium hover:bg-accent"
+          activeProps={{ className: "bg-secondary" }}
+        >
+          Reports
+        </Link>
         <Link
           to="/conduct/records"
           className="rounded-md px-3 py-1.5 text-sm font-medium hover:bg-accent"

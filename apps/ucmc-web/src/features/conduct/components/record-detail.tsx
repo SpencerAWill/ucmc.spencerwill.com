@@ -212,7 +212,7 @@ export function RecordDetail({
         ) : (
           <ul className="space-y-1 text-sm">
             {record.reports.map((report) => (
-              <li key={report.publicId}>
+              <li key={report.id}>
                 {formatPlainDate(report.occurredOn)} ({report.status})
               </li>
             ))}

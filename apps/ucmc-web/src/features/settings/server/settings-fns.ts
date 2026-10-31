@@ -128,6 +128,8 @@ export type PublicFlags = {
   // each feedback surface accepts NEW submissions.
   siteFeedback: boolean;
   clubFeedback: boolean;
+  // Whether members may file NEW conduct reports (`conduct_reports.submissions_enabled`).
+  conductReports: boolean;
   // Per-page kill switches, keyed by the `pages.*` suffix. Each gates both
   // the page's route (via `requirePageFlag`) and its nav/tab entry. See
   // the registry's `pages` category for the full set.

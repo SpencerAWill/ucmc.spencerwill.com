@@ -965,7 +965,10 @@ export const auditAction = [
   "calendar_subscription.revoked",
   // Member conduct (see .claude/rules/feature-conduct.md once it lands).
   // Metadata carries the level, the state transition and ids only: never
-  // the statement, the notes, report text, names or emails.
+  // the statement, the notes, report text, names or emails. Report rows
+  // target ('conduct_report', publicId); record rows ('conduct_record', publicId).
+  "conduct.report_filed",
+  "conduct.report_triaged",
   "conduct.record_created",
   "conduct.record_updated",
   "conduct.referred",
@@ -2837,6 +2840,11 @@ export const conductReports = sqliteTable(
       sql`${t.subjectUserId} IS NOT NULL OR ${t.subjectDescription} IS NOT NULL`,
     ),
     index("conduct_reports_status_created_at_idx").on(t.status, t.createdAt),
+    // The per-reporter rate limit counts a reporter's last 24 hours.
+    index("conduct_reports_reporter_created_at_idx").on(
+      t.reporterUserId,
+      t.createdAt,
+    ),
     index("conduct_reports_retain_until_idx").on(t.retainUntil),
   ],
 );

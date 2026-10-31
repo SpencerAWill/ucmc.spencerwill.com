@@ -687,6 +687,13 @@
       "when": 1793480808205,
       "tag": "0097_conduct_permissions_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1793484079146,
+      "tag": "0098_conduct_reports_reporter_index",
+      "breakpoints": true
     }
   ]
 }

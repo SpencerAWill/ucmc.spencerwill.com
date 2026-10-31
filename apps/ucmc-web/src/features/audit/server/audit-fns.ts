@@ -125,6 +125,8 @@ export const AUDIT_ACTIONS = [
   "passkey.added",
   "passkey.removed",
   "passkey.renamed",
+  "conduct.report_filed",
+  "conduct.report_triaged",
   "conduct.record_created",
   "conduct.record_updated",
   "conduct.referred",

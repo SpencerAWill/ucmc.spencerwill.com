@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
@@ -40,6 +40,10 @@ import { UserMenu } from "#/features/auth/components/user-menu";
 import { ViewAsMenu } from "#/features/auth/components/view-as-menu";
 import { ANALYTICS_PAGE_ICONS } from "#/components/analytics-page-icons";
 import { GitHubIcon } from "#/components/brand-icons";
+import {
+  ConductReportLauncherProvider,
+  useConductReportLauncherState,
+} from "#/components/feedback/conduct-report-launcher";
 import { FeedbackLauncherProvider } from "#/components/feedback/feedback-launcher";
 import {
   FeedbackDialog,
@@ -127,10 +131,37 @@ function captureForFeedback() {
   return captureViewport({ maxBytes: SITE_FEEDBACK_SCREENSHOT_MAX_BYTES });
 }
 
+/** Approved, holding `conduct:report` (preview-aware), submissions on. */
+function useCanReportConduct(): boolean {
+  const { isApproved, hasPermission } = useAuth();
+  const flagsOptions = publicFlagsQueryOptions();
+  const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
+  return isApproved && hasPermission("conduct:report") && flags.conductReports;
+}
+
+// Lazy: the picker and form only ship once someone opens the dialog.
+const ReportDialog = lazy(async () => ({
+  default: (await import("#/features/conduct/components/report-dialog"))
+    .ReportDialog,
+}));
+
+function ConductReportMount() {
+  const { isOpen, setOpen } = useConductReportLauncherState();
+  if (!isOpen) {
+    return null;
+  }
+  return (
+    <Suspense fallback={null}>
+      <ReportDialog open onOpenChange={setOpen} />
+    </Suspense>
+  );
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   // The launcher wraps the whole shell so the user menu can open the
   // feedback dialog from any page; the dialog is mounted once, here.
   const surfaces = useFeedbackSurfaces();
+  const canReportConduct = useCanReportConduct();
   return (
     <FeedbackLauncherProvider
       canSend={surfaces.site || surfaces.club}
@@ -139,7 +170,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       captureScreenshot={surfaces.site}
       capture={captureForFeedback}
     >
-      <AppShell>{children}</AppShell>
+      <ConductReportLauncherProvider canReport={canReportConduct}>
+        <AppShell>{children}</AppShell>
+        <ConductReportMount />
+      </ConductReportLauncherProvider>
       <FeedbackDialog surfaces={surfaces} />
     </FeedbackLauncherProvider>
   );

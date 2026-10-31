@@ -1,11 +1,34 @@
 import { conductKeys } from "#/features/conduct/api/query-keys";
 import type { ListRecordsFilter } from "#/features/conduct/server/limits";
 import {
+  listConductReportsFn,
+  searchReportSubjectsFn,
+} from "#/features/conduct/server/report-fns";
+import {
   getConductRecordFn,
+  getConductSubjectFn,
   listConductRecordsFn,
   memberConductSummaryFn,
   searchConductSubjectsFn,
 } from "#/features/conduct/server/record-fns";
+
+export function conductReportsQueryOptions(
+  status?: "new" | "accepted" | "dismissed",
+) {
+  return {
+    queryKey: conductKeys.reports({ status }),
+    queryFn: () => listConductReportsFn({ data: { status } }),
+    staleTime: 30_000,
+  } as const;
+}
+
+export function reportSubjectsQueryOptions(q: string) {
+  return {
+    queryKey: conductKeys.reportSubjects(q),
+    queryFn: () => searchReportSubjectsFn({ data: { q } }),
+    staleTime: 30_000,
+  } as const;
+}
 
 export function conductRecordsQueryOptions(filter: ListRecordsFilter = {}) {
   return {
@@ -27,6 +50,14 @@ export function conductSubjectsQueryOptions(q: string) {
   return {
     queryKey: conductKeys.subjects(q),
     queryFn: () => searchConductSubjectsFn({ data: { q } }),
+    staleTime: 30_000,
+  } as const;
+}
+
+export function conductSubjectQueryOptions(publicId: string) {
+  return {
+    queryKey: conductKeys.subject(publicId),
+    queryFn: () => getConductSubjectFn({ data: { publicId } }),
     staleTime: 30_000,
   } as const;
 }

@@ -37,6 +37,14 @@ const memberSummarySchema = z.object({
 
 const subjectSearchSchema = z.object({ q: z.string().max(200) });
 
+export const getConductSubjectFn = createServerFn({ method: "GET" })
+  .validator(z.object({ publicId: z.string().trim().min(1).max(100) }))
+  .handler(async ({ data }): Promise<ConductSubjectOption | null> => {
+    const { getConductSubjectAction } =
+      await import("#/features/conduct/server/record-actions.server");
+    return getConductSubjectAction(data);
+  });
+
 export const searchConductSubjectsFn = createServerFn({ method: "GET" })
   .validator(subjectSearchSchema)
   .handler(async ({ data }): Promise<ConductSubjectOption[]> => {

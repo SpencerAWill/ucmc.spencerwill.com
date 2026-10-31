@@ -597,6 +597,31 @@ describe("searchConductSubjectsAction", () => {
   });
 });
 
+describe("getConductSubjectAction", () => {
+  it("returns the picker shape for an approved member, null otherwise, and needs conduct:manage", async () => {
+    const me = await signInManager();
+    const s = await subject("Pat Climber");
+    await expect(
+      actions.getConductSubjectAction({ publicId: s.publicId }),
+    ).resolves.toEqual({
+      userId: s.id,
+      publicId: s.publicId,
+      fullName: "Pat Climber",
+    });
+    await expect(
+      actions.getConductSubjectAction({ publicId: "nobody" }),
+    ).resolves.toBeNull();
+    await expect(
+      actions.getConductSubjectAction({ publicId: me.publicId }),
+    ).resolves.toBeNull();
+
+    await signInWith(["perm_conduct_view"]);
+    await expect(
+      actions.getConductSubjectAction({ publicId: s.publicId }),
+    ).rejects.toThrow("Forbidden");
+  });
+});
+
 describe("reads", () => {
   it("puts no internal id in the detail", async () => {
     await signInManager();
