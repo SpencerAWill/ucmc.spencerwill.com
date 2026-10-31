@@ -51,7 +51,7 @@ const PUBLIC_ROUTES = [
   "/gazette",
   "/sponsors",
   "/volunteer",
-  "/trips",
+  "/trip-sign-up",
   // The densest fixed-width surface on the site: a seven-column grid
   // that cannot reflow, a row of filter chips, and an agenda of rows
   // carrying badges and a meta line. Every one is a way for something

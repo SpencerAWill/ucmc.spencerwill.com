@@ -437,6 +437,20 @@ export function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
+          {/* /trip-sign-up hosts the Google Form stopgap until the
+           * trips feature ships. Public like the form itself, and
+           * gated on its flag alone (like the Blog placeholder): no
+           * `trips:*` permission exists, by design (see the route). */}
+          {pages.trip_signup ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Trip sign-up">
+                <Link to="/trip-sign-up">
+                  <Compass />
+                  <span>Trip sign-up</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarGroup>
 
@@ -511,21 +525,6 @@ export function SidebarNav() {
                     </>
                   ) : null}
                 </Collapsible>
-              </SidebarMenuItem>
-            ) : null}
-            {pages.trips ? (
-              <SidebarMenuItem>
-                {/* A real link now: /trips hosts the Google Form
-                 * sign-up stopgap until the trips feature ships.
-                 * Already inside the `isApproved` block, which
-                 * matches the route's `requireApproved` guard — no
-                 * `trips:*` permission exists yet. */}
-                <SidebarMenuButton asChild tooltip="Trips">
-                  <Link to="/trips">
-                    <Compass />
-                    <span>Trips</span>
-                  </Link>
-                </SidebarMenuButton>
               </SidebarMenuItem>
             ) : null}
             {canReadGear || canLoanGear ? (

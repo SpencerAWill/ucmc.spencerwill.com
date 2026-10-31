@@ -51,10 +51,10 @@ const CSP_VALUE = [
   "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   // `frame-src` covers the Turnstile widget, the inline PDF
   // iframe on /gazette/$publicId, AND the embedded Google Form on
-  // /trips.
+  // /trip-sign-up.
   //
   // `https://docs.google.com` is a TEMPORARY allowance for the trip
-  // sign-up form embedded at /trips while the real trips feature is
+  // sign-up form embedded at /trip-sign-up while the real trips feature is
   // built. Delete it together with that route's embed — it is the only
   // third-party frame source on the site that isn't Turnstile.
   //

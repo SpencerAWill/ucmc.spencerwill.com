@@ -68,7 +68,7 @@ const PAGES_ON = {
   gear: true,
   gear_inventory: true,
   gear_loans: true,
-  trips: true,
+  trip_signup: true,
   sponsors: true,
 } as const;
 
@@ -121,37 +121,35 @@ describe("SidebarNav page-flag gates", () => {
     expect(screen.queryByRole("link", { name: "Waivers" })).toBeNull();
   });
 
-  it("links Trips to the sign-up route once it stops being a placeholder", () => {
-    // `pages.trips` predates the route as a "coming soon" placeholder
-    // flag, so the entry rendered as an inert `aria-disabled` button.
-    // /trips is now a real page (the Google Form stopgap); if this
-    // regresses to a placeholder the flag still hides it, but members
-    // silently lose the only in-app path to trip sign-ups.
+  it("links Trip sign-up to /trip-sign-up", () => {
+    // `/trips` is reserved for the real feature and only redirects; the
+    // entry must point at the stopgap's own URL.
     renderNav();
 
-    expect(screen.getByRole("link", { name: "Trips" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Trip sign-up" })).toHaveAttribute(
       "href",
-      "/trips",
+      "/trip-sign-up",
     );
   });
 
-  it("hides Trips when the page flag is off", () => {
-    setFlags({ ...PAGES_ON, trips: false });
+  it("hides Trip sign-up when the page flag is off", () => {
+    setFlags({ ...PAGES_ON, trip_signup: false });
 
     renderNav();
 
-    expect(screen.queryByText("Trips")).toBeNull();
+    expect(screen.queryByText("Trip sign-up")).toBeNull();
   });
 
-  it("hides Trips from members who aren't approved", () => {
-    // The entry lives inside the `isApproved` block, matching the
-    // route's `requireApproved` guard — there is no `trips:*`
-    // permission to gate on.
+  it("shows Trip sign-up to a signed-out visitor", () => {
+    // The form is public, so the entry sits in the public group with no
+    // permission or approval gate — only its page flag.
     setAuth([], false);
 
     renderNav();
 
-    expect(screen.queryByText("Trips")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Trip sign-up" }),
+    ).toBeInTheDocument();
   });
 
   it("links Sponsors for a viewer holding public_sponsors:view", () => {

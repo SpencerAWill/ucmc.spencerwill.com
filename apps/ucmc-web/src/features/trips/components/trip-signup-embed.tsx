@@ -9,14 +9,15 @@ import { Button } from "#/components/ui/button";
  *
  * **This is a stopgap.** Trips are being built as a first-class feature
  * (`/trips` with real rows, rosters and waiver gating); until that lands
- * members still need somewhere to sign up, and the club already runs
- * sign-ups through this form. Embedding it keeps the entry point inside
- * the member area — one place to send people — instead of a link in a
- * GroupMe message that nobody can find two weeks later.
+ * people still need somewhere to sign up, and the club already runs
+ * sign-ups through this form. Embedding it at `/trip-sign-up` keeps the
+ * entry point on the site — one place to send people — instead of a link
+ * in a GroupMe message that nobody can find two weeks later.
  *
- * When the real feature ships, delete this component, the `/trips` route's
- * body, and the `https://docs.google.com` entry in `frame-src`
- * (`server/headers.server.ts`) — that CSP allowance exists only for this.
+ * When the real feature ships, delete this component, the `/trip-sign-up`
+ * route, the `/trips` redirect, and the `https://docs.google.com` entry in
+ * `frame-src` (`server/headers.server.ts`) — that CSP allowance exists
+ * only for this.
  */
 
 /**
@@ -35,9 +36,14 @@ const SIGNUP_FORM_URL =
  * Takes `waiverCurrent` as a prop rather than reading the waiver query
  * itself, so the component stays query-free and renders in the dom pool
  * without a QueryClient — the same arrangement `ServiceRecord` uses for
- * `canLinkToAlbum`.
+ * `canLinkToAlbum`. `null` means there is no member standing to report:
+ * a signed-out visitor or an account still awaiting approval.
  */
-export function TripSignupEmbed({ waiverCurrent }: { waiverCurrent: boolean }) {
+export function TripSignupEmbed({
+  waiverCurrent,
+}: {
+  waiverCurrent: boolean | null;
+}) {
   return (
     <div className="space-y-4">
       {/* Advisory, not a gate. `requireCurrentWaiver` would bounce a
@@ -46,7 +52,16 @@ export function TripSignupEmbed({ waiverCurrent }: { waiverCurrent: boolean }) {
        * cannot self-serve it), so hard-gating would strand people who
        * signed their paper and are waiting on the Treasurer. The trip
        * leader still checks standing before anyone leaves. */}
-      {waiverCurrent ? null : (
+      {/* No standing to read: a general reminder rather than a warning,
+       * since nothing is known to be missing. Plain text, not an Alert —
+       * `role="alert"` would announce it on every load. */}
+      {waiverCurrent === null ? (
+        <p className="text-sm text-muted-foreground">
+          You&rsquo;ll need a signed club waiver on file before you can come on
+          a trip. The trip leader checks before anyone leaves.
+        </p>
+      ) : null}
+      {waiverCurrent === false ? (
         <Alert variant="warning">
           <TriangleAlert />
           <AlertTitle>
@@ -68,7 +83,7 @@ export function TripSignupEmbed({ waiverCurrent }: { waiverCurrent: boolean }) {
             </p>
           </AlertDescription>
         </Alert>
-      )}
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline">
