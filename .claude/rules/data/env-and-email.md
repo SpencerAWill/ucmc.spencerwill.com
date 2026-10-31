@@ -17,7 +17,7 @@ Why the env is validated up front and fails closed: `docs/adr/0011-validate-the-
 `@t3-oss/env-core` + zod (`src/config/env.ts`) for `VITE_*` client vars. **Every server var and secret is read as `serverEnv().NAME`** (`src/server/env.server.ts`); `cloudflare-env.ts`'s `WorkerEnv` types bindings only.
 
 - **Two layers**: the Zod schema checks each variable alone (blank means unset); `configurationProblems()` checks combinations. `server-entry.ts` runs both before every request (ahead of the edge cache) and every cron tick, so a bad config is a 500 everywhere and an `env.invalid` log line naming variables, never values.
-- **A deployed-only rule keys on `APP_BASE_URL` being https.** Required there: `SESSION_SECRET`, both Turnstile keys, an email provider. Refused there: `MAILPIT_URL`, `E2E_BYPASS_RATE_LIMIT`. A bare local checkout must still boot.
+- **A deployed-only rule keys on `APP_BASE_URL` being https.** Required there: `SESSION_SECRET`, `CONDUCT_EMAIL_KEY`, both Turnstile keys, an email provider. Refused there: `MAILPIT_URL`, `E2E_BYPASS_RATE_LIMIT`. A bare local checkout must still boot.
 - **`EMAIL_OUTBOX` with `RESEND_API_KEY` is not a problem** — dev holds a stale key and the outbox winning is ADR 0001's safeguard. Don't port flareling's rule refusing the pair.
 - **`LOG_LEVEL` is the one var read raw** (by the logger, which must work while validation fails) and is not in the schema: a typo means `info`, never an outage.
 - **Never call `serverEnv()` at module scope**, same as the bindings.

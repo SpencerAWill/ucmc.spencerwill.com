@@ -28,7 +28,7 @@ function frame() {
 
 describe("TripSignupEmbed", () => {
   it("embeds the sign-up form with embedded=true", () => {
-    render(<TripSignupEmbed waiverCurrent />);
+    render(<TripSignupEmbed waiverCurrent suspendedUntil={null} />);
 
     const iframe = frame();
     expect(iframe).not.toBeNull();
@@ -45,7 +45,7 @@ describe("TripSignupEmbed", () => {
     // The recovery path when a browser refuses to frame third-party
     // content. A standalone tab wants the full-page form, so the embed
     // parameter must not ride along.
-    render(<TripSignupEmbed waiverCurrent />);
+    render(<TripSignupEmbed waiverCurrent suspendedUntil={null} />);
 
     const link = screen.getByRole("link", {
       name: /open the form in a new tab/i,
@@ -56,7 +56,7 @@ describe("TripSignupEmbed", () => {
   });
 
   it("warns, but does not block, when the waiver isn't current", () => {
-    render(<TripSignupEmbed waiverCurrent={false} />);
+    render(<TripSignupEmbed waiverCurrent={false} suspendedUntil={null} />);
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       /waiver isn.t on file/i,
@@ -71,7 +71,7 @@ describe("TripSignupEmbed", () => {
   });
 
   it("shows no waiver warning or reminder when the member is attested", () => {
-    render(<TripSignupEmbed waiverCurrent />);
+    render(<TripSignupEmbed waiverCurrent suspendedUntil={null} />);
 
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText(/signed club waiver on file/i)).toBeNull();
@@ -80,7 +80,7 @@ describe("TripSignupEmbed", () => {
   it("shows a general reminder, not a warning, when there is no standing to read", () => {
     // Signed-out visitors and pending accounts: nothing is known to be
     // missing, and /my/waiver isn't somewhere they can go.
-    render(<TripSignupEmbed waiverCurrent={null} />);
+    render(<TripSignupEmbed waiverCurrent={null} suspendedUntil={null} />);
 
     expect(screen.getByText(/signed club waiver on file/i)).toBeVisible();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -88,5 +88,22 @@ describe("TripSignupEmbed", () => {
       screen.queryByRole("link", { name: /your waiver page/i }),
     ).toBeNull();
     expect(frame()).not.toBeNull();
+  });
+
+  it("shows the suspension notice instead of the form and the new-tab link", () => {
+    render(
+      <TripSignupEmbed
+        waiverCurrent
+        suspendedUntil={Temporal.PlainDate.from("2026-12-15")}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "You\u2019re suspended from club trips until Dec 15, 2026.",
+    );
+    expect(frame()).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /open the form in a new tab/i }),
+    ).toBeNull();
   });
 });

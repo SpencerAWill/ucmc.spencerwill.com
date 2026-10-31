@@ -22,6 +22,7 @@ const PROD: ServerEnv = {
   RESEND_FROM_NAME: "UCMC",
   RESEND_API_KEY: "re_live",
   SESSION_SECRET: "x".repeat(32),
+  CONDUCT_EMAIL_KEY: "y".repeat(32),
   TURNSTILE_SECRET_KEY: "secret",
 };
 const PROD_CLIENT = { VITE_TURNSTILE_SITE_KEY: "site" };
@@ -51,9 +52,11 @@ describe("parseServerEnv", () => {
       ...LOCAL,
       RESEND_API_KEY: "",
       SESSION_SECRET: "",
+      CONDUCT_EMAIL_KEY: "",
     });
     expect(env.RESEND_API_KEY).toBeUndefined();
     expect(env.SESSION_SECRET).toBeUndefined();
+    expect(env.CONDUCT_EMAIL_KEY).toBeUndefined();
   });
 
   it("ignores bindings and anything else on the env object", () => {
@@ -75,6 +78,7 @@ describe("parseServerEnv", () => {
       ...LOCAL,
       APP_BASE_URL: "https://example.com/",
       SESSION_SECRET: "short-secret-value",
+      CONDUCT_EMAIL_KEY: "short-conduct-key",
       RESEND_API_KEY: "sk_wrong_provider",
       WEBAUTHN_RP_ID: undefined,
     });
@@ -82,12 +86,14 @@ describe("parseServerEnv", () => {
     const problems = result.ok ? [] : result.problems;
     expect(problems.map((p) => p.split(":")[0]).sort()).toEqual([
       "APP_BASE_URL",
+      "CONDUCT_EMAIL_KEY",
       "RESEND_API_KEY",
       "SESSION_SECRET",
       "WEBAUTHN_RP_ID",
     ]);
     const text = problems.join("\n");
     expect(text).not.toContain("short-secret-value");
+    expect(text).not.toContain("short-conduct-key");
     expect(text).not.toContain("sk_wrong_provider");
   });
 });
@@ -113,6 +119,12 @@ describe("configurationProblems", () => {
 
   it.each<[string, Partial<ServerEnv>, Partial<typeof PROD_CLIENT>, RegExp]>([
     ["no session secret", { SESSION_SECRET: undefined }, {}, /SESSION_SECRET/],
+    [
+      "no conduct email key",
+      { CONDUCT_EMAIL_KEY: undefined },
+      {},
+      /CONDUCT_EMAIL_KEY/,
+    ],
     [
       "no email provider",
       { RESEND_API_KEY: undefined },

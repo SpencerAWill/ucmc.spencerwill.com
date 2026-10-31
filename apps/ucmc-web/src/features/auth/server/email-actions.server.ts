@@ -29,6 +29,7 @@ import {
   recordAuditEvent,
 } from "#/server/audit/audit-log.server";
 import { normalizeEmail } from "#/server/auth/email-normalize";
+import { isBlockedEmail } from "#/server/conduct/standing.server";
 import {
   consumeMagicLink,
   requestMagicLink,
@@ -163,14 +164,22 @@ export async function requestAddEmailAction(args: {
   // before sending a magic link the recipient can't act on. The actual
   // race-safety boundary is the UNIQUE(email) constraint at consume
   // time; this is a UX layer.
-  const existing = await getDb().query.userEmails.findFirst({
-    where: eq(schema.userEmails.email, email),
-    columns: { userId: true },
-  });
-  if (existing) {
-    if (existing.userId === principal.userId) {
-      return { ok: false, reason: "already_yours" };
-    }
+  //
+  // A terminated member's address answers exactly as one another account
+  // holds, so the asker learns it is unavailable and nothing about why.
+  // Both lookups run on every request, so the two cases also do the same
+  // work.
+  const [existing, blocked] = await Promise.all([
+    getDb().query.userEmails.findFirst({
+      where: eq(schema.userEmails.email, email),
+      columns: { userId: true },
+    }),
+    isBlockedEmail(email),
+  ]);
+  if (existing?.userId === principal.userId) {
+    return { ok: false, reason: "already_yours" };
+  }
+  if (existing || blocked) {
     return { ok: false, reason: "email_taken" };
   }
 
@@ -209,6 +218,11 @@ export async function consumeAddEmailAction(
   }
 
   const email = normalizeEmail(proof.email);
+  // Re-checked for a link issued before the termination, with the same
+  // answer the request gives (see `requestAddEmailAction`).
+  if (await isBlockedEmail(email)) {
+    return { ok: false, reason: "email_taken" };
+  }
   const db = getDb();
   try {
     // Insert + audit in one batch — the email is known up front, so

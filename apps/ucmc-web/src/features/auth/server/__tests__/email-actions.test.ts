@@ -14,6 +14,7 @@ import type * as Resend from "#/server/email/resend";
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
+import { createTermination } from "#/test-support/factories/conduct";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -638,5 +639,58 @@ describe("setPrimaryEmailAction", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.email).toBe("alice@example.com");
     expect(rows[0]?.isPrimary).toBe(true);
+  });
+});
+
+describe("adding a terminated member's address", () => {
+  const BLOCKED = "removed-member@example.com";
+
+  const blockAddress = (email: string) =>
+    createTermination({ emails: [email] });
+
+  beforeEach(async () => {
+    await getDb().delete(schema.conductBlockedEmails);
+    await getDb().delete(schema.conductRecords);
+  });
+
+  it("answers a request exactly as for an address another account holds", async () => {
+    const aliceId = await seedApprovedUser("alice@example.com");
+    await seedApprovedUser("claimed@example.com");
+    await blockAddress(BLOCKED);
+    await signInAs(aliceId);
+
+    const taken = await requestAddEmailAction({ email: "claimed@example.com" });
+    const blocked = await requestAddEmailAction({ email: BLOCKED });
+    expect(blocked).toEqual(taken);
+    expect(blocked).toEqual({ ok: false, reason: "email_taken" });
+    expect(await getDb().select().from(schema.magicLinks)).toHaveLength(0);
+  });
+
+  it("refuses at consume for a link issued before the termination", async () => {
+    const aliceId = await seedApprovedUser("alice@example.com");
+    const token = await seedAddEmailLink({
+      email: BLOCKED,
+      targetUserId: aliceId,
+    });
+    await blockAddress(BLOCKED);
+    await signInAs(aliceId);
+
+    expect(await consumeAddEmailAction(token)).toEqual({
+      ok: false,
+      reason: "email_taken",
+    });
+    const rows = await getDb()
+      .select()
+      .from(schema.userEmails)
+      .where(eq(schema.userEmails.email, BLOCKED));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("still adds an address nobody blocked", async () => {
+    const aliceId = await seedApprovedUser("alice@example.com");
+    await blockAddress(BLOCKED);
+    await signInAs(aliceId);
+    const result = await requestAddEmailAction({ email: "fresh@example.com" });
+    expect(result.ok).toBe(true);
   });
 });

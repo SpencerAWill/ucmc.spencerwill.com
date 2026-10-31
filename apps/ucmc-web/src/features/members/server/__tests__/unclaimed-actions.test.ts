@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
+import { createTermination } from "#/test-support/factories/conduct";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -484,5 +485,63 @@ describe("pre-add and delete at scale (#291)", () => {
       userIds: added.created.map((c) => c.userId),
     });
     expect(result.deletedIds).toHaveLength(60);
+  });
+});
+
+describe("a terminated member's address", () => {
+  beforeEach(async () => {
+    await getDb().delete(schema.conductBlockedEmails);
+    await getDb().delete(schema.conductRecords);
+  });
+
+  it("is skipped at pre-add exactly like an address another account holds", async () => {
+    await signInAsApprover();
+    await seedUser("taken@uc.edu");
+    await createTermination({ emails: ["removed@uc.edu"] });
+
+    const result = await preAddOk({
+      entries: [
+        { name: "Carol", email: "carol@uc.edu" },
+        { name: "Taken", email: "taken@uc.edu" },
+        { name: "Removed", email: " Removed@UC.edu " },
+      ],
+    });
+    expect(result.created.map((c) => c.email)).toEqual(["carol@uc.edu"]);
+    expect(result.skipped).toEqual([
+      { email: "taken@uc.edu", name: "Taken", reason: "email_taken" },
+      { email: "removed@uc.edu", name: "Removed", reason: "email_taken" },
+    ]);
+  });
+
+  it("is refused as an unclaimed account's new email with the taken answer", async () => {
+    await signInAsApprover();
+    await createTermination({ emails: ["removed@uc.edu"] });
+    const { created } = await preAddOk({
+      entries: [{ name: "X", email: "freeaddr@uc.edu" }],
+    });
+
+    const result = await editUnclaimedMemberAction({
+      userId: created[0].userId,
+      name: "X",
+      email: "removed@uc.edu",
+    });
+    expect(result).toEqual({ ok: false, error: { kind: "email_taken" } });
+    const emailRow = await getDb().query.userEmails.findFirst({
+      where: eq(schema.userEmails.userId, created[0].userId),
+    });
+    expect(emailRow?.email).toBe("freeaddr@uc.edu");
+  });
+
+  it("stops being refused once the termination is lifted", async () => {
+    await signInAsApprover();
+    const recordId = await createTermination({ emails: ["removed@uc.edu"] });
+    await getDb()
+      .update(schema.conductRecords)
+      .set({ liftedAt: Temporal.Now.instant() })
+      .where(eq(schema.conductRecords.id, recordId));
+    const result = await preAddOk({
+      entries: [{ name: "Removed", email: "removed@uc.edu" }],
+    });
+    expect(result.created.map((c) => c.email)).toEqual(["removed@uc.edu"]);
   });
 });

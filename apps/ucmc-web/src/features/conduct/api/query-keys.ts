@@ -13,6 +13,7 @@ export const conductKeys = {
   reports: (filter: Record<string, unknown> = {}) =>
     ["conduct", "reports", filter] as const,
   mine: ["conduct", "mine"] as const,
+  standing: ["conduct", "standing"] as const,
   preview: (input: unknown) => ["conduct", "preview", input] as const,
   member: (userId: string) => ["conduct", "member", userId] as const,
   subjects: (q: string) => ["conduct", "subjects", q] as const,
@@ -26,3 +27,9 @@ export const conductKeys = {
  * `features/members`; `MEMBERS_DETAIL_QUERY_KEY` is the same value.
  */
 export const MEMBERS_DETAIL_PREFIX = ["members", "detail"] as const;
+
+/**
+ * Every members cache. A termination deactivates the subject, which moves
+ * them between the members tabs; written as a literal for the same reason.
+ */
+export const MEMBERS_PREFIX = ["members"] as const;

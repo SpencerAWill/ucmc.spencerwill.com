@@ -47,6 +47,9 @@ inputs:
     required: true
   session-secret:
     required: true
+  conduct-email-key:
+    description: HMAC key for the conduct email block. Never rotate it casually; rotating lifts every block.
+    required: true
   cloudflare-account-read-token:
     description: The daily cost snapshot's token (#268). Optional.
     default: ""
@@ -156,7 +159,7 @@ runs:
     # on a stack using the dev outbox. Both are masked as soon as read.
     #
     # Written BEFORE the restore point and the migration: a missing
-    # SESSION_SECRET or an unreadable stack output must fail the job while
+    # SESSION_SECRET / CONDUCT_EMAIL_KEY or an unreadable stack output must fail the job while
     # D1 is untouched, not leave it migrated under the old code.
     - name: Write the secrets file
       shell: bash
@@ -164,6 +167,7 @@ runs:
       env:
         STACK: ${{ inputs.stack }}
         SESSION_SECRET: ${{ inputs.session-secret }}
+        CONDUCT_EMAIL_KEY: ${{ inputs.conduct-email-key }}
         CLOUDFLARE_ACCOUNT_READ_TOKEN: ${{ inputs.cloudflare-account-read-token }}
         SITE_FEEDBACK_GITHUB_TOKEN: ${{ inputs.site-feedback-github-token }}
         SITE_FEEDBACK_GITHUB_REPO: ${{ inputs.site-feedback-github-repo }}
@@ -174,12 +178,12 @@ runs:
         RESEND_API_KEY="$(pulumi stack output resendApiKey --show-secrets --stack "$STACK")"
         if [ -n "$RESEND_API_KEY" ]; then echo "::add-mask::$RESEND_API_KEY"; fi
         export TURNSTILE_SECRET_KEY RESEND_API_KEY
-        if [ -z "$SESSION_SECRET" ] || [ -z "$TURNSTILE_SECRET_KEY" ]; then
-          echo "::error::SESSION_SECRET or TURNSTILE_SECRET_KEY is empty"
+        if [ -z "$SESSION_SECRET" ] || [ -z "$CONDUCT_EMAIL_KEY" ] || [ -z "$TURNSTILE_SECRET_KEY" ]; then
+          echo "::error::SESSION_SECRET, CONDUCT_EMAIL_KEY or TURNSTILE_SECRET_KEY is empty"
           exit 1
         fi
         jq -n 'env
-          | {SESSION_SECRET, TURNSTILE_SECRET_KEY, RESEND_API_KEY,
+          | {SESSION_SECRET, CONDUCT_EMAIL_KEY, TURNSTILE_SECRET_KEY, RESEND_API_KEY,
              CLOUDFLARE_ACCOUNT_READ_TOKEN, SITE_FEEDBACK_GITHUB_TOKEN, SITE_FEEDBACK_GITHUB_REPO}
           | with_entries(select(.value != null and .value != ""))' \
           > "$RUNNER_TEMP/secrets.json"

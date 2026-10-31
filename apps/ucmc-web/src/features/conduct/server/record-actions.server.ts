@@ -18,6 +18,9 @@
  *     carries the level, the state transition and ids only. A lifecycle
  *     write whose guard no longer holds (it lost a race) writes nothing,
  *     audit row included, and throws.
+ *   - **A termination blocks every address on the account**, verified or
+ *     not, as `emailFingerprint` rows in the record's own batch; `lift`
+ *     deletes them in its batch. Standing's `isBlockedEmail` reads them.
  *   - **`retain_until` is recomputed by every write**, with `updated_at`
  *     as the last activity.
  *   - **The notice is sent after the batch commits** (`sendNotice`), to
@@ -26,6 +29,9 @@
  *     `notice_sent_at` NULL, which the detail page shows as "Notice not
  *     sent". `conduct.notice` is not suppressible, so no preference is
  *     read. Neither the statement nor the address goes in audit metadata.
+ *   - **A termination deactivates the account** after the notice send has
+ *     returned, in its own write (`deactivateUserStatements`). If that
+ *     fails the record stands and the action throws `DEACTIVATION_FAILED`.
  */
 import { uuidv7 } from "uuidv7";
 
@@ -47,6 +53,8 @@ import type {
 } from "#/features/conduct/server/limits";
 import {
   applyRecordWrite,
+  blockEmailsStatements,
+  findAccountEmails,
   findRecordDetail,
   findNoticeRecipient,
   findRecordForMutation,
@@ -77,13 +85,15 @@ import { buildAuditEventStatement } from "#/server/audit/audit-log.server";
 import type { AuditAction } from "#/server/audit/audit-log.server";
 import { generatePublicId } from "#/server/auth/ids";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import { emailFingerprint } from "#/server/conduct/email-fingerprint.server";
 import { retainUntil } from "#/server/conduct/retention";
-import { standingFor } from "#/server/conduct/standing.server";
+import { isTerminated, standingFor } from "#/server/conduct/standing.server";
 import type { ConductStanding } from "#/server/conduct/standing.server";
 import { runBatch } from "#/server/db";
 import { conductNoticeEmail } from "#/server/email/conduct-email";
 import type { ConductNoticeLevel } from "#/server/email/conduct-email";
 import { sendEmail } from "#/server/email/resend";
+import { deactivateUserStatements } from "#/server/members/deactivate.server";
 import { errorMessage, log } from "#/server/log/log.server";
 
 // ── public types ────────────────────────────────────────────────────────
@@ -130,6 +140,9 @@ export interface MemberConductSummary {
 // ── helpers ─────────────────────────────────────────────────────────────
 
 const TARGET_TYPE = "conduct_record";
+
+const DEACTIVATION_FAILED =
+  "Record saved, but deactivating the account failed; check the member's status on /members.";
 
 function today(): Temporal.PlainDate {
   return Temporal.Now.plainDateISO(CLUB_TIME_ZONE);
@@ -321,6 +334,14 @@ export async function createConductRecordAction(
   if (!subject) {
     throw new Error("Member not found");
   }
+  // One active termination per member: a second (say, a resubmit after
+  // a failed deactivation) would duplicate the notice and the block.
+  if (
+    input.level === "termination" &&
+    (await isTerminated(input.subjectUserId))
+  ) {
+    throw new Error("Member already has an active termination");
+  }
 
   const reportIds = [...new Set(input.reportIds)];
   const reports = await findReportsByPublicId(reportIds, input.subjectUserId);
@@ -376,6 +397,14 @@ export async function createConductRecordAction(
       : null;
   const vote = input.level === "termination" ? input.vote : null;
   const scocState: ScocState = referral ? "referred" : "none";
+  // Computed before the batch: a missing key throws here, so a
+  // termination is never written without its block.
+  const blockedEmailHmacs =
+    input.level === "termination"
+      ? await Promise.all(
+          (await findAccountEmails(input.subjectUserId)).map(emailFingerprint),
+        )
+      : [];
 
   await runBatch([
     insertRecordStatement({
@@ -412,6 +441,8 @@ export async function createConductRecordAction(
       id,
       reports.map((r) => r.id),
     ),
+    // A termination blocks every address on the account by keyed hash.
+    ...blockEmailsStatements(id, blockedEmailHmacs),
     // Citing a report is triaging it: a `new` one becomes accepted.
     ...acceptCitedReportsStatements({
       reports,
@@ -446,7 +477,29 @@ export async function createConductRecordAction(
       ...noticeDates(input),
     });
   }
+  if (input.level === "termination") {
+    await deactivateSubject(principal.userId, input.subjectUserId);
+  }
   return { publicId };
+}
+
+/**
+ * A termination deactivates the account, after the notice has gone (so
+ * the email is not racing the sign-out) and in its own write, so the
+ * record stands if this fails. A subject who is not approved (pending,
+ * already deactivated) transitions nothing, which is fine. A failure is
+ * logged and surfaced: the officer must know the account is still live.
+ */
+async function deactivateSubject(
+  actorUserId: string,
+  subjectUserId: string,
+): Promise<void> {
+  try {
+    await deactivateUserStatements(actorUserId, [subjectUserId]);
+  } catch (err: unknown) {
+    log.error("conduct.deactivation_failed", { error: errorMessage(err) });
+    throw new Error(DEACTIVATION_FAILED, { cause: err });
+  }
 }
 
 // ── lifecycle ───────────────────────────────────────────────────────────

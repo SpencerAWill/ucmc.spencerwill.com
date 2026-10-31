@@ -19,7 +19,8 @@ import { repository } from "./src/repository.ts";
  * credential that can loosen its own rules.
  *
  * Not managed here, deliberately: the hand-set environment secrets
- * SESSION_SECRET (rotating it signs every member out) and
+ * SESSION_SECRET (rotating it signs every member out), CONDUCT_EMAIL_KEY
+ * (rotating it lifts every conduct email block) and
  * CLOUDFLARE_ACCOUNT_READ_TOKEN (the cost cron's token), and the
  * SITE_FEEDBACK_GITHUB_TOKEN secret / SITE_FEEDBACK_GITHUB_REPO variable. GitHub never
  * reveals a secret's value, so adopting one means re-entering it; they stay

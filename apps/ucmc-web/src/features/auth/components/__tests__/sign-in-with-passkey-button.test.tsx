@@ -234,4 +234,29 @@ describe("SignInWithPasskeyButton", () => {
       /user cancelled/i,
     );
   });
+
+  it("sends a member under termination to the termination notice", async () => {
+    const user = userEvent.setup();
+    webauthnAuthenticateBeginFn.mockResolvedValue({
+      ok: true,
+      options: { challenge: "abc" },
+    });
+    startAuthentication.mockResolvedValue({ id: "cred-1" });
+    webauthnAuthenticateFinishFn.mockResolvedValue({
+      ok: false,
+      reason: "conduct_terminated",
+    });
+
+    renderButton();
+    await user.click(
+      await screen.findByRole("button", { name: /sign in with a passkey/i }),
+    );
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({
+        href: "/deactivated?reason=terminated",
+      });
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });

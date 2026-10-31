@@ -15,7 +15,10 @@ import {
   sccsOutcomeSchema,
   updateRecordSchema,
 } from "#/features/conduct/server/limits";
-import type { MyActiveSanction } from "#/features/conduct/server/my-conduct-actions.server";
+import type {
+  MyActiveSanction,
+  MyConductStanding,
+} from "#/features/conduct/server/my-conduct-actions.server";
 import type {
   ConductRecordDetail,
   ConductRecordSummary,
@@ -138,3 +141,12 @@ export const previewConductNoticeFn = createServerFn({ method: "POST" })
       await import("#/features/conduct/server/record-actions.server");
     return previewConductNoticeAction(data);
   });
+
+/** The caller's suspension end date, or null. Null too when signed out. */
+export const getMyConductStandingFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<MyConductStanding | null> => {
+    const { getMyConductStandingAction } =
+      await import("#/features/conduct/server/my-conduct-actions.server");
+    return getMyConductStandingAction();
+  },
+);

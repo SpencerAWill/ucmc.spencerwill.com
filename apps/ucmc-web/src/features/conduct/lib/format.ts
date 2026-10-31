@@ -1,10 +1,9 @@
 import type { ScocState } from "#/../drizzle/schema";
 import { CLUB_TIME_ZONE } from "#/config/time";
+import { formatPlainDate } from "#/lib/date-format";
 
-/** A calendar date, in the viewer's locale. A PlainDate has no zone to shift. */
-export function formatPlainDate(date: Temporal.PlainDate): string {
-  return date.toLocaleString(undefined, { dateStyle: "medium" });
-}
+// Hoisted to `#/lib/date-format` so `features/trips` can use it too.
+export { formatPlainDate };
 
 export function formatDateRange(
   startsOn: Temporal.PlainDate | null,

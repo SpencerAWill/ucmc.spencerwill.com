@@ -3,6 +3,7 @@ import { ExternalLink, TriangleAlert } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
+import { formatPlainDate } from "#/lib/date-format";
 
 /**
  * The club's trip sign-up Google Form, embedded in the app.
@@ -41,9 +42,25 @@ const SIGNUP_FORM_URL =
  */
 export function TripSignupEmbed({
   waiverCurrent,
+  suspendedUntil,
 }: {
   waiverCurrent: boolean | null;
+  /** Set by the route from the conduct feature (trips cannot import it). */
+  suspendedUntil: Temporal.PlainDate | null;
 }) {
+  // A suspended member gets the notice instead of the form and the
+  // new-tab link, which would be a way around it.
+  if (suspendedUntil !== null) {
+    return (
+      <Alert variant="warning">
+        <TriangleAlert />
+        <AlertTitle>
+          You&rsquo;re suspended from club trips until{" "}
+          {formatPlainDate(suspendedUntil)}.
+        </AlertTitle>
+      </Alert>
+    );
+  }
   return (
     <div className="space-y-4">
       {/* Advisory, not a gate. `requireCurrentWaiver` would bounce a

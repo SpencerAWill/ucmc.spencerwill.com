@@ -5,6 +5,7 @@ import { getDb, schema } from "#/server/db";
 import { createRole, createUser } from "#/test-support/factories/users";
 import type { CreateRecordInput } from "#/features/conduct/server/limits";
 import type * as RepoModuleNs from "#/features/conduct/server/record-repo.server";
+import type * as DeactivateModuleNs from "#/server/members/deactivate.server";
 
 type RepoModule = typeof RepoModuleNs;
 
@@ -23,12 +24,18 @@ vi.mock("@tanstack/react-start/server", () => ({
 }));
 
 const sent = vi.hoisted(() => [] as Array<Record<string, unknown>>);
-const sendBehaviour = vi.hoisted(() => ({ fail: false }));
+const sendBehaviour = vi.hoisted(() => ({
+  fail: false,
+  onSend: null as null | (() => Promise<void>),
+}));
 vi.mock("#/server/email/resend", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     sendEmail: vi.fn(async (message: Record<string, unknown>) => {
+      if (sendBehaviour.onSend) {
+        await sendBehaviour.onSend();
+      }
       if (sendBehaviour.fail) {
         throw new Error("provider exploded");
       }
@@ -50,7 +57,18 @@ vi.mock(
   },
 );
 
+// Pass-through, so a test can make the deactivation step fail.
+vi.mock("#/server/members/deactivate.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof DeactivateModuleNs>();
+  return {
+    ...actual,
+    deactivateUserStatements: vi.fn(actual.deactivateUserStatements),
+  };
+});
+
 const repo = await import("#/features/conduct/server/record-repo.server");
+const { deactivateUserStatements } =
+  await import("#/server/members/deactivate.server");
 const actions = await import("#/features/conduct/server/record-actions.server");
 const { getMyActiveSanctionsAction } =
   await import("#/features/conduct/server/my-conduct-actions.server");
@@ -58,6 +76,12 @@ const { requireConductReporter } =
   await import("#/features/conduct/server/conduct-guards.server");
 const { createRecordSchema } = await import("#/features/conduct/server/limits");
 const { openSession } = await import("#/server/auth/session.server");
+const { isBlockedEmail } = await import("#/server/conduct/standing.server");
+const { getMyTerminationNoticeAction } =
+  await import("#/features/conduct/server/termination-notice-actions.server");
+const { writeProofCookie } = await import("#/server/auth/proof-cookie.server");
+const { APPEAL_LINE } = await import("#/server/email/conduct-email");
+const { base64UrlEncode } = await import("#/server/auth/signing.server");
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -187,6 +211,7 @@ beforeEach(async () => {
   cookieJar.clear();
   sent.length = 0;
   sendBehaviour.fail = false;
+  sendBehaviour.onSend = null;
   const db = getDb();
   await db.delete(schema.auditLog);
   await db
@@ -194,6 +219,7 @@ beforeEach(async () => {
     .where(eq(schema.conductRecords.level, "termination"));
   await db.delete(schema.conductRecords);
   await db.delete(schema.conductReports);
+  await db.delete(schema.conductBlockedEmails);
   await db.delete(schema.sessions);
   await db.delete(schema.userRoles);
   await db.delete(schema.profiles);
@@ -474,6 +500,211 @@ describe("liftConductRecordAction", () => {
     await expect(
       actions.liftConductRecordAction({ recordId: publicId, reason: "again" }),
     ).rejects.toThrow("already lifted");
+  });
+});
+
+// ── email block ───────────────────────────────────────────────────────
+
+describe("the termination email block", () => {
+  async function blockedRows() {
+    return getDb().select().from(schema.conductBlockedEmails);
+  }
+
+  it("fingerprints every address on the account and drops them on lift", async () => {
+    await signInManager();
+    const s = await subject();
+    // A second, unverified address: the spec blocks every email on the
+    // account, not only the verified ones.
+    await getDb()
+      .insert(schema.userEmails)
+      .values({
+        id: `uem_${crypto.randomUUID()}`,
+        userId: s.id,
+        email: "second@example.com",
+        isPrimary: false,
+        verifiedAt: null,
+      });
+    const { publicId } = await create(
+      termination(s.id, { warningSkipped: true }),
+    );
+    const row = await recordRow(publicId);
+    const blocked = await blockedRows();
+    expect(blocked).toHaveLength(2);
+    expect(blocked.every((b) => b.recordId === row.id)).toBe(true);
+    // Keyed hashes only: no readable address is stored.
+    expect(blocked.every((b) => /^[0-9a-f]{64}$/.test(b.emailHmac))).toBe(true);
+    expect(await isBlockedEmail(s.email)).toBe(true);
+    expect(await isBlockedEmail("Second@Example.com")).toBe(true);
+
+    await actions.liftConductRecordAction({ recordId: publicId, reason: "r" });
+    expect(await blockedRows()).toHaveLength(0);
+    expect(await isBlockedEmail(s.email)).toBe(false);
+    expect(await isBlockedEmail("second@example.com")).toBe(false);
+  });
+
+  it("blocks nothing for a lower level", async () => {
+    await signInManager();
+    const s = await subject();
+    await create(warning(s.id));
+    await create(note(s.id));
+    expect(await blockedRows()).toHaveLength(0);
+    expect(await isBlockedEmail(s.email)).toBe(false);
+  });
+});
+
+describe("a termination deactivates the account", () => {
+  async function userRow(userId: string) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, userId));
+    return row;
+  }
+
+  async function sessionCount(userId: string) {
+    return (
+      await getDb()
+        .select()
+        .from(schema.sessions)
+        .where(eq(schema.sessions.userId, userId))
+    ).length;
+  }
+
+  async function deactivationAudits(userId: string) {
+    return getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(
+        and(
+          eq(schema.auditLog.action, "member.deactivated"),
+          eq(schema.auditLog.targetUserId, userId),
+        ),
+      );
+  }
+
+  /** Give the subject a live session, then sign the manager back in. */
+  async function subjectWithSession() {
+    const s = await subject();
+    await openSession(s.id);
+    return s;
+  }
+
+  it("deactivates, signs out and audits with the conduct manager as actor", async () => {
+    const s = await subjectWithSession();
+    const manager = await signInManager();
+    expect(await sessionCount(s.id)).toBe(1);
+
+    await create(termination(s.id, { warningSkipped: true }));
+
+    const row = await userRow(s.id);
+    expect(row.status).toBe("deactivated");
+    expect(row.deactivatedAt).not.toBeNull();
+    expect(await sessionCount(s.id)).toBe(0);
+    const audits = await deactivationAudits(s.id);
+    expect(audits).toHaveLength(1);
+    expect(audits[0].actorUserId).toBe(manager.id);
+  });
+
+  it("sends the notice before the sessions are deleted", async () => {
+    const s = await subjectWithSession();
+    await signInManager();
+    const atSend: number[] = [];
+    sendBehaviour.onSend = async () => {
+      atSend.push(await sessionCount(s.id));
+    };
+
+    await create(termination(s.id, { warningSkipped: true }));
+
+    expect(atSend).toEqual([1]);
+    expect(await sessionCount(s.id)).toBe(0);
+  });
+
+  it("still deactivates when the notice fails to send", async () => {
+    const s = await subjectWithSession();
+    await signInManager();
+    sendBehaviour.fail = true;
+
+    const { publicId } = await create(
+      termination(s.id, { warningSkipped: true }),
+    );
+
+    expect((await recordRow(publicId)).noticeSentAt).toBeNull();
+    expect((await userRow(s.id)).status).toBe("deactivated");
+    expect(await sessionCount(s.id)).toBe(0);
+  });
+
+  it("does nothing to the account for a lower level", async () => {
+    const s = await subjectWithSession();
+    await signInManager();
+    await create(warning(s.id));
+    expect((await userRow(s.id)).status).toBe("approved");
+    expect(await sessionCount(s.id)).toBe(1);
+  });
+
+  it("terminates a subject who is not approved without failing", async () => {
+    const s = await createUser({ status: "pending" });
+    await signInManager();
+    const { publicId } = await create(
+      termination(s.id, { warningSkipped: true }),
+    );
+    expect(await recordRow(publicId)).toBeDefined();
+    expect((await userRow(s.id)).status).toBe("pending");
+    expect(await deactivationAudits(s.id)).toHaveLength(0);
+  });
+
+  it("keeps the record and says so when deactivation fails", async () => {
+    const s = await subjectWithSession();
+    await signInManager();
+    vi.mocked(deactivateUserStatements).mockRejectedValueOnce(
+      new Error("d1 down"),
+    );
+
+    await expect(
+      create(termination(s.id, { warningSkipped: true })),
+    ).rejects.toThrow(
+      "Record saved, but deactivating the account failed; check the member's status on /members.",
+    );
+
+    const records = await getDb().select().from(schema.conductRecords);
+    expect(records).toHaveLength(1);
+    expect(records[0].noticeSentAt).not.toBeNull();
+    expect((await userRow(s.id)).status).toBe("approved");
+    expect(await isBlockedEmail(s.email)).toBe(true);
+  });
+
+  it("refuses a second termination while one is active, even after a failed deactivation", async () => {
+    const s = await subjectWithSession();
+    await signInManager();
+    vi.mocked(deactivateUserStatements).mockRejectedValueOnce(
+      new Error("d1 down"),
+    );
+    await expect(
+      create(termination(s.id, { warningSkipped: true })),
+    ).rejects.toThrow("Record saved, but deactivating");
+    const blockedBefore = await getDb()
+      .select()
+      .from(schema.conductBlockedEmails);
+
+    await expect(
+      create(termination(s.id, { warningSkipped: true })),
+    ).rejects.toThrow("Member already has an active termination");
+
+    expect(await getDb().select().from(schema.conductRecords)).toHaveLength(1);
+    expect(sent).toHaveLength(1);
+    expect(
+      await getDb().select().from(schema.conductBlockedEmails),
+    ).toHaveLength(blockedBefore.length);
+    // A lower level is still allowed, and a lift reopens termination.
+    await create(warning(s.id));
+    const [record] = await getDb()
+      .select()
+      .from(schema.conductRecords)
+      .where(eq(schema.conductRecords.level, "termination"));
+    await actions.liftConductRecordAction({
+      recordId: record.publicId,
+      reason: "r",
+    });
+    await create(termination(s.id, { warningSkipped: true }));
   });
 });
 
@@ -979,5 +1210,119 @@ describe("getMyActiveSanctionsAction", () => {
     await signInAs(me.id);
     const mine = await getMyActiveSanctionsAction();
     expect(mine.map((m) => m.statement)).toEqual([STATEMENT]);
+  });
+});
+
+describe("getMyTerminationNoticeAction", () => {
+  async function terminated() {
+    const s = await subject();
+    await signInManager();
+    const { publicId } = await create(
+      termination(s.id, { warningSkipped: true }),
+    );
+    cookieJar.clear();
+    return { s, publicId };
+  }
+
+  async function proveEmail(email: string, issuedAt = Date.now()) {
+    cookieJar.clear();
+    await writeProofCookie({ email, intent: "login", issuedAt });
+  }
+
+  it("answers null to a visitor with no session and no proof", async () => {
+    await terminated();
+    expect(await getMyTerminationNoticeAction()).toBeNull();
+  });
+
+  it("answers the terminated member's own surviving session", async () => {
+    const s = await subject();
+    await signInManager();
+    await create(termination(s.id, { warningSkipped: true }));
+    // A session row that outlived the deactivation, as on the request
+    // that redirected the member here.
+    await signInAs(s.id);
+    expect(await getMyTerminationNoticeAction()).toEqual({
+      statement: STATEMENT,
+      appealText: APPEAL_LINE,
+    });
+  });
+
+  it("answers null to a signed-in member who is not terminated", async () => {
+    await terminated();
+    const other = await subject("Other Member");
+    await signInAs(other.id);
+    expect(await getMyTerminationNoticeAction()).toBeNull();
+  });
+
+  it("answers a valid proof cookie for a blocked address, normalized", async () => {
+    const { s } = await terminated();
+    await proveEmail(` ${s.email.toUpperCase()} `);
+    expect(await getMyTerminationNoticeAction()).toEqual({
+      statement: STATEMENT,
+      appealText: APPEAL_LINE,
+    });
+  });
+
+  it("still answers the proof after the account is purged", async () => {
+    const { s } = await terminated();
+    await getDb()
+      .delete(schema.userEmails)
+      .where(eq(schema.userEmails.userId, s.id));
+    await getDb()
+      .delete(schema.profiles)
+      .where(eq(schema.profiles.userId, s.id));
+    await getDb().delete(schema.users).where(eq(schema.users.id, s.id));
+    await proveEmail(s.email);
+    expect((await getMyTerminationNoticeAction())?.statement).toBe(STATEMENT);
+  });
+
+  it("answers null to a proof for an unblocked address", async () => {
+    await terminated();
+    await proveEmail("someone-else@example.com");
+    expect(await getMyTerminationNoticeAction()).toBeNull();
+  });
+
+  it("answers null to an expired or forged proof", async () => {
+    const { s } = await terminated();
+    await proveEmail(s.email, Date.now() - 1000 * 60 * 60);
+    expect(await getMyTerminationNoticeAction()).toBeNull();
+
+    await proveEmail(s.email);
+    const [name, value] = [...cookieJar.entries()][0];
+    const [, signature] = value.split(".");
+    // A fresh payload under another payload's signature.
+    const forged = base64UrlEncode(
+      JSON.stringify({
+        email: s.email,
+        intent: "login",
+        issuedAt: Date.now() + 1,
+      }),
+    );
+    cookieJar.set(name, `${forged}.${signature}`);
+    expect(await getMyTerminationNoticeAction()).toBeNull();
+  });
+
+  it("answers null to a proof whose fingerprint rows outlived a lifted termination", async () => {
+    const { s, publicId } = await terminated();
+    // Lifted without the lift's delete: the lifted_at test is the backstop.
+    await getDb()
+      .update(schema.conductRecords)
+      .set({ liftedAt: Temporal.Now.instant() })
+      .where(eq(schema.conductRecords.publicId, publicId));
+    expect(
+      await getDb().select().from(schema.conductBlockedEmails),
+    ).not.toHaveLength(0);
+    await proveEmail(s.email);
+    expect(await getMyTerminationNoticeAction()).toBeNull();
+  });
+
+  it("answers null once the termination is lifted", async () => {
+    const { s, publicId } = await terminated();
+    await signInManager();
+    await actions.liftConductRecordAction({ recordId: publicId, reason: "r" });
+    await proveEmail(s.email);
+    expect(await getMyTerminationNoticeAction()).toBeNull();
+    await signInAs(s.id);
+    expect(await getMyTerminationNoticeAction()).toBeNull();
   });
 });

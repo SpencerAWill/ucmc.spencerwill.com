@@ -55,7 +55,7 @@ export type AuthenticateFinishResult =
     }
   | {
       ok: false;
-      reason: "rate_limited" | "no_ceremony" | "invalid";
+      reason: "rate_limited" | "no_ceremony" | "invalid" | "conduct_terminated";
     };
 
 export type RemovePasskeyResult =

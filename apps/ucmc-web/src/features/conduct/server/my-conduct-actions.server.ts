@@ -8,6 +8,7 @@
 import { CLUB_TIME_ZONE } from "#/config/time";
 import { listActiveSanctionsFor } from "#/features/conduct/server/record-repo.server";
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
+import { standingFor } from "#/server/conduct/standing.server";
 
 export interface MyActiveSanction {
   level: "warning" | "suspension" | "termination";
@@ -33,4 +34,23 @@ export async function getMyActiveSanctionsAction(): Promise<
     startsOn: row.startsOn,
     endsOn: row.endsOn,
   }));
+}
+
+export interface MyConductStanding {
+  suspendedUntil: Temporal.PlainDate | null;
+}
+
+/**
+ * Whether the caller is suspended, for the public `/trip-sign-up` page.
+ * Null when signed out. Only the end date leaves: no record ids, and no
+ * termination flag, because a terminated member is deactivated and cannot
+ * hold a session.
+ */
+export async function getMyConductStandingAction(): Promise<MyConductStanding | null> {
+  const principal = await loadCurrentPrincipal();
+  if (!principal) {
+    return null;
+  }
+  const { suspendedUntil } = await standingFor(principal.userId);
+  return { suspendedUntil };
 }

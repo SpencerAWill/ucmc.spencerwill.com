@@ -404,6 +404,149 @@ describe("reactivateMembersAction", () => {
   });
 });
 
+describe("reactivateMembersAction and a termination", () => {
+  beforeEach(async () => {
+    await getDb().delete(schema.conductRecords);
+  });
+
+  async function terminate(userId: string): Promise<string> {
+    const id = `crec_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.conductRecords)
+      .values({
+        id,
+        publicId: id,
+        level: "termination",
+        subjectUserId: userId,
+        subjectNameSnapshot: "Sam Subject",
+        memberStatement: "Statement",
+        voteHeldOn: Temporal.PlainDate.from("2026-10-20"),
+        votesFor: 5,
+        votesAgainst: 1,
+        votesAbstain: 0,
+        committeeSize: 7,
+        warningSkipped: true,
+      });
+    return id;
+  }
+
+  async function statusOf(userId: string) {
+    const user = await getDb().query.users.findFirst({
+      where: eq(schema.users.id, userId),
+    });
+    return user!.status;
+  }
+
+  it("refuses while a termination is active, writing nothing, and succeeds once lifted", async () => {
+    await signInAsAdmin();
+    const terminatedId = await seedUser("terminated@example.com");
+    const otherId = await seedUser("other@example.com");
+    await deactivateMembersAction([terminatedId, otherId]);
+    const recordId = await terminate(terminatedId);
+
+    await expect(
+      reactivateMembersAction([otherId, terminatedId]),
+    ).rejects.toThrow("Membership terminated; lift the termination first");
+    expect(await statusOf(terminatedId)).toBe("deactivated");
+    // A bulk request with one terminated id reactivates no one.
+    expect(await statusOf(otherId)).toBe("deactivated");
+
+    await getDb()
+      .update(schema.conductRecords)
+      .set({ liftedAt: Temporal.Now.instant() })
+      .where(eq(schema.conductRecords.id, recordId));
+    await reactivateMembersAction([terminatedId, otherId]);
+    expect(await statusOf(terminatedId)).toBe("approved");
+    expect(await statusOf(otherId)).toBe("approved");
+  });
+});
+
+describe("approveRegistrationsAction and a termination", () => {
+  beforeEach(async () => {
+    await getDb().delete(schema.conductRecords);
+  });
+
+  it("refuses a batch holding a terminated registrant, approving no one, and succeeds once lifted", async () => {
+    await signInAsAdmin();
+    const terminatedId = await seedUser("terminated@example.com", {
+      status: "pending",
+    });
+    const otherId = await seedUser("other@example.com", { status: "pending" });
+    const recordId = `crec_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.conductRecords)
+      .values({
+        id: recordId,
+        publicId: recordId,
+        level: "termination",
+        subjectUserId: terminatedId,
+        subjectNameSnapshot: "Sam Subject",
+        memberStatement: "Statement",
+        voteHeldOn: Temporal.PlainDate.from("2026-10-20"),
+        votesFor: 5,
+        votesAgainst: 1,
+        votesAbstain: 0,
+        committeeSize: 7,
+        warningSkipped: true,
+      });
+    const statusOf = async (userId: string) =>
+      (await getDb().query.users.findFirst({
+        where: eq(schema.users.id, userId),
+      }))!.status;
+
+    await expect(
+      approveRegistrationsAction([otherId, terminatedId]),
+    ).rejects.toThrow("Membership terminated; lift the termination first");
+    expect(await statusOf(terminatedId)).toBe("pending");
+    expect(await statusOf(otherId)).toBe("pending");
+
+    await getDb()
+      .update(schema.conductRecords)
+      .set({ liftedAt: Temporal.Now.instant() })
+      .where(eq(schema.conductRecords.id, recordId));
+    await approveRegistrationsAction([otherId, terminatedId]);
+    expect(await statusOf(terminatedId)).toBe("approved");
+    expect(await statusOf(otherId)).toBe("approved");
+  });
+});
+
+describe("approveRegistrationsAction status filter", () => {
+  it("approves only pending registrations, leaving any other status as it was", async () => {
+    await signInAsAdmin();
+    const pendingId = await seedUser("queue@example.com", {
+      status: "pending",
+    });
+    const others = await Promise.all(
+      (["unclaimed", "deactivated", "rejected"] as const).map(
+        async (status) =>
+          [
+            status,
+            await seedUser(`${status}@example.com`, { status }),
+          ] as const,
+      ),
+    );
+
+    await approveRegistrationsAction([
+      pendingId,
+      ...others.map(([, id]) => id),
+    ]);
+
+    const statusOf = async (userId: string) =>
+      (await getDb().query.users.findFirst({
+        where: eq(schema.users.id, userId),
+      }))!.status;
+    expect(await statusOf(pendingId)).toBe("approved");
+    for (const [status, id] of others) {
+      expect(await statusOf(id)).toBe(status);
+    }
+    const approvals = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "registration.approved"));
+    expect(approvals.map((a) => a.targetUserId)).toEqual([pendingId]);
+  });
+});
+
 // ── un-reject ───────────────────────────────────────────────────────────
 
 describe("unrejectMembersAction", () => {

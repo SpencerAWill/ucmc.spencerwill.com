@@ -73,3 +73,8 @@ export function formatRelative(instant: Temporal.Instant): string {
   }
   return "just now";
 }
+
+/** A calendar date, in the viewer's locale. A PlainDate has no zone to shift. */
+export function formatPlainDate(date: Temporal.PlainDate): string {
+  return date.toLocaleString(undefined, { dateStyle: "medium" });
+}

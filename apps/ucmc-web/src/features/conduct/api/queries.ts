@@ -11,6 +11,7 @@ import {
   getConductRecordFn,
   getConductSubjectFn,
   getMyActiveSanctionsFn,
+  getMyConductStandingFn,
   listConductRecordsFn,
   memberConductSummaryFn,
   previewConductNoticeFn,
@@ -71,6 +72,14 @@ export function memberConductSummaryQueryOptions(userId: string) {
   return {
     queryKey: conductKeys.member(userId),
     queryFn: () => memberConductSummaryFn({ data: { userId } }),
+    staleTime: 30_000,
+  } as const;
+}
+
+export function myConductStandingQueryOptions() {
+  return {
+    queryKey: conductKeys.standing,
+    queryFn: () => getMyConductStandingFn(),
     staleTime: 30_000,
   } as const;
 }

@@ -50,7 +50,7 @@ export type ConsumeMagicLinkResult =
       hasProfile: boolean;
     }
   | { ok: true; mode: "proof"; intent: schema.MagicLinkIntent }
-  | { ok: false; reason: "invalid" | "rate_limited" };
+  | { ok: false; reason: "invalid" | "rate_limited" | "conduct_terminated" };
 
 // ── request / consume ────────────────────────────────────────────────────
 

@@ -66,11 +66,17 @@ const serverEnvSchema = z.object({
   ),
 
   // Secrets (`.env.example` says what each is for). Optional here;
-  // `configurationProblems` requires SESSION_SECRET and Turnstile when
-  // deployed. RESEND_API_KEY is optional because the outbox or Mailpit
-  // can carry the mail instead (see `email/email-tier.ts`).
+  // `configurationProblems` requires SESSION_SECRET, CONDUCT_EMAIL_KEY
+  // and Turnstile when deployed. RESEND_API_KEY is optional because the
+  // outbox or Mailpit can carry the mail instead (see
+  // `email/email-tier.ts`).
   RESEND_API_KEY: optional(z.string().startsWith("re_")),
   SESSION_SECRET: optional(z.string().min(32)),
+  // HMAC key for the conduct email block (`conduct/email-fingerprint`):
+  // a terminated member's addresses are kept only as keyed hashes.
+  // Rotating it silently lifts every block, so it is never rotated
+  // without re-fingerprinting.
+  CONDUCT_EMAIL_KEY: optional(z.string().min(32)),
   TURNSTILE_SECRET_KEY: optional(z.string().min(1)),
 
   // Site-feedback triage: a fine-grained PAT (Issues read/write) and the
@@ -209,6 +215,11 @@ export function configurationProblems(
     // Locally a missing secret still boots; signing a cookie throws.
     if (!env.SESSION_SECRET) {
       problems.push("SESSION_SECRET is required when deployed.");
+    }
+    // Without it a termination cannot be issued and sign-in cannot check
+    // the block, so it is refused up front rather than at the first one.
+    if (!env.CONDUCT_EMAIL_KEY) {
+      problems.push("CONDUCT_EMAIL_KEY is required when deployed.");
     }
     if (env.MAILPIT_URL) {
       problems.push("MAILPIT_URL is for local development only.");

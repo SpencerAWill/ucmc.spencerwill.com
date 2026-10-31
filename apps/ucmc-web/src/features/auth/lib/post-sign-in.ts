@@ -34,6 +34,18 @@ export function postSignInHref(
 }
 
 /**
+ * The refusal a sign-in or registration step gives a member under an
+ * unlifted termination: a result `reason` from the magic-link consume and
+ * the passkey finish, and the thrown message from the profile submit
+ * (an error's message is all that crosses the server-fn wire).
+ */
+export const CONDUCT_TERMINATED = "conduct_terminated";
+
+/** Where that refusal lands. `/deactivated` shows the termination heading
+ *  and appeal route from the query alone, with no session or cookie. */
+export const TERMINATED_HREF = "/deactivated?reason=terminated";
+
+/**
  * `/auth/callback`'s destination for a consumed link. A first-time
  * registrant (`mode: "proof"`) has no account yet, so no profile — the
  * same row of the table as a session without one.

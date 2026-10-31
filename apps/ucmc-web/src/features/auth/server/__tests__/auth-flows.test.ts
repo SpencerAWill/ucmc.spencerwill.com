@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Resend from "#/server/email/resend";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
+import { createTermination } from "#/test-support/factories/conduct";
 
 // ── mocks (declared before action imports) ──────────────────────────────
 
@@ -717,6 +718,44 @@ describe("list pending registrations", () => {
   });
 });
 
+describe("list pending registrations: conduct name match", () => {
+  async function grant(userId: string, name: string): Promise<void> {
+    const roleId = `role_${name.replace(":", "_")}`;
+    const permId = `perm_${name.replace(":", "_")}`;
+    await getDb().insert(schema.roles).values({
+      id: roleId,
+      name: roleId,
+      displayName: roleId,
+      description: roleId,
+    });
+    await getDb()
+      .insert(schema.permissions)
+      .values({ id: permId, name, description: name });
+    await getDb()
+      .insert(schema.rolePermissions)
+      .values({ roleId, permissionId: permId });
+    await getDb().insert(schema.userRoles).values({ userId, roleId });
+  }
+
+  it("sets conductMatch only for a conduct:view viewer", async () => {
+    const approverId = await seedApprover();
+    await seedUser({
+      email: "match@example.com",
+      status: "pending",
+      withProfile: true,
+    });
+    const recordId = await createTermination({ subjectName: "test user" });
+
+    await signInAs(approverId);
+    const without = await listPendingRegistrationsAction({});
+    expect(without.rows[0].conductMatch).toBeNull();
+
+    await grant(approverId, "conduct:view");
+    const withView = await listPendingRegistrationsAction({});
+    expect(withView.rows[0].conductMatch).toEqual([recordId]);
+  });
+});
+
 describe("submit-profile status reset", () => {
   // Sanity-level contract test: a returning approved user re-submitting
   // their profile keeps `approved` status. JavaScript is single-threaded
@@ -938,5 +977,235 @@ describe("pre-seeded user registration", () => {
       where: (p, { eq }) => eq(p.userId, preSeededId),
     });
     expect(profile!.fullName).toBe("Alice Smith");
+  });
+});
+
+describe("terminated address (conduct block)", () => {
+  const BLOCKED = "removed-member@example.com";
+
+  const blockAddresses = (emails: string[], subjectUserId?: string) =>
+    createTermination({ emails, subjectUserId });
+
+  beforeEach(async () => {
+    await getDb().delete(schema.conductBlockedEmails);
+    await getDb().delete(schema.conductRecords);
+    await getDb().delete(schema.userEmails);
+  });
+
+  it("refuses a link for a purged member's address and writes no cookie", async () => {
+    await blockAddresses([BLOCKED]);
+    const token = await seedMagicLink({ email: BLOCKED, intent: "register" });
+
+    // Normalisation is the block's equality: a cased, padded variant
+    // of the same address is still refused.
+    const upper = await seedMagicLink({
+      email: "  Removed-Member@Example.com ",
+      intent: "register",
+    });
+
+    expect(await consumeMagicLinkAction(token)).toEqual({
+      ok: false,
+      reason: "conduct_terminated",
+    });
+    expect(await consumeMagicLinkAction(upper)).toEqual({
+      ok: false,
+      reason: "conduct_terminated",
+    });
+    expect([...cookieJar.keys()]).toEqual([]);
+    expect(await getDb().select().from(schema.sessions)).toHaveLength(0);
+  });
+
+  it("stops blocking once the termination is lifted", async () => {
+    const recordId = await blockAddresses([BLOCKED]);
+    await getDb()
+      .update(schema.conductRecords)
+      .set({ liftedAt: Temporal.Now.instant() })
+      .where(drizzleEq(schema.conductRecords.id, recordId));
+    const token = await seedMagicLink({ email: BLOCKED, intent: "register" });
+
+    expect(await consumeMagicLinkAction(token)).toEqual({
+      ok: true,
+      mode: "proof",
+      intent: "register",
+    });
+  });
+
+  it("answers a request for a blocked address exactly as any other", async () => {
+    await blockAddresses([BLOCKED]);
+    const blocked = await requestMagicLinkAction({
+      email: BLOCKED,
+      turnstileToken: "",
+    });
+    const other = await requestMagicLinkAction({
+      email: "someone-new@example.com",
+      turnstileToken: "",
+    });
+    expect(blocked).toEqual(other);
+    // The link still goes out, so the request path does nothing an
+    // observer could tell apart; the block applies at consume.
+    const links = await getDb().select().from(schema.magicLinks);
+    expect(links.map((l) => l.email).sort()).toEqual(
+      [BLOCKED, "someone-new@example.com"].sort(),
+    );
+  });
+
+  it("still registers an address nobody blocked", async () => {
+    await blockAddresses([BLOCKED]);
+    const token = await seedMagicLink({
+      email: "fresh@example.com",
+      intent: "register",
+    });
+    expect(await consumeMagicLinkAction(token)).toEqual({
+      ok: true,
+      mode: "proof",
+      intent: "register",
+    });
+    await submitProfileAction(validProfile);
+    const owner = await getDb().query.userEmails.findFirst({
+      where: drizzleEq(schema.userEmails.email, "fresh@example.com"),
+    });
+    expect(owner).toBeDefined();
+  });
+
+  it("refuses a profile submit carrying a proof for a blocked address", async () => {
+    // A proof cookie issued before the termination landed.
+    const token = await seedMagicLink({ email: BLOCKED, intent: "register" });
+    await consumeMagicLinkAction(token);
+    expect(cookieJar.size).toBe(1);
+    await blockAddresses([BLOCKED]);
+
+    await expect(submitProfileAction(validProfile)).rejects.toThrow(
+      "conduct_terminated",
+    );
+    expect(await getDb().select().from(schema.users)).toHaveLength(0);
+    expect(await getDb().select().from(schema.userEmails)).toHaveLength(0);
+  });
+
+  async function seedUnclaimedAt(email: string): Promise<string> {
+    const id = `user_${crypto.randomUUID()}`;
+    await getDb()
+      .insert(schema.users)
+      .values({
+        id,
+        publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        status: "unclaimed",
+        placeholderName: "Pre-added",
+        unclaimedAt: Temporal.Now.instant(),
+      });
+    await getDb()
+      .insert(schema.userEmails)
+      .values({
+        id: `uem_${crypto.randomUUID()}`,
+        userId: id,
+        email,
+        isPrimary: true,
+        verifiedAt: null,
+      });
+    return id;
+  }
+
+  it("refuses to claim an unclaimed account whose address is blocked", async () => {
+    const id = await seedUnclaimedAt(BLOCKED);
+    await blockAddresses([BLOCKED]);
+    const token = await seedMagicLink({ email: BLOCKED, intent: "login" });
+
+    expect(await consumeMagicLinkAction(token)).toEqual({
+      ok: false,
+      reason: "conduct_terminated",
+    });
+    expect(await getDb().select().from(schema.sessions)).toHaveLength(0);
+    const email = await getDb().query.userEmails.findFirst({
+      where: drizzleEq(schema.userEmails.userId, id),
+    });
+    expect(email?.verifiedAt).toBeNull();
+  });
+
+  it("refuses to claim an unclaimed account under termination", async () => {
+    // The termination names the account but its fingerprint is of some
+    // other address, so only the user-keyed check can catch it.
+    const id = await seedUnclaimedAt("pre-added@example.com");
+    await blockAddresses(["other@example.com"], id);
+    const token = await seedMagicLink({
+      email: "pre-added@example.com",
+      intent: "login",
+    });
+
+    expect(await consumeMagicLinkAction(token)).toEqual({
+      ok: false,
+      reason: "conduct_terminated",
+    });
+    expect(await getDb().select().from(schema.sessions)).toHaveLength(0);
+  });
+
+  it("refuses the claim at profile submit for a session opened before the termination", async () => {
+    const id = await seedUnclaimedAt("pre-added@example.com");
+    await signInAs(id);
+    await blockAddresses(["pre-added@example.com"], id);
+
+    await expect(submitProfileAction(validProfile)).rejects.toThrow(
+      "conduct_terminated",
+    );
+    const user = await getDb().query.users.findFirst({
+      where: drizzleEq(schema.users.id, id),
+    });
+    expect(user?.status).toBe("unclaimed");
+    expect(await getDb().select().from(schema.profiles)).toHaveLength(0);
+  });
+
+  it("refuses a deactivated member under termination, so the callback can say why", async () => {
+    const id = await seedUser({
+      email: "terminated@example.com",
+      status: "deactivated",
+      withProfile: true,
+    });
+    await blockAddresses(["terminated@example.com"], id);
+    const token = await seedMagicLink({
+      email: "terminated@example.com",
+      intent: "login",
+    });
+
+    expect(await consumeMagicLinkAction(token)).toEqual({
+      ok: false,
+      reason: "conduct_terminated",
+    });
+    expect(await getDb().select().from(schema.sessions)).toHaveLength(0);
+  });
+
+  it("refuses an approved member under termination (deactivation failed)", async () => {
+    // The termination names the account by id only: its fingerprint is
+    // of an address the member no longer holds.
+    const id = await seedUser({
+      email: "still-approved@example.com",
+      status: "approved",
+      withProfile: true,
+    });
+    await blockAddresses(["old@example.com"], id);
+    const token = await seedMagicLink({
+      email: "still-approved@example.com",
+      intent: "login",
+    });
+
+    expect(await consumeMagicLinkAction(token)).toEqual({
+      ok: false,
+      reason: "conduct_terminated",
+    });
+    expect(await getDb().select().from(schema.sessions)).toHaveLength(0);
+  });
+
+  it("still signs in a deactivated member with no termination", async () => {
+    await seedUser({
+      email: "plain-deactivated@example.com",
+      status: "deactivated",
+      withProfile: true,
+    });
+    const token = await seedMagicLink({
+      email: "plain-deactivated@example.com",
+      intent: "login",
+    });
+    expect(await consumeMagicLinkAction(token)).toMatchObject({
+      ok: true,
+      mode: "session",
+      status: "deactivated",
+    });
   });
 });

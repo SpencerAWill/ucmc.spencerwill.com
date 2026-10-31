@@ -203,4 +203,24 @@ describe("ProfileForm", () => {
     });
     expect(navigateMock).not.toHaveBeenCalled();
   });
+
+  it("sends a refused (terminated) registrant to the termination notice", async () => {
+    const user = userEvent.setup();
+    submitProfileFn.mockRejectedValue(new Error("conduct_terminated"));
+
+    renderForm();
+
+    await user.type(screen.getByLabelText(/preferred name/i), "ce");
+    await user.click(screen.getByLabelText(/acknowledge.*policies/i));
+    await user.click(
+      screen.getByRole("button", { name: /submit for review/i }),
+    );
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({
+        href: "/deactivated?reason=terminated",
+      });
+    });
+    expect(toastError).not.toHaveBeenCalled();
+  });
 });

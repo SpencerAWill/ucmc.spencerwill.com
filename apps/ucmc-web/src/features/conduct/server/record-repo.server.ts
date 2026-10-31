@@ -450,6 +450,26 @@ export async function applyRecordWrite(input: {
   return Array.isArray(updated) && updated.length > 0;
 }
 
+/**
+ * Every address on the account, verified or not: a termination blocks
+ * all of them (the primary is a `user_emails` row like the rest).
+ */
+export async function findAccountEmails(userId: string): Promise<string[]> {
+  const rows = await getDb()
+    .select({ email: schema.userEmails.email })
+    .from(schema.userEmails)
+    .where(eq(schema.userEmails.userId, userId));
+  return rows.map((r) => r.email);
+}
+
+/** One `conduct_blocked_emails` row per fingerprint, split to fit D1. */
+export function blockEmailsStatements(recordId: string, emailHmacs: string[]) {
+  return insertStatements(
+    schema.conductBlockedEmails,
+    [...new Set(emailHmacs)].map((emailHmac) => ({ recordId, emailHmac })),
+  );
+}
+
 /** The subject's primary verified address, or null when they have none. */
 export async function findNoticeRecipient(
   userId: string,
@@ -511,4 +531,51 @@ export async function listActiveSanctionsFor(
       ),
     )
     .orderBy(desc(records.createdAt), desc(records.id));
+}
+
+/**
+ * The statement of a member's newest unlifted termination, or null. For
+ * the member's own `/deactivated` page, so it reads by subject with no
+ * viewer filter: the subject is the viewer.
+ */
+export async function findActiveTerminationStatementFor(
+  subjectUserId: string,
+): Promise<string | null> {
+  const rows = await getDb()
+    .select({ statement: records.memberStatement })
+    .from(records)
+    .where(
+      and(
+        eq(records.subjectUserId, subjectUserId),
+        eq(records.level, "termination"),
+        isNull(records.liftedAt),
+      ),
+    )
+    .orderBy(desc(records.createdAt), desc(records.id))
+    .limit(1);
+  return rows.at(0)?.statement ?? null;
+}
+
+/**
+ * The statement of the newest unlifted termination that blocked this
+ * fingerprint, or null. Holds after the account is purged, because the
+ * fingerprint outlives it.
+ */
+export async function findActiveTerminationStatementByFingerprint(
+  emailHmac: string,
+): Promise<string | null> {
+  const rows = await getDb()
+    .select({ statement: records.memberStatement })
+    .from(schema.conductBlockedEmails)
+    .innerJoin(records, eq(records.id, schema.conductBlockedEmails.recordId))
+    .where(
+      and(
+        eq(schema.conductBlockedEmails.emailHmac, emailHmac),
+        eq(records.level, "termination"),
+        isNull(records.liftedAt),
+      ),
+    )
+    .orderBy(desc(records.createdAt), desc(records.id))
+    .limit(1);
+  return rows.at(0)?.statement ?? null;
 }
