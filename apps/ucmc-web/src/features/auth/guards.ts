@@ -383,6 +383,23 @@ export async function getCurrentWaiverStatus(
 }
 
 /**
+ * {@link getCurrentWaiverStatus} for a route that anyone may open: the
+ * status for an approved member, `null` for everyone else. A signed-out
+ * visitor has no waiver to read (the server fn requires a session), and a
+ * pending account has nothing an officer could have attested yet, so
+ * neither is asked.
+ */
+export async function getWaiverStatusIfApproved(
+  queryClient: QueryClient,
+): Promise<WaiverStatus | null> {
+  const principal = await getPrincipal(queryClient);
+  if (principal?.status !== "approved") {
+    return null;
+  }
+  return getCurrentWaiverStatus(queryClient);
+}
+
+/**
  * Hard gate for routes that require an active paper-waiver attestation
  * for the current academic cycle (e.g. trip RSVP, equipment checkout,
  * future participation-gated actions). Layers on top of `requireApproved`

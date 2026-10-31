@@ -49,7 +49,7 @@ Both, in the same change. See the `add-page-flag` skill for the guard wiring.
 
 If the feature needs its own permission, that is a **DB row and therefore a migration** (unlike settings). Seed it ungranted if it should be delegable at `/access`.
 
-Consider whether a permission is warranted at all: `/trips` deliberately has none, because it's a stopgap that gets deleted and a migration isn't worth spending on it.
+Consider whether a permission is warranted at all: `/trip-sign-up` deliberately has none, because it's a stopgap that gets deleted and a migration isn't worth spending on it.
 
 If a write permission should imply a read one, express the OR in **one shared helper** (`requireGearInspector`-style) and grant the read permission explicitly in the seed migration — there is no implication mechanism, and `/access` should show the real grant.
 

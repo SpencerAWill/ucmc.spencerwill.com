@@ -433,10 +433,10 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-09-12",
   }),
-  "pages.trips": z.boolean().default(true).register(registry, {
-    label: "Trips enabled",
+  "pages.trip_signup": z.boolean().default(true).register(registry, {
+    label: "Trip sign-up enabled",
     description:
-      "When off, the Trips sidebar entry is hidden and the /trips route returns notFound for everyone. /trips currently embeds the club's trip sign-up Google Form while the full trips feature is built.",
+      "When off, the Trip sign-up sidebar entry is hidden and the /trip-sign-up route returns notFound for everyone. /trip-sign-up embeds the club's trip sign-up Google Form while the full trips feature is built.",
     category: "pages",
     flagKind: "release",
     owner: "system_admin",

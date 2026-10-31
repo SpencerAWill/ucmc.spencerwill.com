@@ -70,9 +70,23 @@ describe("TripSignupEmbed", () => {
     expect(frame()).not.toBeNull();
   });
 
-  it("shows no waiver warning when the member is attested", () => {
+  it("shows no waiver warning or reminder when the member is attested", () => {
     render(<TripSignupEmbed waiverCurrent />);
 
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(/signed club waiver on file/i)).toBeNull();
+  });
+
+  it("shows a general reminder, not a warning, when there is no standing to read", () => {
+    // Signed-out visitors and pending accounts: nothing is known to be
+    // missing, and /my/waiver isn't somewhere they can go.
+    render(<TripSignupEmbed waiverCurrent={null} />);
+
+    expect(screen.getByText(/signed club waiver on file/i)).toBeVisible();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /your waiver page/i }),
+    ).toBeNull();
+    expect(frame()).not.toBeNull();
   });
 });

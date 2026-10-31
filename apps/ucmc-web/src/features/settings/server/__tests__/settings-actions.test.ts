@@ -331,7 +331,7 @@ describe("readSetting fail-open", () => {
 
 // ── legacy key fallback (temporary, see settings-repo.server.ts) ───────
 
-describe("pre-rename feedback submission setting keys", () => {
+describe("pre-rename setting keys", () => {
   it("reads site_feedback.submissions_enabled through to the old key when only it exists", async () => {
     // The skew this covers: a build that asks for the new key against a
     // database that hasn't run 0064. Without the fallback the read would
@@ -356,6 +356,19 @@ describe("pre-rename feedback submission setting keys", () => {
       });
 
     expect(await readSetting("club_feedback.submissions_enabled")).toBe(false);
+  });
+
+  it("reads pages.trip_signup through to pages.trips when only it exists", async () => {
+    // A page flag defaults ON, so without the fallback a build ahead of
+    // 0095 would re-open the trip sign-up page an admin had switched off.
+    await getDb()
+      .insert(schema.siteSettings)
+      .values({
+        key: "pages.trips",
+        valueJson: JSON.stringify(false),
+      });
+
+    expect(await readSetting("pages.trip_signup")).toBe(false);
   });
 
   it("prefers the current key when both rows exist", async () => {
@@ -499,7 +512,7 @@ describe("getPublicFlagsAction", () => {
       "policies",
       "resources",
       "album",
-      "trips",
+      "trip_signup",
       "elections",
       "executive",
       "gazette",

@@ -557,6 +557,45 @@ describe("rename_feedback_submission_settings carries the switches and their his
   );
 });
 
+describe("rename_trips_page_flag carries the switch and its history", () => {
+  // The Google Form stopgap moved to /trip-sign-up, freeing `pages.trips`
+  // for the real feature. A bare rename would turn a page an admin had
+  // switched off back ON and strand its /settings history.
+  const BEFORE = "0094_calendar_subscription_token_hash.sql";
+
+  beforeEach(async () => {
+    await applyThrough(BEFORE);
+
+    const seed = [
+      `INSERT INTO site_settings (key, value_json) VALUES ('pages.trips', 'false')`,
+      `INSERT INTO audit_log (id, action, target_type, target_id)
+       VALUES ('aud_trips', 'settings_updated', 'site_setting', 'pages.trips')`,
+    ];
+    for (const statement of seed) {
+      await env.MIGRATIONS_DB.prepare(statement).run();
+    }
+
+    await applyRest();
+  });
+
+  it("moves the stored value and audit row to pages.trip_signup", async () => {
+    const renamed = await env.MIGRATIONS_DB.prepare(
+      `SELECT value_json FROM site_settings WHERE key = 'pages.trip_signup'`,
+    ).first<{ value_json: string }>();
+    expect(renamed?.value_json).toBe("false");
+
+    const leftover = await env.MIGRATIONS_DB.prepare(
+      `SELECT key FROM site_settings WHERE key = 'pages.trips'`,
+    ).first();
+    expect(leftover).toBeNull();
+
+    const audit = await env.MIGRATIONS_DB.prepare(
+      `SELECT target_id FROM audit_log WHERE id = 'aud_trips'`,
+    ).first<{ target_id: string }>();
+    expect(audit?.target_id).toBe("pages.trip_signup");
+  });
+});
+
 describe("site_feedback_issue_backfill turns legacy GitHub mirrors into issues and links", () => {
   // The auto-mirror stamped `github_issue_number` / `github_issue_url` on
   // each submission. The triage model reads issues and links instead, so

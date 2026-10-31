@@ -37,7 +37,7 @@ Why the waiver term is the club season: `docs/adr/0004-the-club-season-is-the-wa
 - **The cycle is `currentSeason()`**, never an ad-hoc August boundary, with no grace window. `attestWaiver` stamps the season at attest time, so a mid-season waiver covers the whole season.
 - **`waivers:view` is read-only** (queue, history, the member-detail card; seeded to president, treasurer, advisor). **`waivers:verify`** also attests, bulk-attests and revokes. `verify` implies `view` only through the OR in `requireWaiverViewer` and the route's `requireAnyPermission`, and the seed grants `view` explicitly to verify-holders so `/access` shows the real grant.
 - **No signed PDF is ever stored**; an attestation row is `(userId, cycle, version, attestedAt, attestedBy)`. That is what keeps the read tier low-risk; keep it that way.
-- **Attestation is officer-driven**, so a member can't self-serve one. A surface that merely benefits from standing uses `getCurrentWaiverStatus` for an advisory banner, not `requireCurrentWaiver`, which would strand someone waiting on the Treasurer (`/trips` is the example).
+- **Attestation is officer-driven**, so a member can't self-serve one. A surface that merely benefits from standing uses `getCurrentWaiverStatus` for an advisory banner (or `getWaiverStatusIfApproved` on a page anyone may open), not `requireCurrentWaiver`, which would strand someone waiting on the Treasurer (`/trip-sign-up` is the example).
 
 ## Adding things
 

@@ -10,6 +10,7 @@ paths:
   - "apps/ucmc-web/src/routes/volunteer.tsx"
   - "apps/ucmc-web/src/routes/sponsors.tsx"
   - "apps/ucmc-web/src/routes/trips.tsx"
+  - "apps/ucmc-web/src/routes/trip-sign-up.tsx"
   - "apps/ucmc-web/src/routes/history.tsx"
   - "apps/ucmc-web/src/routes/gear-cave.tsx"
   - "apps/ucmc-web/src/routes/policies.tsx"
@@ -22,7 +23,7 @@ paths:
 
 ## Page heroes
 
-Every public page renders the same hero band — a gradient or auto-advancing gallery with editable overlay copy.
+Every public page renders the same hero band — a gradient or auto-advancing gallery with editable overlay copy. **`/trip-sign-up` is the one deliberate exception**: it is a stopgap that gets deleted, so it keeps its own `<h1>` header rather than spending a `HERO_PAGES` entry (a persisted slug) on it.
 
 **`HERO_PAGES` in `features/landing/lib/hero-pages.ts` is the single registry.** The `hero.<page>.heading` / `.tagline` setting keys, the discriminated update validator, the editor's scoping, and the `hero_slides.page` values are all derived from it, so **adding a hero to a new page is one entry there** — no migration (unlike RBAC permissions, which are DB rows). Detail pages (`/gazette/$publicId`, `/members/$publicId`) deliberately have none.
 
@@ -104,13 +105,15 @@ Every mark renders on a **light chip in both themes** (`SponsorLogo`) — sponso
 
 `websiteUrl` (sponsors) and `signupUrl` (volunteer) are **scheme-restricted, and `z.url()` is not enough**: Zod accepts `javascript:`, `data:` and `vbscript:`, and both `:manage` permissions are seeded ungranted precisely so they can be delegated to a non-admin role — an unrestricted scheme is stored XSS handed to whoever holds that delegation. `HTTP_SCHEME` guards the write **and** the render helper (`sponsorWebsiteHref()` / `outingJoinHref`) re-checks. **The render-time check is the one that matters**, since a schema only guards writes made after it shipped and a row from a direct SQL edit bypasses it entirely. A rejected link degrades to plain text / the `mailto:`, so the entry stays useful.
 
-## Trips (`/trips`) — a deliberate stopgap
+## Trip sign-up (`/trip-sign-up`) — a deliberate stopgap
 
-Members need somewhere to sign up while the real trips feature is built, and the club already runs sign-ups through a Google Form — so `/trips` embeds that form in an `<iframe>` rather than leaving the link to circulate out-of-band. Gated on `requireApproved` plus `pages.trips`, which **predates the route** as the sidebar placeholder's flag.
+People need somewhere to sign up while the real trips feature is built, and the club already runs sign-ups through a Google Form — so `/trip-sign-up` embeds that form in an `<iframe>` rather than leaving the link to circulate out-of-band. **It is public, gated on `pages.trip_signup` alone**: the form was never behind an account, so a sign-in gate only hid the entry point. Its sidebar entry sits in the public group.
+
+**`/trips` is reserved for the real feature** and today only redirects to `/trip-sign-up`, so links shared before the move keep working. Replace the redirect when the feature lands. The flag was `pages.trips` until `0095` renamed it, which is why `LEGACY_SETTING_KEYS` reads through to that key for one release.
 
 **No `trips:*` permission exists** — permissions are DB rows and cost a migration, which isn't worth spending on a surface that gets deleted; the real feature introduces its own and can tighten the guard then.
 
-**Waiver standing is advisory here, not a gate** — see the compliance rule. Swap in `requireCurrentWaiver` when the real feature lands and attestation is no longer the bottleneck.
+**Waiver standing is advisory here, not a gate** — see the compliance rule. Only an approved member's standing is read (`getWaiverStatusIfApproved`); a signed-out visitor or a pending account gets a static reminder instead of the warning, since nothing is known to be missing and `/my/waiver` isn't open to them. Swap in `requireCurrentWaiver` when the real feature lands and attestation is no longer the bottleneck.
 
 **`frame-src` in `server/headers.server.ts` carries `https://docs.google.com` solely for this page** — the only third-party frame source on the site that isn't Turnstile. It comes out with the embed.
 

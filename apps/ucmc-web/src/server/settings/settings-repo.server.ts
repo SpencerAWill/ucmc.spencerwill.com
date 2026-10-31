@@ -25,7 +25,7 @@ import { SETTINGS } from "./settings-registry";
 import type { SettingKey, SettingValue } from "./settings-registry";
 
 /**
- * Keys renamed by migration `0085`, mapped current → pre-`0085`. The
+ * Keys renamed by migrations `0085` and `0095`, mapped current → old. The
  * fail-open contract makes a rename dangerous in exactly the skew this
  * covers: against a database that hasn't run `0085`, the new key finds no
  * row and falls back to the registry default (`true` for the feedback
@@ -38,11 +38,14 @@ import type { SettingKey, SettingValue } from "./settings-registry";
  *
  * Same reasoning and the same lifetime as
  * `src/server/auth/permission-aliases.ts` — **delete both once `0085` is
- * applied to dev and prod.**
+ * applied to dev and prod.** The `pages.trip_signup` entry (`0095`, the
+ * trip sign-up stopgap moving off `/trips`) goes once `0095` is applied;
+ * for a page flag the skew would *re-enable* a page an admin switched off.
  */
 const LEGACY_SETTING_KEYS: Partial<Record<SettingKey, string>> = {
   "site_feedback.submissions_enabled": "feedback.site_enabled",
   "club_feedback.submissions_enabled": "feedback.club_enabled",
+  "pages.trip_signup": "pages.trips",
 };
 
 /**

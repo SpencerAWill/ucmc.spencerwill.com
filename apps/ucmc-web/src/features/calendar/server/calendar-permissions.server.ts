@@ -16,7 +16,7 @@
  *     returns `false`.
  *
  * **There is deliberately no `events:view`.** Being an approved member
- * is the qualification for the calendar page, as /trips already
+ * is the qualification for the calendar page, as /trips once
  * decided; a third permission would be granted to `role_member` on day
  * one and never revoked from anyone.
  *
