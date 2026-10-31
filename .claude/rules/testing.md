@@ -30,6 +30,17 @@ Migrations are applied once per file via `test/apply-migrations.ts`. **Storage i
 
 Tests call **action functions** (`*-actions.server.ts`) directly, not the `createServerFn` shells.
 
+### D1 factories (`src/test-support/factories/`)
+
+**Build rows with the factories, not a file-local `seedUser`** (#323): `users.ts` (`createUser`, `grantRole`, `createRole`), `events.ts` (`createEvent`), `gear.ts` (`createGearType` → `createGearModel` → `createGearItem`, `createGearLoan`), `waivers.ts` (`createWaiverAttestation`). About 45 tests had their own copy of `seedUser`, so every NOT NULL column added to `users` or `profiles` had to be edited into all of them. The factories hold the one copy of each default.
+
+- Each takes `Partial<$inferInsert>` overrides and returns the inserted row. `createUser` also returns `email` and takes `profile` (overrides, or `false` for an unregistered user) and `roles`. A gear item creates its own model and type unless it is given one.
+- **The defaults claim to match production state**: `createUser()` is a user `loadPrincipal` accepts, and `createWaiverAttestation()` is one the waiver gate counts as current. `factories/__tests__/factories.test.ts` checks this against the real readers, so a new default gets a test there.
+- **Pin anything a test asserts on.** The defaults are unique (emails, public ids, gear names and codes) or relative to now (`currentSeason()`, `Temporal.Now`). A test that asserts on a fixed season passes `cycle` itself, as `compliance-actions.test.ts` does.
+- **They write rows directly.** A test of the create path calls the action instead, because the action is what it is testing.
+- **Migration is opportunistic**: when you touch a test file, move its helpers onto the factories in the same change. There is no sweep. When a domain helper has nothing to move onto yet, add a factory beside the others instead of another file-local copy.
+- `beforeEach` cleanup is still the caller's job. The factories write to `user_emails` and `profiles` too, and both cascade from `users`.
+
 ## `dom` pool — `*.test.tsx`
 
 `vitest.dom.config.ts`. jsdom + Testing Library + user-event. `cloudflare:workers` is aliased to `test/cloudflare-workers-stub.ts`.
