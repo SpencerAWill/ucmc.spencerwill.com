@@ -61,7 +61,7 @@ test("an old ?register=true link still renders the sign-in page", async ({
   await waitForHydration(page);
 
   await expect(
-    page.getByRole("heading", { name: /sign in or join ucmc/i }),
+    page.getByRole("heading", { name: /sign in to ucmc/i }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /email me a link/i }),

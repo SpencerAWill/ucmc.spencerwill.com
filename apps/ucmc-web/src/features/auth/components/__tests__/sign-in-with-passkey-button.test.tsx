@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SignInWithPasskeyButton } from "#/features/auth/components/sign-in-with-passkey-button";
@@ -70,6 +71,18 @@ describe("SignInWithPasskeyButton", () => {
     expect(
       await screen.findByRole("button", { name: /sign in with a passkey/i }),
     ).toBeInTheDocument();
+  });
+
+  // It leads /sign-in, so appearing only after mount would push the whole
+  // page down on hydration (#398).
+  it("is in the server-rendered HTML", () => {
+    const queryClient = new QueryClient();
+    const html = renderToString(
+      <QueryClientProvider client={queryClient}>
+        <SignInWithPasskeyButton />
+      </QueryClientProvider>,
+    );
+    expect(html).toContain("Sign in with a passkey");
   });
 
   it("renders nothing when WebAuthn is unsupported", () => {

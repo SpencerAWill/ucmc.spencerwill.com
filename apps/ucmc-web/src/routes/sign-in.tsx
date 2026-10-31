@@ -4,7 +4,10 @@ import { z } from "zod";
 import { PageContainer } from "#/components/layouts/page-container";
 import { Alert, AlertDescription } from "#/components/ui/alert";
 import { MagicLinkForm } from "#/features/auth/components/magic-link-form";
-import { SignInWithPasskeyButton } from "#/features/auth/components/sign-in-with-passkey-button";
+import {
+  SignInWithPasskeyButton,
+  useWebAuthnSupported,
+} from "#/features/auth/components/sign-in-with-passkey-button";
 import { safeReturnPath } from "#/lib/safe-return-path";
 
 // URL search params arrive as strings; coerce so `?invalid=true` parses
@@ -38,15 +41,17 @@ function SignInPage() {
   // protocol-relative, control characters) is dropped to prevent
   // open-redirect via crafted /sign-in?redirect=... links.
   const safeRedirect = safeReturnPath(redirect) ?? undefined;
+  const passkeySupported = useWebAuthnSupported();
 
   return (
     <PageContainer width="focused" className="flex flex-col gap-6">
       <header className="space-y-2 text-center">
-        <h1 className="text-2xl font-semibold">Sign in or join UCMC</h1>
-        <p className="text-sm text-muted-foreground">
-          Enter your email and we’ll send you a link. New here? The same link
-          starts your registration.
-        </p>
+        <h1 className="text-2xl font-semibold">Sign in to UCMC</h1>
+        {passkeySupported ? (
+          <p className="text-sm text-muted-foreground">
+            Use your passkey to sign in instantly.
+          </p>
+        ) : null}
       </header>
       {invalid ? (
         <Alert variant="destructive">
@@ -63,16 +68,30 @@ function SignInPage() {
           </AlertDescription>
         </Alert>
       ) : null}
-      <MagicLinkForm redirectTo={safeRedirect} />
-      {/* Passkey users skip the email round-trip. The button hides itself
-          when the browser doesn't support WebAuthn, so we don't need a
-          conditional gate here. A new visitor simply has no passkey to pick. */}
-      <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        or
-        <span className="h-px flex-1 bg-border" />
-      </div>
-      <SignInWithPasskeyButton redirectTo={safeRedirect} />
+      {/* Passkey first: it skips the email round-trip. Without WebAuthn
+          the button hides itself, and the divider goes with it rather than
+          leading the page with an "or" to nothing. A new visitor simply has
+          no passkey. */}
+      {passkeySupported ? (
+        <>
+          <SignInWithPasskeyButton redirectTo={safeRedirect} />
+          <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
+      {/* Always mounted, never behind a disclosure: its email field carries
+          the passkey-autofill ceremony (`autoComplete="username webauthn"`),
+          which a collapsed form would never start. */}
+      <section className="space-y-4">
+        <p className="text-center text-sm text-muted-foreground">
+          No passkey yet, or new here? We&rsquo;ll email you a link &mdash; it
+          also starts registration.
+        </p>
+        <MagicLinkForm redirectTo={safeRedirect} />
+      </section>
     </PageContainer>
   );
 }

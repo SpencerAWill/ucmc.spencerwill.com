@@ -8,16 +8,33 @@ import { usePasskeyAuthenticate } from "#/features/auth/api/use-passkey-authenti
 import { postSignInHref } from "#/features/auth/lib/post-sign-in";
 
 /**
+ * Whether this browser can run a WebAuthn ceremony. Assumes it can until
+ * the client says otherwise: the passkey button leads the sign-in page,
+ * so rendering it only after mount would push the whole page down on
+ * every load in the browsers that have WebAuthn (#398). Detection runs
+ * after mount (the server has no `window`), so the SSR and hydration
+ * passes agree. The sign-in page reads it too, so the "or" divider and
+ * the passkey copy go with the button.
+ */
+export function useWebAuthnSupported(): boolean {
+  const [isSupported, setIsSupported] = useState(true);
+  useEffect(() => {
+    setIsSupported(typeof window.PublicKeyCredential !== "undefined");
+  }, []);
+  return isSupported;
+}
+
+/**
  * Explicit "Sign in with a passkey" trigger for the sign-in page. Runs
  * the same begin → browser ceremony → finish flow as the magic-link
  * form's Conditional-UI autofill hook, but with `useBrowserAutofill:
  * false` so the browser shows its full passkey picker on click rather
  * than waiting for an autofill interaction.
  *
- * Conditional UI is still the fast path for users who reflexively type
- * their email; this button is the discoverable fallback (and the
- * deterministic affordance for e2e tests). Hides itself entirely when
- * WebAuthn isn't supported by the browser.
+ * The page's primary action (#398). Conditional UI still catches users
+ * who reflexively type their email; this button is the discoverable path
+ * (and the deterministic affordance for e2e tests). Hides itself once the
+ * client finds WebAuthn unsupported.
  */
 export function SignInWithPasskeyButton({
   redirectTo,
@@ -29,17 +46,8 @@ export function SignInWithPasskeyButton({
 } = {}) {
   const navigate = useNavigate();
   const mutation = usePasskeyAuthenticate();
-  const [isSupported, setIsSupported] = useState(false);
+  const isSupported = useWebAuthnSupported();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Feature detection runs after mount so the SSR pass renders nothing
-  // (server has no `window`); avoids a hydration mismatch.
-  useEffect(() => {
-    setIsSupported(
-      typeof window !== "undefined" &&
-        typeof window.PublicKeyCredential !== "undefined",
-    );
-  }, []);
 
   const onClick = () => {
     setErrorMessage(null);
@@ -74,7 +82,7 @@ export function SignInWithPasskeyButton({
     <div className="space-y-2">
       <Button
         type="button"
-        variant="outline"
+        size="lg"
         className="w-full"
         onClick={onClick}
         disabled={mutation.isPending}
