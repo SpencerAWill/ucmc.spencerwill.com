@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { WAIVER_VERSION } from "#/config/legal";
 import { complianceAnalyticsAction } from "#/features/analytics/server/compliance-actions.server";
 import type * as SessionServer from "#/server/auth/session.server";
 import { getDb, schema } from "#/server/db";
-import { attachPrimaryEmail } from "#/server/db/test-helpers";
+import { createEvent } from "#/test-support/factories/events";
+import { createUser } from "#/test-support/factories/users";
+import { createWaiverAttestation } from "#/test-support/factories/waivers";
 
 const cookieJar = new Map<string, string>();
 vi.mock("@tanstack/react-start/server", () => ({
@@ -42,10 +43,7 @@ afterEach(async () => {
 async function seedMember(
   status: (typeof schema.userStatus)[number] = "approved",
 ): Promise<string> {
-  const id = `u_${crypto.randomUUID()}`;
-  await getDb().insert(schema.users).values({ id, publicId: id, status });
-  await attachPrimaryEmail(id, `${id}@example.com`);
-  return id;
+  return (await createUser({ status })).id;
 }
 
 async function attest(
@@ -57,32 +55,25 @@ async function attest(
     attestedAt: Temporal.Instant;
   }> = {},
 ) {
-  await getDb()
-    .insert(schema.waiverAttestations)
-    .values({
-      id: `w_${crypto.randomUUID()}`,
-      userId,
-      cycle: over.cycle ?? SEASON,
-      version: over.version ?? WAIVER_VERSION,
-      attestedAt:
-        over.attestedAt ?? Temporal.Instant.from("2026-09-15T12:00:00Z"),
-      revokedAt: over.revokedAt ?? null,
-    });
+  // Pinned to SEASON rather than the factory's `currentSeason()`, so the
+  // file keeps passing after the season rolls over.
+  await createWaiverAttestation({
+    userId,
+    cycle: SEASON,
+    attestedAt: Temporal.Instant.from("2026-09-15T12:00:00Z"),
+    ...over,
+  });
 }
 
 async function asViewer(
   permissions: string[] = ["analytics:view", "waivers:view"],
 ) {
-  const userId = `officer_${crypto.randomUUID()}`;
-  await getDb()
-    .insert(schema.users)
-    .values({ id: userId, publicId: userId, status: "approved" });
-  await attachPrimaryEmail(userId, `${userId}@example.com`);
+  const { id: userId, email } = await createUser();
   const { loadCurrentPrincipal } = await import("#/server/auth/session.server");
   vi.mocked(loadCurrentPrincipal).mockResolvedValue({
     userId,
-    primaryEmail: `${userId}@example.com`,
-    emails: [`${userId}@example.com`],
+    primaryEmail: email,
+    emails: [email],
     preferredName: null,
     status: "approved",
     hasProfile: false,
@@ -187,29 +178,26 @@ describe("waiver coverage", () => {
 });
 
 describe("RSO event minimum", () => {
-  const event = (over: { startsAt: string; canceledAt?: string }) => ({
-    id: `e_${crypto.randomUUID()}`,
-    publicId: `e_${crypto.randomUUID()}`,
-    title: "Trip",
-    kind: "trip" as const,
-    startsAt: Temporal.Instant.from(over.startsAt),
-    canceledAt: over.canceledAt ? Temporal.Instant.from(over.canceledAt) : null,
-  });
+  const trip = (over: { startsAt: string; canceledAt?: string }) =>
+    createEvent({
+      title: "Trip",
+      kind: "trip",
+      startsAt: Temporal.Instant.from(over.startsAt),
+      canceledAt: over.canceledAt
+        ? Temporal.Instant.from(over.canceledAt)
+        : null,
+    });
 
   it("excludes cancelled events", async () => {
     // UC's minimum counts events HELD. Counting cancellations would let
     // the club satisfy a registration requirement with meetings that
     // never happened.
     await asViewer();
-    await getDb()
-      .insert(schema.events)
-      .values([
-        event({ startsAt: "2026-09-10T18:00:00Z" }),
-        event({
-          startsAt: "2026-09-17T18:00:00Z",
-          canceledAt: "2026-09-16T00:00:00Z",
-        }),
-      ]);
+    await trip({ startsAt: "2026-09-10T18:00:00Z" });
+    await trip({
+      startsAt: "2026-09-17T18:00:00Z",
+      canceledAt: "2026-09-16T00:00:00Z",
+    });
 
     const result = await complianceAnalyticsAction({ season: SEASON });
     expect(result.eventsHeld).toBe(1);
@@ -217,13 +205,9 @@ describe("RSO event minimum", () => {
 
   it("counts only events inside the season", async () => {
     await asViewer();
-    await getDb()
-      .insert(schema.events)
-      .values([
-        // Jul 31 2026 belongs to the previous season.
-        event({ startsAt: "2026-07-31T18:00:00Z" }),
-        event({ startsAt: "2026-08-01T18:00:00Z" }),
-      ]);
+    // Jul 31 2026 belongs to the previous season.
+    await trip({ startsAt: "2026-07-31T18:00:00Z" });
+    await trip({ startsAt: "2026-08-01T18:00:00Z" });
 
     const result = await complianceAnalyticsAction({ season: SEASON });
     expect(result.eventsHeld).toBe(1);

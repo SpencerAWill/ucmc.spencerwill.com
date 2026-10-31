@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, schema } from "#/server/db";
+import {
+  createGearItem,
+  createGearLoan,
+  createGearModel,
+} from "#/test-support/factories/gear";
+import { createUser } from "#/test-support/factories/users";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -31,32 +37,18 @@ function daysBefore(days: number): Temporal.Instant {
 }
 
 let memberId: string;
+let modelId: string;
 
 async function seedLoan(dueAt: Temporal.Instant, returned: boolean) {
-  const db = getDb();
-  const itemId = `gi_${crypto.randomUUID()}`;
-  await db.insert(schema.gearItems).values({
-    id: itemId,
-    publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-    modelId: MODEL_ID,
-    code: crypto.randomUUID().slice(0, 8),
-    condition: "serviceable",
-  });
-  await db.insert(schema.gearLoans).values({
-    id: `gl_${crypto.randomUUID()}`,
-    publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+  const { id: itemId } = await createGearItem({ modelId });
+  await createGearLoan({
     itemId,
-    modelId: null,
-    quantity: 1,
     memberUserId: memberId,
     checkedOutAt: daysBefore(60),
     dueAt,
     returnedAt: returned ? NOW : null,
   });
 }
-
-const TYPE_ID = "gt_standing_fixture";
-const MODEL_ID = "gm_standing_fixture";
 
 beforeEach(async () => {
   const db = getDb();
@@ -67,24 +59,8 @@ beforeEach(async () => {
   await db.delete(schema.siteSettings);
   await db.delete(schema.users);
 
-  memberId = `u_${crypto.randomUUID()}`;
-  await db.insert(schema.users).values({
-    id: memberId,
-    publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-    status: "approved",
-  });
-  await db.insert(schema.gearTypes).values({
-    id: TYPE_ID,
-    publicId: "standingtype",
-    name: "Standing fixture type",
-  });
-  await db.insert(schema.gearModels).values({
-    id: MODEL_ID,
-    publicId: "standingmodl",
-    typeId: TYPE_ID,
-    name: "Standing fixture model",
-    tracking: "coded",
-  });
+  memberId = (await createUser()).id;
+  modelId = (await createGearModel()).id;
 });
 
 describe("gearCaveStanding", () => {

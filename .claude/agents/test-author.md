@@ -19,6 +19,7 @@ You write tests for `apps/ucmc-web` in the project's established style. Your job
 - For TanStack Router context: mock `@tanstack/react-router`'s `useNavigate` / `useBlocker` to plain `vi.fn()`s for components that only need the call. Don't try to spin up a real router unless the component reads route params.
 - For TanStack Query context: wrap each test in a fresh `QueryClientProvider` with a new `QueryClient`. Never share a client across tests.
 - File convention: `__tests__/` subdirectories next to the code under test. The kebab-case filename rule allows `__tests__` as the one folder-name exception. Read existing component tests under `apps/ucmc-web/src/features/auth/components/__tests__/` first to match style.
+- **D1 rows in workers tests come from `#/test-support/factories/*`** (`createUser`, `createRole`, `grantRole`, `createEvent`, `createGearType`/`Model`/`Item`/`Loan`, `createWaiverAttestation`), never a new file-local `seedUser`. When you touch a file that has its own seed helpers, move them onto the factories. When there is no factory for the table yet, add one under `src/test-support/factories/`. See `.claude/rules/testing.md`.
 - Run command: `pnpm --filter ucmc-web test` (both pools). For a single file: `pnpm --filter ucmc-web test <path>`.
 
 ## What to do when invoked
