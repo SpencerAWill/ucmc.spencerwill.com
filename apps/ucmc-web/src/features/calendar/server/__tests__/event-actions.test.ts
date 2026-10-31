@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CLUB_TIME_ZONE } from "#/config/time";
 import { getDb, schema } from "#/server/db";
-import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import {
   MEMBER_SCOPE,
   OFFICER_SCOPE,
   PUBLIC_SCOPE,
 } from "#/server/events/events-repo.server";
+import { createRole, createUser } from "#/test-support/factories/users";
 
 // ── mocks ──────────────────────────────────────────────────────────────
 
@@ -58,44 +58,18 @@ function wallTime(instant: Temporal.Instant): string {
     .toString();
 }
 
-async function seedUser(email: string, status: "approved" | "pending") {
-  const id = `user_${crypto.randomUUID()}`;
-  const db = getDb();
-  await db.insert(schema.users).values({
-    id,
-    publicId: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-    status,
-  });
-  await attachPrimaryEmail(id, email);
-  await db.insert(schema.profiles).values({
-    userId: id,
-    fullName: "Test User",
-    preferredName: "Test",
-    phone: "+15135551212",
-    ucAffiliation: "student",
-    updatedAt: Temporal.Now.instant(),
-  });
-  return id;
-}
-
-async function assignRole(userId: string, roleId: string) {
-  await getDb()
-    .insert(schema.userRoles)
-    .values({ userId, roleId })
-    .onConflictDoNothing();
-}
-
 async function signInAsAdmin(email = "admin@example.com") {
-  const userId = await seedUser(email, "approved");
-  await assignRole(userId, "role_system_admin");
+  const { id: userId } = await createUser({
+    email,
+    roles: ["role_system_admin"],
+  });
   cookieJar.clear();
   await openSession(userId);
   return userId;
 }
 
 async function signInAsMember(email = "member@example.com") {
-  const userId = await seedUser(email, "approved");
-  await assignRole(userId, "role_member");
+  const { id: userId } = await createUser({ email, roles: ["role_member"] });
   cookieJar.clear();
   await openSession(userId);
   return userId;
@@ -110,24 +84,11 @@ async function signInAsMember(email = "member@example.com") {
  * file — the trap `sponsor-actions.test.ts` documents having fallen
  * into.
  */
-const READER_ROLE = "role_test_events_reader";
-
 async function signInAsPrivateReader(email = "exec@example.com") {
-  const db = getDb();
-  await db
-    .insert(schema.roles)
-    .values({
-      id: READER_ROLE,
-      name: "test_events_reader",
-      displayName: "Test: events private reader",
-    })
-    .onConflictDoNothing();
-  await db
-    .insert(schema.rolePermissions)
-    .values({ roleId: READER_ROLE, permissionId: "perm_events_read_private" })
-    .onConflictDoNothing();
-  const userId = await seedUser(email, "approved");
-  await assignRole(userId, READER_ROLE);
+  const reader = await createRole({
+    permissions: ["perm_events_read_private"],
+  });
+  const { id: userId } = await createUser({ email, roles: [reader.id] });
   cookieJar.clear();
   await openSession(userId);
   return userId;
@@ -209,7 +170,10 @@ describe("visibility scope", () => {
    * `members` means.
    */
   it("gives a pending user the public tier despite a session", async () => {
-    const userId = await seedUser("pending@example.com", "pending");
+    const { id: userId } = await createUser({
+      email: "pending@example.com",
+      status: "pending",
+    });
     cookieJar.clear();
     await openSession(userId);
     expect(await currentVisibilityScope()).toEqual(PUBLIC_SCOPE);
