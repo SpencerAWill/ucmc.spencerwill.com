@@ -89,6 +89,22 @@ describe("RecordDetail", () => {
     expect(screen.queryByRole("button", { name: "Lift" })).toBeNull();
   });
 
+  it("flags a warning whose notice was not sent, and not a note", async () => {
+    const first = await renderDetail(detail({ level: "warning" }));
+    expect(screen.getByText("Notice not sent")).toBeInTheDocument();
+    first.unmount();
+    const second = await renderDetail(
+      detail({
+        level: "warning",
+        noticeSentAt: Temporal.Instant.from("2026-10-20T12:00:00Z"),
+      }),
+    );
+    expect(screen.queryByText("Notice not sent")).toBeNull();
+    second.unmount();
+    await renderDetail(detail({ level: "note" }));
+    expect(screen.queryByText("Notice not sent")).toBeNull();
+  });
+
   it("hides manager controls from a viewer", async () => {
     await renderDetail(detail(), false);
     expect(screen.queryByRole("button", { name: "Lift" })).toBeNull();

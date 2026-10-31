@@ -12,6 +12,8 @@ export const conductKeys = {
   record: (publicId: string) => ["conduct", "record", publicId] as const,
   reports: (filter: Record<string, unknown> = {}) =>
     ["conduct", "reports", filter] as const,
+  mine: ["conduct", "mine"] as const,
+  preview: (input: unknown) => ["conduct", "preview", input] as const,
   member: (userId: string) => ["conduct", "member", userId] as const,
   subjects: (q: string) => ["conduct", "subjects", q] as const,
   subject: (publicId: string) => ["conduct", "subject", publicId] as const,

@@ -5,9 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RecordForm } from "#/features/conduct/components/record-form";
 import { STATEMENT_TEMPLATE } from "#/features/conduct/server/limits";
+import { previewConductNoticeFn } from "#/features/conduct/server/record-fns";
 
 vi.mock("#/features/conduct/server/record-fns", () => ({
   createConductRecordFn: vi.fn(),
+  previewConductNoticeFn: vi.fn(),
   searchConductSubjectsFn: vi.fn(async () => []),
   listConductRecordsFn: vi.fn(async () => [
     {
@@ -77,6 +79,41 @@ async function fillStatement(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("RecordForm", () => {
+  it("shows the exact email subject and text before a warning is issued", async () => {
+    const user = userEvent.setup();
+    vi.mocked(previewConductNoticeFn).mockResolvedValue({
+      subject: "Notice of warning",
+      text: "EXACT EMAIL BODY",
+    });
+    renderForm();
+    await chooseLevel(user, "warning");
+    await fillStatement(user);
+    await user.click(screen.getByRole("button", { name: "Review and send" }));
+
+    expect(await screen.findByText("Subject: Notice of warning")).toBeVisible();
+    expect(screen.getByText("EXACT EMAIL BODY")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Issue warning" })).toBeEnabled();
+    expect(previewConductNoticeFn).toHaveBeenCalledWith({
+      data: { level: "warning", memberStatement: "Final text." },
+    });
+  });
+
+  it("keeps issuing disabled when the preview fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(previewConductNoticeFn).mockRejectedValue(new Error("boom"));
+    renderForm();
+    await chooseLevel(user, "warning");
+    await fillStatement(user);
+    await user.click(screen.getByRole("button", { name: "Review and send" }));
+
+    expect(
+      await screen.findByText(/Could not load the email preview/),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Issue warning" }),
+    ).toBeDisabled();
+  });
+
   it("offers a lifted warning as the prior warning, marked as lifted", async () => {
     const user = userEvent.setup();
     renderForm();

@@ -35,6 +35,7 @@ import {
 } from "#/components/ui/popover";
 import { Textarea } from "#/components/ui/textarea";
 import {
+  conductNoticePreviewQueryOptions,
   conductRecordsQueryOptions,
   conductSubjectsQueryOptions,
 } from "#/features/conduct/api/queries";
@@ -226,6 +227,18 @@ export function RecordForm({
     Number(committeeSize) > 0
       ? Math.ceil((Number(committeeSize) * 2) / 3)
       : null;
+
+  // Fetched only while the confirm step is open, for the levels that email.
+  const previewInput = {
+    level: level === "note" ? "warning" : level,
+    memberStatement: statement,
+    ...(startsOn === "" ? {} : { startsOn }),
+    ...(level !== "termination" && endsOn !== "" ? { endsOn } : {}),
+  };
+  const preview = useQuery({
+    ...conductNoticePreviewQueryOptions(previewInput),
+    enabled: confirming && hasStatement,
+  });
 
   const submit = () => {
     create.mutate(input, {
@@ -472,19 +485,36 @@ export function RecordForm({
             <AlertDialogDescription asChild>
               <div className="space-y-2">
                 <p>
-                  The member is told of it. This is what they will read, and it
-                  cannot be edited afterwards.
+                  The member is emailed exactly this, and it cannot be edited
+                  afterwards.
                 </p>
-                <p className="max-h-60 overflow-y-auto rounded-md border p-2 text-sm whitespace-pre-wrap text-foreground">
-                  {statement}
-                </p>
+                {preview.isPending ? (
+                  <p
+                    role="status"
+                    className="flex items-center gap-2 text-sm text-muted-foreground"
+                  >
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading the email preview…
+                  </p>
+                ) : preview.isError ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    Could not load the email preview. Go back and try again.
+                  </p>
+                ) : (
+                  <div className="max-h-60 space-y-2 overflow-y-auto rounded-md border p-2 text-sm text-foreground">
+                    <p className="font-medium">
+                      Subject: {preview.data.subject}
+                    </p>
+                    <p className="whitespace-pre-wrap">{preview.data.text}</p>
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Back</AlertDialogCancel>
             <AlertDialogAction
-              disabled={create.isPending}
+              disabled={create.isPending || !preview.isSuccess}
               onClick={(e) => {
                 e.preventDefault();
                 submit();

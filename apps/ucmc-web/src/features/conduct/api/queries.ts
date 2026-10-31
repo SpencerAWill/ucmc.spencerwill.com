@@ -1,5 +1,8 @@
 import { conductKeys } from "#/features/conduct/api/query-keys";
-import type { ListRecordsFilter } from "#/features/conduct/server/limits";
+import type {
+  ListRecordsFilter,
+  PreviewNoticeInput,
+} from "#/features/conduct/server/limits";
 import {
   listConductReportsFn,
   searchReportSubjectsFn,
@@ -7,8 +10,10 @@ import {
 import {
   getConductRecordFn,
   getConductSubjectFn,
+  getMyActiveSanctionsFn,
   listConductRecordsFn,
   memberConductSummaryFn,
+  previewConductNoticeFn,
   searchConductSubjectsFn,
 } from "#/features/conduct/server/record-fns";
 
@@ -67,5 +72,24 @@ export function memberConductSummaryQueryOptions(userId: string) {
     queryKey: conductKeys.member(userId),
     queryFn: () => memberConductSummaryFn({ data: { userId } }),
     staleTime: 30_000,
+  } as const;
+}
+
+export function myActiveSanctionsQueryOptions() {
+  return {
+    queryKey: conductKeys.mine,
+    queryFn: () => getMyActiveSanctionsFn(),
+    staleTime: 30_000,
+  } as const;
+}
+
+/** Exactly what the member would be emailed. Never cached past the dialog. */
+export function conductNoticePreviewQueryOptions(input: PreviewNoticeInput) {
+  return {
+    queryKey: conductKeys.preview(input),
+    queryFn: () => previewConductNoticeFn({ data: input }),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
   } as const;
 }

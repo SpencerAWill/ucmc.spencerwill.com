@@ -10,6 +10,11 @@
  */
 import { z } from "zod";
 
+import { APPEAL_LINE } from "#/server/email/conduct-email";
+
+/** The §9.3 appeal route, worded once for the template, the email and `/my`. */
+export { APPEAL_LINE };
+
 export const CONDUCT_LIMITS = {
   bodyMax: 5000,
   statementMax: 5000,
@@ -44,7 +49,7 @@ The Executive Committee has reviewed the following conduct: [describe the conduc
 
 As a result, the club is issuing this [warning / suspension / termination]. [Describe the sanction.] It takes effect on [start date] and runs until [end date, if any].
 
-You may appeal in writing within two weeks to the Student Activities Board.`;
+${APPEAL_LINE}`;
 
 const plainDate = z
   .string()
@@ -68,6 +73,8 @@ const common = {
   possibleScoc: z.boolean(),
   /** Report public ids. */
   reportIds: z.array(id).max(CONDUCT_LIMITS.reportsPerRecordMax),
+  /** The public id of a record on the same subject this one corrects. */
+  supersedesPublicId: id.optional(),
 };
 
 function endsNotBeforeStarts(value: {
@@ -151,6 +158,16 @@ export const createRecordSchema = z.discriminatedUnion("level", [
       },
     ),
 ]);
+
+/** What the notice preview needs: the member-facing parts of a record. */
+export const previewNoticeSchema = z
+  .object({
+    level: z.enum(["warning", "suspension", "termination"]),
+    memberStatement: statement,
+    startsOn: plainDate.optional(),
+    endsOn: plainDate.optional(),
+  })
+  .refine(endsNotBeforeStarts, endsMessage);
 
 /** Internal notes only. The member statement is locked once sent. */
 export const updateRecordSchema = z.object({
@@ -242,6 +259,8 @@ export type DismissReportArgs = z.output<typeof dismissReportSchema>;
 
 export type CreateRecordInput = z.input<typeof createRecordSchema>;
 export type CreateRecordArgs = z.output<typeof createRecordSchema>;
+export type PreviewNoticeInput = z.input<typeof previewNoticeSchema>;
+export type PreviewNoticeArgs = z.output<typeof previewNoticeSchema>;
 export type UpdateRecordArgs = z.output<typeof updateRecordSchema>;
 export type ReferArgs = z.output<typeof referSchema>;
 export type SccsOutcomeArgs = z.output<typeof sccsOutcomeSchema>;

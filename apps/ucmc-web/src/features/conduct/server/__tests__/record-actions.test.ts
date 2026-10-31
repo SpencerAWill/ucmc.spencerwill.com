@@ -22,6 +22,21 @@ vi.mock("@tanstack/react-start/server", () => ({
   getRequestHeader: () => undefined,
 }));
 
+const sent = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const sendBehaviour = vi.hoisted(() => ({ fail: false }));
+vi.mock("#/server/email/resend", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    sendEmail: vi.fn(async (message: Record<string, unknown>) => {
+      if (sendBehaviour.fail) {
+        throw new Error("provider exploded");
+      }
+      sent.push(message);
+    }),
+  };
+});
+
 // Pass-through, so a race test can hand an action the record as it was
 // before a competing request changed it.
 vi.mock(
@@ -37,6 +52,8 @@ vi.mock(
 
 const repo = await import("#/features/conduct/server/record-repo.server");
 const actions = await import("#/features/conduct/server/record-actions.server");
+const { getMyActiveSanctionsAction } =
+  await import("#/features/conduct/server/my-conduct-actions.server");
 const { requireConductReporter } =
   await import("#/features/conduct/server/conduct-guards.server");
 const { createRecordSchema } = await import("#/features/conduct/server/limits");
@@ -168,6 +185,8 @@ async function auditRows(publicId: string) {
 
 beforeEach(async () => {
   cookieJar.clear();
+  sent.length = 0;
+  sendBehaviour.fail = false;
   const db = getDb();
   await db.delete(schema.auditLog);
   await db
@@ -735,5 +754,230 @@ describe("reads", () => {
     for (const id of internalIds) {
       expect(JSON.stringify(summary)).not.toContain(id);
     }
+  });
+});
+
+describe("conduct.notice", () => {
+  it("emails the subject's primary address once, matching the preview", async () => {
+    await signInManager();
+    const s = await subject();
+    await getDb().insert(schema.userNotificationPreferences).values({
+      userId: s.id,
+      category: "conduct.notice",
+      channel: "email",
+      enabled: false,
+      source: "user",
+    });
+    const input = warning(s.id, { startsOn: "2026-11-01" });
+    const preview = await actions.previewConductNoticeAction({
+      level: "warning",
+      memberStatement: STATEMENT,
+      startsOn: Temporal.PlainDate.from("2026-11-01"),
+    });
+    const { publicId } = await create(input);
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe(s.email);
+    expect(sent[0].kind).toBe("conduct.notice");
+    expect(sent[0].subject).toBe(preview.subject);
+    expect(sent[0].text).toBe(preview.text);
+    expect(preview.text).toContain(STATEMENT);
+    expect(preview.text).toContain("2026-11-01");
+    expect(preview.text).toContain("appeal");
+    expect((await recordRow(publicId)).noticeSentAt).not.toBeNull();
+    for (const row of await auditRows(publicId)) {
+      expect(row.metadataJson ?? "").not.toContain("SECRET-STATEMENT");
+      expect(row.metadataJson ?? "").not.toContain(s.email);
+    }
+  });
+
+  it("previews without writing or sending, and needs conduct:manage", async () => {
+    await signInManager();
+    await actions.previewConductNoticeAction({
+      level: "suspension",
+      memberStatement: STATEMENT,
+    });
+    expect(sent).toHaveLength(0);
+    expect(await getDb().select().from(schema.conductRecords)).toHaveLength(0);
+    await signInWith(["perm_conduct_view"]);
+    await expect(
+      actions.previewConductNoticeAction({
+        level: "warning",
+        memberStatement: STATEMENT,
+      }),
+    ).rejects.toThrow("Forbidden");
+  });
+
+  it("sends nothing for a note", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId } = await create(note(s.id));
+    expect(sent).toHaveLength(0);
+    expect((await recordRow(publicId)).noticeSentAt).toBeNull();
+  });
+
+  it("keeps the record and leaves the notice unsent when the send fails", async () => {
+    await signInManager();
+    const s = await subject();
+    sendBehaviour.fail = true;
+    const { publicId } = await create(warning(s.id));
+    const row = await recordRow(publicId);
+    expect(row).toBeDefined();
+    expect(row.noticeSentAt).toBeNull();
+  });
+
+  it("skips the send when the subject has no verified primary address", async () => {
+    await signInManager();
+    const s = await subject();
+    await getDb()
+      .delete(schema.userEmails)
+      .where(eq(schema.userEmails.userId, s.id));
+    const { publicId } = await create(warning(s.id));
+    expect(sent).toHaveLength(0);
+    expect((await recordRow(publicId)).noticeSentAt).toBeNull();
+  });
+
+  it("sends a lifted notice without the internal reason", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId } = await create(warning(s.id));
+    sent.length = 0;
+    await actions.liftConductRecordAction({
+      recordId: publicId,
+      reason: "SECRET-LIFT-REASON",
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe(s.email);
+    expect(sent[0].text).toContain("lifted");
+    expect(JSON.stringify(sent[0])).not.toContain("SECRET-LIFT-REASON");
+  });
+
+  it("sends no lifted notice for a note", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId } = await create(note(s.id));
+    await actions.liftConductRecordAction({ recordId: publicId, reason: "ok" });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("locks the statement: an update touches internal notes only", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId } = await create(warning(s.id));
+    const before = await recordRow(publicId);
+    await actions.updateConductRecordAction({
+      ...({ memberStatement: "changed", level: "note" } as object),
+      recordId: publicId,
+      internalNotes: "new notes",
+    });
+    const after = await recordRow(publicId);
+    expect(after.internalNotes).toBe("new notes");
+    expect(after.memberStatement).toBe(before.memberStatement);
+    expect(after.level).toBe("warning");
+    expect(after.noticeSentAt).not.toBeNull();
+  });
+
+  it("links a correction to the old record and leaves its statement alone", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId: old } = await create(warning(s.id));
+    const { publicId } = await create(
+      warning(s.id, { supersedesPublicId: old, memberStatement: "Corrected." }),
+    );
+    const detail = await actions.getConductRecordAction(publicId);
+    expect(detail?.supersedesPublicId).toBe(old);
+    expect((await recordRow(old)).memberStatement).toBe(STATEMENT);
+  });
+
+  it("refuses to supersede another member's record, or one about the caller", async () => {
+    const manager = await signInManager();
+    const a = await subject("Ann A");
+    const b = await subject("Bob B");
+    const { publicId: aRecord } = await create(warning(a.id));
+    await expect(
+      create(warning(b.id, { supersedesPublicId: aRecord })),
+    ).rejects.toThrow("Record not found");
+    await expect(
+      create(warning(a.id, { supersedesPublicId: "nope" })),
+    ).rejects.toThrow("Record not found");
+    expect(manager.id).toBeDefined();
+  });
+});
+
+describe("getMyActiveSanctionsAction", () => {
+  const today = Temporal.Now.plainDateISO("America/New_York");
+  const day = (offset: number) => today.add({ days: offset }).toString();
+
+  it("needs a session but no conduct permission", async () => {
+    cookieJar.clear();
+    await expect(getMyActiveSanctionsAction()).rejects.toThrow("Not signed in");
+    const member = await createUser({});
+    await signInAs(member.id);
+    await expect(getMyActiveSanctionsAction()).resolves.toEqual([]);
+  });
+
+  it("returns only the caller's own active sanctions, as statement and dates", async () => {
+    await signInManager();
+    const me = await subject("Me Myself");
+    const other = await subject("Other One");
+    await create(note(me.id));
+    await create(warning(me.id, { endsOn: day(5) }));
+    await create(
+      warning(me.id, {
+        memberStatement: "Open-ended warning.",
+      }),
+    );
+    await create(
+      warning(me.id, {
+        memberStatement: "Expired warning.",
+        startsOn: day(-30),
+        endsOn: day(-1),
+      }),
+    );
+    await create(
+      warning(me.id, {
+        level: "suspension",
+        memberStatement: "Upcoming suspension.",
+        startsOn: day(10),
+        endsOn: day(20),
+      } as never),
+    );
+    const { publicId: lifted } = await create(
+      warning(me.id, { memberStatement: "Lifted warning." }),
+    );
+    await getDb()
+      .update(schema.conductRecords)
+      .set({ liftedAt: Temporal.Now.instant() })
+      .where(eq(schema.conductRecords.publicId, lifted));
+    await create(warning(other.id, { memberStatement: "Someone else's." }));
+
+    await signInAs(me.id);
+    const mine = await getMyActiveSanctionsAction();
+    expect(mine.map((m) => m.statement).sort()).toEqual(
+      [STATEMENT, "Open-ended warning.", "Upcoming suspension."].sort(),
+    );
+    const upcoming = mine.find((m) => m.level === "suspension");
+    expect(upcoming?.startsOn?.toString()).toBe(day(10));
+    expect(upcoming?.endsOn?.toString()).toBe(day(20));
+    for (const row of mine) {
+      expect(Object.keys(row).sort()).toEqual([
+        "endsOn",
+        "level",
+        "startsOn",
+        "statement",
+      ]);
+    }
+    expect(JSON.stringify(mine)).not.toContain(NOTES);
+  });
+
+  it("still shows a record whose notice was never sent", async () => {
+    await signInManager();
+    const me = await subject("No Email");
+    sendBehaviour.fail = true;
+    const { publicId } = await create(warning(me.id));
+    expect((await recordRow(publicId)).noticeSentAt).toBeNull();
+    await signInAs(me.id);
+    const mine = await getMyActiveSanctionsAction();
+    expect(mine.map((m) => m.statement)).toEqual([STATEMENT]);
   });
 });

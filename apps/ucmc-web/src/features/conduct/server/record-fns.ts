@@ -10,10 +10,12 @@ import {
   createRecordSchema,
   liftSchema,
   listRecordsSchema,
+  previewNoticeSchema,
   referSchema,
   sccsOutcomeSchema,
   updateRecordSchema,
 } from "#/features/conduct/server/limits";
+import type { MyActiveSanction } from "#/features/conduct/server/my-conduct-actions.server";
 import type {
   ConductRecordDetail,
   ConductRecordSummary,
@@ -26,6 +28,7 @@ export type {
   ConductRecordSummary,
   ConductSubjectOption,
   MemberConductSummary,
+  MyActiveSanction,
 };
 
 const recordIdSchema = z.object({
@@ -116,4 +119,22 @@ export const liftConductRecordFn = createServerFn({ method: "POST" })
     const { liftConductRecordAction } =
       await import("#/features/conduct/server/record-actions.server");
     return liftConductRecordAction(data);
+  });
+
+/** The signed-in member's own active sanctions. Needs a session only. */
+export const getMyActiveSanctionsFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<MyActiveSanction[]> => {
+    const { getMyActiveSanctionsAction } =
+      await import("#/features/conduct/server/my-conduct-actions.server");
+    return getMyActiveSanctionsAction();
+  },
+);
+
+/** POST so the statement stays out of URLs and logs. */
+export const previewConductNoticeFn = createServerFn({ method: "POST" })
+  .validator(previewNoticeSchema)
+  .handler(async ({ data }): Promise<{ subject: string; text: string }> => {
+    const { previewConductNoticeAction } =
+      await import("#/features/conduct/server/record-actions.server");
+    return previewConductNoticeAction(data);
   });

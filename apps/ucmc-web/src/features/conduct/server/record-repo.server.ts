@@ -449,3 +449,66 @@ export async function applyRecordWrite(input: {
   const updated = results[results.length - 1];
   return Array.isArray(updated) && updated.length > 0;
 }
+
+/** The subject's primary verified address, or null when they have none. */
+export async function findNoticeRecipient(
+  userId: string,
+): Promise<string | null> {
+  const rows = await getDb()
+    .select({ email: schema.userEmails.email })
+    .from(schema.userEmails)
+    .where(
+      and(
+        eq(schema.userEmails.userId, userId),
+        eq(schema.userEmails.isPrimary, true),
+        isNotNull(schema.userEmails.verifiedAt),
+      ),
+    )
+    .limit(1);
+  return rows.at(0)?.email ?? null;
+}
+
+/** Record that the notice went out. Only ever set once. */
+export async function markNoticeSent(
+  recordId: string,
+  at: Temporal.Instant,
+): Promise<void> {
+  await getDb()
+    .update(records)
+    .set({ noticeSentAt: at })
+    .where(and(eq(records.id, recordId), isNull(records.noticeSentAt)));
+}
+
+/**
+ * A member's own warnings, suspensions and terminations that are not
+ * lifted and have not run out. Statement and dates only: nothing internal.
+ * A termination has no end date, so it holds until lifted.
+ */
+export async function listActiveSanctionsFor(
+  subjectUserId: string,
+  today: Temporal.PlainDate,
+) {
+  const day = today.toString();
+  return getDb()
+    .select({
+      level: records.level,
+      statement: records.memberStatement,
+      startsOn: records.startsOn,
+      endsOn: records.endsOn,
+    })
+    .from(records)
+    .where(
+      and(
+        eq(records.subjectUserId, subjectUserId),
+        isNull(records.liftedAt),
+        or(
+          eq(records.level, "termination"),
+          and(
+            or(eq(records.level, "warning"), eq(records.level, "suspension")),
+            or(isNull(records.endsOn), sql`${records.endsOn} >= ${day}`),
+          ),
+        ),
+      ),
+    )
+    .orderBy(desc(records.createdAt), desc(records.id));
+}

@@ -20,6 +20,12 @@
  *     audit row included, and throws.
  *   - **`retain_until` is recomputed by every write**, with `updated_at`
  *     as the last activity.
+ *   - **The notice is sent after the batch commits** (`sendNotice`), to
+ *     the subject's primary verified address. It never fails the write:
+ *     a missing address or a failed send is logged and leaves
+ *     `notice_sent_at` NULL, which the detail page shows as "Notice not
+ *     sent". `conduct.notice` is not suppressible, so no preference is
+ *     read. Neither the statement nor the address goes in audit metadata.
  */
 import { uuidv7 } from "uuidv7";
 
@@ -34,6 +40,7 @@ import type {
   CreateRecordArgs,
   LiftArgs,
   ListRecordsFilter,
+  PreviewNoticeArgs,
   ReferArgs,
   SccsOutcomeArgs,
   UpdateRecordArgs,
@@ -41,6 +48,7 @@ import type {
 import {
   applyRecordWrite,
   findRecordDetail,
+  findNoticeRecipient,
   findRecordForMutation,
   findReportsByPublicId,
   findSubjectName,
@@ -48,6 +56,7 @@ import {
   insertRecordStatement,
   linkReportsStatements,
   listRecordHistory,
+  markNoticeSent,
   listRecords,
   listRecordsForSubject,
   findSubject,
@@ -72,6 +81,10 @@ import { retainUntil } from "#/server/conduct/retention";
 import { standingFor } from "#/server/conduct/standing.server";
 import type { ConductStanding } from "#/server/conduct/standing.server";
 import { runBatch } from "#/server/db";
+import { conductNoticeEmail } from "#/server/email/conduct-email";
+import type { ConductNoticeLevel } from "#/server/email/conduct-email";
+import { sendEmail } from "#/server/email/resend";
+import { errorMessage, log } from "#/server/log/log.server";
 
 // ── public types ────────────────────────────────────────────────────────
 
@@ -159,6 +172,71 @@ async function loadForMutation(
     throw new Error("Record not found");
   }
   return record;
+}
+
+/**
+ * Email the subject after the write committed. Never throws. `sendEmail`
+ * records the attempt itself. Only a first notice sets `notice_sent_at`
+ * (which locks the statement); a lift notice leaves it alone.
+ */
+async function sendNotice(args: {
+  recordId: string;
+  subjectUserId: string | null;
+  level: ConductNoticeLevel;
+  lifted: boolean;
+  statement?: string;
+  startsOn?: Temporal.PlainDate | null;
+  endsOn?: Temporal.PlainDate | null;
+}): Promise<void> {
+  try {
+    if (args.subjectUserId === null) {
+      log.warn("conduct.notice_skipped", { reason: "no_account" });
+      return;
+    }
+    const to = await findNoticeRecipient(args.subjectUserId);
+    if (to === null) {
+      log.warn("conduct.notice_skipped", { reason: "no_verified_email" });
+      return;
+    }
+    await sendEmail(conductNoticeEmail({ ...args, to }));
+    if (!args.lifted) {
+      await markNoticeSent(args.recordId, Temporal.Now.instant());
+    }
+  } catch (err: unknown) {
+    log.error("conduct.notice_failed", { error: errorMessage(err) });
+  }
+}
+
+/** A start date the record will carry: the form's, else today. */
+function noticeDates(input: {
+  level: ConductLevel;
+  startsOn?: Temporal.PlainDate;
+  endsOn?: Temporal.PlainDate;
+}) {
+  return {
+    startsOn: input.startsOn ?? today(),
+    endsOn:
+      input.level === "warning" || input.level === "suspension"
+        ? (input.endsOn ?? null)
+        : null,
+  };
+}
+
+/**
+ * Exactly what creating this record would email the member. Pure: no
+ * writes, no send.
+ */
+export async function previewConductNoticeAction(
+  input: PreviewNoticeArgs,
+): Promise<{ subject: string; text: string }> {
+  await requireConductManager();
+  const { subject, text } = conductNoticeEmail({
+    level: input.level,
+    statement: input.memberStatement,
+    lifted: false,
+    ...noticeDates(input),
+  });
+  return { subject, text };
 }
 
 // ── reads ───────────────────────────────────────────────────────────────
@@ -275,6 +353,20 @@ export async function createConductRecordAction(
     throw new Error("Prior warning not found");
   }
 
+  // A correction must be about the same member. Subject-hiding applies
+  // through `findRecordForMutation`, and a mismatch reads as not found.
+  let supersedesId: string | null = null;
+  if (input.supersedesPublicId !== undefined) {
+    const old = await findRecordForMutation(
+      input.supersedesPublicId,
+      principal.userId,
+    );
+    if (!old || old.subjectUserId !== input.subjectUserId) {
+      throw new Error("Record not found");
+    }
+    supersedesId = old.id;
+  }
+
   const now = Temporal.Now.instant();
   const id = `crec_${uuidv7()}`;
   const publicId = generatePublicId();
@@ -305,6 +397,7 @@ export async function createConductRecordAction(
       votesAbstain: vote?.abstain ?? null,
       committeeSize: vote?.committeeSize ?? null,
       priorWarningId,
+      supersedesId,
       warningSkipped:
         input.level === "termination" && input.warningSkipped === true,
       createdBy: principal.userId,
@@ -343,6 +436,16 @@ export async function createConductRecordAction(
       }),
     ),
   ]);
+  if (input.level !== "note") {
+    await sendNotice({
+      recordId: id,
+      subjectUserId: input.subjectUserId,
+      level: input.level,
+      lifted: false,
+      statement: input.memberStatement,
+      ...noticeDates(input),
+    });
+  }
   return { publicId };
 }
 
@@ -376,6 +479,11 @@ export async function updateConductRecordAction(
   const principal = await requireConductManager();
   const record = await loadForMutation(input.recordId, principal.userId);
   const now = Temporal.Now.instant();
+  // The statement is locked once the notice has gone out. That needs no
+  // check here: `updateRecordSchema` carries `internalNotes` only, and
+  // this write sets nothing else, so a sent record's statement, level and
+  // dates cannot change. A test pins it; keep any new editable field out
+  // of this write unless it is also refused once `notice_sent_at` is set.
   return transition(record, "any", "Record not found", {
     set: {
       internalNotes: input.internalNotes === "" ? null : input.internalNotes,
@@ -454,7 +562,7 @@ export async function liftConductRecordAction(
     throw new Error(ALREADY_LIFTED);
   }
   const now = Temporal.Now.instant();
-  return transition(record, "unlifted", ALREADY_LIFTED, {
+  const lifted = await transition(record, "unlifted", ALREADY_LIFTED, {
     set: {
       liftedAt: now,
       liftedBy: principal.userId,
@@ -468,4 +576,15 @@ export async function liftConductRecordAction(
       level: record.level,
     }),
   });
+  // The lift reason is internal and is not sent: the member is told the
+  // level and that it was lifted.
+  if (record.level !== "note") {
+    await sendNotice({
+      recordId: record.id,
+      subjectUserId: record.subjectUserId,
+      level: record.level,
+      lifted: true,
+    });
+  }
+  return lifted;
 }

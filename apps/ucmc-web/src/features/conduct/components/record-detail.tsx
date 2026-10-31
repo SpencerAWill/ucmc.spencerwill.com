@@ -182,6 +182,13 @@ export function RecordDetail({
             None. The warning step was skipped.
           </Field>
         ) : null}
+        {record.level !== "note" ? (
+          <Field label="Notice">
+            {record.noticeSentAt
+              ? `Sent ${formatClubDate(record.noticeSentAt)}`
+              : "Notice not sent"}
+          </Field>
+        ) : null}
         <Field label="Created">
           {formatClubDate(record.createdAt)}
           {record.createdByName ? ` by ${record.createdByName}` : ""}
