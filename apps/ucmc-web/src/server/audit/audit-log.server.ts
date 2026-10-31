@@ -97,6 +97,8 @@
  * schema doc-comment in `drizzle/schema.ts` is the canonical
  * statement of this rule.
  */
+import { sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { getDb, insertStatements, runBatch, schema } from "#/server/db";
@@ -141,6 +143,30 @@ function buildRow(event: AuditEventInput) {
  */
 export function buildAuditEventStatement(event: AuditEventInput) {
   return getDb().insert(schema.auditLog).values(buildRow(event));
+}
+
+/**
+ * `buildAuditEventStatement`, but the row is written only if `condition`
+ * holds when the statement runs. It is for a guarded state transition
+ * inside one batch: put it **before** the guarded UPDATE, with the
+ * UPDATE's own guard as `condition`, so a transition a racing request
+ * already made writes no audit row. (`db.run(sql…)` cannot join a D1
+ * batch; `insert().select(sql…)` can.)
+ *
+ * The SELECT lists every `audit_log` column in table order, which is
+ * what Drizzle's `insert().select()` emits the column list in. A new
+ * column on `audit_log` must be added here too.
+ */
+export function buildConditionalAuditEventStatement(
+  event: AuditEventInput,
+  condition: SQL,
+) {
+  const row = buildRow(event);
+  return getDb()
+    .insert(schema.auditLog)
+    .select(
+      sql`select ${row.id}, ${row.actorUserId}, ${row.action}, ${row.targetUserId}, ${row.targetType}, ${row.targetId}, ${row.metadataJson}, unixepoch() * 1000 where ${condition}`,
+    );
 }
 
 /**

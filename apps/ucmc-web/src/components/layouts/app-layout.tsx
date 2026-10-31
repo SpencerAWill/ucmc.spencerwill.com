@@ -27,6 +27,7 @@ import {
   Newspaper,
   Package,
   Rss,
+  Scale,
   ScrollText,
   Settings,
   Shield,
@@ -716,6 +717,7 @@ export function SidebarUtilityNav() {
   // The permission is still `roles:manage` — the page is named for the
   // umbrella concern (access), the permission for the object it edits.
   const canManageAccess = hasPermission("roles:manage") && pages.access;
+  const canViewConduct = hasAnyPermission(["conduct:view"]) && pages.conduct;
   return (
     /*
      * `mt-auto` bottom-aligns this group: it soaks up whatever vertical
@@ -749,6 +751,16 @@ export function SidebarUtilityNav() {
               <Link to="/access">
                 <Shield />
                 <span>Access</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ) : null}
+        {canViewConduct ? (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Conduct">
+              <Link to="/conduct">
+                <Scale />
+                <span>Conduct</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

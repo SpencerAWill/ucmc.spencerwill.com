@@ -1,0 +1,415 @@
+/**
+ * Data access for conduct records. No auth and no business rules: every
+ * function takes what it needs as arguments, and the actions decide who
+ * may call it.
+ *
+ * Every read that a viewer drives takes `viewerUserId` and leaves out
+ * the records whose subject is that viewer. An exec member must never
+ * read their own file (the user's decision; see the design doc), and
+ * filtering here rather than in each action means no read can forget.
+ */
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
+
+import type { ConductLevel, ScocState } from "#/../drizzle/schema";
+import type { AuditEventInput } from "#/server/audit/audit-log.server";
+import { buildConditionalAuditEventStatement } from "#/server/audit/audit-log.server";
+import { getDb, inJsonArray, insertStatements, schema } from "#/server/db";
+import { PROFILE_NAME_SEARCH, searchMatches } from "#/server/db/search";
+
+type RecordInsert = typeof schema.conductRecords.$inferInsert;
+
+const records = schema.conductRecords;
+
+function notSubject(viewerUserId: string): SQL {
+  return sql`(${records.subjectUserId} is null or ${records.subjectUserId} <> ${viewerUserId})`;
+}
+
+/** The name a record snapshots, or null when the user does not exist. */
+export async function findSubjectName(
+  userId: string,
+): Promise<{ name: string } | null> {
+  const rows = await getDb()
+    .select({
+      fullName: schema.profiles.fullName,
+      placeholderName: schema.users.placeholderName,
+    })
+    .from(schema.users)
+    .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  const row = rows.at(0);
+  if (!row) {
+    return null;
+  }
+  // A pre-added member who never claimed the account has no profile;
+  // the officer's placeholder name is the only name there is.
+  return { name: row.fullName ?? row.placeholderName ?? "Unnamed member" };
+}
+
+export interface ConductSubjectOption {
+  userId: string;
+  publicId: string;
+  fullName: string;
+}
+
+/**
+ * Approved members whose name contains `query`, for the record form's
+ * subject picker. The viewer is left out: nobody opens a record on
+ * themselves.
+ */
+export async function searchSubjects(
+  query: string,
+  viewerUserId: string,
+  limit = 20,
+): Promise<ConductSubjectOption[]> {
+  return getDb()
+    .select({
+      userId: schema.users.id,
+      publicId: schema.users.publicId,
+      fullName: schema.profiles.fullName,
+    })
+    .from(schema.users)
+    .innerJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+    .where(
+      and(
+        eq(schema.users.status, "approved"),
+        ne(schema.users.id, viewerUserId),
+        searchMatches(schema.users.id, PROFILE_NAME_SEARCH, "user_id", query, [
+          "full_name",
+        ]),
+      ),
+    )
+    .orderBy(asc(schema.profiles.fullName))
+    .limit(limit);
+}
+
+export interface LinkableReport {
+  id: string;
+  publicId: string;
+  possibleScoc: boolean;
+  /** Linked to a record that is referred to SCCS right now. */
+  locked: boolean;
+  /** Linked to a record SCCS has already returned or sanctioned. */
+  sccsDone: boolean;
+}
+
+// The outer column is written out qualified: in a one-table select
+// Drizzle renders `${schema.conductReports.id}` as a bare "id", which
+// inside the subquery would bind to `r.id` instead.
+function linkedRecordInState(states: readonly string[]): SQL<number> {
+  return sql<number>`exists (select 1 from ${schema.conductRecordReports} crr join ${records} r on r.id = crr.record_id where crr.report_id = "conduct_reports"."id" and ${inJsonArray(sql`r.scoc_state`, states)})`;
+}
+
+/**
+ * The reports a record about `subjectUserId` may cite: those about the
+ * same member, or about someone the reporter could not name. A report
+ * about anyone else is left out, so the caller's count check refuses it.
+ */
+export async function findReportsByPublicId(
+  publicIds: readonly string[],
+  subjectUserId: string,
+): Promise<LinkableReport[]> {
+  if (publicIds.length === 0) {
+    return [];
+  }
+  const rows = await getDb()
+    .select({
+      id: schema.conductReports.id,
+      publicId: schema.conductReports.publicId,
+      possibleScoc: schema.conductReports.possibleScoc,
+      locked: linkedRecordInState(["referred"]),
+      sccsDone: linkedRecordInState(["returned", "sccs_sanctioned"]),
+    })
+    .from(schema.conductReports)
+    .where(
+      and(
+        inJsonArray(schema.conductReports.publicId, publicIds),
+        or(
+          isNull(schema.conductReports.subjectUserId),
+          eq(schema.conductReports.subjectUserId, subjectUserId),
+        ),
+      ),
+    );
+  return rows.map((r) => ({
+    ...r,
+    locked: Boolean(r.locked),
+    sccsDone: Boolean(r.sccsDone),
+  }));
+}
+
+/** The internal id of a warning on `subjectUserId`, lifted or not. */
+export async function findWarningId(
+  publicId: string,
+  subjectUserId: string,
+): Promise<string | null> {
+  const rows = await getDb()
+    .select({ id: records.id })
+    .from(records)
+    .where(
+      and(
+        eq(records.publicId, publicId),
+        eq(records.level, "warning"),
+        eq(records.subjectUserId, subjectUserId),
+      ),
+    )
+    .limit(1);
+  return rows.at(0)?.id ?? null;
+}
+
+/** What a mutation needs to know about a record. Server-side only. */
+export interface RecordForMutation {
+  id: string;
+  publicId: string;
+  level: ConductLevel;
+  endsOn: Temporal.PlainDate | null;
+  liftedAt: Temporal.Instant | null;
+  scocState: ScocState;
+}
+
+export async function findRecordForMutation(
+  publicId: string,
+  viewerUserId: string,
+): Promise<RecordForMutation | null> {
+  const rows = await getDb()
+    .select({
+      id: records.id,
+      publicId: records.publicId,
+      level: records.level,
+      endsOn: records.endsOn,
+      liftedAt: records.liftedAt,
+      scocState: records.scocState,
+    })
+    .from(records)
+    .where(and(eq(records.publicId, publicId), notSubject(viewerUserId)))
+    .limit(1);
+  return rows.at(0) ?? null;
+}
+
+const prior = alias(records, "prior_warning");
+const superseded = alias(records, "superseded");
+const creator = alias(schema.profiles, "creator_profile");
+const referrer = alias(schema.profiles, "referrer_profile");
+const lifter = alias(schema.profiles, "lifter_profile");
+
+/**
+ * A record as the detail page shows it. Projected column by column so
+ * no internal id reaches the client: other records and the subject are
+ * named by public id, and officers by their preferred name.
+ */
+export async function findRecordDetail(publicId: string, viewerUserId: string) {
+  const rows = await getDb()
+    .select({
+      publicId: records.publicId,
+      level: records.level,
+      subjectName: records.subjectNameSnapshot,
+      subjectPublicId: schema.users.publicId,
+      memberStatement: records.memberStatement,
+      internalNotes: records.internalNotes,
+      startsOn: records.startsOn,
+      endsOn: records.endsOn,
+      scocState: records.scocState,
+      referredOn: records.referredOn,
+      referredByName: referrer.preferredName,
+      sccsOutcomeNote: records.sccsOutcomeNote,
+      voteHeldOn: records.voteHeldOn,
+      votesFor: records.votesFor,
+      votesAgainst: records.votesAgainst,
+      votesAbstain: records.votesAbstain,
+      committeeSize: records.committeeSize,
+      priorWarningPublicId: prior.publicId,
+      warningSkipped: records.warningSkipped,
+      supersedesPublicId: superseded.publicId,
+      liftedAt: records.liftedAt,
+      liftedByName: lifter.preferredName,
+      liftReason: records.liftReason,
+      appealOutcome: records.appealOutcome,
+      noticeSentAt: records.noticeSentAt,
+      createdByName: creator.preferredName,
+      createdAt: records.createdAt,
+      updatedAt: records.updatedAt,
+      retainUntil: records.retainUntil,
+    })
+    .from(records)
+    .leftJoin(schema.users, eq(schema.users.id, records.subjectUserId))
+    .leftJoin(prior, eq(prior.id, records.priorWarningId))
+    .leftJoin(superseded, eq(superseded.id, records.supersedesId))
+    .leftJoin(creator, eq(creator.userId, records.createdBy))
+    .leftJoin(referrer, eq(referrer.userId, records.referredBy))
+    .leftJoin(lifter, eq(lifter.userId, records.liftedBy))
+    .where(and(eq(records.publicId, publicId), notSubject(viewerUserId)))
+    .limit(1);
+  return rows.at(0) ?? null;
+}
+
+export type ConductRecordDetailRow = NonNullable<
+  Awaited<ReturnType<typeof findRecordDetail>>
+>;
+
+export interface RecordListFilter {
+  level?: ConductLevel;
+  active?: boolean;
+  referred?: boolean;
+}
+
+export async function listRecords(
+  filter: RecordListFilter,
+  viewerUserId: string,
+) {
+  const conditions: SQL[] = [notSubject(viewerUserId)];
+  if (filter.level !== undefined) {
+    conditions.push(eq(records.level, filter.level));
+  }
+  if (filter.active !== undefined) {
+    conditions.push(
+      filter.active ? isNull(records.liftedAt) : isNotNull(records.liftedAt),
+    );
+  }
+  if (filter.referred !== undefined) {
+    conditions.push(
+      filter.referred
+        ? eq(records.scocState, "referred")
+        : ne(records.scocState, "referred"),
+    );
+  }
+  return getDb()
+    .select({
+      publicId: records.publicId,
+      level: records.level,
+      subjectName: records.subjectNameSnapshot,
+      subjectPublicId: schema.users.publicId,
+      startsOn: records.startsOn,
+      endsOn: records.endsOn,
+      scocState: records.scocState,
+      liftedAt: records.liftedAt,
+      createdAt: records.createdAt,
+    })
+    .from(records)
+    .leftJoin(schema.users, eq(schema.users.id, records.subjectUserId))
+    .where(and(...conditions))
+    .orderBy(desc(records.createdAt), desc(records.id));
+}
+
+/** A member's records, newest first. The caller excludes the viewer. */
+export async function listRecordsForSubject(subjectUserId: string) {
+  return getDb()
+    .select({
+      publicId: records.publicId,
+      level: records.level,
+      startsOn: records.startsOn,
+      liftedAt: records.liftedAt,
+    })
+    .from(records)
+    .where(eq(records.subjectUserId, subjectUserId))
+    .orderBy(desc(records.createdAt), desc(records.id));
+}
+
+/** Audit rows for one record, oldest first. `targetId` is its public id. */
+export async function listRecordHistory(publicId: string) {
+  return getDb()
+    .select({
+      id: schema.auditLog.id,
+      action: schema.auditLog.action,
+      actorName: schema.profiles.preferredName,
+      metadataJson: schema.auditLog.metadataJson,
+      createdAt: schema.auditLog.createdAt,
+    })
+    .from(schema.auditLog)
+    .leftJoin(
+      schema.profiles,
+      eq(schema.profiles.userId, schema.auditLog.actorUserId),
+    )
+    .where(
+      and(
+        eq(schema.auditLog.targetType, "conduct_record"),
+        eq(schema.auditLog.targetId, publicId),
+      ),
+    )
+    .orderBy(asc(schema.auditLog.createdAt), asc(schema.auditLog.id));
+}
+
+// ── statements, for the caller's batch ────────────────────────────────
+
+export function insertRecordStatement(row: RecordInsert) {
+  return getDb().insert(records).values(row);
+}
+
+export function linkReportsStatements(recordId: string, reportIds: string[]) {
+  return insertStatements(
+    schema.conductRecordReports,
+    reportIds.map((reportId) => ({ recordId, reportId })),
+  );
+}
+
+/**
+ * The state a record must still be in for a write to apply. Written
+ * qualified, because the same fragment runs inside the UPDATE and inside
+ * the `exists` subqueries that guard the write's side effects.
+ */
+const REQUIRED_STATE = {
+  any: sql`1`,
+  unreferred: sql`"conduct_records"."scoc_state" = 'none'`,
+  referred: sql`"conduct_records"."scoc_state" = 'referred'`,
+  unlifted: sql`"conduct_records"."lifted_at" is null`,
+} as const;
+
+export type RequiredRecordState = keyof typeof REQUIRED_STATE;
+
+/**
+ * Apply one write to a record, with its audit row, as one batch, and
+ * report whether it applied.
+ *
+ * The guard is the record still being in `requires`. A request that
+ * lost a race to an identical one (two lifts, two referrals) must not
+ * leave a second audit row or rerun a side effect, so every statement
+ * carries the guard: the audit insert and any delete run first and
+ * check it through `exists`, then the UPDATE checks it itself. The batch
+ * is one transaction, so all of them see the same answer. When it is
+ * false nothing is written and this returns `false` for the caller to
+ * throw.
+ */
+export async function applyRecordWrite(input: {
+  recordId: string;
+  requires: RequiredRecordState;
+  set: Partial<RecordInsert>;
+  audit: AuditEventInput;
+  /** A lifted termination no longer blocks the member's addresses. */
+  deleteBlockedEmails?: boolean;
+}): Promise<boolean> {
+  const state = REQUIRED_STATE[input.requires];
+  const stillApplies = sql`exists (select 1 from "conduct_records" where "conduct_records"."id" = ${input.recordId} and ${state})`;
+  const db = getDb();
+  const update = db
+    .update(records)
+    .set(input.set)
+    .where(and(eq(records.id, input.recordId), state))
+    .returning({ id: records.id });
+  const audit = buildConditionalAuditEventStatement(input.audit, stillApplies);
+  const results = input.deleteBlockedEmails
+    ? await db.batch([
+        audit,
+        db
+          .delete(schema.conductBlockedEmails)
+          .where(
+            and(
+              eq(schema.conductBlockedEmails.recordId, input.recordId),
+              stillApplies,
+            ),
+          ),
+        update,
+      ])
+    : await db.batch([audit, update]);
+  const updated = results[results.length - 1];
+  return Array.isArray(updated) && updated.length > 0;
+}

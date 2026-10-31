@@ -125,6 +125,11 @@ export const AUDIT_ACTIONS = [
   "passkey.added",
   "passkey.removed",
   "passkey.renamed",
+  "conduct.record_created",
+  "conduct.record_updated",
+  "conduct.referred",
+  "conduct.sccs_outcome",
+  "conduct.lifted",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 const auditActionEnum = z.enum(AUDIT_ACTIONS);

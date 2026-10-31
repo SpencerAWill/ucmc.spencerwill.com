@@ -1,0 +1,113 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { RecordDetail } from "#/features/conduct/components/record-detail";
+import type { ConductRecordDetail } from "#/features/conduct/server/record-fns";
+import { renderWithRouter } from "#/test-support/router-harness";
+
+vi.mock("#/features/conduct/server/record-fns", () => ({
+  updateConductRecordFn: vi.fn(),
+  referConductRecordFn: vi.fn(),
+  recordSccsOutcomeFn: vi.fn(),
+  liftConductRecordFn: vi.fn(),
+}));
+
+function detail(
+  overrides: Partial<ConductRecordDetail> = {},
+): ConductRecordDetail {
+  return {
+    publicId: "crec_1",
+    level: "warning",
+    subjectName: "Sam Subject",
+    subjectPublicId: "pub_sam",
+    memberStatement: "A statement.",
+    internalNotes: null,
+    startsOn: Temporal.PlainDate.from("2026-10-01"),
+    endsOn: null,
+    scocState: "none",
+    referredOn: null,
+    referredByName: null,
+    sccsOutcomeNote: null,
+    voteHeldOn: null,
+    votesFor: null,
+    votesAgainst: null,
+    votesAbstain: null,
+    committeeSize: null,
+    priorWarningPublicId: null,
+    warningSkipped: false,
+    supersedesPublicId: null,
+    liftedAt: null,
+    liftedByName: null,
+    liftReason: null,
+    appealOutcome: null,
+    noticeSentAt: null,
+    createdByName: "Pat President",
+    createdAt: Temporal.Instant.from("2026-10-01T12:00:00Z"),
+    updatedAt: Temporal.Instant.from("2026-10-01T12:00:00Z"),
+    retainUntil: null,
+    reports: [],
+    history: [],
+    ...overrides,
+  };
+}
+
+async function renderDetail(record: ConductRecordDetail, canManage = true) {
+  const queryClient = new QueryClient();
+  return renderWithRouter(
+    <QueryClientProvider client={queryClient}>
+      <RecordDetail record={record} canManage={canManage} />
+    </QueryClientProvider>,
+  );
+}
+
+describe("RecordDetail", () => {
+  it("links the subject to their member page", async () => {
+    await renderDetail(detail());
+    expect(screen.getByRole("link", { name: "Sam Subject" })).toHaveAttribute(
+      "href",
+      "/members/pub_sam",
+    );
+  });
+
+  it("shows the snapshot name as plain text once the account is gone", async () => {
+    await renderDetail(detail({ subjectPublicId: null }));
+    expect(screen.getByText("Sam Subject")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Sam Subject" })).toBeNull();
+  });
+
+  it("shows a lifted record as lifted, with the reason and no lift action", async () => {
+    await renderDetail(
+      detail({
+        liftedAt: Temporal.Instant.from("2026-10-20T12:00:00Z"),
+        liftedByName: "Pat President",
+        liftReason: "Appeal upheld.",
+      }),
+    );
+    expect(screen.getAllByText("Lifted").length).toBeGreaterThan(0);
+    expect(screen.getByText("Appeal upheld.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Lift" })).toBeNull();
+  });
+
+  it("hides manager controls from a viewer", async () => {
+    await renderDetail(detail(), false);
+    expect(screen.queryByRole("button", { name: "Lift" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit notes" })).toBeNull();
+  });
+});
+
+describe("LiftDialog appeal field", () => {
+  it("is asked for on a termination only", async () => {
+    const { userEvent } = await import("@testing-library/user-event").then(
+      (m) => ({ userEvent: m.default }),
+    );
+    const user = userEvent.setup();
+    const first = await renderDetail(detail({ level: "termination" }));
+    await user.click(screen.getByRole("button", { name: "Lift" }));
+    expect(screen.getByLabelText(/Appeal outcome/)).toBeInTheDocument();
+    first.unmount();
+    await renderDetail(detail({ level: "warning" }));
+    await user.click(screen.getByRole("button", { name: "Lift" }));
+    expect(screen.queryByLabelText(/Appeal outcome/)).toBeNull();
+  });
+});

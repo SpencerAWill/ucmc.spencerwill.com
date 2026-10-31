@@ -21,6 +21,7 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 /**
  * Epoch-milliseconds column that reads/writes as a `Temporal.Instant`.
@@ -41,6 +42,18 @@ const instantMs = customType<{ data: Temporal.Instant; driverData: number }>({
 });
 
 const timestamp = (name: string) => instantMs(name);
+
+/**
+ * Calendar date that reads/writes as a `Temporal.PlainDate`, stored as
+ * `YYYY-MM-DD` text. A date with no time of day (a suspension's last day,
+ * the day a report's incident happened) is a Cincinnati-local calendar
+ * fact, not an instant, so it must not round-trip through epoch ms.
+ */
+const plainDate = customType<{ data: Temporal.PlainDate; driverData: string }>({
+  dataType: () => "text",
+  toDriver: (value) => value.toString(),
+  fromDriver: (value) => Temporal.PlainDate.from(value),
+});
 
 export const userStatus = [
   "pending",
@@ -950,6 +963,14 @@ export const auditAction = [
   "calendar_subscription.created",
   "calendar_subscription.rotated",
   "calendar_subscription.revoked",
+  // Member conduct (see .claude/rules/feature-conduct.md once it lands).
+  // Metadata carries the level, the state transition and ids only: never
+  // the statement, the notes, report text, names or emails.
+  "conduct.record_created",
+  "conduct.record_updated",
+  "conduct.referred",
+  "conduct.sccs_outcome",
+  "conduct.lifted",
 ] as const;
 export type AuditAction = (typeof auditAction)[number];
 
@@ -2750,5 +2771,189 @@ export const costSnapshots = sqliteTable(
       columns: [table.source, table.serviceName, table.periodStart],
     }),
     index("cost_snapshots_period_idx").on(table.periodStart),
+  ],
+);
+
+/**
+ * Member conduct. A report is what a member tells the Executive Committee;
+ * a record is what the committee decides. Both are retained on a clock
+ * (`retain_until`, see `src/server/conduct/retention.ts`) and an active
+ * termination has none. Every user FK is SET NULL so purging an account
+ * never takes the record with it; the record keeps `subject_name_snapshot`.
+ */
+export const conductLevel = [
+  "note",
+  "warning",
+  "suspension",
+  "termination",
+] as const;
+export type ConductLevel = (typeof conductLevel)[number];
+
+export const conductReportStatus = ["new", "accepted", "dismissed"] as const;
+export type ConductReportStatus = (typeof conductReportStatus)[number];
+
+export const scocState = [
+  "none",
+  "referred",
+  "returned",
+  "sccs_sanctioned",
+] as const;
+export type ScocState = (typeof scocState)[number];
+
+export const conductReports = sqliteTable(
+  "conduct_reports",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    reporterUserId: text("reporter_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    subjectUserId: text("subject_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    subjectDescription: text("subject_description"),
+    occurredOn: plainDate("occurred_on").notNull(),
+    location: text("location"),
+    body: text("body").notNull(),
+    possibleScoc: integer("possible_scoc", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    status: text("status", { enum: conductReportStatus })
+      .notNull()
+      .default("new"),
+    triagedBy: text("triaged_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    triagedAt: timestamp("triaged_at"),
+    dismissReason: text("dismiss_reason"),
+    retainUntil: timestamp("retain_until"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    check(
+      "conduct_reports_subject_known",
+      sql`${t.subjectUserId} IS NOT NULL OR ${t.subjectDescription} IS NOT NULL`,
+    ),
+    index("conduct_reports_status_created_at_idx").on(t.status, t.createdAt),
+    index("conduct_reports_retain_until_idx").on(t.retainUntil),
+  ],
+);
+
+export const conductRecords = sqliteTable(
+  "conduct_records",
+  {
+    id: text("id").primaryKey(),
+    publicId: text("public_id").notNull().unique(),
+    level: text("level", { enum: conductLevel }).notNull(),
+    subjectUserId: text("subject_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    subjectNameSnapshot: text("subject_name_snapshot").notNull(),
+    memberStatement: text("member_statement"),
+    internalNotes: text("internal_notes"),
+    startsOn: plainDate("starts_on"),
+    endsOn: plainDate("ends_on"),
+    scocState: text("scoc_state", { enum: scocState })
+      .notNull()
+      .default("none"),
+    referredOn: plainDate("referred_on"),
+    referredBy: text("referred_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    sccsOutcomeNote: text("sccs_outcome_note"),
+    voteHeldOn: plainDate("vote_held_on"),
+    votesFor: integer("votes_for"),
+    votesAgainst: integer("votes_against"),
+    votesAbstain: integer("votes_abstain"),
+    committeeSize: integer("committee_size"),
+    // NO ACTION, not SET NULL: nulling it would break the termination
+    // CHECK below. The retention sweep skips warnings a termination cites.
+    priorWarningId: text("prior_warning_id").references(
+      (): AnySQLiteColumn => conductRecords.id,
+      { onDelete: "no action" },
+    ),
+    warningSkipped: integer("warning_skipped", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    supersedesId: text("supersedes_id").references(
+      (): AnySQLiteColumn => conductRecords.id,
+      { onDelete: "set null" },
+    ),
+    liftedAt: timestamp("lifted_at"),
+    liftedBy: text("lifted_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    liftReason: text("lift_reason"),
+    appealOutcome: text("appeal_outcome"),
+    noticeSentAt: timestamp("notice_sent_at"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    retainUntil: timestamp("retain_until"),
+  },
+  (t) => [
+    check(
+      "conduct_records_termination_vote",
+      sql`${t.level} <> 'termination' OR (${t.votesFor} IS NOT NULL AND ${t.votesAgainst} IS NOT NULL AND ${t.votesAbstain} IS NOT NULL AND ${t.committeeSize} IS NOT NULL AND ${t.votesFor} * 3 >= ${t.committeeSize} * 2 AND ${t.votesFor} + ${t.votesAgainst} + ${t.votesAbstain} <= ${t.committeeSize} AND ${t.voteHeldOn} IS NOT NULL)`,
+    ),
+    check(
+      "conduct_records_termination_warning",
+      sql`${t.level} <> 'termination' OR ((${t.priorWarningId} IS NOT NULL) <> (${t.warningSkipped} = 1))`,
+    ),
+    check(
+      "conduct_records_suspension_dates",
+      sql`${t.level} <> 'suspension' OR (${t.startsOn} IS NOT NULL AND ${t.endsOn} IS NOT NULL AND ${t.endsOn} >= ${t.startsOn})`,
+    ),
+    check(
+      "conduct_records_statement_required",
+      sql`${t.level} = 'note' OR ${t.memberStatement} IS NOT NULL`,
+    ),
+    check(
+      "conduct_records_ends_on_level",
+      sql`${t.level} IN ('suspension', 'warning') OR ${t.endsOn} IS NULL`,
+    ),
+    index("conduct_records_subject_idx").on(t.subjectUserId),
+    index("conduct_records_level_lifted_idx").on(t.level, t.liftedAt),
+    index("conduct_records_retain_until_idx").on(t.retainUntil),
+  ],
+);
+
+export const conductRecordReports = sqliteTable(
+  "conduct_record_reports",
+  {
+    recordId: text("record_id")
+      .notNull()
+      .references(() => conductRecords.id, { onDelete: "cascade" }),
+    reportId: text("report_id")
+      .notNull()
+      .references(() => conductReports.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.recordId, t.reportId] })],
+);
+
+/**
+ * HMACs of every email on a terminated member's account, so a returning
+ * applicant is caught at registration without keeping the addresses.
+ * Deleted with the termination (lift or purge).
+ */
+export const conductBlockedEmails = sqliteTable(
+  "conduct_blocked_emails",
+  {
+    recordId: text("record_id")
+      .notNull()
+      .references(() => conductRecords.id, { onDelete: "cascade" }),
+    emailHmac: text("email_hmac").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.recordId, t.emailHmac] }),
+    index("conduct_blocked_emails_hmac_idx").on(t.emailHmac),
   ],
 );

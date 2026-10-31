@@ -586,6 +586,15 @@ export const SETTINGS = {
     owner: "system_admin",
     createdAt: "2026-08-21",
   }),
+  "pages.conduct": z.boolean().default(true).register(registry, {
+    label: "Conduct page enabled",
+    description:
+      "When off, the Conduct sidebar entry is hidden and /conduct returns notFound.",
+    category: "pages",
+    flagKind: "release",
+    owner: "system_admin",
+    createdAt: "2026-10-31",
+  }),
 
   // Members surfaces. `pages.members` is the SECTION — a grouping node
   // with no page of its own; switching it off takes the whole /members
