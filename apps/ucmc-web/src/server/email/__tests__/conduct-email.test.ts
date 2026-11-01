@@ -42,4 +42,19 @@ describe("conductNoticeEmail", () => {
     expect(m.text).toContain("termination");
     expect(m.text).not.toContain("ignored statement");
   });
+
+  it("says a correction replaces an earlier notice, first", () => {
+    const m = conductNoticeEmail({
+      level: "warning",
+      statement: "You are warned. You may appeal.",
+      lifted: false,
+      corrects: true,
+    });
+    expect(m.subject).toBe(
+      "Corrected notice from the UCMC Executive Committee: warning",
+    );
+    expect(m.text).toBe(
+      "This notice corrects an earlier one. The earlier notice no longer applies.\n\nYou are warned. You may appeal.\n",
+    );
+  });
 });

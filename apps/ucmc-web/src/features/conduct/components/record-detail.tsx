@@ -7,6 +7,7 @@ import { Button } from "#/components/ui/button";
 import { Label } from "#/components/ui/label";
 import { Textarea } from "#/components/ui/textarea";
 import { useUpdateConductRecord } from "#/features/conduct/api/use-update-conduct-record";
+import { CorrectRecordSheet } from "#/features/conduct/components/correct-record-sheet";
 import { LiftDialog } from "#/features/conduct/components/lift-dialog";
 import { ScocReferralPanel } from "#/features/conduct/components/scoc-referral-panel";
 import {
@@ -32,6 +33,31 @@ function Field({
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="text-sm whitespace-pre-wrap">{children}</dd>
     </div>
+  );
+}
+
+function RecordLink({ publicId, label }: { publicId: string; label: string }) {
+  return (
+    <Link
+      to="/conduct/$publicId"
+      params={{ publicId }}
+      className="underline underline-offset-4"
+    >
+      {label}
+    </Link>
+  );
+}
+
+/**
+ * A correction replaces a sent notice or a sanction in force, once, and
+ * not while SCCS holds the matter. The server applies the same rule.
+ */
+function canCorrect(record: ConductRecordDetail): boolean {
+  return (
+    record.level !== "note" &&
+    record.supersededByPublicId === null &&
+    record.scocState !== "referred" &&
+    (record.noticeSentAt !== null || record.liftedAt === null)
   );
 }
 
@@ -112,6 +138,7 @@ export function RecordDetail({
 }) {
   const range = formatDateRange(record.startsOn, record.endsOn);
   const hasVote = record.votesFor !== null;
+  const correctable = canManage && canCorrect(record);
 
   return (
     <div className="space-y-6">
@@ -168,13 +195,26 @@ export function RecordDetail({
         ) : null}
         {record.priorWarningPublicId ? (
           <Field label="Prior warning">
-            <Link
-              to="/conduct/$publicId"
-              params={{ publicId: record.priorWarningPublicId }}
-              className="underline underline-offset-4"
-            >
-              View the warning
-            </Link>
+            <RecordLink
+              publicId={record.priorWarningPublicId}
+              label="View the warning"
+            />
+          </Field>
+        ) : null}
+        {record.supersededByPublicId ? (
+          <Field label="Superseded by">
+            <RecordLink
+              publicId={record.supersededByPublicId}
+              label="View the correction"
+            />
+          </Field>
+        ) : null}
+        {record.supersedesPublicId ? (
+          <Field label="Supersedes">
+            <RecordLink
+              publicId={record.supersedesPublicId}
+              label="View the corrected record"
+            />
           </Field>
         ) : null}
         {record.warningSkipped ? (
@@ -197,18 +237,25 @@ export function RecordDetail({
 
       <ScocReferralPanel record={record} canManage={canManage} />
 
-      {canManage && !record.liftedAt ? (
+      {canManage && (!record.liftedAt || correctable) ? (
         <section className="space-y-2" aria-label="Actions">
           <h2 className="text-lg font-semibold">Actions</h2>
-          {record.level === "note" ? (
+          {record.level === "note" && !record.liftedAt ? (
             <p className="text-sm text-muted-foreground">
               Lifting a note closes it.
             </p>
           ) : null}
-          <LiftDialog
-            recordId={record.publicId}
-            level={CONDUCT_LEVEL_LABELS[record.level].toLowerCase()}
-          />
+          <div className="flex flex-wrap gap-2">
+            {record.liftedAt ? null : (
+              <LiftDialog
+                recordId={record.publicId}
+                level={CONDUCT_LEVEL_LABELS[record.level].toLowerCase()}
+              />
+            )}
+            {correctable ? (
+              <CorrectRecordSheet publicId={record.publicId} />
+            ) : null}
+          </div>
         </section>
       ) : null}
 

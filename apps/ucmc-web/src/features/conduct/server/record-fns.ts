@@ -22,6 +22,7 @@ import type {
 import type {
   ConductRecordDetail,
   ConductRecordSummary,
+  CorrectionDraft,
   MemberConductSummary,
 } from "#/features/conduct/server/record-actions.server";
 import type { ConductSubjectOption } from "#/features/conduct/server/record-repo.server";
@@ -30,6 +31,7 @@ export type {
   ConductRecordDetail,
   ConductRecordSummary,
   ConductSubjectOption,
+  CorrectionDraft,
   MemberConductSummary,
   MyActiveSanction,
 };
@@ -49,6 +51,14 @@ export const getConductSubjectFn = createServerFn({ method: "GET" })
     const { getConductSubjectAction } =
       await import("#/features/conduct/server/record-actions.server");
     return getConductSubjectAction(data);
+  });
+
+export const getCorrectionDraftFn = createServerFn({ method: "GET" })
+  .validator(recordIdSchema)
+  .handler(async ({ data }): Promise<CorrectionDraft | null> => {
+    const { getCorrectionDraftAction } =
+      await import("#/features/conduct/server/record-actions.server");
+    return getCorrectionDraftAction(data);
   });
 
 export const searchConductSubjectsFn = createServerFn({ method: "GET" })

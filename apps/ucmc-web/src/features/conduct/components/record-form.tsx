@@ -48,7 +48,10 @@ import {
   createRecordSchema,
 } from "#/features/conduct/server/limits";
 import type { CreateRecordInput } from "#/features/conduct/server/limits";
-import type { ConductSubjectOption } from "#/features/conduct/server/record-fns";
+import type {
+  ConductSubjectOption,
+  CorrectionDraft,
+} from "#/features/conduct/server/record-fns";
 
 type Level = keyof typeof CONDUCT_LEVEL_LABELS;
 
@@ -138,41 +141,66 @@ function SubjectPicker({
  * the committee vote and its prior-warning step. Validity is the same
  * `createRecordSchema` the server runs, so the form cannot disagree
  * with it.
+ *
+ * With `correction` it corrects a sent or active record: prefilled from
+ * it, about the same member (no picker), never a note, and created with
+ * `supersedesPublicId`, which lifts the old record in the same write.
  */
 export function RecordForm({
   initialSubject = null,
   initialPossibleScoc = false,
   reportIds = [],
+  correction,
   onCreated,
 }: {
   initialSubject?: ConductSubjectOption | null;
   initialPossibleScoc?: boolean;
   reportIds?: string[];
+  correction?: { supersedesPublicId: string; draft: CorrectionDraft };
   onCreated?: (publicId: string) => void;
 }) {
+  const draft = correction?.draft;
   const create = useCreateConductRecord();
-  const [subject, setSubject] = useState(initialSubject);
-  const [level, setLevel] = useState<Level>("note");
+  const [subject, setSubject] = useState(draft?.subject ?? initialSubject);
+  const [level, setLevel] = useState<Level>(draft?.level ?? "note");
   const [possibleScoc, setPossibleScoc] = useState(initialPossibleScoc);
   const [internalNotes, setInternalNotes] = useState("");
   // null until the officer types, so the template follows the level.
-  const [editedStatement, setEditedStatement] = useState<string | null>(null);
-  const [startsOn, setStartsOn] = useState("");
-  const [endsOn, setEndsOn] = useState("");
-  const [heldOn, setHeldOn] = useState("");
-  const [votesFor, setVotesFor] = useState("");
-  const [votesAgainst, setVotesAgainst] = useState("");
-  const [votesAbstain, setVotesAbstain] = useState("");
-  const [committeeSize, setCommitteeSize] = useState("");
-  const [priorWarningId, setPriorWarningId] = useState("");
-  const [noPriorWarning, setNoPriorWarning] = useState(false);
+  const [editedStatement, setEditedStatement] = useState<string | null>(
+    draft?.memberStatement ?? null,
+  );
+  const [startsOn, setStartsOn] = useState(draft?.startsOn?.toString() ?? "");
+  const [endsOn, setEndsOn] = useState(draft?.endsOn?.toString() ?? "");
+  const vote = draft?.vote;
+  const [heldOn, setHeldOn] = useState(vote?.heldOn.toString() ?? "");
+  const [votesFor, setVotesFor] = useState(vote ? String(vote.for) : "");
+  const [votesAgainst, setVotesAgainst] = useState(
+    vote ? String(vote.against) : "",
+  );
+  const [votesAbstain, setVotesAbstain] = useState(
+    vote ? String(vote.abstain) : "",
+  );
+  const [committeeSize, setCommitteeSize] = useState(
+    vote ? String(vote.committeeSize) : "",
+  );
+  const [priorWarningId, setPriorWarningId] = useState(
+    draft?.priorWarningPublicId ?? "",
+  );
+  const [noPriorWarning, setNoPriorWarning] = useState(
+    draft?.warningSkipped ?? false,
+  );
   const [confirming, setConfirming] = useState(false);
 
   const statement = editedStatement ?? STATEMENT_TEMPLATE;
   const hasStatement = level !== "note";
-  const availableLevels = possibleScoc
-    ? LEVELS.filter((l) => !SCOC_BLOCKED.includes(l))
-    : LEVELS;
+  const availableLevels = LEVELS.filter(
+    (l) =>
+      !(possibleScoc && SCOC_BLOCKED.includes(l)) &&
+      !(correction && l === "note"),
+  );
+  const supersedes = correction
+    ? { supersedesPublicId: correction.supersedesPublicId }
+    : {};
 
   const warnings = useQuery({
     ...conductRecordsQueryOptions({ level: "warning" }),
@@ -191,6 +219,7 @@ export function RecordForm({
     internalNotes,
     possibleScoc,
     reportIds,
+    ...supersedes,
     ...(hasStatement ? { memberStatement: statement } : {}),
     ...optionalDate(startsOn),
     ...(level === "warning" || level === "suspension"
@@ -234,6 +263,7 @@ export function RecordForm({
     memberStatement: statement,
     ...(startsOn === "" ? {} : { startsOn }),
     ...(level !== "termination" && endsOn !== "" ? { endsOn } : {}),
+    ...supersedes,
   };
   const preview = useQuery({
     ...conductNoticePreviewQueryOptions(previewInput),
@@ -243,7 +273,7 @@ export function RecordForm({
   const submit = () => {
     create.mutate(input, {
       onSuccess: ({ publicId }) => {
-        toast.success("Record created.");
+        toast.success(correction ? "Correction issued." : "Record created.");
         setConfirming(false);
         onCreated?.(publicId);
       },
@@ -271,7 +301,13 @@ export function RecordForm({
     >
       <div className="space-y-1">
         <Label htmlFor="conduct-subject">Member</Label>
-        <SubjectPicker selected={subject} onSelect={setSubject} />
+        {correction ? (
+          <p id="conduct-subject" className="text-sm">
+            {subject?.fullName}
+          </p>
+        ) : (
+          <SubjectPicker selected={subject} onSelect={setSubject} />
+        )}
       </div>
 
       <div className="space-y-1">
@@ -289,20 +325,24 @@ export function RecordForm({
         </NativeSelect>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="conduct-scoc"
-          checked={possibleScoc}
-          onCheckedChange={(checked) => {
-            const next = checked === true;
-            setPossibleScoc(next);
-            if (next && SCOC_BLOCKED.includes(level)) {
-              setLevel("note");
-            }
-          }}
-        />
-        <Label htmlFor="conduct-scoc">Possible SCOC violation</Label>
-      </div>
+      {/* A correction is never a note, and a possible SCOC violation
+          waits on SCCS at note level, so a correction cannot be one. */}
+      {correction ? null : (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="conduct-scoc"
+            checked={possibleScoc}
+            onCheckedChange={(checked) => {
+              const next = checked === true;
+              setPossibleScoc(next);
+              if (next && SCOC_BLOCKED.includes(level)) {
+                setLevel("note");
+              }
+            }}
+          />
+          <Label htmlFor="conduct-scoc">Possible SCOC violation</Label>
+        </div>
+      )}
       {possibleScoc ? <SccsContactInfo /> : null}
 
       {hasStatement ? (

@@ -76,7 +76,8 @@ const { requireConductReporter } =
   await import("#/features/conduct/server/conduct-guards.server");
 const { createRecordSchema } = await import("#/features/conduct/server/limits");
 const { openSession } = await import("#/server/auth/session.server");
-const { isBlockedEmail } = await import("#/server/conduct/standing.server");
+const { isBlockedEmail, standingFor } =
+  await import("#/server/conduct/standing.server");
 const { getMyTerminationNoticeAction } =
   await import("#/features/conduct/server/termination-notice-actions.server");
 const { writeProofCookie } = await import("#/server/auth/proof-cookie.server");
@@ -1132,6 +1133,273 @@ describe("conduct.notice", () => {
       create(warning(a.id, { supersedesPublicId: "nope" })),
     ).rejects.toThrow("Record not found");
     expect(manager.id).toBeDefined();
+  });
+});
+
+describe("correcting a sent notice", () => {
+  function notices() {
+    return sent.filter((m) => m.kind === "conduct.notice");
+  }
+
+  function suspension(
+    subjectUserId: string,
+    startsOn: string,
+    endsOn: string,
+    extra: Record<string, unknown> = {},
+  ) {
+    return {
+      level: "suspension",
+      subjectUserId,
+      internalNotes: NOTES,
+      memberStatement: STATEMENT,
+      possibleScoc: false,
+      reportIds: [],
+      startsOn,
+      endsOn,
+      ...extra,
+    } as CreateRecordInput;
+  }
+
+  it("lifts the old record in the same write and sends only the correction", async () => {
+    const manager = await signInManager();
+    const s = await subject();
+    const { publicId: old } = await create(warning(s.id));
+    sent.length = 0;
+
+    const { publicId } = await create(
+      warning(s.id, { supersedesPublicId: old, memberStatement: "Corrected." }),
+    );
+
+    const oldRow = await recordRow(old);
+    expect(oldRow.liftedAt).not.toBeNull();
+    expect(oldRow.liftedBy).toBe(manager.id);
+    expect(oldRow.liftReason).toBe(`Superseded by ${publicId}`);
+    // Lifted, so the five-year clock runs from the lift.
+    expect(oldRow.retainUntil).not.toBeNull();
+    expect(oldRow.memberStatement).toBe(STATEMENT);
+
+    const lifts = (await auditRows(old)).filter(
+      (r) => r.action === "conduct.lifted",
+    );
+    expect(lifts).toHaveLength(1);
+    expect(JSON.parse(lifts[0].metadataJson ?? "{}")).toEqual({
+      supersededBy: publicId,
+    });
+
+    // One email: the correction. No "has been lifted" notice.
+    expect(notices()).toHaveLength(1);
+    const [message] = notices();
+    expect(message.to).toBe(s.email);
+    expect(message.subject).toBe(
+      "Corrected notice from the UCMC Executive Committee: warning",
+    );
+    expect(String(message.text)).toMatch(
+      /^This notice corrects an earlier one\./,
+    );
+    expect(String(message.text)).toContain("Corrected.");
+    expect((await recordRow(publicId)).noticeSentAt).not.toBeNull();
+
+    const oldDetail = await actions.getConductRecordAction(old);
+    expect(oldDetail?.supersededByPublicId).toBe(publicId);
+    const newDetail = await actions.getConductRecordAction(publicId);
+    expect(newDetail?.supersedesPublicId).toBe(old);
+    expect(newDetail?.supersededByPublicId).toBeNull();
+  });
+
+  it("previews the correction exactly as it is sent", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId: old } = await create(warning(s.id));
+    sent.length = 0;
+    const preview = await actions.previewConductNoticeAction({
+      level: "warning",
+      memberStatement: "Corrected.",
+      supersedesPublicId: old,
+    });
+    await create(
+      warning(s.id, { supersedesPublicId: old, memberStatement: "Corrected." }),
+    );
+    const [message] = notices();
+    expect({ subject: message.subject, text: message.text }).toEqual(preview);
+  });
+
+  it("leaves only the new record in standing and on /my", async () => {
+    await signInManager();
+    const s = await subject();
+    const today = Temporal.Now.plainDateISO("America/New_York");
+    const { publicId: old } = await create(
+      suspension(
+        s.id,
+        today.subtract({ days: 1 }).toString(),
+        today.add({ days: 30 }).toString(),
+      ),
+    );
+    await create(
+      suspension(
+        s.id,
+        today.subtract({ days: 1 }).toString(),
+        today.add({ days: 10 }).toString(),
+        { supersedesPublicId: old, memberStatement: "Corrected." },
+      ),
+    );
+
+    const standing = await standingFor(s.id);
+    expect(standing.suspendedUntil?.toString()).toBe(
+      today.add({ days: 10 }).toString(),
+    );
+    expect(standing.activeRecordIds).toHaveLength(1);
+
+    await signInAs(s.id);
+    const mine = await getMyActiveSanctionsAction();
+    expect(mine.map((m) => m.statement)).toEqual(["Corrected."]);
+  });
+
+  it("replaces an active termination with exactly one, keeping the block", async () => {
+    const manager = await signInManager();
+    const s = await subject();
+    const { publicId: old } = await create(
+      termination(s.id, { warningSkipped: true }),
+    );
+    const oldRow = await recordRow(old);
+    // An address the member removed after the termination: only the old
+    // record's fingerprint still covers it.
+    await getDb()
+      .insert(schema.conductBlockedEmails)
+      .values({ recordId: oldRow.id, emailHmac: "removed-address-hmac" });
+    sent.length = 0;
+
+    const { publicId } = await create(
+      termination(s.id, {
+        warningSkipped: true,
+        supersedesPublicId: old,
+        memberStatement: "Corrected termination.",
+      }),
+    );
+    const newRow = await recordRow(publicId);
+
+    const active = await getDb()
+      .select()
+      .from(schema.conductRecords)
+      .where(
+        and(
+          eq(schema.conductRecords.subjectUserId, s.id),
+          eq(schema.conductRecords.level, "termination"),
+        ),
+      );
+    expect(active.filter((r) => r.liftedAt === null).map((r) => r.id)).toEqual([
+      newRow.id,
+    ]);
+    expect(newRow.retainUntil).toBeNull();
+
+    const blocked = await getDb().select().from(schema.conductBlockedEmails);
+    expect(blocked.every((b) => b.recordId === newRow.id)).toBe(true);
+    expect(blocked.map((b) => b.emailHmac)).toContain("removed-address-hmac");
+    expect(await isBlockedEmail(s.email)).toBe(true);
+    expect((await standingFor(s.id)).terminated).toBe(true);
+
+    // Still deactivated; the second deactivation transitions nothing.
+    const [user] = await getDb()
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, s.id));
+    expect(user.status).toBe("deactivated");
+    const deactivations = await getDb()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "member.deactivated"));
+    expect(deactivations).toHaveLength(1);
+    expect(notices().map((m) => m.subject)).toEqual([
+      "Corrected notice from the UCMC Executive Committee: termination",
+    ]);
+    expect(manager.id).toBeDefined();
+  });
+
+  it("a correction that lost a race writes nothing", async () => {
+    const manager = await signInManager();
+    const s = await subject();
+    const { publicId: old } = await create(warning(s.id));
+    const before = await repo.findRecordForMutation(old, manager.id);
+    expect(before).not.toBeNull();
+    // A lift lands between the correction's read and its write.
+    await actions.liftConductRecordAction({ recordId: old, reason: "r" });
+    const auditCount = (await getDb().select().from(schema.auditLog)).length;
+    sent.length = 0;
+
+    vi.mocked(repo.findRecordForMutation).mockResolvedValueOnce(before);
+    await expect(
+      create(warning(s.id, { supersedesPublicId: old })),
+    ).rejects.toThrow("The record being corrected changed");
+
+    const rows = await getDb().select().from(schema.conductRecords);
+    expect(rows).toHaveLength(1);
+    expect((await recordRow(old)).liftReason).toBe("r");
+    expect(await getDb().select().from(schema.auditLog)).toHaveLength(
+      auditCount,
+    );
+    expect(sent).toHaveLength(0);
+  });
+
+  it("a second correction of the same record writes nothing", async () => {
+    const manager = await signInManager();
+    const s = await subject();
+    const { publicId: old } = await create(warning(s.id));
+    const before = await repo.findRecordForMutation(old, manager.id);
+    await create(warning(s.id, { supersedesPublicId: old }));
+    const count = (await getDb().select().from(schema.conductRecords)).length;
+
+    vi.mocked(repo.findRecordForMutation).mockResolvedValueOnce(before);
+    await expect(
+      create(warning(s.id, { supersedesPublicId: old })),
+    ).rejects.toThrow("The record being corrected changed");
+    expect(await getDb().select().from(schema.conductRecords)).toHaveLength(
+      count,
+    );
+    // Without the stale read it is refused up front.
+    await expect(
+      create(warning(s.id, { supersedesPublicId: old })),
+    ).rejects.toThrow("Record already corrected");
+  });
+
+  it("refuses to correct a note, or to correct into one", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId: n } = await create(note(s.id));
+    await expect(
+      create(warning(s.id, { supersedesPublicId: n })),
+    ).rejects.toThrow("A note has no notice to correct");
+    const { publicId: w } = await create(warning(s.id));
+    await expect(create(note(s.id, { supersedesPublicId: w }))).rejects.toThrow(
+      "A correction must be a warning",
+    );
+  });
+
+  it("drafts the prefill, including for a deactivated member, and needs conduct:manage", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId: old } = await create(
+      termination(s.id, { warningSkipped: true }),
+    );
+    const draft = await actions.getCorrectionDraftAction({ publicId: old });
+    expect(draft).toMatchObject({
+      subject: { userId: s.id, publicId: s.publicId, fullName: "Sam Subject" },
+      level: "termination",
+      memberStatement: STATEMENT,
+      endsOn: null,
+      warningSkipped: true,
+      priorWarningPublicId: null,
+      vote: { for: 5, against: 1, abstain: 0, committeeSize: 7 },
+    });
+    expect(draft?.vote?.heldOn.toString()).toBe("2026-10-20");
+
+    const { publicId: n } = await create(note(s.id));
+    await expect(
+      actions.getCorrectionDraftAction({ publicId: n }),
+    ).resolves.toBeNull();
+
+    await signInWith(["perm_conduct_view"]);
+    await expect(
+      actions.getCorrectionDraftAction({ publicId: old }),
+    ).rejects.toThrow("Forbidden");
   });
 });
 

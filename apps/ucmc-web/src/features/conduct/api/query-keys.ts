@@ -18,6 +18,8 @@ export const conductKeys = {
   member: (userId: string) => ["conduct", "member", userId] as const,
   subjects: (q: string) => ["conduct", "subjects", q] as const,
   subject: (publicId: string) => ["conduct", "subject", publicId] as const,
+  correction: (publicId: string) =>
+    ["conduct", "correction", publicId] as const,
   reportSubjects: (q: string) => ["conduct", "report-subjects", q] as const,
 };
 

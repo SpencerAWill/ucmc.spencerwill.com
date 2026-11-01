@@ -11,6 +11,7 @@ vi.mock("#/features/conduct/server/record-fns", () => ({
   referConductRecordFn: vi.fn(),
   recordSccsOutcomeFn: vi.fn(),
   liftConductRecordFn: vi.fn(),
+  getCorrectionDraftFn: vi.fn(async () => null),
 }));
 
 function detail(
@@ -37,6 +38,7 @@ function detail(
     priorWarningPublicId: null,
     warningSkipped: false,
     supersedesPublicId: null,
+    supersededByPublicId: null,
     liftedAt: null,
     liftedByName: null,
     liftReason: null,
@@ -141,5 +143,48 @@ describe("LiftDialog reason field", () => {
     ).toHaveAccessibleDescription(
       "The member can see this reason in their data export.",
     );
+  });
+
+  it("offers Correct on a sent or active sanction, to managers only", async () => {
+    const { unmount } = await renderDetail(
+      detail({
+        liftedAt: Temporal.Instant.from("2026-10-05T12:00:00Z"),
+        liftReason: "Appeal upheld",
+        noticeSentAt: Temporal.Instant.from("2026-10-01T12:00:00Z"),
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Correct" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Lift" })).toBeNull();
+    unmount();
+
+    const viewer = await renderDetail(detail(), false);
+    expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
+    viewer.unmount();
+
+    const lifted = await renderDetail(
+      detail({ liftedAt: Temporal.Instant.from("2026-10-05T12:00:00Z") }),
+    );
+    // Lifted before its notice went: nothing the member holds to correct.
+    expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
+    lifted.unmount();
+
+    await renderDetail(detail({ level: "note", memberStatement: null }));
+    expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
+  });
+
+  it("links a correction both ways and offers no second correction", async () => {
+    const { unmount } = await renderDetail(
+      detail({ supersededByPublicId: "crec_new" }),
+    );
+    expect(
+      screen.getByRole("link", { name: "View the correction" }),
+    ).toHaveAttribute("href", "/conduct/crec_new");
+    expect(screen.queryByRole("button", { name: "Correct" })).toBeNull();
+    unmount();
+
+    await renderDetail(detail({ supersedesPublicId: "crec_old" }));
+    expect(
+      screen.getByRole("link", { name: "View the corrected record" }),
+    ).toHaveAttribute("href", "/conduct/crec_old");
   });
 });

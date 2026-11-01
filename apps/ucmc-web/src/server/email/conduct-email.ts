@@ -27,6 +27,9 @@ export type ConductNoticeLevel = "warning" | "suspension" | "termination";
 export const APPEAL_LINE =
   "You may appeal in writing within two weeks to the Student Activities Board.";
 
+const CORRECTION_LINE =
+  "This notice corrects an earlier one. The earlier notice no longer applies.";
+
 /**
  * The formal notice to the member. Plain text: the member statement
  * as the officers wrote it, then the dates and the §9.3 appeal line
@@ -34,6 +37,9 @@ export const APPEAL_LINE =
  * that the sanction was lifted: **the lift reason never goes
  * in an email** (it is in the member's data export). `conduct.notice` is not suppressible, so there is no
  * unsubscribe header.
+ *
+ * A correction (a record that supersedes an earlier one) says so in its
+ * subject and first line, and the earlier record sends no lift notice.
  *
  * The record form's preview calls this too, so what an officer reviews
  * is what is sent.
@@ -44,6 +50,8 @@ export function conductNoticeEmail(args: {
   /** Ignored for a lift notice. */
   statement?: string;
   lifted: boolean;
+  /** This notice replaces an earlier one. Ignored for a lift notice. */
+  corrects?: boolean;
   startsOn?: Temporal.PlainDate | null;
   endsOn?: Temporal.PlainDate | null;
 }): EmailMessage & { subject: string; text: string } {
@@ -59,7 +67,7 @@ export function conductNoticeEmail(args: {
     };
   }
   const statement = (args.statement ?? "").trim();
-  const lines = [statement];
+  const lines = args.corrects ? [CORRECTION_LINE, statement] : [statement];
   const dates: string[] = [];
   for (const [label, date] of [
     ["Starts", args.startsOn],
@@ -77,7 +85,7 @@ export function conductNoticeEmail(args: {
   }
   return {
     ...message,
-    subject: `Notice from the UCMC Executive Committee: ${args.level}`,
+    subject: `${args.corrects ? "Corrected notice" : "Notice"} from the UCMC Executive Committee: ${args.level}`,
     text: `${lines.join("\n\n")}\n`,
   };
 }

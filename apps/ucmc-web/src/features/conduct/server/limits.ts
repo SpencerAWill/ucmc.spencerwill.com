@@ -166,6 +166,8 @@ export const previewNoticeSchema = z
     memberStatement: statement,
     startsOn: plainDate.optional(),
     endsOn: plainDate.optional(),
+    /** Set when the record corrects an earlier one: the notice says so. */
+    supersedesPublicId: id.optional(),
   })
   .refine(endsNotBeforeStarts, endsMessage);
 

@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RecordForm } from "#/features/conduct/components/record-form";
 import { STATEMENT_TEMPLATE } from "#/features/conduct/server/limits";
-import { previewConductNoticeFn } from "#/features/conduct/server/record-fns";
+import {
+  createConductRecordFn,
+  previewConductNoticeFn,
+} from "#/features/conduct/server/record-fns";
+import type { CorrectionDraft } from "#/features/conduct/server/record-fns";
 
 vi.mock("#/features/conduct/server/record-fns", () => ({
   createConductRecordFn: vi.fn(),
@@ -54,13 +58,15 @@ const SUBJECT = {
   fullName: "Sam Subject",
 };
 
-function renderForm() {
+function renderForm(
+  props: Partial<React.ComponentProps<typeof RecordForm>> = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <RecordForm initialSubject={SUBJECT} />
+      <RecordForm initialSubject={SUBJECT} {...props} />
     </QueryClientProvider>,
   );
 }
@@ -209,5 +215,99 @@ describe("RecordForm", () => {
     expect(options).toEqual(["Note"]);
     expect(screen.getByLabelText("Level")).toHaveValue("note");
     expect(screen.getByText("513-556-6814")).toBeInTheDocument();
+  });
+
+  it("prefills a correction from the record and sends it as superseding", async () => {
+    const user = userEvent.setup();
+    vi.mocked(previewConductNoticeFn).mockResolvedValue({
+      subject: "Corrected notice",
+      text: "BODY",
+    });
+    vi.mocked(createConductRecordFn).mockResolvedValue({
+      publicId: "crec_new",
+    });
+    const draft: CorrectionDraft = {
+      subject: SUBJECT,
+      level: "suspension",
+      memberStatement: "You are suspended.",
+      startsOn: Temporal.PlainDate.from("2026-11-01"),
+      endsOn: Temporal.PlainDate.from("2026-12-01"),
+      vote: null,
+      priorWarningPublicId: null,
+      warningSkipped: false,
+    };
+    renderForm({
+      initialSubject: null,
+      correction: { supersedesPublicId: "crec_old", draft },
+    });
+
+    expect(screen.getByText("Sam Subject")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /Member/ })).toBeNull();
+    expect(screen.getByLabelText("Level")).toHaveValue("suspension");
+    const levels = within(screen.getByLabelText("Level"))
+      .getAllByRole("option")
+      .map((o) => o.textContent);
+    expect(levels).not.toContain("Note");
+    expect(screen.queryByLabelText("Possible SCOC violation")).toBeNull();
+    expect(screen.getByLabelText("Member statement")).toHaveValue(
+      "You are suspended.",
+    );
+    expect(screen.getByLabelText("Starts on")).toHaveValue("2026-11-01");
+    expect(screen.getByLabelText("Ends on")).toHaveValue("2026-12-01");
+
+    await user.click(screen.getByRole("button", { name: "Review and send" }));
+    expect(await screen.findByText("Subject: Corrected notice")).toBeVisible();
+    expect(previewConductNoticeFn).toHaveBeenLastCalledWith({
+      data: {
+        level: "suspension",
+        memberStatement: "You are suspended.",
+        startsOn: "2026-11-01",
+        endsOn: "2026-12-01",
+        supersedesPublicId: "crec_old",
+      },
+    });
+    await user.click(screen.getByRole("button", { name: "Issue suspension" }));
+    await vi.waitFor(() =>
+      expect(createConductRecordFn).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          level: "suspension",
+          subjectUserId: "user_sam",
+          supersedesPublicId: "crec_old",
+          memberStatement: "You are suspended.",
+        }),
+      }),
+    );
+  });
+
+  it("prefills a termination's vote and warning step", () => {
+    renderForm({
+      initialSubject: null,
+      correction: {
+        supersedesPublicId: "crec_old",
+        draft: {
+          subject: SUBJECT,
+          level: "termination",
+          memberStatement: "Terminated.",
+          startsOn: null,
+          endsOn: null,
+          vote: {
+            heldOn: Temporal.PlainDate.from("2026-10-20"),
+            for: 5,
+            against: 1,
+            abstain: 0,
+            committeeSize: 7,
+          },
+          priorWarningPublicId: null,
+          warningSkipped: true,
+        },
+      },
+    });
+    expect(screen.getByLabelText("Vote held on")).toHaveValue("2026-10-20");
+    expect(screen.getByLabelText("Votes for")).toHaveValue(5);
+    expect(screen.getByLabelText("Committee size")).toHaveValue(7);
+    expect(screen.getByLabelText("No prior warning")).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Review and send" }),
+    ).toBeEnabled();
   });
 });

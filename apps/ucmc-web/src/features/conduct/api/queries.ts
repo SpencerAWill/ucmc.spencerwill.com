@@ -10,6 +10,7 @@ import {
 import {
   getConductRecordFn,
   getConductSubjectFn,
+  getCorrectionDraftFn,
   getMyActiveSanctionsFn,
   getMyConductStandingFn,
   listConductRecordsFn,
@@ -65,6 +66,15 @@ export function conductSubjectQueryOptions(publicId: string) {
     queryKey: conductKeys.subject(publicId),
     queryFn: () => getConductSubjectFn({ data: { publicId } }),
     staleTime: 30_000,
+  } as const;
+}
+
+/** The record form's prefill for correcting a record. Manager-only. */
+export function correctionDraftQueryOptions(publicId: string) {
+  return {
+    queryKey: conductKeys.correction(publicId),
+    queryFn: () => getCorrectionDraftFn({ data: { publicId } }),
+    staleTime: 0,
   } as const;
 }
 

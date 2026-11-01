@@ -32,6 +32,12 @@
  *   - **A termination deactivates the account** after the notice send has
  *     returned, in its own write (`deactivateUserStatements`). If that
  *     fails the record stands and the action throws `DEACTIVATION_FAILED`.
+ *   - **A sent statement is corrected by superseding it.** Creating with
+ *     `supersedesPublicId` lifts the old record in the same batch
+ *     ("Superseded by …", its block dropped, a `conduct.lifted` audit row
+ *     carrying `supersededBy`) and sends no lift notice: the new record's
+ *     notice says it corrects an earlier one. If the old record changed
+ *     after it was read, the batch aborts and nothing is written.
  */
 import { uuidv7 } from "uuidv7";
 
@@ -60,6 +66,7 @@ import {
   findRecordForMutation,
   findReportsByPublicId,
   findSubjectName,
+  findCorrectionDraft,
   findWarningId,
   insertRecordStatement,
   linkReportsStatements,
@@ -69,6 +76,8 @@ import {
   listRecordsForSubject,
   findSubject,
   searchSubjects,
+  supersedeRecordStatements,
+  supersedesReference,
 } from "#/features/conduct/server/record-repo.server";
 import type {
   ConductRecordDetailRow,
@@ -89,7 +98,7 @@ import { emailFingerprint } from "#/server/conduct/email-fingerprint.server";
 import { retainUntil } from "#/server/conduct/retention";
 import { isTerminated, standingFor } from "#/server/conduct/standing.server";
 import type { ConductStanding } from "#/server/conduct/standing.server";
-import { runBatch } from "#/server/db";
+import { isForeignKeyViolation, runBatch } from "#/server/db";
 import { conductNoticeEmail } from "#/server/email/conduct-email";
 import type { ConductNoticeLevel } from "#/server/email/conduct-email";
 import { sendEmail } from "#/server/email/resend";
@@ -144,6 +153,9 @@ const TARGET_TYPE = "conduct_record";
 const DEACTIVATION_FAILED =
   "Record saved, but deactivating the account failed; check the member's status on /members.";
 
+const CORRECTION_LOST_RACE =
+  "The record being corrected changed; reload it and try again.";
+
 function today(): Temporal.PlainDate {
   return Temporal.Now.plainDateISO(CLUB_TIME_ZONE);
 }
@@ -197,6 +209,7 @@ async function sendNotice(args: {
   subjectUserId: string | null;
   level: ConductNoticeLevel;
   lifted: boolean;
+  corrects?: boolean;
   statement?: string;
   startsOn?: Temporal.PlainDate | null;
   endsOn?: Temporal.PlainDate | null;
@@ -247,6 +260,7 @@ export async function previewConductNoticeAction(
     level: input.level,
     statement: input.memberStatement,
     lifted: false,
+    corrects: input.supersedesPublicId !== undefined,
     ...noticeDates(input),
   });
   return { subject, text };
@@ -318,6 +332,121 @@ export async function getConductSubjectAction(input: {
   return findSubject(input.publicId, principal.userId);
 }
 
+export interface CorrectionDraft {
+  subject: ConductSubjectOption;
+  level: Exclude<ConductLevel, "note">;
+  memberStatement: string;
+  startsOn: Temporal.PlainDate | null;
+  endsOn: Temporal.PlainDate | null;
+  vote: {
+    heldOn: Temporal.PlainDate;
+    for: number;
+    against: number;
+    abstain: number;
+    committeeSize: number;
+  } | null;
+  priorWarningPublicId: string | null;
+  warningSkipped: boolean;
+}
+
+/**
+ * The record form's prefill for correcting `publicId`, or null when it
+ * cannot be corrected (see `findCorrectable`) or its member's account is
+ * gone. The subject may be deactivated: a terminated member is.
+ */
+export async function getCorrectionDraftAction(input: {
+  publicId: string;
+}): Promise<CorrectionDraft | null> {
+  const principal = await requireConductManager();
+  const record = await findRecordForMutation(input.publicId, principal.userId);
+  if (!record || correctionRefusal(record) !== null) {
+    return null;
+  }
+  const row = await findCorrectionDraft(input.publicId, principal.userId);
+  if (!row || row.level === "note" || row.memberStatement === null) {
+    return null;
+  }
+  return {
+    subject: {
+      userId: row.userId,
+      publicId: row.subjectPublicId,
+      fullName: row.subjectName,
+    },
+    level: row.level,
+    memberStatement: row.memberStatement,
+    startsOn: row.startsOn,
+    endsOn: row.endsOn,
+    vote:
+      row.voteHeldOn !== null &&
+      row.votesFor !== null &&
+      row.votesAgainst !== null &&
+      row.votesAbstain !== null &&
+      row.committeeSize !== null
+        ? {
+            heldOn: row.voteHeldOn,
+            for: row.votesFor,
+            against: row.votesAgainst,
+            abstain: row.votesAbstain,
+            committeeSize: row.committeeSize,
+          }
+        : null,
+    priorWarningPublicId: row.priorWarningPublicId,
+    warningSkipped: row.warningSkipped,
+  };
+}
+
+/**
+ * Why `record` cannot be corrected, or null when it can. A correction
+ * replaces a notice the member was sent or a sanction still in force,
+ * once, and not while SCCS holds the matter.
+ */
+function correctionRefusal(record: RecordForMutation): string | null {
+  if (record.level === "note") {
+    return "A note has no notice to correct";
+  }
+  if (record.superseded) {
+    return "Record already corrected";
+  }
+  if (record.scocState === "referred") {
+    return "Referred to SCCS";
+  }
+  if (record.noticeSentAt === null && record.liftedAt !== null) {
+    return "Only a sent or active record can be corrected";
+  }
+  return null;
+}
+
+/**
+ * The record this create corrects, or null when it corrects none. It
+ * must be about the same member and correctable; subject-hiding applies
+ * through `findRecordForMutation`, and a mismatch reads as not found.
+ */
+async function findCorrectable(
+  input: CreateRecordArgs,
+  viewerUserId: string,
+): Promise<RecordForMutation | null> {
+  if (input.supersedesPublicId === undefined) {
+    return null;
+  }
+  if (input.level === "note") {
+    throw new Error(
+      "A correction must be a warning, suspension or termination",
+    );
+  }
+  const old = await findRecordForMutation(
+    input.supersedesPublicId,
+    viewerUserId,
+  );
+  if (!old || old.subjectUserId !== input.subjectUserId) {
+    throw new Error("Record not found");
+  }
+  const refusal = correctionRefusal(old);
+  if (refusal !== null) {
+    throw new Error(refusal);
+  }
+  return old;
+}
+
 // ── create ──────────────────────────────────────────────────────────────
 
 export async function createConductRecordAction(
@@ -334,10 +463,16 @@ export async function createConductRecordAction(
   if (!subject) {
     throw new Error("Member not found");
   }
+  const old = await findCorrectable(input, principal.userId);
   // One active termination per member: a second (say, a resubmit after
-  // a failed deactivation) would duplicate the notice and the block.
+  // a failed deactivation) would duplicate the notice and the block. A
+  // correction of that termination replaces it in the same batch, so it
+  // is the one exception.
+  const replacesActiveTermination =
+    old !== null && old.level === "termination" && old.liftedAt === null;
   if (
     input.level === "termination" &&
+    !replacesActiveTermination &&
     (await isTerminated(input.subjectUserId))
   ) {
     throw new Error("Member already has an active termination");
@@ -374,20 +509,6 @@ export async function createConductRecordAction(
     throw new Error("Prior warning not found");
   }
 
-  // A correction must be about the same member. Subject-hiding applies
-  // through `findRecordForMutation`, and a mismatch reads as not found.
-  let supersedesId: string | null = null;
-  if (input.supersedesPublicId !== undefined) {
-    const old = await findRecordForMutation(
-      input.supersedesPublicId,
-      principal.userId,
-    );
-    if (!old || old.subjectUserId !== input.subjectUserId) {
-      throw new Error("Record not found");
-    }
-    supersedesId = old.id;
-  }
-
   const now = Temporal.Now.instant();
   const id = `crec_${uuidv7()}`;
   const publicId = generatePublicId();
@@ -406,7 +527,7 @@ export async function createConductRecordAction(
         )
       : [];
 
-  await runBatch([
+  const statements = [
     insertRecordStatement({
       id,
       publicId,
@@ -426,7 +547,11 @@ export async function createConductRecordAction(
       votesAbstain: vote?.abstain ?? null,
       committeeSize: vote?.committeeSize ?? null,
       priorWarningId,
-      supersedesId,
+      // Guarded: aborts the batch if the old record changed since read.
+      supersedesId:
+        old === null
+          ? null
+          : supersedesReference(old.id, old.liftedAt === null),
       warningSkipped:
         input.level === "termination" && input.warningSkipped === true,
       createdBy: principal.userId,
@@ -464,19 +589,64 @@ export async function createConductRecordAction(
           input.level === "termination" ? (input.priorWarningId ?? null) : null,
         warningSkipped:
           input.level === "termination" && input.warningSkipped === true,
+        supersedesId: old?.publicId ?? null,
       }),
     ),
-  ]);
+    ...(old === null
+      ? []
+      : supersedeRecordStatements({
+          oldRecordId: old.id,
+          newRecordId: id,
+          // The old termination's block may cover an address the member
+          // has since removed; the new one keeps it.
+          carryBlockedEmails:
+            input.level === "termination" && replacesActiveTermination,
+          // Already lifted: it stays as it was, with its own lift reason.
+          lift:
+            old.liftedAt !== null
+              ? null
+              : {
+                  set: {
+                    liftedAt: now,
+                    liftedBy: principal.userId,
+                    liftReason: `Superseded by ${publicId}`,
+                    updatedAt: now,
+                    retainUntil: retentionFor({ ...old, liftedAt: now }, now),
+                  },
+                  audit: auditEvent(
+                    principal.userId,
+                    "conduct.lifted",
+                    old.publicId,
+                    { supersededBy: publicId },
+                  ),
+                },
+        })),
+  ];
+  try {
+    await runBatch(statements);
+  } catch (err: unknown) {
+    if (old !== null && isForeignKeyViolation(err)) {
+      throw new Error(CORRECTION_LOST_RACE, { cause: err });
+    }
+    throw err;
+  }
+  // A correction's old record sends no lift notice: this one says it
+  // replaces the earlier notice.
   if (input.level !== "note") {
     await sendNotice({
       recordId: id,
       subjectUserId: input.subjectUserId,
       level: input.level,
       lifted: false,
+      corrects: old !== null,
       statement: input.memberStatement,
       ...noticeDates(input),
     });
   }
+  // Deactivation assumes an approved subject: a pending one cannot be
+  // picked (`searchSubjects` and `findSubject` offer approved members
+  // only) and approval refuses a terminated one. A deactivated subject,
+  // as in a termination correcting a termination, transitions nothing.
   if (input.level === "termination") {
     await deactivateSubject(principal.userId, input.subjectUserId);
   }

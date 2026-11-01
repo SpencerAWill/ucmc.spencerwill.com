@@ -211,7 +211,13 @@ export interface RecordForMutation {
   endsOn: Temporal.PlainDate | null;
   liftedAt: Temporal.Instant | null;
   scocState: ScocState;
+  noticeSentAt: Temporal.Instant | null;
+  /** A later record already corrects this one. */
+  superseded: boolean;
 }
+
+// Qualified against the outer, unaliased `conduct_records`.
+const IS_SUPERSEDED = sql<number>`exists (select 1 from "conduct_records" "superseder" where "superseder"."supersedes_id" = "conduct_records"."id")`;
 
 export async function findRecordForMutation(
   publicId: string,
@@ -226,11 +232,14 @@ export async function findRecordForMutation(
       endsOn: records.endsOn,
       liftedAt: records.liftedAt,
       scocState: records.scocState,
+      noticeSentAt: records.noticeSentAt,
+      superseded: IS_SUPERSEDED,
     })
     .from(records)
     .where(and(eq(records.publicId, publicId), notSubject(viewerUserId)))
     .limit(1);
-  return rows.at(0) ?? null;
+  const row = rows.at(0);
+  return row ? { ...row, superseded: Boolean(row.superseded) } : null;
 }
 
 const prior = alias(records, "prior_warning");
@@ -267,6 +276,9 @@ export async function findRecordDetail(publicId: string, viewerUserId: string) {
       priorWarningPublicId: prior.publicId,
       warningSkipped: records.warningSkipped,
       supersedesPublicId: superseded.publicId,
+      supersededByPublicId: sql<
+        string | null
+      >`(select "superseder"."public_id" from "conduct_records" "superseder" where "superseder"."supersedes_id" = "conduct_records"."id" limit 1)`,
       liftedAt: records.liftedAt,
       liftedByName: lifter.preferredName,
       liftReason: records.liftReason,
@@ -284,6 +296,41 @@ export async function findRecordDetail(publicId: string, viewerUserId: string) {
     .leftJoin(creator, eq(creator.userId, records.createdBy))
     .leftJoin(referrer, eq(referrer.userId, records.referredBy))
     .leftJoin(lifter, eq(lifter.userId, records.liftedBy))
+    .where(and(eq(records.publicId, publicId), notSubject(viewerUserId)))
+    .limit(1);
+  return rows.at(0) ?? null;
+}
+
+/**
+ * What the record form needs to prefill a correction of `publicId`: the
+ * member in the picker's shape (any status, since a terminated member is
+ * deactivated) and the member-facing fields. Null when the viewer may not
+ * read it or the member's account is gone.
+ */
+export async function findCorrectionDraft(
+  publicId: string,
+  viewerUserId: string,
+) {
+  const rows = await getDb()
+    .select({
+      userId: schema.users.id,
+      subjectPublicId: schema.users.publicId,
+      subjectName: records.subjectNameSnapshot,
+      level: records.level,
+      memberStatement: records.memberStatement,
+      startsOn: records.startsOn,
+      endsOn: records.endsOn,
+      voteHeldOn: records.voteHeldOn,
+      votesFor: records.votesFor,
+      votesAgainst: records.votesAgainst,
+      votesAbstain: records.votesAbstain,
+      committeeSize: records.committeeSize,
+      priorWarningPublicId: prior.publicId,
+      warningSkipped: records.warningSkipped,
+    })
+    .from(records)
+    .innerJoin(schema.users, eq(schema.users.id, records.subjectUserId))
+    .leftJoin(prior, eq(prior.id, records.priorWarningId))
     .where(and(eq(records.publicId, publicId), notSubject(viewerUserId)))
     .limit(1);
   return rows.at(0) ?? null;
@@ -377,8 +424,87 @@ export async function listRecordHistory(publicId: string) {
 
 // ── statements, for the caller's batch ────────────────────────────────
 
-export function insertRecordStatement(row: RecordInsert) {
+/**
+ * `supersedesId` may be `supersedesReference(...)`, which aborts the
+ * whole batch when the record being corrected changed after it was read.
+ */
+export function insertRecordStatement(
+  row: Omit<RecordInsert, "supersedesId"> & {
+    supersedesId: string | SQL | null;
+  },
+) {
   return getDb().insert(records).values(row);
+}
+
+/**
+ * The state a record being corrected must still be in: not referred, not
+ * already corrected and, when it was unlifted as read, still unlifted.
+ * Written against the unaliased `conduct_records`.
+ */
+function correctableState(recordId: string, requireUnlifted: boolean): SQL {
+  return sql`"conduct_records"."id" = ${recordId} and "conduct_records"."scoc_state" <> 'referred' and not exists (select 1 from "conduct_records" "superseder" where "superseder"."supersedes_id" = ${recordId})${requireUnlifted ? sql` and "conduct_records"."lifted_at" is null` : sql``}`;
+}
+
+/**
+ * The new record's `supersedes_id`, guarded. While the old record is as
+ * the action read it this is its id. Once it is not (a lift or another
+ * correction landed first) it is a value no record has, so the FK fails
+ * and D1 rolls back the whole batch: nothing of the correction is
+ * written. `isForeignKeyViolation` recognises the error.
+ */
+export function supersedesReference(
+  recordId: string,
+  requireUnlifted: boolean,
+): SQL {
+  return sql`coalesce((select "conduct_records"."id" from "conduct_records" where ${correctableState(recordId, requireUnlifted)}), 'conduct-correction-lost-race')`;
+}
+
+/**
+ * What a correction does to the record it supersedes, for the caller's
+ * batch, after the new record's insert. A termination replacing an active
+ * one first carries the old block over, so an address the member has
+ * since removed stays blocked. Then, when the old record is unlifted, it
+ * is lifted with its audit row and its block dropped, each guarded as in
+ * `applyRecordWrite`.
+ */
+export function supersedeRecordStatements(input: {
+  oldRecordId: string;
+  newRecordId: string;
+  carryBlockedEmails: boolean;
+  lift: { set: Partial<RecordInsert>; audit: AuditEventInput } | null;
+}) {
+  const db = getDb();
+  const carry = input.carryBlockedEmails
+    ? [
+        db
+          .insert(schema.conductBlockedEmails)
+          .select(
+            sql`select ${input.newRecordId}, "email_hmac" from "conduct_blocked_emails" where "record_id" = ${input.oldRecordId}`,
+          )
+          .onConflictDoNothing(),
+      ]
+    : [];
+  if (input.lift === null) {
+    return carry;
+  }
+  const unlifted = REQUIRED_STATE.unlifted;
+  const stillApplies = sql`exists (select 1 from "conduct_records" where "conduct_records"."id" = ${input.oldRecordId} and ${unlifted})`;
+  return [
+    ...carry,
+    buildConditionalAuditEventStatement(input.lift.audit, stillApplies),
+    db
+      .delete(schema.conductBlockedEmails)
+      .where(
+        and(
+          eq(schema.conductBlockedEmails.recordId, input.oldRecordId),
+          stillApplies,
+        ),
+      ),
+    db
+      .update(records)
+      .set(input.lift.set)
+      .where(and(eq(records.id, input.oldRecordId), unlifted)),
+  ];
 }
 
 export function linkReportsStatements(recordId: string, reportIds: string[]) {
