@@ -190,7 +190,7 @@ export function UserMenu() {
                 onSelect={() => reportLauncher.open()}
               >
                 <ShieldAlert className="mr-2 size-4" />
-                Report a conduct concern
+                Report Conduct
               </DropdownMenuItem>
             ) : null}
           </>

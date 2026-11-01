@@ -1,5 +1,5 @@
 /**
- * Opens the "Report a conduct concern" dialog from the user menu.
+ * Opens the conduct report dialog from the user menu ("Report Conduct").
  *
  * Feature-blind, like `feedback-launcher.tsx`: the menu (in
  * `features/auth`) calls `open()`, and `AppLayout` provides the context
