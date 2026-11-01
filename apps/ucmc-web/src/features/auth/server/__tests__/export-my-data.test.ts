@@ -57,6 +57,8 @@ async function signInAs(userId: string): Promise<void> {
 beforeEach(async () => {
   cookieJar.clear();
   const db = getDb();
+  await db.delete(schema.conductReports);
+  await db.delete(schema.conductRecords);
   await db.delete(schema.waiverAttestations);
   await db.delete(schema.userRoles);
   await db.delete(schema.passkeyCredentials);
@@ -208,5 +210,115 @@ describe("exportMyDataAction", () => {
     expect(payload.schemaVersion).toBe(1);
     expect(typeof payload.exportedAt).toBe("string");
     expect(() => new Date(payload.exportedAt).toISOString()).not.toThrow();
+  });
+
+  describe("conduct", () => {
+    async function insertRecord(
+      subjectUserId: string,
+      values: Partial<typeof schema.conductRecords.$inferInsert> & {
+        level: "note" | "warning" | "suspension";
+      },
+    ) {
+      const id = `crec_${crypto.randomUUID()}`;
+      await getDb()
+        .insert(schema.conductRecords)
+        .values({
+          id,
+          publicId: id,
+          subjectUserId,
+          subjectNameSnapshot: "Test User",
+          ...values,
+        });
+    }
+
+    it("exports the subject's own notices and nothing exec-only", async () => {
+      const subject = await seedUser("subject@example.com");
+      const reporter = await seedUser("reporter@example.com");
+      await insertRecord(subject, {
+        level: "note",
+        internalNotes: "NOTE-TEXT-SECRET",
+      });
+      await insertRecord(subject, {
+        level: "warning",
+        memberStatement: "Please stop doing the thing.",
+        internalNotes: "INTERNAL-NOTES-SECRET",
+        sccsOutcomeNote: "SCCS-SECRET",
+        startsOn: Temporal.PlainDate.from("2026-09-01"),
+        liftedAt: Temporal.Instant.from("2026-10-01T12:00:00Z"),
+        liftReason: "Resolved",
+      });
+      await getDb()
+        .insert(schema.conductReports)
+        .values({
+          id: "crep_1",
+          publicId: "crep_1",
+          reporterUserId: reporter,
+          subjectUserId: subject,
+          occurredOn: Temporal.PlainDate.from("2026-08-30"),
+          body: "REPORT-ABOUT-SUBJECT-SECRET",
+        });
+      await signInAs(subject);
+
+      const payload = await exportMyDataAction();
+
+      expect(payload.conductNotices).toEqual([
+        {
+          level: "warning",
+          statement: "Please stop doing the thing.",
+          startsOn: Temporal.PlainDate.from("2026-09-01"),
+          endsOn: null,
+          liftedAt: Temporal.Instant.from("2026-10-01T12:00:00Z"),
+          liftReason: "Resolved",
+        },
+      ]);
+      expect(payload.conductReportsFiled).toEqual([]);
+      const serialized = JSON.stringify(payload);
+      for (const secret of [
+        "NOTE-TEXT-SECRET",
+        "INTERNAL-NOTES-SECRET",
+        "SCCS-SECRET",
+        "REPORT-ABOUT-SUBJECT-SECRET",
+        "reporterUserId",
+        "internalNotes",
+      ]) {
+        expect(serialized).not.toContain(secret);
+      }
+    });
+
+    it("exports a reporter's own reports without triage fields", async () => {
+      const reporter = await seedUser("filer@example.com");
+      const subject = await seedUser("accused@example.com");
+      await getDb()
+        .insert(schema.conductReports)
+        .values({
+          id: "crep_2",
+          publicId: "crep_2",
+          reporterUserId: reporter,
+          subjectUserId: subject,
+          occurredOn: Temporal.PlainDate.from("2026-08-30"),
+          location: "Red River Gorge",
+          body: "What I saw.",
+          status: "dismissed",
+          dismissReason: "DISMISS-SECRET",
+        });
+      await signInAs(reporter);
+
+      const payload = await exportMyDataAction();
+
+      expect(payload.conductReportsFiled).toHaveLength(1);
+      const filed = payload.conductReportsFiled[0];
+      expect(Object.keys(filed).sort()).toEqual([
+        "body",
+        "createdAt",
+        "location",
+        "occurredOn",
+      ]);
+      expect(filed.body).toBe("What I saw.");
+      expect(filed.location).toBe("Red River Gorge");
+      expect(payload.conductNotices).toEqual([]);
+      const serialized = JSON.stringify(payload);
+      expect(serialized).not.toContain("DISMISS-SECRET");
+      expect(serialized).not.toContain("dismissed");
+    });
   });
 });

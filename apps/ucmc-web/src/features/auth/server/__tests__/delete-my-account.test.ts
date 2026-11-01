@@ -85,6 +85,8 @@ beforeEach(async () => {
   cookieJar.clear();
   deleteAvatarSpy.mockReset();
   const db = getDb();
+  await db.delete(schema.conductReports);
+  await db.delete(schema.conductRecords);
   await db.delete(schema.auditLog);
   await db.delete(schema.waiverAttestations);
   await db.delete(schema.userRoles);
@@ -370,5 +372,48 @@ describe("deleteMyAccountAction", () => {
       });
       expect(user).toBeDefined();
     });
+  });
+
+  it("leaves conduct records and reports in place with NULL user FKs", async () => {
+    const userId = await seedUser("both-roles@example.com");
+    const db = getDb();
+    await db.insert(schema.conductRecords).values({
+      id: "crec_keep",
+      publicId: "crec_keep",
+      level: "warning",
+      subjectUserId: userId,
+      subjectNameSnapshot: "Test User",
+      memberStatement: "A warning.",
+      createdBy: userId,
+    });
+    await db.insert(schema.conductReports).values({
+      id: "crep_keep",
+      publicId: "crep_keep",
+      reporterUserId: userId,
+      subjectUserId: userId,
+      occurredOn: Temporal.PlainDate.from("2026-08-30"),
+      body: "A report.",
+    });
+    await signInAs(userId);
+
+    await deleteMyAccountAction();
+
+    const [record] = await db
+      .select()
+      .from(schema.conductRecords)
+      .where(eq(schema.conductRecords.id, "crec_keep"));
+    expect(record.subjectUserId).toBeNull();
+    expect(record.createdBy).toBeNull();
+    expect(record.subjectNameSnapshot).toBe("Test User");
+    const [report] = await db
+      .select()
+      .from(schema.conductReports)
+      .where(eq(schema.conductReports.id, "crep_keep"));
+    expect(report.reporterUserId).toBeNull();
+    expect(report.subjectUserId).toBeNull();
+    expect(report.body).toBe("A report.");
+    // The subject-known CHECK needs a description once the user is gone;
+    // migration 0099's trigger stamps the profile name.
+    expect(report.subjectDescription).toBe("Test User");
   });
 });

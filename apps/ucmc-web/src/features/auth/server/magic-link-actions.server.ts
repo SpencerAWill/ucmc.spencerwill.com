@@ -438,6 +438,26 @@ export async function exportMyDataAction(): Promise<{
     revocationReason: string | null;
     notes: string | null;
   }>;
+  /**
+   * The member's own warnings, suspensions and terminations,
+   * lifted or not. Notes, internal notes, SCCS fields, ids and anything
+   * that names a reporter are exec-only and never appear here.
+   */
+  conductNotices: Array<{
+    level: schema.ConductLevel;
+    statement: string | null;
+    startsOn: Temporal.PlainDate | null;
+    endsOn: Temporal.PlainDate | null;
+    liftedAt: Temporal.Instant | null;
+    liftReason: string | null;
+  }>;
+  /** Reports the member filed: their own text only, no triage state. */
+  conductReportsFiled: Array<{
+    occurredOn: Temporal.PlainDate;
+    location: string | null;
+    body: string;
+    createdAt: Temporal.Instant;
+  }>;
   excluded: string[];
 }> {
   const principal = await loadCurrentPrincipal();
@@ -462,6 +482,8 @@ export async function exportMyDataAction(): Promise<{
     emergencyContacts,
     userRoles,
     attestations,
+    conductNotices,
+    conductReportsFiled,
   ] = await db.batch([
     db.select().from(schema.users).where(eq(schema.users.id, userId)).limit(1),
     db
@@ -504,6 +526,33 @@ export async function exportMyDataAction(): Promise<{
       })
       .from(schema.waiverAttestations)
       .where(eq(schema.waiverAttestations.userId, userId)),
+    db
+      .select({
+        level: schema.conductRecords.level,
+        statement: schema.conductRecords.memberStatement,
+        startsOn: schema.conductRecords.startsOn,
+        endsOn: schema.conductRecords.endsOn,
+        liftedAt: schema.conductRecords.liftedAt,
+        liftReason: schema.conductRecords.liftReason,
+      })
+      .from(schema.conductRecords)
+      .where(
+        and(
+          eq(schema.conductRecords.subjectUserId, userId),
+          ne(schema.conductRecords.level, "note"),
+        ),
+      )
+      .orderBy(schema.conductRecords.createdAt),
+    db
+      .select({
+        occurredOn: schema.conductReports.occurredOn,
+        location: schema.conductReports.location,
+        body: schema.conductReports.body,
+        createdAt: schema.conductReports.createdAt,
+      })
+      .from(schema.conductReports)
+      .where(eq(schema.conductReports.reporterUserId, userId))
+      .orderBy(schema.conductReports.createdAt),
   ]);
 
   return {
@@ -515,6 +564,8 @@ export async function exportMyDataAction(): Promise<{
     emergencyContacts,
     roles: userRoles.map((r) => r.roleId),
     waiverAttestations: attestations,
+    conductNotices,
+    conductReportsFiled,
     excluded: [
       "Passkey credentials (public keys, counters, transports)",
       "Magic-link token hashes",
@@ -583,6 +634,10 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
   // Drop the user row. Foreign-key cascades in schema.ts handle:
   //   profiles, emergency_contacts, sessions, passkey_credentials,
   //   user_roles, waiver_attestations.
+  // Conduct rows are deliberately NOT deleted here. Every conduct FK to
+  // users is ON DELETE SET NULL, so records (with the subject's name
+  // snapshot) and a reporter's reports outlive the account until their
+  // retention sweep; see docs/adr/0012-conduct-records-outlive-the-account.md.
   // Authorship columns elsewhere (`created_by` / `updated_by` /
   // `attested_by`) are ON DELETE SET NULL, so the content stays but
   // loses its author attribution.

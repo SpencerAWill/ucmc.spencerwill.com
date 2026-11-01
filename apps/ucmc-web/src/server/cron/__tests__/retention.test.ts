@@ -7,6 +7,8 @@ import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import { getPrivateBucket, getPublicBucket } from "#/server/r2";
 import {
   EXPIRED_ROWS_PER_TICK,
+  conductRecordsDelete,
+  conductReportsDelete,
   expiredRowsDelete,
   runRetentionSweeps,
   sweepOrphanPrivateR2Keys,
@@ -19,6 +21,8 @@ import {
   sweepExpiredSessions,
   sweepRevokedWaiverAttestations,
   sweepWebauthnCeremonies,
+  sweepConductRecords,
+  sweepConductReports,
 } from "#/server/cron/retention.server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -78,6 +82,15 @@ afterEach(async () => {
   // Each suite seeds its own rows; clean slate avoids interactions
   // between tests that both delete from `users`.
   const db = getDb();
+  await db
+    .delete(schema.auditLog)
+    .where(eq(schema.auditLog.targetType, "conduct_record"));
+  // Terminations first: their NO ACTION prior_warning_id blocks the warning.
+  await db
+    .delete(schema.conductRecords)
+    .where(eq(schema.conductRecords.level, "termination"));
+  await db.delete(schema.conductRecords);
+  await db.delete(schema.conductReports);
   await db.delete(schema.siteFeedbackIssues);
   await db.delete(schema.siteFeedback);
   await db.delete(schema.albumPhotos);
@@ -213,6 +226,109 @@ describe("sweepDeactivatedAccounts", () => {
     const count = await sweepDeactivatedAccounts(NOW);
 
     expect(count).toBe(0);
+  });
+});
+
+describe("sweepDeactivatedAccounts with conduct reports", () => {
+  async function seedReportAbout(
+    userId: string,
+    subjectDescription: string | null = null,
+  ): Promise<string> {
+    const id = uid("crep");
+    await getDb()
+      .insert(schema.conductReports)
+      .values({
+        id,
+        publicId: id,
+        subjectUserId: userId,
+        subjectDescription,
+        occurredOn: Temporal.PlainDate.from("2026-08-30"),
+        body: "A report.",
+      });
+    return id;
+  }
+
+  async function reportRow(id: string) {
+    const [row] = await getDb()
+      .select()
+      .from(schema.conductReports)
+      .where(eq(schema.conductReports.id, id));
+    return row;
+  }
+
+  const OLD = NOW.subtract({ milliseconds: 366 * DAY_MS });
+
+  it("purges a report's subject without throwing and keeps the report, naming them", async () => {
+    const userId = await seedUser({
+      status: "deactivated",
+      deactivatedAt: OLD,
+    });
+    await getDb().insert(schema.profiles).values({
+      userId,
+      fullName: "  Pat Subject ",
+      preferredName: "Pat",
+      phone: "+15135551212",
+      ucAffiliation: "student",
+      updatedAt: Temporal.Now.instant(),
+    });
+    const reportId = await seedReportAbout(userId);
+
+    expect(await sweepDeactivatedAccounts(NOW)).toBe(1);
+
+    const row = await reportRow(reportId);
+    expect(row.subjectUserId).toBeNull();
+    expect(row.subjectDescription).toBe("Pat Subject");
+    expect(row.body).toBe("A report.");
+  });
+
+  it("falls back to 'Former member' when the user has no profile", async () => {
+    const userId = await seedUser({
+      status: "deactivated",
+      deactivatedAt: OLD,
+    });
+    const reportId = await seedReportAbout(userId);
+
+    await sweepDeactivatedAccounts(NOW);
+
+    expect((await reportRow(reportId)).subjectDescription).toBe(
+      "Former member",
+    );
+  });
+
+  it("falls back when the profile name is blank", async () => {
+    const userId = await seedUser({
+      status: "deactivated",
+      deactivatedAt: OLD,
+    });
+    await getDb().insert(schema.profiles).values({
+      userId,
+      fullName: "   ",
+      preferredName: "x",
+      phone: "+15135551212",
+      ucAffiliation: "student",
+      updatedAt: Temporal.Now.instant(),
+    });
+    const reportId = await seedReportAbout(userId);
+
+    await sweepDeactivatedAccounts(NOW);
+
+    expect((await reportRow(reportId)).subjectDescription).toBe(
+      "Former member",
+    );
+  });
+
+  it("does not overwrite a description the reporter wrote", async () => {
+    const userId = await seedUser({
+      status: "deactivated",
+      deactivatedAt: OLD,
+    });
+    const reportId = await seedReportAbout(userId, "Tall man in a red jacket");
+
+    await sweepDeactivatedAccounts(NOW);
+
+    expect((await reportRow(reportId)).subjectDescription).toBe(
+      "Tall man in a red jacket",
+    );
   });
 });
 
@@ -407,6 +523,8 @@ describe("runRetentionSweeps", () => {
       webauthnCeremonies: 0,
       expiredSessions: 0,
       expiredMagicLinks: 0,
+      conductRecords: 0,
+      conductReports: 0,
     });
 
     // Verify side effects landed.
@@ -838,5 +956,206 @@ describe("runRetentionSweeps screenshots", () => {
       resolvedScreenshots: 1,
       orphanPrivateR2Keys: 1,
     });
+  });
+});
+
+// ── conduct retention ─────────────────────────────────────────────────
+
+async function seedConductRecord(opts: {
+  level?: "note" | "warning" | "termination";
+  retainUntil: Temporal.Instant | null;
+  priorWarningId?: string;
+}): Promise<string> {
+  const id = uid("crec");
+  const termination = opts.level === "termination";
+  await getDb()
+    .insert(schema.conductRecords)
+    .values({
+      id,
+      publicId: id,
+      level: opts.level ?? "note",
+      subjectNameSnapshot: "Test Member",
+      memberStatement: "Statement",
+      retainUntil: opts.retainUntil,
+      ...(termination
+        ? {
+            voteHeldOn: Temporal.PlainDate.from("2026-10-01"),
+            votesFor: 5,
+            votesAgainst: 1,
+            votesAbstain: 0,
+            committeeSize: 7,
+            priorWarningId: opts.priorWarningId ?? null,
+            warningSkipped: opts.priorWarningId === undefined,
+          }
+        : {}),
+    });
+  return id;
+}
+
+async function seedConductReport(
+  retainUntil: Temporal.Instant | null,
+): Promise<string> {
+  const id = uid("crep");
+  await getDb()
+    .insert(schema.conductReports)
+    .values({
+      id,
+      publicId: id,
+      subjectDescription: "Someone",
+      occurredOn: Temporal.PlainDate.from("2026-10-01"),
+      body: "Body",
+      retainUntil,
+    });
+  return id;
+}
+
+async function conductIds() {
+  const db = getDb();
+  const records = await db
+    .select({ id: schema.conductRecords.id })
+    .from(schema.conductRecords);
+  const reports = await db
+    .select({ id: schema.conductReports.id })
+    .from(schema.conductReports);
+  return {
+    records: records.map((r) => r.id),
+    reports: reports.map((r) => r.id),
+  };
+}
+
+describe("conduct retention sweeps", () => {
+  const YESTERDAY = NOW.subtract({ milliseconds: DAY_MS });
+  const TOMORROW = NOW.add({ milliseconds: DAY_MS });
+
+  it("deletes a due record with its links, fingerprints and keeps its audit rows", async () => {
+    const db = getDb();
+    const due = await seedConductRecord({
+      level: "termination",
+      retainUntil: YESTERDAY,
+    });
+    const keep = await seedConductRecord({ retainUntil: TOMORROW });
+    const report = await seedConductReport(TOMORROW);
+    await db
+      .insert(schema.conductRecordReports)
+      .values({ recordId: due, reportId: report });
+    await db
+      .insert(schema.conductBlockedEmails)
+      .values({ recordId: due, emailHmac: "abc123" });
+    await db.insert(schema.auditLog).values({
+      id: uid("aud"),
+      action: "conduct.record_created",
+      targetType: "conduct_record",
+      targetId: due,
+    });
+
+    expect(await sweepConductRecords(NOW)).toBe(1);
+
+    const ids = await conductIds();
+    expect(ids.records).toEqual([keep]);
+    expect(ids.reports).toEqual([report]);
+    expect(await db.select().from(schema.conductRecordReports)).toHaveLength(0);
+    expect(await db.select().from(schema.conductBlockedEmails)).toHaveLength(0);
+    const audit = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.targetId, due));
+    expect(audit).toHaveLength(1);
+  });
+
+  it("keeps an active termination (NULL retain_until)", async () => {
+    const active = await seedConductRecord({
+      level: "termination",
+      retainUntil: null,
+    });
+    expect(await sweepConductRecords(NOW)).toBe(0);
+    expect((await conductIds()).records).toEqual([active]);
+  });
+
+  it("keeps a due warning a remaining termination cites, without throwing", async () => {
+    const warning = await seedConductRecord({
+      level: "warning",
+      retainUntil: YESTERDAY,
+    });
+    const termination = await seedConductRecord({
+      level: "termination",
+      retainUntil: null,
+      priorWarningId: warning,
+    });
+
+    await expect(sweepConductRecords(NOW)).resolves.toBe(0);
+    expect((await conductIds()).records.sort()).toEqual(
+      [warning, termination].sort(),
+    );
+  });
+
+  it("purges the warning once its citing termination is gone", async () => {
+    const warning = await seedConductRecord({
+      level: "warning",
+      retainUntil: YESTERDAY,
+    });
+    await seedConductRecord({
+      level: "termination",
+      retainUntil: YESTERDAY,
+      priorWarningId: warning,
+    });
+
+    // First tick takes the termination; the warning was cited when it ran.
+    expect(await sweepConductRecords(NOW)).toBe(1);
+    expect(await sweepConductRecords(NOW)).toBe(1);
+    expect((await conductIds()).records).toEqual([]);
+  });
+
+  it("deletes a due report with no remaining link, keeps a future one", async () => {
+    const due = await seedConductReport(YESTERDAY);
+    const future = await seedConductReport(TOMORROW);
+    expect(await sweepConductReports(NOW)).toBe(1);
+    expect((await conductIds()).reports).toEqual([future]);
+    expect(due).not.toBe(future);
+  });
+
+  it("keeps a due report linked to a retained record", async () => {
+    const record = await seedConductRecord({ retainUntil: TOMORROW });
+    const report = await seedConductReport(YESTERDAY);
+    await getDb()
+      .insert(schema.conductRecordReports)
+      .values({ recordId: record, reportId: report });
+
+    expect(await sweepConductReports(NOW)).toBe(0);
+    expect((await conductIds()).reports).toEqual([report]);
+    expect(
+      await getDb().select().from(schema.conductRecordReports),
+    ).toHaveLength(1);
+  });
+
+  it("frees a report in the same run once its record is purged", async () => {
+    const record = await seedConductRecord({ retainUntil: YESTERDAY });
+    const report = await seedConductReport(YESTERDAY);
+    await getDb()
+      .insert(schema.conductRecordReports)
+      .values({ recordId: record, reportId: report });
+
+    const counts = await runRetentionSweeps(NOW, { minOrphanAgeMs: 0 });
+    expect(counts.conductRecords).toBe(1);
+    expect(counts.conductReports).toBe(1);
+    expect(await conductIds()).toEqual({ records: [], reports: [] });
+  });
+
+  it("binds a fixed number of parameters (cutoff and cap)", () => {
+    expect(conductRecordsDelete(NOW).toSQL().params).toHaveLength(2);
+    expect(conductReportsDelete(NOW).toSQL().params).toHaveLength(2);
+  });
+
+  it("uses the retain_until indexes", async () => {
+    for (const [query, indexName] of [
+      [conductRecordsDelete(NOW).toSQL(), "conduct_records_retain_until_idx"],
+      [conductReportsDelete(NOW).toSQL(), "conduct_reports_retain_until_idx"],
+    ] as const) {
+      const { results } = await env.DB.prepare(
+        `EXPLAIN QUERY PLAN ${query.sql}`,
+      )
+        .bind(...query.params)
+        .all<{ detail: string }>();
+      expect(results.some((r) => r.detail.includes(indexName))).toBe(true);
+    }
   });
 });

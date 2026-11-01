@@ -5,6 +5,7 @@ import { getDb, schema } from "#/server/db";
 import { emailFingerprint } from "#/server/conduct/email-fingerprint.server";
 import {
   anyTerminated,
+  blockedEmailsAmong,
   isBlockedEmail,
   isTerminated,
   possibleTerminatedNameMatches,
@@ -241,6 +242,37 @@ describe("isBlockedEmail", () => {
     const id = await suspend(user.id, "2026-11-01", "2030-01-01");
     await block(id, "suspended@example.com");
     expect(await isBlockedEmail("suspended@example.com")).toBe(false);
+  });
+});
+
+describe("blockedEmailsAmong", () => {
+  it("answers an empty list with an empty set", async () => {
+    expect(await blockedEmailsAmong([])).toEqual(new Set());
+  });
+
+  it("returns the normalized blocked addresses of unlifted terminations only", async () => {
+    await createTermination({ emails: ["live@example.com"] });
+    await createTermination({
+      emails: ["lifted@example.com"],
+      liftedAt: Temporal.Instant.from("2026-12-01T00:00:00Z"),
+    });
+    const user = await createUser();
+    const suspension = await suspend(user.id, "2026-11-01", "2030-01-01");
+    await getDb()
+      .insert(schema.conductBlockedEmails)
+      .values({
+        recordId: suspension,
+        emailHmac: await emailFingerprint("suspended@example.com"),
+      });
+
+    expect(
+      await blockedEmailsAmong([
+        " LIVE@Example.com ",
+        "lifted@example.com",
+        "suspended@example.com",
+        "other@example.com",
+      ]),
+    ).toEqual(new Set(["live@example.com"]));
   });
 });
 

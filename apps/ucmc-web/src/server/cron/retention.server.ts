@@ -12,6 +12,14 @@
  *     pass over the private bucket's screenshot and Album-original
  *     prefixes (the Album ones wait a day before an orphan goes)
  *
+ *   - conduct records and reports past their `retain_until` (ADR 0012),
+ *     at most `EXPIRED_ROWS_PER_TICK` of each per tick. Records go first,
+ *     so a report their deletion frees can follow. A warning that a
+ *     remaining record cites as `prior_warning_id` is skipped (the FK is
+ *     NO ACTION) and goes after that record; a report linked to a
+ *     remaining record is skipped so the link cascade cannot drop its
+ *     evidence. Link and fingerprint rows go by cascade; audit rows stay.
+ *
  * It also sweeps `email_sends`, which is **not** a privacy promise and
  * is deliberately absent from the list above. That table carries no
  * recipient (see `0078_email_sends.sql`), so nothing in it is personal
@@ -52,7 +60,7 @@
  * `runRetentionSweeps()` runs them sequentially and aggregates a
  * structured result that the scheduled handler logs.
  */
-import { and, asc, eq, isNotNull, lt } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lt, sql } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 
 import { screenshotPurgeDue } from "#/server/cron/screenshot-retention";
@@ -169,6 +177,8 @@ export interface SweepCounts {
   webauthnCeremonies: number;
   expiredSessions: number;
   expiredMagicLinks: number;
+  conductRecords: number;
+  conductReports: number;
 }
 
 /** Housekeeping, not a privacy promise — see the module doc comment. */
@@ -249,6 +259,73 @@ export async function sweepExpiredMagicLinks(
     schema.magicLinks.expiresAt,
     now,
   );
+}
+
+/**
+ * The DELETE behind the conduct record sweep: up to `EXPIRED_ROWS_PER_TICK`
+ * records whose `retain_until` is before `now`, oldest first, binding the
+ * cutoff and the cap only. A warning some remaining record cites through
+ * `prior_warning_id` is left: that FK is NO ACTION (the termination CHECK
+ * forbids nulling it), so deleting it would fail the whole statement. It
+ * goes on a later tick, after its termination. Exported for the plan test.
+ */
+export function conductRecordsDelete(now: Temporal.Instant) {
+  const db = getDb();
+  const { id, retainUntil } = schema.conductRecords;
+  const due = db
+    .select({ id })
+    .from(schema.conductRecords)
+    .where(
+      and(
+        lt(retainUntil, now),
+        sql`NOT EXISTS (SELECT 1 FROM conduct_records AS t WHERE t.prior_warning_id = ${id})`,
+      ),
+    )
+    .orderBy(asc(retainUntil))
+    .limit(EXPIRED_ROWS_PER_TICK);
+  return db
+    .delete(schema.conductRecords)
+    .where(inSubquery(id, due))
+    .returning({ id });
+}
+
+/**
+ * The DELETE behind the conduct report sweep. A report linked to any
+ * remaining record is left: `conduct_record_reports` cascades from the
+ * report, so deleting it would silently drop evidence a retained record
+ * still cites. Runs after the record sweep for that reason.
+ */
+export function conductReportsDelete(now: Temporal.Instant) {
+  const db = getDb();
+  const { id, retainUntil } = schema.conductReports;
+  const due = db
+    .select({ id })
+    .from(schema.conductReports)
+    .where(
+      and(
+        lt(retainUntil, now),
+        sql`NOT EXISTS (SELECT 1 FROM conduct_record_reports AS l WHERE l.report_id = ${id})`,
+      ),
+    )
+    .orderBy(asc(retainUntil))
+    .limit(EXPIRED_ROWS_PER_TICK);
+  return db
+    .delete(schema.conductReports)
+    .where(inSubquery(id, due))
+    .returning({ id });
+}
+
+/** Run before `sweepConductReports`, so a report a record held can follow. */
+export async function sweepConductRecords(
+  now: Temporal.Instant,
+): Promise<number> {
+  return (await conductRecordsDelete(now)).length;
+}
+
+export async function sweepConductReports(
+  now: Temporal.Instant,
+): Promise<number> {
+  return (await conductReportsDelete(now)).length;
 }
 
 export async function sweepRejectedRegistrations(
@@ -646,6 +723,8 @@ export async function runRetentionSweeps(
     webauthnCeremonies: 0,
     expiredSessions: 0,
     expiredMagicLinks: 0,
+    conductRecords: 0,
+    conductReports: 0,
   };
 
   // Each sweep is wrapped so an error in one (e.g. R2 outage) doesn't
@@ -678,6 +757,9 @@ export async function runRetentionSweeps(
     { name: "webauthnCeremonies", run: () => sweepWebauthnCeremonies(now) },
     { name: "expiredSessions", run: () => sweepExpiredSessions(now) },
     { name: "expiredMagicLinks", run: () => sweepExpiredMagicLinks(now) },
+    // Records before reports: see `sweepConductReports`.
+    { name: "conductRecords", run: () => sweepConductRecords(now) },
+    { name: "conductReports", run: () => sweepConductReports(now) },
   ];
 
   for (const sweep of sweeps) {

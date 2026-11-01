@@ -31,8 +31,8 @@ export const APPEAL_LINE =
  * The formal notice to the member. Plain text: the member statement
  * as the officers wrote it, then the dates and the §9.3 appeal line
  * unless the statement already carries them. A lift notice says only
- * that the sanction was lifted: **the internal lift reason never goes
- * in an email.** `conduct.notice` is not suppressible, so there is no
+ * that the sanction was lifted: **the lift reason never goes
+ * in an email** (it is in the member's data export). `conduct.notice` is not suppressible, so there is no
  * unsubscribe header.
  *
  * The record form's preview calls this too, so what an officer reviews

@@ -629,8 +629,8 @@ export async function liftConductRecordAction(
       level: record.level,
     }),
   });
-  // The lift reason is internal and is not sent: the member is told the
-  // level and that it was lifted.
+  // The lift reason is not emailed (it is in the member's data export): the
+  // member is told the level and that it was lifted.
   if (record.level !== "note") {
     await sendNotice({
       recordId: record.id,

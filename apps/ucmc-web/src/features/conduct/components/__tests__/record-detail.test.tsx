@@ -127,3 +127,19 @@ describe("LiftDialog appeal field", () => {
     expect(screen.queryByLabelText(/Appeal outcome/)).toBeNull();
   });
 });
+
+describe("LiftDialog reason field", () => {
+  it("tells the officer the member can see the reason in their export", async () => {
+    const { userEvent } = await import("@testing-library/user-event").then(
+      (m) => ({ userEvent: m.default }),
+    );
+    const user = userEvent.setup();
+    await renderDetail(detail({ level: "warning" }));
+    await user.click(screen.getByRole("button", { name: "Lift" }));
+    expect(
+      screen.getByLabelText("Reason", { selector: "textarea" }),
+    ).toHaveAccessibleDescription(
+      "The member can see this reason in their data export.",
+    );
+  });
+});

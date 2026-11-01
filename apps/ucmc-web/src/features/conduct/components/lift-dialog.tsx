@@ -64,8 +64,12 @@ export function LiftDialog({
           </DialogHeader>
           <div className="space-y-1">
             <Label htmlFor="lift-reason">Reason</Label>
+            <p id="lift-reason-hint" className="text-xs text-muted-foreground">
+              The member can see this reason in their data export.
+            </p>
             <Textarea
               id="lift-reason"
+              aria-describedby="lift-reason-hint"
               value={reason}
               maxLength={CONDUCT_LIMITS.liftReasonMax}
               onChange={(e) => setReason(e.target.value)}
