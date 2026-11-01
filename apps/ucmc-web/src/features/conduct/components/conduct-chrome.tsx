@@ -15,6 +15,16 @@ export function ConfidentialEyebrow() {
   );
 }
 
+/** "Exec only" beside anything the member never sees. */
+export function ExecOnlyTag() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      <LockKeyhole aria-hidden="true" className="size-3" />
+      Exec only
+    </span>
+  );
+}
+
 const TABS = [
   { to: "/conduct/reports", label: "Reports" },
   { to: "/conduct/records", label: "Records" },

@@ -21,6 +21,7 @@ import {
   SCOC_STATE_LABELS,
   formatPlainDate,
 } from "#/features/conduct/lib/format";
+import { Panel } from "#/features/conduct/components/panel";
 import type { ConductRecordDetail } from "#/features/conduct/server/record-fns";
 
 /**
@@ -67,6 +68,9 @@ export function ScocReferralPanel({
     "returned",
   );
   const [note, setNote] = useState("");
+  // Most records are never referred, so the SCCS guidance and the form
+  // open only when an officer starts a referral.
+  const [referring, setReferring] = useState(false);
 
   if (record.liftedAt) {
     return null;
@@ -77,46 +81,56 @@ export function ScocReferralPanel({
       return null;
     }
     return (
-      <section className="space-y-3" aria-label="SCCS referral">
-        <h2 className="text-lg font-semibold">SCCS referral</h2>
-        <SccsContactInfo />
-        <form
-          className="flex flex-wrap items-end gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            refer.mutate(
-              { recordId: record.publicId, referredOn },
-              {
-                onSuccess: () => toast.success("Marked as referred to SCCS."),
-                onError: (err) => toast.error(err.message),
-              },
-            );
-          }}
-        >
-          <div className="space-y-1">
-            <Label htmlFor="referred-on">Referred on</Label>
-            <Input
-              id="referred-on"
-              type="date"
-              value={referredOn}
-              onChange={(e) => setReferredOn(e.target.value)}
-            />
-          </div>
+      <Panel title="SCCS referral">
+        <p className="text-muted-foreground">Not referred.</p>
+        {referring ? null : (
           <Button
-            type="submit"
             variant="outline"
-            disabled={referredOn === "" || refer.isPending}
+            size="sm"
+            onClick={() => setReferring(true)}
           >
-            Mark as referred
+            Refer to SCCS
           </Button>
-        </form>
-      </section>
+        )}
+        {referring ? <SccsContactInfo /> : null}
+        {referring ? (
+          <form
+            className="flex flex-wrap items-end gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              refer.mutate(
+                { recordId: record.publicId, referredOn },
+                {
+                  onSuccess: () => toast.success("Marked as referred to SCCS."),
+                  onError: (err) => toast.error(err.message),
+                },
+              );
+            }}
+          >
+            <div className="space-y-1">
+              <Label htmlFor="referred-on">Referred on</Label>
+              <Input
+                id="referred-on"
+                type="date"
+                value={referredOn}
+                onChange={(e) => setReferredOn(e.target.value)}
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={referredOn === "" || refer.isPending}
+            >
+              Mark as referred
+            </Button>
+          </form>
+        ) : null}
+      </Panel>
     );
   }
 
   return (
-    <section className="space-y-3" aria-label="SCCS referral">
-      <h2 className="text-lg font-semibold">SCCS referral</h2>
+    <Panel title="SCCS referral">
       <p className="text-sm">
         {SCOC_STATE_LABELS[record.scocState]}
         {record.referredOn
@@ -179,6 +193,6 @@ export function ScocReferralPanel({
           ) : null}
         </>
       ) : null}
-    </section>
+    </Panel>
   );
 }

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { RecordDetail } from "#/features/conduct/components/record-detail";
@@ -116,9 +117,6 @@ describe("RecordDetail", () => {
 
 describe("LiftDialog appeal field", () => {
   it("is asked for on a termination only", async () => {
-    const { userEvent } = await import("@testing-library/user-event").then(
-      (m) => ({ userEvent: m.default }),
-    );
     const user = userEvent.setup();
     const first = await renderDetail(detail({ level: "termination" }));
     await user.click(screen.getByRole("button", { name: "Lift" }));
@@ -132,9 +130,6 @@ describe("LiftDialog appeal field", () => {
 
 describe("LiftDialog reason field", () => {
   it("tells the officer the member can see the reason in their export", async () => {
-    const { userEvent } = await import("@testing-library/user-event").then(
-      (m) => ({ userEvent: m.default }),
-    );
     const user = userEvent.setup();
     await renderDetail(detail({ level: "warning" }));
     await user.click(screen.getByRole("button", { name: "Lift" }));
@@ -186,5 +181,88 @@ describe("LiftDialog reason field", () => {
     expect(
       screen.getByRole("link", { name: "View the corrected record" }),
     ).toHaveAttribute("href", "/conduct/crec_old");
+  });
+});
+
+describe("RecordDetail case file", () => {
+  it("reads the history as a timeline, not audit action names", async () => {
+    await renderDetail(
+      detail({
+        history: [
+          {
+            id: "a1",
+            action: "conduct.record_created",
+            actorName: "Pat",
+            metadataJson: JSON.stringify({ level: "warning" }),
+            createdAt: Temporal.Instant.from("2026-10-01T12:00:00Z"),
+          },
+          {
+            id: "a2",
+            action: "conduct.sccs_outcome",
+            actorName: "Pat",
+            metadataJson: JSON.stringify({ from: "referred", to: "returned" }),
+            createdAt: Temporal.Instant.from("2026-10-02T12:00:00Z"),
+          },
+        ],
+      }),
+    );
+    const timeline = within(screen.getByRole("region", { name: "Timeline" }));
+    expect(timeline.getByText("Record created")).toBeInTheDocument();
+    expect(
+      timeline.getByText("SCCS returned it to the club"),
+    ).toBeInTheDocument();
+    expect(timeline.queryByText(/conduct\./)).toBeNull();
+  });
+
+  it("states a termination vote against the two-thirds line", async () => {
+    await renderDetail(
+      detail({
+        level: "termination",
+        votesFor: 5,
+        votesAgainst: 1,
+        votesAbstain: 0,
+        committeeSize: 7,
+        voteHeldOn: Temporal.PlainDate.from("2026-10-01"),
+      }),
+    );
+    expect(
+      screen.getByText(
+        "5 for, 1 against, 0 abstaining, of 7. Two thirds is 5.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows when the notice went out, and has no notice section for a note", async () => {
+    await renderDetail(
+      detail({ noticeSentAt: Temporal.Instant.from("2026-10-01T15:00:00Z") }),
+    );
+    expect(screen.getByText(/^Emailed /)).toBeInTheDocument();
+    expect(screen.queryByText("Notice not sent")).toBeNull();
+  });
+
+  it("keeps internal notes marked as exec only", async () => {
+    await renderDetail(detail({ internalNotes: "Private." }));
+    const notes = within(
+      screen.getByRole("region", { name: "Internal notes" }),
+    );
+    expect(notes.getByText("Exec only")).toBeInTheDocument();
+    expect(notes.getByText("Private.")).toBeInTheDocument();
+  });
+
+  it("keeps the SCCS referral form closed until an officer starts one", async () => {
+    const user = userEvent.setup();
+    await renderDetail(detail());
+    const panel = within(screen.getByRole("region", { name: "SCCS referral" }));
+    expect(panel.getByText("Not referred.")).toBeInTheDocument();
+    expect(
+      panel.queryByRole("button", { name: "Mark as referred" }),
+    ).toBeNull();
+
+    await user.click(panel.getByRole("button", { name: "Refer to SCCS" }));
+
+    expect(
+      panel.getByRole("button", { name: "Mark as referred" }),
+    ).toBeVisible();
+    expect(panel.getByText("513-556-6814")).toBeInTheDocument();
   });
 });

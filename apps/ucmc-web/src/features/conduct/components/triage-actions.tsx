@@ -214,13 +214,23 @@ export function TriageActions({ report }: { report: ConductReportSummary }) {
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Button size="sm" onClick={() => setMode("start")}>
+      <Button size="sm" aria-haspopup="dialog" onClick={() => setMode("start")}>
         Start a record
       </Button>
-      <Button size="sm" variant="outline" onClick={() => setMode("attach")}>
+      <Button
+        size="sm"
+        variant="outline"
+        aria-haspopup="dialog"
+        onClick={() => setMode("attach")}
+      >
         Attach to a record
       </Button>
-      <Button size="sm" variant="outline" onClick={() => setMode("dismiss")}>
+      <Button
+        size="sm"
+        variant="outline"
+        aria-haspopup="dialog"
+        onClick={() => setMode("dismiss")}
+      >
         Dismiss
       </Button>
       {mode === "start" ? (

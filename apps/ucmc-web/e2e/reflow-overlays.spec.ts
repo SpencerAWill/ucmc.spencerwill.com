@@ -78,6 +78,8 @@ const SIGNED_IN_ROUTES = [
   "/members/waivers",
   "/gear",
   "/gear/loans",
+  "/conduct/reports",
+  "/conduct/records",
   "/access",
   "/settings",
   "/feedback/site/triage",

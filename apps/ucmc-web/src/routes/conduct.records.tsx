@@ -30,7 +30,9 @@ function RecordsPage() {
     <div className="space-y-4">
       {hasPermission("conduct:manage") ? (
         <div className="flex justify-end">
-          <Button onClick={() => setCreating(true)}>New record</Button>
+          <Button aria-haspopup="dialog" onClick={() => setCreating(true)}>
+            New record
+          </Button>
         </div>
       ) : null}
       <RecordsTable />

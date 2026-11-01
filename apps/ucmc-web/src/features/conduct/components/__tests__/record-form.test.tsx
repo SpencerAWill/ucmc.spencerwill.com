@@ -75,7 +75,16 @@ async function chooseLevel(
   user: ReturnType<typeof userEvent.setup>,
   level: string,
 ) {
-  await user.selectOptions(screen.getByLabelText("Level"), level);
+  await user.click(levelRadio(level));
+}
+
+/** A level's card in the picker; its name starts with the level's label. */
+function levelRadio(level: string) {
+  const label = level.charAt(0).toUpperCase() + level.slice(1);
+  return within(screen.getByRole("radiogroup", { name: "Level" })).getByRole(
+    "radio",
+    { name: new RegExp(`^${label}`) },
+  );
 }
 
 async function fillStatement(user: ReturnType<typeof userEvent.setup>) {
@@ -219,17 +228,19 @@ describe("RecordForm", () => {
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
   });
 
-  it("drops the sanction levels and shows the SCCS number for a possible SCOC violation", async () => {
+  it("locks the sanction levels and shows the SCCS number for a possible SCOC violation", async () => {
     const user = userEvent.setup();
     renderForm();
     await chooseLevel(user, "warning");
     await user.click(screen.getByLabelText("Possible SCOC violation"));
 
-    const options = within(screen.getByLabelText("Level"))
-      .getAllByRole("option")
-      .map((o) => o.textContent);
-    expect(options).toEqual(["Note"]);
-    expect(screen.getByLabelText("Level")).toHaveValue("note");
+    expect(levelRadio("note")).toBeChecked();
+    for (const level of ["warning", "suspension", "termination"]) {
+      expect(levelRadio(level)).toBeDisabled();
+      expect(levelRadio(level)).toHaveAccessibleName(
+        expect.stringContaining("goes to SCCS first"),
+      );
+    }
     expect(screen.getByText("513-556-6814")).toBeInTheDocument();
   });
 
@@ -259,11 +270,13 @@ describe("RecordForm", () => {
 
     expect(screen.getByText("Sam Subject")).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /Member/ })).toBeNull();
-    expect(screen.getByLabelText("Level")).toHaveValue("suspension");
-    const levels = within(screen.getByLabelText("Level"))
-      .getAllByRole("option")
-      .map((o) => o.textContent);
-    expect(levels).not.toContain("Note");
+    expect(levelRadio("suspension")).toBeChecked();
+    expect(
+      within(screen.getByRole("radiogroup", { name: "Level" })).queryByRole(
+        "radio",
+        { name: /^Note/ },
+      ),
+    ).toBeNull();
     expect(screen.queryByLabelText("Possible SCOC violation")).toBeNull();
     expect(screen.getByLabelText("Member statement")).toHaveValue(
       "You are suspended.",
