@@ -34,7 +34,7 @@
  *     fails the record stands and the action throws `DEACTIVATION_FAILED`.
  *   - **A sent statement is corrected by superseding it.** Creating with
  *     `supersedesPublicId` lifts the old record in the same batch
- *     ("Superseded by …", its block dropped, a `conduct.lifted` audit row
+ *     ("Superseded by a corrected notice", its block dropped, a `conduct.lifted` audit row
  *     carrying `supersededBy`) and sends no lift notice: the new record's
  *     notice says it corrects an earlier one. If the old record changed
  *     after it was read, the batch aborts and nothing is written.
@@ -155,6 +155,9 @@ const DEACTIVATION_FAILED =
 
 const CORRECTION_LOST_RACE =
   "The record being corrected changed; reload it and try again.";
+
+// The member reads this in their export, so it names no record id.
+const SUPERSEDED_LIFT_REASON = "Superseded by a corrected notice";
 
 function today(): Temporal.PlainDate {
   return Temporal.Now.plainDateISO(CLUB_TIME_ZONE);
@@ -609,7 +612,7 @@ export async function createConductRecordAction(
                   set: {
                     liftedAt: now,
                     liftedBy: principal.userId,
-                    liftReason: `Superseded by ${publicId}`,
+                    liftReason: SUPERSEDED_LIFT_REASON,
                     updatedAt: now,
                     retainUntil: retentionFor({ ...old, liftedAt: now }, now),
                   },

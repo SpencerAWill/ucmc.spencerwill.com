@@ -1220,7 +1220,7 @@ describe("correcting a sent notice", () => {
     const oldRow = await recordRow(old);
     expect(oldRow.liftedAt).not.toBeNull();
     expect(oldRow.liftedBy).toBe(manager.id);
-    expect(oldRow.liftReason).toBe(`Superseded by ${publicId}`);
+    expect(oldRow.liftReason).toBe("Superseded by a corrected notice");
     // Lifted, so the five-year clock runs from the lift.
     expect(oldRow.retainUntil).not.toBeNull();
     expect(oldRow.memberStatement).toBe(STATEMENT);
