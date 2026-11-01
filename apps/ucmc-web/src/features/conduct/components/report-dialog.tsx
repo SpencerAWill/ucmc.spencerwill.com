@@ -127,17 +127,21 @@ function ReportForm({ onSubmitted }: { onSubmitted: () => void }) {
   const [body, setBody] = useState("");
   const [possibleScoc, setPossibleScoc] = useState(false);
 
+  const subjectFields: Pick<
+    SubmitReportInput,
+    "subjectDescription" | "subjectPublicId"
+  > = unknownName
+    ? { subjectDescription: description }
+    : member === null
+      ? {}
+      : { subjectPublicId: member.publicId };
   const input = {
-    ...(unknownName
-      ? { subjectDescription: description }
-      : member === null
-        ? {}
-        : { subjectPublicId: member.publicId }),
+    ...subjectFields,
     occurredOn,
     location,
     body,
     possibleScoc,
-  } as SubmitReportInput;
+  } satisfies SubmitReportInput;
   const valid = submitReportSchema.safeParse(input).success;
 
   return (

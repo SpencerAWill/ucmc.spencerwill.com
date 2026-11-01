@@ -952,7 +952,39 @@ describe("reads", () => {
     expect(await ids({ level: "warning" })).toEqual([w]);
     expect(await ids({ active: true })).toEqual([n]);
     expect(await ids({ active: false })).toEqual([w]);
+    expect(await ids({ lifted: true })).toEqual([w]);
+    expect(await ids({ lifted: false })).toEqual([n]);
     expect(await ids({ referred: true })).toEqual([n]);
+  });
+
+  it("counts as active only what is in force today, in club time", async () => {
+    await signInManager();
+    const s = await subject();
+    const today = Temporal.Now.plainDateISO("America/New_York");
+    const day = (offset: number) => today.add({ days: offset }).toString();
+    const { publicId: ended } = await create(
+      warning(s.id, { startsOn: day(-10), endsOn: day(-1) }),
+    );
+    const { publicId: endsToday } = await create(
+      warning(s.id, { startsOn: day(-10), endsOn: day(0) }),
+    );
+    const { publicId: upcoming } = await create(
+      warning(s.id, { startsOn: day(2), endsOn: day(9) }),
+    );
+    const { publicId: open } = await create(warning(s.id));
+
+    const ids = async (active: boolean) =>
+      (await actions.listConductRecordsAction({ active }))
+        .map((r) => r.publicId)
+        .sort();
+    expect(await ids(true)).toEqual([endsToday, open, upcoming].sort());
+    expect(await ids(false)).toEqual([ended]);
+    // Lapsed but never lifted: the "Lifted" filter does not claim it.
+    expect(
+      (await actions.listConductRecordsAction({ lifted: true })).map(
+        (r) => r.publicId,
+      ),
+    ).toEqual([]);
   });
 
   it("summarises a member's records and standing", async () => {
@@ -1107,6 +1139,21 @@ describe("conduct.notice", () => {
     expect(after.memberStatement).toBe(before.memberStatement);
     expect(after.level).toBe("warning");
     expect(after.noticeSentAt).not.toBeNull();
+  });
+
+  it("refuses to empty a note's text, but not a warning's internal notes", async () => {
+    await signInManager();
+    const s = await subject();
+    const { publicId: n } = await create(note(s.id));
+    await expect(
+      actions.updateConductRecordAction({ recordId: n, internalNotes: "" }),
+    ).rejects.toThrow("A note needs its text");
+    expect((await recordRow(n)).internalNotes).toBe(NOTES);
+    expect(await auditRows(n)).toHaveLength(1);
+
+    const { publicId: w } = await create(warning(s.id));
+    await actions.updateConductRecordAction({ recordId: w, internalNotes: "" });
+    expect((await recordRow(w)).internalNotes).toBeNull();
   });
 
   it("links a correction to the old record and leaves its statement alone", async () => {

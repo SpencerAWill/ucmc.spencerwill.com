@@ -246,6 +246,9 @@ export function RecordForm({
   } as CreateRecordInput;
 
   const parsed = createRecordSchema.safeParse(input);
+  // Explains the disabled submit: a suspension's dates are required.
+  const datesNeeded =
+    level === "suspension" && (startsOn === "" || endsOn === "");
   const unresolved = hasStatement && UNRESOLVED_PLACEHOLDER.test(statement);
   const valid = subject !== null && parsed.success && !unresolved;
   const voteIssue =
@@ -390,6 +393,14 @@ export function RecordForm({
                 />
               </div>
             </>
+          ) : null}
+          {datesNeeded ? (
+            <p
+              id="conduct-dates-hint"
+              className="text-sm text-muted-foreground sm:col-span-2"
+            >
+              A suspension needs a start date and an end date.
+            </p>
           ) : null}
         </div>
       ) : (

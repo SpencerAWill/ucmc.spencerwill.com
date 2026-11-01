@@ -29,6 +29,7 @@ import type {
 } from "#/../drizzle/schema";
 import type { AuditEventInput } from "#/server/audit/audit-log.server";
 import { buildConditionalAuditEventStatement } from "#/server/audit/audit-log.server";
+import { CLUB_TIME_ZONE } from "#/config/time";
 import { getDb, inJsonArray, insertStatements, schema } from "#/server/db";
 import { PROFILE_NAME_SEARCH, searchMatches } from "#/server/db/search";
 
@@ -342,21 +343,29 @@ export type ConductRecordDetailRow = NonNullable<
 
 export interface RecordListFilter {
   level?: ConductLevel;
+  /** In force: unlifted, and `ends_on` NULL or not past (Ruling 27). */
   active?: boolean;
+  lifted?: boolean;
   referred?: boolean;
 }
 
 export async function listRecords(
   filter: RecordListFilter,
   viewerUserId: string,
+  today: Temporal.PlainDate = Temporal.Now.plainDateISO(CLUB_TIME_ZONE),
 ) {
   const conditions: SQL[] = [notSubject(viewerUserId)];
   if (filter.level !== undefined) {
     conditions.push(eq(records.level, filter.level));
   }
   if (filter.active !== undefined) {
+    // Text dates compare as strings. An upcoming record is in force.
+    const inForce = sql`(${records.liftedAt} is null and (${records.endsOn} is null or ${records.endsOn} >= ${today.toString()}))`;
+    conditions.push(filter.active ? inForce : sql`not ${inForce}`);
+  }
+  if (filter.lifted !== undefined) {
     conditions.push(
-      filter.active ? isNull(records.liftedAt) : isNotNull(records.liftedAt),
+      filter.lifted ? isNotNull(records.liftedAt) : isNull(records.liftedAt),
     );
   }
   if (filter.referred !== undefined) {

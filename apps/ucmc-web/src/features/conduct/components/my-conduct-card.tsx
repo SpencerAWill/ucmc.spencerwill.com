@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { Card, CardContent } from "#/components/ui/card";
+import { CLUB_TIME_ZONE } from "#/config/time";
 import { myActiveSanctionsQueryOptions } from "#/features/conduct/api/queries";
 import { formatPlainDate } from "#/features/conduct/lib/format";
 import {
@@ -11,7 +12,7 @@ import type { MyActiveSanction } from "#/features/conduct/server/record-fns";
 
 function dates(sanction: MyActiveSanction): string {
   const { startsOn, endsOn } = sanction;
-  const today = Temporal.Now.plainDateISO("America/New_York");
+  const today = Temporal.Now.plainDateISO(CLUB_TIME_ZONE);
   const upcoming =
     startsOn !== null && Temporal.PlainDate.compare(startsOn, today) > 0;
   if (upcoming) {

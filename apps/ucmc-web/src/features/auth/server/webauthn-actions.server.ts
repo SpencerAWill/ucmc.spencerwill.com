@@ -20,6 +20,7 @@ import {
   renameCredentialForUser,
   updateCredentialCounter,
 } from "#/features/auth/server/passkey-credentials.server";
+import { CONDUCT_TERMINATED } from "#/features/auth/lib/post-sign-in";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { loadPrincipal } from "#/server/auth/principal.server";
 import { isTerminated } from "#/server/conduct/standing.server";
@@ -245,7 +246,7 @@ export async function webauthnAuthenticateFinishAction(args: {
   // session in any account status. Checked after verification so an
   // unverified response learns nothing about the credential's owner.
   if (await isTerminated(principal.userId)) {
-    return { ok: false, reason: "conduct_terminated" };
+    return { ok: false, reason: CONDUCT_TERMINATED };
   }
 
   await openSession(principal.userId);

@@ -74,8 +74,8 @@ const serverEnvSchema = z.object({
   SESSION_SECRET: optional(z.string().min(32)),
   // HMAC key for the conduct email block (`conduct/email-fingerprint`):
   // a terminated member's addresses are kept only as keyed hashes.
-  // Rotating it silently lifts every block, so it is never rotated
-  // without re-fingerprinting.
+  // Rotation lifts every block; it cannot be re-hashed, because plain
+  // addresses are never stored.
   CONDUCT_EMAIL_KEY: optional(z.string().min(32)),
   TURNSTILE_SECRET_KEY: optional(z.string().min(1)),
 

@@ -200,7 +200,9 @@ export const liftSchema = z.object({
 
 export const listRecordsSchema = z.object({
   level: z.enum(["note", "warning", "suspension", "termination"]).optional(),
+  /** In force: unlifted, and no end date or one not yet past. */
   active: z.boolean().optional(),
+  lifted: z.boolean().optional(),
   referred: z.boolean().optional(),
 });
 

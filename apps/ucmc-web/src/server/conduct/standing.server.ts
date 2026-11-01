@@ -61,17 +61,15 @@ export async function standingFor(
       ),
     );
 
-  let suspendedUntil: Temporal.PlainDate | null = null;
-  for (const row of rows) {
-    if (
+  const suspendedUntil = rows.reduce<Temporal.PlainDate | null>(
+    (latest, row) =>
       row.level === "suspension" &&
       row.endsOn !== null &&
-      (suspendedUntil === null ||
-        Temporal.PlainDate.compare(row.endsOn, suspendedUntil) > 0)
-    ) {
-      suspendedUntil = row.endsOn;
-    }
-  }
+      (latest === null || Temporal.PlainDate.compare(row.endsOn, latest) > 0)
+        ? row.endsOn
+        : latest,
+    null,
+  );
   return {
     terminated: rows.some((r) => r.level === "termination"),
     suspendedUntil,

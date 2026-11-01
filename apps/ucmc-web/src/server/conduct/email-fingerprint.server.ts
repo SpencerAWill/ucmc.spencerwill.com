@@ -13,8 +13,9 @@
  * to start without it; locally, throwing is what keeps a termination from
  * being written without its block, or a sign-in from skipping the check.
  *
- * Rotating the key orphans every stored fingerprint, which lifts every
- * block at once.
+ * Rotating the key orphans every stored fingerprint: rotation lifts
+ * every block; it cannot be re-hashed, because plain addresses are never
+ * stored.
  */
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import { serverEnv } from "#/server/env.server";

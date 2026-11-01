@@ -145,6 +145,22 @@ describe("RecordForm", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("says a suspension needs both dates while either is missing", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await chooseLevel(user, "suspension");
+    await fillStatement(user);
+    const submit = screen.getByRole("button", { name: "Review and send" });
+    const hint = "A suspension needs a start date and an end date.";
+    expect(screen.getByText(hint)).toBeVisible();
+    expect(submit).toBeDisabled();
+    await user.type(screen.getByLabelText("Starts on"), "2026-11-01");
+    expect(screen.getByText(hint)).toBeVisible();
+    await user.type(screen.getByLabelText("Ends on"), "2026-12-01");
+    expect(screen.queryByText(hint)).toBeNull();
+    expect(submit).toBeEnabled();
+  });
+
   it("has no member statement for a note", () => {
     renderForm();
     expect(screen.queryByLabelText("Member statement")).not.toBeInTheDocument();

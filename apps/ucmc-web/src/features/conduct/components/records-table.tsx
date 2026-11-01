@@ -25,7 +25,7 @@ import {
 import type { ListRecordsFilter } from "#/features/conduct/server/limits";
 import type { ConductRecordSummary } from "#/features/conduct/server/record-fns";
 
-type StatusFilter = "all" | "not_lifted" | "lifted" | "referred";
+type StatusFilter = "all" | "active" | "lifted" | "referred";
 
 function filterFor(level: string, status: StatusFilter): ListRecordsFilter {
   const filter: ListRecordsFilter = {};
@@ -33,10 +33,10 @@ function filterFor(level: string, status: StatusFilter): ListRecordsFilter {
   if (parsedLevel.success) {
     filter.level = parsedLevel.data;
   }
-  if (status === "not_lifted") {
+  if (status === "active") {
     filter.active = true;
   } else if (status === "lifted") {
-    filter.active = false;
+    filter.lifted = true;
   } else if (status === "referred") {
     filter.referred = true;
   }
@@ -87,9 +87,7 @@ export function RecordsTable() {
             onChange={(e) => setStatus(e.target.value as StatusFilter)}
           >
             <NativeSelectOption value="all">All</NativeSelectOption>
-            <NativeSelectOption value="not_lifted">
-              Not lifted
-            </NativeSelectOption>
+            <NativeSelectOption value="active">Active</NativeSelectOption>
             <NativeSelectOption value="lifted">Lifted</NativeSelectOption>
             <NativeSelectOption value="referred">
               Referred to SCCS

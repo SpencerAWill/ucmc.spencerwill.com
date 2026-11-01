@@ -263,7 +263,7 @@ export async function consumeMagicLinkAction(
       ? await isClaimBlocked(proof.email, existing?.userId ?? null)
       : await isTerminated(existing.userId);
   if (refused) {
-    return { ok: false, reason: "conduct_terminated" };
+    return { ok: false, reason: CONDUCT_TERMINATED };
   }
   if (existing) {
     // First time an officer-pre-added (unclaimed) user clicks a magic

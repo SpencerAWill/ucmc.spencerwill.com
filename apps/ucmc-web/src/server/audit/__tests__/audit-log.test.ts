@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, getTableColumns, sql } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { getDb, runBatch, schema } from "#/server/db";
@@ -6,6 +6,7 @@ import { attachPrimaryEmail } from "#/server/db/test-helpers";
 import {
   buildAuditEventStatement,
   buildBulkAuditEventStatements,
+  buildConditionalAuditEventStatement,
   recordAuditEvent,
   recordAuditEvents,
 } from "#/server/audit/audit-log.server";
@@ -311,3 +312,64 @@ describe("FK cascade on user delete (the SET NULL invariant)", () => {
 // covers the recorder side (`recordAuditEvent`, the `build*` helpers,
 // and FK cascade behavior) — those stay shared because every feature
 // records events.
+
+describe("buildConditionalAuditEventStatement", () => {
+  // Its INSERT ... SELECT lists values positionally, in the order the
+  // table declares its columns. A reordered or added column must fail
+  // here, not land a value in the wrong column.
+  it("writes every column where the table expects it", async () => {
+    expect(Object.keys(getTableColumns(schema.auditLog))).toEqual([
+      "id",
+      "actorUserId",
+      "action",
+      "targetUserId",
+      "targetType",
+      "targetId",
+      "metadataJson",
+      "createdAt",
+    ]);
+    const actor = await seedUser();
+    const target = await seedUser();
+    const before = Temporal.Now.instant().epochMilliseconds;
+    await runBatch([
+      buildConditionalAuditEventStatement(
+        {
+          actorUserId: actor,
+          action: "role.assigned",
+          targetUserId: target,
+          targetType: "role",
+          targetId: "role_x",
+          metadata: { k: "v" },
+        },
+        sql`1`,
+      ),
+    ]);
+    const [row] = await getDb().select().from(schema.auditLog);
+    expect(row.id).toMatch(/^audit_/);
+    expect(row).toMatchObject({
+      actorUserId: actor,
+      action: "role.assigned",
+      targetUserId: target,
+      targetType: "role",
+      targetId: "role_x",
+      metadataJson: JSON.stringify({ k: "v" }),
+    });
+    expect(row.createdAt.epochMilliseconds).toBeGreaterThanOrEqual(
+      before - 1000,
+    );
+    expect(row.createdAt.epochMilliseconds).toBeLessThanOrEqual(
+      Temporal.Now.instant().epochMilliseconds + 1000,
+    );
+  });
+
+  it("writes nothing when the condition is false", async () => {
+    const actor = await seedUser();
+    await runBatch([
+      buildConditionalAuditEventStatement(
+        { actorUserId: actor, action: "role.assigned" },
+        sql`0`,
+      ),
+    ]);
+    expect(await getDb().select().from(schema.auditLog)).toHaveLength(0);
+  });
+});

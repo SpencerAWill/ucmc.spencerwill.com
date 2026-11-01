@@ -701,6 +701,10 @@ export async function updateConductRecordAction(
 ): Promise<{ ok: true }> {
   const principal = await requireConductManager();
   const record = await loadForMutation(input.recordId, principal.userId);
+  // A note's text is all it holds, as `createRecordSchema` insists.
+  if (record.level === "note" && input.internalNotes === "") {
+    throw new Error("A note needs its text");
+  }
   const now = Temporal.Now.instant();
   // The statement is locked once the notice has gone out. That needs no
   // check here: `updateRecordSchema` carries `internalNotes` only, and
