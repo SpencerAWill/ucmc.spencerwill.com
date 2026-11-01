@@ -44,13 +44,14 @@ The rest of the auth rule is split by area under `.claude/rules/auth/` and loads
 
 - **`/register/profile` accepts a proof cookie (no `users` row yet) or a session (no `profiles` row)**; `requireRegistrationContext` exposes `{ source, email }`. It collects only what an exec needs to review: legal + preferred name, phone, UC affiliation, policies ack.
 - **Optional parts live on `/register/pending`** (`PasskeyEnrollmentCard`, `ContactsEditor`, `BioEditor`), whose writes need a session but not approval. It redirects an approved principal to its `?redirect` or `/my/profile`, and a profile-less one back to `/register/profile`.
+- **A terminated member cannot sign in, register or claim** (`feature-conduct.md`): magic-link consume, passkey finish and profile submit refuse with `CONDUCT_TERMINATED`, which the client sends to `TERMINATED_HREF` (both in `lib/post-sign-in.ts`). Any new path that creates a `users` row, approves one, or opens a session checks `isBlockedEmail` / `isTerminated` from `src/server/conduct/standing.server.ts` too.
 - **Officer pre-add ("unclaimed")**: `members:manage` officers add by name + email (`status="unclaimed"`, `placeholder_name`, `unclaimed_at`, primary email with `verified_at = NULL`). The first magic-link click approves on profile submit, skipping the queue. Audit chain `member.pre_added` → `member.claimed`. Excluded from the directory and from role assignment.
 
 **Return path (`?redirect=`)**
 
 - **Account-status guards take the `beforeLoad` args object** (`requireApproved({ context, location })`), never a bare `QueryClient`, so a route can't forget the location.
 - **The value is `pathname + searchStr`**, never the hash (`beforeLoad` doesn't see it during SSR).
-- **`/register/pending` and `/deactivated` call `requireAuth` themselves**, which is why neither may be a return path.
+- **`/register/pending` and `/deactivated` call `requireAuth` themselves**, which is why neither may be a return path. `/deactivated` skips it for a termination: when `getMyTerminationNoticeFn` answers (own session or a proof cookie for a blocked address) or on `?reason=terminated` (see `feature-conduct.md`).
 - **`signInReturnPath` returns nothing inside the sign-in flow** (`/sign-in`, `/auth/`, `/register/`, `/verify-email`) or for `/deactivated`.
 - **Every hop re-checks with `safeReturnPath`**: one leading `/` not followed by `/` or `\`, no control characters, length-capped. Never a bare `startsWith("/")`. Its property test requires the origin unchanged.
 - **Navigate with `navigate({ href })`, never `{ to }`**, so the search string survives.

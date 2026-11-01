@@ -72,6 +72,22 @@ export const NOTIFICATION_CATEGORIES = {
     alwaysOnReason:
       "You'll always be told when you're holding overdue club gear.",
   },
+  "conduct.report_received": {
+    label: "New conduct reports",
+    description:
+      "An email when a member files a conduct report, so you can triage it.",
+    defaultEnabled: true,
+    suppressible: true,
+  },
+  "conduct.notice": {
+    label: "Conduct notices",
+    description:
+      "Formal notices from the Executive Committee about your membership.",
+    defaultEnabled: true,
+    suppressible: false,
+    alwaysOnReason:
+      "The Executive Committee must be able to reach you about your membership.",
+  },
 } as const satisfies Record<string, NotificationCategoryMeta>;
 
 export type NotificationCategory = keyof typeof NOTIFICATION_CATEGORIES;

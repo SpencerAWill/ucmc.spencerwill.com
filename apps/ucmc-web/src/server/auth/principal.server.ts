@@ -283,7 +283,7 @@ export async function loadPrincipal(userId: string): Promise<Principal | null> {
 // ── role-id constants ──────────────────────────────────────────────────
 
 const ANONYMOUS_ROLE_ID = "role_anonymous";
-const SYSTEM_ADMIN_ROLE_ID = "role_system_admin";
+export const SYSTEM_ADMIN_ROLE_ID = "role_system_admin";
 
 // ── anonymous permissions ──────────────────────────────────────────────
 

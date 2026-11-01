@@ -40,6 +40,7 @@ export default defineConfig({
             RESEND_FROM: "test@localhost",
             RESEND_FROM_NAME: "UCMC Test",
             SESSION_SECRET: "test-session-secret-at-least-32-chars-long-xxx",
+            CONDUCT_EMAIL_KEY: "test-conduct-email-key-at-least-32-chars-long",
           },
           // A SECOND, deliberately un-migrated D1. `test/apply-migrations.ts`
           // migrates `env.DB` to head before every file, which makes it

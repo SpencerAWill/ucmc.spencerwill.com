@@ -32,6 +32,10 @@ import {
 import { normalizeEmail } from "#/server/auth/email-normalize";
 import { generatePublicId } from "#/server/auth/ids";
 import {
+  blockedEmailsAmong,
+  isBlockedEmail,
+} from "#/server/conduct/standing.server";
+import {
   getDb,
   inJsonArray,
   insertStatements,
@@ -227,7 +231,14 @@ export async function preAddUnclaimedMembersAction(args: {
     .select({ email: schema.userEmails.email })
     .from(schema.userEmails)
     .where(inJsonArray(schema.userEmails.email, candidateEmails));
-  const takenSet = new Set(taken.map((row) => row.email));
+  // A terminated member's address is reported as taken, the answer the
+  // officer would have had while the account existed, so the list tells
+  // them nothing about conduct. Pre-adding it would let a later claim or
+  // approval restore the membership the termination ended.
+  const takenSet = new Set([
+    ...taken.map((row) => row.email),
+    ...(await blockedEmailsAmong(candidateEmails)),
+  ]);
 
   const toCreate: OkEntry[] = [];
   for (const entry of okEntries) {
@@ -450,6 +461,10 @@ export async function editUnclaimedMemberAction(args: {
 
   if (before.name === newName && before.email === newEmail) {
     return { ok: true };
+  }
+  // Same answer as an address another account holds (see pre-add).
+  if (before.email !== newEmail && (await isBlockedEmail(newEmail))) {
+    return { ok: false, error: { kind: "email_taken" } };
   }
 
   // Always include the user UPDATE in the batch (even when only email

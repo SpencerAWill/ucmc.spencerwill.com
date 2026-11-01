@@ -8,7 +8,11 @@ import { Checkbox } from "#/components/ui/checkbox";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { useSubmitProfile } from "#/features/auth/api/use-submit-profile";
-import { postSignInHref } from "#/features/auth/lib/post-sign-in";
+import {
+  CONDUCT_TERMINATED,
+  postSignInHref,
+  TERMINATED_HREF,
+} from "#/features/auth/lib/post-sign-in";
 import { useAppForm } from "#/lib/form/form";
 import { useUnsavedChangesGuard } from "#/lib/form/use-unsaved-changes-guard";
 import type { RegistrationInput } from "#/server/profile/profile-schemas";
@@ -102,7 +106,14 @@ export function ProfileForm({
             ),
           });
         },
-        onError: () => {
+        onError: async (error) => {
+          if (error.message === CONDUCT_TERMINATED) {
+            // Nothing was saved; clear the unsaved-changes guard so it
+            // doesn't hold the navigation (same reason as onSuccess).
+            form.reset(form.state.values);
+            await navigate({ href: TERMINATED_HREF });
+            return;
+          }
           toast.error("Couldn’t save your profile. Please try again.");
         },
       });

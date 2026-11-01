@@ -4,7 +4,11 @@ import { z } from "zod";
 import { PageContainer } from "#/components/layouts/page-container";
 import { Button } from "#/components/ui/button";
 import { useConsumeMagicLink } from "#/features/auth/api/use-consume-magic-link";
-import { callbackHref } from "#/features/auth/lib/post-sign-in";
+import {
+  callbackHref,
+  CONDUCT_TERMINATED,
+  TERMINATED_HREF,
+} from "#/features/auth/lib/post-sign-in";
 import { safeReturnPath } from "#/lib/safe-return-path";
 import type { ConsumeMagicLinkResult } from "#/features/auth/server/server-fns";
 
@@ -30,6 +34,7 @@ const callbackSearchSchema = z.object({
  *   user w/o profile             → /register/profile   (session opened)
  *   user + profile, not approved → /register/pending    (session opened)
  *   user + profile, approved     → search.redirect ?? "/"
+ *   terminated address           → /deactivated?reason=terminated
  *
  * The two /register pages carry `?redirect` along; the table itself is
  * `callbackHref` / `postSignInHref`, shared with both passkey paths.
@@ -58,6 +63,10 @@ function CallbackPage() {
     // the user was on before clicking the magic link.
     mutation.mutate(token, {
       onSuccess: async (result: ConsumeMagicLinkResult) => {
+        if (!result.ok && result.reason === CONDUCT_TERMINATED) {
+          await navigate({ href: TERMINATED_HREF });
+          return;
+        }
         if (!result.ok) {
           await navigate({
             to: "/sign-in",

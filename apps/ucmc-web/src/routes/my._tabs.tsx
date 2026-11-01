@@ -5,6 +5,7 @@ import { RouteErrorFallback } from "#/components/error-page";
 import { AccountTabsBar } from "#/components/layouts/account-tabs-bar";
 import { PageContainer } from "#/components/layouts/page-container";
 import { profileQueryOptions } from "#/features/auth/api/queries";
+import { MyConductCard } from "#/features/conduct/components/my-conduct-card";
 
 /**
  * Pathless layout for the personal-account tabs: a greeting header, a
@@ -49,6 +50,9 @@ function AccountTabsLayout() {
       <h1 className="mb-4 text-2xl font-semibold">
         {preferredName ? `Hi ${preferredName}!` : "Hi there!"}
       </h1>
+      <div className="mb-4 empty:hidden">
+        <MyConductCard />
+      </div>
       <AccountTabsBar />
       <Outlet />
     </PageContainer>

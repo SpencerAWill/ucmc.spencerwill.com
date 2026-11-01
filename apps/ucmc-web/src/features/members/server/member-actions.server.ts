@@ -45,8 +45,17 @@ import {
   requireMembersManager,
 } from "#/features/members/server/permissions.server";
 import { optionalProfileText } from "#/server/profile/profile-schemas";
+import {
+  anyTerminated,
+  possibleTerminatedNameMatches,
+} from "#/server/conduct/standing.server";
+import { deactivateUserStatements } from "#/server/members/deactivate.server";
 
 // ── auth helpers ────────────────────────────────────────────────────────
+
+/** Approval and reactivation both refuse while a termination stands. */
+const MEMBERSHIP_TERMINATED =
+  "Membership terminated; lift the termination first";
 
 /** Requires the caller to be signed in and approved. */
 async function requireApprovedPrincipal(): Promise<Principal> {
@@ -70,6 +79,13 @@ export interface PendingRegistration {
   fullName: string | null;
   preferredName: string | null;
   ucAffiliation: string | null;
+  /**
+   * Public ids of unlifted terminations whose subject shares this
+   * applicant's name. A hint only. `null` unless the viewer holds
+   * `conduct:view` (never `[]`, so a non-viewer cannot tell whether
+   * anything matched), and never a record about the viewer.
+   */
+  conductMatch: string[] | null;
 }
 
 const DEFAULT_LIMIT = 50;
@@ -85,7 +101,7 @@ export async function listPendingRegistrationsAction(opts: {
   limit?: number;
   offset?: number;
 }): Promise<PendingRegistrationsPage> {
-  await requireMembersManager();
+  const principal = await requireMembersManager();
   const db = getDb();
 
   const conditions = [eq(schema.users.status, "pending")];
@@ -137,6 +153,14 @@ export async function listPendingRegistrationsAction(opts: {
       .offset(opts.offset ?? 0),
   ]);
 
+  const canSeeConduct = principal.permissions.includes("conduct:view");
+  const matches = canSeeConduct
+    ? await possibleTerminatedNameMatches(
+        rows.flatMap((r) => (r.fullName === null ? [] : [r.fullName])),
+        principal.userId,
+      )
+    : null;
+
   return {
     total: countResult[0]?.value ?? 0,
     rows: rows.map((r) => ({
@@ -147,6 +171,8 @@ export async function listPendingRegistrationsAction(opts: {
       fullName: r.fullName,
       preferredName: r.preferredName,
       ucAffiliation: r.ucAffiliation,
+      conductMatch:
+        matches === null ? null : (r.fullName && matches.get(r.fullName)) || [],
     })),
   };
 }
@@ -666,6 +692,14 @@ export async function approveRegistrationsAction(
   userIds: string[],
 ): Promise<{ ok: true }> {
   const approver = await requireMembersManager();
+
+  // A terminated registrant is not approved until exec lifts the
+  // termination. Checked before anything is written, so a batch with one
+  // terminated id approves no one.
+  if (await anyTerminated(userIds)) {
+    throw new Error(MEMBERSHIP_TERMINATED);
+  }
+
   const db = getDb();
 
   // `.returning({ id })` so the audit + role-grant operate on the
@@ -680,7 +714,16 @@ export async function approveRegistrationsAction(
       approvedAt: Temporal.Now.instant(),
       approvedBy: approver.userId,
     })
-    .where(inJsonArray(schema.users.id, userIds))
+    // Only a pending registration is approved here. Without the status
+    // filter an unclaimed pre-add (which never passed the queue, and
+    // might hold a terminated member's address) or a deactivated
+    // account would be approved by id.
+    .where(
+      and(
+        inJsonArray(schema.users.id, userIds),
+        eq(schema.users.status, "pending"),
+      ),
+    )
     .returning({ id: schema.users.id });
   const updatedIds = updated.map(({ id }) => id);
 
@@ -749,41 +792,7 @@ export async function deactivateMembersAction(
     throw new Error("Cannot deactivate yourself");
   }
 
-  const db = getDb();
-
-  // Only deactivate users that are currently approved. `.returning`
-  // gives the IDs of rows the UPDATE actually touched so the audit
-  // log doesn't claim a deactivation for users in the wrong status.
-  const updated = await db
-    .update(schema.users)
-    .set({ status: "deactivated", deactivatedAt: Temporal.Now.instant() })
-    .where(
-      and(
-        inJsonArray(schema.users.id, userIds),
-        eq(schema.users.status, "approved"),
-      ),
-    )
-    .returning({ id: schema.users.id });
-
-  // Immediately revoke all sessions so deactivated users are signed
-  // out. Limit to the IDs that actually transitioned — purging
-  // sessions for users we didn't touch would be a surprise side
-  // effect of the bulk endpoint.
-  const updatedIds = updated.map(({ id }) => id);
-  if (updatedIds.length > 0) {
-    await db
-      .delete(schema.sessions)
-      .where(inJsonArray(schema.sessions.userId, updatedIds));
-  }
-
-  // Sequential audit — see `audit-log.server.ts` residual case.
-  await recordAuditEvents(
-    updatedIds.map((userId) => ({
-      actorUserId: principal.userId,
-      action: "member.deactivated",
-      targetUserId: userId,
-    })),
-  );
+  await deactivateUserStatements(principal.userId, userIds);
 
   return { ok: true };
 }
@@ -794,6 +803,14 @@ export async function reactivateMembersAction(
   userIds: string[],
 ): Promise<{ ok: true }> {
   const approver = await requireMembersManager();
+
+  // A terminated member comes back only once exec lifts the termination.
+  // Checked before anything is written, so a bulk request with one
+  // terminated id reactivates no one.
+  if (await anyTerminated(userIds)) {
+    throw new Error(MEMBERSHIP_TERMINATED);
+  }
+
   const db = getDb();
 
   // Only reactivate users that are currently deactivated. Clear

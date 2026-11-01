@@ -38,3 +38,4 @@ Small, easily reversed choices don't need one; a comment beside the code is the 
 | [0009](0009-tanstack-charts-through-chartsurface.md) | TanStack Charts, mounted through `ChartSurface`                                  | Accepted |
 | [0010](0010-registries-not-rows.md)                  | Settings, notifications, prompts and badges are registries; permissions are rows | Accepted |
 | [0011](0011-validate-the-worker-env-fail-closed.md)  | Validate the Worker env up front; a bad config fails every request               | Accepted |
+| [0012](0012-conduct-records-outlive-the-account.md)  | Conduct records outlive the account; known addresses are blocked by keyed hash   | Accepted |

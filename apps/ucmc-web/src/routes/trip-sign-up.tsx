@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { myConductStandingQueryOptions } from "#/features/conduct/api/queries";
 import { useAuth } from "#/features/auth/api/use-auth";
 import { getWaiverStatusIfApproved } from "#/features/auth/guards";
 import { PageContainer } from "#/components/layouts/page-container";
@@ -29,8 +30,16 @@ export const Route = createFileRoute("/trip-sign-up")({
   // approved member — see the component for why signing up isn't gated
   // on attestation. A failed read drops the banner rather than erroring
   // the page: the form is the point, the banner is a nicety.
-  loader: ({ context }) =>
-    getWaiverStatusIfApproved(context.queryClient).catch(() => null),
+  // The suspension notice is public-safe: signed-out visitors get null.
+  loader: async ({ context }) => {
+    const [waiver] = await Promise.all([
+      getWaiverStatusIfApproved(context.queryClient).catch(() => null),
+      context.queryClient
+        .ensureQueryData(myConductStandingQueryOptions())
+        .catch(() => null),
+    ]);
+    return waiver;
+  },
   component: TripSignUpPage,
 });
 
@@ -40,6 +49,8 @@ function TripSignUpPage() {
     ...myWaiverStatusQueryOptions(),
     enabled: isApproved,
   });
+
+  const { data: standing } = useQuery(myConductStandingQueryOptions());
 
   return (
     <PageContainer width="app" className="space-y-6">
@@ -53,6 +64,7 @@ function TripSignUpPage() {
       </header>
 
       <TripSignupEmbed
+        suspendedUntil={standing?.suspendedUntil ?? null}
         waiverCurrent={
           isApproved && waiver !== undefined ? waiver.current !== null : null
         }

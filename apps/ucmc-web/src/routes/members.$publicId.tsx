@@ -15,6 +15,7 @@ import {
 import { useState } from "react";
 
 import { PageContainer } from "#/components/layouts/page-container";
+import { MemberConductCard } from "#/features/conduct/components/member-conduct-card";
 import { memberDetailQueryOptions } from "#/features/members/api/queries";
 import { useDeactivateMembers } from "#/features/members/api/use-deactivate-members";
 import { useReactivateMembers } from "#/features/members/api/use-reactivate-members";
@@ -108,6 +109,7 @@ function MemberDetailPage() {
   // principal. Reading the flag here is what makes the emulated view
   // honest.
   const canViewWaivers = hasAnyPermission(WAIVER_VIEW_PERMISSIONS);
+  const canViewConduct = hasPermission("conduct:view");
   const isSelf = principal?.userId === member?.userId;
 
   // Everything an officer sees lives behind one tab. Taking the
@@ -119,7 +121,8 @@ function MemberDetailPage() {
       canViewWaivers ||
       canManage ||
       canRevokeSessions ||
-      canAssignRoles);
+      canAssignRoles ||
+      canViewConduct);
 
   if (isLoading) {
     return (
@@ -335,7 +338,13 @@ function MemberDetailPage() {
 
           {hasOfficerTab ? (
             <TabsContent value="officer" className="space-y-4">
-              <TripReadiness items={readiness} />
+              {readiness.length > 0 ? (
+                <TripReadiness items={readiness} />
+              ) : null}
+
+              {canViewConduct ? (
+                <MemberConductCard userId={member.userId} />
+              ) : null}
 
               {canViewPrivate ? (
                 <FieldEmergencyCard

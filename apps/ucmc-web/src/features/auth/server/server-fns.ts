@@ -27,6 +27,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import type { CONDUCT_TERMINATED } from "#/features/auth/lib/post-sign-in";
 import { safeReturnPath } from "#/lib/safe-return-path";
 import {
   detailsInputSchema,
@@ -50,7 +51,10 @@ export type ConsumeMagicLinkResult =
       hasProfile: boolean;
     }
   | { ok: true; mode: "proof"; intent: schema.MagicLinkIntent }
-  | { ok: false; reason: "invalid" | "rate_limited" };
+  | {
+      ok: false;
+      reason: "invalid" | "rate_limited" | typeof CONDUCT_TERMINATED;
+    };
 
 // ── request / consume ────────────────────────────────────────────────────
 

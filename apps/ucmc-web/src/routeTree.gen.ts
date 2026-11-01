@@ -17,6 +17,7 @@ import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AntiHazingRouteImport } from './routes/anti-hazing'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as ConductRouteImport } from './routes/conduct'
 import { Route as ConstitutionRouteImport } from './routes/constitution'
 import { Route as DeactivatedRouteImport } from './routes/deactivated'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
@@ -54,6 +55,10 @@ import { Route as AnalyticsPlatformRouteImport } from './routes/analytics.platfo
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as CalendarIndexRouteImport } from './routes/calendar.index'
 import { Route as CalendarPublicIdRouteImport } from './routes/calendar.$publicId'
+import { Route as ConductIndexRouteImport } from './routes/conduct.index'
+import { Route as ConductPublicIdRouteImport } from './routes/conduct.$publicId'
+import { Route as ConductRecordsRouteImport } from './routes/conduct.records'
+import { Route as ConductReportsRouteImport } from './routes/conduct.reports'
 import { Route as DevOutboxRouteImport } from './routes/dev.outbox'
 import { Route as FeedbackIndexRouteImport } from './routes/feedback.index'
 import { Route as FeedbackClubRouteImport } from './routes/feedback.club'
@@ -139,6 +144,11 @@ const AuditRoute = AuditRouteImport.update({
 const CalendarRoute = CalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConductRoute = ConductRouteImport.update({
+  id: '/conduct',
+  path: '/conduct',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConstitutionRoute = ConstitutionRouteImport.update({
@@ -325,6 +335,26 @@ const CalendarPublicIdRoute = CalendarPublicIdRouteImport.update({
   id: '/$publicId',
   path: '/$publicId',
   getParentRoute: () => CalendarRoute,
+} as any)
+const ConductIndexRoute = ConductIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ConductRoute,
+} as any)
+const ConductPublicIdRoute = ConductPublicIdRouteImport.update({
+  id: '/$publicId',
+  path: '/$publicId',
+  getParentRoute: () => ConductRoute,
+} as any)
+const ConductRecordsRoute = ConductRecordsRouteImport.update({
+  id: '/records',
+  path: '/records',
+  getParentRoute: () => ConductRoute,
+} as any)
+const ConductReportsRoute = ConductReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => ConductRoute,
 } as any)
 const DevOutboxRoute = DevOutboxRouteImport.update({
   id: '/dev/outbox',
@@ -567,6 +597,7 @@ export interface FileRoutesByFullPath {
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/calendar': typeof CalendarRouteWithChildren
+  '/conduct': typeof ConductRouteWithChildren
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -602,6 +633,9 @@ export interface FileRoutesByFullPath {
   '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
+  '/conduct/$publicId': typeof ConductPublicIdRoute
+  '/conduct/records': typeof ConductRecordsRoute
+  '/conduct/reports': typeof ConductReportsRoute
   '/dev/outbox': typeof DevOutboxRoute
   '/feedback/club': typeof FeedbackClubRoute
   '/feedback/site': typeof FeedbackSiteRouteWithChildren
@@ -615,6 +649,7 @@ export interface FileRoutesByFullPath {
   '/register/profile': typeof RegisterProfileRoute
   '/analytics/': typeof AnalyticsIndexRoute
   '/calendar/': typeof CalendarIndexRoute
+  '/conduct/': typeof ConductIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
@@ -687,6 +722,9 @@ export interface FileRoutesByTo {
   '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
+  '/conduct/$publicId': typeof ConductPublicIdRoute
+  '/conduct/records': typeof ConductRecordsRoute
+  '/conduct/reports': typeof ConductReportsRoute
   '/dev/outbox': typeof DevOutboxRoute
   '/feedback/club': typeof FeedbackClubRoute
   '/gazette/$publicId': typeof GazettePublicIdRoute
@@ -699,6 +737,7 @@ export interface FileRoutesByTo {
   '/register/profile': typeof RegisterProfileRoute
   '/analytics': typeof AnalyticsIndexRoute
   '/calendar': typeof CalendarIndexRoute
+  '/conduct': typeof ConductIndexRoute
   '/feedback': typeof FeedbackIndexRoute
   '/gazette': typeof GazetteIndexRoute
   '/gear': typeof GearIndexRoute
@@ -741,6 +780,7 @@ export interface FileRoutesById {
   '/anti-hazing': typeof AntiHazingRoute
   '/audit': typeof AuditRoute
   '/calendar': typeof CalendarRouteWithChildren
+  '/conduct': typeof ConductRouteWithChildren
   '/constitution': typeof ConstitutionRoute
   '/deactivated': typeof DeactivatedRoute
   '/disclaimer': typeof DisclaimerRoute
@@ -776,6 +816,9 @@ export interface FileRoutesById {
   '/analytics/platform': typeof AnalyticsPlatformRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/calendar/$publicId': typeof CalendarPublicIdRoute
+  '/conduct/$publicId': typeof ConductPublicIdRoute
+  '/conduct/records': typeof ConductRecordsRoute
+  '/conduct/reports': typeof ConductReportsRoute
   '/dev/outbox': typeof DevOutboxRoute
   '/feedback/club': typeof FeedbackClubRoute
   '/feedback/site': typeof FeedbackSiteRouteWithChildren
@@ -791,6 +834,7 @@ export interface FileRoutesById {
   '/register/profile': typeof RegisterProfileRoute
   '/analytics/': typeof AnalyticsIndexRoute
   '/calendar/': typeof CalendarIndexRoute
+  '/conduct/': typeof ConductIndexRoute
   '/feedback/': typeof FeedbackIndexRoute
   '/gazette/': typeof GazetteIndexRoute
   '/gear/': typeof GearIndexRoute
@@ -836,6 +880,7 @@ export interface FileRouteTypes {
     | '/anti-hazing'
     | '/audit'
     | '/calendar'
+    | '/conduct'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
@@ -871,6 +916,9 @@ export interface FileRouteTypes {
     | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
+    | '/conduct/$publicId'
+    | '/conduct/records'
+    | '/conduct/reports'
     | '/dev/outbox'
     | '/feedback/club'
     | '/feedback/site'
@@ -884,6 +932,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/analytics/'
     | '/calendar/'
+    | '/conduct/'
     | '/feedback/'
     | '/gazette/'
     | '/gear/'
@@ -956,6 +1005,9 @@ export interface FileRouteTypes {
     | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
+    | '/conduct/$publicId'
+    | '/conduct/records'
+    | '/conduct/reports'
     | '/dev/outbox'
     | '/feedback/club'
     | '/gazette/$publicId'
@@ -968,6 +1020,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/analytics'
     | '/calendar'
+    | '/conduct'
     | '/feedback'
     | '/gazette'
     | '/gear'
@@ -1009,6 +1062,7 @@ export interface FileRouteTypes {
     | '/anti-hazing'
     | '/audit'
     | '/calendar'
+    | '/conduct'
     | '/constitution'
     | '/deactivated'
     | '/disclaimer'
@@ -1044,6 +1098,9 @@ export interface FileRouteTypes {
     | '/analytics/platform'
     | '/auth/callback'
     | '/calendar/$publicId'
+    | '/conduct/$publicId'
+    | '/conduct/records'
+    | '/conduct/reports'
     | '/dev/outbox'
     | '/feedback/club'
     | '/feedback/site'
@@ -1059,6 +1116,7 @@ export interface FileRouteTypes {
     | '/register/profile'
     | '/analytics/'
     | '/calendar/'
+    | '/conduct/'
     | '/feedback/'
     | '/gazette/'
     | '/gear/'
@@ -1103,6 +1161,7 @@ export interface RootRouteChildren {
   AntiHazingRoute: typeof AntiHazingRoute
   AuditRoute: typeof AuditRoute
   CalendarRoute: typeof CalendarRouteWithChildren
+  ConductRoute: typeof ConductRouteWithChildren
   ConstitutionRoute: typeof ConstitutionRoute
   DeactivatedRoute: typeof DeactivatedRoute
   DisclaimerRoute: typeof DisclaimerRoute
@@ -1203,6 +1262,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/calendar'
       preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conduct': {
+      id: '/conduct'
+      path: '/conduct'
+      fullPath: '/conduct'
+      preLoaderRoute: typeof ConductRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/constitution': {
@@ -1463,6 +1529,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/calendar/$publicId'
       preLoaderRoute: typeof CalendarPublicIdRouteImport
       parentRoute: typeof CalendarRoute
+    }
+    '/conduct/': {
+      id: '/conduct/'
+      path: '/'
+      fullPath: '/conduct/'
+      preLoaderRoute: typeof ConductIndexRouteImport
+      parentRoute: typeof ConductRoute
+    }
+    '/conduct/$publicId': {
+      id: '/conduct/$publicId'
+      path: '/$publicId'
+      fullPath: '/conduct/$publicId'
+      preLoaderRoute: typeof ConductPublicIdRouteImport
+      parentRoute: typeof ConductRoute
+    }
+    '/conduct/records': {
+      id: '/conduct/records'
+      path: '/records'
+      fullPath: '/conduct/records'
+      preLoaderRoute: typeof ConductRecordsRouteImport
+      parentRoute: typeof ConductRoute
+    }
+    '/conduct/reports': {
+      id: '/conduct/reports'
+      path: '/reports'
+      fullPath: '/conduct/reports'
+      preLoaderRoute: typeof ConductReportsRouteImport
+      parentRoute: typeof ConductRoute
     }
     '/dev/outbox': {
       id: '/dev/outbox'
@@ -1825,6 +1919,23 @@ const CalendarRouteWithChildren = CalendarRoute._addFileChildren(
   CalendarRouteChildren,
 )
 
+interface ConductRouteChildren {
+  ConductPublicIdRoute: typeof ConductPublicIdRoute
+  ConductRecordsRoute: typeof ConductRecordsRoute
+  ConductReportsRoute: typeof ConductReportsRoute
+  ConductIndexRoute: typeof ConductIndexRoute
+}
+
+const ConductRouteChildren: ConductRouteChildren = {
+  ConductPublicIdRoute: ConductPublicIdRoute,
+  ConductRecordsRoute: ConductRecordsRoute,
+  ConductReportsRoute: ConductReportsRoute,
+  ConductIndexRoute: ConductIndexRoute,
+}
+
+const ConductRouteWithChildren =
+  ConductRoute._addFileChildren(ConductRouteChildren)
+
 interface FeedbackSiteRouteChildren {
   FeedbackSiteIndexRoute: typeof FeedbackSiteIndexRoute
   FeedbackSiteTriageIndexRoute: typeof FeedbackSiteTriageIndexRoute
@@ -1982,6 +2093,7 @@ const rootRouteChildren: RootRouteChildren = {
   AntiHazingRoute: AntiHazingRoute,
   AuditRoute: AuditRoute,
   CalendarRoute: CalendarRouteWithChildren,
+  ConductRoute: ConductRouteWithChildren,
   ConstitutionRoute: ConstitutionRoute,
   DeactivatedRoute: DeactivatedRoute,
   DisclaimerRoute: DisclaimerRoute,

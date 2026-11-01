@@ -12,6 +12,8 @@ import { and, eq, ne } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { normalizeEmail } from "#/server/auth/email-normalize";
+import { CONDUCT_TERMINATED } from "#/features/auth/lib/post-sign-in";
+import { isBlockedEmail, isTerminated } from "#/server/conduct/standing.server";
 import { generatePublicId } from "#/server/auth/ids";
 import {
   consumeMagicLink,
@@ -126,6 +128,22 @@ async function resolveUserByEmail(
   };
 }
 
+/**
+ * Whether a termination forbids this address, or this not-yet-approved
+ * account, from becoming a member. `isBlockedEmail` throws without
+ * `CONDUCT_EMAIL_KEY`, and that is left to surface: failing open would
+ * let every blocked address back in.
+ */
+async function isClaimBlocked(
+  email: string,
+  userId: string | null,
+): Promise<boolean> {
+  if (await isBlockedEmail(email)) {
+    return true;
+  }
+  return userId !== null && (await isTerminated(userId));
+}
+
 // ── timing jitter ────────────────────────────────────────────────────────
 // All paths through requestMagicLinkAction must take roughly the same
 // wall-clock time so an attacker can't distinguish "known email" (DB hit +
@@ -187,6 +205,9 @@ export async function requestMagicLinkAction(args: {
 
     const existingUserId = await findUserIdByEmail(args.email);
 
+    // No conduct-block check here: skipping the send for a terminated
+    // member's address would be the one observable difference on this
+    // endpoint. The link goes out and `consumeMagicLinkAction` refuses it.
     await requestMagicLink({
       email: args.email,
       intent: existingUserId ? "login" : "register",
@@ -227,6 +248,22 @@ export async function consumeMagicLinkAction(
   const existing = await resolveUserByEmail(proof.email);
   if (existing === BROKEN_USER_FK) {
     return { ok: false, reason: "invalid" };
+  }
+  // A terminated member gets no session, whatever their account status:
+  // a deactivated one would otherwise land on /sign-in with no word of
+  // why (the principal loader drops the session), and an approved one is
+  // left behind when the deactivation after the record failed. A
+  // terminated member's address cannot start an account either: neither
+  // a fresh registration (the purged member coming back) nor a claim of
+  // an officer pre-add, which `submitProfileAction` would approve
+  // outright. Nothing is written, so the refusal leaves no cookie or
+  // session.
+  const refused =
+    existing === null || existing.status === "unclaimed"
+      ? await isClaimBlocked(proof.email, existing?.userId ?? null)
+      : await isTerminated(existing.userId);
+  if (refused) {
+    return { ok: false, reason: CONDUCT_TERMINATED };
   }
   if (existing) {
     // First time an officer-pre-added (unclaimed) user clicks a magic
@@ -401,6 +438,26 @@ export async function exportMyDataAction(): Promise<{
     revocationReason: string | null;
     notes: string | null;
   }>;
+  /**
+   * The member's own warnings, suspensions and terminations,
+   * lifted or not. Notes, internal notes, SCCS fields, ids and anything
+   * that names a reporter are exec-only and never appear here.
+   */
+  conductNotices: Array<{
+    level: schema.ConductLevel;
+    statement: string | null;
+    startsOn: Temporal.PlainDate | null;
+    endsOn: Temporal.PlainDate | null;
+    liftedAt: Temporal.Instant | null;
+    liftReason: string | null;
+  }>;
+  /** Reports the member filed: their own text only, no triage state. */
+  conductReportsFiled: Array<{
+    occurredOn: Temporal.PlainDate;
+    location: string | null;
+    body: string;
+    createdAt: Temporal.Instant;
+  }>;
   excluded: string[];
 }> {
   const principal = await loadCurrentPrincipal();
@@ -425,6 +482,8 @@ export async function exportMyDataAction(): Promise<{
     emergencyContacts,
     userRoles,
     attestations,
+    conductNotices,
+    conductReportsFiled,
   ] = await db.batch([
     db.select().from(schema.users).where(eq(schema.users.id, userId)).limit(1),
     db
@@ -467,6 +526,33 @@ export async function exportMyDataAction(): Promise<{
       })
       .from(schema.waiverAttestations)
       .where(eq(schema.waiverAttestations.userId, userId)),
+    db
+      .select({
+        level: schema.conductRecords.level,
+        statement: schema.conductRecords.memberStatement,
+        startsOn: schema.conductRecords.startsOn,
+        endsOn: schema.conductRecords.endsOn,
+        liftedAt: schema.conductRecords.liftedAt,
+        liftReason: schema.conductRecords.liftReason,
+      })
+      .from(schema.conductRecords)
+      .where(
+        and(
+          eq(schema.conductRecords.subjectUserId, userId),
+          ne(schema.conductRecords.level, "note"),
+        ),
+      )
+      .orderBy(schema.conductRecords.createdAt),
+    db
+      .select({
+        occurredOn: schema.conductReports.occurredOn,
+        location: schema.conductReports.location,
+        body: schema.conductReports.body,
+        createdAt: schema.conductReports.createdAt,
+      })
+      .from(schema.conductReports)
+      .where(eq(schema.conductReports.reporterUserId, userId))
+      .orderBy(schema.conductReports.createdAt),
   ]);
 
   return {
@@ -478,6 +564,8 @@ export async function exportMyDataAction(): Promise<{
     emergencyContacts,
     roles: userRoles.map((r) => r.roleId),
     waiverAttestations: attestations,
+    conductNotices,
+    conductReportsFiled,
     excluded: [
       "Passkey credentials (public keys, counters, transports)",
       "Magic-link token hashes",
@@ -546,6 +634,10 @@ export async function deleteMyAccountAction(): Promise<{ ok: true }> {
   // Drop the user row. Foreign-key cascades in schema.ts handle:
   //   profiles, emergency_contacts, sessions, passkey_credentials,
   //   user_roles, waiver_attestations.
+  // Conduct rows are deliberately NOT deleted here. Every conduct FK to
+  // users is ON DELETE SET NULL, so records (with the subject's name
+  // snapshot) and a reporter's reports outlive the account until their
+  // retention sweep; see docs/adr/0012-conduct-records-outlive-the-account.md.
   // Authorship columns elsewhere (`created_by` / `updated_by` /
   // `attested_by`) are ON DELETE SET NULL, so the content stays but
   // loses its author attribution.
@@ -595,6 +687,16 @@ export async function submitProfileAction(
   }
 
   const email = normalizeEmail(principal?.primaryEmail ?? proof!.email);
+
+  // Re-checked here, not only at consume: a proof cookie or an unclaimed
+  // session can predate the termination, and this is where an account is
+  // created (proof) or approved (an unclaimed claim). Before any write.
+  if (
+    (!principal || principal.status === "unclaimed") &&
+    (await isClaimBlocked(email, principal?.userId ?? null))
+  ) {
+    throw new Error(CONDUCT_TERMINATED);
+  }
 
   const { emergencyContacts, policiesAck: _ack, ...rest } = data;
   // Every optional text column normalizes to NULL through one shared

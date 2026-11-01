@@ -46,6 +46,7 @@ const FEATURES = [
   "auth",
   "calendar",
   "club-feedback",
+  "conduct",
   "feedback",
   "gazette",
   "gear",

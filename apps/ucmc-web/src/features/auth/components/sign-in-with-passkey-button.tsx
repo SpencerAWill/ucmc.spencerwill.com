@@ -5,7 +5,11 @@ import { useEffect, useState } from "react";
 import { Alert, AlertDescription } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { usePasskeyAuthenticate } from "#/features/auth/api/use-passkey-authenticate";
-import { postSignInHref } from "#/features/auth/lib/post-sign-in";
+import {
+  CONDUCT_TERMINATED,
+  postSignInHref,
+  TERMINATED_HREF,
+} from "#/features/auth/lib/post-sign-in";
 
 /**
  * Whether this browser can run a WebAuthn ceremony. Assumes it can until
@@ -55,6 +59,10 @@ export function SignInWithPasskeyButton({
       { useBrowserAutofill: false },
       {
         onSuccess: async (finish) => {
+          if (!finish.ok && finish.reason === CONDUCT_TERMINATED) {
+            await navigate({ href: TERMINATED_HREF });
+            return;
+          }
           if (!finish.ok) {
             setErrorMessage(reasonToMessage(finish.reason));
             return;

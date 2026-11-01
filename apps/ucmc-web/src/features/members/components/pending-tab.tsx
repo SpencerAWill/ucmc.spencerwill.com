@@ -5,6 +5,7 @@
  * per-page) is owned by the calling route and threaded through props.
  */
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { CalendarIcon, Check, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { DateRange } from "react-day-picker";
@@ -31,6 +32,7 @@ import { useApproveRegistrations } from "#/features/members/api/use-approve-regi
 import { useRejectRegistrations } from "#/features/members/api/use-reject-registrations";
 import type { PendingRegistration } from "#/features/members/server/member-fns";
 import { formatDate } from "#/lib/date-format";
+import { useAuth } from "#/features/auth/api/use-auth";
 
 const LIMIT_OPTIONS = ["25", "50", "100", "250"] as const;
 
@@ -347,6 +349,10 @@ function RegistrationRow({
 
   const rowPending = approve.isPending || reject.isPending;
   const name = registration.preferredName ?? registration.fullName;
+  const { hasPermission } = useAuth();
+  const conductMatch = hasPermission("conduct:view")
+    ? (registration.conductMatch ?? [])
+    : [];
 
   return (
     <li
@@ -382,6 +388,16 @@ function RegistrationRow({
               No profile yet
             </span>
           )}
+          {conductMatch.map((publicId) => (
+            <Link
+              key={publicId}
+              to="/conduct/$publicId"
+              params={{ publicId }}
+              className="rounded bg-destructive/10 px-1.5 py-0.5 text-destructive underline-offset-4 hover:underline"
+            >
+              Possible match to a terminated record
+            </Link>
+          ))}
           <span>{formatDate(registration.createdAt)}</span>
         </div>
       </div>

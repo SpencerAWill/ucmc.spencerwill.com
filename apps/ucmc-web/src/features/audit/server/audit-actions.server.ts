@@ -4,13 +4,22 @@
  * the various feature server modules. The shell wrapper is in
  * `./audit-fns.ts`.
  */
-import { aliasedTable, and, count, desc, eq, gte, lt } from "drizzle-orm";
+import { aliasedTable, and, count, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import { loadCurrentPrincipal } from "#/server/auth/session.server";
 import { getDb, schema } from "#/server/db";
 
 const PER_PAGE_DEFAULT = 50;
 const PER_PAGE_MAX = 200;
+
+/**
+ * Conduct rows never reach `/audit`. `audit:view` is not a conduct
+ * permission, and a `conduct.report_filed` row's actor is the reporter,
+ * whom exec alone may know. A record's own history is on its detail page
+ * (`/conduct/$publicId`), which applies the conduct gates. Fixed text, no
+ * binds.
+ */
+const NOT_CONDUCT = sql`(${schema.auditLog.targetType} is null or ${schema.auditLog.targetType} not in ('conduct_record', 'conduct_report'))`;
 
 export interface AuditUserRef {
   userId: string;
@@ -86,6 +95,7 @@ export async function listAuditEventsAction(input: {
   const targetProfiles = aliasedTable(schema.profiles, "target_profiles");
 
   const filters = [
+    NOT_CONDUCT,
     input.action ? eq(schema.auditLog.action, input.action) : undefined,
     input.from !== undefined
       ? gte(
@@ -101,7 +111,7 @@ export async function listAuditEventsAction(input: {
       : undefined,
   ].filter((f): f is NonNullable<typeof f> => f !== undefined);
 
-  const whereClause = filters.length > 0 ? and(...filters) : undefined;
+  const whereClause = and(...filters);
 
   // Count + page query are independent — run them in parallel so
   // every /audit load saves a D1 round-trip. Filtered indexes

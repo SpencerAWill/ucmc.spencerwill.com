@@ -27,6 +27,7 @@ import type {
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import type { CONDUCT_TERMINATED } from "#/features/auth/lib/post-sign-in";
 import type { schema } from "#/server/db";
 
 // ── result types (shared with webauthn-actions.server.ts) ────────────────
@@ -55,7 +56,8 @@ export type AuthenticateFinishResult =
     }
   | {
       ok: false;
-      reason: "rate_limited" | "no_ceremony" | "invalid";
+      reason:
+        "rate_limited" | "no_ceremony" | "invalid" | typeof CONDUCT_TERMINATED;
     };
 
 export type RemovePasskeyResult =

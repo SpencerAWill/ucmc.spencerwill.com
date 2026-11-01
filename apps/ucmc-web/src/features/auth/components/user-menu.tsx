@@ -7,10 +7,12 @@ import {
   Map,
   MessageSquare,
   MessageSquarePlus,
+  ShieldAlert,
   ShoppingCart,
   User as UserIcon,
 } from "lucide-react";
 
+import { useConductReportLauncher } from "#/components/feedback/conduct-report-launcher";
 import { useFeedbackLauncher } from "#/components/feedback/feedback-launcher";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { UserAvatar } from "#/components/user-avatar";
@@ -46,6 +48,7 @@ export function UserMenu() {
   const { data: flags = flagsOptions.placeholderData } = useQuery(flagsOptions);
   const pages = flags.pages;
   const launcher = useFeedbackLauncher();
+  const reportLauncher = useConductReportLauncher();
 
   if (isLoading) {
     return (
@@ -180,6 +183,15 @@ export function UserMenu() {
                   Send Feedback
                 </DropdownMenuItem>
               </>
+            ) : null}
+            {reportLauncher.canReport ? (
+              <DropdownMenuItem
+                aria-haspopup="dialog"
+                onSelect={() => reportLauncher.open()}
+              >
+                <ShieldAlert className="mr-2 size-4" />
+                Report Conduct
+              </DropdownMenuItem>
             ) : null}
           </>
         )}

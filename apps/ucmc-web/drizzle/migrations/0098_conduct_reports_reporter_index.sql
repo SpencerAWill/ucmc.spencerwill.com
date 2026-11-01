@@ -1,0 +1,1 @@
+CREATE INDEX `conduct_reports_reporter_created_at_idx` ON `conduct_reports` (`reporter_user_id`,`created_at`);

@@ -11,6 +11,7 @@ import type { Principal } from "#/server/auth/principal.server";
 import type * as WebauthnModule from "#/features/auth/server/webauthn.server";
 import { getDb, schema } from "#/server/db";
 import { attachPrimaryEmail } from "#/server/db/test-helpers";
+import { createTermination } from "#/test-support/factories/conduct";
 
 // ── shared mocks ─────────────────────────────────────────────────────────
 
@@ -231,6 +232,8 @@ beforeEach(async () => {
   // isolation in the workers pool is per FILE, not per test — without
   // this the audit assertions below would see the previous test's rows.
   await db.delete(schema.auditLog);
+  await db.delete(schema.conductBlockedEmails);
+  await db.delete(schema.conductRecords);
   await db.delete(schema.users);
 });
 
@@ -492,6 +495,33 @@ describe("webauthnAuthenticateFinishAction", () => {
       k.endsWith("ucmc_webauthn"),
     );
     expect(ceremonyCookie).toBeUndefined();
+  });
+
+  it("refuses a session to a member under termination, whatever their status", async () => {
+    for (const status of ["approved", "deactivated"] as const) {
+      const userId = `user_terminated_${status}`;
+      await seedUser({
+        id: userId,
+        email: `${status}@example.com`,
+        status,
+        withProfile: true,
+      });
+      await insertCredential({
+        userId,
+        credentialId: "cred-id-1",
+        publicKey: new Uint8Array([1, 2, 3]),
+        counter: 0,
+      });
+      await createTermination({ subjectUserId: userId });
+      await seedCeremony({ challenge: "auth-challenge", type: "authenticate" });
+
+      expect(await webauthnAuthenticateFinishAction({ response })).toEqual({
+        ok: false,
+        reason: "conduct_terminated",
+      });
+      await getDb().delete(schema.passkeyCredentials);
+    }
+    expect(openSessionSpy).not.toHaveBeenCalled();
   });
 
   // The cookie is client-held, so a captured value can be sent again. The

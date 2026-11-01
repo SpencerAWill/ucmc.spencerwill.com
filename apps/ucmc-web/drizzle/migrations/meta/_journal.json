@@ -673,6 +673,34 @@
       "when": 1793472351981,
       "tag": "0095_rename_trips_page_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1793480807658,
+      "tag": "0096_conduct_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1793480808205,
+      "tag": "0097_conduct_permissions_seed",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1793484079146,
+      "tag": "0098_conduct_reports_reporter_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "6",
+      "when": 1793491949060,
+      "tag": "0099_conduct_report_subject_survives_account_deletion",
+      "breakpoints": true
     }
   ]
 }

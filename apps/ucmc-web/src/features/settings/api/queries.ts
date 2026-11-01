@@ -110,6 +110,8 @@ export function publicFlagsQueryOptions() {
       SETTINGS["site_feedback.submissions_enabled"].parse(undefined),
     clubFeedback:
       SETTINGS["club_feedback.submissions_enabled"].parse(undefined),
+    conductReports:
+      SETTINGS["conduct_reports.submissions_enabled"].parse(undefined),
     pages,
   };
   return {

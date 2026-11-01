@@ -135,7 +135,7 @@ coloured bar separates by colour; it takes no border rule.**
 
 **The button's focus outline is the tone's foreground, not `--ring`.** The brand-green ring is measured against the page and can vanish on a coloured fill (green on success); the foreground is already held to 4.5:1 against it. The bar takes no border, per the chrome rule above.
 
-**The `--notice-<tone>` pairs are gated by `notice-contrast.test.tsx`**, which reads `styles.css` from disk (both vitest pools stub CSS, so `?raw` is empty) and converts OKLCH to sRGB luminance: every tone, both themes, ≥ 4.5:1. Light uses deep fills with a near-white foreground except warning, which only reads as amber when light and takes a near-black foreground; dark is re-stepped, not flipped. The measured ratios sit in a comment above each block — re-run the test after touching any of them.
+**The `--notice-<tone>` pairs are gated by `notice-contrast.test.tsx`**, which reads `styles.css` from disk (both vitest pools stub CSS, so `?raw` is empty) and converts OKLCH to sRGB luminance: every tone, both themes, ≥ 4.5:1. The same test holds the `--conduct-*` severity fills (graphics beside a text label) to 3:1 against `--card`. Light uses deep fills with a near-white foreground except warning, which only reads as amber when light and takes a near-black foreground; dark is re-stepped, not flipped. The measured ratios sit in a comment above each block — re-run the test after touching any of them.
 
 ## Page containers (`page-container.tsx`)
 

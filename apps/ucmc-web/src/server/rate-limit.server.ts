@@ -1,6 +1,8 @@
 import { getRequestHeader } from "@tanstack/react-start/server";
+import { and, count, eq, gt } from "drizzle-orm";
 
 import { env } from "#/server/cloudflare-env";
+import { getDb, schema } from "#/server/db";
 import { serverEnv } from "#/server/env.server";
 
 /**
@@ -214,6 +216,49 @@ export async function checkCalendarFeedRateLimit(
   try {
     const { success } = await env.CALENDAR_RATE_LIMITER.limit({ key });
     return success;
+  } catch {
+    return true;
+  }
+}
+
+/** Conduct reports one member may file in `CONDUCT_REPORT_WINDOW_MS`. */
+const CONDUCT_REPORT_LIMIT = 5;
+const CONDUCT_REPORT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Gate a conduct report by reporter: at most 5 in any 24 hours.
+ *
+ * Unlike the limiters above this counts the reporter's own rows in
+ * `conduct_reports` rather than calling a rate-limit binding, because a
+ * binding's `period` is 10 or 60 s only (`docs/platform-limits.md`) and
+ * a day-long budget is the point here. The count is exact and global,
+ * not per location. Two submissions racing past the count can both land,
+ * which is fine for a speed bump against a flood of reports.
+ *
+ * The window is exact elapsed time, not calendar days. Fails open on a
+ * D1 error, like every other limiter here; the insert that follows would
+ * fail on the same error anyway.
+ */
+export async function checkConductReportRateLimit(
+  userId: string,
+): Promise<boolean> {
+  if (isBypassed()) {
+    return true;
+  }
+  try {
+    const since = Temporal.Now.instant().subtract({
+      milliseconds: CONDUCT_REPORT_WINDOW_MS,
+    });
+    const [row] = await getDb()
+      .select({ n: count() })
+      .from(schema.conductReports)
+      .where(
+        and(
+          eq(schema.conductReports.reporterUserId, userId),
+          gt(schema.conductReports.createdAt, since),
+        ),
+      );
+    return row.n < CONDUCT_REPORT_LIMIT;
   } catch {
     return true;
   }

@@ -11,6 +11,7 @@ services:
       # Host-shell passthroughs for local Worker secrets. `${VAR:-}` means
       # "empty if unset on host" — apps/ucmc-web/.env.local then fills in.
       SESSION_SECRET: "${SESSION_SECRET:-}"
+      CONDUCT_EMAIL_KEY: "${CONDUCT_EMAIL_KEY:-}"
       RESEND_API_KEY: "${RESEND_API_KEY:-}"
     # Published here rather than listed in devcontainer.json's `forwardPorts`.
     # Forwarding is a devcontainer CLIENT feature: it only works while a

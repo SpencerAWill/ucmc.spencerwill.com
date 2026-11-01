@@ -20,8 +20,10 @@ import {
   renameCredentialForUser,
   updateCredentialCounter,
 } from "#/features/auth/server/passkey-credentials.server";
+import { CONDUCT_TERMINATED } from "#/features/auth/lib/post-sign-in";
 import { recordAuditEvent } from "#/server/audit/audit-log.server";
 import { loadPrincipal } from "#/server/auth/principal.server";
+import { isTerminated } from "#/server/conduct/standing.server";
 import {
   loadCurrentPrincipal,
   openSession,
@@ -238,6 +240,13 @@ export async function webauthnAuthenticateFinishAction(args: {
     // Credential row pointed at a user that no longer exists. Treat as
     // generic invalid to avoid leaking state.
     return { ok: false, reason: "invalid" };
+  }
+
+  // Same refusal as the magic-link consume: a terminated member gets no
+  // session in any account status. Checked after verification so an
+  // unverified response learns nothing about the credential's owner.
+  if (await isTerminated(principal.userId)) {
+    return { ok: false, reason: CONDUCT_TERMINATED };
   }
 
   await openSession(principal.userId);

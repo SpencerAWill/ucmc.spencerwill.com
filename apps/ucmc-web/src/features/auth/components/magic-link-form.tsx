@@ -10,7 +10,11 @@ import { env } from "#/config/env";
 import { SESSION_QUERY_KEY } from "#/features/auth/api/query-keys";
 import { useRequestMagicLink } from "#/features/auth/api/use-request-magic-link";
 import { DevOutboxLink } from "#/features/auth/components/dev-outbox-link";
-import { postSignInHref } from "#/features/auth/lib/post-sign-in";
+import {
+  CONDUCT_TERMINATED,
+  postSignInHref,
+  TERMINATED_HREF,
+} from "#/features/auth/lib/post-sign-in";
 import { useAppForm } from "#/lib/form/form";
 import {
   webauthnAuthenticateBeginFn,
@@ -236,7 +240,16 @@ function usePasskeyAutofill({ redirectTo }: { redirectTo?: string }): void {
         const finish = await webauthnAuthenticateFinishFn({
           data: { response },
         });
-        if (signal.aborted || !finish.ok) {
+        if (signal.aborted) {
+          return;
+        }
+        if (!finish.ok && finish.reason === CONDUCT_TERMINATED) {
+          // Not silent: the member picked a passkey, and falling back to
+          // the email form would only lead to the same refusal.
+          await navigate({ href: TERMINATED_HREF });
+          return;
+        }
+        if (!finish.ok) {
           return;
         }
         await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });

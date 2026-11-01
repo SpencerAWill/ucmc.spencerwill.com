@@ -400,6 +400,7 @@ jobs:
       RESEND_FROM: noreply@localhost
       RESEND_FROM_NAME: UCMC (ci)
       SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
+      CONDUCT_EMAIL_KEY: ci-test-conduct-email-key-32-bytes-long-enough
       # A container job shares a Docker network with its services, so
       # Mailpit is reached by service name — the devcontainer's address
       # and the fixture's default. (It was `localhost:8025` while the job
@@ -528,6 +529,7 @@ jobs:
       RESEND_FROM: noreply@localhost
       RESEND_FROM_NAME: UCMC (ci)
       SESSION_SECRET: ci-test-session-secret-32-bytes-long-enough
+      CONDUCT_EMAIL_KEY: ci-test-conduct-email-key-32-bytes-long-enough
       # No Mailpit here on purpose: every spec these projects match seeds
       # its session directly via `seedSession`, so no runner needs a
       # mailbox or pays for a service container.
@@ -809,6 +811,7 @@ jobs:
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
           cloudflare-infra-api-token: ${{ secrets.CLOUDFLARE_INFRA_API_TOKEN }}
           session-secret: ${{ secrets.SESSION_SECRET }}
+          conduct-email-key: ${{ secrets.CONDUCT_EMAIL_KEY }}
           cloudflare-account-read-token: ${{ secrets.CLOUDFLARE_ACCOUNT_READ_TOKEN }}
           site-feedback-github-token: ${{ secrets.SITE_FEEDBACK_GITHUB_TOKEN }}
           site-feedback-github-repo: ${{ vars.SITE_FEEDBACK_GITHUB_REPO }}
@@ -865,6 +868,7 @@ jobs:
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
           cloudflare-infra-api-token: ${{ secrets.CLOUDFLARE_INFRA_API_TOKEN }}
           session-secret: ${{ secrets.SESSION_SECRET }}
+          conduct-email-key: ${{ secrets.CONDUCT_EMAIL_KEY }}
           cloudflare-account-read-token: ${{ secrets.CLOUDFLARE_ACCOUNT_READ_TOKEN }}
           site-feedback-github-token: ${{ secrets.SITE_FEEDBACK_GITHUB_TOKEN }}
           site-feedback-github-repo: ${{ vars.SITE_FEEDBACK_GITHUB_REPO }}
