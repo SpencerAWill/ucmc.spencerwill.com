@@ -248,7 +248,7 @@ describe("sweepDeactivatedAccounts with conduct reports", () => {
     return id;
   }
 
-  async function reportRow(id: string) {
+  async function conductReportRow(id: string) {
     const [row] = await getDb()
       .select()
       .from(schema.conductReports)
@@ -275,7 +275,7 @@ describe("sweepDeactivatedAccounts with conduct reports", () => {
 
     expect(await sweepDeactivatedAccounts(NOW)).toBe(1);
 
-    const row = await reportRow(reportId);
+    const row = await conductReportRow(reportId);
     expect(row.subjectUserId).toBeNull();
     expect(row.subjectDescription).toBe("Pat Subject");
     expect(row.body).toBe("A report.");
@@ -290,7 +290,7 @@ describe("sweepDeactivatedAccounts with conduct reports", () => {
 
     await sweepDeactivatedAccounts(NOW);
 
-    expect((await reportRow(reportId)).subjectDescription).toBe(
+    expect((await conductReportRow(reportId)).subjectDescription).toBe(
       "Former member",
     );
   });
@@ -312,7 +312,7 @@ describe("sweepDeactivatedAccounts with conduct reports", () => {
 
     await sweepDeactivatedAccounts(NOW);
 
-    expect((await reportRow(reportId)).subjectDescription).toBe(
+    expect((await conductReportRow(reportId)).subjectDescription).toBe(
       "Former member",
     );
   });
@@ -326,7 +326,7 @@ describe("sweepDeactivatedAccounts with conduct reports", () => {
 
     await sweepDeactivatedAccounts(NOW);
 
-    expect((await reportRow(reportId)).subjectDescription).toBe(
+    expect((await conductReportRow(reportId)).subjectDescription).toBe(
       "Tall man in a red jacket",
     );
   });
