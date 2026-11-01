@@ -117,6 +117,8 @@ export interface ConductRecordSummary {
   endsOn: Temporal.PlainDate | null;
   scocState: ScocState;
   liftedAt: Temporal.Instant | null;
+  /** Null for a note, and for a notice that could not be sent. */
+  noticeSentAt: Temporal.Instant | null;
   createdAt: Temporal.Instant;
 }
 

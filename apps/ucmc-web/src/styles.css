@@ -86,6 +86,16 @@
   --notice-danger-foreground: oklch(0.985 0.004 27);
   --notice-neutral: oklch(0.37 0.012 286);
   --notice-neutral-foreground: oklch(0.985 0 0);
+  /*
+   * Conduct severity (`features/conduct/components/severity-mark.tsx`):
+   * the meter's filled steps, a record row's stripe and the record
+   * header's band. Graphics beside a text label, so each is held to
+   * 3:1 against --card (SC 1.4.11) by `notice-contrast.test.tsx`.
+   */
+  --conduct-note: oklch(0.56 0.012 286);
+  --conduct-warning: oklch(0.62 0.13 75);
+  --conduct-suspension: oklch(0.57 0.16 45);
+  --conduct-termination: oklch(0.52 0.19 27);
   --secondary: oklch(0.933 0.014 85);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.933 0.014 85);
@@ -254,6 +264,10 @@
   --notice-danger-foreground: oklch(0.94 0.03 25);
   --notice-neutral: oklch(0.31 0.008 286);
   --notice-neutral-foreground: oklch(0.95 0 0);
+  --conduct-note: oklch(0.62 0.012 286);
+  --conduct-warning: oklch(0.78 0.14 80);
+  --conduct-suspension: oklch(0.7 0.15 50);
+  --conduct-termination: oklch(0.65 0.18 25);
   --secondary: oklch(0.288 0.006 286);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.288 0.006 286);
@@ -338,6 +352,10 @@
   --color-notice-danger-foreground: var(--notice-danger-foreground);
   --color-notice-neutral: var(--notice-neutral);
   --color-notice-neutral-foreground: var(--notice-neutral-foreground);
+  --color-conduct-note: var(--conduct-note);
+  --color-conduct-warning: var(--conduct-warning);
+  --color-conduct-suspension: var(--conduct-suspension);
+  --color-conduct-termination: var(--conduct-termination);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

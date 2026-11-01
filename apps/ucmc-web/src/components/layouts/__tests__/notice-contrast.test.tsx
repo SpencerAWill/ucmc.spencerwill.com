@@ -119,3 +119,34 @@ describe("notice tones clear WCAG AA", () => {
     ).toBeGreaterThanOrEqual(AA);
   });
 });
+
+// The conduct severity fills are graphics next to a text label (the
+// meter, a row stripe, the record header band), so SC 1.4.11's 3:1
+// against the card they sit on is the bar, not AA.
+const NON_TEXT = 3;
+const CONDUCT_LEVELS = [
+  "note",
+  "warning",
+  "suspension",
+  "termination",
+] as const;
+
+describe("conduct severity fills clear 3:1 against the card", () => {
+  const cases = CONDUCT_LEVELS.flatMap((level) =>
+    (Object.keys(THEMES) as (keyof typeof THEMES)[]).map(
+      (theme) => [level, theme] as const,
+    ),
+  );
+
+  it.each(cases)("%s in %s", (level, theme) => {
+    const block = parseBlock(css, THEMES[theme]);
+    const fill = block.get(`--conduct-${level}`);
+    expect(fill, `--conduct-${level} missing from ${theme}`).toBeDefined();
+
+    const ratio = contrast(fill ?? "", block.get("--card") ?? "");
+    expect(
+      ratio,
+      `${level} ${theme}: ${ratio.toFixed(2)}:1`,
+    ).toBeGreaterThanOrEqual(NON_TEXT);
+  });
+});

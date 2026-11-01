@@ -1,7 +1,11 @@
-import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 
 import { PageContainer } from "#/components/layouts/page-container";
 import { requireAnyPermission } from "#/features/auth/guards";
+import {
+  ConductTabsBar,
+  ConfidentialEyebrow,
+} from "#/features/conduct/components/conduct-chrome";
 import { requirePageFlag } from "#/features/settings/api/page-guards";
 
 /**
@@ -9,6 +13,10 @@ import { requirePageFlag } from "#/features/settings/api/page-guards";
  * page 404s for everyone, then `conduct:view` (every holder of
  * `conduct:manage` has it too). Controls that change a record are gated
  * again in the components on `conduct:manage`.
+ *
+ * The two lists share the title and tabs. A record page brings its own
+ * header (a breadcrumb and the member's name as its `h1`), so the layout
+ * adds only the container there.
  */
 export const Route = createFileRoute("/conduct")({
   beforeLoad: async ({ context, location }) => {
@@ -18,32 +26,34 @@ export const Route = createFileRoute("/conduct")({
   component: ConductLayout,
 });
 
+function isListPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/conduct/reports") ||
+    pathname.startsWith("/conduct/records")
+  );
+}
+
 function ConductLayout() {
+  const pathname = useLocation({ select: (l) => l.pathname });
+
+  if (!isListPath(pathname)) {
+    return (
+      <PageContainer width="wide">
+        <Outlet />
+      </PageContainer>
+    );
+  }
   return (
     <PageContainer width="wide" className="flex flex-col gap-6">
-      <header className="space-y-1">
+      <header className="space-y-1.5">
+        <ConfidentialEyebrow />
         <h1 className="text-2xl font-semibold">Conduct</h1>
         <p className="text-sm text-muted-foreground">
-          Member reports, and records of notes, warnings, suspensions and
-          terminations. Visible only to conduct officers.
+          Member reports, and the club&rsquo;s records of notes, warnings,
+          suspensions and terminations.
         </p>
       </header>
-      <nav aria-label="Conduct sections" className="flex gap-2 border-b pb-2">
-        <Link
-          to="/conduct/reports"
-          className="rounded-md px-3 py-1.5 text-sm font-medium hover:bg-accent"
-          activeProps={{ className: "bg-secondary" }}
-        >
-          Reports
-        </Link>
-        <Link
-          to="/conduct/records"
-          className="rounded-md px-3 py-1.5 text-sm font-medium hover:bg-accent"
-          activeProps={{ className: "bg-secondary" }}
-        >
-          Records
-        </Link>
-      </nav>
+      <ConductTabsBar />
       <Outlet />
     </PageContainer>
   );

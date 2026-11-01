@@ -385,6 +385,7 @@ export async function listRecords(
       endsOn: records.endsOn,
       scocState: records.scocState,
       liftedAt: records.liftedAt,
+      noticeSentAt: records.noticeSentAt,
       createdAt: records.createdAt,
     })
     .from(records)
