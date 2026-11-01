@@ -24,7 +24,7 @@ import {
 } from "#/components/ui/select";
 import { auditEventsQueryOptions } from "#/features/audit/api/queries";
 import { AuditCard } from "#/features/audit/components/audit-card";
-import { AUDIT_ACTIONS } from "#/features/audit/server/audit-fns";
+import { AUDIT_FILTER_ACTIONS } from "#/features/audit/server/audit-fns";
 import { requirePermission } from "#/features/auth/guards";
 import { cn } from "#/lib/utils";
 
@@ -34,7 +34,7 @@ const DEFAULT_PER_PAGE = 50;
 const ALL_ACTIONS_VALUE = "__all__";
 
 const auditSearchSchema = z.object({
-  action: z.enum(AUDIT_ACTIONS).optional(),
+  action: z.enum(AUDIT_FILTER_ACTIONS).optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
   page: z.coerce.number().int().min(1).optional(),
@@ -121,7 +121,7 @@ function AuditPage() {
         action:
           value === ALL_ACTIONS_VALUE
             ? undefined
-            : (value as (typeof AUDIT_ACTIONS)[number]),
+            : (value as (typeof AUDIT_FILTER_ACTIONS)[number]),
         page: undefined,
       }),
     });
@@ -189,7 +189,7 @@ function AuditPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL_ACTIONS_VALUE}>All action types</SelectItem>
-            {AUDIT_ACTIONS.map((a) => (
+            {AUDIT_FILTER_ACTIONS.map((a) => (
               <SelectItem key={a} value={a}>
                 {a}
               </SelectItem>

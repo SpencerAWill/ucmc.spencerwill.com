@@ -305,4 +305,57 @@ describe("listAuditEventsAction", () => {
     expect(result.entries[0]?.actor?.preferredName).toBe("Alice");
     expect(result.entries[0]?.target?.preferredName).toBe("Bob");
   });
+
+  it("never returns conduct rows, whose actor can be a reporter", async () => {
+    await asViewer();
+    const reporter = await seedUser();
+    await getDb()
+      .insert(schema.auditLog)
+      .values([
+        {
+          id: "audit_report",
+          actorUserId: reporter,
+          action: "conduct.report_filed",
+          targetType: "conduct_report",
+          targetId: "rep_1",
+        },
+        {
+          id: "audit_record",
+          actorUserId: reporter,
+          action: "conduct.record_created",
+          targetType: "conduct_record",
+          targetId: "rec_1",
+        },
+        {
+          id: "audit_role",
+          actorUserId: reporter,
+          action: "role.created",
+          targetType: "role",
+          targetId: "role_x",
+        },
+        { id: "audit_plain", actorUserId: reporter, action: "member.claimed" },
+      ]);
+
+    const { listAuditEventsAction } =
+      await import("#/features/audit/server/audit-actions.server");
+    const result = await listAuditEventsAction({});
+    expect(result.totalCount).toBe(2);
+    expect(result.entries.map((e) => e.id).sort()).toEqual([
+      "audit_plain",
+      "audit_role",
+    ]);
+  });
+
+  it("offers no conduct action as a filter", async () => {
+    const { AUDIT_FILTER_ACTIONS, listAuditEventsInputSchema } =
+      await import("#/features/audit/server/audit-fns");
+    expect(
+      AUDIT_FILTER_ACTIONS.filter((a) => a.startsWith("conduct.")),
+    ).toEqual([]);
+    expect(AUDIT_FILTER_ACTIONS).toContain("role.created");
+    expect(
+      listAuditEventsInputSchema.safeParse({ action: "conduct.lifted" })
+        .success,
+    ).toBe(false);
+  });
 });

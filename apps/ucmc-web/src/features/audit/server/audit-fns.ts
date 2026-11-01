@@ -16,8 +16,9 @@ export type { AuditEntrySummary, ListAuditEventsResult };
 // Mirror of the `auditAction` enum in `drizzle/schema.ts`. Re-declaring
 // the values here keeps the client bundle from pulling in the entire
 // schema file just to validate a string filter. Exposed as
-// `AUDIT_ACTIONS` for the route's filter `Select` and `AuditAction` for
-// type-safe filter shapes; the zod enum stays internal.
+// `AUDIT_ACTIONS` and `AuditAction` for typing rows, and
+// `AUDIT_FILTER_ACTIONS` (no `conduct.*`) for the route's filter `Select`;
+// the zod enum stays internal.
 // Order is intentional — drives the audit page's filter dropdown.
 // Existing entries keep their slots so officers' muscle memory survives
 // the unclaimed-members feature; the four new entries land at the end
@@ -134,7 +135,21 @@ export const AUDIT_ACTIONS = [
   "conduct.lifted",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
-const auditActionEnum = z.enum(AUDIT_ACTIONS);
+
+/** An action `/audit` can filter by: every one but `conduct.*`. */
+export type AuditFilterAction = Exclude<AuditAction, `conduct.${string}`>;
+
+function isFilterable(action: AuditAction): action is AuditFilterAction {
+  return !action.startsWith("conduct.");
+}
+
+/**
+ * The actions `/audit` can filter by: every one but `conduct.*`.
+ * `listAuditEventsAction` never returns conduct rows (their history is on
+ * `/conduct/$publicId`), so a conduct filter could only come back empty.
+ */
+export const AUDIT_FILTER_ACTIONS = AUDIT_ACTIONS.filter(isFilterable);
+const auditActionEnum = z.enum(AUDIT_FILTER_ACTIONS);
 
 export const listAuditEventsInputSchema = z.object({
   page: z.number().int().min(1).optional(),

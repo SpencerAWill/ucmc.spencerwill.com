@@ -43,10 +43,13 @@ export interface ConductReportSummary {
   dismissReason: string | null;
 }
 
-// Qualified, so the fragment means the same thing in a join and in the
-// `exists` guards below.
+// Qualified, so the fragment means the same thing in a one-table select
+// and in a join. A report is about the viewer when it names them, or when
+// it names nobody but is cited by a record about them: once triaged into
+// that record, a nameless report is plainly about its subject. Two binds
+// whatever the data.
 function notSubject(viewerUserId: string): SQL {
-  return sql`("conduct_reports"."subject_user_id" is null or "conduct_reports"."subject_user_id" <> ${viewerUserId})`;
+  return sql`(("conduct_reports"."subject_user_id" is null or "conduct_reports"."subject_user_id" <> ${viewerUserId}) and not exists (select 1 from "conduct_record_reports" crr_viewer join "conduct_records" cr_viewer on cr_viewer."id" = crr_viewer."record_id" where crr_viewer."report_id" = "conduct_reports"."id" and cr_viewer."subject_user_id" = ${viewerUserId}))`;
 }
 
 function selectSummaries() {

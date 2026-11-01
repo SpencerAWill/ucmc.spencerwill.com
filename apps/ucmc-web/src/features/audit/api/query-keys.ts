@@ -9,10 +9,10 @@
  * pagination — so flipping a filter cache-misses cleanly instead of
  * returning a stale page.
  */
-import type { AuditAction } from "#/features/audit/server/audit-fns";
+import type { AuditFilterAction } from "#/features/audit/server/audit-fns";
 
 export interface AuditEventsFilters {
-  action: AuditAction | null;
+  action: AuditFilterAction | null;
   fromMs: number | null;
   toMs: number | null;
   page: number;

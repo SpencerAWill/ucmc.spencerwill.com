@@ -436,6 +436,39 @@ describe("listConductReportsAction", () => {
       }),
     ).rejects.toThrow("Report not found");
   });
+
+  it("hides a nameless report from the manager a record citing it is about", async () => {
+    const m = await manager("Mo Manager");
+    const other = await manager("Vic Vice");
+    const nameless = await fileAbout(null);
+    const unrelated = await fileAbout(null);
+    // Another manager files the record about M, citing the nameless report.
+    await signInAs(other.id);
+    const { publicId } = await createRecord({
+      level: "note",
+      subjectUserId: m.id,
+      reportIds: [nameless.publicId],
+    });
+
+    await signInAs(m.id);
+    const list = await reports.listConductReportsAction();
+    expect(list.map((x) => x.id)).toEqual([unrelated.publicId]);
+    await expect(
+      reports.acceptConductReportAction({ reportId: nameless.publicId }),
+    ).rejects.toThrow("Report not found");
+    await expect(
+      repo.findReportForTriage(nameless.publicId, m.id),
+    ).resolves.toBeNull();
+    await expect(repo.listReportsForRecord(publicId, m.id)).resolves.toEqual(
+      [],
+    );
+
+    // The other manager still sees both.
+    await signInAs(other.id);
+    expect(
+      (await reports.listConductReportsAction()).map((x) => x.id).sort(),
+    ).toEqual([nameless.publicId, unrelated.publicId].sort());
+  });
 });
 
 // ── triage ─────────────────────────────────────────────────────────────
